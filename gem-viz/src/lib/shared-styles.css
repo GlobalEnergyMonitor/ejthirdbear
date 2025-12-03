@@ -1,0 +1,214 @@
+/* Shared CSS Variables */
+:root {
+  --font-family: Georgia, serif;
+  --font-size-xs: 8px;
+  --font-size-sm: 9px;
+  --font-size-base: 10px;
+  --font-size-md: 11px;
+  --font-size-lg: 13px;
+
+  --color-bg-primary: #fff;
+  --color-bg-secondary: #fafafa;
+  --color-bg-tertiary: #f0f0f0;
+  --color-border: #ddd;
+  --color-border-dark: #000;
+
+  --color-text-primary: #000;
+  --color-text-secondary: #666;
+  --color-text-tertiary: #999;
+
+  --color-success: #4caf50;
+  --color-warning: #ff9800;
+  --color-error: #f44336;
+  --color-info: #2196f3;
+
+  --spacing-xs: 5px;
+  --spacing-sm: 10px;
+  --spacing-md: 15px;
+  --spacing-lg: 20px;
+
+  --border-width: 1px;
+  --border-radius: 0;
+}
+
+/* Common Panel Styles */
+.panel {
+  margin: var(--spacing-lg) 0;
+  padding: var(--spacing-lg);
+  background: var(--color-bg-primary);
+  border: var(--border-width) solid var(--color-border-dark);
+}
+
+.panel-header {
+  margin: 0 0 var(--spacing-lg) 0;
+  font-size: var(--font-size-lg);
+  font-weight: bold;
+  text-transform: uppercase;
+  border-bottom: var(--border-width) solid var(--color-border-dark);
+  padding-bottom: var(--spacing-sm);
+}
+
+/* Common Card Styles */
+.card {
+  padding: var(--spacing-md);
+  background: var(--color-bg-secondary);
+  border: var(--border-width) solid var(--color-border);
+}
+
+/* Common Grid Styles */
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--spacing-md);
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--spacing-md);
+}
+
+.grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--spacing-md);
+}
+
+.grid-auto {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: var(--spacing-md);
+}
+
+/* Common Table Styles */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-base);
+}
+
+.data-table thead {
+  background: var(--color-bg-tertiary);
+  border-top: var(--border-width) solid var(--color-border-dark);
+  border-bottom: var(--border-width) solid var(--color-border-dark);
+}
+
+.data-table th {
+  padding: 8px 10px;
+  text-align: left;
+  font-weight: bold;
+  font-size: var(--font-size-sm);
+  text-transform: uppercase;
+}
+
+.data-table td {
+  padding: 6px 10px;
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.data-table tr:last-child td {
+  border-bottom: none;
+}
+
+.data-table tbody tr:hover {
+  background: var(--color-bg-secondary);
+}
+
+/* Common State Styles */
+.loading-state {
+  padding: 30px;
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-md);
+}
+
+.no-data-state {
+  padding: 30px;
+  text-align: center;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-md);
+  font-style: italic;
+}
+
+/* Common Stat Display */
+.stat-box {
+  display: flex;
+  flex-direction: column;
+  padding: var(--spacing-sm);
+  background: var(--color-bg-primary);
+  border: var(--border-width) solid var(--color-border);
+}
+
+.stat-label {
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+  margin-bottom: 2px;
+}
+
+.stat-value {
+  font-size: 12px;
+  font-weight: bold;
+  color: var(--color-text-primary);
+}
+
+/* Common Badge Styles */
+.badge {
+  display: inline-block;
+  padding: 2px 6px;
+  font-size: var(--font-size-xs);
+  font-weight: bold;
+  text-transform: uppercase;
+  border: var(--border-width) solid;
+}
+
+.badge-success {
+  background: var(--color-success);
+  color: #fff;
+  border-color: var(--color-success);
+}
+
+.badge-warning {
+  background: var(--color-warning);
+  color: #fff;
+  border-color: var(--color-warning);
+}
+
+.badge-error {
+  background: var(--color-error);
+  color: #fff;
+  border-color: var(--color-error);
+}
+
+.badge-info {
+  background: var(--color-info);
+  color: #fff;
+  border-color: var(--color-info);
+}
+
+/* Utility Classes */
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.font-bold {
+  font-weight: bold;
+}
+
+.text-secondary {
+  color: var(--color-text-secondary);
+}
+
+.text-tertiary {
+  color: var(--color-text-tertiary);
+}

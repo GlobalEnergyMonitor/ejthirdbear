@@ -1,0 +1,182 @@
+# GEM Data Processing Pipeline
+# Converts Excel tracker files to CSV and Parquet formats
+
+# Default recipe - show available commands
+default:
+    @just --list
+
+# Convert all Excel tracker files to CSV
+convert-all: convert-coal-plants convert-coal-mines convert-steel-plants convert-power-facilities
+    @echo "✓ All tracker files converted to CSV"
+
+# Convert coal plants tracker
+convert-coal-plants:
+    @echo "Converting coal plants tracker..."
+    in2csv 'Global-Coal-Plant-Tracker-July-2025 DATA TEAM COPY.xlsx' --sheet 'Units' > coal-plants.csv
+    @echo "✓ Created coal-plants.csv ($(wc -l < coal-plants.csv | xargs) lines)"
+
+# Convert coal mines tracker
+convert-coal-mines:
+    @echo "Converting coal mines tracker..."
+    in2csv 'Global Coal Mine Tracker, May 2025 DATA TEAM COPY.xlsx' --sheet 'GCMT Non-closed Mines' > coal-mines.csv
+    @echo "✓ Created coal-mines.csv ($(wc -l < coal-mines.csv | xargs) lines)"
+
+# Convert steel plants tracker
+convert-steel-plants:
+    @echo "Converting steel plants tracker..."
+    in2csv 'Plant-level data - Global Iron and Steel Tracker - March 2025 (V1.2) DATA TEAM COPY.xlsx' --sheet 'Plant data' > steel-plants.csv
+    @echo "✓ Created steel-plants.csv ($(wc -l < steel-plants.csv | xargs) lines)"
+
+# Convert power facilities tracker
+convert-power-facilities:
+    @echo "Converting power facilities tracker..."
+    in2csv 'Global Integrated Power September 2025 II DATA TEAM COPY.xlsx' --sheet 'Power facilities' > power-facilities.csv
+    @echo "✓ Created power-facilities.csv ($(wc -l < power-facilities.csv | xargs) lines)"
+
+# Move CSV files to gem-viz public directory
+move-csvs:
+    @echo "Moving CSV files to gem-viz/public/..."
+    mv coal-plants.csv coal-mines.csv steel-plants.csv power-facilities.csv gem-viz/public/
+    @ls -lh gem-viz/public/*.csv
+
+# Convert CSVs to Parquet for better performance (optional)
+convert-to-parquet:
+    @echo "Converting CSVs to Parquet..."
+    duckdb :memory: "COPY (SELECT * FROM 'gem-viz/public/coal-plants.csv') TO 'gem-viz/public/coal-plants.parquet' (FORMAT PARQUET)"
+    duckdb :memory: "COPY (SELECT * FROM 'gem-viz/public/coal-mines.csv') TO 'gem-viz/public/coal-mines.parquet' (FORMAT PARQUET)"
+    duckdb :memory: "COPY (SELECT * FROM 'gem-viz/public/steel-plants.csv') TO 'gem-viz/public/steel-plants.parquet' (FORMAT PARQUET)"
+    duckdb :memory: "COPY (SELECT * FROM 'gem-viz/public/power-facilities.csv') TO 'gem-viz/public/power-facilities.parquet' (FORMAT PARQUET)"
+    @echo "✓ Created parquet files"
+    @ls -lh gem-viz/public/*.parquet
+
+# Full pipeline: convert all + move + create parquet
+process-all: convert-all move-csvs
+    @echo ""
+    @echo "✓ All tracker files processed and ready!"
+    @echo "  Files are in gem-viz/public/"
+    @echo ""
+    @echo "To also create parquet versions, run: just convert-to-parquet"
+
+# Verify data has required columns
+verify:
+    @echo "Verifying coal plants has GEM location ID + coordinates..."
+    @head -1 gem-viz/public/coal-plants.csv | grep -q "GEM location ID" && echo "  ✓ Has GEM location ID"
+    @head -1 gem-viz/public/coal-plants.csv | grep -q "Latitude" && echo "  ✓ Has Latitude"
+    @head -1 gem-viz/public/coal-plants.csv | grep -q "Longitude" && echo "  ✓ Has Longitude"
+    @echo ""
+    @echo "Verifying coal mines has coordinates..."
+    @head -1 gem-viz/public/coal-mines.csv | grep -q "Latitude" && echo "  ✓ Has Latitude"
+    @head -1 gem-viz/public/coal-mines.csv | grep -q "Longitude" && echo "  ✓ Has Longitude"
+    @echo ""
+    @echo "Testing join between ownership and coal plants..."
+    @duckdb :memory: "SELECT COUNT(*) as joined_rows FROM 'all_trackers_ownership@1.parquet' o JOIN 'gem-viz/public/coal-plants.csv' cp ON o.\"GEM location ID\" = cp.\"GEM location ID\" WHERE o.Tracker = 'Coal Plant' AND cp.Latitude IS NOT NULL"
+
+# Show column names for each tracker type
+show-columns:
+    @echo "=== Coal Plants Columns ==="
+    @head -1 gem-viz/public/coal-plants.csv | tr ',' '\n' | nl
+    @echo ""
+    @echo "=== Coal Mines Columns ==="
+    @head -1 gem-viz/public/coal-mines.csv | tr ',' '\n' | nl
+    @echo ""
+    @echo "=== Steel Plants Columns ==="
+    @head -1 gem-viz/public/steel-plants.csv | tr ',' '\n' | nl
+    @echo ""
+    @echo "=== Power Facilities Columns ==="
+    @head -1 gem-viz/public/power-facilities.csv | tr ',' '\n' | head -20
+
+# Preview sample data from each tracker
+preview:
+    @echo "=== Coal Plants Sample ==="
+    @head -3 gem-viz/public/coal-plants.csv | csvcut -c "GEM location ID,Latitude,Longitude,Plant name,Country/Area" | csvlook
+    @echo ""
+    @echo "=== Coal Mines Sample ==="
+    @head -3 gem-viz/public/coal-mines.csv | csvcut -c "GEM Mine ID,Latitude,Longitude,Mine Name,Country / Area" | csvlook
+
+# Clean up generated files
+clean:
+    @echo "Removing generated CSV and Parquet files..."
+    rm -f gem-viz/public/coal-plants.csv
+    rm -f gem-viz/public/coal-mines.csv
+    rm -f gem-viz/public/steel-plants.csv
+    rm -f gem-viz/public/power-facilities.csv
+    rm -f gem-viz/public/*.parquet
+    @echo "✓ Cleaned up"
+
+# List all available Excel sheets for inspection
+list-sheets:
+    @echo "=== Coal Plants Sheets ==="
+    @in2csv --names 'Global-Coal-Plant-Tracker-July-2025 DATA TEAM COPY.xlsx'
+    @echo ""
+    @echo "=== Coal Mines Sheets ==="
+    @in2csv --names 'Global Coal Mine Tracker, May 2025 DATA TEAM COPY.xlsx'
+    @echo ""
+    @echo "=== Steel Plants Sheets ==="
+    @in2csv --names 'Plant-level data - Global Iron and Steel Tracker - March 2025 (V1.2) DATA TEAM COPY.xlsx'
+    @echo ""
+    @echo "=== Integrated Power Sheets ==="
+    @in2csv --names 'Global Integrated Power September 2025 II DATA TEAM COPY.xlsx'
+
+# Check for required dependencies
+check-deps:
+    @echo "Checking dependencies..."
+    @command -v in2csv >/dev/null 2>&1 && echo "  ✓ in2csv (csvkit)" || echo "  ✗ in2csv missing - install with: brew install csvkit"
+    @command -v duckdb >/dev/null 2>&1 && echo "  ✓ duckdb" || echo "  ✗ duckdb missing - install with: brew install duckdb"
+    @command -v csvcut >/dev/null 2>&1 && echo "  ✓ csvcut (csvkit)" || echo "  ✗ csvkit missing"
+    @command -v csvlook >/dev/null 2>&1 && echo "  ✓ csvlook (csvkit)" || echo "  ✗ csvkit missing"
+    @command -v node >/dev/null 2>&1 && echo "  ✓ node" || echo "  ✗ node missing - install from nodejs.org"
+
+# === MotherDuck Commands ===
+
+# Install MotherDuck dependencies
+motherduck-setup:
+    @echo "📦 Installing MotherDuck dependencies..."
+    cd scripts && npm install
+    @echo "✓ Dependencies installed"
+    @echo ""
+    @echo "Next steps:"
+    @echo "  1. Copy scripts/.env.example to scripts/.env"
+    @echo "  2. Get your token from https://app.motherduck.com/ (Settings > Tokens)"
+    @echo "  3. Add token to scripts/.env"
+    @echo "  4. Run: just motherduck-upload"
+
+# Upload all data to MotherDuck
+motherduck-upload:
+    @echo "🚀 Uploading GEM data to MotherDuck..."
+    cd scripts && node upload-to-motherduck.js
+
+# Query MotherDuck (interactive mode)
+motherduck-query:
+    @echo "🔍 Starting interactive query mode..."
+    cd scripts && node query-motherduck.js
+
+# Run a specific sample query
+motherduck-sample QUERY:
+    @echo "📊 Running sample query: {{QUERY}}"
+    cd scripts && node query-motherduck.js {{QUERY}}
+
+# Show available sample queries
+motherduck-samples:
+    @echo "📋 Available sample queries:"
+    @echo ""
+    @echo "  show-tables       - List all tables in database"
+    @echo "  ownership-summary - Summary by tracker type"
+    @echo "  top-owners        - Top 20 owners by records"
+    @echo "  tracker-status    - Asset status breakdown"
+    @echo "  country-capacity  - Top 30 countries by capacity"
+    @echo ""
+    @echo "Usage: just motherduck-sample <query-name>"
+
+# Export data from MotherDuck to local parquet files (for CDN hosting)
+motherduck-export:
+    @echo "📦 Exporting MotherDuck data to parquet files..."
+    cd scripts && node export-from-motherduck.js
+
+# Full sync: Upload to MotherDuck, then export for web
+sync-parquet:
+    @echo "🔄 Full sync: Local → MotherDuck → Parquet for web"
+    just motherduck-upload
+    just motherduck-export
+    @echo ""
+    @echo "✓ Sync complete!"
+    @echo "💡 Next: Upload gem-viz/public/*.parquet to your CDN/S3"

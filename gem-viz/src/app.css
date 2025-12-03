@@ -1,0 +1,50 @@
+@import './lib/shared-styles.css';
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  font-family: Georgia, serif;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #333;
+  background: #fff;
+}
+
+body {
+  padding: 0;
+  background: #fafafa;
+  min-height: 100vh;
+}
+
+::selection {
+  background: #333;
+  color: #fff;
+}
+
+/* Academic typography */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-weight: normal;
+  margin: 0 0 10px 0;
+}
+
+/* Clean borders */
+button,
+input,
+textarea,
+select {
+  border: 1px solid #ccc;
+}
+
+/* Remove Vite HMR indicator */
+vite-error-overlay {
+  display: none !important;
+}

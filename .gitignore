@@ -1,0 +1,42 @@
+# Excel source files (large)
+*.xlsx
+
+# Parquet files (can be regenerated)
+*.parquet
+
+# Generated CSVs (can be regenerated via justfile)
+gem-viz/public/*.csv
+gem-viz/public/*.parquet
+
+# Node modules
+node_modules/
+gem-viz/node_modules/
+
+# Build output
+gem-viz/dist/
+gem-viz/.svelte-kit/
+gem-viz/build/
+build/
+.svelte-kit/
+
+# Build caches (relationship cache, asset cache)
+.asset-cache.json
+.relationship-cache.json
+
+# OS files
+.DS_Store
+*.swp
+*.swo
+*~
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+
+# MotherDuck credentials
+scripts/.env
+.env

@@ -1,0 +1,1586 @@
+{
+  "version": 1,
+  "generated": "2025-11-25T23:56:24.092Z",
+  "tileSize": 20,
+  "totalAssets": 20947,
+  "totalRows": 39638,
+  "tiles": [
+    {
+      "name": "tile_20_100",
+      "file": "tile_20_100.parquet",
+      "bounds": {
+        "minLat": 20.037805,
+        "maxLat": 39.996807,
+        "minLon": 100.245,
+        "maxLon": 119.9925
+      },
+      "tileBounds": {
+        "minLat": 20,
+        "maxLat": 40,
+        "minLon": 100,
+        "maxLon": 120
+      },
+      "assetCount": 5175,
+      "rowCount": 9438,
+      "sizeMB": 0.09
+    },
+    {
+      "name": "tile_20_-100",
+      "file": "tile_20_-100.parquet",
+      "bounds": {
+        "minLat": 20.049659,
+        "maxLat": 39.983672,
+        "minLon": -99.977705,
+        "maxLon": -80.0525
+      },
+      "tileBounds": {
+        "minLat": 20,
+        "maxLat": 40,
+        "minLon": -100,
+        "maxLon": -80
+      },
+      "assetCount": 1313,
+      "rowCount": 2767,
+      "sizeMB": 0.03
+    },
+    {
+      "name": "tile_40_0",
+      "file": "tile_40_0.parquet",
+      "bounds": {
+        "minLat": 40.233555,
+        "maxLat": 59.852419,
+        "minLon": 0.00974,
+        "maxLon": 19.99944
+      },
+      "tileBounds": {
+        "minLat": 40,
+        "maxLat": 60,
+        "minLon": 0,
+        "maxLon": 20
+      },
+      "assetCount": 1149,
+      "rowCount": 2178,
+      "sizeMB": 0.03
+    },
+    {
+      "name": "tile_20_120",
+      "file": "tile_20_120.parquet",
+      "bounds": {
+        "minLat": 22.4998137501257,
+        "maxLat": 39.978133,
+        "minLon": 120.0011,
+        "maxLon": 139.993079
+      },
+      "tileBounds": {
+        "minLat": 20,
+        "maxLat": 40,
+        "minLon": 120,
+        "maxLon": 140
+      },
+      "assetCount": 849,
+      "rowCount": 2079,
+      "sizeMB": 0.02
+    },
+    {
+      "name": "tile_20_80",
+      "file": "tile_20_80.parquet",
+      "bounds": {
+        "minLat": 20.044037,
+        "maxLat": 39.98,
+        "minLon": 80.005278,
+        "maxLon": 99.608333
+      },
+      "tileBounds": {
+        "minLat": 20,
+        "maxLat": 40,
+        "minLon": 80,
+        "maxLon": 100
+      },
+      "assetCount": 1140,
+      "rowCount": 1934,
+      "sizeMB": 0.02
+    },
+    {
+      "name": "tile_20_40",
+      "file": "tile_20_40.parquet",
+      "bounds": {
+        "minLat": 20.090403,
+        "maxLat": 39.893857,
+        "minLon": 40.009985,
+        "maxLon": 59.7324
+      },
+      "tileBounds": {
+        "minLat": 20,
+        "maxLat": 40,
+        "minLon": 40,
+        "maxLon": 60
+      },
+      "assetCount": 470,
+      "rowCount": 1461,
+      "sizeMB": 0.01
+    },
+    {
+      "name": "tile_40_20",
+      "file": "tile_40_20.parquet",
+      "bounds": {
+        "minLat": 40.00429,
+        "maxLat": 59.9694,
+        "minLon": 20.004848,
+        "maxLon": 39.9492
+      },
+      "tileBounds": {
+        "minLat": 40,
+        "maxLat": 60,
+        "minLon": 20,
+        "maxLon": 40
+      },
+      "assetCount": 606,
+      "rowCount": 1358,
+      "sizeMB": 0.02
+    },
+    {
+      "name": "tile_40_120",
+      "file": "tile_40_120.parquet",
+      "bounds": {
+        "minLat": 40.07962,
+        "maxLat": 57.686438,
+        "minLon": 120.00959,
+        "maxLon": 139.9911
+      },
+      "tileBounds": {
+        "minLat": 40,
+        "maxLat": 60,
+        "minLon": 120,
+        "maxLon": 140
+      },
+      "assetCount": 579,
+      "rowCount": 1132,
+      "sizeMB": 0.01
+    },
+    {
+      "name": "tile_0_100",
+      "file": "tile_0_100.parquet",
+      "bounds": {
+        "minLat": 0.011305887914414,
+        "maxLat": 19.986,
+        "minLon": 100.085256185649,
+        "maxLon": 119.957549
+      },
+      "tileBounds": {
+        "minLat": 0,
+        "maxLat": 20,
+        "minLon": 100,
+        "maxLon": 120
+      },
+      "assetCount": 605,
+      "rowCount": 1068,
+      "sizeMB": 0.01
+    },
+    {
+      "name": "tile_20_60",
+      "file": "tile_20_60.parquet",
+      "bounds": {
+        "minLat": 20.0063,
+        "maxLat": 39.895939,
+        "minLon": 60.446317,
+        "maxLon": 79.99754701
+      },
+      "tileBounds": {
+        "minLat": 20,
+        "maxLat": 40,
+        "minLon": 60,
+        "maxLon": 80
+      },
+      "assetCount": 533,
+      "rowCount": 1061,
+      "sizeMB": 0.01
+    },
+    {
+      "name": "tile_40_80",
+      "file": "tile_40_80.parquet",
+      "bounds": {
+        "minLat": 40.208093,
+        "maxLat": 56.6918322,
+        "minLon": 80.108673,
+        "maxLon": 97.829641
+      },
+      "tileBounds": {
+        "minLat": 40,
+        "maxLat": 60,
+        "minLon": 80,
+        "maxLon": 100
+      },
+      "assetCount": 520,
+      "rowCount": 1020,
+      "sizeMB": 0.01
+    },
+    {
+      "name": "tile_20_20",
+      "file": "tile_20_20.parquet",
+      "bounds": {
+        "minLat": 20.629909,
+        "maxLat": 39.9913503645095,
+        "minLon": 20.068256,
+        "maxLon": 39.824861
+      },
+      "tileBounds": {
+        "minLat": 20,
+        "maxLat": 40,
+        "minLon": 20,
+        "maxLon": 40
+      },
+      "assetCount": 448,
+      "rowCount": 929,
+      "sizeMB": 0.01
+    },
+    {
+      "name": "tile_40_100",
+      "file": "tile_40_100.parquet",
+      "bounds": {
+        "minLat": 40.000585,
+        "maxLat": 58.315514,
+        "minLon": 100.118621,
+        "maxLon": 119.940867
+      },
+      "tileBounds": {
+        "minLat": 40,
+        "maxLat": 60,
+        "minLon": 100,
+        "maxLon": 120
+      },
+      "assetCount": 412,
+      "rowCount": 850,
+      "sizeMB": 0.01
+    },
+    {
+      "name": "tile_-20_100",
+      "file": "tile_-20_100.parquet",
+      "bounds": {
+        "minLat": -8.901172,
+        "maxLat": -0.008383,
+        "minLon": 100.3724,
+        "maxLon": 119.936723
+      },
+      "tileBounds": {
+        "minLat": -20,
+        "maxLat": 0,
+        "minLon": 100,
+        "maxLon": 120
+      },
+      "assetCount": 641,
+      "rowCount": 844,
+      "sizeMB": 0.01
+    },
+    {
+      "name": "tile_40_-100",
+      "file": "tile_40_-100.parquet",
+      "bounds": {
+        "minLat": 40.002241,
+        "maxLat": 50.134407,
+        "minLon": -99.889816,
+        "maxLon": -80.040529
+      },
+      "tileBounds": {
+        "minLat": 40,
+        "maxLat": 60,
+        "minLon": -100,
+        "maxLon": -80
+      },
+      "assetCount": 379,
+      "rowCount": 811,
+      "sizeMB": 0.01
+    },
+    {
+      "name": "tile_40_-80",
+      "file": "tile_40_-80.parquet",
+      "bounds": {
+        "minLat": 40.0017,
+        "maxLat": 55.1264,
+        "minLon": -79.967681,
+        "maxLon": -60.038285
+      },
+      "tileBounds": {
+        "minLat": 40,
+        "maxLat": 60,
+        "minLon": -80,
+        "maxLon": -60
+      },
+      "assetCount": 465,
+      "rowCount": 735,
+      "sizeMB": 0.01
+    },
+    {
+      "name": "tile_20_-120",
+      "file": "tile_20_-120.parquet",
+      "bounds": {
+        "minLat": 20.457349,
+        "maxLat": 39.941129,
+        "minLon": -119.9001,
+        "maxLon": -100.05686
+      },
+      "tileBounds": {
+        "minLat": 20,
+        "maxLat": 40,
+        "minLon": -120,
+        "maxLon": -100
+      },
+      "assetCount": 348,
+      "rowCount": 713,
+      "sizeMB": 0.01
+    },
+    {
+      "name": "tile_40_-20",
+      "file": "tile_40_-20.parquet",
+      "bounds": {
+        "minLat": 40.0527,
+        "maxLat": 57.47721,
+        "minLon": -9.5778,
+        "maxLon": -0.016808
+      },
+      "tileBounds": {
+        "minLat": 40,
+        "maxLat": 60,
+        "minLon": -20,
+        "maxLon": 0
+      },
+      "assetCount": 378,
+      "rowCount": 657,
+      "sizeMB": 0.01
+    },
+    {
+      "name": "tile_-40_-60",
+      "file": "tile_-40_-60.parquet",
+      "bounds": {
+        "minLat": -38.5785,
+        "maxLat": -20.01137,
+        "minLon": -59.86682,
+        "maxLon": -40.230285
+      },
+      "tileBounds": {
+        "minLat": -40,
+        "maxLat": -20,
+        "minLon": -60,
+        "maxLon": -40
+      },
+      "assetCount": 532,
+      "rowCount": 651,
+      "sizeMB": 0.01
+    },
+    {
+      "name": "tile_0_60",
+      "file": "tile_0_60.parquet",
+      "bounds": {
+        "minLat": 4.20408,
+        "maxLat": 19.9957,
+        "minLon": 72.740525,
+        "maxLon": 79.998611
+      },
+      "tileBounds": {
+        "minLat": 0,
+        "maxLat": 20,
+        "minLon": 60,
+        "maxLon": 80
+      },
+      "assetCount": 393,
+      "rowCount": 608,
+      "sizeMB": 0.01
+    },
+    {
+      "name": "tile_40_40",
+      "file": "tile_40_40.parquet",
+      "bounds": {
+        "minLat": 40.009874,
+        "maxLat": 59.6957,
+        "minLon": 40.020158,
+        "maxLon": 59.992198
+      },
+      "tileBounds": {
+        "minLat": 40,
+        "maxLat": 60,
+        "minLon": 40,
+        "maxLon": 60
+      },
+      "assetCount": 174,
+      "rowCount": 541,
+      "sizeMB": 0.01
+    },
+    {
+      "name": "tile_-40_20",
+      "file": "tile_-40_20.parquet",
+      "bounds": {
+        "minLat": -34.166755,
+        "maxLat": -20.158611,
+        "minLon": 21.960715,
+        "maxLon": 35.062531
+      },
+      "tileBounds": {
+        "minLat": -40,
+        "maxLat": -20,
+        "minLon": 20,
+        "maxLon": 40
+      },
+      "assetCount": 260,
+      "rowCount": 469,
+      "sizeMB": 0.01
+    },
+    {
+      "name": "tile_40_60",
+      "file": "tile_40_60.parquet",
+      "bounds": {
+        "minLat": 40.012819,
+        "maxLat": 59.781594,
+        "minLon": 60.033543,
+        "maxLon": 79.02764
+      },
+      "tileBounds": {
+        "minLat": 40,
+        "maxLat": 60,
+        "minLon": 60,
+        "maxLon": 80
+      },
+      "assetCount": 139,
+      "rowCount": 468,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_0_80",
+      "file": "tile_0_80.parquet",
+      "bounds": {
+        "minLat": 0.236595,
+        "maxLat": 19.958191,
+        "minLon": 80.003746,
+        "maxLon": 99.9589630518956
+      },
+      "tileBounds": {
+        "minLat": 0,
+        "maxLat": 20,
+        "minLon": 80,
+        "maxLon": 100
+      },
+      "assetCount": 247,
+      "rowCount": 466,
+      "sizeMB": 0.01
+    },
+    {
+      "name": "tile_20_-80",
+      "file": "tile_20_-80.parquet",
+      "bounds": {
+        "minLat": 20.63041,
+        "maxLat": 39.99656425,
+        "minLon": -79.998828,
+        "maxLon": -64.79189
+      },
+      "tileBounds": {
+        "minLat": 20,
+        "maxLat": 40,
+        "minLon": -80,
+        "maxLon": -60
+      },
+      "assetCount": 205,
+      "rowCount": 407,
+      "sizeMB": 0.01
+    },
+    {
+      "name": "tile_-40_140",
+      "file": "tile_-40_140.parquet",
+      "bounds": {
+        "minLat": -38.38655,
+        "maxLat": -20.155867,
+        "minLon": 142.189328,
+        "maxLon": 153.445
+      },
+      "tileBounds": {
+        "minLat": -40,
+        "maxLat": -20,
+        "minLon": 140,
+        "maxLon": 160
+      },
+      "assetCount": 255,
+      "rowCount": 394,
+      "sizeMB": 0.01
+    },
+    {
+      "name": "tile_40_-120",
+      "file": "tile_40_-120.parquet",
+      "bounds": {
+        "minLat": 40.019211,
+        "maxLat": 58.4483,
+        "minLon": -119.8131,
+        "maxLon": -100.241682
+      },
+      "tileBounds": {
+        "minLat": 40,
+        "maxLat": 60,
+        "minLon": -120,
+        "maxLon": -100
+      },
+      "assetCount": 213,
+      "rowCount": 385,
+      "sizeMB": 0.01
+    },
+    {
+      "name": "tile_0_-80",
+      "file": "tile_0_-80.parquet",
+      "bounds": {
+        "minLat": 0.926179,
+        "maxLat": 19.995485,
+        "minLon": -79.909361,
+        "maxLon": -60.4057417
+      },
+      "tileBounds": {
+        "minLat": 0,
+        "maxLat": 20,
+        "minLon": -80,
+        "maxLon": -60
+      },
+      "assetCount": 202,
+      "rowCount": 348,
+      "sizeMB": 0.01
+    },
+    {
+      "name": "tile_0_120",
+      "file": "tile_0_120.parquet",
+      "bounds": {
+        "minLat": 0.466894,
+        "maxLat": 18.344084,
+        "minLon": 120.096,
+        "maxLon": 128.285273
+      },
+      "tileBounds": {
+        "minLat": 0,
+        "maxLat": 20,
+        "minLon": 120,
+        "maxLon": 140
+      },
+      "assetCount": 165,
+      "rowCount": 308,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_20_0",
+      "file": "tile_20_0.parquet",
+      "bounds": {
+        "minLat": 22.797448,
+        "maxLat": 39.981132,
+        "minLon": 0.127492,
+        "maxLon": 17.097763
+      },
+      "tileBounds": {
+        "minLat": 20,
+        "maxLat": 40,
+        "minLon": 0,
+        "maxLon": 20
+      },
+      "assetCount": 123,
+      "rowCount": 307,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_0_0",
+      "file": "tile_0_0.parquet",
+      "bounds": {
+        "minLat": 0.290794,
+        "maxLat": 17.287796,
+        "minLon": 0.009259,
+        "maxLon": 18.55385
+      },
+      "tileBounds": {
+        "minLat": 0,
+        "maxLat": 20,
+        "minLon": 0,
+        "maxLon": 20
+      },
+      "assetCount": 133,
+      "rowCount": 297,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_-20_-60",
+      "file": "tile_-20_-60.parquet",
+      "bounds": {
+        "minLat": -19.989701,
+        "maxLat": -0.009077,
+        "minLon": -59.962413,
+        "maxLon": -40.0747
+      },
+      "tileBounds": {
+        "minLat": -20,
+        "maxLat": 0,
+        "minLon": -60,
+        "maxLon": -40
+      },
+      "assetCount": 245,
+      "rowCount": 279,
+      "sizeMB": 0.01
+    },
+    {
+      "name": "tile_-40_-80",
+      "file": "tile_-40_-80.parquet",
+      "bounds": {
+        "minLat": -39.800668,
+        "maxLat": -20.80529,
+        "minLon": -73.2275,
+        "maxLon": -60.138697
+      },
+      "tileBounds": {
+        "minLat": -40,
+        "maxLat": -20,
+        "minLon": -80,
+        "maxLon": -60
+      },
+      "assetCount": 134,
+      "rowCount": 227,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_20_-20",
+      "file": "tile_20_-20.parquet",
+      "bounds": {
+        "minLat": 20.540573,
+        "maxLat": 39.99519,
+        "minLon": -17.791705,
+        "maxLon": -0.001
+      },
+      "tileBounds": {
+        "minLat": 20,
+        "maxLat": 40,
+        "minLon": -20,
+        "maxLon": 0
+      },
+      "assetCount": 114,
+      "rowCount": 220,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_-20_20",
+      "file": "tile_-20_20.parquet",
+      "bounds": {
+        "minLat": -19.463164,
+        "maxLat": -0.207979,
+        "minLon": 21.71654,
+        "maxLon": 39.992006
+      },
+      "tileBounds": {
+        "minLat": -20,
+        "maxLat": 0,
+        "minLon": 20,
+        "maxLon": 40
+      },
+      "assetCount": 139,
+      "rowCount": 218,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_60_20",
+      "file": "tile_60_20.parquet",
+      "bounds": {
+        "minLat": 60.014759,
+        "maxLat": 70.6854,
+        "minLon": 20.181001,
+        "maxLon": 39.905783
+      },
+      "tileBounds": {
+        "minLat": 60,
+        "maxLat": 80,
+        "minLon": 20,
+        "maxLon": 40
+      },
+      "assetCount": 102,
+      "rowCount": 157,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_0_-100",
+      "file": "tile_0_-100.parquet",
+      "bounds": {
+        "minLat": 9.005716,
+        "maxLat": 19.9582,
+        "minLon": -99.2946,
+        "maxLon": -80.689504
+      },
+      "tileBounds": {
+        "minLat": 0,
+        "maxLat": 20,
+        "minLon": -100,
+        "maxLon": -80
+      },
+      "assetCount": 120,
+      "rowCount": 148,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_-40_100",
+      "file": "tile_-40_100.parquet",
+      "bounds": {
+        "minLat": -34.496557,
+        "maxLat": -20.255364,
+        "minLon": 114.799967,
+        "maxLon": 119.9987
+      },
+      "tileBounds": {
+        "minLat": -40,
+        "maxLat": -20,
+        "minLon": 100,
+        "maxLon": 120
+      },
+      "assetCount": 102,
+      "rowCount": 140,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_-20_120",
+      "file": "tile_-20_120.parquet",
+      "bounds": {
+        "minLat": -19.67536,
+        "maxLat": -0.866667,
+        "minLon": 120.02061,
+        "maxLon": 138.1459607
+      },
+      "tileBounds": {
+        "minLat": -20,
+        "maxLat": 0,
+        "minLon": 120,
+        "maxLon": 140
+      },
+      "assetCount": 48,
+      "rowCount": 135,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_20_140",
+      "file": "tile_20_140.parquet",
+      "bounds": {
+        "minLat": 35.412092,
+        "maxLat": 39.784715,
+        "minLon": 140.002669,
+        "maxLon": 141.876928
+      },
+      "tileBounds": {
+        "minLat": 20,
+        "maxLat": 40,
+        "minLon": 140,
+        "maxLon": 160
+      },
+      "assetCount": 69,
+      "rowCount": 126,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_-20_-40",
+      "file": "tile_-20_-40.parquet",
+      "bounds": {
+        "minLat": -19.536223,
+        "maxLat": -3.555502,
+        "minLon": -39.9454,
+        "maxLon": -34.8758803
+      },
+      "tileBounds": {
+        "minLat": -20,
+        "maxLat": 0,
+        "minLon": -40,
+        "maxLon": -20
+      },
+      "assetCount": 100,
+      "rowCount": 124,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_0_40",
+      "file": "tile_0_40.parquet",
+      "bounds": {
+        "minLat": 11.4794,
+        "maxLat": 19.986265,
+        "minLon": 41.158411,
+        "maxLon": 57.704722
+      },
+      "tileBounds": {
+        "minLat": 0,
+        "maxLat": 20,
+        "minLon": 40,
+        "maxLon": 60
+      },
+      "assetCount": 49,
+      "rowCount": 110,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_40_-140",
+      "file": "tile_40_-140.parquet",
+      "bounds": {
+        "minLat": 40.3683,
+        "maxLat": 58.651624,
+        "minLon": -129.937176,
+        "maxLon": -120.2647
+      },
+      "tileBounds": {
+        "minLat": 40,
+        "maxLat": 60,
+        "minLon": -140,
+        "maxLon": -120
+      },
+      "assetCount": 83,
+      "rowCount": 100,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_-20_-80",
+      "file": "tile_-20_-80.parquet",
+      "bounds": {
+        "minLat": -17.81384747,
+        "maxLat": -0.118293,
+        "minLon": -79.954066,
+        "maxLon": -60.012396
+      },
+      "tileBounds": {
+        "minLat": -20,
+        "maxLat": 0,
+        "minLon": -80,
+        "maxLon": -60
+      },
+      "assetCount": 61,
+      "rowCount": 93,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_0_20",
+      "file": "tile_0_20.parquet",
+      "bounds": {
+        "minLat": 0.2809009,
+        "maxLat": 19.626296,
+        "minLon": 21.337311,
+        "maxLon": 39.44277
+      },
+      "tileBounds": {
+        "minLat": 0,
+        "maxLat": 20,
+        "minLon": 20,
+        "maxLon": 40
+      },
+      "assetCount": 51,
+      "rowCount": 86,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_0_-20",
+      "file": "tile_0_-20.parquet",
+      "bounds": {
+        "minLat": 4.769396,
+        "maxLat": 19.749788,
+        "minLon": -17.434005,
+        "maxLon": -0.023595
+      },
+      "tileBounds": {
+        "minLat": 0,
+        "maxLat": 20,
+        "minLon": -20,
+        "maxLon": 0
+      },
+      "assetCount": 70,
+      "rowCount": 86,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_20_-140",
+      "file": "tile_20_-140.parquet",
+      "bounds": {
+        "minLat": 36.225,
+        "maxLat": 39.9412,
+        "minLon": -122.3909,
+        "maxLon": -120.0998
+      },
+      "tileBounds": {
+        "minLat": 20,
+        "maxLat": 40,
+        "minLon": -140,
+        "maxLon": -120
+      },
+      "assetCount": 53,
+      "rowCount": 75,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_40_140",
+      "file": "tile_40_140.parquet",
+      "bounds": {
+        "minLat": 40.534482,
+        "maxLat": 53.134722,
+        "minLon": 140.227297,
+        "maxLon": 158.7394
+      },
+      "tileBounds": {
+        "minLat": 40,
+        "maxLat": 60,
+        "minLon": 140,
+        "maxLon": 160
+      },
+      "assetCount": 35,
+      "rowCount": 68,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_-40_120",
+      "file": "tile_-40_120.parquet",
+      "bounds": {
+        "minLat": -35.11009,
+        "maxLat": -20.7833,
+        "minLon": 120.061885,
+        "maxLon": 139.991694
+      },
+      "tileBounds": {
+        "minLat": -40,
+        "maxLat": -20,
+        "minLon": 120,
+        "maxLon": 140
+      },
+      "assetCount": 38,
+      "rowCount": 61,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_60_60",
+      "file": "tile_60_60.parquet",
+      "bounds": {
+        "minLat": 60.9758,
+        "maxLat": 67.610818,
+        "minLon": 63.391937,
+        "maxLon": 78.086021
+      },
+      "tileBounds": {
+        "minLat": 60,
+        "maxLat": 80,
+        "minLon": 60,
+        "maxLon": 80
+      },
+      "assetCount": 17,
+      "rowCount": 54,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_-40_160",
+      "file": "tile_-40_160.parquet",
+      "bounds": {
+        "minLat": -39.609873,
+        "maxLat": -21.010213,
+        "minLon": 164.683935,
+        "maxLon": 176.888759
+      },
+      "tileBounds": {
+        "minLat": -40,
+        "maxLat": -20,
+        "minLon": 160,
+        "maxLon": 180
+      },
+      "assetCount": 22,
+      "rowCount": 44,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_60_40",
+      "file": "tile_60_40.parquet",
+      "bounds": {
+        "minLat": 60.9575,
+        "maxLat": 65.132417,
+        "minLon": 40.5731,
+        "maxLon": 57.313913
+      },
+      "tileBounds": {
+        "minLat": 60,
+        "maxLat": 80,
+        "minLon": 40,
+        "maxLon": 60
+      },
+      "assetCount": 7,
+      "rowCount": 35,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_-20_0",
+      "file": "tile_-20_0.parquet",
+      "bounds": {
+        "minLat": -19.2269,
+        "maxLat": -0.72379,
+        "minLon": 8.765327,
+        "maxLon": 17.7363
+      },
+      "tileBounds": {
+        "minLat": -20,
+        "maxLat": 0,
+        "minLon": 0,
+        "maxLon": 20
+      },
+      "assetCount": 24,
+      "rowCount": 34,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_-40_40",
+      "file": "tile_-40_40.parquet",
+      "bounds": {
+        "minLat": -23.452222,
+        "maxLat": -20.067599,
+        "minLon": 45.078056,
+        "maxLon": 57.69242862
+      },
+      "tileBounds": {
+        "minLat": -40,
+        "maxLat": -20,
+        "minLon": 40,
+        "maxLon": 60
+      },
+      "assetCount": 20,
+      "rowCount": 30,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_-40_0",
+      "file": "tile_-40_0.parquet",
+      "bounds": {
+        "minLat": -33.883115,
+        "maxLat": -20.4482,
+        "minLon": 14.966667,
+        "maxLon": 18.535834
+      },
+      "tileBounds": {
+        "minLat": -40,
+        "maxLat": -20,
+        "minLon": 0,
+        "maxLon": 20
+      },
+      "assetCount": 13,
+      "rowCount": 29,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_60_0",
+      "file": "tile_60_0.parquet",
+      "bounds": {
+        "minLat": 60.142191,
+        "maxLat": 78.1568,
+        "minLon": 5.037212,
+        "maxLon": 19.1613
+      },
+      "tileBounds": {
+        "minLat": 60,
+        "maxLat": 80,
+        "minLon": 0,
+        "maxLon": 20
+      },
+      "assetCount": 21,
+      "rowCount": 26,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_-20_40",
+      "file": "tile_-20_40.parquet",
+      "bounds": {
+        "minLat": -19.501522,
+        "maxLat": -0.373844,
+        "minLon": 40.113392,
+        "maxLon": 55.466194
+      },
+      "tileBounds": {
+        "minLat": -20,
+        "maxLat": 0,
+        "minLon": 40,
+        "maxLon": 60
+      },
+      "assetCount": 14,
+      "rowCount": 24,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_20_-160",
+      "file": "tile_20_-160.parquet",
+      "bounds": {
+        "minLat": 20.0939,
+        "maxLat": 21.388997,
+        "minLon": -158.128853,
+        "maxLon": -155.4711
+      },
+      "tileBounds": {
+        "minLat": 20,
+        "maxLat": 40,
+        "minLon": -160,
+        "maxLon": -140
+      },
+      "assetCount": 9,
+      "rowCount": 24,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_-20_140",
+      "file": "tile_-20_140.parquet",
+      "bounds": {
+        "minLat": -19.6430744,
+        "maxLat": -2.60839,
+        "minLon": 140.789297,
+        "maxLon": 150.23768081015
+      },
+      "tileBounds": {
+        "minLat": -20,
+        "maxLat": 0,
+        "minLon": 140,
+        "maxLon": 160
+      },
+      "assetCount": 19,
+      "rowCount": 23,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_0_-120",
+      "file": "tile_0_-120.parquet",
+      "bounds": {
+        "minLat": 17.930688,
+        "maxLat": 19.6837098797482,
+        "minLon": -104.319167,
+        "maxLon": -102.115439
+      },
+      "tileBounds": {
+        "minLat": 0,
+        "maxLat": 20,
+        "minLon": -120,
+        "maxLon": -100
+      },
+      "assetCount": 8,
+      "rowCount": 22,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_60_80",
+      "file": "tile_60_80.parquet",
+      "bounds": {
+        "minLat": 67.729017,
+        "maxLat": 73.5072265,
+        "minLon": 80.5350454,
+        "maxLon": 88.3442
+      },
+      "tileBounds": {
+        "minLat": 60,
+        "maxLat": 80,
+        "minLon": 80,
+        "maxLon": 100
+      },
+      "assetCount": 7,
+      "rowCount": 22,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_-60_160",
+      "file": "tile_-60_160.parquet",
+      "bounds": {
+        "minLat": -46.148431,
+        "maxLat": -41.66887,
+        "minLon": 167.99114,
+        "maxLon": 172.8259511
+      },
+      "tileBounds": {
+        "minLat": -60,
+        "maxLat": -40,
+        "minLon": 160,
+        "maxLon": 180
+      },
+      "assetCount": 16,
+      "rowCount": 18,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_60_-160",
+      "file": "tile_60_-160.parquet",
+      "bounds": {
+        "minLat": 60.499444,
+        "maxLat": 64.7356,
+        "minLon": -151.661459,
+        "maxLon": -147.3481
+      },
+      "tileBounds": {
+        "minLat": 60,
+        "maxLat": 80,
+        "minLon": -160,
+        "maxLon": -140
+      },
+      "assetCount": 10,
+      "rowCount": 17,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_0_-60",
+      "file": "tile_0_-60.parquet",
+      "bounds": {
+        "minLat": 0.368379,
+        "maxLat": 13.125792,
+        "minLon": -59.9562836,
+        "maxLon": -51.1445701
+      },
+      "tileBounds": {
+        "minLat": 0,
+        "maxLat": 20,
+        "minLon": -60,
+        "maxLon": -40
+      },
+      "assetCount": 12,
+      "rowCount": 16,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_-60_-80",
+      "file": "tile_-60_-80.parquet",
+      "bounds": {
+        "minLat": -51.634092,
+        "maxLat": -41.517859,
+        "minLon": -73.821783,
+        "maxLon": -65.055
+      },
+      "tileBounds": {
+        "minLat": -60,
+        "maxLat": -40,
+        "minLon": -80,
+        "maxLon": -60
+      },
+      "assetCount": 10,
+      "rowCount": 12,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_-20_-100",
+      "file": "tile_-20_-100.parquet",
+      "bounds": {
+        "minLat": -4.9279,
+        "maxLat": -0.981065,
+        "minLon": -81.28213,
+        "maxLon": -80.641787
+      },
+      "tileBounds": {
+        "minLat": -20,
+        "maxLat": 0,
+        "minLon": -100,
+        "maxLon": -80
+      },
+      "assetCount": 9,
+      "rowCount": 12,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_-60_140",
+      "file": "tile_-60_140.parquet",
+      "bounds": {
+        "minLat": -42.5377465,
+        "maxLat": -41.139935,
+        "minLon": 144.746017,
+        "maxLon": 148.1367327
+      },
+      "tileBounds": {
+        "minLat": -60,
+        "maxLat": -40,
+        "minLon": 140,
+        "maxLon": 160
+      },
+      "assetCount": 9,
+      "rowCount": 11,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_60_160",
+      "file": "tile_60_160.parquet",
+      "bounds": {
+        "minLat": 62.721858,
+        "maxLat": 69.704514,
+        "minLon": 170.289712,
+        "maxLon": 178.929691
+      },
+      "tileBounds": {
+        "minLat": 60,
+        "maxLat": 80,
+        "minLon": 160,
+        "maxLon": 180
+      },
+      "assetCount": 6,
+      "rowCount": 8,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_40_-60",
+      "file": "tile_40_-60.parquet",
+      "bounds": {
+        "minLat": 46.1782285,
+        "maxLat": 48.9551273,
+        "minLon": -59.824882,
+        "maxLon": -53.097717
+      },
+      "tileBounds": {
+        "minLat": 40,
+        "maxLat": 60,
+        "minLon": -60,
+        "maxLon": -40
+      },
+      "assetCount": 3,
+      "rowCount": 6,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_-20_160",
+      "file": "tile_-20_160.parquet",
+      "bounds": {
+        "minLat": -18.00931937,
+        "maxLat": -16.42892949,
+        "minLon": 177.320760724438,
+        "maxLon": 179.387847487648
+      },
+      "tileBounds": {
+        "minLat": -20,
+        "maxLat": 0,
+        "minLon": 160,
+        "maxLon": 180
+      },
+      "assetCount": 5,
+      "rowCount": 6,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_60_120",
+      "file": "tile_60_120.parquet",
+      "bounds": {
+        "minLat": 62.022778,
+        "maxLat": 62.351144,
+        "minLon": 129.745818,
+        "maxLon": 135.874786
+      },
+      "tileBounds": {
+        "minLat": 60,
+        "maxLat": 80,
+        "minLon": 120,
+        "maxLon": 140
+      },
+      "assetCount": 4,
+      "rowCount": 5,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_60_-20",
+      "file": "tile_60_-20.parquet",
+      "bounds": {
+        "minLat": 60.1668,
+        "maxLat": 60.4649,
+        "minLon": -1.2793,
+        "maxLon": -1.1644
+      },
+      "tileBounds": {
+        "minLat": 60,
+        "maxLat": 80,
+        "minLon": -20,
+        "maxLon": 0
+      },
+      "assetCount": 2,
+      "rowCount": 5,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_60_100",
+      "file": "tile_60_100.parquet",
+      "bounds": {
+        "minLat": 60.722964,
+        "maxLat": 60.722964,
+        "minLon": 114.929975,
+        "maxLon": 114.929975
+      },
+      "tileBounds": {
+        "minLat": 60,
+        "maxLat": 80,
+        "minLon": 100,
+        "maxLon": 120
+      },
+      "assetCount": 1,
+      "rowCount": 3,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_-40_-40",
+      "file": "tile_-40_-40.parquet",
+      "bounds": {
+        "minLat": -29.55475,
+        "maxLat": -21.1265,
+        "minLon": -29.55475,
+        "maxLon": -21.1265
+      },
+      "tileBounds": {
+        "minLat": -40,
+        "maxLat": -20,
+        "minLon": -40,
+        "maxLon": -20
+      },
+      "assetCount": 3,
+      "rowCount": 3,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_60_140",
+      "file": "tile_60_140.parquet",
+      "bounds": {
+        "minLat": 62.5312344,
+        "maxLat": 65.75233074,
+        "minLon": 149.7665559,
+        "maxLon": 155.7972808
+      },
+      "tileBounds": {
+        "minLat": 60,
+        "maxLat": 80,
+        "minLon": 140,
+        "maxLon": 160
+      },
+      "assetCount": 2,
+      "rowCount": 2,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_0_-160",
+      "file": "tile_0_-160.parquet",
+      "bounds": {
+        "minLat": 19.7317,
+        "maxLat": 19.8435,
+        "minLon": -156.0283,
+        "maxLon": -155.0871
+      },
+      "tileBounds": {
+        "minLat": 0,
+        "maxLat": 20,
+        "minLon": -160,
+        "maxLon": -140
+      },
+      "assetCount": 2,
+      "rowCount": 2,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_20_-40",
+      "file": "tile_20_-40.parquet",
+      "bounds": {
+        "minLat": 37.7812,
+        "maxLat": 38.7154,
+        "minLon": -27.0699,
+        "maxLon": -25.6137
+      },
+      "tileBounds": {
+        "minLat": 20,
+        "maxLat": 40,
+        "minLon": -40,
+        "maxLon": -20
+      },
+      "assetCount": 2,
+      "rowCount": 2,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_-20_-20",
+      "file": "tile_-20_-20.parquet",
+      "bounds": {
+        "minLat": -2.535,
+        "maxLat": -2.535,
+        "minLon": -2.535,
+        "maxLon": -2.535
+      },
+      "tileBounds": {
+        "minLat": -20,
+        "maxLat": 0,
+        "minLon": -20,
+        "maxLon": 0
+      },
+      "assetCount": 1,
+      "rowCount": 1,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_60_-60",
+      "file": "tile_60_-60.parquet",
+      "bounds": {
+        "minLat": 64.5,
+        "maxLat": 64.5,
+        "minLon": -50,
+        "maxLon": -50
+      },
+      "tileBounds": {
+        "minLat": 60,
+        "maxLat": 80,
+        "minLon": -60,
+        "maxLon": -40
+      },
+      "assetCount": 1,
+      "rowCount": 1,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_40_160",
+      "file": "tile_40_160.parquet",
+      "bounds": {
+        "minLat": 59.16013198,
+        "maxLat": 59.16013198,
+        "minLon": 160.0639318,
+        "maxLon": 160.0639318
+      },
+      "tileBounds": {
+        "minLat": 40,
+        "maxLat": 60,
+        "minLon": 160,
+        "maxLon": 180
+      },
+      "assetCount": 1,
+      "rowCount": 1,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_0_140",
+      "file": "tile_0_140.parquet",
+      "bounds": {
+        "minLat": 13.523986,
+        "maxLat": 13.523986,
+        "minLon": 144.80697,
+        "maxLon": 144.80697
+      },
+      "tileBounds": {
+        "minLat": 0,
+        "maxLat": 20,
+        "minLon": 140,
+        "maxLon": 160
+      },
+      "assetCount": 1,
+      "rowCount": 1,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_-20_60",
+      "file": "tile_-20_60.parquet",
+      "bounds": {
+        "minLat": -0.6257210642,
+        "maxLat": -0.6257210642,
+        "minLon": 73.1008439567044,
+        "maxLon": 73.1008439567044
+      },
+      "tileBounds": {
+        "minLat": -20,
+        "maxLat": 0,
+        "minLon": 60,
+        "maxLon": 80
+      },
+      "assetCount": 1,
+      "rowCount": 1,
+      "sizeMB": 0
+    },
+    {
+      "name": "tile_60_-80",
+      "file": "tile_60_-80.parquet",
+      "bounds": {
+        "minLat": 71.336994,
+        "maxLat": 71.336994,
+        "minLon": -79.228748,
+        "maxLon": -79.228748
+      },
+      "tileBounds": {
+        "minLat": 60,
+        "maxLat": 80,
+        "minLon": -80,
+        "maxLon": -60
+      },
+      "assetCount": 1,
+      "rowCount": 1,
+      "sizeMB": 0
+    }
+  ]
+}

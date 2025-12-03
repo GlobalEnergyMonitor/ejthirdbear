@@ -1,0 +1,74 @@
+# GEM Viz
+#
+# FIRST TIME:    just setup
+# DEVELOPING:    just dev
+# DEPLOYING:     just ship      (see DEPLOY.md for credentials)
+# DATA CHANGED:  just refresh
+
+default:
+  @just --list
+
+# ─────────────────────────────────────────────────────────────────────────
+# MAIN WORKFLOWS
+# ─────────────────────────────────────────────────────────────────────────
+
+# First-time setup
+setup: install build-tiles
+  @echo "✓ Run 'just dev' to start"
+
+# Start dev server
+dev:
+  npm run dev
+
+# Deploy to production
+ship: build-tiles build deploy
+  @echo "✓ Deployed!"
+
+# Refresh tiles from MotherDuck
+refresh:
+  rm -rf static/tiles
+  node scripts/build-spatial-tiles.js
+  @echo "✓ Tiles refreshed"
+
+# ─────────────────────────────────────────────────────────────────────────
+# BUILD
+# ─────────────────────────────────────────────────────────────────────────
+
+build:
+  npm run build
+
+build-tiles:
+  node scripts/build-spatial-tiles.js
+
+preview:
+  npm run preview
+
+clean:
+  rm -rf .svelte-kit build static/tiles
+
+# ─────────────────────────────────────────────────────────────────────────
+# DEPLOY
+# ─────────────────────────────────────────────────────────────────────────
+
+# Deploy to Digital Ocean Spaces (see DEPLOY.md for setup)
+deploy:
+  npm run deploy
+
+# ─────────────────────────────────────────────────────────────────────────
+# MISC
+# ─────────────────────────────────────────────────────────────────────────
+
+install:
+  npm install
+
+check:
+  npm run check
+
+lint:
+  npm run lint
+
+format:
+  npm run format
+
+release:
+  npm run release
