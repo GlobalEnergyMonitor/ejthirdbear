@@ -291,7 +291,6 @@
     } else {
       selectedIds.add(id);
     }
-    selectedIds = selectedIds; // Trigger reactivity
     selectAll = selectedIds.size === results.length;
   }
 

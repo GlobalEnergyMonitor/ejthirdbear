@@ -1,8 +1,8 @@
 <script>
-  import { onMount } from 'svelte';
   import { base, assets as assetsPath } from '$app/paths';
   import { initDuckDB, loadParquetFromPath, query } from '$lib/duckdb-utils';
   import { exportList } from '$lib/exportList';
+  import { isValidSlug } from '$lib/slug';
 
   let loading = false;
   let exporting = false;
@@ -72,8 +72,8 @@
 
       // Build ID list for SQL IN clause - escape single quotes for SQL safety
       const idList = ids.map(id => {
-        // Validate ID format (should be alphanumeric with possible underscores/hyphens)
-        if (!/^[\w\-]+$/.test(id)) {
+        // Validate ID format using slug utility
+        if (!isValidSlug(id)) {
           console.warn('Suspicious ID format:', id);
         }
         // SQL escape: double single quotes

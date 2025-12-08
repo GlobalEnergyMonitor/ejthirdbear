@@ -1,5 +1,6 @@
 import { writable, get } from 'svelte/store';
 import { browser } from '$app/environment';
+import { isValidSlug, sanitizeName } from './slug';
 
 export interface ExportAsset {
   id: string;
@@ -30,13 +31,10 @@ function loadFromStorage(): ExportAsset[] {
     const validated = parsed.filter((item): item is ExportAsset => {
       if (!item || typeof item !== 'object') return false;
       if (typeof item.id !== 'string' || !item.id) return false;
-      if (item.id.length > 100) return false;
-      // Allow reasonable ID characters
-      if (!/^[\w\-\.]+$/.test(item.id)) return false;
-      return true;
+      return isValidSlug(item.id);
     }).map(item => ({
       id: item.id,
-      name: typeof item.name === 'string' ? item.name.slice(0, 500) : '',
+      name: sanitizeName(item.name),
       tracker: typeof item.tracker === 'string' ? item.tracker : undefined,
       addedAt: typeof item.addedAt === 'number' ? item.addedAt : Date.now()
     }));
@@ -73,20 +71,6 @@ function saveToStorage(list: ExportAsset[]) {
   }
 }
 
-// Validate asset ID format (alphanumeric, underscores, hyphens)
-function isValidId(id: string): boolean {
-  if (!id || typeof id !== 'string') return false;
-  if (id.length > 100) return false; // Sanity check
-  // Allow alphanumeric, underscores, hyphens, dots (for composite IDs)
-  return /^[\w\-\.]+$/.test(id);
-}
-
-// Sanitize asset name to prevent issues
-function sanitizeName(name: string | undefined): string {
-  if (!name || typeof name !== 'string') return '';
-  // Limit length and remove control characters
-  return name.slice(0, 500).replace(/[\x00-\x1f\x7f]/g, '');
-}
 
 // Create the store
 function createExportListStore() {
@@ -101,7 +85,7 @@ function createExportListStore() {
     subscribe,
 
     add(asset: { id: string; name: string; tracker?: string }) {
-      if (!isValidId(asset.id)) {
+      if (!isValidSlug(asset.id)) {
         console.error('Invalid asset ID, skipping:', asset.id);
         return;
       }
@@ -120,7 +104,7 @@ function createExportListStore() {
       update((list) => {
         const existingIds = new Set(list.map((a) => a.id));
         const newAssets = assets
-          .filter((a) => isValidId(a.id) && !existingIds.has(a.id))
+          .filter((a) => isValidSlug(a.id) && !existingIds.has(a.id))
           .map((a) => ({
             id: a.id,
             name: sanitizeName(a.name),
