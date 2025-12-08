@@ -127,18 +127,27 @@ export async function entries() {
     writeFileSync(CACHE_FILE, cacheJSON);
     console.log(`  ✓ Wrote ${Object.keys(assetsMap).length} assets to disk cache (${cacheSizeMB} MB)`);
 
-    // Filter out already-built pages for incremental builds
+    // Limit prerendering to prevent "too many open files" error
+    // SvelteKit/Vite can't handle writing 62k+ pages' file I/O simultaneously
     const allAssetIds = Object.keys(assetsMap);
-    const unbuildAssets = allAssetIds.filter(id => {
+    const MAX_PRERENDER = 5000; // Limit: render top 5000 assets
+    const assetsToRender = allAssetIds.slice(0, MAX_PRERENDER);
+
+    const unbuildAssets = assetsToRender.filter(id => {
       const pagePath = join(process.cwd(), 'build', 'asset', id, 'index.html');
       return !existsSync(pagePath);
     });
 
-    const alreadyBuilt = allAssetIds.length - unbuildAssets.length;
+    const alreadyBuilt = assetsToRender.length - unbuildAssets.length;
+    const skippedAssets = allAssetIds.length - assetsToRender.length;
+
     if (alreadyBuilt > 0) {
       console.log(`  📦 Skipping ${alreadyBuilt} already-built pages`);
     }
-    console.log(`  🔨 Building ${unbuildAssets.length} remaining pages`);
+    if (skippedAssets > 0) {
+      console.log(`  ⏭️  Skipping ${skippedAssets} assets (prerender limit: ${MAX_PRERENDER})`);
+    }
+    console.log(`  🔨 Building ${unbuildAssets.length} remaining pages out of ${assetsToRender.length} total`);
 
     // Return array of { id } objects for SvelteKit to prerender
     return unbuildAssets.map(id => ({ id }));
