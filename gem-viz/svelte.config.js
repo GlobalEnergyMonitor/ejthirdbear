@@ -13,8 +13,8 @@ const config = {
       strict: false
     }),
     prerender: {
-      concurrency: 1,  // Serial rendering - slow but 100% reliable, super nice to DB
-      crawl: true,     // Crawl to find dynamic routes like /asset/[id]
+      concurrency: 10,  // Render 10 pages at a time - balances speed vs file descriptor pressure
+      crawl: true,      // Crawl to find dynamic routes like /asset/[id]
       entries: ['*'],
       handleHttpError: ({ status, path, message }) => {
         // Skip 404/500 errors from problematic/missing assets and continue build
