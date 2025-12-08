@@ -38,7 +38,9 @@ jobs:
         run: npm run lint
 
       - name: Build
-        run: npm run build
+        run: |
+          ulimit -n 4096
+          npm run build
         env:
           MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
           PUBLIC_MOTHERDUCK_TOKEN: ${{ secrets.PUBLIC_MOTHERDUCK_TOKEN }}
