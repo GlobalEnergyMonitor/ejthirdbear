@@ -36,6 +36,9 @@ jobs:
 
       - name: Build
         run: npm run build
+        env:
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+          PUBLIC_MOTHERDUCK_TOKEN: ${{ secrets.PUBLIC_MOTHERDUCK_TOKEN }}
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
