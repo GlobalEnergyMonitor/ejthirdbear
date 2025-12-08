@@ -11,7 +11,9 @@
     forceX,
     forceY
   } from 'd3-force-3d';
-  import { loadParquetFromPath, query } from '$lib/duckdb-utils';
+
+  // DuckDB utilities - loaded dynamically only on client
+  let loadParquetFromPath, query;
 
   // State
   let container;
@@ -81,8 +83,15 @@
       error = null;
       loadingPhase = 'Loading parquet files...';
 
+      // Dynamic import - only load DuckDB on client
+      if (!loadParquetFromPath || !query) {
+        const duckdbUtils = await import('$lib/duckdb-utils');
+        loadParquetFromPath = duckdbUtils.loadParquetFromPath;
+        query = duckdbUtils.query;
+      }
+
       console.log('Loading ownership data...');
-      const ownershipResult = await loadParquetFromPath('/ownership@1.parquet', 'ownership');
+      const ownershipResult = await loadParquetFromPath('/gem-viz/all_trackers_ownership@1.parquet', 'ownership');
 
       if (!ownershipResult.success) {
         throw new Error('Failed to load ownership data: ' + ownershipResult.error);

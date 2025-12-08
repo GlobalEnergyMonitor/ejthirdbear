@@ -1,9 +1,9 @@
 {
-  "version": "6eff10e",
-  "commit": "6eff10e",
-  "message": "Write version.json to static directory for deployment",
+  "version": "16af47e",
+  "commit": "16af47e",
+  "message": "Remove API endpoint (won't work with static export)",
   "author": "EJ Fox",
-  "timestamp": "2025-12-08T16:28:51.821Z",
-  "deployed": "2025-12-08T16:28:51.821Z",
-  "buildTime": "12/8/2025, 11:28:51 AM"
+  "timestamp": "2025-12-08T16:37:39.559Z",
+  "deployed": "2025-12-08T16:37:39.559Z",
+  "buildTime": "12/8/2025, 11:37:39 AM"
 }

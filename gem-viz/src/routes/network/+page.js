@@ -1,2 +1,2 @@
-// Enable prerendering - 3D visualization will hydrate on the client
+// Enable prerendering - DuckDB code is dynamically imported only on client
 export const prerender = true;
