@@ -1,9 +1,9 @@
 {
-  "version": "c7671f4",
-  "commit": "c7671f4",
-  "message": "Fix entity page generation: use dynamic entries function to load all entity IDs",
+  "version": "43c51b8",
+  "commit": "43c51b8",
+  "message": "Generate all entity pages at build time using top-level await",
   "author": "EJ Fox",
-  "timestamp": "2025-12-08T22:44:43.730Z",
-  "deployed": "2025-12-08T22:44:43.730Z",
-  "buildTime": "12/8/2025, 5:44:43 PM"
+  "timestamp": "2025-12-08T23:03:12.373Z",
+  "deployed": "2025-12-08T23:03:12.373Z",
+  "buildTime": "12/8/2025, 6:03:12 PM"
 }

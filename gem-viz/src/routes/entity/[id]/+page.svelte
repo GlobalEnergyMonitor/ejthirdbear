@@ -48,7 +48,7 @@
 </script>
 
 <svelte:head>
-  <title>{entity['full_name'] || `Entity ${entity['gem entity id']}`} — GEM Viz</title>
+  <title>{entity['Full Name'] || `Entity ${entity['gem entity id']}`} — GEM Viz</title>
 </svelte:head>
 
 <main>
@@ -58,7 +58,7 @@
   </header>
 
   <article class="entity-detail">
-    <h1>{entity['full_name'] || `ID: ${entity['gem entity id']}`}</h1>
+    <h1>{entity['Full Name'] || `ID: ${entity['gem entity id']}`}</h1>
 
     <div class="meta-grid">
       {#if entity['entity_type'] && shouldDisplay(entity['entity_type'])}
