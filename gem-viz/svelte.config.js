@@ -20,7 +20,8 @@ const config = {
         // Skip 404/500 errors from problematic/missing assets and continue build
         console.warn(`⚠️  Skipping ${path} (status ${status}: ${message})`);
         // Don't throw - just log and continue
-      }
+      },
+      handleUnseenRoutes: 'warn'  // Warn about unseen routes like /entity/[id] but don't fail build
     },
     paths: {
       base: '/gem-viz'
