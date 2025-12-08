@@ -1,9 +1,9 @@
 {
-  "version": "4a69b21",
-  "commit": "4a69b21",
-  "message": "Fix network page rendering by dynamically importing DuckDB",
+  "version": "5f2bf06",
+  "commit": "5f2bf06",
+  "message": "Re-enable crawling for prerender (XL runner has capacity for file I/O)",
   "author": "EJ Fox",
-  "timestamp": "2025-12-08T17:03:27.113Z",
-  "deployed": "2025-12-08T17:03:27.113Z",
-  "buildTime": "12/8/2025, 12:03:27 PM"
+  "timestamp": "2025-12-08T20:50:14.809Z",
+  "deployed": "2025-12-08T20:50:14.809Z",
+  "buildTime": "12/8/2025, 3:50:14 PM"
 }

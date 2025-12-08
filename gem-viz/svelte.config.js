@@ -9,11 +9,7 @@ const config = {
       pages: 'build',
       assets: 'build',
       fallback: undefined,
-      precompress: {
-        brotli: true,
-        gzip: true,
-        files: ['html', 'js', 'json', 'css', 'svg', 'xml']
-      },
+      precompress: false,  // Disable to reduce file descriptor pressure during prerender
       strict: false
     }),
     prerender: {
