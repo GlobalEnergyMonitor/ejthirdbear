@@ -15,24 +15,7 @@ const config = {
     prerender: {
       concurrency: 10,  // Render 10 pages at a time - balances speed vs file descriptor pressure
       crawl: true,      // Crawl to find dynamic routes like /asset/[id]
-      entries: async () => {
-        // Start with crawled routes
-        const crawledEntries = ['*'];
-
-        // Dynamically add entity routes by calling the entity entries() function
-        try {
-          const { entries: entityEntries } = await import('./src/routes/entity/[id]/+page.server.js');
-          if (typeof entityEntries === 'function') {
-            const entities = await entityEntries();
-            const entityPaths = entities.map(e => `/entity/${e.id}`);
-            return [...crawledEntries, ...entityPaths];
-          }
-        } catch (err) {
-          console.warn('Could not load entity entries:', err.message);
-        }
-
-        return crawledEntries;
-      },
+      entries: ['*'],   // Crawl all discovered routes
       handleHttpError: ({ status, path, message }) => {
         // Skip 404/500 errors from problematic/missing assets and continue build
         console.warn(`⚠️  Skipping ${path} (status ${status}: ${message})`);
