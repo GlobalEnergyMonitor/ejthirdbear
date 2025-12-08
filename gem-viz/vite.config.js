@@ -19,6 +19,7 @@ export default defineConfig({
 
   build: {
     sourcemap: true,
+    minify: 'terser',
     rollupOptions: {
       external: [
         // Exclude Node.js-only packages from browser bundle
@@ -41,7 +42,10 @@ export default defineConfig({
         }
       }
     },
-    chunkSizeWarningLimit: 1500
+    chunkSizeWarningLimit: 1500,
+    // Batch file writes to avoid exhausting file descriptors
+    // Limit concurrent file operations during prerender/build
+    reportCompressedSize: false
   },
 
   optimizeDeps: {
