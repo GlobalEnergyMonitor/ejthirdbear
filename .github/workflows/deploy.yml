@@ -41,7 +41,7 @@ jobs:
 
       - name: Build
         run: |
-          ulimit -n 4096
+          ulimit -n 16384
           npm run build
         env:
           MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
