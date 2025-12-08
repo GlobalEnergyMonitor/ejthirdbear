@@ -28,12 +28,10 @@ const versionInfo = {
   buildTime: new Date().toLocaleString()
 };
 
-// Ensure directory exists
-const dir = 'src/lib/generated';
-mkdirSync(dir, { recursive: true });
-
-// Write to static file that will be served by API
-writeFileSync(`${dir}/version.json`, JSON.stringify(versionInfo, null, 2));
+// Write to static directory so it gets served as a static file
+const staticDir = 'static';
+mkdirSync(staticDir, { recursive: true });
+writeFileSync(`${staticDir}/version.json`, JSON.stringify(versionInfo, null, 2));
 
 console.log('✅ Version info injected');
 console.log(`   Commit: ${commit}`);
