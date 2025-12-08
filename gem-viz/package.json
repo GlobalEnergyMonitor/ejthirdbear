@@ -8,6 +8,7 @@
     "build": "node scripts/inject-version.js && node scripts/generate-geojson.js && NODE_OPTIONS=--max-old-space-size=8192 vite build",
     "preview": "vite preview",
     "deploy": "npm run build && node scripts/deploy.js",
+    "deploy:vps": "bash scripts/deploy-vps.sh",
     "release": "node scripts/release.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
