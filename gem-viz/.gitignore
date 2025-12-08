@@ -36,3 +36,6 @@ data/
 .env.*.local
 build-*.log
 .wrangler/
+
+# Generated files (build-time injection)
+src/lib/generated/
