@@ -79,7 +79,6 @@ try {
     `--endpoint-url ${ENDPOINT} ` +
     `--profile ${PROFILE} ` +
     `--acl public-read ` +
-    `--delete ` +
     `--cache-control "public, max-age=3600"`,
     { stdio: 'inherit' }
   );
