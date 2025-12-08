@@ -66,16 +66,11 @@ export async function entries() {
       })
       || columns[0];
 
-    let whereClause = '';
-    if (countryCol) {
-      whereClause = `WHERE "${countryCol}" = 'United States'`;
-    }
-
     // BULK FETCH: Get ALL asset data in one query (not just IDs!)
+    // Removed country filter - prerender ALL 62,366+ assets
     const assetsResult = await motherduck.query(`
       SELECT *
       FROM ${fullTableName}
-      ${whereClause}
     `);
 
     if (!assetsResult.success) {
@@ -129,6 +124,8 @@ export async function entries() {
 
     // Filter out already-built pages for incremental builds
     const allAssetIds = Object.keys(assetsMap);
+    console.log(`  📋 Asset IDs to build: ${allAssetIds.slice(0, 3).join(', ')}${allAssetIds.length > 3 ? ` ... (${allAssetIds.length} total)` : ''}`);
+
     const unbuildAssets = allAssetIds.filter(id => {
       const pagePath = join(process.cwd(), 'build', 'asset', id, 'index.html');
       return !existsSync(pagePath);
@@ -138,7 +135,8 @@ export async function entries() {
     if (alreadyBuilt > 0) {
       console.log(`  📦 Skipping ${alreadyBuilt} already-built pages`);
     }
-    console.log(`  🔨 Building ${unbuildAssets.length} remaining pages`);
+    console.log(`  🔨 Building ${unbuildAssets.length}/${allAssetIds.length} pages`);
+    console.log(`  💾 Cache file: ${CACHE_FILE}`);
 
     // Return array of { id } objects for SvelteKit to prerender
     return unbuildAssets.map(id => ({ id }));
@@ -150,21 +148,26 @@ export async function entries() {
 
 // Helper to load cache from disk
 function loadCacheFromDisk() {
-  if (!ASSET_CACHE.initialized && existsSync(CACHE_FILE)) {
-    try {
-      const cacheData = JSON.parse(readFileSync(CACHE_FILE, 'utf-8'));
-      ASSET_CACHE.metadata = {
-        tableName: cacheData.tableName,
-        columns: cacheData.columns,
-        idCol: cacheData.idCol,
-        useCompositeId: cacheData.useCompositeId,
-        ownerIdCol: cacheData.ownerIdCol,
-        unitIdCol: cacheData.unitIdCol
-      };
-      ASSET_CACHE.assets = new Map(Object.entries(cacheData.assets));
-      ASSET_CACHE.initialized = true;
-    } catch (err) {
-      console.error('Failed to load cache from disk:', err);
+  if (!ASSET_CACHE.initialized) {
+    if (existsSync(CACHE_FILE)) {
+      try {
+        const cacheData = JSON.parse(readFileSync(CACHE_FILE, 'utf-8'));
+        ASSET_CACHE.metadata = {
+          tableName: cacheData.tableName,
+          columns: cacheData.columns,
+          idCol: cacheData.idCol,
+          useCompositeId: cacheData.useCompositeId,
+          ownerIdCol: cacheData.ownerIdCol,
+          unitIdCol: cacheData.unitIdCol
+        };
+        ASSET_CACHE.assets = new Map(Object.entries(cacheData.assets));
+        ASSET_CACHE.initialized = true;
+        console.log(`  ✓ Loaded cache: ${ASSET_CACHE.assets.size} assets from ${CACHE_FILE}`);
+      } catch (err) {
+        console.error(`  ✗ Failed to load cache from ${CACHE_FILE}:`, err.message);
+      }
+    } else {
+      console.warn(`  ⚠️  Cache file not found at ${CACHE_FILE}`);
     }
   }
 }
