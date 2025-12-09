@@ -5,7 +5,8 @@ import { join, dirname } from 'path';
 export const prerender = true;
 
 // Disk cache path (persists across worker processes)
-const CACHE_FILE = join(process.cwd(), 'build/.asset-cache.json');
+// Use .svelte-kit for build-time cache (not cleaned up like build/)
+const CACHE_FILE = join(process.cwd(), '.svelte-kit/.asset-cache.json');
 
 // In-memory cache (loaded from disk)
 const ASSET_CACHE = {
