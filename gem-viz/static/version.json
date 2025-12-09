@@ -1,9 +1,9 @@
 {
-  "version": "05f0a39",
-  "commit": "05f0a39",
-  "message": "Clean up entity page implementation",
+  "version": "5be47fd",
+  "commit": "5be47fd",
+  "message": "Improve build logging and cache diagnostics for prerendering debug",
   "author": "EJ Fox",
-  "timestamp": "2025-12-08T23:23:36.543Z",
-  "deployed": "2025-12-08T23:23:36.543Z",
-  "buildTime": "12/8/2025, 6:23:36 PM"
+  "timestamp": "2025-12-08T23:57:13.668Z",
+  "deployed": "2025-12-08T23:57:13.668Z",
+  "buildTime": "12/8/2025, 6:57:13 PM"
 }
