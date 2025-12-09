@@ -17,14 +17,13 @@ const config = {
     }),
     prerender: {
       concurrency: 1,   // Render 1 page at a time - eliminates cache/timing race conditions
-      crawl: true,      // Crawl to find dynamic routes like /asset/[id]
-      entries: ['*'],  // Include only crawled routes
+      crawl: false,     // Don't crawl - entries() generates all routes from +page.server.js
       handleHttpError: ({ status, path, message }) => {
         // Skip 404/500 errors from problematic/missing assets and continue build
         console.warn(`⚠️  Skipping ${path} (status ${status}: ${message})`);
         // Don't throw - just log and continue
       },
-      handleUnseenRoutes: 'warn'  // Warn about unseen routes that still can't be found after crawl
+      handleUnseenRoutes: 'ignore'  // Ignore unseen routes (we're generating the list)
     },
     paths: {
       base: '/gem-viz'
