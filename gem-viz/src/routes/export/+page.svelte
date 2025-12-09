@@ -6,11 +6,11 @@
   import { isValidSlug } from '$lib/slug';
   import DataTable from '$lib/components/DataTable.svelte';
 
-  let loading = false;
-  let exporting = false;
-  let error = null;
-  let dbReady = false;
-  let exportProgress = '';
+  let loading = $state(false);
+  let exporting = $state(false);
+  let error = $state(null);
+  let dbReady = $state(false);
+  let exportProgress = $state('');
   let selectedRows = $state([]);
 
   const columns = [

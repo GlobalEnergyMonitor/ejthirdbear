@@ -15,6 +15,7 @@ dotenv.config();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const outputDir = path.join(__dirname, '../static');
+const assetLocationsPath = path.join(__dirname, '../public/asset_locations.parquet');
 
 const { Database } = duckdb;
 let db = null;
@@ -61,6 +62,79 @@ async function generateGeoJSON() {
   console.log('\n📍 Generating GeoJSON from MotherDuck...\n');
 
   try {
+    // Fast path: build from local asset_locations.parquet if available
+    if (fs.existsSync(assetLocationsPath)) {
+      console.log('📂 Using local asset_locations.parquet');
+      db = new Database(':memory:');
+
+      const parquetEscaped = assetLocationsPath.replace(/'/g, "''");
+      const { success, data, error: queryError } = await query(`
+        SELECT DISTINCT
+          "GEM.location.ID" AS location_id,
+          Latitude AS lat,
+          Longitude AS lon,
+          "Country.Area" AS country,
+          "State.Province" AS state,
+          tracker
+        FROM read_parquet('${parquetEscaped}')
+        WHERE Latitude IS NOT NULL AND Longitude IS NOT NULL
+      `);
+
+      if (!success) {
+        throw new Error(`Failed to load asset_locations.parquet: ${queryError}`);
+      }
+
+      console.log(`✓ Loaded ${data.length.toLocaleString()} point rows from local parquet\n`);
+
+      const features = data.map((row) => ({
+        type: 'Feature',
+        id: row.location_id,
+        properties: {
+          id: row.location_id,
+          'GEM location ID': row.location_id,
+          lat: row.lat,
+          lon: row.lon,
+          country: row.country,
+          state: row.state,
+          tracker: row.tracker,
+        },
+        geometry: {
+          type: 'Point',
+          coordinates: [row.lon, row.lat],
+        },
+      }));
+
+      const geojson = {
+        type: 'FeatureCollection',
+        metadata: {
+          source: 'asset_locations.parquet',
+          generated: new Date().toISOString(),
+          count: features.length,
+          columns: {
+            locationId: 'GEM location ID',
+            lat: 'Latitude',
+            lon: 'Longitude',
+            country: 'Country.Area',
+            state: 'State.Province',
+            tracker: 'tracker',
+          },
+        },
+        features,
+      };
+
+      const outputPath = path.join(outputDir, 'points.geojson');
+      fs.writeFileSync(outputPath, JSON.stringify(geojson, null, 2));
+      const stats = fs.statSync(outputPath);
+      const sizeMB = (stats.size / 1024 / 1024).toFixed(2);
+      console.log('📦 GeoJSON Statistics:');
+      console.log(`   File: static/points.geojson`);
+      console.log(`   Size: ${sizeMB} MB (uncompressed)`);
+      console.log(`   Features: ${geojson.features.length.toLocaleString()}`);
+      console.log(`   Estimated gzip size: ~${(sizeMB / 5).toFixed(2)} MB`);
+      console.log('\n✅ GeoJSON generation complete!\n');
+      return;
+    }
+
     await initDB();
 
     // Get all data tables and check for lat/lon columns

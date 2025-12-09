@@ -143,10 +143,10 @@
           )
           SELECT
             "GEM unit ID" as source_id,
-            "Unit" as source_name,
+            "Project" as source_name,
             "Owner GEM Entity ID" as target_id,
             "Owner" as target_name,
-            "% Share of Ownership" as share
+            "Share" as share
           FROM ownership
           WHERE "GEM unit ID" IS NOT NULL
             AND "Owner GEM Entity ID" IS NOT NULL
@@ -158,10 +158,10 @@
         edgeQuery = `
           SELECT
             "GEM unit ID" as source_id,
-            "Unit" as source_name,
+            "Project" as source_name,
             "Owner GEM Entity ID" as target_id,
             "Owner" as target_name,
-            "% Share of Ownership" as share
+            "Share" as share
           FROM ownership
           WHERE "GEM unit ID" IS NOT NULL
             AND "Owner GEM Entity ID" IS NOT NULL
@@ -172,10 +172,10 @@
         edgeQuery = `
           SELECT
             "GEM unit ID" as source_id,
-            "Unit" as source_name,
+            "Project" as source_name,
             "Owner GEM Entity ID" as target_id,
             "Owner" as target_name,
-            "% Share of Ownership" as share
+            "Share" as share
           FROM ownership
           WHERE "GEM unit ID" IS NOT NULL
             AND "Owner GEM Entity ID" IS NOT NULL
@@ -397,8 +397,8 @@
           new LineLayer({
             id: 'edges',
             data: lineData,
-            getSourcePosition: (d) => [d.source.x, d.source.y],
-            getTargetPosition: (d) => [d.target.x, d.target.y],
+            getSourcePosition: (d) => [d.source.x, d.source.y, config.use3D ? (d.source.z || 0) : 0],
+            getTargetPosition: (d) => [d.target.x, d.target.y, config.use3D ? (d.target.z || 0) : 0],
             getColor: (d) => {
               const shareAlpha = Math.min(255, Math.max(15, (d.share || 8) * 2.2));
               return [70, 70, 70, Math.round(shareAlpha * edgeOpacity)];
@@ -414,7 +414,7 @@
         new ScatterplotLayer({
           id: 'nodes',
           data: nodes,
-          getPosition: (d) => [d.x || 0, d.y || 0],
+          getPosition: (d) => [d.x || 0, d.y || 0, config.use3D ? (d.z || 0) : 0],
           getRadius: (d) => {
             const baseSize = Math.max(2, Math.log2(d.connections + 1) * 2.8);
             return baseSize * nodeScale;
@@ -453,18 +453,24 @@
   }
 
   onMount(async () => {
-    const { OrthographicView } = await import('@deck.gl/core');
+    const { OrthographicView, OrbitView } = await import('@deck.gl/core');
+
+    const view = config.use3D
+      ? new OrbitView({ orbitAxis: 'Y' })
+      : new OrthographicView({ flipY: false });
+
+    const initialViewState = config.use3D
+      ? { target: [0, 0, 0], rotationX: 30, rotationOrbit: -30, zoom: -1, minZoom: -3, maxZoom: 3 }
+      : { target: [0, 0, 0], zoom: -1.5 };
 
     deck = new Deck({
       parent: container,
-      views: new OrthographicView({ flipY: false }),
-      initialViewState: {
-        target: [0, 0, 0],
-        zoom: -1.5,
-      },
+      views: view,
+      initialViewState,
       controller: {
         scrollZoom: { speed: 0.012, smooth: true },
         dragPan: true,
+        dragRotate: config.use3D,
         doubleClickZoom: true,
         keyboard: true,
       },
@@ -574,6 +580,15 @@
           oninput={updateLayers}
         />
       </label>
+
+      <label class="toggle">
+        <input
+          type="checkbox"
+          bind:checked={config.use3D}
+          onchange={reloadWithConfig}
+        />
+        <span>3D Mode</span>
+      </label>
     </div>
   </div>
 
@@ -588,8 +603,8 @@
   </div>
 
   <div class="help">
-    <p>Scroll to zoom • Drag to pan • Hover for details</p>
-    <p class="engine">d3-force-3d engine</p>
+    <p>Scroll to zoom • Drag to pan {config.use3D ? '• Right-drag to rotate' : ''} • Hover for details</p>
+    <p class="engine">d3-force-3d engine {config.use3D ? '(3D)' : '(2D)'}</p>
   </div>
 
   <div bind:this={container} class="deck-container"></div>
@@ -702,6 +717,21 @@
 
   .control-group input[type='range'] {
     width: 60px;
+  }
+
+  .control-group .toggle {
+    flex-direction: row-reverse;
+    justify-content: flex-end;
+    gap: 6px;
+    padding-top: 4px;
+    border-top: 1px solid #eee;
+    margin-top: 4px;
+  }
+
+  .control-group .toggle input[type='checkbox'] {
+    width: 14px;
+    height: 14px;
+    accent-color: #000;
   }
 
   .stats {

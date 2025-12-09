@@ -1,4 +1,5 @@
 import { sveltekit } from '@sveltejs/kit/vite';
+import path from 'path';
 import { defineConfig } from 'vite';
 import { ViteMinifyPlugin } from 'vite-plugin-minify';
 
@@ -51,6 +52,13 @@ export default defineConfig({
   optimizeDeps: {
     include: ['@duckdb/duckdb-wasm', '@motherduck/wasm-client', 'd3', 'maplibre-gl', 'maplibre-gl-draw'],
     exclude: ['duckdb']
+  },
+
+  resolve: {
+    alias: {
+      // Stub out Node-only child_process to silence bundler warnings from transitive deps
+      child_process: path.resolve('./src/lib/shims/child_process.js')
+    }
   },
 
   ssr: {

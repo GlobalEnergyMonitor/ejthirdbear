@@ -7,8 +7,6 @@
   import { mapFilter, clearMapFilter, setMapFilter } from '$lib/mapFilter';
   import { base } from '$app/paths';
 
-  export let tableName = 'data'; // Not used anymore - loads static GeoJSON
-
   let mapContainer;
   let map;
   let draw;

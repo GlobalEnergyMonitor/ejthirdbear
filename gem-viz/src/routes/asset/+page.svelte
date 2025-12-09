@@ -119,12 +119,13 @@
   }
 
   header {
-    border-bottom: 1px solid #000;
-    padding-bottom: 15px;
+    border-bottom: 1px solid #e0e0e0;
+    padding-bottom: 18px;
     margin-bottom: 20px;
     display: flex;
-    gap: 20px;
-    align-items: baseline;
+    gap: 16px;
+    align-items: center;
+    flex-wrap: wrap;
   }
 
   .back-link {
@@ -140,16 +141,20 @@
   }
 
   .title {
-    font-size: 13px;
-    font-weight: bold;
+    font-size: 15px;
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.6px;
   }
 
   .count {
     font-size: 10px;
-    color: #999;
+    color: #555;
     margin-left: auto;
+    padding: 6px 10px;
+    border: 1px solid #e0e0e0;
+    border-radius: 999px;
+    background: #f7f7f7;
   }
 
   .no-data {

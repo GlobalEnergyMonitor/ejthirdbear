@@ -1,9 +1,9 @@
 {
-  "version": "4625e59",
-  "commit": "4625e59",
-  "message": "Fix broken internal links for Digital Ocean Spaces",
+  "version": "bf65f9e",
+  "commit": "bf65f9e",
+  "message": "Apply linter formatting across codebase",
   "author": "EJ Fox",
-  "timestamp": "2025-12-09T19:22:44.968Z",
-  "deployed": "2025-12-09T19:22:44.968Z",
-  "buildTime": "12/9/2025, 2:22:45 PM"
+  "timestamp": "2025-12-09T23:19:23.465Z",
+  "deployed": "2025-12-09T23:19:23.465Z",
+  "buildTime": "12/9/2025, 6:19:23 PM"
 }

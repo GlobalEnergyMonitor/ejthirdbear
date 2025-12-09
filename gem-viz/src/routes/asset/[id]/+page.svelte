@@ -4,7 +4,6 @@
   import OwnershipPie from '$lib/components/OwnershipPie.svelte';
   import { colors, colorByStatus, colorByTracker } from '$lib/ownership-theme';
 
-  export const prerender = true;
   export let data;
 
   const { asset, tableName, columns, svgs, resolvedId, paramsId } = data;
@@ -28,6 +27,7 @@
   const countryCol = columns.find((c) => c.toLowerCase() === 'country');
   const latCol = columns.find((c) => c.toLowerCase() === 'latitude' || c.toLowerCase() === 'lat');
   const lonCol = columns.find((c) => c.toLowerCase() === 'longitude' || c.toLowerCase() === 'lon');
+  const gemLocationIdCol = columns.find((c) => c.toLowerCase() === 'gem location id');
   const gemUnitIdCol = columns.find((c) => c.toLowerCase() === 'gem unit id');
   const ownershipPctCol = columns.find((c) => c.toLowerCase().includes('share') || c.toLowerCase().includes('ownership'));
   const trackerCol = columns.find((c) => c.toLowerCase() === 'tracker');
@@ -127,12 +127,15 @@
     </div>
 
     <!-- Interactive location map -->
-    {#if gemUnitIdCol && asset[gemUnitIdCol]}
+    {#if (latCol && lonCol && asset[latCol] && asset[lonCol]) || (gemLocationIdCol && asset[gemLocationIdCol])}
       <section class="map-section">
         <h2>Location</h2>
         <AssetMap
           gemUnitId={asset[gemUnitIdCol]}
+          gemLocationId={gemLocationIdCol && asset[gemLocationIdCol] ? asset[gemLocationIdCol] : null}
           assetName={nameCol && asset[nameCol] ? asset[nameCol] : `ID: ${asset[columns[0]]}`}
+          lat={latCol && asset[latCol] ? asset[latCol] : null}
+          lon={lonCol && asset[lonCol] ? asset[lonCol] : null}
         />
       </section>
     {/if}

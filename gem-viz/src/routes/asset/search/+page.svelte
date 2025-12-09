@@ -402,12 +402,12 @@
   }
 
   header {
-    border-bottom: 1px solid #000;
-    padding-bottom: 15px;
-    margin-bottom: 20px;
+    border-bottom: 1px solid #e0e0e0;
+    padding-bottom: 18px;
+    margin-bottom: 18px;
     display: flex;
-    gap: 20px;
-    align-items: baseline;
+    gap: 16px;
+    align-items: center;
     flex-wrap: wrap;
   }
 
@@ -424,15 +424,19 @@
   }
 
   .title {
-    font-size: 13px;
-    font-weight: bold;
+    font-size: 15px;
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.6px;
   }
 
   .count {
     font-size: 10px;
-    color: #666;
+    color: #555;
+    padding: 6px 10px;
+    border: 1px solid #e0e0e0;
+    border-radius: 999px;
+    background: #f7f7f7;
   }
 
   .export-link {
@@ -454,18 +458,20 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 12px 16px;
-    background: #f5f5f5;
-    border: 1px solid #ddd;
-    margin-bottom: 20px;
+    padding: 10px 14px;
+    background: #fdfbf7;
+    border: 1px solid #e0e0e0;
+    margin-bottom: 16px;
     font-size: 12px;
+    border-radius: 6px;
   }
 
   .filter-label {
     font-weight: bold;
     text-transform: uppercase;
     font-size: 10px;
-    color: #666;
+    color: #333;
+    letter-spacing: 0.4px;
   }
 
   .filter-desc {
@@ -475,7 +481,7 @@
 
   .query-time {
     margin-left: auto;
-    color: #999;
+    color: #666;
     font-size: 10px;
   }
 
@@ -611,149 +617,6 @@
     cursor: pointer;
   }
 
-  .assets-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 16px;
-  }
-
-  .asset-card {
-    display: flex;
-    background: #fff;
-    border: 1px solid #ddd;
-    transition: all 0.1s ease;
-  }
-
-  .asset-card:hover {
-    border-color: #000;
-    background: #fafafa;
-  }
-
-  .asset-card.selected {
-    border-color: #1976d2;
-    background: #e3f2fd;
-  }
-
-  .checkbox-wrapper {
-    display: flex;
-    align-items: flex-start;
-    padding: 16px 8px 16px 16px;
-    cursor: pointer;
-  }
-
-  .checkbox-wrapper input {
-    width: 16px;
-    height: 16px;
-    cursor: pointer;
-  }
-
-  .asset-content {
-    flex: 1;
-    padding: 16px 16px 16px 8px;
-    text-decoration: none;
-    color: #000;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .asset-header {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-
-  .tracker-badge {
-    font-size: 9px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    padding: 2px 6px;
-    background: #333;
-    color: #fff;
-  }
-
-  .status-badge {
-    font-size: 9px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    padding: 2px 6px;
-    background: #f0f0f0;
-    color: #666;
-  }
-
-  .status-badge.operating {
-    background: #4caf50;
-    color: #fff;
-  }
-
-  .in-export-badge {
-    font-size: 9px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    padding: 2px 6px;
-    background: #1976d2;
-    color: #fff;
-  }
-
-  h3 {
-    font-size: 14px;
-    font-weight: normal;
-    margin: 0;
-    font-family: Georgia, serif;
-    line-height: 1.3;
-  }
-
-  .asset-meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    font-size: 11px;
-    color: #666;
-  }
-
-  .meta-item {
-    padding: 2px 6px;
-    background: #f5f5f5;
-    border: 1px solid #eee;
-  }
-
-  .meta-item.capacity {
-    font-weight: bold;
-    background: #e3f2fd;
-    border-color: #bbdefb;
-    color: #1976d2;
-  }
-
-  .coords {
-    font-size: 10px;
-    font-family: monospace;
-    color: #999;
-    margin-top: auto;
-  }
-
-  .load-more {
-    display: flex;
-    justify-content: center;
-    padding: 20px;
-  }
-
-  .load-more-btn {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    padding: 10px 24px;
-    background: #f5f5f5;
-    color: #333;
-    border: 1px solid #ddd;
-    cursor: pointer;
-    transition: all 0.15s ease;
-  }
-
-  .load-more-btn:hover {
-    background: #e0e0e0;
-    border-color: #bbb;
-  }
-
   .limit-notice {
     text-align: center;
     padding: 20px;
@@ -765,10 +628,6 @@
   @media (max-width: 768px) {
     main {
       padding: 15px;
-    }
-
-    .assets-grid {
-      grid-template-columns: 1fr;
     }
   }
 </style>
