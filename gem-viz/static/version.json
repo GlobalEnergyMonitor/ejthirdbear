@@ -1,9 +1,9 @@
 {
-  "version": "419d4b8",
-  "commit": "419d4b8",
-  "message": "Fix structuredClone error with Svelte 5 $state proxy",
+  "version": "4625e59",
+  "commit": "4625e59",
+  "message": "Fix broken internal links for Digital Ocean Spaces",
   "author": "EJ Fox",
-  "timestamp": "2025-12-09T18:36:05.103Z",
-  "deployed": "2025-12-09T18:36:05.103Z",
-  "buildTime": "12/9/2025, 1:36:05 PM"
+  "timestamp": "2025-12-09T19:22:44.968Z",
+  "deployed": "2025-12-09T19:22:44.968Z",
+  "buildTime": "12/9/2025, 2:22:45 PM"
 }

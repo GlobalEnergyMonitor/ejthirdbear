@@ -1,7 +1,8 @@
 <script>
-  import { onMount, tick } from 'svelte';
+  import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { base, assets as assetsPath } from '$app/paths';
+  import { goto } from '$app/navigation';
   import { initDuckDB, loadParquetFromPath, query } from '$lib/duckdb-utils';
   import { exportList } from '$lib/exportList';
   import {
@@ -9,9 +10,9 @@
     findTilesForBounds,
     estimateSize,
     loadTiles,
-    buildUnionQuery,
-    queryLoadedTiles
+    buildUnionQuery
   } from '$lib/tileLoader';
+  import DataTable from '$lib/components/DataTable.svelte';
 
   let loading = true;
   let error = null;
@@ -27,19 +28,22 @@
   let currentTile = '';
   let estimatedDownload = { mb: 0, rows: 0, assets: 0 };
 
-  // Selection state
-  let selectedIds = new Set();
-  let selectAll = false;
 
-  // Virtual scrolling state
-  let visibleStart = 0;
-  let visibleCount = 50;
-  let containerEl;
+  // DataTable column definitions for asset data
+  const tableColumns = [
+    { key: 'id', label: 'ID', sortable: true, filterable: true, width: '200px' },
+    { key: 'name', label: 'Name', sortable: true, filterable: true },
+    { key: 'tracker', label: 'Tracker', sortable: true, filterable: true, width: '120px' },
+    { key: 'country', label: 'Country', sortable: true, filterable: true, width: '140px' },
+    { key: 'state', label: 'State', sortable: true, filterable: true, width: '120px' },
+    { key: 'lat', label: 'Latitude', sortable: true, type: 'number', width: '100px' },
+    { key: 'lon', label: 'Longitude', sortable: true, type: 'number', width: '100px' }
+  ];
 
-  // Derived visible results for performance
-  $: visibleResults = results.slice(visibleStart, visibleStart + visibleCount);
-  $: hasMoreAbove = visibleStart > 0;
-  $: hasMoreBelow = visibleStart + visibleCount < results.length;
+  // Handle row click to navigate to asset page
+  function handleRowClick(row) {
+    goto(`${base}/asset/${row.id}/index.html`);
+  }
 
   // Parse filter from URL params
   function parseFilter() {
@@ -125,8 +129,6 @@
     try {
       loading = true;
       error = null;
-      selectedIds = new Set();
-      selectAll = false;
       tilesLoaded = 0;
       tilesToLoad = 0;
       currentTile = '';
@@ -284,48 +286,8 @@
     return data;
   }
 
-  // Selection handlers
-  function toggleSelect(id) {
-    if (selectedIds.has(id)) {
-      selectedIds.delete(id);
-    } else {
-      selectedIds.add(id);
-    }
-    selectAll = selectedIds.size === results.length;
-  }
-
-  function toggleSelectAll() {
-    if (selectAll) {
-      selectedIds = new Set();
-    } else {
-      selectedIds = new Set(results.map(r => r.id));
-    }
-    selectAll = !selectAll;
-  }
-
-  function addSelectedToExport() {
-    const toAdd = results.filter(r => selectedIds.has(r.id));
-    exportList.addMany(toAdd);
-    selectedIds = new Set();
-    selectAll = false;
-  }
-
   function addAllToExport() {
     exportList.addMany(results);
-  }
-
-  // Load more results for virtual scrolling
-  function loadMore() {
-    visibleCount = Math.min(visibleCount + 50, results.length);
-  }
-
-  // Scroll to load more (Intersection Observer approach)
-  function handleScroll(e) {
-    const { scrollTop, scrollHeight, clientHeight } = e.target;
-    // Load more when 80% scrolled
-    if (scrollTop + clientHeight > scrollHeight * 0.8) {
-      loadMore();
-    }
   }
 
   onMount(() => {
@@ -397,15 +359,6 @@
     </div>
   {:else}
     <div class="bulk-actions">
-      <label class="select-all">
-        <input type="checkbox" checked={selectAll} onchange={toggleSelectAll} />
-        Select all
-      </label>
-      {#if selectedIds.size > 0}
-        <button class="action-btn" onclick={addSelectedToExport}>
-          Add {selectedIds.size} to Export List
-        </button>
-      {/if}
       <button class="action-btn secondary" onclick={addAllToExport}>
         Add All {results.length} to Export
       </button>
@@ -416,47 +369,21 @@
       {/if}
     </div>
 
-    <div class="assets-grid" bind:this={containerEl} onscroll={handleScroll}>
-      {#each visibleResults as asset (asset.id)}
-        <div class="asset-card" class:selected={selectedIds.has(asset.id)}>
-          <label class="checkbox-wrapper">
-            <input
-              type="checkbox"
-              checked={selectedIds.has(asset.id)}
-              onchange={() => toggleSelect(asset.id)}
-            />
-          </label>
-          <a href="{base}/asset/{asset.id}/index.html" class="asset-content">
-            <div class="asset-header">
-              <span class="tracker-badge">{asset.tracker || 'Unknown'}</span>
-              {#if $exportList.some(e => e.id === asset.id)}
-                <span class="in-export-badge">In Export</span>
-              {/if}
-            </div>
-            <h3>{asset.name || asset.id}</h3>
-            <div class="asset-meta">
-              {#if asset.country}
-                <span class="meta-item">{asset.country}</span>
-              {/if}
-              {#if asset.state}
-                <span class="meta-item">{asset.state}</span>
-              {/if}
-            </div>
-            <div class="coords">
-              {asset.lat?.toFixed(4)}°, {asset.lon?.toFixed(4)}°
-            </div>
-          </a>
-        </div>
-      {/each}
+    <div class="table-container">
+      <DataTable
+        columns={tableColumns}
+        data={results}
+        pageSize={50}
+        showGlobalSearch={true}
+        showColumnFilters={true}
+        showPagination={true}
+        showExport={true}
+        showColumnToggle={true}
+        stickyHeader={true}
+        striped={true}
+        onRowClick={handleRowClick}
+      />
     </div>
-
-    {#if hasMoreBelow}
-      <div class="load-more">
-        <button class="load-more-btn" onclick={loadMore}>
-          Load More ({results.length - visibleCount} remaining)
-        </button>
-      </div>
-    {/if}
 
     {#if results.length >= 500}
       <p class="limit-notice">Showing first 500 results. Zoom in for more specific results.</p>
@@ -561,12 +488,8 @@
     flex-wrap: wrap;
   }
 
-  .select-all {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    cursor: pointer;
+  .table-container {
+    margin-bottom: 20px;
   }
 
   .action-btn {
