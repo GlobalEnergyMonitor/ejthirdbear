@@ -1,24 +1,44 @@
 <script>
   import { base, assets as assetsPath } from '$app/paths';
+  import { goto } from '$app/navigation';
   import { initDuckDB, loadParquetFromPath, query } from '$lib/duckdb-utils';
   import { exportList } from '$lib/exportList';
   import { isValidSlug } from '$lib/slug';
+  import DataTable from '$lib/components/DataTable.svelte';
 
   let loading = false;
   let exporting = false;
   let error = null;
   let dbReady = false;
   let exportProgress = '';
+  let selectedRows = $state([]);
+
+  const columns = [
+    { key: 'name', label: 'Name', sortable: true, filterable: true, width: '250px' },
+    { key: 'id', label: 'ID', sortable: true, filterable: true, width: '150px' },
+    { key: 'tracker', label: 'Tracker', sortable: true, filterable: true, width: '120px' },
+    { key: 'addedAt', label: 'Added', sortable: true, type: 'date', width: '120px' }
+  ];
 
   // Remove single asset
   function removeAsset(id) {
     exportList.remove(id);
   }
 
+  // Remove selected assets
+  function removeSelected() {
+    if (selectedRows.length === 0) return;
+    if (confirm(`Remove ${selectedRows.length} assets from export list?`)) {
+      selectedRows.forEach(row => exportList.remove(row.id));
+      selectedRows = [];
+    }
+  }
+
   // Clear entire list
   function clearAll() {
     if (confirm('Remove all assets from export list?')) {
       exportList.clear();
+      selectedRows = [];
     }
   }
 
@@ -200,8 +220,21 @@
     URL.revokeObjectURL(url);
   }
 
+  function handleRowClick(row) {
+    goto(`${base}/asset/${row.id}/index.html`);
+  }
+
+  // Format data for DataTable
+  function formatAssets(assets) {
+    return assets.map(a => ({
+      ...a,
+      addedAt: new Date(a.addedAt).toLocaleDateString()
+    }));
+  }
+
   $: assets = $exportList;
   $: assetCount = assets.length;
+  $: formattedAssets = formatAssets(assets);
 </script>
 
 <svelte:head>
@@ -227,9 +260,14 @@
         {#if exporting}
           Exporting...
         {:else}
-          Download CSV ({assetCount} assets)
+          Download Full CSV ({assetCount} assets)
         {/if}
       </button>
+      {#if selectedRows.length > 0}
+        <button class="action-btn danger" onclick={removeSelected}>
+          Remove Selected ({selectedRows.length})
+        </button>
+      {/if}
       <button class="action-btn danger" onclick={clearAll} disabled={exporting}>
         Clear All
       </button>
@@ -250,49 +288,27 @@
       Multiple rows per asset if there are multiple owners.
     </div>
 
-    <table class="asset-table">
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>Name</th>
-          <th>Tracker</th>
-          <th>Added</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        {#each assets as asset}
-          <tr>
-            <td class="id-cell">
-              <a href="{base}/asset/{asset.id}/index.html">{asset.id}</a>
-            </td>
-            <td>{asset.name || '—'}</td>
-            <td>
-              {#if asset.tracker}
-                <span class="tracker-badge">{asset.tracker}</span>
-              {:else}
-                —
-              {/if}
-            </td>
-            <td class="date-cell">
-              {new Date(asset.addedAt).toLocaleDateString()}
-            </td>
-            <td class="action-cell">
-              <button class="remove-btn" onclick={() => removeAsset(asset.id)} title="Remove">
-                ×
-              </button>
-            </td>
-          </tr>
-        {/each}
-      </tbody>
-    </table>
+    <DataTable
+      {columns}
+      data={formattedAssets}
+      pageSize={50}
+      showGlobalSearch={true}
+      showColumnFilters={false}
+      showPagination={true}
+      showExport={false}
+      showColumnToggle={false}
+      stickyHeader={true}
+      striped={true}
+      onRowClick={handleRowClick}
+      bind:selectedRows
+    />
 
     <div class="export-actions bottom">
       <button class="action-btn primary" onclick={exportCSV} disabled={exporting || loading}>
         {#if exporting}
           Exporting...
         {:else}
-          Download CSV ({assetCount} assets)
+          Download Full CSV ({assetCount} assets)
         {/if}
       </button>
     </div>
@@ -302,7 +318,7 @@
 <style>
   main {
     width: 100%;
-    max-width: 1000px;
+    max-width: 1200px;
     margin: 0 auto;
     padding: 20px 40px;
   }
@@ -442,96 +458,9 @@
     margin-bottom: 4px;
   }
 
-  .asset-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 12px;
-  }
-
-  .asset-table th {
-    text-align: left;
-    padding: 10px 12px;
-    background: #f5f5f5;
-    border-bottom: 2px solid #ddd;
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: #666;
-  }
-
-  .asset-table td {
-    padding: 10px 12px;
-    border-bottom: 1px solid #eee;
-    vertical-align: middle;
-  }
-
-  .asset-table tr:hover {
-    background: #fafafa;
-  }
-
-  .id-cell {
-    font-family: monospace;
-    font-size: 11px;
-  }
-
-  .id-cell a {
-    color: #1976d2;
-    text-decoration: none;
-  }
-
-  .id-cell a:hover {
-    text-decoration: underline;
-  }
-
-  .date-cell {
-    color: #999;
-    font-size: 11px;
-  }
-
-  .action-cell {
-    width: 40px;
-    text-align: center;
-  }
-
-  .tracker-badge {
-    font-size: 9px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    padding: 2px 6px;
-    background: #333;
-    color: #fff;
-  }
-
-  .remove-btn {
-    width: 24px;
-    height: 24px;
-    border: 1px solid #ddd;
-    background: #fff;
-    color: #999;
-    font-size: 16px;
-    line-height: 1;
-    cursor: pointer;
-    border-radius: 2px;
-  }
-
-  .remove-btn:hover {
-    background: #ffebee;
-    border-color: #ef9a9a;
-    color: #d32f2f;
-  }
-
   @media (max-width: 768px) {
     main {
       padding: 15px;
-    }
-
-    .asset-table {
-      font-size: 11px;
-    }
-
-    .asset-table th,
-    .asset-table td {
-      padding: 8px;
     }
   }
 </style>
