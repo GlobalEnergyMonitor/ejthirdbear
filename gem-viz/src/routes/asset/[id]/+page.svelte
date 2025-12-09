@@ -1,6 +1,8 @@
 <script>
   import { base } from '$app/paths';
   import AssetMap from '$lib/components/AssetMap.svelte';
+  import OwnershipPie from '$lib/components/OwnershipPie.svelte';
+  import { colors, colorByStatus, colorByTracker } from '$lib/ownership-theme';
 
   export const prerender = true;
   export let data;
@@ -8,26 +10,46 @@
   const { asset, tableName, columns, svgs, resolvedId, paramsId } = data;
 
   // Find special columns for prominent display
-  const nameCol = columns.find(c => {
+  const nameCol = columns.find((c) => {
     const lower = c.toLowerCase();
-    return lower === 'mine' || lower === 'plant' || lower === 'project' || lower === 'facility' ||
-           lower === 'mine name' || lower === 'plant name' || lower === 'project name';
+    return (
+      lower === 'mine' ||
+      lower === 'plant' ||
+      lower === 'project' ||
+      lower === 'facility' ||
+      lower === 'mine name' ||
+      lower === 'plant name' ||
+      lower === 'project name'
+    );
   });
 
-  const statusCol = columns.find(c => c.toLowerCase() === 'status');
-  const ownerCol = columns.find(c => c.toLowerCase() === 'owner' || c.toLowerCase() === 'parent');
-  const countryCol = columns.find(c => c.toLowerCase() === 'country');
-  const latCol = columns.find(c => c.toLowerCase() === 'latitude' || c.toLowerCase() === 'lat');
-  const lonCol = columns.find(c => c.toLowerCase() === 'longitude' || c.toLowerCase() === 'lon');
-  const gemUnitIdCol = columns.find(c => c.toLowerCase() === 'gem unit id');
+  const statusCol = columns.find((c) => c.toLowerCase() === 'status');
+  const ownerCol = columns.find((c) => c.toLowerCase() === 'owner' || c.toLowerCase() === 'parent');
+  const countryCol = columns.find((c) => c.toLowerCase() === 'country');
+  const latCol = columns.find((c) => c.toLowerCase() === 'latitude' || c.toLowerCase() === 'lat');
+  const lonCol = columns.find((c) => c.toLowerCase() === 'longitude' || c.toLowerCase() === 'lon');
+  const gemUnitIdCol = columns.find((c) => c.toLowerCase() === 'gem unit id');
+  const ownershipPctCol = columns.find((c) => c.toLowerCase().includes('share') || c.toLowerCase().includes('ownership'));
+  const trackerCol = columns.find((c) => c.toLowerCase() === 'tracker');
+
+  // Get status color from theme
+  const statusValue = statusCol && asset[statusCol] ? String(asset[statusCol]).toLowerCase() : null;
+  const statusColor = statusValue ? (colorByStatus.get(statusValue) || colors.grey) : colors.grey;
+
+  // Get tracker color from theme
+  const trackerValue = trackerCol && asset[trackerCol] ? asset[trackerCol] : null;
+  const trackerColor = trackerValue ? (colorByTracker.get(trackerValue) || colors.orange) : colors.orange;
+
+  // Ownership percentage
+  const ownershipPct = ownershipPctCol && asset[ownershipPctCol] ? Number(asset[ownershipPctCol]) : null;
 
   // Group remaining columns
-  const specialCols = [nameCol, statusCol, ownerCol, countryCol, latCol, lonCol].filter(Boolean);
-  const otherCols = columns.filter(c => !specialCols.includes(c));
+  const specialCols = [nameCol, statusCol, ownerCol, countryCol, latCol, lonCol, ownershipPctCol].filter(Boolean);
+  const otherCols = columns.filter((c) => !specialCols.includes(c));
 </script>
 
 <svelte:head>
-  <title>{(nameCol && asset[nameCol]) ? asset[nameCol] : `ID: ${asset[columns[0]]}`} — GEM Viz</title>
+  <title>{nameCol && asset[nameCol] ? asset[nameCol] : `ID: ${asset[columns[0]]}`} — GEM Viz</title>
 </svelte:head>
 
 <main>
@@ -51,7 +73,20 @@
       {#if statusCol && asset[statusCol]}
         <div class="meta-item">
           <span class="label">Status</span>
-          <span class="value status">{asset[statusCol]}</span>
+          <span class="value status-badge" style="--status-color: {statusColor}">
+            <span class="status-dot"></span>
+            {asset[statusCol]}
+          </span>
+        </div>
+      {/if}
+
+      {#if trackerCol && asset[trackerCol]}
+        <div class="meta-item">
+          <span class="label">Tracker</span>
+          <span class="value tracker-badge" style="--tracker-color: {trackerColor}">
+            <span class="tracker-dot"></span>
+            {asset[trackerCol]}
+          </span>
         </div>
       {/if}
 
@@ -59,6 +94,20 @@
         <div class="meta-item">
           <span class="label">Owner</span>
           <span class="value">{asset[ownerCol]}</span>
+        </div>
+      {/if}
+
+      {#if ownershipPct !== null}
+        <div class="meta-item">
+          <span class="label">Ownership Share</span>
+          <span class="value ownership-value">
+            <OwnershipPie
+              percentage={ownershipPct}
+              size={24}
+              fillColor={colors.navy}
+            />
+            <span>{ownershipPct.toFixed(1)}%</span>
+          </span>
         </div>
       {/if}
 
@@ -83,7 +132,7 @@
         <h2>Location</h2>
         <AssetMap
           gemUnitId={asset[gemUnitIdCol]}
-          assetName={(nameCol && asset[nameCol]) ? asset[nameCol] : `ID: ${asset[columns[0]]}`}
+          assetName={nameCol && asset[nameCol] ? asset[nameCol] : `ID: ${asset[columns[0]]}`}
         />
       </section>
     {/if}
@@ -220,8 +269,39 @@
     color: #000;
   }
 
-  .value.status {
+  .value.status-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     font-weight: bold;
+  }
+
+  .status-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: var(--status-color, #808080);
+    flex-shrink: 0;
+  }
+
+  .tracker-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .tracker-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: var(--tracker-color, #FE4F2D);
+    flex-shrink: 0;
+  }
+
+  .ownership-value {
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
 
   .properties dl {
