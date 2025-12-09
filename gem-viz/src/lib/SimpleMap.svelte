@@ -31,7 +31,7 @@
 
       // Fetch static GeoJSON (generated at build time)
       console.log('Loading static GeoJSON...');
-      const response = await fetch('/points.geojson');
+      const response = await fetch(`${base}/points.geojson`);
       if (!response.ok) {
         throw new Error(`Failed to load GeoJSON: ${response.statusText}`);
       }
