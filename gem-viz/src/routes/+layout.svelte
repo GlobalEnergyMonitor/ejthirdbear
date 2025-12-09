@@ -1,6 +1,5 @@
 <script>
   import '../app.css';
-  import { page } from '$app/stores';
 
   // Get version from package.json
   const appVersion = '0.1.0';
@@ -12,9 +11,6 @@
   <footer>
     <div class="footer-content">
       <span class="version">v{appVersion}</span>
-      {#if $page.url.pathname !== '/changelog'}
-        <a href="/changelog" class="changelog-link">Changelog</a>
-      {/if}
     </div>
   </footer>
 </div>
@@ -45,14 +41,5 @@
 
   .version {
     font-family: Georgia, serif;
-  }
-
-  .changelog-link {
-    color: #000;
-    text-decoration: underline;
-  }
-
-  .changelog-link:hover {
-    text-decoration: none;
   }
 </style>

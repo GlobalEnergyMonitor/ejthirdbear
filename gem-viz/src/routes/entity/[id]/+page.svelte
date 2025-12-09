@@ -53,7 +53,7 @@
 
 <main>
   <header>
-    <a href="{base}/" class="back-link">← Home</a>
+    <a href="{base}/index.html" class="back-link">← Home</a>
     <span class="entity-type">Entity Profile</span>
   </header>
 

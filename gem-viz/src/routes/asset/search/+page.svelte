@@ -352,7 +352,7 @@
       <span class="count">{results.length.toLocaleString()} assets found</span>
     {/if}
     {#if exportCount > 0}
-      <a href="{base}/export" class="export-link">Export List ({exportCount})</a>
+      <a href="{base}/export/index.html" class="export-link">Export List ({exportCount})</a>
     {/if}
   </header>
 
@@ -410,7 +410,7 @@
         Add All {results.length} to Export
       </button>
       {#if exportCount > 0}
-        <a href="{base}/export" class="action-btn primary">
+        <a href="{base}/export/index.html" class="action-btn primary">
           Go to Export ({exportCount} assets)
         </a>
       {/if}

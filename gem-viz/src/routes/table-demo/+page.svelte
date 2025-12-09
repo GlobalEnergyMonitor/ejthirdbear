@@ -54,7 +54,7 @@
 
 <div class="demo-page">
   <header>
-    <a href="{base}/" class="back-link">← Back to GEM Viz</a>
+    <a href="{base}/index.html" class="back-link">← Back to GEM Viz</a>
     <h1>DATA TABLE DEMO</h1>
     <p class="subtitle">
       Feature-rich Svelte table component with sorting, filtering,

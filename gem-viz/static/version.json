@@ -1,9 +1,9 @@
 {
-  "version": "142bef1",
-  "commit": "142bef1",
-  "message": "Fix NetworkGraph column names and Svelte 5 runes compatibility",
+  "version": "419d4b8",
+  "commit": "419d4b8",
+  "message": "Fix structuredClone error with Svelte 5 $state proxy",
   "author": "EJ Fox",
-  "timestamp": "2025-12-09T18:26:43.058Z",
-  "deployed": "2025-12-09T18:26:43.058Z",
-  "buildTime": "12/9/2025, 1:26:43 PM"
+  "timestamp": "2025-12-09T18:36:05.103Z",
+  "deployed": "2025-12-09T18:36:05.103Z",
+  "buildTime": "12/9/2025, 1:36:05 PM"
 }
