@@ -39,6 +39,11 @@ export async function initDuckDB(): Promise<DuckDBInstance> {
 
     // Select appropriate bundle
     const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
+    console.debug('[duckdb-utils] Selected bundle', {
+      mainModule: bundle.mainModule,
+      mainWorker: bundle.mainWorker,
+      version: (bundle as any)?.version ?? 'unknown'
+    });
 
     // Create worker for background processing
     const worker_url = URL.createObjectURL(
@@ -167,7 +172,7 @@ export async function loadParquetFromPath(
 
       const response = await fetch(path);
       if (!response.ok) {
-        throw new Error(`Failed to fetch ${path}: ${response.statusText}`);
+        throw new Error(`Failed to fetch ${path}: ${response.status} ${response.statusText}`);
       }
 
       const contentLength = response.headers.get('content-length');
@@ -335,7 +340,8 @@ export async function query<T = Record<string, any>>(sql: string): Promise<Query
       success: true,
     };
   } catch (error) {
-    console.error('Query failed:', error);
+    const preview = sql.length > 500 ? `${sql.slice(0, 500)}...` : sql;
+    console.error('Query failed:', error, 'SQL preview:', preview);
     return {
       success: false,
       error: (error as Error).message,

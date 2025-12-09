@@ -5,7 +5,6 @@ export async function load() {
   const motherduck = (await import('$lib/motherduck-node')).default;
 
   try {
-
     // Query the catalog to find actual data tables (skip metadata sheets like "About")
     const catalogResult = await motherduck.query(`
       SELECT schema_name, table_name, row_count
@@ -34,7 +33,20 @@ export async function load() {
 
     const columns = schemaResult.data.map(c => c.column_name);
 
-    // Find the best ID column
+    // Detect columns (mirror asset detail prerender logic)
+    const countryCol = columns.find(c => c.toLowerCase() === 'country' || c.toLowerCase() === 'country/area');
+    const ownerCol = columns.find(c => c.toLowerCase() === 'owner');
+
+    const ownerIdCol = columns.find(c => {
+      const lower = c.toLowerCase();
+      return lower.includes('owner') && lower.includes('id');
+    });
+
+    const unitIdCol = columns.find(c => c.toLowerCase() === 'gem unit id');
+
+    const useCompositeId = Boolean(ownerIdCol && unitIdCol);
+
+    // Find the best ID column (fallback)
     const idCol = columns.find(c => {
       const lower = c.toLowerCase();
       return lower === 'id' || lower === 'wiki page' || lower === 'project id' || lower.includes('_id');
@@ -48,8 +60,6 @@ export async function load() {
     });
 
     const statusCol = columns.find(c => c.toLowerCase() === 'status');
-    const ownerCol = columns.find(c => c.toLowerCase() === 'owner');
-    const countryCol = columns.find(c => c.toLowerCase() === 'country' || c.toLowerCase() === 'country/area');
 
     // Select just the columns we need for the list view
     const columnsToSelect = [idCol];
@@ -57,6 +67,8 @@ export async function load() {
     if (statusCol) columnsToSelect.push(statusCol);
     if (ownerCol) columnsToSelect.push(ownerCol);
     if (countryCol) columnsToSelect.push(countryCol);
+    if (ownerIdCol) columnsToSelect.push(ownerIdCol);
+    if (unitIdCol) columnsToSelect.push(unitIdCol);
 
     // Query with just the columns we need
     const result = await motherduck.query(`
@@ -77,7 +89,10 @@ export async function load() {
       nameCol,
       statusCol,
       ownerCol,
-      countryCol
+      countryCol,
+      ownerIdCol,
+      unitIdCol,
+      useCompositeId
     };
 
   } catch (error) {

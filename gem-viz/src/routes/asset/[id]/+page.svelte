@@ -2,9 +2,10 @@
   import { base } from '$app/paths';
   import AssetMap from '$lib/components/AssetMap.svelte';
 
+  export const prerender = true;
   export let data;
 
-  const { asset, tableName, columns, svgs } = data;
+  const { asset, tableName, columns, svgs, resolvedId, paramsId } = data;
 
   // Find special columns for prominent display
   const nameCol = columns.find(c => {
@@ -40,6 +41,10 @@
       <h1>{asset[nameCol]}</h1>
     {:else}
       <h1>ID: {asset[columns[0]]}</h1>
+    {/if}
+
+    {#if resolvedId && paramsId && resolvedId !== paramsId}
+      <p class="resolved-id">Resolved to composite ID: {resolvedId}</p>
     {/if}
 
     <div class="meta-grid">
@@ -268,6 +273,13 @@
     padding: 20px;
     background: #fafafa;
     border: 1px solid #ddd;
+  }
+
+  .resolved-id {
+    font-size: 11px;
+    color: #555;
+    margin-top: -20px;
+    margin-bottom: 20px;
   }
 
   .viz-section h2 {

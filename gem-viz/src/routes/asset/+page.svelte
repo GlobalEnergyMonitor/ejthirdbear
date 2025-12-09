@@ -4,7 +4,18 @@
   import DataTable from '$lib/components/DataTable.svelte';
   export let data;
 
-  const { assets, tableName, idCol, nameCol, statusCol, ownerCol, countryCol } = data;
+  const {
+    assets,
+    tableName,
+    idCol,
+    nameCol,
+    statusCol,
+    ownerCol,
+    countryCol,
+    ownerIdCol,
+    unitIdCol,
+    useCompositeId
+  } = data;
 
   // Build columns config dynamically based on what's available
   const columns = [];
@@ -58,7 +69,13 @@
   }
 
   function handleRowClick(row) {
-    const id = row[idCol];
+    let id = row[idCol];
+
+    // Ownership tables need composite IDs to match prerendered pages
+    if (useCompositeId && ownerIdCol && unitIdCol && row[ownerIdCol] && row[unitIdCol]) {
+      id = `${row[ownerIdCol]}_${row[unitIdCol]}`;
+    }
+
     goto(`${base}/asset/${id}/index.html`);
   }
 </script>

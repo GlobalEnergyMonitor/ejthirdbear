@@ -82,7 +82,7 @@
       loading = true;
       error = null;
       loadingPhase = 'Loading parquet files...';
-      console.debug('[NetworkGraph] loadData start', { config: structuredClone(config) });
+      console.debug('[NetworkGraph] loadData start', { config: JSON.parse(JSON.stringify(config)) });
 
       // Dynamic import - only load DuckDB on client
       if (!loadParquetFromPath || !query) {

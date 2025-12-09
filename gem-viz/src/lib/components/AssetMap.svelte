@@ -1,4 +1,5 @@
 <script>
+  import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import maplibregl from 'maplibre-gl';
 
@@ -11,6 +12,13 @@
   let error = null;
 
   onMount(async () => {
+    console.debug('[AssetMap] Mount', {
+      gemUnitId,
+      assetName,
+      basePath: base,
+      location: typeof window !== 'undefined' ? window.location.href : 'ssr'
+    });
+
     if (!gemUnitId) {
       error = 'No GEM Unit ID provided';
       loading = false;
@@ -18,9 +26,28 @@
     }
 
     try {
+      const pointsUrl = `${base}/points.geojson`;
+      console.debug('[AssetMap] Fetching points', pointsUrl);
+
       // Load the points GeoJSON
-      const response = await fetch('/points.geojson');
-      const geojson = await response.json();
+      const response = await fetch(pointsUrl);
+      if (!response.ok) {
+        const body = await response.text().catch(() => '<unavailable>');
+        throw new Error(`Failed to load points (${response.status} ${response.statusText}): ${body.slice(0, 200)}`);
+      }
+
+      let geojson;
+      try {
+        geojson = await response.json();
+      } catch (parseErr) {
+        console.error('[AssetMap] Failed to parse GeoJSON', parseErr);
+        throw new Error(`Invalid GeoJSON response: ${parseErr.message}`);
+      }
+
+      console.debug('[AssetMap] Loaded GeoJSON', {
+        featureCount: geojson?.features?.length ?? 0,
+        sampleProperties: geojson?.features?.[0]?.properties ?? null
+      });
 
       // Find the matching feature by GEM unit ID
       const feature = geojson.features.find(f =>
@@ -29,12 +56,19 @@
       );
 
       if (!feature) {
+        console.warn('[AssetMap] Feature not found', { gemUnitId });
         error = 'Location not found in GeoJSON';
         loading = false;
         return;
       }
 
-      const [lon, lat] = feature.geometry.coordinates;
+      const coords = feature.geometry?.coordinates;
+      if (!Array.isArray(coords) || coords.length < 2) {
+        throw new Error(`Invalid coordinates for ${gemUnitId}: ${JSON.stringify(coords)}`);
+      }
+
+      const [lon, lat] = coords;
+      console.debug('[AssetMap] Using coordinates', { lat, lon });
 
       // Initialize map
       map = new maplibregl.Map({
@@ -56,8 +90,8 @@
       loading = false;
 
     } catch (err) {
-      console.error('Error loading asset map:', err);
-      error = err.message;
+      console.error('[AssetMap] Error loading asset map:', err);
+      error = `${err.name || 'Error'}: ${err.message}`;
       loading = false;
     }
 

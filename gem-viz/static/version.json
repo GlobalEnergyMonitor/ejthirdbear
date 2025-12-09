@@ -1,9 +1,9 @@
 {
-  "version": "5412222",
-  "commit": "5412222",
-  "message": "Reduce prerender concurrency from 10 to 1 to fix cache race condition",
+  "version": "142bef1",
+  "commit": "142bef1",
+  "message": "Fix NetworkGraph column names and Svelte 5 runes compatibility",
   "author": "EJ Fox",
-  "timestamp": "2025-12-09T00:14:16.187Z",
-  "deployed": "2025-12-09T00:14:16.187Z",
-  "buildTime": "12/8/2025, 7:14:16 PM"
+  "timestamp": "2025-12-09T18:26:43.058Z",
+  "deployed": "2025-12-09T18:26:43.058Z",
+  "buildTime": "12/9/2025, 1:26:43 PM"
 }

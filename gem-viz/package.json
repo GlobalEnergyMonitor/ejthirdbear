@@ -9,6 +9,8 @@
     "preview": "vite preview",
     "deploy": "npm run build && node scripts/deploy.js",
     "deploy:vps": "bash scripts/deploy-vps.sh",
+    "build:ssr": "bash scripts/build-ssr.sh",
+    "start:ssr": "PORT=3000 node build-ssr/index.js",
     "release": "node scripts/release.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

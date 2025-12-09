@@ -123,24 +123,15 @@ export async function entries() {
     writeFileSync(CACHE_FILE, cacheJSON);
     console.log(`  ✓ Wrote ${Object.keys(assetsMap).length} assets to disk cache (${cacheSizeMB} MB)`);
 
-    // Filter out already-built pages for incremental builds
+    // Return ALL assets for prerendering - no incremental build optimization
+    // (Incremental builds caused issues where stale build/ directories would skip all pages)
     const allAssetIds = Object.keys(assetsMap);
     console.log(`  📋 Asset IDs to build: ${allAssetIds.slice(0, 3).join(', ')}${allAssetIds.length > 3 ? ` ... (${allAssetIds.length} total)` : ''}`);
-
-    const unbuildAssets = allAssetIds.filter(id => {
-      const pagePath = join(process.cwd(), 'build', 'asset', id, 'index.html');
-      return !existsSync(pagePath);
-    });
-
-    const alreadyBuilt = allAssetIds.length - unbuildAssets.length;
-    if (alreadyBuilt > 0) {
-      console.log(`  📦 Skipping ${alreadyBuilt} already-built pages`);
-    }
-    console.log(`  🔨 Building ${unbuildAssets.length}/${allAssetIds.length} pages`);
+    console.log(`  🔨 Building ${allAssetIds.length} pages`);
     console.log(`  💾 Cache file: ${CACHE_FILE}`);
 
     // Return array of { id } objects for SvelteKit to prerender
-    return unbuildAssets.map(id => ({ id }));
+    return allAssetIds.map(id => ({ id }));
   } catch (err) {
     console.error('Error in entries():', err);
     return [];
@@ -182,7 +173,8 @@ export async function load({ params }) {
 
   // Try to serve from cache first (fast path)
   if (ASSET_CACHE.initialized) {
-    const asset = ASSET_CACHE.assets.get(params.id);
+    let asset = ASSET_CACHE.assets.get(params.id);
+    let resolvedId = params.id;
 
     if (asset) {
       const { tableName, columns } = ASSET_CACHE.metadata;
@@ -190,8 +182,47 @@ export async function load({ params }) {
         asset,
         tableName,
         columns,
-        svgs: { map: null, capacity: null, status: null }
+        svgs: { map: null, capacity: null, status: null },
+        resolvedId,
+        paramsId: params.id
       };
+    }
+
+    // Fallback: ownership tables might be requested by only owner or unit ID.
+    const { useCompositeId, ownerIdCol, unitIdCol, tableName, columns } = ASSET_CACHE.metadata || {};
+    if (useCompositeId && ownerIdCol && unitIdCol) {
+      const matches = [];
+      for (const [key, value] of ASSET_CACHE.assets.entries()) {
+        if (
+          String(value[unitIdCol]) === params.id ||
+          String(value[ownerIdCol]) === params.id
+        ) {
+          matches.push({ key, asset: value });
+          if (matches.length >= 5) break;
+        }
+      }
+
+      if (matches.length === 1) {
+        ({ key: resolvedId, asset } = matches[0]);
+        console.warn(`⚠️  Fallback resolved ${params.id} -> ${resolvedId} for ownership table`);
+        return {
+          asset,
+          tableName,
+          columns,
+          svgs: { map: null, capacity: null, status: null },
+          resolvedId,
+          paramsId: params.id
+        };
+      }
+
+      if (matches.length > 1) {
+        console.warn(`⚠️  Multiple matches for ${params.id}; suggest using composite ID`, {
+          requested: params.id,
+          suggestions: matches.map(m => m.key)
+        });
+      } else {
+        console.warn(`⚠️  No ownership matches for ${params.id}; use composite owner_unit ID`);
+      }
     }
   }
 
