@@ -232,9 +232,9 @@
     }));
   }
 
-  $: assets = $exportList;
-  $: assetCount = assets.length;
-  $: formattedAssets = formatAssets(assets);
+  let assets = $derived($exportList);
+  let assetCount = $derived(assets.length);
+  let formattedAssets = $derived(formatAssets(assets));
 </script>
 
 <svelte:head>

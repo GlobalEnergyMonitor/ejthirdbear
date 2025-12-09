@@ -82,102 +82,117 @@
       loading = true;
       error = null;
       loadingPhase = 'Loading parquet files...';
+      console.debug('[NetworkGraph] loadData start', { config: structuredClone(config) });
 
       // Dynamic import - only load DuckDB on client
       if (!loadParquetFromPath || !query) {
         const duckdbUtils = await import('$lib/duckdb-utils');
         loadParquetFromPath = duckdbUtils.loadParquetFromPath;
         query = duckdbUtils.query;
+        console.debug('[NetworkGraph] DuckDB utils loaded');
       }
 
-      console.log('Loading ownership data...');
-      const ownershipResult = await loadParquetFromPath('/gem-viz/all_trackers_ownership@1.parquet', 'ownership');
+      const parquetPath = '/gem-viz/all_trackers_ownership@1.parquet';
+      console.debug('[NetworkGraph] Loading ownership parquet', { parquetPath });
+      const ownershipResult = await loadParquetFromPath(parquetPath, 'ownership');
 
       if (!ownershipResult.success) {
+        console.error('[NetworkGraph] Parquet load failed', ownershipResult);
         throw new Error('Failed to load ownership data: ' + ownershipResult.error);
       }
 
       loadingPhase = 'Counting total edges...';
+      console.debug('[NetworkGraph] Counting edges');
 
+      // The ownership table uses "GEM unit ID" for assets and "Owner GEM Entity ID" for owners
       const countResult = await query(`
         SELECT COUNT(*) as total
         FROM ownership
-        WHERE "Subject Entity ID" IS NOT NULL
-          AND "Interested Party ID" IS NOT NULL
+        WHERE "GEM unit ID" IS NOT NULL
+          AND "Owner GEM Entity ID" IS NOT NULL
       `);
 
       allEdgesCount = countResult.success && countResult.data?.[0]?.total
         ? Number(countResult.data[0].total)
         : 0;
 
+      console.debug('[NetworkGraph] Edge count result', countResult);
       console.log(`Total edges in dataset: ${allEdgesCount}`);
 
       loadingPhase = `Querying edges (${config.sampleMode} mode)...`;
+      console.debug('[NetworkGraph] Building edge query', {
+        sampleMode: config.sampleMode,
+        maxEdges: config.maxEdges
+      });
 
       let edgeQuery;
 
       if (config.sampleMode === 'top') {
+        // Use GEM unit ID (asset) -> Owner GEM Entity ID (owner) relationship
         edgeQuery = `
           WITH entity_counts AS (
             SELECT entity_id, COUNT(*) as cnt FROM (
-              SELECT "Subject Entity ID" as entity_id FROM ownership WHERE "Subject Entity ID" IS NOT NULL
+              SELECT "GEM unit ID" as entity_id FROM ownership WHERE "GEM unit ID" IS NOT NULL
               UNION ALL
-              SELECT "Interested Party ID" as entity_id FROM ownership WHERE "Interested Party ID" IS NOT NULL
+              SELECT "Owner GEM Entity ID" as entity_id FROM ownership WHERE "Owner GEM Entity ID" IS NOT NULL
             ) GROUP BY entity_id
           ),
           top_entities AS (
             SELECT entity_id FROM entity_counts ORDER BY cnt DESC LIMIT ${Math.ceil(config.maxEdges / 5)}
           )
           SELECT
-            "Subject Entity ID" as source_id,
-            "Subject Entity Name" as source_name,
-            "Interested Party ID" as target_id,
-            "Interested Party Name" as target_name,
+            "GEM unit ID" as source_id,
+            "Unit" as source_name,
+            "Owner GEM Entity ID" as target_id,
+            "Owner" as target_name,
             "% Share of Ownership" as share
           FROM ownership
-          WHERE "Subject Entity ID" IS NOT NULL
-            AND "Interested Party ID" IS NOT NULL
-            AND ("Subject Entity ID" IN (SELECT entity_id FROM top_entities)
-                 OR "Interested Party ID" IN (SELECT entity_id FROM top_entities))
+          WHERE "GEM unit ID" IS NOT NULL
+            AND "Owner GEM Entity ID" IS NOT NULL
+            AND ("GEM unit ID" IN (SELECT entity_id FROM top_entities)
+                 OR "Owner GEM Entity ID" IN (SELECT entity_id FROM top_entities))
           LIMIT ${config.maxEdges}
         `;
       } else if (config.sampleMode === 'random') {
         edgeQuery = `
           SELECT
-            "Subject Entity ID" as source_id,
-            "Subject Entity Name" as source_name,
-            "Interested Party ID" as target_id,
-            "Interested Party Name" as target_name,
+            "GEM unit ID" as source_id,
+            "Unit" as source_name,
+            "Owner GEM Entity ID" as target_id,
+            "Owner" as target_name,
             "% Share of Ownership" as share
           FROM ownership
-          WHERE "Subject Entity ID" IS NOT NULL
-            AND "Interested Party ID" IS NOT NULL
+          WHERE "GEM unit ID" IS NOT NULL
+            AND "Owner GEM Entity ID" IS NOT NULL
           ORDER BY RANDOM()
           LIMIT ${config.maxEdges}
         `;
       } else {
         edgeQuery = `
           SELECT
-            "Subject Entity ID" as source_id,
-            "Subject Entity Name" as source_name,
-            "Interested Party ID" as target_id,
-            "Interested Party Name" as target_name,
+            "GEM unit ID" as source_id,
+            "Unit" as source_name,
+            "Owner GEM Entity ID" as target_id,
+            "Owner" as target_name,
             "% Share of Ownership" as share
           FROM ownership
-          WHERE "Subject Entity ID" IS NOT NULL
-            AND "Interested Party ID" IS NOT NULL
+          WHERE "GEM unit ID" IS NOT NULL
+            AND "Owner GEM Entity ID" IS NOT NULL
           LIMIT ${config.maxEdges}
         `;
       }
 
+      console.debug('[NetworkGraph] Running edge query', edgeQuery);
       const edgesResult = await query(edgeQuery);
 
       if (!edgesResult.success || !edgesResult.data) {
-        throw new Error('Failed to query ownership edges');
+        console.error('[NetworkGraph] Edge query failed', edgesResult);
+        throw new Error(`Failed to query ownership edges: ${edgesResult.error || 'unknown error'}`);
       }
 
       console.log(`Loaded ${edgesResult.data.length} edges`);
       loadingPhase = 'Building graph structure...';
+      console.debug('[NetworkGraph] First edge sample', edgesResult.data?.[0]);
 
       nodeMap.clear();
       links = [];
@@ -239,8 +254,8 @@
       await runSimulation();
       loading = false;
     } catch (e) {
-      console.error('Error loading data:', e);
-      error = e.message;
+      console.error('[NetworkGraph] Error loading data:', e);
+      error = `${e.name || 'Error'}: ${e.message}`;
       loading = false;
     }
   }
