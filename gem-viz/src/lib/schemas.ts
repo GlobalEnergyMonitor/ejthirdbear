@@ -12,7 +12,7 @@ export const CatalogSchema = z.object({
   table_name: z.string(),
   row_count: z.union([z.number(), z.bigint()]),
   column_count: z.union([z.number(), z.bigint()]),
-  loaded_at: z.any() // DuckDB timestamp type
+  loaded_at: z.any(), // DuckDB timestamp type
 });
 
 export type CatalogEntry = z.infer<typeof CatalogSchema>;
@@ -28,24 +28,24 @@ export const BaseAssetSchema = z.object({
   'Wiki page': z.string().optional(),
 
   // Names
-  'Project': z.string().optional(),
-  'Plant': z.string().optional(),
-  'Mine': z.string().optional(),
-  'Unit': z.string().optional(),
+  Project: z.string().optional(),
+  Plant: z.string().optional(),
+  Mine: z.string().optional(),
+  Unit: z.string().optional(),
 
   // Location
-  'Country': z.string().optional(),
-  'Region': z.string().optional(),
-  'Latitude': z.number().optional(),
-  'Longitude': z.number().optional(),
+  Country: z.string().optional(),
+  Region: z.string().optional(),
+  Latitude: z.number().optional(),
+  Longitude: z.number().optional(),
 
   // Ownership
-  'Owner': z.string().optional(),
-  'Parent': z.string().optional(),
+  Owner: z.string().optional(),
+  Parent: z.string().optional(),
 
   // Status & Type
-  'Status': z.string().optional(),
-  'Tracker': z.string().optional(),
+  Status: z.string().optional(),
+  Tracker: z.string().optional(),
 
   // Capacity
   'Capacity (MW)': z.number().optional(),
@@ -58,7 +58,7 @@ export type BaseAsset = z.infer<typeof BaseAssetSchema>;
  * Coal Plant specific schema
  */
 export const CoalPlantSchema = BaseAssetSchema.extend({
-  'Plant': z.string(),
+  Plant: z.string(),
   'Capacity (MW)': z.number().optional(),
   'Combustion technology': z.string().optional(),
   'Heat rate (Btu per kWh)': z.number().optional(),
@@ -70,7 +70,7 @@ export type CoalPlant = z.infer<typeof CoalPlantSchema>;
  * Coal Mine specific schema
  */
 export const CoalMineSchema = BaseAssetSchema.extend({
-  'Mine': z.string(),
+  Mine: z.string(),
   'Capacity (Mt)': z.number().optional(),
   'Mine type': z.string().optional(),
 });

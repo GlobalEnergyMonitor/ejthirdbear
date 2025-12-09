@@ -28,7 +28,7 @@ export async function initMotherDuck(): Promise<MDConnection> {
     console.log('Token length:', PUBLIC_MOTHERDUCK_TOKEN?.length || 0);
 
     connection = await MDConnection.create({
-      mdToken: PUBLIC_MOTHERDUCK_TOKEN
+      mdToken: PUBLIC_MOTHERDUCK_TOKEN,
     });
 
     console.log('MDConnection created successfully');
@@ -38,7 +38,6 @@ export async function initMotherDuck(): Promise<MDConnection> {
 
     console.log('✓ Connected to MotherDuck: gem_data');
     return connection;
-
   } catch (error) {
     console.error('Failed to initialize MotherDuck:', error);
     console.error('Error type:', typeof error);
@@ -69,21 +68,21 @@ export async function query<T = Record<string, any>>(
     return {
       data,
       executionTime,
-      success: true
+      success: true,
     };
-
   } catch (error) {
     console.error('Query failed:', error);
-    const errorMessage = error instanceof Error
-      ? error.message
-      : typeof error === 'string'
-        ? error
-        : JSON.stringify(error);
+    const errorMessage =
+      error instanceof Error
+        ? error.message
+        : typeof error === 'string'
+          ? error
+          : JSON.stringify(error);
 
     return {
       success: false,
       error: errorMessage,
-      executionTime: performance.now() - startTime
+      executionTime: performance.now() - startTime,
     };
   }
 }
@@ -123,5 +122,5 @@ export default {
   query,
   getTableSchema,
   listTables,
-  getDatabaseInfo
+  getDatabaseInfo,
 };

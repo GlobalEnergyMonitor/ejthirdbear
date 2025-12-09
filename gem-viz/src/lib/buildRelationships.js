@@ -21,11 +21,11 @@
 export function parseOwnershipPath(pathString) {
   if (!pathString) return [];
 
-  const nodes = pathString.split(' -> ').map(node => {
+  const nodes = pathString.split(' -> ').map((node) => {
     const match = node.match(/^(.+?)(?: \[([0-9.]+)%\])?$/);
     return {
       name: match ? match[1].trim() : node.trim(),
-      share: match && match[2] ? parseFloat(match[2]) : null
+      share: match && match[2] ? parseFloat(match[2]) : null,
     };
   });
 
@@ -46,17 +46,17 @@ export async function computeAssetRelationships(asset, motherduck, tableName) {
     sameOwnerAssets: [],
     coLocatedAssets: [],
     ownershipChain: [],
-    ownerStats: null
+    ownerStats: null,
   };
 
   try {
-    const ownerEntityId = asset["Owner GEM Entity ID"];
-    const locationId = asset["GEM location ID"];
-    const currentUnitId = asset["GEM unit ID"];
+    const ownerEntityId = asset['Owner GEM Entity ID'];
+    const locationId = asset['GEM location ID'];
+    const currentUnitId = asset['GEM unit ID'];
 
     // 1. Parse ownership chain
-    if (asset["Ownership Path"]) {
-      relationships.ownershipChain = parseOwnershipPath(asset["Ownership Path"]);
+    if (asset['Ownership Path']) {
+      relationships.ownershipChain = parseOwnershipPath(asset['Ownership Path']);
     }
 
     // 2. Query same owner assets (top 10 by capacity)
@@ -120,9 +120,8 @@ export async function computeAssetRelationships(asset, motherduck, tableName) {
         relationships.coLocatedAssets = result.data;
       }
     }
-
   } catch (error) {
-    console.error(`Error computing relationships for ${asset["GEM unit ID"]}:`, error);
+    console.error(`Error computing relationships for ${asset['GEM unit ID']}:`, error);
   }
 
   return relationships;
@@ -145,8 +144,8 @@ export async function buildRelationshipCache(assets, motherduck, tableName) {
   const assetsByLocation = new Map();
 
   for (const [assetId, asset] of Object.entries(assets)) {
-    const ownerEntityId = asset["Owner GEM Entity ID"];
-    const locationId = asset["GEM location ID"];
+    const ownerEntityId = asset['Owner GEM Entity ID'];
+    const locationId = asset['GEM location ID'];
 
     if (ownerEntityId) {
       if (!assetsByOwner.has(ownerEntityId)) {
@@ -189,7 +188,7 @@ export async function buildRelationshipCache(assets, motherduck, tableName) {
       relationshipCache[assetId] = {
         ...relationships,
         // Parse ownership chain per asset (varies by asset)
-        ownershipChain: parseOwnershipPath(asset["Ownership Path"])
+        ownershipChain: parseOwnershipPath(asset['Ownership Path']),
       };
     }
 
@@ -226,7 +225,7 @@ export async function buildRelationshipCache(assets, motherduck, tableName) {
         if (relationshipCache[assetId]) {
           // Filter out the current asset from co-located list
           relationshipCache[assetId].coLocatedAssets = result.data.filter(
-            a => a["GEM unit ID"] !== assets[assetId]["GEM unit ID"]
+            (a) => a['GEM unit ID'] !== assets[assetId]['GEM unit ID']
           );
         }
       }
@@ -247,36 +246,41 @@ export async function buildRelationshipCache(assets, motherduck, tableName) {
 export function compactRelationships(relationships) {
   return {
     // Only keep essential fields for same owner assets
-    so: relationships.sameOwnerAssets?.slice(0, 5).map(a => ({
-      p: a.Project,
-      i: a["GEM unit ID"],
-      s: a.Status,
-      c: a["Capacity (MW)"],
-      t: a.Tracker
-    })) || [],
+    so:
+      relationships.sameOwnerAssets?.slice(0, 5).map((a) => ({
+        p: a.Project,
+        i: a['GEM unit ID'],
+        s: a.Status,
+        c: a['Capacity (MW)'],
+        t: a.Tracker,
+      })) || [],
 
     // Co-located assets
-    cl: relationships.coLocatedAssets?.map(a => ({
-      p: a.Project,
-      i: a["GEM unit ID"],
-      s: a.Status,
-      c: a["Capacity (MW)"],
-      o: a["Owner Name"]
-    })) || [],
+    cl:
+      relationships.coLocatedAssets?.map((a) => ({
+        p: a.Project,
+        i: a['GEM unit ID'],
+        s: a.Status,
+        c: a['Capacity (MW)'],
+        o: a['Owner Name'],
+      })) || [],
 
     // Ownership chain
-    oc: relationships.ownershipChain?.map(n => ({
-      n: n.name,
-      s: n.share
-    })) || [],
+    oc:
+      relationships.ownershipChain?.map((n) => ({
+        n: n.name,
+        s: n.share,
+      })) || [],
 
     // Owner stats
-    os: relationships.ownerStats ? {
-      a: relationships.ownerStats.total_assets,
-      c: relationships.ownerStats.total_capacity_mw,
-      r: relationships.ownerStats.countries,
-      t: relationships.ownerStats.tracker_types
-    } : null
+    os: relationships.ownerStats
+      ? {
+          a: relationships.ownerStats.total_assets,
+          c: relationships.ownerStats.total_capacity_mw,
+          r: relationships.ownerStats.countries,
+          t: relationships.ownerStats.tracker_types,
+        }
+      : null,
   };
 }
 
@@ -285,32 +289,37 @@ export function compactRelationships(relationships) {
  */
 export function expandRelationships(compact) {
   return {
-    sameOwnerAssets: compact.so?.map(a => ({
-      Project: a.p,
-      "GEM unit ID": a.i,
-      Status: a.s,
-      "Capacity (MW)": a.c,
-      Tracker: a.t
-    })) || [],
+    sameOwnerAssets:
+      compact.so?.map((a) => ({
+        Project: a.p,
+        'GEM unit ID': a.i,
+        Status: a.s,
+        'Capacity (MW)': a.c,
+        Tracker: a.t,
+      })) || [],
 
-    coLocatedAssets: compact.cl?.map(a => ({
-      Project: a.p,
-      "GEM unit ID": a.i,
-      Status: a.s,
-      "Capacity (MW)": a.c,
-      "Owner Name": a.o
-    })) || [],
+    coLocatedAssets:
+      compact.cl?.map((a) => ({
+        Project: a.p,
+        'GEM unit ID': a.i,
+        Status: a.s,
+        'Capacity (MW)': a.c,
+        'Owner Name': a.o,
+      })) || [],
 
-    ownershipChain: compact.oc?.map(n => ({
-      name: n.n,
-      share: n.s
-    })) || [],
+    ownershipChain:
+      compact.oc?.map((n) => ({
+        name: n.n,
+        share: n.s,
+      })) || [],
 
-    ownerStats: compact.os ? {
-      total_assets: compact.os.a,
-      total_capacity_mw: compact.os.c,
-      countries: compact.os.r,
-      tracker_types: compact.os.t
-    } : null
+    ownerStats: compact.os
+      ? {
+          total_assets: compact.os.a,
+          total_capacity_mw: compact.os.c,
+          countries: compact.os.r,
+          tracker_types: compact.os.t,
+        }
+      : null,
   };
 }

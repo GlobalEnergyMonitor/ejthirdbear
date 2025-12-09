@@ -17,7 +17,7 @@
     { key: 'name', label: 'Name', sortable: true, filterable: true, width: '250px' },
     { key: 'id', label: 'ID', sortable: true, filterable: true, width: '150px' },
     { key: 'tracker', label: 'Tracker', sortable: true, filterable: true, width: '120px' },
-    { key: 'addedAt', label: 'Added', sortable: true, type: 'date', width: '120px' }
+    { key: 'addedAt', label: 'Added', sortable: true, type: 'date', width: '120px' },
   ];
 
   // Remove single asset
@@ -29,7 +29,7 @@
   function removeSelected() {
     if (selectedRows.length === 0) return;
     if (confirm(`Remove ${selectedRows.length} assets from export list?`)) {
-      selectedRows.forEach(row => exportList.remove(row.id));
+      selectedRows.forEach((row) => exportList.remove(row.id));
       selectedRows = [];
     }
   }
@@ -51,10 +51,16 @@
       await initDuckDB();
 
       const parquetBase = assetsPath || '';
-      const ownershipResult = await loadParquetFromPath(`${parquetBase}/all_trackers_ownership@1.parquet`, 'ownership');
+      const ownershipResult = await loadParquetFromPath(
+        `${parquetBase}/all_trackers_ownership@1.parquet`,
+        'ownership'
+      );
       if (!ownershipResult.success) throw new Error(ownershipResult.error);
 
-      const locResult = await loadParquetFromPath(`${parquetBase}/asset_locations.parquet`, 'locations');
+      const locResult = await loadParquetFromPath(
+        `${parquetBase}/asset_locations.parquet`,
+        'locations'
+      );
       if (!locResult.success) throw new Error(locResult.error);
 
       dbReady = true;
@@ -91,14 +97,16 @@
       exportProgress = `Querying full data for ${ids.length} assets...`;
 
       // Build ID list for SQL IN clause - escape single quotes for SQL safety
-      const idList = ids.map(id => {
-        // Validate ID format using slug utility
-        if (!isValidSlug(id)) {
-          console.warn('Suspicious ID format:', id);
-        }
-        // SQL escape: double single quotes
-        return `'${id.replace(/'/g, "''")}'`;
-      }).join(',');
+      const idList = ids
+        .map((id) => {
+          // Validate ID format using slug utility
+          if (!isValidSlug(id)) {
+            console.warn('Suspicious ID format:', id);
+          }
+          // SQL escape: double single quotes
+          return `'${id.replace(/'/g, "''")}'`;
+        })
+        .join(',');
 
       // Query ALL columns from ownership table, joined with locations
       const sql = `
@@ -126,14 +134,16 @@
       if (data.length === 0) {
         throw new Error(
           `No data found for selected assets. The assets may have been removed from the database, ` +
-          `or the IDs may not match. Try clearing your export list and re-selecting assets.`
+            `or the IDs may not match. Try clearing your export list and re-selecting assets.`
         );
       }
 
       // Sanity check: warn if we got way more rows than expected (possible data issue)
       const rowsPerAsset = data.length / ids.length;
       if (rowsPerAsset > 50) {
-        console.warn(`High row count: ${data.length} rows for ${ids.length} assets (${rowsPerAsset.toFixed(1)} per asset)`);
+        console.warn(
+          `High row count: ${data.length} rows for ${ids.length} assets (${rowsPerAsset.toFixed(1)} per asset)`
+        );
       }
 
       exportProgress = `Converting ${data.length} rows to CSV...`;
@@ -151,12 +161,11 @@
 
       // Download
       exportProgress = 'Downloading...';
-      const filename = `gem-export-${ids.length}-assets-${new Date().toISOString().slice(0,10)}.csv`;
+      const filename = `gem-export-${ids.length}-assets-${new Date().toISOString().slice(0, 10)}.csv`;
       downloadCSV(csv, filename);
 
       exportProgress = `Exported ${data.length} rows for ${ids.length} assets (${csvSizeMB} MB)`;
       console.log(`Export complete: ${filename}`);
-
     } catch (err) {
       console.error('Export error:', err);
       error = err.message || 'Unknown error during export';
@@ -171,7 +180,7 @@
     if (data.length === 0) return '';
 
     // Get all unique column names, sorted for consistency
-    const columns = [...new Set(data.flatMap(row => Object.keys(row)))].sort();
+    const columns = [...new Set(data.flatMap((row) => Object.keys(row)))].sort();
 
     // Escape a value for CSV: handle quotes, newlines, commas
     function escapeCSV(val) {
@@ -197,11 +206,11 @@
     }
 
     // Header row - escape column names too (they might contain special chars)
-    const header = columns.map(col => escapeCSV(col)).join(',');
+    const header = columns.map((col) => escapeCSV(col)).join(',');
 
     // Data rows
-    const rows = data.map(row => {
-      return columns.map(col => escapeCSV(row[col])).join(',');
+    const rows = data.map((row) => {
+      return columns.map((col) => escapeCSV(row[col])).join(',');
     });
 
     return [header, ...rows].join('\r\n'); // CRLF per RFC 4180
@@ -226,9 +235,9 @@
 
   // Format data for DataTable
   function formatAssets(assets) {
-    return assets.map(a => ({
+    return assets.map((a) => ({
       ...a,
-      addedAt: new Date(a.addedAt).toLocaleDateString()
+      addedAt: new Date(a.addedAt).toLocaleDateString(),
     }));
   }
 
@@ -268,9 +277,7 @@
           Remove Selected ({selectedRows.length})
         </button>
       {/if}
-      <button class="action-btn danger" onclick={clearAll} disabled={exporting}>
-        Clear All
-      </button>
+      <button class="action-btn danger" onclick={clearAll} disabled={exporting}> Clear All </button>
       {#if exportProgress}
         <span class="progress">{exportProgress}</span>
       {/if}
@@ -284,8 +291,8 @@
 
     <div class="info-box">
       <strong>What you'll get:</strong> A CSV with ALL columns from the GEM database for each asset,
-      including ownership details, capacity, status, coordinates, and more.
-      Multiple rows per asset if there are multiple owners.
+      including ownership details, capacity, status, coordinates, and more. Multiple rows per asset if
+      there are multiple owners.
     </div>
 
     <DataTable

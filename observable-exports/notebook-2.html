@@ -1,0 +1,536 @@
+<!doctype html>
+<notebook theme="air">
+  <title>GEM Ownership - Data Access and Helper Functions</title>
+  <script id="0" type="text/markdown">
+    # GEM Ownership - Data Access and Helper Functions
+  </script>
+  <script id="700" type="text/markdown">
+    ## Data For Asset-Class Screener and Owner View
+  </script>
+  <script id="10" type="application/vnd.observable.javascript">
+    getDataForEntity = async function(GemEntityID) {
+
+      /********* Get all assets in the tracker under spotlight owner, including shortest path string **********/
+      // NOTE:  I NEED TO CHANGE THIS IF I WE WANT TO SUPPORT PEOPLE SEEING OTHERS OWNERS BESIDES PARENTS. SHOULD BE ABLE TO WITH recursiveEdgesCte
+      const assetsShortestPathData = await db.sql([`
+        SELECT *
+        FROM assets a 
+        LEFT JOIN locations l ON(a."GEM unit ID" = l."GEM.unit.id") 
+        WHERE "Owner GEM Entity ID" = '${GemEntityID}' 
+        `
+    ])
+        // note: join to locations need work since sometimes it's "unit ID" and sometimes "location ID" but when I add an or to the join it slows down way too much to be workable. 
+
+      /********* Clean data on asset nodes **********/
+      let assetsObj = {}
+      assetsShortestPathData.forEach(d=> {
+        const id = d[idFields.get(d['Tracker'])] //  d['GEM unit ID'] || d['GEM location ID'] || d['ProjectID']
+        assetsObj[id] = {
+          id, idField: idFields.get(d['Tracker']), locationID: d['GEM location ID'], name: d['Project'],
+          tracker: d['Tracker'], status: d['Status'], spotlightOwnershipSharePct: d['Share'],
+          directlyOwnedBySpotlightOwner: d['Immediate Project Owner GEM Entity ID'] == GemEntityID,
+          size: d[capacityFields.get(d['Tracker'])], sizeUnit: capacityFields.get(d['Tracker']),
+          lat: d['Latitude'], lon: d['Longitude'], country: d['Country.Area'], subNationalUnit: d['State.Province']
+        } 
+      })
+      const assets = Array.from(Object.values(assetsObj))
+
+      /**** Traverse the ownership table to get all downstream entities ***/ 
+      const downstreamData = await getDownstreamEntities(GemEntityID)
+      const allEntityIds = downstreamData.map(d=> [d.parent_id, d.child_id]).flat()
+
+      /********* Query data on entity nodes **********/
+      const entityData = await db.sql([`
+        SELECT "Entity ID" id, *
+        FROM entity e 
+        WHERE "Entity ID" IN (${allEntityIds.map(d=> "'" + d + "'").join(', ')})
+        `
+      ])
+      const entityMap = new Map(entityData.map(d=> [d.id, d]))
+
+      /********* Combine asset and entity nodes **********/
+      const nodes = [...assets.map(d=> ({type: 'asset', ...d})), ...entityData.map(d=> ({type: 'entity', ...d}))]
+
+
+      /********* Query edges from ownership and assetOwnership tables, and combine them  **********/
+      const assetEdgesRaw = await db.sql([`
+        SELECT *
+        FROM assetOwnership ao 
+        WHERE "Immediate Owner Entity ID" IN (${allEntityIds.map(d=> "'" + d + "'").join(', ')})
+        `
+      ])
+
+      const edges = [
+        ...downstreamData.map(d => ({
+          source: d['parent_id'], 
+          target: d['child_id'], 
+          value: d['% Share of Ownership'],
+          type: 'intermediateEdge',
+          refUrl: d['Data Source URL'],
+          imputedShare: d['Share Imputed?'] == 'imputed value'
+        })),
+        ...assetEdgesRaw.map(d => ({
+          source: d['Immediate Owner Entity ID'], 
+          target: d['Asset Unit ID'] || d['Asset ID'] || d['ProjectID'],
+          targetIdType: (d['Asset Unit ID'] ? 'Asset Unit ID' : 'Asset ID'),
+          type: 'leafEdge',
+          value: d['% Share of Ownership'],
+          refUrl: null,
+          imputedShare: d['Share Imputed?'] == 'imputed value'
+        }))
+      ] 
+
+      /***** Get downstream data for all direct subsidiaries ****/ 
+      const directSubsidiaries = 
+        edges.filter(d => d.source == GemEntityID && d.type == 'intermediateEdge')
+          .map(d => d.target)
+
+      const subsidiaryAssets = new Map(
+        directSubsidiaries
+          .map(d => getDownstreamLeavesFromEntity(edges, nodes, d))
+        )
+
+      /***** Find all assets that connect via more than one path ****/ 
+      let multiplePathAssets = new Map() 
+      subsidiaryAssets.forEach((v, k)=> {
+        v.forEach(a=> {
+        if (!multiplePathAssets.has(a.id)) {multiplePathAssets.set(a.id, [])}
+        multiplePathAssets.get(a.id).push(k);
+        })
+      }) 
+
+      // Add assets directly owned by spotlight owner. 
+      edges.filter(d=> d.type =='leafEdge' && d.source == GemEntityID).forEach(d=> {
+        if (!multiplePathAssets.has(d.target)){return}  // no need to add them here if they only have direct owner
+        multiplePathAssets.get(d.target).push(d.source);
+      })
+      // filter to just those with multiple subsidiary/direct owners
+      multiplePathAssets = new Map(Array.from(multiplePathAssets).filter(d=> d[1].length > 1) )
+
+      /******* Get stats  *******/
+      const intermediaryDataArr = await getDirectSubsidiaryGraphStats(GemEntityID)
+      const intermediaryData = new Map(intermediaryDataArr.map(d=> [d.direct_subsidiary, d] ))
+
+      /********* Return boatload of data **********/
+      return {GemEntityID, edges, nodes, directSubsidiaries, subsidiaryAssets, entityMap, assetsShortestPathData, downstreamData,  assetEdgesRaw, entityData, assets, allEntityIds, multiplePathAssets, intermediaryData}
+    }
+  </script>
+  <script id="654" type="text/markdown">
+    #### Data From Recursive DuckDB Query
+    Ideally we could run the recursive CTE once and then run multiple queries from it, but I wasn't figuring out an easy way to do that in Observable. So here I'm rerunning the recursive graph traversalEdgesCte for many queries. This gives stats for full sub-graphs, but not filtered by asset classes, which we need to figure out.  
+  </script>
+  <script id="641" type="application/vnd.observable.javascript">
+    recursiveEdgesCte = function(entityId) {
+      return `WITH RECURSIVE edges AS (
+            SELECT
+                o."Interested Party ID" AS parent,
+                o."Subject Entity ID" AS child,
+                o."Subject Entity ID" AS root_child, 
+                LIST_VALUE(o."Interested Party ID") AS visited,
+                1 AS depth
+            FROM ownership o
+            WHERE o."Interested Party ID" = '${entityId}'
+
+            UNION ALL
+
+            SELECT
+                o."Interested Party ID" AS parent,
+                o."Subject Entity ID" AS child,
+                e.root_child, 
+                LIST_APPEND(e.visited, o."Subject Entity ID") AS visited, 
+                e.depth + 1 AS depth
+            FROM ownership o
+            JOIN edges e
+                ON o."Interested Party ID" = e.child
+            WHERE NOT (o."Subject Entity ID" = ANY(e.visited))
+        )`
+    }
+  </script>
+  <script id="563" type="application/vnd.observable.javascript">
+    getDirectSubsidiaryGraphStats = async function(entityId) {
+      return await db.sql([`
+        ${recursiveEdgesCte(entityId)}
+        SELECT 
+            root_child AS direct_subsidiary,
+            COUNT(DISTINCT child) AS total_descendants,
+            MAX(depth) AS max_generations
+        FROM edges
+        GROUP BY root_child
+        ORDER BY root_child;
+    `])
+
+    /* 
+      const subsidiaryStats = db.sql([`
+          SELECT 
+            root_child AS first_level_subsidiary,
+            COUNT(DISTINCT child) AS total_descendants,
+            MAX(depth) AS max_generations
+        FROM edges
+        GROUP BY root_child
+        ORDER BY root_child; `
+      ])
+
+      const edgeStats = db.sql([`
+          SELECT e.parent, e.child, o.* 
+        FROM (SELECT DISTINCT parent, child FROM edges) e
+        JOIN ownership o  ON (
+          o."Interested Party ID" = e.parent
+          AND o."Subject Entity ID"   = e.child);`
+      ])
+
+    */  /* 
+
+
+        SELECT e.parent, e.child, o.* 
+        FROM (SELECT DISTINCT parent, child FROM edges) e
+        JOIN ownership o  ON (
+          o."Interested Party ID" = e.parent
+          AND o."Subject Entity ID"   = e.child);
+    `])*/
+      // 
+    }
+  </script>
+  <script id="434" type="application/vnd.observable.javascript">
+    // recursive duckDb query theoretically with infinite loop protection via the "DISTINCT" in the final statement. Written by chatGpt after I fed it my failed async recursive function
+    getDownstreamEntities = async function(entityId) {
+      return await db.sql([`
+        ${recursiveEdgesCte(entityId)}
+
+        SELECT e.parent as parent_id, e.child as child_id, o.* 
+        FROM (SELECT DISTINCT parent, child FROM edges) e
+        JOIN ownership o  ON (
+          o."Interested Party ID" = e.parent
+          AND o."Subject Entity ID"   = e.child);
+      `]);
+    }
+
+  </script>
+  <script id="320" type="application/vnd.observable.javascript">
+    getDownstreamLeavesFromEntity = function(edges,nodes, startId) {
+      // starting code from chatGPT here: 
+      const adjacency = new Map();
+    edges.forEach(e => {
+      if (!adjacency.has(e.source)) adjacency.set(e.source, []);
+      adjacency.get(e.source).push(e.target);
+    });
+
+    // Step 2: Traverse from the seed node and collect leaves
+    function getDownstreamLeaves(startId, nodes, adjacency) {
+      const nodeById = new Map(nodes.map(n => [n.id, n]));
+      const visited = new Set();
+      const leaves = [];
+
+      const stack = [startId];
+
+      while (stack.length) {
+        const current = stack.pop();
+        if (visited.has(current)) continue;
+        visited.add(current);
+
+        const node = nodeById.get(current);
+        if (!node) continue;
+
+        // If it's a leaf, collect it
+        if (node.type === "asset") {
+          leaves.push(node);
+          continue; // no need to go deeper from a leaf (usually)
+        }
+
+        // Continue downstream
+        const neighbors = adjacency.get(current) || [];
+        neighbors.forEach(next => {
+          if (!visited.has(next)) stack.push(next);
+        });
+      }
+
+      return leaves;
+    }
+    const leaves = getDownstreamLeaves(startId, nodes, adjacency);
+    return [startId, leaves];
+    }
+  </script>
+  <script id="698" type="text/markdown">
+    The tracker has unit names but not project names. Here project names are pulled in from the underlying trackers, mapped to each unit / entity id. (Notably not mapped to location id!)
+  </script>
+  <script id="515" type="application/vnd.observable.javascript">
+    projectNames = {
+      const names = await db.sql([`
+        SELECT *
+        FROM assetNames n
+        `
+      ])
+      return new Map(names.map(d=> [d.id, d]))
+    }
+  </script>
+  <script id="268" type="text/markdown">
+    #### Sample Output data from getDataFromEntity():
+  </script>
+  <script id="125" type="application/vnd.observable.javascript">
+    kkrData = getDataForEntity('E100000001247')
+  </script>
+  <script id="358" type="application/vnd.observable.javascript">
+    dd = kkrData.assets
+  </script>
+  <script id="527" type="application/vnd.observable.javascript" pinned="">
+    getDataForEntity('E100001000178') 
+  </script>
+  <script id="768" type="application/vnd.observable.javascript" pinned="">
+    db.sql([`SELECT Tracker, count(*) FROM assets GROUP BY 1  `])
+  </script>
+  <script id="532" type="application/vnd.observable.javascript" pinned="">
+    getDataForEntity('E100001000008')
+  </script>
+  <script id="331" type="application/vnd.observable.javascript">
+    kkrData.assetsShortestPathData[6]['Ownership Path']
+  </script>
+  <script id="703" type="text/markdown">
+    ## Data for Asset's Owners View
+  </script>
+  <script id="705" type="application/vnd.observable.javascript">
+    recursiveEdgesCteUpstream = function(immediateAssetOwnersArr) {
+      return `WITH RECURSIVE edges AS (
+            SELECT
+                o."Interested Party ID" AS parent,
+                o."Subject Entity ID" AS child,
+                LIST_VALUE(o."Subject Entity ID") AS visited,
+                1 as depth 
+            FROM ownership o
+            WHERE o."Subject Entity ID" IN (${immediateAssetOwnersArr.map(d=> "'" + d + "'").join(', ')})
+
+            UNION ALL
+
+            SELECT
+                o."Interested Party ID" AS parent,
+                o."Subject Entity ID" AS child,
+                LIST_APPEND(e.visited, o."Subject Entity ID") AS visited,
+                e.depth + 1 AS depth
+            FROM ownership o
+            JOIN edges e
+                ON o."Subject Entity ID" = e.parent
+            WHERE NOT (o."Subject Entity ID" = ANY(e.visited))
+        )`
+    }
+  </script>
+  <script id="5" type="application/vnd.observable.javascript">
+    getAssetOwners = async function(GemAssetID) {
+
+      /****** Get Immediate Owners and Parent Owners  ******/
+      const immediateOwners = await db.sql([`SELECT * FROM assetOwnership WHERE "Asset Unit ID" = '${GemAssetID}' OR "Asset ID" == '${GemAssetID}'`])
+      const parentOwners = await db.sql([`${recursiveEdgesCteUpstream(immediateOwners.map(d=> d['Immediate Owner Entity ID']))}
+        SELECT e.parent as parent_id, e.child as child_id, depth, o.* 
+        FROM (SELECT DISTINCT parent, child, depth FROM edges) e
+        JOIN ownership o  ON (
+          o."Interested Party ID" = e.parent
+          AND o."Subject Entity ID"   = e.child);
+     `])
+
+      /**** Format as Edges ****/
+
+      const edges = [
+        ...parentOwners.map(d => ({
+          source: d['parent_id'], 
+          target: d['child_id'], 
+          value: d['% Share of Ownership'],
+          type: 'intermediateEdge',
+          refUrl: d['Data Source URL'],
+          imputedShare: d['Share Imputed?'] == 'imputed value',
+          depth: d.depth,
+        })),
+        ...immediateOwners.map(d => ({
+          source: d['Immediate Owner Entity ID'], 
+          target: d['Asset Unit ID'] || d['Asset ID'] || d['ProjectID'],
+          targetIdType: (d['Asset Unit ID'] ? 'Asset Unit ID' : 'Asset ID'),
+          type: 'leafEdge',
+          value: d['% Share of Ownership'],
+          refUrl: null,
+          imputedShare: d['Share Imputed?'] == 'imputed value',
+          depth: 0
+        }))
+      ] 
+
+      /***** Get Owner Node Data *****/
+      const allEntityIds = Array.from(new Set(edges.map(d=> [d.source, d.target]).flat())).filter(d=> d!= GemAssetID)
+      const nodes = await db.sql([
+        `SELECT "Entity ID" id, * FROM entity WHERE "Entity ID" IN(${allEntityIds.map(d=> "'" + d + "'").join(', ')})`
+      ])
+
+      /***** Get Asset Data *****/
+      const assetInfo = await db.sql([
+          `SELECT * FROM assets
+          WHERE  
+            "GEM location ID" = '${GemAssetID}' OR
+            "GEM unit ID" = '${GemAssetID}' OR
+            "GEM Mine ID" = '${GemAssetID}' OR
+            "GEM Asset ID" = '${GemAssetID}' OR
+            "ProjectID" = '${GemAssetID}' OR
+            "Steel Plant ID" = '${GemAssetID}' OR
+            "GEM Plant ID" = '${GemAssetID}'
+          `
+      ])
+
+      const assetName = await db.sql([
+          `SELECT * FROM assetNames
+          WHERE id = '${GemAssetID}'
+          `
+      ])
+
+
+
+      /**** Return all data ****/
+      return {assetId: GemAssetID, edges, nodes, immediateOwners, parentOwners, assetInfo, assetName, allEntityIds}
+    }
+  </script>
+  <script id="750" type="application/vnd.observable.javascript" pinned="">
+    db.sql([
+          `SELECT * FROM assetNames WHere id = 'G100001057899' LIMIT 5`])
+  </script>
+  <script id="770" type="application/vnd.observable.javascript" pinned="">
+    db.sql([
+          `SELECT * FROM assets WHere AssetId = 'G100001057899' LIMIT 5`])
+  </script>
+  <script id="720" type="application/vnd.observable.javascript" pinned="">
+    getAssetOwners('G100001057899')
+  </script>
+  <script id="272" type="text/markdown">
+    ### Other functions that may come in handy for the other views 
+  </script>
+  <script id="8" type="application/vnd.observable.javascript">
+    getEntityOwners = async function(GemEntityID) {
+      // eventually this should be cleaned up to properly traverse the graph instead of hack the shortest paths fields. Also this approach will fail when the entity name is a subset of a longer entity name (since both will match the ownership path strings)
+      const selectedOwner = await db.sql([`SELECT name FROM entity WHERE "Entity ID" = '${GemEntityID}'`])
+
+      if (selectedOwner.length == 1){  
+        return db.sql([
+        `SELECT DISTINCT CONCAT(split_part("Ownership Path", '${selectedOwner[0].Name}', 1), '${selectedOwner[0].Name}') upstream_path
+          FROM assets a 
+          JOIN ownership o ON(o."Subject Entity ID" = a."Immediate Project Owner GEM Entity ID" 
+              OR o."Subject Entity ID" = a."Owner GEM Entity ID")
+          WHERE "Ownership Path" LIKE '%->%${selectedOwner[0].Name}%'
+      `
+      ])}
+        else {
+          console.warn(selectedOwner.length + ' entities found for ' + GemEntityID)
+          return []
+        }
+    }
+  </script>
+  <script id="710" type="application/vnd.observable.javascript" pinned="">
+    db.sql([`SELECT * FROM assetOwnership WHERE "Asset Unit ID" = 'G100001057899'  `])
+  </script>
+  <script id="16" type="application/vnd.observable.javascript">
+    getEntityLinkData = function(GemEntityID1, GemEntityID2, bidirectionalSearch=true){
+      return db.sql([
+         `SELECT * 
+          FROM ownership
+          WHERE ("Subject Entity ID" = '${GemEntityID1}' AND "Interested Party ID" = '${GemEntityID2}')
+            ${bidirectionalSearch ? `OR ("Interested Party ID" = '${GemEntityID1}' AND "Subject Entity ID" = '${GemEntityID2}')` : ''}
+        `
+      ])
+    }
+  </script>
+  <script id="19" type="application/vnd.observable.javascript">
+    getAssetEntityLinkData = function(GemEntityID, GemLocationID){
+       return 
+    }
+  </script>
+  <script id="175" type="text/markdown">
+    ### Dependencies
+  </script>
+  <script id="22" type="application/vnd.observable.javascript">
+    import {db} from '8f8b5ba824ba1d24'
+  </script>
+  <script id="187" type="text/markdown">
+    ### Helper Functions and Maps
+  </script>
+  <script id="128" type="application/vnd.observable.javascript">
+    summarizeAssets = function(data) {
+      function getStats(v) {
+        return {
+          assetCount: uniqueCount(v, 'GEM location ID'),
+          unitCount: uniqueCount(v, 'GEM unit ID'),
+          types: new Set(v.map(d=> d.Tracker)),
+         // capacities: sum for capacity field for each type of asset ,
+        }
+      }
+      const total = getStats(data) 
+      const byCountry = sortMap('assetCount', d3.rollup(data, getStats, d=> d['Country.Area']))
+      const bySubCountry = d3.rollup(data, getStats, d=> d['Country.Area'], d=> d['State.Province'] ) 
+      const byType = sortMap('assetCount', d3.rollup(data, getStats, d=> d['Tracker']))
+      const byStatus = sortMap('assetCount',d3.rollup(data, getStats, d=> d['Status'].toLowerCase()) )
+
+      return {total, byCountry, bySubCountry, byType, byStatus} 
+    }
+  </script>
+  <script id="507" type="application/vnd.observable.javascript">
+    // meant to work with reformated asset data used in asset-screener (and probably eventually elsewhere) 
+    summarizeAssets2 = function(data) {
+      function getStats(v) {
+        return {
+          assetCount: uniqueCountIfNullField(v, 'locationID', 'id'),
+          unitCount: uniqueCount(v, 'id'),
+          types: new Set(v.map(d=> d.tracker)),
+         // capacities: sum for capacity field for each type of asset ,
+        }
+      }
+      const total = getStats(data) 
+      const byCountry = sortMap('assetCount', d3.rollup(data, getStats, d=> d['country']))
+      const bySubCountry = d3.rollup(data, getStats, d=> d['country'], d=> d['subNationalUnit'] ) 
+      const byType = sortMap('assetCount', d3.rollup(data, getStats, d=> d['tracker']))
+      const byStatus = sortMap('assetCount',d3.rollup(data, getStats, d=> d['status']?.toLowerCase()) )
+
+      return {total, byCountry, bySubCountry, byType, byStatus} 
+    }
+
+  </script>
+  <script id="130" type="application/vnd.observable.javascript">
+    uniqueCount = (arr, field) => Array.from(new Set(arr.map(d=> d[field] ))).length
+  </script>
+  <script id="510" type="application/vnd.observable.javascript">
+    uniqueCountIfNullField = (arr, field1, field2) => Array.from(new Set(arr.map(d=> d[field1] || d[field2] ))).length
+  </script>
+  <script id="140" type="application/vnd.observable.javascript">
+    sortMap = (field, map, dir=d3.descending) => new Map(Array.from(map).sort((a, b) => dir(a[1][field], b[1][field])))
+  </script>
+  <script id="222" type="application/vnd.observable.javascript">
+    capacityFields = new Map([
+      // should update this to accept array of capacities or something for trackers with different fields
+      ['Bioenergy Power', 'Capacity (MW)'],
+      ['Coal Plant', 'Capacity (MW)'],
+      ['Gas Plant', 'Capacity (MW)'],
+      ['Coal Mine', 'Capacity (Mtpa)'],
+      ['Iron Ore Mine', 'Production 2023 (ttpa)'],
+      ['Gas Infrastructure', 'CapacityBcm/y'],
+      ['Oil Infrastructure', 'CapacityBOEd'],
+      ['Steel Plant', 'Nominal crude steel capacity (ttpa)'],
+      ['Cement and Concrete', 'Cement Capacity (millions metric tonnes per annum)'],  
+    ])
+  </script>
+  <script id="349" type="application/vnd.observable.javascript">
+    idFields = new Map([
+      ['Bioenergy Power', 'GEM unit ID'],
+      ['Coal Plant', 'GEM unit ID'],
+      ['Gas Plant', 'GEM unit ID'],
+      ['Coal Mine', 'GEM Mine ID'],
+      ['Iron Ore Mine', 'GEM Asset ID'],
+      ['Gas Pipeline', 'ProjectID'],
+      ['Oil & NGL Pipeline', 'ProjectID'],
+      ['Steel Plant', 'Steel Plant ID'],
+      ['Cement and Concrete', 'GEM Plant ID'],  
+    ])
+  </script>
+  <script id="311" type="text/markdown">
+    ### Testing out the above functions
+  </script>
+  <script id="234" type="application/vnd.observable.javascript" pinned="">
+    d3.rollup(kkrData.assetsShortestPathData, v=> v.length, d=> d.Tracker)
+  </script>
+  <script id="135" type="application/vnd.observable.javascript" pinned="">
+    summarizeAssets(kkrData.assetsShortestPathData)
+  </script>
+  <script id="244" type="application/vnd.observable.javascript" pinned="">
+    kkrData.assetsShortestPathData.filter(d=> d.Tracker == 'Oil & NGL Pipeline')
+  </script>
+  <script id="237" type="application/vnd.observable.javascript" pinned="">
+    d3.rollup(kkrData.assets, v=> v.length, d=> d.tracker)
+  </script>
+</notebook>

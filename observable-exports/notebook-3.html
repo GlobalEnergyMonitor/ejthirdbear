@@ -1,0 +1,239 @@
+<!doctype html>
+<notebook theme="air">
+  <title>Ownership Tools - Styles</title>
+  <script id="0" type="text/markdown">
+    # Ownership Tools - Styles 
+
+    GEM is currently undergoing a brand refresh. The new draft brand guidelines are [here](https://drive.google.com/file/d/1KdGbXafjnXRBnlz5umt2QmwStejuq1Pi/view?usp=sharing). They have not yet been finalized or incorporated into our data visualization style guide. Hopefully this project can help highlight gaps or places where what we have doesn't work. So this notebook should be seen as a starting point rather than where we need to end. 
+
+    Their draft stylesheet for the new website is imported into this notebook, and linked [here](https://cdn.prod.website-files.com/69022141a3f83fcf19ca67ef/css/gem-demo-v3.shared.62b4a668d.css)
+  </script>
+  <script id="66" type="application/vnd.observable.javascript">
+    /**** I initially imported their stylesheet directly into this notebook, but I really don't like it for this notebook ****/
+    //stylesheet = html`<link href="https://cdn.prod.website-files.com/69022141a3f83fcf19ca67ef/css/gem-demo-v3.shared.62b4a668d.css" rel="stylesheet" />`
+
+  </script>
+  <script id="13" type="text/markdown">
+    ## Colors
+  </script>
+  <script id="17" type="application/vnd.observable.javascript">
+    colorsMap = new Map([
+      ['navy', '#004A63'],
+      ['mint', '#9DF7E5'],
+      ['orange', '#FE4F2D'],
+      ['teal', '#016B83'],
+      ['midnight', '#002430'],
+      ['warmWhite', '#F2F2EB'], 
+      ['white', '#FFFFFF'],
+      ['red', '#DC153D'],
+      ['yellow', '#F4CA19'],
+      ['green', '#32B24D'],
+      ['purple', '#89549D'],
+      ['black','#000000']
+    ])
+  </script>
+  <script id="11" type="application/vnd.observable.javascript">
+    colors = ({
+      navy: '#004A63',
+      mint: '#9DF7E5', 
+      orange: '#FE4F2D',
+      teal: '#016B83', 
+      midnight: '#002430',
+      warmWhite: '#F2F2EB', 
+      white: '#FFFFFF',
+      red: '#DC153D',
+      yellow: '#F4CA19',
+      green: '#32B24D',
+      purple: '#89549D',
+      black: '#000'
+    })
+  </script>
+  <script id="37" type="application/vnd.observable.javascript">
+    corePalette = ['navy','mint', 'orange','teal', 'midnight','warmWhite','white']
+  </script>
+  <script id="28" type="application/vnd.observable.javascript">
+    swatches(colorsCore)
+  </script>
+  <script id="15" type="application/vnd.observable.javascript">
+    colorsCore = corePalette.map(d=> colors[d])
+  </script>
+  <script id="46" type="application/vnd.observable.javascript">
+    secondaryPalette = ['red', 'yellow', 'green', 'purple', 'black']
+  </script>
+  <script id="51" type="application/vnd.observable.javascript">
+    swatches(colorsSecondary)
+  </script>
+  <script id="48" type="application/vnd.observable.javascript">
+    colorsSecondary = secondaryPalette.map(d=> colors[d])
+  </script>
+  <script id="59" type="text/markdown">
+    <hr >
+  </script>
+  <script id="329" type="text/markdown">
+    ### Lightness-adjusted core and secondary colors
+  </script>
+  <script id="331" type="application/vnd.observable.javascript">
+    viewof lightnessFunc = Inputs.radio(lightnessRangeFunctions, {label: "Lightness function:", value: Array.from(lightnessRangeFunctions)[0][1]})
+  </script>
+  <script id="101" type="application/vnd.observable.javascript">
+    swatches([colors.orange, ...lightnessFunc(colors.orange)], 'Oranges', '12px')
+  </script>
+  <script id="105" type="application/vnd.observable.javascript">
+    swatches([colors.teal, ...lightnessFunc(colors.teal)], 'Teals', '12px')
+  </script>
+  <script id="108" type="application/vnd.observable.javascript">
+    swatches([colors.mint, ...lightnessFunc(colors.mint)], 'Mints', '12px')
+  </script>
+  <script id="209" type="application/vnd.observable.javascript">
+    swatches([colors.purple, ...lightnessFunc(colors.purple)], 'Purples', '12px')
+  </script>
+  <script id="213" type="application/vnd.observable.javascript">
+    swatches([colors.yellow, ...lightnessFunc(colors.yellow)], 'Yellows', '12px')
+  </script>
+  <script id="218" type="application/vnd.observable.javascript">
+    swatches([colors.red, ...lightnessFunc(colors.red)], 'Reds', '12px')
+  </script>
+  <script id="378" type="application/vnd.observable.javascript">
+    swatches(['grey', ...lightnessFunc('grey')], 'Greys', '12px')
+  </script>
+  <script id="385" type="text/markdown">
+    ### Asset Type Palettes 
+    For Ownership Trackers, we should organize by shades of dirtiness, showing up to 4 shades from our orange palette. For views with more than 4 assets we should either combine (like Coal plants and mines get a single color, and oil pipelines and gas pipelines get a single color; or we should move into other hues like purples and darker portions of yellow). Below is a first crack at unique colors for each tracker. 
+
+    One question is whether it makes sense to alway use these, or to only use the extended palette if we have a wide range of trackers. Like if we're just looking at owners of pipelines should we use the weird dirty yellow and peach indicated below, or just fall back to a default two colors of dark orange and orange. I think the latter is probably the better approach, but want alignment before coding that.  
+  </script>
+  <script id="404" type="application/vnd.observable.javascript">
+    swatches(Array.from(colorByTracker.values()), 'Ownership Tracker Colors', null, Array.from(colorByTracker.keys()))
+  </script>
+  <script id="395" type="application/vnd.observable.javascript">
+    colorByTracker = new Map([
+      ['Coal Plant', setColLightness(colors.orange, 0.2)],
+      ['Coal Mine', setColLightness(colors.orange, 0.35)],
+      ['Gas Plant', colors.orange],
+      ['Oil & NGL Pipeline', setColLightness(colors.yellow, 0.4)],
+      ['Gas Pipeline', setColLightness(colors.orange, 0.75)],
+      ['Bioenergy Power', setColLightness(colors.purple, 0.4)],
+      ['Steel Plant', setColLightness(colors.purple, 0.65)],
+      ['Iron Ore Mine', colors.red],
+      ['Cement and Concrete', setColLightness(colors.yellow, 0.2)],  
+    ])
+  </script>
+  <script id="438" type="text/markdown">
+    ### Color by Status
+    We have lot of different statuses (partly due to lack of normalization across trackers). Normally they should be combined into groups, but sometimes need to be disaggregated. For now I'm showing the combined versions, with the only desegregation if we're only looking at prospective projects. 
+
+    One question is if we can use grey for canceled or closed projects, or if we want to reserve that something like showing when ownership percent is imputed or unknown. 
+  </script>
+  <script id="453" type="application/vnd.observable.javascript">
+    statusColors = new Map([
+      [setColLightness(colors.orange, 0.2), {descript: 'operating', statuses: ["operating","operating pre-retirement"]}],
+      [colors.orange, {descript: 'prospective', statuses: ["proposed","announced","pre-permit","permitted", "pre-construction", "construction"]}],
+      [setColLightness(colors.grey, 0.4), {descript: 'retired/mothballed/idle', statuses: ["retired","mothballed","idle","mothballed pre-retirement"]}],
+      [setColLightness(colors.grey, 0.7), {descript: 'cancelled/shelved', statuses: ["cancelled","shelved","cancelled - inferred 4 y","shelved - inferred 2 y"]}],
+     ])
+  </script>
+  <script id="448" type="application/vnd.observable.javascript">
+    colorByStatus = new Map(
+      Array.from(statusColors).map(d=> d[1].statuses.map(status => [status, d[0]])).flat()
+    )
+  </script>
+  <script id="460" type="application/vnd.observable.javascript">
+    swatches(Array.from(colorByStatus.values()), 'Status Colors (hover to see cutoff text titles)', null, Array.from(colorByStatus.keys()))
+  </script>
+  <script id="487" type="application/vnd.observable.javascript">
+    statusColorsProspective = new Map([
+      [setColLightness(colors.orange, 0.8), {descript: 'proposed/announced', statuses: ["proposed","announced"]}],
+      [colors.orange, {descript: 'pre-construction', statuses: ["pre-permit","permitted", "pre-construction",]}],
+      [setColLightness(colors.orange, 0.3), {descript: 'construction', statuses: ["operating","operating pre-retirement"]}],
+     ])
+  </script>
+  <script id="458" type="application/vnd.observable.javascript">
+    colorByStatusProspective = new Map(
+      Array.from(statusColorsProspective).map(d=> d[1].statuses.map(status => [status, d[0]])).flat()
+    )
+  </script>
+  <script id="491" type="application/vnd.observable.javascript">
+    swatches(Array.from(colorByStatusProspective.values()), 'Status Colors for Prospective Projects', null, Array.from(colorByStatusProspective.keys()))
+  </script>
+  <script id="500" type="text/markdown">
+    ### Maps for export to other notebooks
+    ~~~js
+    import {colMaps} from '088dde385b864f12'
+    ~~~
+
+  </script>
+  <script id="498" type="application/vnd.observable.javascript">
+    colMaps = ({
+      byTracker: colorByTracker, 
+      byStatus: colorByStatus,
+      byStatusProspective: colorByStatusProspective,
+      statusLegend: statusColors,
+      statusProspectiveLegend: colorByStatusProspective
+    })
+  </script>
+  <script id="510" type="text/markdown">
+    ### Color Helper Functions for this Notebook
+  </script>
+  <script id="76" type="application/vnd.observable.javascript">
+    adjustColLightness = function(col, pct){
+      const colHsl = d3.hsl(col)
+      colHsl.l *= pct
+      return colHsl.formatHex()
+    }
+  </script>
+  <script id="100" type="application/vnd.observable.javascript">
+    setColLightness = function(col, lightness){
+      const colHsl = d3.hsl(col)
+      colHsl.l = lightness
+      return colHsl.formatHex()
+    }
+  </script>
+  <script id="334" type="application/vnd.observable.javascript">
+    lightnessRangeFunctions = new Map([ 
+      ["Raw range (0.1 to 0.9)", (col) => d3.range(.1, .91, 0.1).map(d=> setColLightness(col, d)) ],
+      ["Relative Range (0% to 200% of current)", (col) => d3.range(0.2, 2.0, 0.2).map(d=> adjustColLightness(col, d)) ]
+    ])
+  </script>
+  <script id="25" type="application/vnd.observable.javascript">
+    //import {swatches} from '@d3/working-with-color' -- adding border to the original
+
+    function swatches(colors, title = null, sepFirst = null, extraTextArray = null) {
+      return html`
+        ${title ? `<h4 style = "margin-bottom: 3px;">${title}</h4>` : ''}
+        <div style = "display: flex; gap: 7px; font-size: 0.8rem" > 
+          ${colors.map((c,i) => `
+            <div style= "max-width: 60px; overflow:hidden; white-space: nowrap;">
+              <div title="${c}" class="swatch" style="            
+                width: 60px;
+                height: 30px;
+                background: ${c};
+                border: 1px solid #ddd;
+                margin-right: ${sepFirst && i==0 ? sepFirst : '' };">
+              </div>
+              <div>${c}</div>
+              ${extraTextArray ? `<div title="${extraTextArray[i]}">${extraTextArray[i]}</div>` : ''}
+          </div>`)}
+        </div>`;
+    }
+  </script>
+  <script id="42" type="text/markdown">
+    <hr />
+  </script>
+  <script id="61" type="text/markdown">
+    ## Fonts
+  </script>
+  <script id="522" type="text/markdown">
+    The new Brand uses only Plus Jakarta Sans (google font). It's loaded below and available to import into other notebooks with 
+
+    ~~~js
+    import { loadFont } from '088dde385b864f12'
+    ~~~
+
+    We have had some discussion of adding a condensed font that is highly legible and looks good with Plus Jakarta Sans, specifically to make the best use of space / enable more labels for data vis. Happy to have something like that included here. 
+  </script>
+  <script id="519" type="application/vnd.observable.javascript" pinned="">
+    loadFont = html`<link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap" rel="stylesheet">`
+  </script>
+</notebook>

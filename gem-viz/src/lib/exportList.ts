@@ -28,20 +28,22 @@ function loadFromStorage(): ExportAsset[] {
     }
 
     // Filter and validate each entry
-    const validated = parsed.filter((item): item is ExportAsset => {
-      if (!item || typeof item !== 'object') return false;
-      if (typeof item.id !== 'string' || !item.id) return false;
-      return isValidSlug(item.id);
-    }).map(item => ({
-      id: item.id,
-      name: sanitizeName(item.name),
-      tracker: typeof item.tracker === 'string' ? item.tracker : undefined,
-      addedAt: typeof item.addedAt === 'number' ? item.addedAt : Date.now()
-    }));
+    const validated = parsed
+      .filter((item): item is ExportAsset => {
+        if (!item || typeof item !== 'object') return false;
+        if (typeof item.id !== 'string' || !item.id) return false;
+        return isValidSlug(item.id);
+      })
+      .map((item) => ({
+        id: item.id,
+        name: sanitizeName(item.name),
+        tracker: typeof item.tracker === 'string' ? item.tracker : undefined,
+        addedAt: typeof item.addedAt === 'number' ? item.addedAt : Date.now(),
+      }));
 
     // Deduplicate by ID
     const seen = new Set<string>();
-    const deduplicated = validated.filter(item => {
+    const deduplicated = validated.filter((item) => {
       if (seen.has(item.id)) return false;
       seen.add(item.id);
       return true;
@@ -71,7 +73,6 @@ function saveToStorage(list: ExportAsset[]) {
   }
 }
 
-
 // Create the store
 function createExportListStore() {
   const { subscribe, set, update } = writable<ExportAsset[]>(loadFromStorage());
@@ -91,12 +92,15 @@ function createExportListStore() {
       }
       update((list) => {
         if (list.some((a) => a.id === asset.id)) return list;
-        return [...list, {
-          id: asset.id,
-          name: sanitizeName(asset.name),
-          tracker: asset.tracker,
-          addedAt: Date.now()
-        }];
+        return [
+          ...list,
+          {
+            id: asset.id,
+            name: sanitizeName(asset.name),
+            tracker: asset.tracker,
+            addedAt: Date.now(),
+          },
+        ];
       });
     },
 
@@ -109,10 +113,10 @@ function createExportListStore() {
             id: a.id,
             name: sanitizeName(a.name),
             tracker: a.tracker,
-            addedAt: Date.now()
+            addedAt: Date.now(),
           }));
 
-        if (newAssets.length !== assets.filter(a => !existingIds.has(a.id)).length) {
+        if (newAssets.length !== assets.filter((a) => !existingIds.has(a.id)).length) {
           console.warn('Some assets had invalid IDs and were skipped');
         }
 
@@ -143,7 +147,7 @@ function createExportListStore() {
 
     count(): number {
       return get({ subscribe }).length;
-    }
+    },
   };
 }
 

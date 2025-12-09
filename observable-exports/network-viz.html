@@ -1,0 +1,548 @@
+<!doctype html>
+<notebook theme="air">
+  <title>GEM Ownership Asset Screener</title>
+  <script id="0" type="text/markdown">
+    # GEM Ownership Asset Screener 
+    Tool to let users screen to see if an owning entity (or set of many multiple entities) have any ownership of asset classes. **Mockup is [here](https://docs.google.com/presentation/d/13RgzwAKNZ3zVr1MExclyX9ePK2rZsbYzFrS4fjATUDQ/edit?slide=id.g399c5544348_0_0#slide=id.g399c5544348_0_0)**. 
+
+    This notebook is where we can prototype and design the views of the Asset-Class Screener that **shows assets of one of more selected Asset Classes for a selected Owning Entity.** 
+  </script>
+  <script id="128" type="application/vnd.observable.javascript">
+    assetscreenervizmockup = FileAttachment("AssetScreenerVizMockup.png").image({width: 500})
+  </script>
+  <script id="126" type="text/markdown">
+    In this notebook, I'll call the selected owning entity ("Sempra Energy" in the mockup above) the "**spotlight owner**".  
+
+    We have loaded in data for a number of use-cases -- looking at screens of different asset-classes for specific spotlight owners. 
+  </script>
+  <script id="100" type="text/markdown">
+    ### Sample User Tasks 
+    **Primary**: 
+    * Identify which subsidiaries are the ones that connect the spotlight owner and the flagged assets -- e.g. those that are of the selected asset class(es).
+    * Learn about the individual flagged assets that the parent company has stake in (asset type, status, capacity/size, geography) and see how much of a stake the parent company has in the asset.
+    * Get summary data about how many flagged assets are in the Ownership Tracker for the parent company, grouped by status, type, geography, as well as basic information about the volume of and nature of other assets owned by the spotlight owner in the Ownership Tracker.  
+
+    **Secondary**: 
+    * Dig deeper into a given asset's relationship with the spotlight owner, seeing the full path of connections between the asset and the owner.
+    * Dig deeper into a given subsidiaries connection to flagged assets -- seeing something about the tree down from the subsidiary to the assets.
+    * See other partial owners of a given subsidiary, or of a given asset. 
+    * Evaluate the research by seeing when the entity relationship was last researched (this will be added to the tracker on the next release, so not in the data yet), and seeing the url to the source verifying the relationship (which is linked in the edges data).
+    * Evaluate if there are types of ownership set up to obscure ownership - trust and nominees
+    * Middle: if all existing within a single intermediary
+
+    **Edge cases to make sure we handle**:
+    * Multiple paths from spotlight owner to a given asset.
+    * Multiple paths from a direct subsidiary owner to a given asset. 
+    * Multiple units of different status within a project. (Maybe multiple units with different owners if that happens much)
+    * Mix of direct ownership and ownership via subsidiary
+    * When only one asset for an entity is returned (which could be common for niche asset classes), what else should we show immediately, without them needing to hover/click around.
+
+  </script>
+  <script id="16" type="text/markdown">
+    ## Data Test Cases 
+  </script>
+  <script id="50" type="application/vnd.observable.javascript">
+    viewof curCase = Inputs.radio(screeningCases, {
+      format: d=> d.assetClassName + ' (Owned by ' + d.owner + ')', value: screeningCases[0]})
+
+  </script>
+  <script id="462" type="application/vnd.observable.javascript">
+    mutable hoverData = curData
+  </script>
+  <script id="163" type="application/vnd.observable.javascript">
+    chart = {
+      const container = d3.create('div').attr('id','chart-container')
+
+      /****** Set up / populate spotlight company box + legend ******/ 
+      const header = container.append('div').attr('class','chart-header')
+      header.append('div').attr('class', 'owner-card').text(curData.spotlightOwner.Name)
+      const legend = header.append('div').attr('class', 'legend')
+      legend.append('div').text(curData.assets.length + ' ' + curCase.assetClassName + ' via ' + Array.from(curData.subsidiariesMatched).length + ' direct subsidiaries')
+      legend.append('div').attr('class','legend-items')
+        .selectAll('div').data(colLegend).join('div').attr('class','legend-item')
+        .html(d=> `<div class='legend-bubble' style = "background-color:${d[0]};"></div><div>${d[1].descript}</div>`)
+
+      /****** Set up svg to container main chart ******/ 
+      const svg = container.append('svg').attr('width',900).attr('height',svgHeight + params.svgMarginTop *2 ) 
+
+      /****** Div below SVG with "additional assets" facts ******/ 
+      const additionalAssets = container.append('div').text(curData.spotlightOwner.Name + ' has stakes in __ additional assets identified in the Global Energy Ownership Trackers')
+
+      /****** g that will hold all the chart elements ******/ 
+      const gMain = svg.append('g').attr('transform', (d,i) => `translate(${0}, ${params.svgMarginTop})`)
+
+
+      /****** path from spotlight company box (above the SVG) to subsidiaries (and direct ownership when applicable) ******/ 
+      const subsidiariesPaths = gMain.append('g').selectAll('path').data(groupYs).join('path')
+        .attr('d', d=> subsidiaryPath([20, -params.svgMarginTop], d.top + d.height/2 + params.svgMarginTop, params.subsidX - 20 - params.subsidiaryMarkHeight/2) )
+        .attr('fill','none').attr('stroke',colors.navy)
+
+      /****** group of chart for each subsiary (plus one for direct ownership where it exists) ******/ 
+      let subsidiaryGroups = Array.from(curData.subsidiariesMatched)
+      if (curData.directlyOwned.length) {
+        subsidiaryGroups.push([null, curData.directlyOwned])
+      } 
+
+      /****** g's for each subsiary, which will contain, circles, pies, subsidiary name tspans, and lines to assets ******/ 
+      const gSubsidiaries = gMain.append('g')
+        .selectAll('g')
+        .data(subsidiaryGroups.map((d,i)=> ({id: d[0], data: d[1], ...groupYs[i]})))
+        .join('g')
+        .attr('transform', (d,i) => `translate(${params.subsidX}, ${d.top})`)
+
+      // Append subsidiary circles (but not for directly owned assets)
+      gSubsidiaries.filter(d=> d.id!= null)
+        .append('circle').attr('cx', 0)
+        .attr('cy', (d,i)=> d.height/2)
+        .attr('r', params.subsidiaryMarkHeight/2)
+        .attr('fill',colors.navy)
+        .attr('fill-opacity',.1)
+        .attr('stroke',colors.navy)
+        .attr('stroke-width',2)
+        .on('mouseover', (e,d) => {mutable hoverData = {...d, entityData: curData.entityMap.get(d.id), edgeToSpotlightData: curData.matchedEdges.get(d.id) }})
+
+      gSubsidiaries.filter(d=> d.id!= null).append("path")
+        .attr("transform", d=> `translate(0, ${d.height/2})`)
+        .attr("d", d => d3.arc()({
+          innerRadius: 0,
+          outerRadius: params.subsidiaryMarkHeight/2 - 1,
+          startAngle: 0,
+          endAngle: 2 * Math.PI * ((curData.matchedEdges.get(d.id)?.value || 100) / 100) 
+        }))
+        .style('pointer-events','none')
+        .attr('fill', d => curData.matchedEdges.get(d.id)?.value ? colors.navy : '#B9B9B9');
+
+      gSubsidiaries.append('text')
+        .attr('y', (d,i)=> d.height/2 - 5)
+        .attr('x', params.subsidiaryMarkHeight/2 + 5)
+        .attr('fill', colors.navy)
+        .datum(d=> curData.entityMap.get(d.id)?.Name || 'Directly owned')
+        .call(wrapTextTwoLines, 18)
+        //.text(d=> curData.entityMap.get(d.id).Name)
+
+      gSubsidiaries.append('line')
+        .attr('y1', d => d.height/2).attr('y2', d => d.height/2)
+        .attr('x1', d => (d.id == null ? -1 : 1 ) * params.subsidiaryMarkHeight/2).attr('x2', d => params.assetsX - 40)
+        .attr('stroke',colors.navy)
+
+      gSubsidiaries.append('path')
+        .attr('d', d=> bracketPath([params.assetsX - 40, d.height/2], d.height, 20))
+        .attr('fill','none').attr('stroke',colors.navy)
+
+      /****** g's for each asset, which will contain circles, and names ******/ 
+      const gAssets = gSubsidiaries.append('g').selectAll('g')
+        .data(d=> d.data).join('g')
+        .attr('transform', (d,i,nodes) =>  `translate(${params.assetsX}, ${(i+0.5) * (nodes.length == 1 ? params.subsidiaryMarkHeight : params.assetMarkHeight) + (i) * params.assetSpacing})`)
+        .on('mouseover', (e,d)=> {mutable hoverData = d})
+
+      gAssets.append('circle')
+        .attr('r', params.assetMarkHeight/2)
+        .attr('fill',d=> col.get(d[colField]))
+
+      gAssets.append('text').attr('y', 6).attr('x', params.assetMarkHeight).text(d=> includeUnitNames ? d.name : (projectNames.get(d.id)?.name || d.name))
+
+      return container.node()
+    }
+  </script>
+  <script id="478" type="application/vnd.observable.javascript">
+    // If this is toggle off they get sorted by number of assets descending. 
+    viewof sortByOwnershipPct = Inputs.toggle({label: 'sort subsidiaries by ownership percent', value:true}) 
+  </script>
+  <script id="711" type="application/vnd.observable.javascript">
+    viewof includeUnitNames = Inputs.toggle({label: 'Include unit names in labels', value:false}) 
+  </script>
+  <script id="245" type="application/vnd.observable.javascript">
+    viewof params = Inputs.form({
+      subsidX: Inputs.range([0,350], {label: 'subsidiary x', value: 120, step:1 }), 
+      assetsX: Inputs.range([0,400], {label: 'assets x', value: 380, step:1 }),
+      yPadding: Inputs.range([0,150], {label: 'asset groups padding y', value: 30, step:1 }),
+      assetSpacing: Inputs.range([0,15], {label: 'asset mark padding', value: 8, step:1 }),
+      assetMarkHeight: Inputs.range([0,150], {label: 'asset mark height', value: 16, step:1 }),
+      subsidiaryMarkHeight: Inputs.range([0,150], {label: 'subsidiary mark height', value: 30, step:1 }),
+      svgMarginTop: Inputs.range([0,30], {label: 'svg margin top', value: 24, step:1 }),
+      legendIconSize: Inputs.range([0,30], {label: 'legend icon size', value: 14, step:1 }),
+    })
+
+  </script>
+  <script id="413" type="application/vnd.observable.javascript">
+    subsidiaryPath = function(startPnt, height, width, crvPct = 1) {
+        const lnPtn = [startPnt[0], startPnt[1] + height * crvPct * .4] 
+        const CtlPt1 = [startPnt[0], startPnt[1] + height * crvPct]
+        const CtlPt2 = [startPnt[0] + width * crvPct, startPnt[1] + height ]
+        const endPnt = [startPnt[0] + width, startPnt[1] + height]
+        const path = d3.path()
+        path.moveTo(...startPnt)
+        path.lineTo(...lnPtn)
+        path.bezierCurveTo(...CtlPt1, ...CtlPt2, ...endPnt)
+        return path
+    }
+  </script>
+  <script id="361" type="application/vnd.observable.javascript">
+    bracketPath = function(lineEndPnt, height, width, crvPct = 0.7) {
+        const startPnt = [lineEndPnt[0] + width, lineEndPnt[1] - height/2]
+        const endPnt = [lineEndPnt[0] + width, lineEndPnt[1] + height/2]
+        const topCtlPt = [lineEndPnt[0] + width * (1-crvPct), lineEndPnt[1] - height/2]
+        const midCtlPt = [lineEndPnt[0] + width * crvPct, lineEndPnt[1] ]
+        const bottomCtlPt = [lineEndPnt[0] + width * (1-crvPct), lineEndPnt[1] + height/2]
+        const path = d3.path()
+        path.moveTo(...startPnt)
+        path.bezierCurveTo(...topCtlPt, ...midCtlPt, ...lineEndPnt)
+        path.bezierCurveTo(...midCtlPt, ...bottomCtlPt, ...endPnt)
+        return path
+
+     // d="M150,150 C 171,150 163,77 182,78 M150,150 C 177,144 186,152 181,219" />
+    }
+  </script>
+  <script id="186" type="application/vnd.observable.javascript">
+    styles = html`<style> 
+
+      #chart-container {
+        padding: 10px;
+        background-color:     
+        color: ${colors.navy};
+        font-family: "Plus Jakarta Sans", sans-serif;
+      }
+      .chart-header { 
+        display: flex;
+        gap: 12px;
+      }
+      .legend-items { 
+        display: flex;
+        gap: 20px;
+      }  
+      .legend-item { 
+        display: flex;
+        align-items: center;
+        gap: 7px; 
+      }  
+      .legend-bubble { 
+        width: ${params.legendIconSize}px;
+        height: ${params.legendIconSize}px;
+        border-radius: 50%;
+      }
+      .owner-card { 
+        background: ${colors.navy}22;
+        border-radius: 0px 10px 10px 10px;
+        border: 1px solid ${colors.navy};
+        color: ${colors.navy};
+        padding: 10px;
+        width: fit-content;
+        display: flex;
+        align-items: center;
+        justify-content: center; 
+      }
+    </style>`
+  </script>
+  <script id="169" type="text/markdown">
+    ### Stephen's to dos: 
+    #### Priority 1:
+    * √ Get intermediary-node counts (this was somewhat more complicated than I thought it would be, so I didn't do it for now). in curData.intermediaryData, though a big caveat is the summary stats on the intermediary network cover the whole tree, not just the part filtered to a given asset class. 
+    * √ Add to data an identifier when single asset has multiple subsidiaries. (And make sure example of that exists in our test data sets) -- in  curData.multiplePathAssets. 
+    * Check if I can make header and footer sticky within Observable cell 
+
+    #### Get to soon-ish:
+    * Further improve asset coloring logic [After Nadieh take a look] 
+    * Update the "additional assets" in the footer to use real data
+    * Figure out how to group statuses and what we want visually encoded (beyond color-based encoding)
+    * Figure out what to show on hover for different parts of chart
+    * Figure out sorting of assets within direct subsidiary
+
+    #### Nadieh already working on 
+    * Add indicator of percent ownership of asset (fill opacity within thick enough stroke to ID colors); or pies, or mini bars within rects
+    * Enable toggle to view by project vs units. Data is available in curData.assetsGroupedByProject, but not yet in vis. (Nadieh solving this by packing the units within project).
+    * Handle when too many assets to fit to enumerate (horizontal or wrap). For now planning to just leave long list of assets but sticky scrolling. 
+    * Handle mouseover / clicks better (currently pulling relevant data to a mutable hoverData cell. Need to show data there as popups)
+    * And intermediary data information to the graphic (once Stephen pulls it)
+
+  </script>
+  <script id="5" type="text/markdown">
+    ## Appendix
+  </script>
+  <script id="25" type="text/markdown">
+    ### Load and Process Data
+  </script>
+  <script id="13" type="application/vnd.observable.javascript">
+    data = ({
+      KKR: await getDataForEntity('E100000001247'),
+      SouthKoreaGov: await getDataForEntity('E100000000962'),
+      OsakaGas: await getDataForEntity('E100000000654'),
+      JFESteel: await getDataForEntity('E100001000516'),
+      AlgeriaGov: await getDataForEntity('E100001000008')
+      // add other companies here. 
+    })
+  </script>
+  <script id="840" type="application/vnd.observable.javascript">
+    { 
+      const dd = data[curCase.owner]
+      return dd.assets.filter(d=> d['country'] == 'Philippines')// && fossilTrackers.includes(d['tracker']))
+      const assetsMatched = dd.assets.filter(curCase.assetClassFunction); 
+      return assetsMatched;
+      const assetsMatchedIds = assetsMatched.map(d=> d.id) 
+      let subsidiariesMatched = new Map(Array.from(dd.subsidiaryAssets)
+        .map(d=> [d[0], d[1].filter(curCase.assetClassFunction)])
+        .filter(d=> d[1].length > 0)
+        .sort((a,b)=> d3.descending(a[1].length, b[1].length))
+      )
+      let directlyOwned = assetsMatched.filter(d=> d.directlyOwnedBySpotlightOwner)
+
+      const matchedEdges = new Map(dd
+        .edges
+        .filter(d=> d.source == dd.GemEntityID && 
+                Array.from(subsidiariesMatched.keys()).includes(d.target))
+        .map(d=>[d.target, d])
+      )
+
+      if(sortByOwnershipPct ) { 
+        subsidiariesMatched = new Map(Array.from(subsidiariesMatched).sort((a,b) => d3.descending(matchedEdges.get(a[0]).value || 0, matchedEdges.get(b[0]).value || 0)))
+      }
+
+      const assetsGroupedByProject = d3.rollup(assetsMatched, v=> ({name: projectNames.get(v[0].id)?.name, tracker: v[0].tracker, assets: v}), d=> d.locationID || d.id)
+      const summary = summarizeAssets2(assetsMatched)
+      const summaryRemainingAssets = summarizeAssets2(data[curCase.owner].assets.filter(d => !curCase.assetClassFunction(d)))
+
+      return { 
+        assets: assetsMatched, 
+        assetsGroupedByProject,
+        subsidiariesMatched,
+        directlyOwned, 
+        spotlightOwner: dd.entityMap.get(dd.GemEntityID), 
+        matchedEdges,
+        summary, summaryRemainingAssets,
+        entityMap: dd.entityMap, // where to get data for any entity in the graph
+        multiplePathAssets: dd.multiplePathAssets, // map of asset-id to subsidiary/spotlight - for assets appearing under multiple paths 
+        intermediaryData: dd.intermediaryData, // map. keys are direct subsidiary, values have stats on number of intermediary entities between them and assets, and depth of tree before assets. (currently only valid when showing all assets, but should be usable to inform design).
+
+      }
+    }
+  </script>
+  <script id="229" type="application/vnd.observable.javascript">
+    curData = {
+      const dd = data[curCase.owner]
+      const assetsMatched = dd.assets.filter(curCase.assetClassFunction); 
+      const assetsMatchedIds = assetsMatched.map(d=> d.id) 
+      let subsidiariesMatched = new Map(Array.from(dd.subsidiaryAssets)
+        .map(d=> [d[0], d[1].filter(curCase.assetClassFunction)])
+        .filter(d=> d[1].length > 0)
+        .sort((a,b)=> d3.descending(a[1].length, b[1].length))
+      )
+      let directlyOwned = assetsMatched.filter(d=> d.directlyOwnedBySpotlightOwner)
+
+      const matchedEdges = new Map(dd
+        .edges
+        .filter(d=> d.source == dd.GemEntityID && 
+                Array.from(subsidiariesMatched.keys()).includes(d.target))
+        .map(d=>[d.target, d])
+      )
+
+      if(sortByOwnershipPct ) { 
+        subsidiariesMatched = new Map(Array.from(subsidiariesMatched).sort((a,b) => d3.descending(matchedEdges.get(a[0]).value || 0, matchedEdges.get(b[0]).value || 0)))
+      }
+
+      const assetsGroupedByProject = d3.rollup(assetsMatched, v=> ({name: projectNames.get(v[0].id)?.name, tracker: v[0].tracker, assets: v}), d=> d.locationID || d.id)
+      const summary = summarizeAssets2(assetsMatched)
+      const summaryRemainingAssets = summarizeAssets2(data[curCase.owner].assets.filter(d => !curCase.assetClassFunction(d)))
+
+      return { 
+        assets: assetsMatched, 
+        assetsGroupedByProject,
+        subsidiariesMatched,
+        directlyOwned, 
+        spotlightOwner: dd.entityMap.get(dd.GemEntityID), 
+        matchedEdges,
+        summary, summaryRemainingAssets,
+        entityMap: dd.entityMap, // where to get data for any entity in the graph
+        multiplePathAssets: dd.multiplePathAssets, // map of asset-id to subsidiary/spotlight - for assets appearing under multiple paths 
+        intermediaryData: dd.intermediaryData, // map. keys are direct subsidiary, values have stats on number of intermediary entities between them and assets, and depth of tree before assets. (currently only valid when showing all assets, but should be usable to inform design).
+
+      }
+    }
+  </script>
+  <script id="759" type="text/markdown">
+    ### Calculate SVG Height (to fit all vertically)
+  </script>
+  <script id="255" type="application/vnd.observable.javascript">
+    groupYs = {
+      // positioning algorithm for subsidiaries and for now assuming vertical arrangement of assets, and no grouping of units into assets. Will need to update for grouping units into assets and for handling cases with too many assets for vertical alignment of all of them)
+      const groupHeights = Array.from(curData.subsidiariesMatched)
+        .map(d=> d[1].length * params.assetMarkHeight + (d[1].length - 1) * params.assetSpacing)
+
+      if (curData.directlyOwned.length) {
+        groupHeights.push(
+          curData.directlyOwned.length * params.assetMarkHeight + (curData.directlyOwned.length - 1) * params.assetSpacing 
+        )
+      }
+
+      let y = 0
+      return groupHeights.map(d=> {
+        let top = y 
+        let height = d3.max([d, params.subsidiaryMarkHeight])
+        y += (height + params.yPadding)
+        return {top, height}
+      }) 
+    }
+  </script>
+  <script id="274" type="application/vnd.observable.javascript">
+    svgHeight = groupYs[groupYs.length-1].top + groupYs[groupYs.length-1].height
+  </script>
+  <script id="686" type="text/markdown">
+    ### Colors 
+    Logic for color scale is currently:
+    If screened assets include multiple trackers, color by tracker;
+    Else If screened assets include multiple statuses, color by status (grouped into a few categories, unless all statuses included as prospective status, in which case the color scale is disaggregated to show different prospective statuses)
+  </script>
+  <script id="568" type="application/vnd.observable.javascript">
+    colMaps
+  </script>
+  <script id="562" type="application/vnd.observable.javascript">
+    colField = curData.summary.total.types.size > 1 ? 'tracker' : 'status'
+  </script>
+  <script id="560" type="application/vnd.observable.javascript">
+    setColAndLegend = {
+      if(colField == 'tracker') {
+        mutable col = colMaps.byTracker
+        mutable colLegend = new Map(Array.from(colMaps.byTracker)
+          .filter(d=> Array.from(curData.summary.byType.keys()).includes(d[0]))
+          .map(d=> [d[1], {descript: d[0]}]))
+        return colMaps.byTracker 
+      } else if (colField == 'status') {
+        if(Array.from(curData.summary.byType).every(d=> prospectiveStatuses.includes(d))) {
+          mutable col = colMaps.byStatusProspective
+          mutable colLegend = new Map(Array.from(colMaps.statusProspectiveLegend)
+            .filter(d=> 
+              d[1].statuses.some(st => Array.from(curData.summary.byStatus.keys()).includes(st))))
+        } else {
+          mutable col = colMaps.byStatus
+          mutable colLegend = new Map(Array.from(colMaps.statusLegend)      
+            .filter(d=> 
+              d[1].statuses.some(st => Array.from(curData.summary.byStatus.keys()).includes(st))))
+        }
+      }
+
+    }
+  </script>
+  <script id="596" type="application/vnd.observable.javascript">
+    mutable col = ''
+  </script>
+  <script id="605" type="application/vnd.observable.javascript">
+    mutable colLegend = ''
+  </script>
+  <script id="67" type="text/markdown">
+    ### Case Studies (Asset Classes + Company combinations) 
+  </script>
+  <script id="32" type="application/vnd.observable.javascript">
+    screeningCases = [
+      {
+        assetClassName: 'fossil fuel projects in the Philippines', 
+        assetClassFunction: d=> d['country'] == 'Philippines' && fossilTrackers.includes(d['tracker']),
+        owner: 'KKR', 
+      }, 
+      {
+        assetClassName: 'proposed projects', 
+        assetClassFunction: d=> prospectiveStatuses.includes(d['status']),
+        owner: 'KKR', 
+      }, 
+      {
+        assetClassName: 'coal -- plants and mines', 
+        assetClassFunction: d=> ["Coal Plant", "Coal Mine"].includes(d['tracker']),
+        owner: 'KKR', 
+      }, 
+      {
+        assetClassName: 'projects', 
+        assetClassFunction: d=> true,
+        owner: 'KKR', 
+      }, 
+      {
+        assetClassName: 'projects', 
+        assetClassFunction: d=> true,
+        owner: 'OsakaGas', 
+      }, 
+      {
+        assetClassName: 'projects', 
+        assetClassFunction: d=> true,
+        owner: 'SouthKoreaGov', 
+      }, 
+      {
+        assetClassName: 'projects outside of South Korea', 
+        assetClassFunction: d=> d.country != 'South Korea',
+        owner: 'SouthKoreaGov', 
+      }, 
+      {
+        assetClassName: 'projects', 
+        assetClassFunction: d=> true,
+        owner: 'JFESteel', 
+      }, 
+      {
+        assetClassName: 'gas pipelines', 
+        assetClassFunction: d=> d.tracker == 'Gas Pipeline',
+        owner: 'AlgeriaGov'
+      }
+    ]
+  </script>
+  <script id="36" type="application/vnd.observable.javascript">
+    fossilTrackers = [ "Coal Plant","Gas Plant", "Coal Mine","Gas Pipeline" ] 
+      // NOT "Bioenergy Power", "Iron Mine","Gas Pipeline", "Steel Plant"}
+  </script>
+  <script id="41" type="application/vnd.observable.javascript">
+    prospectiveStatuses = ['permitted','pre-permit','pre-construction','construction','proposed','announced'] 
+    // NOT  "cancelled",  "operating", "retired", "mothballed","shelved", "shelved - inferred 2 y", "cancelled - inferred 4 y" , "mothballed", "idle", "operating pre-retirement","mothballed pre-retirement"}
+  </script>
+  <script id="514" type="application/vnd.observable.javascript">
+    // d3 function to split text into two lines and append as tspans, split at n and elispsis'd after n characters on the second line. Drafted by chatGPT - which required a handful of tweaks 
+
+    function wrapTextTwoLines(textSelection, n) {
+      textSelection.each(function(d) {
+        const text = d
+
+        // Helper: produce line1 and line2
+        function splitTwoLines(str, limit) {
+          if (str.length <= limit) {
+            return [str];
+          }
+
+          let breakPos = str.lastIndexOf(" ", limit);
+          if (breakPos === -1) breakPos = limit;
+
+          const line1 = str.slice(0, breakPos).trim();
+          let rest = str.slice(breakPos).trim();
+
+          let line2;
+          if (rest.length > limit) {
+            line2 = rest.slice(0, limit).trim() + "…";
+          } else {
+            line2 = rest;
+          }
+
+          return [line1, line2];
+        }
+
+        const [line1, line2] = splitTwoLines(text, n);
+
+        // Append tspans
+        const textNode = d3.select(this);
+        textNode.selectAll("*").remove(); // clear previous tspans if updating
+
+        textNode
+          .append("tspan")
+          .text(line1);
+
+        if (line2) {
+          textNode
+            .append("tspan")
+            .attr("x", textNode.attr('x'))
+            .attr("dy", "1.2em")
+            .text(line2);
+        }
+      });
+    }
+
+  </script>
+  <script id="7" type="text/markdown">
+    ### Dependencies
+  </script>
+  <script id="9" type="application/vnd.observable.javascript">
+    import {getDataForEntity, summarizeAssets, summarizeAssets2, projectNames} from 'bdcdb445752833fa' 
+  </script>
+  <script id="155" type="application/vnd.observable.javascript">
+    import {colors, colMaps, loadFont} from '088dde385b864f12'
+  </script>
+</notebook>

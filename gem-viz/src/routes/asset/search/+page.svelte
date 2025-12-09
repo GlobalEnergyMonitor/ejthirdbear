@@ -10,7 +10,7 @@
     findTilesForBounds,
     estimateSize,
     loadTiles,
-    buildUnionQuery
+    buildUnionQuery,
   } from '$lib/tileLoader';
   import DataTable from '$lib/components/DataTable.svelte';
 
@@ -28,7 +28,6 @@
   let currentTile = '';
   let estimatedDownload = { mb: 0, rows: 0, assets: 0 };
 
-
   // DataTable column definitions for asset data
   const tableColumns = [
     { key: 'id', label: 'ID', sortable: true, filterable: true, width: '200px' },
@@ -37,7 +36,7 @@
     { key: 'country', label: 'Country', sortable: true, filterable: true, width: '140px' },
     { key: 'state', label: 'State', sortable: true, filterable: true, width: '120px' },
     { key: 'lat', label: 'Latitude', sortable: true, type: 'number', width: '100px' },
-    { key: 'lon', label: 'Longitude', sortable: true, type: 'number', width: '100px' }
+    { key: 'lon', label: 'Longitude', sortable: true, type: 'number', width: '100px' },
   ];
 
   // Handle row click to navigate to asset page
@@ -80,8 +79,8 @@
     }
 
     if (filter.type === 'polygon') {
-      const lons = filter.coordinates.map(c => c[0]);
-      const lats = filter.coordinates.map(c => c[1]);
+      const lons = filter.coordinates.map((c) => c[0]);
+      const lats = filter.coordinates.map((c) => c[1]);
       const minLon = Math.min(...lons);
       const maxLon = Math.max(...lons);
       const minLat = Math.min(...lats);
@@ -96,10 +95,11 @@
   function pointInPolygon(lon, lat, polygon) {
     let inside = false;
     for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-      const xi = polygon[i][0], yi = polygon[i][1];
-      const xj = polygon[j][0], yj = polygon[j][1];
-      const intersect = ((yi > lat) !== (yj > lat))
-        && (lon < (xj - xi) * (lat - yi) / (yj - yi) + xi);
+      const xi = polygon[i][0],
+        yi = polygon[i][1];
+      const xj = polygon[j][0],
+        yj = polygon[j][1];
+      const intersect = yi > lat !== yj > lat && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi;
       if (intersect) inside = !inside;
     }
     return inside;
@@ -138,13 +138,13 @@
       if (filter?.type === 'bounds') {
         bounds = filter;
       } else if (filter?.type === 'polygon') {
-        const lons = filter.coordinates.map(c => c[0]);
-        const lats = filter.coordinates.map(c => c[1]);
+        const lons = filter.coordinates.map((c) => c[0]);
+        const lats = filter.coordinates.map((c) => c[1]);
         bounds = {
           north: Math.max(...lats),
           south: Math.min(...lats),
           east: Math.max(...lons),
-          west: Math.min(...lons)
+          west: Math.min(...lons),
         };
       }
 
@@ -169,7 +169,6 @@
       queryTime = performance.now() - startTime;
       results = data;
       console.log(`Found ${results.length} assets in ${queryTime.toFixed(0)}ms`);
-
     } catch (err) {
       console.error('Search error:', err);
       error = err.message;
@@ -204,11 +203,12 @@
 
     // Build and execute query across loaded tiles
     const whereClause = buildSpatialWhere(filter);
-    const tableNames = tiles.map(t => t.name.replace(/-/g, '_'));
+    const tableNames = tiles.map((t) => t.name.replace(/-/g, '_'));
 
-    const sql = buildUnionQuery(
-      tableNames,
-      `DISTINCT
+    const sql =
+      buildUnionQuery(
+        tableNames,
+        `DISTINCT
         id,
         id as name,
         tracker,
@@ -216,8 +216,8 @@
         state,
         "Latitude" as lat,
         "Longitude" as lon`,
-      `"Latitude" IS NOT NULL AND "Longitude" IS NOT NULL AND ${whereClause}`
-    ) + `\nORDER BY id\nLIMIT 500`;
+        `"Latitude" IS NOT NULL AND "Longitude" IS NOT NULL AND ${whereClause}`
+      ) + `\nORDER BY id\nLIMIT 500`;
 
     const result = await query(sql);
     if (!result.success) throw new Error(result.error);
@@ -226,9 +226,7 @@
 
     // For polygon filters, do precise point-in-polygon check
     if (filter?.type === 'polygon' && data.length > 0) {
-      data = data.filter(row =>
-        pointInPolygon(row.lon, row.lat, filter.coordinates)
-      );
+      data = data.filter((row) => pointInPolygon(row.lon, row.lat, filter.coordinates));
     }
 
     return data;
@@ -244,10 +242,16 @@
 
     const parquetBase = assetsPath || '';
 
-    const locResult = await loadParquetFromPath(`${parquetBase}/all_trackers_ownership@1.parquet`, 'ownership');
+    const locResult = await loadParquetFromPath(
+      `${parquetBase}/all_trackers_ownership@1.parquet`,
+      'ownership'
+    );
     if (!locResult.success) throw new Error(locResult.error);
 
-    const coordResult = await loadParquetFromPath(`${parquetBase}/asset_locations.parquet`, 'locations');
+    const coordResult = await loadParquetFromPath(
+      `${parquetBase}/asset_locations.parquet`,
+      'locations'
+    );
     if (!coordResult.success) throw new Error(coordResult.error);
 
     const whereClause = buildSpatialWhere(filter);
@@ -278,9 +282,7 @@
     let data = result.data || [];
 
     if (filter?.type === 'polygon' && data.length > 0) {
-      data = data.filter(row =>
-        pointInPolygon(row.lon, row.lat, filter.coordinates)
-      );
+      data = data.filter((row) => pointInPolygon(row.lon, row.lat, filter.coordinates));
     }
 
     return data;
@@ -520,7 +522,9 @@
     background: #1565c0;
   }
 
-  .loading-state, .error-state, .empty-state {
+  .loading-state,
+  .error-state,
+  .empty-state {
     text-align: center;
     padding: 60px 20px;
     color: #666;
@@ -589,7 +593,9 @@
   }
 
   @keyframes spin {
-    to { transform: rotate(360deg); }
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .error-state {

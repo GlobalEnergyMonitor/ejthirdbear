@@ -58,9 +58,7 @@ export async function initDb(): Promise<void> {
  * Execute a SQL query against the active database
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function query<T = Record<string, any>>(
-  sql: string
-): Promise<QueryResult<T>> {
+export async function query<T = Record<string, any>>(sql: string): Promise<QueryResult<T>> {
   if (currentMode === 'motherduck') {
     if (!motherDuckConn) {
       await initDb();
@@ -113,7 +111,7 @@ export async function loadParquet(url: string, tableName: string): Promise<Query
   if (currentMode !== 'local') {
     return {
       success: false,
-      error: 'loadParquet only works in local mode'
+      error: 'loadParquet only works in local mode',
     };
   }
 
@@ -131,5 +129,5 @@ export default {
   switchMode,
   listTables,
   getTableSchema,
-  loadParquet
+  loadParquet,
 };

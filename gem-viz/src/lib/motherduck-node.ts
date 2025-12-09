@@ -33,21 +33,24 @@ async function init(): Promise<any> {
       }
 
       // Install and load MotherDuck extension
-      db!.exec(`
+      db!.exec(
+        `
         INSTALL motherduck;
         LOAD motherduck;
         SET motherduck_token='${PUBLIC_MOTHERDUCK_TOKEN}';
         ATTACH 'md:gem_data' AS gem;
         USE gem;
-      `, (err: Error | null) => {
-        if (err) {
-          console.error('Failed to connect to MotherDuck:', err);
-          reject(err);
-          return;
+      `,
+        (err: Error | null) => {
+          if (err) {
+            console.error('Failed to connect to MotherDuck:', err);
+            reject(err);
+            return;
+          }
+          console.log('✓ Connected to MotherDuck (Node.js)');
+          resolve(db!);
         }
-        console.log('✓ Connected to MotherDuck (Node.js)');
-        resolve(db!);
-      });
+      );
     });
   });
 }
@@ -71,7 +74,7 @@ export async function query<T = Record<string, any>>(sql: string): Promise<Query
             data: [],
             executionTime,
             success: false,
-            error: err.message
+            error: err.message,
           });
           return;
         }
@@ -80,7 +83,7 @@ export async function query<T = Record<string, any>>(sql: string): Promise<Query
         resolve({
           data: rows as T[],
           executionTime,
-          success: true
+          success: true,
         });
       });
     });
@@ -90,7 +93,7 @@ export async function query<T = Record<string, any>>(sql: string): Promise<Query
       data: [],
       executionTime: Date.now() - startTime,
       success: false,
-      error: errorMessage
+      error: errorMessage,
     };
   }
 }
@@ -117,5 +120,5 @@ export async function close(): Promise<void> {
 export default {
   init,
   query,
-  close
+  close,
 };

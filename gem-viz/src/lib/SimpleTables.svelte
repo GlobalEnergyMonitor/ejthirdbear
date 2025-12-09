@@ -17,8 +17,8 @@
     if ($mapFilter.type === 'polygon') {
       // For polygon filters, get bounding box for initial SQL filter
       const { coordinates, latCol, lonCol } = $mapFilter;
-      const lons = coordinates.map(c => c[0]);
-      const lats = coordinates.map(c => c[1]);
+      const lons = coordinates.map((c) => c[0]);
+      const lats = coordinates.map((c) => c[1]);
 
       const west = Math.min(...lons);
       const east = Math.max(...lons);

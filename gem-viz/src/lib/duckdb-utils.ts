@@ -42,7 +42,7 @@ export async function initDuckDB(): Promise<DuckDBInstance> {
     console.debug('[duckdb-utils] Selected bundle', {
       mainModule: bundle.mainModule,
       mainWorker: bundle.mainWorker,
-      version: (bundle as any)?.version ?? 'unknown'
+      version: (bundle as any)?.version ?? 'unknown',
     });
 
     // Create worker for background processing

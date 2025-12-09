@@ -12,7 +12,7 @@
     stickyHeader = true,
     striped = true,
     onRowClick = null,
-    selectedRows = $bindable([])
+    selectedRows = $bindable([]),
   } = $props();
 
   // State
@@ -21,7 +21,7 @@
   let sortColumn = $state(null);
   let sortDirection = $state('asc');
   let currentPage = $state(1);
-  let visibleColumns = $state(columns.map(c => c.key));
+  let visibleColumns = $state(columns.map((c) => c.key));
   let showColumnMenu = $state(false);
   let activeFilters = $state([]);
   let filterLogic = $state('AND'); // AND or OR
@@ -40,8 +40,8 @@
     // Global search
     if (globalSearch.trim()) {
       const search = globalSearch.toLowerCase();
-      result = result.filter(row =>
-        visibleColumns.some(key => {
+      result = result.filter((row) =>
+        visibleColumns.some((key) => {
           const val = row[key];
           return val != null && String(val).toLowerCase().includes(search);
         })
@@ -51,23 +51,21 @@
     // Column filters
     const activeFilterKeys = Object.entries(columnFilters).filter(([_, v]) => v && v.trim());
     if (activeFilterKeys.length > 0) {
-      result = result.filter(row => {
+      result = result.filter((row) => {
         const matches = activeFilterKeys.map(([key, filterVal]) => {
           const cellVal = row[key];
           if (cellVal == null) return false;
           return String(cellVal).toLowerCase().includes(filterVal.toLowerCase());
         });
 
-        return filterLogic === 'AND'
-          ? matches.every(Boolean)
-          : matches.some(Boolean);
+        return filterLogic === 'AND' ? matches.every(Boolean) : matches.some(Boolean);
       });
     }
 
     // Multi-filters (advanced filter chips)
     if (activeFilters.length > 0) {
-      result = result.filter(row => {
-        const matches = activeFilters.map(filter => {
+      result = result.filter((row) => {
+        const matches = activeFilters.map((filter) => {
           const cellVal = row[filter.column];
           if (cellVal == null) return false;
 
@@ -93,9 +91,7 @@
           }
         });
 
-        return filterLogic === 'AND'
-          ? matches.every(Boolean)
-          : matches.some(Boolean);
+        return filterLogic === 'AND' ? matches.every(Boolean) : matches.some(Boolean);
       });
     }
 
@@ -106,7 +102,7 @@
   let sortedData = $derived.by(() => {
     if (!sortColumn) return filteredData;
 
-    const col = columns.find(c => c.key === sortColumn);
+    const col = columns.find((c) => c.key === sortColumn);
     const type = col?.type || 'string';
 
     return [...filteredData].sort((a, b) => {
@@ -149,11 +145,11 @@
   let endRow = $derived(Math.min(currentPage * pageSize, sortedData.length));
 
   // Visible column objects
-  let displayColumns = $derived(columns.filter(c => visibleColumns.includes(c.key)));
+  let displayColumns = $derived(columns.filter((c) => visibleColumns.includes(c.key)));
 
   // Functions
   function handleSort(key) {
-    const col = columns.find(c => c.key === key);
+    const col = columns.find((c) => c.key === key);
     if (!col?.sortable) return;
 
     if (sortColumn === key) {
@@ -166,7 +162,7 @@
 
   function toggleColumn(key) {
     if (visibleColumns.includes(key)) {
-      visibleColumns = visibleColumns.filter(k => k !== key);
+      visibleColumns = visibleColumns.filter((k) => k !== key);
     } else {
       visibleColumns = [...visibleColumns, key];
     }
@@ -178,7 +174,7 @@
   }
 
   function removeFilter(id) {
-    activeFilters = activeFilters.filter(f => f.id !== id);
+    activeFilters = activeFilters.filter((f) => f.id !== id);
   }
 
   function clearAllFilters() {
@@ -188,25 +184,27 @@
   }
 
   function exportCSV() {
-    const headers = displayColumns.map(c => c.label).join(',');
-    const rows = sortedData.map(row =>
-      displayColumns.map(c => {
-        const val = row[c.key];
-        // Escape quotes and wrap in quotes if contains comma
-        const str = String(val ?? '');
-        return str.includes(',') || str.includes('"')
-          ? `"${str.replace(/"/g, '""')}"`
-          : str;
-      }).join(',')
+    const headers = displayColumns.map((c) => c.label).join(',');
+    const rows = sortedData.map((row) =>
+      displayColumns
+        .map((c) => {
+          const val = row[c.key];
+          // Escape quotes and wrap in quotes if contains comma
+          const str = String(val ?? '');
+          return str.includes(',') || str.includes('"') ? `"${str.replace(/"/g, '""')}"` : str;
+        })
+        .join(',')
     );
     const csv = [headers, ...rows].join('\n');
     downloadFile(csv, 'table-export.csv', 'text/csv');
   }
 
   function exportJSON() {
-    const exportData = sortedData.map(row => {
+    const exportData = sortedData.map((row) => {
       const obj = {};
-      displayColumns.forEach(c => { obj[c.key] = row[c.key]; });
+      displayColumns.forEach((c) => {
+        obj[c.key] = row[c.key];
+      });
       return obj;
     });
     downloadFile(JSON.stringify(exportData, null, 2), 'table-export.json', 'application/json');
@@ -229,7 +227,7 @@
   }
 
   function toggleRowSelection(row) {
-    const idx = selectedRows.findIndex(r => r === row);
+    const idx = selectedRows.findIndex((r) => r === row);
     if (idx >= 0) {
       selectedRows = selectedRows.filter((_, i) => i !== idx);
     } else {
@@ -257,13 +255,9 @@
     <div class="toolbar-left">
       {#if showGlobalSearch}
         <div class="search-box">
-          <input
-            type="text"
-            placeholder="Search all columns..."
-            bind:value={globalSearch}
-          />
+          <input type="text" placeholder="Search all columns..." bind:value={globalSearch} />
           {#if globalSearch}
-            <button class="clear-btn" onclick={() => globalSearch = ''}>×</button>
+            <button class="clear-btn" onclick={() => (globalSearch = '')}>×</button>
           {/if}
         </div>
       {/if}
@@ -276,7 +270,7 @@
     <div class="toolbar-right">
       {#if showColumnToggle}
         <div class="column-toggle">
-          <button class="btn" onclick={() => showColumnMenu = !showColumnMenu}>
+          <button class="btn" onclick={() => (showColumnMenu = !showColumnMenu)}>
             Columns ({visibleColumns.length}/{columns.length})
           </button>
           {#if showColumnMenu}
@@ -301,7 +295,7 @@
         <button class="btn" onclick={exportJSON}>JSON</button>
       {/if}
 
-      {#if globalSearch || Object.keys(columnFilters).some(k => columnFilters[k]) || activeFilters.length > 0}
+      {#if globalSearch || Object.keys(columnFilters).some((k) => columnFilters[k]) || activeFilters.length > 0}
         <button class="btn btn-danger" onclick={clearAllFilters}>Clear Filters</button>
       {/if}
     </div>
@@ -348,8 +342,8 @@
             addFilter(newFilterColumn, newFilterOperator, newFilterValue);
             newFilterColumn = '';
             newFilterValue = '';
-          }}
-        >+</button>
+          }}>+</button
+        >
       {/if}
 
       {#if activeFilters.length > 0}
@@ -357,13 +351,13 @@
           <button
             class="btn btn-small"
             class:active={filterLogic === 'AND'}
-            onclick={() => filterLogic = 'AND'}
-          >AND</button>
+            onclick={() => (filterLogic = 'AND')}>AND</button
+          >
           <button
             class="btn btn-small"
             class:active={filterLogic === 'OR'}
-            onclick={() => filterLogic = 'OR'}
-          >OR</button>
+            onclick={() => (filterLogic = 'OR')}>OR</button
+          >
         </div>
       {/if}
     </div>
@@ -372,7 +366,7 @@
       <div class="filter-chips">
         {#each activeFilters as filter}
           <span class="chip">
-            <strong>{columns.find(c => c.key === filter.column)?.label}</strong>
+            <strong>{columns.find((c) => c.key === filter.column)?.label}</strong>
             {filter.operator} "{filter.value}"
             <button class="chip-remove" onclick={() => removeFilter(filter.id)}>×</button>
           </span>
@@ -402,7 +396,7 @@
                     type="text"
                     placeholder="Filter..."
                     value={columnFilters[col.key] || ''}
-                    oninput={(e) => columnFilters[col.key] = e.target.value}
+                    oninput={(e) => (columnFilters[col.key] = e.target.value)}
                   />
                 {/if}
               </th>
@@ -467,9 +461,7 @@
           </tr>
         {:else}
           <tr>
-            <td colspan={displayColumns.length + 1} class="empty-state">
-              No data found
-            </td>
+            <td colspan={displayColumns.length + 1} class="empty-state"> No data found </td>
           </tr>
         {/each}
       </tbody>
@@ -484,16 +476,12 @@
       </div>
 
       <div class="pagination-controls">
-        <button
-          class="btn btn-small"
-          disabled={currentPage === 1}
-          onclick={() => currentPage = 1}
-        >««</button>
-        <button
-          class="btn btn-small"
-          disabled={currentPage === 1}
-          onclick={() => currentPage--}
-        >«</button>
+        <button class="btn btn-small" disabled={currentPage === 1} onclick={() => (currentPage = 1)}
+          >««</button
+        >
+        <button class="btn btn-small" disabled={currentPage === 1} onclick={() => currentPage--}
+          >«</button
+        >
 
         <span class="page-info">
           Page {currentPage} of {totalPages}
@@ -502,13 +490,13 @@
         <button
           class="btn btn-small"
           disabled={currentPage === totalPages}
-          onclick={() => currentPage++}
-        >»</button>
+          onclick={() => currentPage++}>»</button
+        >
         <button
           class="btn btn-small"
           disabled={currentPage === totalPages}
-          onclick={() => currentPage = totalPages}
-        >»»</button>
+          onclick={() => (currentPage = totalPages)}>»»</button
+        >
       </div>
 
       <div class="page-size">
@@ -544,7 +532,8 @@
     gap: 12px;
   }
 
-  .toolbar-left, .toolbar-right {
+  .toolbar-left,
+  .toolbar-right {
     display: flex;
     align-items: center;
     gap: 12px;
@@ -636,7 +625,7 @@
     min-width: 180px;
     max-height: 300px;
     overflow-y: auto;
-    box-shadow: 4px 4px 0 rgba(0,0,0,0.1);
+    box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.1);
   }
 
   .column-menu label {
@@ -667,7 +656,7 @@
   }
 
   .filter-builder select,
-  .filter-builder input[type="text"] {
+  .filter-builder input[type='text'] {
     padding: 6px 10px;
     border: 1px solid #ccc;
     font-size: 11px;
@@ -895,7 +884,8 @@
       align-items: stretch;
     }
 
-    .toolbar-left, .toolbar-right {
+    .toolbar-left,
+    .toolbar-right {
       justify-content: center;
     }
 

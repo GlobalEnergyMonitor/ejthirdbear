@@ -14,7 +14,7 @@
     countryCol,
     ownerIdCol,
     unitIdCol,
-    useCompositeId
+    useCompositeId,
   } = data;
 
   // Build columns config dynamically based on what's available
@@ -26,7 +26,7 @@
       label: 'Name',
       sortable: true,
       filterable: true,
-      width: '250px'
+      width: '250px',
     });
   }
 
@@ -35,7 +35,7 @@
     label: 'ID',
     sortable: true,
     filterable: true,
-    width: '120px'
+    width: '120px',
   });
 
   if (statusCol) {
@@ -44,7 +44,7 @@
       label: 'Status',
       sortable: true,
       filterable: true,
-      width: '120px'
+      width: '120px',
     });
   }
 
@@ -54,7 +54,7 @@
       label: 'Owner',
       sortable: true,
       filterable: true,
-      width: '200px'
+      width: '200px',
     });
   }
 
@@ -64,7 +64,7 @@
       label: 'Country',
       sortable: true,
       filterable: true,
-      width: '150px'
+      width: '150px',
     });
   }
 

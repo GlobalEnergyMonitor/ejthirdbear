@@ -9,7 +9,7 @@
     forceManyBody,
     forceCenter,
     forceX,
-    forceY
+    forceY,
   } from 'd3-force-3d';
 
   // DuckDB utilities - loaded dynamically only on client
@@ -34,8 +34,8 @@
     edgeOpacity: 0.4,
     sampleMode: 'top',
     simulationSpeed: 'fast',
-    warmupTicks: 100,  // Synchronous warmup ticks before animation
-    use3D: false       // Use 3D layout (z-axis)
+    warmupTicks: 100, // Synchronous warmup ticks before animation
+    use3D: false, // Use 3D layout (z-axis)
   });
 
   // Graph data
@@ -57,7 +57,7 @@
       chargeStrength: -12,
       linkDistance: 25,
       warmupTicks: 80,
-      animTicks: 60
+      animTicks: 60,
     },
     medium: {
       alphaDecay: 0.04,
@@ -65,7 +65,7 @@
       chargeStrength: -20,
       linkDistance: 35,
       warmupTicks: 120,
-      animTicks: 100
+      animTicks: 100,
     },
     slow: {
       alphaDecay: 0.02,
@@ -73,8 +73,8 @@
       chargeStrength: -35,
       linkDistance: 45,
       warmupTicks: 180,
-      animTicks: 150
-    }
+      animTicks: 150,
+    },
   };
 
   async function loadData() {
@@ -82,7 +82,9 @@
       loading = true;
       error = null;
       loadingPhase = 'Loading parquet files...';
-      console.debug('[NetworkGraph] loadData start', { config: JSON.parse(JSON.stringify(config)) });
+      console.debug('[NetworkGraph] loadData start', {
+        config: JSON.parse(JSON.stringify(config)),
+      });
 
       // Dynamic import - only load DuckDB on client
       if (!loadParquetFromPath || !query) {
@@ -112,9 +114,8 @@
           AND "Owner GEM Entity ID" IS NOT NULL
       `);
 
-      allEdgesCount = countResult.success && countResult.data?.[0]?.total
-        ? Number(countResult.data[0].total)
-        : 0;
+      allEdgesCount =
+        countResult.success && countResult.data?.[0]?.total ? Number(countResult.data[0].total) : 0;
 
       console.debug('[NetworkGraph] Edge count result', countResult);
       console.log(`Total edges in dataset: ${allEdgesCount}`);
@@ -122,7 +123,7 @@
       loadingPhase = `Querying edges (${config.sampleMode} mode)...`;
       console.debug('[NetworkGraph] Building edge query', {
         sampleMode: config.sampleMode,
-        maxEdges: config.maxEdges
+        maxEdges: config.maxEdges,
       });
 
       let edgeQuery;
@@ -204,7 +205,7 @@
             name: edge.source_name || edge.source_id,
             connections: 0,
             inDegree: 0,
-            outDegree: 0
+            outDegree: 0,
           });
         }
         const sourceNode = nodeMap.get(edge.source_id);
@@ -217,7 +218,7 @@
             name: edge.target_name || edge.target_id,
             connections: 0,
             inDegree: 0,
-            outDegree: 0
+            outDegree: 0,
           });
         }
         const targetNode = nodeMap.get(edge.target_id);
@@ -227,17 +228,16 @@
         links.push({
           source: edge.source_id,
           target: edge.target_id,
-          share: edge.share || 0
+          share: edge.share || 0,
         });
       }
 
-      const filteredNodes = Array.from(nodeMap.values())
-        .filter(n => n.connections >= config.minConnections);
-
-      const nodeIds = new Set(filteredNodes.map(n => n.id));
-      const filteredLinks = links.filter(l =>
-        nodeIds.has(l.source) && nodeIds.has(l.target)
+      const filteredNodes = Array.from(nodeMap.values()).filter(
+        (n) => n.connections >= config.minConnections
       );
+
+      const nodeIds = new Set(filteredNodes.map((n) => n.id));
+      const filteredLinks = links.filter((l) => nodeIds.has(l.source) && nodeIds.has(l.target));
 
       nodes = filteredNodes;
       links = filteredLinks;
@@ -246,7 +246,7 @@
         nodes: nodes.length,
         edges: links.length,
         totalNodes: nodeMap.size,
-        totalEdges: allEdgesCount
+        totalEdges: allEdgesCount,
       };
 
       console.log(`Built graph: ${nodes.length} nodes, ${links.length} edges`);
@@ -270,7 +270,7 @@
 
       // Initialize positions - radial layout based on connectivity
       const scale = Math.sqrt(nodes.length) * 2.5;
-      const maxConn = Math.max(...nodes.map(n => n.connections), 1);
+      const maxConn = Math.max(...nodes.map((n) => n.connections), 1);
 
       for (const node of nodes) {
         const normalizedConn = node.connections / maxConn;
@@ -285,18 +285,24 @@
 
       // Create d3-force-3d simulation
       simulation = forceSimulation(nodes, numDimensions)
-        .force('link', forceLink(links)
-          .id(d => d.id)
-          .distance(preset.linkDistance)
-          .strength(d => {
-            const srcConn = nodeMap.get(d.source.id || d.source)?.connections || 1;
-            const tgtConn = nodeMap.get(d.target.id || d.target)?.connections || 1;
-            return 1 / Math.min(srcConn, tgtConn);
-          }))
-        .force('charge', forceManyBody()
-          .strength(d => preset.chargeStrength * Math.sqrt(d.connections || 1))
-          .theta(0.9)
-          .distanceMax(180))
+        .force(
+          'link',
+          forceLink(links)
+            .id((d) => d.id)
+            .distance(preset.linkDistance)
+            .strength((d) => {
+              const srcConn = nodeMap.get(d.source.id || d.source)?.connections || 1;
+              const tgtConn = nodeMap.get(d.target.id || d.target)?.connections || 1;
+              return 1 / Math.min(srcConn, tgtConn);
+            })
+        )
+        .force(
+          'charge',
+          forceManyBody()
+            .strength((d) => preset.chargeStrength * Math.sqrt(d.connections || 1))
+            .theta(0.9)
+            .distanceMax(180)
+        )
         .force('center', forceCenter(0, 0))
         .force('x', forceX(0).strength(0.015))
         .force('y', forceY(0).strength(0.015))
@@ -387,32 +393,33 @@
     deck.setProps({
       layers: [
         // Edges - hidden at very low zoom for perf
-        currentZoom > -3.5 && new LineLayer({
-          id: 'edges',
-          data: lineData,
-          getSourcePosition: d => [d.source.x, d.source.y],
-          getTargetPosition: d => [d.target.x, d.target.y],
-          getColor: d => {
-            const shareAlpha = Math.min(255, Math.max(15, (d.share || 8) * 2.2));
-            return [70, 70, 70, Math.round(shareAlpha * edgeOpacity)];
-          },
-          getWidth: 1,
-          widthMinPixels: 0.5,
-          widthMaxPixels: 2,
-          pickable: false,
-          updateTriggers: { getColor: [edgeOpacity] }
-        }),
+        currentZoom > -3.5 &&
+          new LineLayer({
+            id: 'edges',
+            data: lineData,
+            getSourcePosition: (d) => [d.source.x, d.source.y],
+            getTargetPosition: (d) => [d.target.x, d.target.y],
+            getColor: (d) => {
+              const shareAlpha = Math.min(255, Math.max(15, (d.share || 8) * 2.2));
+              return [70, 70, 70, Math.round(shareAlpha * edgeOpacity)];
+            },
+            getWidth: 1,
+            widthMinPixels: 0.5,
+            widthMaxPixels: 2,
+            pickable: false,
+            updateTriggers: { getColor: [edgeOpacity] },
+          }),
 
         // Nodes
         new ScatterplotLayer({
           id: 'nodes',
           data: nodes,
-          getPosition: d => [d.x || 0, d.y || 0],
-          getRadius: d => {
+          getPosition: (d) => [d.x || 0, d.y || 0],
+          getRadius: (d) => {
             const baseSize = Math.max(2, Math.log2(d.connections + 1) * 2.8);
             return baseSize * nodeScale;
           },
-          getFillColor: d => {
+          getFillColor: (d) => {
             // Purple -> Orange -> Red gradient by connection count
             const t = Math.min(1, d.connections / 80);
             const r = Math.round(90 + t * 165);
@@ -423,12 +430,14 @@
           radiusMinPixels: 1.5,
           radiusMaxPixels: 35,
           pickable: true,
-          onHover: ({ object }) => { hoveredNode = object; },
+          onHover: ({ object }) => {
+            hoveredNode = object;
+          },
           autoHighlight: true,
           highlightColor: [255, 220, 0, 255],
-          updateTriggers: { getRadius: [nodeScale] }
-        })
-      ].filter(Boolean)
+          updateTriggers: { getRadius: [nodeScale] },
+        }),
+      ].filter(Boolean),
     });
   }
 
@@ -451,13 +460,13 @@
       views: new OrthographicView({ flipY: false }),
       initialViewState: {
         target: [0, 0, 0],
-        zoom: -1.5
+        zoom: -1.5,
       },
       controller: {
         scrollZoom: { speed: 0.012, smooth: true },
         dragPan: true,
         doubleClickZoom: true,
-        keyboard: true
+        keyboard: true,
       },
       onViewStateChange: handleViewStateChange,
       layers: [],
@@ -474,10 +483,10 @@
           style: {
             backgroundColor: '#fff',
             border: '1px solid #000',
-            borderRadius: '0'
-          }
+            borderRadius: '0',
+          },
         };
-      }
+      },
     });
 
     await loadData();
@@ -603,7 +612,8 @@
     left: 0;
   }
 
-  .loading, .error {
+  .loading,
+  .error {
     position: absolute;
     top: 50%;
     left: 50%;
@@ -615,7 +625,8 @@
     border: 1px solid #000;
   }
 
-  .loading p, .error p {
+  .loading p,
+  .error p {
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -680,7 +691,8 @@
     color: #666;
   }
 
-  .control-group select, .control-group input[type="range"] {
+  .control-group select,
+  .control-group input[type='range'] {
     font-family: inherit;
     font-size: 10px;
     padding: 2px 4px;
@@ -688,7 +700,7 @@
     background: white;
   }
 
-  .control-group input[type="range"] {
+  .control-group input[type='range'] {
     width: 60px;
   }
 
@@ -737,7 +749,7 @@
     bottom: 10px;
     left: 10px;
     z-index: 10;
-    background: rgba(255,255,255,0.9);
+    background: rgba(255, 255, 255, 0.9);
     padding: 6px 10px;
     border: 1px solid #ccc;
     font-size: 9px;

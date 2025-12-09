@@ -16,11 +16,12 @@
   function pointInPolygon(x, y, polygon) {
     let inside = false;
     for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-      const xi = polygon[i][0], yi = polygon[i][1];
-      const xj = polygon[j][0], yj = polygon[j][1];
+      const xi = polygon[i][0],
+        yi = polygon[i][1];
+      const xj = polygon[j][0],
+        yj = polygon[j][1];
 
-      const intersect = ((yi > y) !== (yj > y))
-        && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+      const intersect = yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
       if (intersect) inside = !inside;
     }
     return inside;
@@ -33,8 +34,8 @@
       // For polygon filters, get bounding box for initial SQL filter
       // Then do client-side polygon filtering
       const { coordinates, latCol, lonCol } = $mapFilter;
-      const lons = coordinates.map(c => c[0]);
-      const lats = coordinates.map(c => c[1]);
+      const lons = coordinates.map((c) => c[0]);
+      const lats = coordinates.map((c) => c[1]);
 
       const west = Math.min(...lons);
       const east = Math.max(...lons);

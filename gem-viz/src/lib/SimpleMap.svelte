@@ -20,7 +20,7 @@
 
   onMount(async () => {
     // Wait for mapContainer to be ready
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     try {
       if (!mapContainer) {
@@ -58,11 +58,11 @@
         displayControlsDefault: false,
         controls: {
           polygon: true,
-          trash: true
+          trash: true,
         },
         modes: {
           ...MapboxDraw.modes,
-        }
+        },
       });
       map.addControl(draw);
 
@@ -77,7 +77,7 @@
             type: 'polygon',
             coordinates,
             latCol,
-            lonCol
+            lonCol,
           });
 
           console.log('Polygon filter set:', coordinates.length, 'vertices');
@@ -121,15 +121,15 @@
             [e.lngLat.lng, startPoint.lat],
             [e.lngLat.lng, e.lngLat.lat],
             [startPoint.lng, e.lngLat.lat],
-            [startPoint.lng, startPoint.lat]
+            [startPoint.lng, startPoint.lat],
           ];
 
           draw.add({
             type: 'Feature',
             geometry: {
               type: 'Polygon',
-              coordinates: [coords]
-            }
+              coordinates: [coords],
+            },
           });
         }
       });
@@ -145,7 +145,7 @@
             east: Math.max(startPoint.lng, endPoint.lng),
             west: Math.min(startPoint.lng, endPoint.lng),
             latCol,
-            lonCol
+            lonCol,
           };
 
           setMapFilter(bounds);
@@ -161,7 +161,7 @@
         // Add GeoJSON source directly (already in correct format!)
         map.addSource('points', {
           type: 'geojson',
-          data: geojson
+          data: geojson,
         });
 
         map.addLayer({
@@ -203,11 +203,12 @@
   function pointInPolygon(x, y, polygon) {
     let inside = false;
     for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-      const xi = polygon[i][0], yi = polygon[i][1];
-      const xj = polygon[j][0], yj = polygon[j][1];
+      const xi = polygon[i][0],
+        yi = polygon[i][1];
+      const xj = polygon[j][0],
+        yj = polygon[j][1];
 
-      const intersect = ((yi > y) !== (yj > y))
-        && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+      const intersect = yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
       if (intersect) inside = !inside;
     }
     return inside;
@@ -222,7 +223,7 @@
         const originalData = source._data;
 
         // Filter features by polygon
-        const filteredFeatures = originalData.features.map(feature => {
+        const filteredFeatures = originalData.features.map((feature) => {
           const lon = feature.properties.lon;
           const lat = feature.properties.lat;
           const isInside = pointInPolygon(lon, lat, $mapFilter.coordinates);
@@ -231,14 +232,14 @@
             ...feature,
             properties: {
               ...feature.properties,
-              selected: isInside
-            }
+              selected: isInside,
+            },
           };
         });
 
         map.getSource('points').setData({
           type: 'FeatureCollection',
-          features: filteredFeatures
+          features: filteredFeatures,
         });
 
         // Style based on selected property
@@ -246,14 +247,14 @@
           'case',
           ['get', 'selected'],
           0.8, // Selected
-          0.2  // Non-selected
+          0.2, // Non-selected
         ]);
 
         map.setPaintProperty('points', 'circle-color', [
           'case',
           ['get', 'selected'],
           '#2196f3', // Selected - blue
-          '#999'     // Non-selected - gray
+          '#999', // Non-selected - gray
         ]);
       } else {
         // Rectangle bounds filter
@@ -269,7 +270,7 @@
             ['<=', ['get', 'lon'], east],
           ],
           0.8, // Selected points
-          0.2  // Non-selected points
+          0.2, // Non-selected points
         ]);
 
         map.setPaintProperty('points', 'circle-color', [
@@ -282,7 +283,7 @@
             ['<=', ['get', 'lon'], east],
           ],
           '#2196f3', // Selected points - blue
-          '#999'     // Non-selected points - gray
+          '#999', // Non-selected points - gray
         ]);
       }
     } else {
@@ -298,12 +299,15 @@
   {#if $mapFilter}
     <div class="filter-indicator">
       <span>Geographic filter active</span>
-      <a href="{base}/asset/search?{$mapFilter.type === 'polygon' ? `polygon=${encodeURIComponent(JSON.stringify($mapFilter.coordinates))}` : `bounds=${encodeURIComponent(JSON.stringify($mapFilter))}`}" class="view-assets-btn">
+      <a
+        href="{base}/asset/search?{$mapFilter.type === 'polygon'
+          ? `polygon=${encodeURIComponent(JSON.stringify($mapFilter.coordinates))}`
+          : `bounds=${encodeURIComponent(JSON.stringify($mapFilter))}`}"
+        class="view-assets-btn"
+      >
         View Assets
       </a>
-      <button class="clear-filter-btn" on:click={handleClearFilter}>
-        Clear (ESC)
-      </button>
+      <button class="clear-filter-btn" on:click={handleClearFilter}> Clear (ESC) </button>
     </div>
   {/if}
   {#if loading}

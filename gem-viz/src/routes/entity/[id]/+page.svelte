@@ -14,30 +14,32 @@
     'headquarters_country',
     'publicly_listed',
     'parent_entity',
-    'subsidiary_count'
+    'subsidiary_count',
   ];
 
   // External IDs (often country-specific)
-  const externalIdFields = columns.filter(c => {
+  const externalIdFields = columns.filter((c) => {
     const lower = c.toLowerCase();
-    return lower.includes('lei') ||
-           lower.includes('cik') ||
-           lower.includes('cnpj') ||
-           lower.includes('cin') ||
-           lower.includes('isin') ||
-           lower.includes('cusip');
+    return (
+      lower.includes('lei') ||
+      lower.includes('cik') ||
+      lower.includes('cnpj') ||
+      lower.includes('cin') ||
+      lower.includes('isin') ||
+      lower.includes('cusip')
+    );
   });
 
   // Group remaining columns
   const specialCols = [...priorityFields, ...externalIdFields];
-  const otherCols = columns.filter(c => !specialCols.includes(c) && entity[c]);
+  const otherCols = columns.filter((c) => !specialCols.includes(c) && entity[c]);
 
   // Format field names for display
   function formatField(fieldName) {
     return fieldName
       .replace(/_/g, ' ')
       .split(' ')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
   }
 
@@ -92,7 +94,10 @@
       {#if entity['publicly_listed'] && shouldDisplay(entity['publicly_listed'])}
         <div class="meta-item">
           <span class="label">Publicly Listed</span>
-          <span class="value badge" class:yes={entity['publicly_listed'] === 'yes' || entity['publicly_listed'] === true}>
+          <span
+            class="value badge"
+            class:yes={entity['publicly_listed'] === 'yes' || entity['publicly_listed'] === true}
+          >
             {entity['publicly_listed']}
           </span>
         </div>

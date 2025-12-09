@@ -1,0 +1,203 @@
+<!doctype html>
+<notebook theme="air">
+  <title>GEM Ownership - Asset's Owners</title>
+  <script id="0" type="text/markdown">
+    # GEM Ownership - Asset's Owners
+
+    Tool or suite of views to see and explore an asset's owners. Initial mockup [here](https://docs.google.com/presentation/d/13RgzwAKNZ3zVr1MExclyX9ePK2rZsbYzFrS4fjATUDQ/edit?slide=id.g399c5544348_0_9#slide=id.g399c5544348_0_9). 
+  </script>
+  <script id="140" type="application/vnd.observable.javascript">
+    screenshot20251208At94423Pm = FileAttachment("Screenshot 2025-12-08 at 9.44.23 PM.png").image({width: 600})
+  </script>
+  <script id="7" type="text/markdown">
+    ### Sample User Tasks to Facilitate
+
+    * A campaigner is researching a proposed coal plant. They want to quickly see which owning entities (companies and/or governments) have a stake in the plant, what types of owning entities they are, where they are based.
+    * A solar developer is looking at a recently closed mine that it would like to convert to a solar power plant. They want to understand the companies and other entities that have ownership of the closed mine to assess how to approach a purchase or repurposing of the mine.
+    * An investigative journalist is looking to find a local angle for a story about a contentious but far away oil pipeline. They want to quickly see where the various owning entities are based and if any or in their home country.
+
+    #### Edge cases to make sure we handle (eventually): 
+    * A single owner with ownership of multiple intermediaries. BaghlanPowerStation data is a simple example where the single government owner owns a bunch of intermediaries that own the plant. The CAP Acero Huachipato Steel Plant is a more complicated example with additional intermediaries splitting one company into different depths, e.g. The Master Trust of Japan (E100001000178) exists both at a depth of 4 and of 6.
+    * Cyclic ownership relationships. These also exist in the CAP Acero Huachipato Steel Plant case, making it difficult to rely on d3 hierarchies. (In the data they are dealt with by just providing the depth of the initial child-parent edge). 
+  </script>
+  <script id="44" type="text/markdown">
+    ### Draft Visual
+
+    Note: I got less far on this than I had hoped. I did just toss into a simple mermaid layout -- which took some finicking given the different approach I had planned to take with the data when I structured it the way I did (mainly with a unique edge for each source-target relation at each depth -- which can duplicate edges in the common case where an entity directly has a share in another entity and also has a share in that same other entity via an intermediary. 
+  </script>
+  <script id="27" type="application/vnd.observable.javascript">
+    viewof curData = Inputs.radio(data, {label: 'select asset:', value: data.get('sinesPowerStation')})
+  </script>
+  <script id="238" type="text/markdown">
+    #### Mermaid View
+  </script>
+  <script id="171" type="application/vnd.observable.javascript">
+    viewof widthMultiplier = Inputs.range([.2, 2], {label: 'zoom', value: .6, step: 0.01})
+  </script>
+  <script id="150" type="application/vnd.observable.javascript">
+    graphCell = {
+    const mermaidNode = html`<div>
+    ${mermaid`
+      graph TD;
+      ${formatForMermaid(curData.edges)}
+    `}
+    </div>`
+        const cellWidth = mermaidNode.offsetWidth
+      d3.select(mermaidNode).style('width',null).style('overflow-x','auto')
+      const widthPct = widthMultiplier * 100 * (+d3.select(mermaidNode).select('svg').style('max-width').replace('px', '')) / width + '%'
+      d3.select(mermaidNode).select('svg').attr('width', widthPct).style('max-width',null).attr('height', null)
+
+      return mermaidNode
+    }
+  </script>
+  <script id="321" type="text/markdown">
+    ### Force-based approach (very beginnings)
+    Using the depth in the edges, though avoiding for now figuring out how to handle nodes that need to be split into multiple levels / places. Also this is not yet handling the splitting of "natural persons" and "small shareholders" into separate nodes for separate entities. (which the formatForMermaid function does do at least). 
+    I was originally thinking this could be the starting point for a layout like the one I had mocked up. Position nodes this way, then using another force to move the ones on each tier far enough away from eachother to fit the rectangles; and scaleing hight and widthof bars depending on what was available at each level of depth. 
+  </script>
+  <script id="109" type="application/vnd.observable.javascript">
+    {
+      // partially borrowed from https://observablehq.com/@d3/sticky-force-layout
+      const height = (1+d3.max(curData.edges.map(d=> d.depth))) * 50
+
+      let nodes = Array.from(new Set(curData.edges.map(d=> [d.source, d.target]).flat())).map(d=> ({id: d, depth: d3.min(nodeDepths[d]), fy: height - 10 - d3.min(nodeDepths[d]) * 40}))
+
+      let links = d3.map(curData.edges, (d, i) => ({source: d.source, target: d.target}));
+
+      const svg = d3.create("svg").attr("viewBox", [0, 0, width, height]),
+        link = svg
+          .selectAll(".link")
+          .data(links)
+          .join("line")
+          .classed("link", true),
+        node = svg
+          .selectAll(".node")
+          .data(nodes)
+          .join("circle")
+          .attr("r", 4)
+          .classed("node", true)
+
+      yield svg.node();
+
+      const simulation = d3
+        .forceSimulation()
+        .nodes(nodes)
+        .force("charge", d3.forceManyBody())
+        .force("center", d3.forceCenter(width / 2, height / 2))
+        .force("link", d3.forceLink(links).id(d => d.id))
+        .on("tick", tick);
+
+      function tick() {
+        link
+          .attr("x1", d => d.source.x)
+          .attr("y1", d => d.source.y)
+          .attr("x2", d => d.target.x)
+          .attr("y2", d => d.target.y);
+        node
+          .attr("cx", d => d.x)
+          .attr("cy", d => d.y);
+      }
+
+    }
+  </script>
+  <script id="295" type="application/vnd.observable.javascript">
+    html`<style>
+
+    .link {
+      stroke: ${colors.navy};
+      stroke-width: .5px;
+    }
+
+    .node {
+      fill: ${colors.navy};
+      fill-opacity: 0.3;
+      stroke: ${colors.navy};
+      stroke-width: 1px;
+    }
+
+    </style>`
+  </script>
+  <script id="248" type="text/markdown">
+    ### Data Wrangling
+  </script>
+  <script id="251" type="text/markdown">
+    A node map for easy access to data about entities and the asset: 
+  </script>
+  <script id="106" type="application/vnd.observable.javascript">
+    nodeMap = new Map([[curData.assetId, {Name: curData.immediateOwners[0]['Asset Name']}], ...curData.nodes.map(d=> [d.id, d])])
+  </script>
+  <script id="308" type="text/markdown">
+    Node depths to facilitate placement of nodes on the right tier. (since the depths are associated with edges, not nodes in curData):
+  </script>
+  <script id="298" type="application/vnd.observable.javascript">
+    nodeDepths= {  let nodeDepths = {} 
+      curData.edges.forEach(d=> {
+        if (!nodeDepths[d.target])  nodeDepths[d.target] = []
+        if (!nodeDepths[d.target].includes(d.depth)) nodeDepths[d.target].push(d.depth)
+        if (!nodeDepths[d.source])  nodeDepths[d.source] = []
+        if (!nodeDepths[d.source].includes(d.depth+1)) nodeDepths[d.source].push(d.depth+1)
+      })
+      return nodeDepths
+    }
+  </script>
+  <script id="262" type="text/markdown">
+    Hierarchical version of the data, which only works when there isn't cyclical relationship. (Not yet used anywhere visually in this notebook):
+  </script>
+  <script id="81" type="application/vnd.observable.javascript">
+    dataHierarchical = { 
+    const nodes = Array.from(new Set(curData.edges.flatMap(e => [e.source, e.target])));
+    const rows = nodes.map(id => {
+      const parentEdge = curData.edges.find(e => e.source === id);
+      return {
+        id,
+        parentId: parentEdge ? parentEdge.target : null,   // root has null parent
+        ...parentEdge
+      };
+    });
+    const root = d3.stratify()
+      .id(d => d.id)
+      .parentId(d => d.parentId)(rows);  
+    return root 
+    }
+
+  </script>
+  <script id="288" type="text/markdown">
+    Mermaid string construction function: 
+  </script>
+  <script id="155" type="application/vnd.observable.javascript">
+    formatForMermaid = function(edges, parentId = 'source', nodeId= 'target', sharePercentField = 'value') {
+      function stripParenth(str) {return str.replaceAll('(','').replaceAll(')','')}
+      // for the some views the same edge can be on multiple levels of the hierarchy, which means that there is the same source-target pair in edges with depth of different level. This might work okay for some views, but creates duplicate lines for mermaid layouts (at least the way I'm implementing)
+      const edgesUnique = Array.from(d3.rollup(edges, v=> v[0], d=> d.source, d=> d.target).values()).map(d=> Array.from(d.values())).flat()
+
+      return Array.from(edgesUnique).map((d,i)=> {
+        const curParentId = d[parentId] + (['small shareholder(s)', 'natural person(s)'].includes(nodeMap.get(d[parentId]).Name) ? '_' + i : '') 
+        const curNodeId = d[nodeId] 
+        return `${curParentId}(${stripParenth(nodeMap.get(d[parentId]).Name)})-->|${d3.format('.1f')(d[sharePercentField])}%|${curNodeId}(${stripParenth(nodeMap.get(d[nodeId]).Name)});`
+      })
+       .join('')
+    }
+  </script>
+  <script id="10" type="text/markdown">
+    ### Dependencies
+  </script>
+  <script id="14" type="application/vnd.observable.javascript">
+    data = new Map([
+      ["sinesPowerStation", await getAssetOwners('G100000109409')],
+      ["BaghlanPowerStation", await getAssetOwners('G100001057899')],
+      ["CAPAceroHuachipatoSteelPlant", await getAssetOwners('P100000120066')],
+      ["PKNCoalMines", await getAssetOwners('M4499')],
+      ["MaranhãoSãoLuísCoalPlant", await getAssetOwners('G100000106660')],
+      ["NanshanAluminumDonghaiCoalPlant", await getAssetOwners('G100000107258')],
+    ])
+  </script>
+  <script id="12" type="application/vnd.observable.javascript">
+    import {getAssetOwners} from 'bdcdb445752833fa'
+  </script>
+  <script id="152" type="application/vnd.observable.javascript">
+    import {mermaid} from "@matthewkenny/mermaid-js"
+  </script>
+  <script id="326" type="application/vnd.observable.javascript">
+    import {colors, colMaps, loadFont} from '088dde385b864f12'
+  </script>
+</notebook>

@@ -16,7 +16,7 @@
       gemUnitId,
       assetName,
       basePath: base,
-      location: typeof window !== 'undefined' ? window.location.href : 'ssr'
+      location: typeof window !== 'undefined' ? window.location.href : 'ssr',
     });
 
     if (!gemUnitId) {
@@ -33,7 +33,9 @@
       const response = await fetch(pointsUrl);
       if (!response.ok) {
         const body = await response.text().catch(() => '<unavailable>');
-        throw new Error(`Failed to load points (${response.status} ${response.statusText}): ${body.slice(0, 200)}`);
+        throw new Error(
+          `Failed to load points (${response.status} ${response.statusText}): ${body.slice(0, 200)}`
+        );
       }
 
       let geojson;
@@ -46,13 +48,12 @@
 
       console.debug('[AssetMap] Loaded GeoJSON', {
         featureCount: geojson?.features?.length ?? 0,
-        sampleProperties: geojson?.features?.[0]?.properties ?? null
+        sampleProperties: geojson?.features?.[0]?.properties ?? null,
       });
 
       // Find the matching feature by GEM unit ID
-      const feature = geojson.features.find(f =>
-        f.properties['GEM unit ID'] === gemUnitId ||
-        f.properties.id === gemUnitId
+      const feature = geojson.features.find(
+        (f) => f.properties['GEM unit ID'] === gemUnitId || f.properties.id === gemUnitId
       );
 
       if (!feature) {
@@ -75,20 +76,20 @@
         container: mapContainer,
         style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
         center: [lon, lat],
-        zoom: 10
+        zoom: 10,
       });
 
       // Add marker
       new maplibregl.Marker({ color: '#000' })
         .setLngLat([lon, lat])
         .setPopup(
-          new maplibregl.Popup({ offset: 25 })
-            .setHTML(`<strong>${assetName || 'Asset'}</strong><br>${lat.toFixed(4)}, ${lon.toFixed(4)}`)
+          new maplibregl.Popup({ offset: 25 }).setHTML(
+            `<strong>${assetName || 'Asset'}</strong><br>${lat.toFixed(4)}, ${lon.toFixed(4)}`
+          )
         )
         .addTo(map);
 
       loading = false;
-
     } catch (err) {
       console.error('[AssetMap] Error loading asset map:', err);
       error = `${err.name || 'Error'}: ${err.message}`;

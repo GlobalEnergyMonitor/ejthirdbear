@@ -62,7 +62,9 @@ export async function loadManifest(): Promise<TileManifest> {
   }
 
   manifest = await response.json();
-  console.log(`Loaded manifest: ${manifest!.tiles.length} tiles, ${manifest!.totalAssets.toLocaleString()} assets`);
+  console.log(
+    `Loaded manifest: ${manifest!.tiles.length} tiles, ${manifest!.totalAssets.toLocaleString()} assets`
+  );
 
   return manifest!;
 }
@@ -73,7 +75,7 @@ export async function loadManifest(): Promise<TileManifest> {
 export function findTilesForBounds(bounds: MapBounds, manifest: TileManifest): TileInfo[] {
   const { north, south, east, west } = bounds;
 
-  return manifest.tiles.filter(tile => {
+  return manifest.tiles.filter((tile) => {
     const tb = tile.tileBounds;
     // Check for intersection (not complete containment)
     const latOverlap = tb.minLat < north && tb.maxLat > south;
@@ -89,7 +91,7 @@ export function estimateSize(tiles: TileInfo[]): { mb: number; rows: number; ass
   return {
     mb: tiles.reduce((sum, t) => sum + t.sizeMB, 0),
     rows: tiles.reduce((sum, t) => sum + t.rowCount, 0),
-    assets: tiles.reduce((sum, t) => sum + t.assetCount, 0)
+    assets: tiles.reduce((sum, t) => sum + t.assetCount, 0),
   };
 }
 
@@ -103,7 +105,7 @@ export async function loadTiles(
   await initDuckDB();
 
   const basePath = assetsPath || '';
-  const toLoad = tiles.filter(t => !loadedTiles.has(t.name));
+  const toLoad = tiles.filter((t) => !loadedTiles.has(t.name));
 
   if (toLoad.length === 0) {
     console.log('All requested tiles already loaded');
@@ -143,9 +145,7 @@ export async function queryLoadedTiles<T>(
     return [];
   }
 
-  const tableNames = Array.from(loadedTiles).map(name =>
-    name.replace(/-/g, '_')
-  );
+  const tableNames = Array.from(loadedTiles).map((name) => name.replace(/-/g, '_'));
 
   const sql = sqlTemplate(tableNames);
   const result = await query<T>(sql);
@@ -169,7 +169,9 @@ export async function queryBounds<T>(
   const tiles = findTilesForBounds(bounds, m);
   const estimate = estimateSize(tiles);
 
-  console.log(`Query needs ${tiles.length} tiles (${estimate.mb.toFixed(1)} MB, ${estimate.assets.toLocaleString()} assets)`);
+  console.log(
+    `Query needs ${tiles.length} tiles (${estimate.mb.toFixed(1)} MB, ${estimate.assets.toLocaleString()} assets)`
+  );
 
   await loadTiles(tiles, onProgress);
 
@@ -178,7 +180,7 @@ export async function queryBounds<T>(
   return {
     data,
     tilesLoaded: tiles.length,
-    estimatedSize: estimate
+    estimatedSize: estimate,
   };
 }
 
@@ -194,8 +196,8 @@ export function buildUnionQuery(
     return `SELECT ${selectClause} WHERE 1=0`; // Empty result
   }
 
-  const queries = tableNames.map(table =>
-    `SELECT ${selectClause} FROM ${table}${whereClause ? ` WHERE ${whereClause}` : ''}`
+  const queries = tableNames.map(
+    (table) => `SELECT ${selectClause} FROM ${table}${whereClause ? ` WHERE ${whereClause}` : ''}`
   );
 
   return queries.join('\nUNION ALL\n');
@@ -215,6 +217,6 @@ export function clearLoadedTiles(): void {
 export function getLoadedStats(): { tileCount: number; tileNames: string[] } {
   return {
     tileCount: loadedTiles.size,
-    tileNames: Array.from(loadedTiles)
+    tileNames: Array.from(loadedTiles),
   };
 }

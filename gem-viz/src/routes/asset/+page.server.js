@@ -31,35 +31,47 @@ export async function load() {
       ORDER BY ordinal_position
     `);
 
-    const columns = schemaResult.data.map(c => c.column_name);
+    const columns = schemaResult.data.map((c) => c.column_name);
 
     // Detect columns (mirror asset detail prerender logic)
-    const countryCol = columns.find(c => c.toLowerCase() === 'country' || c.toLowerCase() === 'country/area');
-    const ownerCol = columns.find(c => c.toLowerCase() === 'owner');
+    const countryCol = columns.find(
+      (c) => c.toLowerCase() === 'country' || c.toLowerCase() === 'country/area'
+    );
+    const ownerCol = columns.find((c) => c.toLowerCase() === 'owner');
 
-    const ownerIdCol = columns.find(c => {
+    const ownerIdCol = columns.find((c) => {
       const lower = c.toLowerCase();
       return lower.includes('owner') && lower.includes('id');
     });
 
-    const unitIdCol = columns.find(c => c.toLowerCase() === 'gem unit id');
+    const unitIdCol = columns.find((c) => c.toLowerCase() === 'gem unit id');
 
     const useCompositeId = Boolean(ownerIdCol && unitIdCol);
 
     // Find the best ID column (fallback)
-    const idCol = columns.find(c => {
-      const lower = c.toLowerCase();
-      return lower === 'id' || lower === 'wiki page' || lower === 'project id' || lower.includes('_id');
-    }) || columns[0];
+    const idCol =
+      columns.find((c) => {
+        const lower = c.toLowerCase();
+        return (
+          lower === 'id' || lower === 'wiki page' || lower === 'project id' || lower.includes('_id')
+        );
+      }) || columns[0];
 
     // Better name column detection
-    const nameCol = columns.find(c => {
+    const nameCol = columns.find((c) => {
       const lower = c.toLowerCase();
-      return lower === 'mine' || lower === 'plant' || lower === 'project' || lower === 'facility' ||
-             lower === 'mine name' || lower === 'plant name' || lower === 'project name';
+      return (
+        lower === 'mine' ||
+        lower === 'plant' ||
+        lower === 'project' ||
+        lower === 'facility' ||
+        lower === 'mine name' ||
+        lower === 'plant name' ||
+        lower === 'project name'
+      );
     });
 
-    const statusCol = columns.find(c => c.toLowerCase() === 'status');
+    const statusCol = columns.find((c) => c.toLowerCase() === 'status');
 
     // Select just the columns we need for the list view
     const columnsToSelect = [idCol];
@@ -72,7 +84,7 @@ export async function load() {
 
     // Query with just the columns we need
     const result = await motherduck.query(`
-      SELECT ${columnsToSelect.map(c => `"${c}"`).join(', ')}
+      SELECT ${columnsToSelect.map((c) => `"${c}"`).join(', ')}
       FROM ${fullTableName}
       LIMIT 10000
     `);
@@ -92,15 +104,14 @@ export async function load() {
       countryCol,
       ownerIdCol,
       unitIdCol,
-      useCompositeId
+      useCompositeId,
     };
-
   } catch (error) {
     console.error('Load error:', error);
     return {
       assets: [],
       tableName: null,
-      error: error.message
+      error: error.message,
     };
   }
 }

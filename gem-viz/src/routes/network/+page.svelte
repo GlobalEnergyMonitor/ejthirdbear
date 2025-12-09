@@ -17,8 +17,8 @@
   </header>
 
   <p class="intro">
-    Visualizing <strong>every ownership connection</strong> in the Global Energy Monitor database.
-    Each node is an entity (company, government, fund). Each edge is an ownership relationship.
+    Visualizing <strong>every ownership connection</strong> in the Global Energy Monitor database. Each
+    node is an entity (company, government, fund). Each edge is an ownership relationship.
   </p>
 
   <NetworkGraph />

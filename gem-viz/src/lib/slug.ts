@@ -10,7 +10,7 @@ export function slugifyId(input: string | undefined | null): string {
   return slugify(input, {
     lower: true,
     strict: true,
-    replacement: '-'
+    replacement: '-',
   });
 }
 

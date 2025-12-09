@@ -12,7 +12,7 @@ const CACHE_FILE = join(process.cwd(), '.svelte-kit/.asset-cache.json');
 const ASSET_CACHE = {
   assets: new Map(),
   metadata: null,
-  initialized: false
+  initialized: false,
 };
 
 // This function tells SvelteKit which asset IDs to prerender at build time
@@ -51,21 +51,26 @@ export async function entries() {
         AND table_name = '${table_name}'
     `);
 
-    const columns = schemaResult.data.map(c => c.column_name);
-    const countryCol = columns.find(c => c.toLowerCase() === 'country');
+    const columns = schemaResult.data.map((c) => c.column_name);
+    const countryCol = columns.find((c) => c.toLowerCase() === 'country');
 
     // For ownership tables, we need composite IDs since both owner and unit can have duplicates
-    const ownerIdCol = columns.find(c => c.toLowerCase().includes('owner') && c.toLowerCase().includes('id'));
-    const unitIdCol = columns.find(c => c.toLowerCase() === 'gem unit id');
+    const ownerIdCol = columns.find(
+      (c) => c.toLowerCase().includes('owner') && c.toLowerCase().includes('id')
+    );
+    const unitIdCol = columns.find((c) => c.toLowerCase() === 'gem unit id');
     const useCompositeId = ownerIdCol && unitIdCol;
 
     // Fallback to single column ID if not an ownership table
-    const idCol = columns.find(c => c.toLowerCase() === 'gem unit id')
-      || columns.find(c => {
+    const idCol =
+      columns.find((c) => c.toLowerCase() === 'gem unit id') ||
+      columns.find((c) => {
         const lower = c.toLowerCase();
-        return lower === 'id' || lower === 'wiki page' || lower === 'project id' || lower.includes('_id');
-      })
-      || columns[0];
+        return (
+          lower === 'id' || lower === 'wiki page' || lower === 'project id' || lower.includes('_id')
+        );
+      }) ||
+      columns[0];
 
     // BULK FETCH: Get ALL asset data in one query (not just IDs!)
     // Removed country filter - prerender ALL 62,366+ assets
@@ -107,7 +112,7 @@ export async function entries() {
       useCompositeId,
       ownerIdCol,
       unitIdCol,
-      assets: assetsMap
+      assets: assetsMap,
     };
 
     // Write to disk (persists across worker processes)
@@ -121,17 +126,21 @@ export async function entries() {
     }
 
     writeFileSync(CACHE_FILE, cacheJSON);
-    console.log(`  ✓ Wrote ${Object.keys(assetsMap).length} assets to disk cache (${cacheSizeMB} MB)`);
+    console.log(
+      `  ✓ Wrote ${Object.keys(assetsMap).length} assets to disk cache (${cacheSizeMB} MB)`
+    );
 
     // Return ALL assets for prerendering - no incremental build optimization
     // (Incremental builds caused issues where stale build/ directories would skip all pages)
     const allAssetIds = Object.keys(assetsMap);
-    console.log(`  📋 Asset IDs to build: ${allAssetIds.slice(0, 3).join(', ')}${allAssetIds.length > 3 ? ` ... (${allAssetIds.length} total)` : ''}`);
+    console.log(
+      `  📋 Asset IDs to build: ${allAssetIds.slice(0, 3).join(', ')}${allAssetIds.length > 3 ? ` ... (${allAssetIds.length} total)` : ''}`
+    );
     console.log(`  🔨 Building ${allAssetIds.length} pages`);
     console.log(`  💾 Cache file: ${CACHE_FILE}`);
 
     // Return array of { id } objects for SvelteKit to prerender
-    return allAssetIds.map(id => ({ id }));
+    return allAssetIds.map((id) => ({ id }));
   } catch (err) {
     console.error('Error in entries():', err);
     return [];
@@ -150,7 +159,7 @@ function loadCacheFromDisk() {
           idCol: cacheData.idCol,
           useCompositeId: cacheData.useCompositeId,
           ownerIdCol: cacheData.ownerIdCol,
-          unitIdCol: cacheData.unitIdCol
+          unitIdCol: cacheData.unitIdCol,
         };
         ASSET_CACHE.assets = new Map(Object.entries(cacheData.assets));
         ASSET_CACHE.initialized = true;
@@ -184,19 +193,17 @@ export async function load({ params }) {
         columns,
         svgs: { map: null, capacity: null, status: null },
         resolvedId,
-        paramsId: params.id
+        paramsId: params.id,
       };
     }
 
     // Fallback: ownership tables might be requested by only owner or unit ID.
-    const { useCompositeId, ownerIdCol, unitIdCol, tableName, columns } = ASSET_CACHE.metadata || {};
+    const { useCompositeId, ownerIdCol, unitIdCol, tableName, columns } =
+      ASSET_CACHE.metadata || {};
     if (useCompositeId && ownerIdCol && unitIdCol) {
       const matches = [];
       for (const [key, value] of ASSET_CACHE.assets.entries()) {
-        if (
-          String(value[unitIdCol]) === params.id ||
-          String(value[ownerIdCol]) === params.id
-        ) {
+        if (String(value[unitIdCol]) === params.id || String(value[ownerIdCol]) === params.id) {
           matches.push({ key, asset: value });
           if (matches.length >= 5) break;
         }
@@ -211,14 +218,14 @@ export async function load({ params }) {
           columns,
           svgs: { map: null, capacity: null, status: null },
           resolvedId,
-          paramsId: params.id
+          paramsId: params.id,
         };
       }
 
       if (matches.length > 1) {
         console.warn(`⚠️  Multiple matches for ${params.id}; suggest using composite ID`, {
           requested: params.id,
-          suggestions: matches.map(m => m.key)
+          suggestions: matches.map((m) => m.key),
         });
       } else {
         console.warn(`⚠️  No ownership matches for ${params.id}; use composite owner_unit ID`);

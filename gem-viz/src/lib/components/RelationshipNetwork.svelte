@@ -38,8 +38,8 @@
         {#if i < ownershipChain.length - 1}
           <div class="chain-arrow">
             <svg width="40" height="20" viewBox="0 0 40 20">
-              <line x1="0" y1="10" x2="30" y2="10" stroke="#666" stroke-width="2"/>
-              <polygon points="30,5 40,10 30,15" fill="#666"/>
+              <line x1="0" y1="10" x2="30" y2="10" stroke="#666" stroke-width="2" />
+              <polygon points="30,5 40,10 30,15" fill="#666" />
             </svg>
           </div>
         {/if}
@@ -57,7 +57,8 @@
           </span>
         {/if}
         <span class="stat">
-          <strong>{ownerStats.countries}</strong> {ownerStats.countries === 1 ? 'country' : 'countries'}
+          <strong>{ownerStats.countries}</strong>
+          {ownerStats.countries === 1 ? 'country' : 'countries'}
         </span>
       </div>
     {/if}
@@ -99,10 +100,14 @@
   <section class="co-located">
     <h2>📍 Co-Located Assets</h2>
     <p class="location-note">
-      {coLocatedAssets.length + 1} {coLocatedAssets.length === 0 ? 'unit' : 'units'} at this location
-      {#if coLocatedAssets.some(a => a['Capacity (MW)'])}
+      {coLocatedAssets.length + 1}
+      {coLocatedAssets.length === 0 ? 'unit' : 'units'} at this location
+      {#if coLocatedAssets.some((a) => a['Capacity (MW)'])}
         • Combined capacity: {formatCapacity(
-          coLocatedAssets.reduce((sum, a) => sum + (a['Capacity (MW)'] || 0), currentAsset['Capacity (MW)'] || 0)
+          coLocatedAssets.reduce(
+            (sum, a) => sum + (a['Capacity (MW)'] || 0),
+            currentAsset['Capacity (MW)'] || 0
+          )
         )}
       {/if}
     </p>
@@ -256,11 +261,26 @@
     white-space: nowrap;
   }
 
-  .status-operating { background: #4caf50; color: white; }
-  .status-retired { background: #999; color: white; }
-  .status-construction { background: #ff9800; color: white; }
-  .status-cancelled { background: #f44336; color: white; }
-  .status-other { background: #2196f3; color: white; }
+  .status-operating {
+    background: #4caf50;
+    color: white;
+  }
+  .status-retired {
+    background: #999;
+    color: white;
+  }
+  .status-construction {
+    background: #ff9800;
+    color: white;
+  }
+  .status-cancelled {
+    background: #f44336;
+    color: white;
+  }
+  .status-other {
+    background: #2196f3;
+    color: white;
+  }
 
   .asset-meta {
     display: flex;
