@@ -16,7 +16,7 @@ const config = {
       strict: false
     }),
     prerender: {
-      concurrency: 10,  // Render 10 pages at a time - balances speed vs file descriptor pressure
+      concurrency: 1,   // Render 1 page at a time - eliminates cache/timing race conditions
       crawl: true,      // Crawl to find dynamic routes like /asset/[id]
       entries: ['*'],  // Include only crawled routes
       handleHttpError: ({ status, path, message }) => {
