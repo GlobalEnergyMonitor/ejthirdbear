@@ -467,14 +467,9 @@
       parent: container,
       views: view,
       initialViewState,
-      controller: config.use3D
-        ? true // OrbitView defaults: left-drag=rotate, right-drag=pan, scroll=zoom
-        : {
-            scrollZoom: { speed: 0.012, smooth: true },
-            dragPan: true,
-            doubleClickZoom: true,
-            keyboard: true,
-          },
+      // 3D: drag=rotate, shift+drag=pan, scroll=zoom (laptop-friendly)
+      // 2D: drag=pan, scroll=zoom
+      controller: true,
       onViewStateChange: handleViewStateChange,
       layers: [],
       getTooltip: ({ object }) => {
@@ -604,8 +599,8 @@
   </div>
 
   <div class="help">
-    <p>{config.use3D ? 'Drag to rotate • Right-drag to pan' : 'Drag to pan'} • Scroll to zoom • Hover for details</p>
-    <p class="engine">d3-force-3d engine {config.use3D ? '(3D)' : '(2D)'}</p>
+    <p>{config.use3D ? 'Drag to rotate • Shift+drag to pan' : 'Drag to pan'} • Scroll to zoom</p>
+    <p class="engine">d3-force-3d + deck.gl {config.use3D ? '(3D)' : '(2D)'}</p>
   </div>
 
   <div bind:this={container} class="deck-container"></div>
