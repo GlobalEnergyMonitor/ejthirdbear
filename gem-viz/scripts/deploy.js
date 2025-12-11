@@ -57,23 +57,8 @@ try {
     console.log('✓ Copied CHANGELOG.md to build directory');
   }
 
-  // Apply CORS configuration to bucket
-  console.log('\n🔧 Configuring CORS on bucket...\n');
-  try {
-    execSync(
-      `aws s3api put-bucket-cors ` +
-      `--bucket ${BUCKET} ` +
-      `--endpoint-url ${ENDPOINT} ` +
-      `--profile ${PROFILE} ` +
-      `--cors-configuration file://cors-config.json`,
-      { stdio: 'inherit' }
-    );
-    console.log('✓ CORS configuration applied');
-  } catch (corsError) {
-    console.warn('⚠️  CORS configuration failed (may need manual setup):', corsError.message);
-  }
-
   // Upload to Digital Ocean Spaces using AWS CLI
+  // Note: CORS is configured via Digital Ocean dashboard, not here
   console.log('\n📦 Uploading to Digital Ocean Spaces...\n');
   console.log(`→ Syncing to s3://${BUCKET}/${DEPLOY_PATH}/`);
   execSync(
