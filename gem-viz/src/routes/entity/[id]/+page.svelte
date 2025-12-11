@@ -1,57 +1,84 @@
 <script>
+  import { onMount } from 'svelte';
+  import { get } from 'svelte/store';
   import { base } from '$app/paths';
+  import { page } from '$app/stores';
   import OwnershipExplorerD3 from '$lib/components/OwnershipExplorerD3.svelte';
+  import { fetchOwnerPortfolio, fetchOwnerStats, getTables } from '$lib/component-data/schema';
+  import motherduck from '$lib/motherduck-wasm';
 
-  export let data;
+  const SCHEMA_SQL = (schema, table) => `
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = '${schema}'
+      AND table_name = '${table}'
+    ORDER BY ordinal_position
+  `;
 
-  const { entity, columns } = data;
+  let loading = $state(true);
+  let error = $state(null);
 
-  // Define priority columns for display
-  const priorityFields = [
-    'full_name',
-    'entity_type',
-    'legal_entity_type',
-    'registration_country',
-    'headquarters_country',
-    'publicly_listed',
-    'parent_entity',
-    'subsidiary_count',
-  ];
+  let entityId = $state('');
+  let entityName = $state('');
+  let portfolio = $state(null);
+  let stats = $state(null);
+  let columns = $state([]);
 
-  // External IDs (often country-specific)
-  const externalIdFields = columns.filter((c) => {
-    const lower = c.toLowerCase();
-    return (
-      lower.includes('lei') ||
-      lower.includes('cik') ||
-      lower.includes('cnpj') ||
-      lower.includes('cin') ||
-      lower.includes('isin') ||
-      lower.includes('cusip')
+  const summaryAssets = $derived(() => (portfolio?.assets || []).slice(0, 20));
+  const trackerBreakdown = $derived(() => {
+    const counts = new Map();
+    (portfolio?.assets || []).forEach((a) => {
+      const key = a.tracker || 'Unknown';
+      counts.set(key, (counts.get(key) || 0) + 1);
+    });
+    return Array.from(counts, ([tracker, count]) => ({ tracker, count })).sort(
+      (a, b) => b.count - a.count
+    );
+  });
+  const statusBreakdown = $derived(() => {
+    const counts = new Map();
+    (portfolio?.assets || []).forEach((a) => {
+      const key = a.status || 'Unknown';
+      counts.set(key, (counts.get(key) || 0) + 1);
+    });
+    return Array.from(counts, ([status, count]) => ({ status, count })).sort(
+      (a, b) => b.count - a.count
     );
   });
 
-  // Group remaining columns
-  const specialCols = [...priorityFields, ...externalIdFields];
-  const otherCols = columns.filter((c) => !specialCols.includes(c) && entity[c]);
+  onMount(async () => {
+    try {
+      loading = true;
+      error = null;
 
-  // Format field names for display
-  function formatField(fieldName) {
-    return fieldName
-      .replace(/_/g, ' ')
-      .split(' ')
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
-  }
+      const paramsId = get(page)?.params?.id;
+      if (!paramsId) throw new Error('Missing entity ID');
+      entityId = paramsId;
 
-  // Check if value should be displayed
-  function shouldDisplay(value) {
-    return value !== null && value !== undefined && value !== '';
-  }
+      const [portfolioResult, statsResult] = await Promise.all([
+        fetchOwnerPortfolio(paramsId),
+        fetchOwnerStats(paramsId),
+      ]);
+
+      portfolio = portfolioResult;
+      stats = statsResult;
+      entityName = portfolio?.spotlightOwner?.Name || paramsId;
+
+      const { assetTable } = await getTables();
+      const [schemaName, rawTable] = assetTable.split('.');
+      const schemaResult = await motherduck.query(SCHEMA_SQL(schemaName, rawTable));
+      columns = schemaResult.data?.map((c) => c.column_name) ?? [];
+    } catch (err) {
+      console.error('Entity load error:', err);
+      error = err?.message || 'Failed to load entity';
+    } finally {
+      loading = false;
+    }
+  });
 </script>
 
 <svelte:head>
-  <title>{entity['Full Name'] || `Entity ${entity['gem entity id']}`} — GEM Viz</title>
+  <title>{entityName || entityId || 'Entity'} — GEM Viz</title>
 </svelte:head>
 
 <main>
@@ -60,99 +87,116 @@
     <span class="entity-type">Entity Profile</span>
   </header>
 
-  <article class="entity-detail">
-    <h1>{entity['Full Name'] || `ID: ${entity['gem entity id']}`}</h1>
+  {#if loading}
+    <p class="loading">Loading entity directly from MotherDuck…</p>
+  {:else if error}
+    <p class="loading error">{error}</p>
+  {:else}
+    <article class="entity-detail">
+      <h1>{entityName || `ID: ${entityId}`}</h1>
 
-    <div class="meta-grid">
-      {#if entity['entity_type'] && shouldDisplay(entity['entity_type'])}
+      <div class="meta-grid">
         <div class="meta-item">
-          <span class="label">Entity Type</span>
-          <span class="value">{entity['entity_type']}</span>
+          <span class="label">GEM Entity ID</span>
+          <span class="value"><code>{entityId}</code></span>
         </div>
-      {/if}
 
-      {#if entity['legal_entity_type'] && shouldDisplay(entity['legal_entity_type'])}
         <div class="meta-item">
-          <span class="label">Legal Entity Type</span>
-          <span class="value">{entity['legal_entity_type']}</span>
-        </div>
-      {/if}
-
-      {#if entity['registration_country'] && shouldDisplay(entity['registration_country'])}
-        <div class="meta-item">
-          <span class="label">Registered In</span>
-          <span class="value">{entity['registration_country']}</span>
-        </div>
-      {/if}
-
-      {#if entity['headquarters_country'] && shouldDisplay(entity['headquarters_country'])}
-        <div class="meta-item">
-          <span class="label">Headquarters</span>
-          <span class="value">{entity['headquarters_country']}</span>
-        </div>
-      {/if}
-
-      {#if entity['publicly_listed'] && shouldDisplay(entity['publicly_listed'])}
-        <div class="meta-item">
-          <span class="label">Publicly Listed</span>
-          <span
-            class="value badge"
-            class:yes={entity['publicly_listed'] === 'yes' || entity['publicly_listed'] === true}
-          >
-            {entity['publicly_listed']}
+          <span class="label">Assets Tracked</span>
+          <span class="value">
+            {(stats?.total_assets ?? portfolio?.assets?.length ?? 0).toLocaleString()}
           </span>
         </div>
+
+        {#if stats?.total_capacity_mw !== null && stats?.total_capacity_mw !== undefined}
+          <div class="meta-item">
+            <span class="label">Total Capacity (MW)</span>
+            <span class="value">
+              {Number(stats.total_capacity_mw || 0).toLocaleString()}
+            </span>
+          </div>
+        {/if}
+
+        {#if stats?.countries}
+          <div class="meta-item">
+            <span class="label">Countries</span>
+            <span class="value">{stats.countries}</span>
+          </div>
+        {/if}
+
+        {#if columns.length}
+          <div class="meta-item">
+            <span class="label">Columns scanned</span>
+            <span class="value">{columns.length}</span>
+          </div>
+        {/if}
+      </div>
+
+      {#if trackerBreakdown.length > 0}
+        <section class="external-ids">
+          <h2>Tracker Mix</h2>
+          <ul class="chip-list">
+            {#each trackerBreakdown as row}
+              <li class="chip-row">
+                <span class="chip">{row.tracker}</span>
+                <span class="chip-count">{row.count.toLocaleString()}</span>
+              </li>
+            {/each}
+          </ul>
+        </section>
       {/if}
 
-      {#if entity['parent_entity'] && shouldDisplay(entity['parent_entity'])}
-        <div class="meta-item">
-          <span class="label">Parent Entity</span>
-          <span class="value">{entity['parent_entity']}</span>
-        </div>
+      {#if statusBreakdown.length > 0}
+        <section class="external-ids">
+          <h2>Status Breakdown</h2>
+          <ul class="chip-list">
+            {#each statusBreakdown as row}
+              <li class="chip-row">
+                <span class="chip">{row.status}</span>
+                <span class="chip-count">{row.count.toLocaleString()}</span>
+              </li>
+            {/each}
+          </ul>
+        </section>
       {/if}
-    </div>
 
-    {#if externalIdFields.length > 0}
-      <section class="external-ids">
-        <h2>External Identifiers</h2>
-        <dl>
-          {#each externalIdFields as field}
-            {#if shouldDisplay(entity[field])}
-              <div class="id-pair">
-                <dt>{formatField(field)}</dt>
-                <dd>{entity[field]}</dd>
+      {#if summaryAssets.length > 0}
+        <section class="properties">
+          <h2>Representative Assets</h2>
+          <div class="asset-list">
+            {#each summaryAssets as asset}
+              <div class="asset-card">
+                <div class="asset-header">
+                  <a href="{base}/asset/{asset.id}.html" class="asset-link">
+                    {asset.name || asset.id}
+                  </a>
+                  {#if asset.tracker}
+                    <span class="badge">{asset.tracker}</span>
+                  {/if}
+                </div>
+                <div class="asset-meta">
+                  {#if asset.status}
+                    <span class="chip">{asset.status}</span>
+                  {/if}
+                  {#if asset.locationId}
+                    <span class="chip">Location {asset.locationId}</span>
+                  {/if}
+                  {#if asset.capacityMw}
+                    <span class="chip">{Number(asset.capacityMw).toLocaleString()} MW</span>
+                  {/if}
+                </div>
               </div>
-            {/if}
-          {/each}
-        </dl>
+            {/each}
+          </div>
+        </section>
+      {/if}
+
+      <section class="ownership-explorer">
+        <h2>Owner Explorer</h2>
+        <OwnershipExplorerD3 />
       </section>
-    {/if}
-
-    {#if otherCols.length > 0}
-      <section class="properties">
-        <h2>Additional Information</h2>
-        <dl>
-          {#each otherCols as col}
-            {#if shouldDisplay(entity[col])}
-              <div class="property">
-                <dt>{formatField(col)}</dt>
-                <dd>{entity[col]}</dd>
-              </div>
-            {/if}
-          {/each}
-        </dl>
-      </section>
-    {/if}
-
-    <section class="metadata">
-      <p class="gem-id">GEM Entity ID: <code>{entity['gem entity id']}</code></p>
-    </section>
-
-    <section class="ownership-explorer">
-      <h2>Owner Explorer</h2>
-      <OwnershipExplorerD3 />
-    </section>
-  </article>
+    </article>
+  {/if}
 </main>
 
 <style>
@@ -162,6 +206,15 @@
     padding: 40px;
     max-width: 1200px;
     margin: 0 auto;
+  }
+
+  .loading {
+    padding: 30px 0 10px 0;
+    color: #555;
+  }
+
+  .loading.error {
+    color: #b10000;
   }
 
   header {
@@ -262,70 +315,83 @@
     border: 1px solid #ddd;
   }
 
-  .external-ids dl {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 15px;
-  }
-
-  .id-pair {
+  .chip-list {
+    list-style: none;
+    padding: 0;
+    margin: 10px 0 0 0;
     display: flex;
-    flex-direction: column;
-    gap: 5px;
+    flex-wrap: wrap;
+    gap: 8px;
   }
 
-  .id-pair dt {
-    font-size: 10px;
-    font-weight: bold;
-    color: #666;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-  }
-
-  .id-pair dd {
-    font-size: 13px;
-    color: #000;
-    margin: 0;
-    font-family: 'Monaco', 'Courier New', monospace;
+  .chip-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
     background: #fff;
-    padding: 6px;
-    border-radius: 2px;
+    border: 1px solid #ddd;
+    padding: 6px 10px;
+  }
+
+  .chip {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+
+  .chip-count {
+    font-size: 12px;
+    color: #666;
   }
 
   .properties {
     margin: 40px 0;
   }
 
-  .properties dl {
+  .asset-list {
     display: grid;
-    grid-template-columns: 1fr;
-    gap: 15px;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 12px;
   }
 
-  .property {
-    display: grid;
-    grid-template-columns: 250px 1fr;
-    gap: 20px;
-    padding: 12px 0;
-    border-bottom: 1px solid #f0f0f0;
+  .asset-card {
+    border: 1px solid #ddd;
+    padding: 12px;
+    background: #fafafa;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
   }
 
-  .property:last-child {
-    border-bottom: none;
+  .asset-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    justify-content: space-between;
   }
 
-  .property dt {
-    font-size: 11px;
-    font-weight: bold;
-    color: #666;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-  }
-
-  .property dd {
-    font-size: 13px;
+  .asset-link {
     color: #000;
-    margin: 0;
+    text-decoration: underline;
+    font-weight: 600;
+  }
+
+  .asset-link:hover {
+    text-decoration: none;
+  }
+
+  .asset-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .badge {
+    border: 1px solid #000;
+    padding: 3px 6px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
   }
 
   .metadata {
@@ -351,16 +417,11 @@
   }
 
   @media (max-width: 768px) {
-    .property {
-      grid-template-columns: 1fr;
-      gap: 5px;
-    }
-
     .meta-grid {
       grid-template-columns: 1fr;
     }
 
-    .external-ids dl {
+    .asset-list {
       grid-template-columns: 1fr;
     }
   }

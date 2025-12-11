@@ -65,7 +65,7 @@ function recursiveEdgesCteDownstream(entityId: string): string {
  * Recursive CTE for traversing UPSTREAM from assets to all parent owners
  */
 function recursiveEdgesCteUpstream(immediateOwnerIds: string[]): string {
-  const idList = immediateOwnerIds.map(id => `'${id}'`).join(', ');
+  const idList = immediateOwnerIds.map((id) => `'${id}'`).join(', ');
   return `WITH RECURSIVE edges AS (
     SELECT
       o."Interested Party ID" AS parent,
@@ -139,7 +139,7 @@ export async function getAssetOwners(gemAssetId: string): Promise<AssetOwnersDat
 
     const immediateOwners = immediateResult.data;
     const immediateOwnerIds = immediateOwners
-      .map(d => d['Owner GEM Entity ID'] || d['Immediate Owner Entity ID'])
+      .map((d) => d['Owner GEM Entity ID'] || d['Immediate Owner Entity ID'])
       .filter(Boolean);
 
     // Get parent owners recursively
@@ -179,21 +179,19 @@ export async function getAssetOwners(gemAssetId: string): Promise<AssetOwnersDat
     ];
 
     // Get all entity IDs
-    const allEntityIds = Array.from(
-      new Set(edges.flatMap(e => [e.source, e.target]))
-    ).filter(id => id !== gemAssetId);
+    const allEntityIds = Array.from(new Set(edges.flatMap((e) => [e.source, e.target]))).filter(
+      (id) => id !== gemAssetId
+    );
 
     // Get entity node data (simplified - would need entity table)
-    const nodes: EntityNode[] = allEntityIds.map(id => ({
+    const nodes: EntityNode[] = allEntityIds.map((id) => ({
       id,
       Name: id, // Would need to look up actual names
       type: 'entity' as const,
     }));
 
     // Get asset name from first immediate owner record
-    const assetName = immediateOwners[0]?.['Unit'] ||
-      immediateOwners[0]?.['Project'] ||
-      gemAssetId;
+    const assetName = immediateOwners[0]?.['Unit'] || immediateOwners[0]?.['Project'] || gemAssetId;
 
     return {
       assetId: gemAssetId,
@@ -220,7 +218,7 @@ export function formatForMermaid(
 ): string {
   // Dedupe edges by source-target pair
   const seen = new Set<string>();
-  const uniqueEdges = edges.filter(e => {
+  const uniqueEdges = edges.filter((e) => {
     const key = `${e.source}->${e.target}`;
     if (seen.has(key)) return false;
     seen.add(key);
@@ -231,19 +229,23 @@ export function formatForMermaid(
   const stripParens = (s: string) => s.replace(/[()]/g, '');
 
   // Generate Mermaid lines
-  return uniqueEdges.map((e, i) => {
-    const sourceName = nodeMap.get(e.source)?.Name || e.source;
-    const targetName = nodeMap.get(e.target)?.Name || e.target;
+  return uniqueEdges
+    .map((e, i) => {
+      const sourceName = nodeMap.get(e.source)?.Name || e.source;
+      const targetName = nodeMap.get(e.target)?.Name || e.target;
 
-    // Handle "natural persons" and "small shareholders" specially
-    const sourceId = ['small shareholder(s)', 'natural person(s)'].includes(sourceName.toLowerCase())
-      ? `${e.source}_${i}`
-      : e.source;
+      // Handle "natural persons" and "small shareholders" specially
+      const sourceId = ['small shareholder(s)', 'natural person(s)'].includes(
+        sourceName.toLowerCase()
+      )
+        ? `${e.source}_${i}`
+        : e.source;
 
-    const pctLabel = e.value ? `${e.value.toFixed(1)}%` : '';
+      const pctLabel = e.value ? `${e.value.toFixed(1)}%` : '';
 
-    return `${sourceId}(${stripParens(sourceName)})-->|${pctLabel}|${e.target}(${stripParens(targetName)});`;
-  }).join('\n');
+      return `${sourceId}(${stripParens(sourceName)})-->|${pctLabel}|${e.target}(${stripParens(targetName)});`;
+    })
+    .join('\n');
 }
 
 /**
@@ -251,32 +253,29 @@ export function formatForMermaid(
  * Ported from Observable summarizeAssets2()
  */
 export function summarizeAssets(assets: any[]) {
-  const uniqueCount = (arr: any[], field: string) =>
-    new Set(arr.map(d => d[field])).size;
+  const uniqueCount = (arr: any[], field: string) => new Set(arr.map((d) => d[field])).size;
 
   const getStats = (v: any[]) => ({
     assetCount: uniqueCount(v, 'locationID') || uniqueCount(v, 'id'),
     unitCount: uniqueCount(v, 'id'),
-    types: new Set(v.map(d => d.tracker)),
+    types: new Set(v.map((d) => d.tracker)),
   });
 
   const rollup = (arr: any[], keyFn: (d: any) => string) => {
     const map = new Map<string, any[]>();
-    arr.forEach(d => {
+    arr.forEach((d) => {
       const key = keyFn(d);
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(d);
     });
-    return new Map(
-      Array.from(map.entries()).map(([k, v]) => [k, getStats(v)])
-    );
+    return new Map(Array.from(map.entries()).map(([k, v]) => [k, getStats(v)]));
   };
 
   return {
     total: getStats(assets),
-    byCountry: rollup(assets, d => d.country),
-    byType: rollup(assets, d => d.tracker),
-    byStatus: rollup(assets, d => d.status?.toLowerCase()),
+    byCountry: rollup(assets, (d) => d.country),
+    byType: rollup(assets, (d) => d.tracker),
+    byStatus: rollup(assets, (d) => d.status?.toLowerCase()),
   };
 }
 
@@ -393,10 +392,9 @@ export async function getSpotlightOwnerData(
     allAssets.push(...directlyOwned);
 
     // Determine asset class from tracker types
-    const trackers = new Set(allAssets.map(a => a.tracker).filter(Boolean));
-    const assetClassName = trackers.size === 1
-      ? Array.from(trackers)[0]
-      : `assets (${trackers.size} types)`;
+    const trackers = new Set(allAssets.map((a) => a.tracker).filter(Boolean));
+    const assetClassName =
+      trackers.size === 1 ? Array.from(trackers)[0] : `assets (${trackers.size} types)`;
 
     return {
       spotlightOwner: { id: entityId, Name: entityName || entityId },

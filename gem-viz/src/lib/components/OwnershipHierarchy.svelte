@@ -1,5 +1,9 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
+  import { get } from 'svelte/store';
+  import { page } from '$app/stores';
+  import { getTables } from '$lib/component-data/schema';
+  import motherduck from '$lib/motherduck-wasm';
   import { colors } from '$lib/ownership-theme';
 
   // Props
@@ -18,6 +22,84 @@
   let nodePositions = $state([]);
   let linkPositions = $state([]);
   let hoveredNode = $state(null);
+  let loading = $state(false);
+  let dataError = $state(null);
+
+  const SCHEMA_SQL = (schema, table) => `
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = '${schema}'
+      AND table_name = '${table}'
+    ORDER BY ordinal_position
+  `;
+
+  const ASSET_SQL = (fullTableName, idColumn, id) => `
+    SELECT *
+    FROM ${fullTableName}
+    WHERE "${idColumn}" = '${id}'
+  `;
+
+  function escapeValue(val) {
+    return String(val ?? '').replace(/'/g, "''");
+  }
+
+  function parseOwnershipPaths(ownerRecords, targetAssetId, targetAssetName) {
+    const edgeMap = new Map();
+    const nodeMap = new Map();
+
+    for (const record of ownerRecords) {
+      const pathStr = record['Ownership Path'];
+      if (!pathStr) continue;
+
+      const segments = pathStr.split(' -> ');
+      if (segments.length < 2) continue;
+
+      const parsedSegments = segments.map((seg) => {
+        const match = seg.match(/^(.+?)\s*\[([^\]]+)\]$/);
+        if (match) {
+          const name = match[1].trim();
+          const pctStr = match[2].trim();
+          const pct = pctStr === 'unknown %' ? null : parseFloat(pctStr);
+          return { name, pct };
+        }
+        return { name: seg.trim(), pct: null };
+      });
+
+      for (let i = 0; i < parsedSegments.length - 1; i++) {
+        const source = parsedSegments[i];
+        const target = parsedSegments[i + 1];
+        const depth = parsedSegments.length - 1 - i;
+
+        const sourceId = source.name.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 50);
+        const targetId =
+          target.name === targetAssetName
+            ? targetAssetId
+            : target.name.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 50);
+
+        if (!nodeMap.has(sourceId)) {
+          nodeMap.set(sourceId, { id: sourceId, Name: source.name });
+        }
+        if (!nodeMap.has(targetId)) {
+          nodeMap.set(targetId, { id: targetId, Name: target.name });
+        }
+
+        const edgeKey = `${sourceId}->${targetId}`;
+        if (!edgeMap.has(edgeKey)) {
+          edgeMap.set(edgeKey, {
+            source: sourceId,
+            target: targetId,
+            value: target.pct,
+            depth,
+          });
+        }
+      }
+    }
+
+    return {
+      edges: Array.from(edgeMap.values()),
+      nodes: Array.from(nodeMap.values()),
+    };
+  }
 
   // Build node map for quick lookup
   let nodeMap = $derived(() => {
@@ -48,6 +130,7 @@
 
   async function initSimulation() {
     if (typeof window === 'undefined') return;
+    if (!edges.length) return;
 
     const d3Force = await import('d3-force');
 
@@ -104,7 +187,65 @@
     setTimeout(() => simulation.stop(), 3000);
   }
 
-  onMount(() => {
+  async function hydrateOwnership() {
+    if (edges.length > 0 && nodes.length > 0 && assetId) return;
+
+    try {
+      loading = true;
+      dataError = null;
+
+      const resolvedId = assetId || get(page)?.params?.id;
+      if (!resolvedId) throw new Error('Missing asset ID for ownership hierarchy');
+      assetId = resolvedId;
+
+      const { assetTable } = await getTables();
+      const [schemaName, rawTable] = assetTable.split('.');
+      const schemaResult = await motherduck.query(SCHEMA_SQL(schemaName, rawTable));
+      const cols = schemaResult.data?.map((c) => c.column_name) ?? [];
+
+      const unitIdCol =
+        cols.find((c) => c.toLowerCase() === 'gem unit id') ||
+        cols.find((c) => c.toLowerCase() === 'gem_unit_id');
+      const fallbackId =
+        cols.find((c) => {
+          const lower = c.toLowerCase();
+          return (
+            lower === 'id' ||
+            lower === 'wiki page' ||
+            lower === 'project id' ||
+            lower.includes('_id')
+          );
+        }) || cols[0];
+
+      const idColumn = unitIdCol || fallbackId;
+      if (!idColumn) throw new Error('Could not locate asset ID column');
+
+      const dataResult = await motherduck.query(
+        ASSET_SQL(assetTable, idColumn, escapeValue(assetId))
+      );
+
+      if (!dataResult.success || !dataResult.data?.length) {
+        throw new Error('No ownership records available for this asset');
+      }
+
+      if (!assetName) {
+        const first = dataResult.data[0] || {};
+        assetName = first['Project'] || first['Unit Name'] || resolvedId;
+      }
+
+      const parsed = parseOwnershipPaths(dataResult.data, assetId, assetName || assetId);
+      edges = parsed.edges;
+      nodes = parsed.nodes;
+    } catch (err) {
+      console.error('[OwnershipHierarchy] load error', err);
+      dataError = err?.message || 'Failed to load ownership graph';
+    } finally {
+      loading = false;
+    }
+  }
+
+  onMount(async () => {
+    await hydrateOwnership();
     if (edges.length > 0) {
       initSimulation();
     }
@@ -116,7 +257,7 @@
 
   // Re-run when edges change
   $effect(() => {
-    if (edges.length > 0 && typeof window !== 'undefined') {
+    if (!loading && edges.length > 0 && typeof window !== 'undefined') {
       initSimulation();
     }
   });
@@ -143,6 +284,15 @@
 </script>
 
 <div class="ownership-hierarchy">
+  {#if loading || dataError}
+    <div class="overlay" class:error={Boolean(dataError)}>
+      {#if loading}
+        Loading ownership graph…
+      {:else}
+        {dataError}
+      {/if}
+    </div>
+  {/if}
   <svg {width} {height} bind:this={svgElement}>
     <!-- Links -->
     <g class="links">
@@ -231,6 +381,23 @@
     position: relative;
     background: #fafafa;
     border: 1px solid #000;
+  }
+
+  .overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(250, 250, 250, 0.9);
+    z-index: 2;
+    font-size: 12px;
+    color: #555;
+  }
+
+  .overlay.error {
+    color: #b10000;
+    background: rgba(250, 235, 235, 0.92);
   }
 
   svg {

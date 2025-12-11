@@ -22,17 +22,45 @@
   </svg>
 {:else if groupedStatus === 'cancelled'}
   <svg width={size} height={size} viewBox="0 0 {size} {size}" class="status-icon cancelled">
-    <line x1={r * 0.3} y1={r * 0.3} x2={size - r * 0.3} y2={size - r * 0.3}
-          stroke={colors.grey} stroke-width={strokeWidth} stroke-linecap="round" />
-    <line x1={size - r * 0.3} y1={r * 0.3} x2={r * 0.3} y2={size - r * 0.3}
-          stroke={colors.grey} stroke-width={strokeWidth} stroke-linecap="round" />
+    <line
+      x1={r * 0.3}
+      y1={r * 0.3}
+      x2={size - r * 0.3}
+      y2={size - r * 0.3}
+      stroke={colors.grey}
+      stroke-width={strokeWidth}
+      stroke-linecap="round"
+    />
+    <line
+      x1={size - r * 0.3}
+      y1={r * 0.3}
+      x2={r * 0.3}
+      y2={size - r * 0.3}
+      stroke={colors.grey}
+      stroke-width={strokeWidth}
+      stroke-linecap="round"
+    />
   </svg>
 {:else if groupedStatus === 'retired'}
   <svg width={size} height={size} viewBox="0 0 {size} {size}" class="status-icon retired">
-    <line x1={r * 0.3} y1={r * 0.3} x2={size - r * 0.3} y2={size - r * 0.3}
-          stroke={colors.midnightPurple} stroke-width={strokeWidth} stroke-linecap="round" />
-    <line x1={size - r * 0.3} y1={r * 0.3} x2={r * 0.3} y2={size - r * 0.3}
-          stroke={colors.midnightPurple} stroke-width={strokeWidth} stroke-linecap="round" />
+    <line
+      x1={r * 0.3}
+      y1={r * 0.3}
+      x2={size - r * 0.3}
+      y2={size - r * 0.3}
+      stroke={colors.midnightPurple}
+      stroke-width={strokeWidth}
+      stroke-linecap="round"
+    />
+    <line
+      x1={size - r * 0.3}
+      y1={r * 0.3}
+      x2={r * 0.3}
+      y2={size - r * 0.3}
+      stroke={colors.midnightPurple}
+      stroke-width={strokeWidth}
+      stroke-linecap="round"
+    />
   </svg>
 {/if}
 

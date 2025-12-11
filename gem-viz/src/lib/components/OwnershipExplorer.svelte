@@ -3,10 +3,7 @@
   import { get } from 'svelte/store';
   import { onMount } from 'svelte';
   import AssetScreener from '$lib/components/AssetScreener.svelte';
-  import {
-    fetchAssetBasics,
-    fetchOwnerPortfolio,
-  } from '$lib/component-data/schema';
+  import { fetchAssetBasics, fetchOwnerPortfolio } from '$lib/component-data/schema';
   import {
     colorByTracker,
     statusColors,
@@ -22,7 +19,9 @@
   let legend = $derived(() => {
     if (!portfolio?.assets) return [];
     const trackers = new Set(portfolio.assets.map((a) => a.tracker).filter(Boolean));
-    const statuses = new Set(portfolio.assets.map((a) => (a.status || '').toLowerCase()).filter(Boolean));
+    const statuses = new Set(
+      portfolio.assets.map((a) => (a.status || '').toLowerCase()).filter(Boolean)
+    );
     if (trackers.size > 1) {
       return Array.from(colorByTracker)
         .filter(([t]) => trackers.has(t))

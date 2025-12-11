@@ -17,7 +17,7 @@
     unknownColor = '#B9B9B9',
     interactive = false,
     onHover = () => {},
-    onLeave = () => {}
+    onLeave = () => {},
   } = $props();
 
   // Calculate arc path using d3.arc() math
@@ -29,10 +29,21 @@
 
     // SVG arc path: M center, L start, A radius radius 0 largeArc 1 end, Z
     return [
-      'M', cx, cy,
-      'L', start.x, start.y,
-      'A', radius, radius, 0, largeArc, 1, end.x, end.y,
-      'Z'
+      'M',
+      cx,
+      cy,
+      'L',
+      start.x,
+      start.y,
+      'A',
+      radius,
+      radius,
+      0,
+      largeArc,
+      1,
+      end.x,
+      end.y,
+      'Z',
     ].join(' ');
   }
 
@@ -40,7 +51,7 @@
     // Angle 0 = 12 o'clock, clockwise
     return {
       x: cx + radius * Math.sin(angle),
-      y: cy - radius * Math.cos(angle)
+      y: cy - radius * Math.cos(angle),
     };
   }
 
@@ -52,7 +63,9 @@
   let endAngle = $derived((percentage / 100) * 2 * Math.PI);
 
   // Determine fill color - grey if no percentage known
-  let arcFill = $derived(percentage !== null && percentage !== undefined ? fillColor : unknownColor);
+  let arcFill = $derived(
+    percentage !== null && percentage !== undefined ? fillColor : unknownColor
+  );
 
   // Arc path (only if percentage > 0 and < 100)
   let arcPath = $derived(
@@ -85,11 +98,7 @@
 
   <!-- Filled arc wedge for partial ownership -->
   {#if arcPath}
-    <path
-      d={arcPath}
-      fill={arcFill}
-      class="arc-fill"
-    />
+    <path d={arcPath} fill={arcFill} class="arc-fill" />
   {/if}
 </svg>
 

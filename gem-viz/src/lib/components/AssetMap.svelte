@@ -5,10 +5,7 @@
   import maplibregl from 'maplibre-gl';
   import 'maplibre-gl/dist/maplibre-gl.css';
 
-  import {
-    fetchAssetBasics,
-    fetchCoordinatesByLocation,
-  } from '$lib/component-data/schema';
+  import { fetchAssetBasics, fetchCoordinatesByLocation } from '$lib/component-data/schema';
 
   let mapContainer;
   let map;

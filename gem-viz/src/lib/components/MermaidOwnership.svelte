@@ -15,7 +15,7 @@
     assetId = '',
     assetName = '',
     zoom = 0.6,
-    direction = 'TD' // TD (top-down) or LR (left-right)
+    direction = 'TD', // TD (top-down) or LR (left-right)
   } = $props();
 
   let container;
@@ -32,7 +32,7 @@
 
     // Dedupe edges by source-target
     const seen = new Set();
-    const uniqueEdges = edges.filter(e => {
+    const uniqueEdges = edges.filter((e) => {
       const key = `${e.source}->${e.target}`;
       if (seen.has(key)) return false;
       seen.add(key);
@@ -147,13 +147,7 @@
     <div class="controls">
       <label>
         Zoom:
-        <input
-          type="range"
-          min="0.2"
-          max="2"
-          step="0.1"
-          bind:value={zoom}
-        />
+        <input type="range" min="0.2" max="2" step="0.1" bind:value={zoom} />
         <span>{(zoom * 100).toFixed(0)}%</span>
       </label>
     </div>
@@ -195,7 +189,7 @@
     color: #666;
   }
 
-  .controls input[type="range"] {
+  .controls input[type='range'] {
     width: 100px;
   }
 
@@ -214,8 +208,8 @@
 
   .diagram :global(.node rect),
   .diagram :global(.node polygon) {
-    fill: var(--navy, #004A63) !important;
-    stroke: var(--navy, #004A63) !important;
+    fill: var(--navy, #004a63) !important;
+    stroke: var(--navy, #004a63) !important;
   }
 
   .diagram :global(.edgeLabel) {
@@ -223,7 +217,9 @@
     font-size: 10px !important;
   }
 
-  .loading, .error, .empty {
+  .loading,
+  .error,
+  .empty {
     padding: 40px;
     text-align: center;
   }

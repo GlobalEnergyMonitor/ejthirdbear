@@ -97,7 +97,10 @@
         const height =
           nUnits === 1
             ? params.assetMarkHeightSingle
-            : Math.max(params.assetMarkHeightSingle, params.assetMarkHeightCombined * scaleR(nUnits));
+            : Math.max(
+                params.assetMarkHeightSingle,
+                params.assetMarkHeightCombined * scaleR(nUnits)
+              );
         loc.y = y - g.top + height / 2;
         loc.r =
           nUnits === 1
@@ -184,7 +187,9 @@
   });
 
   // Color field (tracker vs status)
-  let colField = $derived(new Set(assets.map((a) => a.tracker).filter(Boolean)).size > 1 ? 'tracker' : 'status');
+  let colField = $derived(
+    new Set(assets.map((a) => a.tracker).filter(Boolean)).size > 1 ? 'tracker' : 'status'
+  );
 
   // Get color for an asset
   function getAssetColor(asset) {
@@ -258,7 +263,10 @@
   // Clean asset name (remove suffixes)
   function cleanAssetName(name) {
     if (!name) return '';
-    return name.replace(/\b(plant|station|project|center|centre|complex|facility)\b[\s\S]*$/i, '$1');
+    return name.replace(
+      /\b(plant|station|project|center|centre|complex|facility)\b[\s\S]*$/i,
+      '$1'
+    );
   }
 
   // Hover state
@@ -279,7 +287,8 @@
     <div class="details-wrapper">
       <p class="subtitle">Details</p>
       <p class="details">
-        {assets.length} {assetClassName} via {subsidiariesMatched.size} direct subsidiaries
+        {assets.length}
+        {assetClassName} via {subsidiariesMatched.size} direct subsidiaries
       </p>
     </div>
   </div>
@@ -311,7 +320,11 @@
 
           <!-- Top stroke -->
           <path
-            d="M 0 {group.top - params.yPadding} C 0 {group.top - params.yPadding * 0.2}, {params.yPadding * 0.2} {group.top}, {params.yPadding} {group.top} L {params.subsidX + params.assetsX - params.assetSpacing * 2} {group.top}"
+            d="M 0 {group.top - params.yPadding} C 0 {group.top -
+              params.yPadding * 0.2}, {params.yPadding *
+              0.2} {group.top}, {params.yPadding} {group.top} L {params.subsidX +
+              params.assetsX -
+              params.assetSpacing * 2} {group.top}"
             fill="none"
             stroke="#d8d8ce"
             stroke-width="3"
@@ -319,11 +332,14 @@
           />
 
           <!-- Subsidiary content -->
-          <g transform="translate({params.subsidiaryMarkHeight / 2 + params.subsidX}, {group.top + 20})">
+          <g
+            transform="translate({params.subsidiaryMarkHeight / 2 + params.subsidX}, {group.top +
+              20})"
+          >
             <!-- Subsidiary circle with ownership pie (not for direct ownership) -->
             {#if !group.isDirect}
               {@const edgeData = matchedEdges.get(group.id)}
-              {@const pieRadius = params.subsidiaryMarkHeight / 2 * 0.7}
+              {@const pieRadius = (params.subsidiaryMarkHeight / 2) * 0.7}
 
               <!-- Background circle -->
               {#if edgeData?.value !== 100}
@@ -355,19 +371,24 @@
             <!-- Subsidiary name -->
             <text
               x={params.subsidiaryMarkHeight / 2 + 5}
-              y={params.subsidiaryMarkHeight / 2 * 0.7}
+              y={(params.subsidiaryMarkHeight / 2) * 0.7}
               fill={colors.navy}
               class="subsidiary-name"
             >
               {#each wrapText(entityMap.get(group.id)?.Name || (group.isDirect ? 'Directly owned' : 'Unknown')) as line, i}
-                <tspan x={params.subsidiaryMarkHeight / 2 + 5} dy={i === 0 ? '0.35em' : '1.2em'}>{line}</tspan>
+                <tspan x={params.subsidiaryMarkHeight / 2 + 5} dy={i === 0 ? '0.35em' : '1.2em'}
+                  >{line}</tspan
+                >
               {/each}
             </text>
 
             <!-- Mini bar charts (only for groups with multiple locations) -->
             {#if group.locations.length > 1}
               <!-- Tracker bar chart -->
-              <g class="bar-chart" transform="translate({params.subsidiaryMarkHeight / 2 + 235}, -10)">
+              <g
+                class="bar-chart"
+                transform="translate({params.subsidiaryMarkHeight / 2 + 235}, -10)"
+              >
                 <text class="bar-title" dy="-0.5em">Asset types</text>
                 {#each group.summaryData.tracker as bar, i}
                   <rect
@@ -380,14 +401,18 @@
                     class="bar-segment"
                     role="img"
                     aria-label={`${bar.tracker}: ${(bar.percentage * 100).toFixed(0)}%`}
-                    onmouseenter={() => (hoverData = { type: 'bar', label: bar.tracker, pct: bar.percentage })}
+                    onmouseenter={() =>
+                      (hoverData = { type: 'bar', label: bar.tracker, pct: bar.percentage })}
                     onmouseleave={() => (hoverData = null)}
                   />
                 {/each}
               </g>
 
               <!-- Status bar chart -->
-              <g class="bar-chart" transform="translate({params.subsidiaryMarkHeight / 2 + 235}, 20)">
+              <g
+                class="bar-chart"
+                transform="translate({params.subsidiaryMarkHeight / 2 + 235}, 20)"
+              >
                 <text class="bar-title" dy="-0.5em">Asset status</text>
                 {#each group.summaryData.status as bar, i}
                   <rect
@@ -400,7 +425,8 @@
                     class="bar-segment"
                     role="img"
                     aria-label={`${bar.status}: ${(bar.percentage * 100).toFixed(0)}%`}
-                    onmouseenter={() => (hoverData = { type: 'bar', label: bar.status, pct: bar.percentage })}
+                    onmouseenter={() =>
+                      (hoverData = { type: 'bar', label: bar.status, pct: bar.percentage })}
                     onmouseleave={() => (hoverData = null)}
                   />
                 {/each}
@@ -416,7 +442,8 @@
                 class="asset-group"
                 role="img"
                 aria-label={loc.units[0]?.name || 'Asset'}
-                onmouseenter={() => (hoverData = { type: 'asset', ...loc.units[0], allUnits: loc.units })}
+                onmouseenter={() =>
+                  (hoverData = { type: 'asset', ...loc.units[0], allUnits: loc.units })}
                 onmouseleave={() => (hoverData = null)}
               >
                 {#if loc.units.length === 1}
@@ -471,11 +498,11 @@
                       {@const angle = (TAU * ui) / n}
                       {@const cx = loc.r * Math.cos(angle)}
                       {@const cy = loc.r * Math.sin(angle)}
-                      {@const unitR = params.assetMarkHeightSingle / 2 * 0.6}
+                      {@const unitR = (params.assetMarkHeightSingle / 2) * 0.6}
                       {@const unitStatus = regroupStatus(unit.status || unit.Status)}
                       <circle
-                        cx={cx}
-                        cy={cy}
+                        {cx}
+                        {cy}
                         r={unitR}
                         fill={getAssetColor(unit)}
                         class="unit-circle"
@@ -533,7 +560,8 @@
   <div class="additional-info">
     <p>
       <span>
-        {spotlightOwner?.Name || 'This owner'} has stakes in additional assets identified in the Global Energy Ownership Trackers
+        {spotlightOwner?.Name || 'This owner'} has stakes in additional assets identified in the Global
+        Energy Ownership Trackers
       </span>
     </p>
   </div>
@@ -558,15 +586,47 @@
       </div>
       <div class="status-icon-item">
         <svg width="16" height="16" viewBox="-8 -8 16 16">
-          <line x1="-4" y1="-4" x2="4" y2="4" stroke={colors.grey} stroke-width="2" stroke-linecap="round" />
-          <line x1="4" y1="-4" x2="-4" y2="4" stroke={colors.grey} stroke-width="2" stroke-linecap="round" />
+          <line
+            x1="-4"
+            y1="-4"
+            x2="4"
+            y2="4"
+            stroke={colors.grey}
+            stroke-width="2"
+            stroke-linecap="round"
+          />
+          <line
+            x1="4"
+            y1="-4"
+            x2="-4"
+            y2="4"
+            stroke={colors.grey}
+            stroke-width="2"
+            stroke-linecap="round"
+          />
         </svg>
         <span>cancelled</span>
       </div>
       <div class="status-icon-item">
         <svg width="16" height="16" viewBox="-8 -8 16 16">
-          <line x1="-4" y1="-4" x2="4" y2="4" stroke={colors.midnightPurple} stroke-width="2" stroke-linecap="round" />
-          <line x1="4" y1="-4" x2="-4" y2="4" stroke={colors.midnightPurple} stroke-width="2" stroke-linecap="round" />
+          <line
+            x1="-4"
+            y1="-4"
+            x2="4"
+            y2="4"
+            stroke={colors.midnightPurple}
+            stroke-width="2"
+            stroke-linecap="round"
+          />
+          <line
+            x1="4"
+            y1="-4"
+            x2="-4"
+            y2="4"
+            stroke={colors.midnightPurple}
+            stroke-width="2"
+            stroke-linecap="round"
+          />
         </svg>
         <span>retired</span>
       </div>
@@ -611,7 +671,7 @@
     gap: 2em;
     padding: 0.4em 1.8em;
     border-bottom: 3px solid #d8d8ce;
-    background: #016B83;
+    background: #016b83;
     color: #ffffff;
   }
 
@@ -630,7 +690,7 @@
     text-transform: uppercase;
     letter-spacing: 0.08em;
     font-weight: 500;
-    color: #9DF7E5;
+    color: #9df7e5;
     margin: 0 0 0.5em 0;
   }
 
@@ -707,7 +767,7 @@
     font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.07em;
-    fill: #004A63;
+    fill: #004a63;
   }
 
   .additional-info {
@@ -718,19 +778,19 @@
   .additional-info p {
     margin: 0;
     font-style: italic;
-    color: #004A63;
+    color: #004a63;
     font-weight: 500;
     font-size: 0.95em;
   }
 
   .additional-info span {
     padding: 0.8em;
-    border-top: 2px solid #FE4F2D;
+    border-top: 2px solid #fe4f2d;
   }
 
   .legend-container {
     padding: 0.6em 1.6em;
-    border-top: 3px solid #016B83;
+    border-top: 3px solid #016b83;
     background: #fafaf7;
   }
 
@@ -740,7 +800,7 @@
     gap: 1.5em;
     justify-content: center;
     font-size: 0.9em;
-    color: #004A63;
+    color: #004a63;
   }
 
   .legend-item {
@@ -783,7 +843,7 @@
     bottom: 100px;
     right: 20px;
     background: white;
-    border: 1px solid #004A63;
+    border: 1px solid #004a63;
     padding: 10px 14px;
     font-size: 12px;
     max-width: 250px;
@@ -793,7 +853,7 @@
   }
 
   .tooltip .ownership-pct {
-    color: #016B83;
+    color: #016b83;
     font-weight: bold;
   }
 

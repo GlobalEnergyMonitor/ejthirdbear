@@ -62,7 +62,8 @@ export async function entries() {
     );
 
     // Fallback ID column if not an ownership table
-    const idCol = unitIdCol ||
+    const idCol =
+      unitIdCol ||
       columns.find((c) => {
         const lower = c.toLowerCase();
         return (
@@ -130,7 +131,9 @@ export async function entries() {
     console.log(
       `  📋 Asset IDs to build: ${allAssetIds.slice(0, 3).join(', ')}${allAssetIds.length > 3 ? ` ... (${allAssetIds.length} total)` : ''}`
     );
-    console.log(`  🔨 Building ${allAssetIds.length} pages (down from ${totalRows} ownership rows)`);
+    console.log(
+      `  🔨 Building ${allAssetIds.length} pages (down from ${totalRows} ownership rows)`
+    );
     console.log(`  💾 Cache file: ${CACHE_FILE}`);
 
     // Return array of { id } objects for SvelteKit to prerender
@@ -156,7 +159,9 @@ function loadCacheFromDisk() {
         };
         ASSET_CACHE.assets = new Map(Object.entries(cacheData.assets));
         ASSET_CACHE.initialized = true;
-        console.log(`  ✓ Loaded cache: ${ASSET_CACHE.assets.size} unique assets from ${CACHE_FILE}`);
+        console.log(
+          `  ✓ Loaded cache: ${ASSET_CACHE.assets.size} unique assets from ${CACHE_FILE}`
+        );
       } catch (err) {
         console.error(`  ✗ Failed to load cache from ${CACHE_FILE}:`, err.message);
       }

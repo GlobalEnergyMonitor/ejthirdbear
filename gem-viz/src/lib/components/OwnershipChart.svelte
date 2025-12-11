@@ -135,7 +135,8 @@
     <div class="owner-card">{spotlightOwner?.Name || 'Unknown Owner'}</div>
     <div class="legend">
       <div class="legend-summary">
-        {assets.length} {assetClassName} via {subsidiariesMatched.size} direct subsidiaries
+        {assets.length}
+        {assetClassName} via {subsidiariesMatched.size} direct subsidiaries
       </div>
       <div class="legend-items">
         {#each colLegend as [color, info]}
@@ -212,7 +213,9 @@
           <line
             y1={groupY.height / 2}
             y2={groupY.height / 2}
-            x1={group.id == null ? -params.subsidiaryMarkHeight / 2 : params.subsidiaryMarkHeight / 2}
+            x1={group.id == null
+              ? -params.subsidiaryMarkHeight / 2
+              : params.subsidiaryMarkHeight / 2}
             x2={params.assetsX - params.subsidX - 40}
             stroke={colors.navy}
             stroke-width="1"
@@ -221,7 +224,11 @@
           <!-- Bracket for multiple assets -->
           {#if group.assets.length > 1}
             <path
-              d={bracketPath([params.assetsX - params.subsidX - 40, groupY.height / 2], groupY.height, 20)}
+              d={bracketPath(
+                [params.assetsX - params.subsidX - 40, groupY.height / 2],
+                groupY.height,
+                20
+              )}
               fill="none"
               stroke={colors.navy}
               stroke-width="1"
@@ -231,7 +238,8 @@
           <!-- Asset circles and names -->
           {#each group.assets as asset, j}
             {@const assetY =
-              (j + 0.5) * (group.assets.length === 1 ? params.subsidiaryMarkHeight : params.assetMarkHeight) +
+              (j + 0.5) *
+                (group.assets.length === 1 ? params.subsidiaryMarkHeight : params.assetMarkHeight) +
               j * params.assetSpacing}
             <g
               transform="translate({params.assetsX - params.subsidX}, {assetY})"
@@ -239,7 +247,11 @@
               onmouseenter={() => (hoverData = asset)}
               onmouseleave={() => (hoverData = null)}
             >
-              <circle r={params.assetMarkHeight / 2} fill={getAssetColor(asset)} class="asset-circle" />
+              <circle
+                r={params.assetMarkHeight / 2}
+                fill={getAssetColor(asset)}
+                class="asset-circle"
+              />
               <text y="5" x={params.assetMarkHeight} class="asset-name">
                 {includeUnitNames ? asset.name : projectNames.get(asset.id)?.name || asset.name}
               </text>
@@ -253,7 +265,8 @@
   <!-- Additional assets info -->
   {#if spotlightOwner}
     <div class="additional-assets">
-      {spotlightOwner.Name} has stakes in additional assets identified in the Global Energy Ownership Trackers
+      {spotlightOwner.Name} has stakes in additional assets identified in the Global Energy Ownership
+      Trackers
     </div>
   {/if}
 

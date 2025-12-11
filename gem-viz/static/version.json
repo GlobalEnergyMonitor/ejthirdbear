@@ -1,9 +1,9 @@
 {
-  "version": "6e2f59f",
-  "commit": "6e2f59f",
-  "message": "Fix DataTable filter row layout and enable prerender for search/export routes",
+  "version": "65c9cbb",
+  "commit": "65c9cbb",
+  "message": "Remove failing CORS step from deploy (configured in DO dashboard)",
   "author": "EJ Fox",
-  "timestamp": "2025-12-10T23:46:55.926Z",
-  "deployed": "2025-12-10T23:46:55.926Z",
-  "buildTime": "12/10/2025, 6:46:55 PM"
+  "timestamp": "2025-12-11T18:10:37.951Z",
+  "deployed": "2025-12-11T18:10:37.951Z",
+  "buildTime": "12/11/2025, 1:10:37 PM"
 }

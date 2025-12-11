@@ -357,10 +357,7 @@ export async function fetchOwnerPortfolio(ownerEntityId: string): Promise<OwnerP
     capacityMw: row.capacity_mw,
   }));
 
-  const allAssets = [
-    ...Array.from(subsidiariesMatched.values()).flat(),
-    ...directlyOwned,
-  ];
+  const allAssets = [...Array.from(subsidiariesMatched.values()).flat(), ...directlyOwned];
 
   entityResult.data?.forEach((row) => {
     entityMap.set(row.id, {
@@ -385,7 +382,8 @@ export async function fetchOwnerPortfolio(ownerEntityId: string): Promise<OwnerP
  */
 export const DATA_CONTRACT = {
   tables: {
-    assetTable: 'Primary asset facts table (cols: "GEM unit ID", "Project", "Tracker", "Status", "Capacity (MW)", "GEM location ID", "Latitude", "Longitude", "Owner GEM Entity ID")',
+    assetTable:
+      'Primary asset facts table (cols: "GEM unit ID", "Project", "Tracker", "Status", "Capacity (MW)", "GEM location ID", "Latitude", "Longitude", "Owner GEM Entity ID")',
     ownershipTable:
       'Ownership edges table (cols: "Interested Party ID", "Subject Entity ID", "% Share of Ownership", "GEM unit ID"/"Asset ID"/"ProjectID")',
   },

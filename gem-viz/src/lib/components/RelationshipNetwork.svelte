@@ -159,7 +159,10 @@
         {coLocatedAssets.length === 0 ? 'unit' : 'units'} at this location
         {#if coLocatedAssets.some((a) => a['Capacity (MW)'])}
           • Combined capacity: {formatCapacity(
-            coLocatedAssets.reduce((sum, a) => sum + (a['Capacity (MW)'] || 0), currentAsset.capacityMw || 0)
+            coLocatedAssets.reduce(
+              (sum, a) => sum + (a['Capacity (MW)'] || 0),
+              currentAsset.capacityMw || 0
+            )
           )}
         {/if}
       </p>

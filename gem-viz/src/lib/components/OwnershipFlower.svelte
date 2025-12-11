@@ -12,14 +12,8 @@
   import { page } from '$app/stores';
   import { get } from 'svelte/store';
   import * as d3 from 'd3';
-  import {
-    colorByTracker,
-    colors,
-  } from '$lib/ownership-theme';
-  import {
-    fetchAssetBasics,
-    fetchOwnerPortfolio,
-  } from '$lib/component-data/schema';
+  import { colorByTracker, colors } from '$lib/ownership-theme';
+  import { fetchAssetBasics, fetchOwnerPortfolio } from '$lib/component-data/schema';
 
   export let ownerId: string | null = null; // optional override
 
@@ -70,10 +64,7 @@
 
     const g = svg.append('g').attr('transform', `translate(${cx}, ${cy})`);
 
-    const petal = d3
-      .arc()
-      .innerRadius(8)
-      .cornerRadius(8);
+    const petal = d3.arc().innerRadius(8).cornerRadius(8);
 
     g.selectAll('path.petal')
       .data(petalsData)

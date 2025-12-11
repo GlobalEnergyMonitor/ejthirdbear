@@ -1,18 +1,17 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 // See https://kit.svelte.dev/docs/types#app
 // for information about these interfaces
 declare global {
-	namespace App {
-		// interface Error {}
-		// interface Locals {}
-		// interface PageData {}
-		// interface PageState {}
-		// interface Platform {}
-	}
+  namespace App {
+    // interface Error {}
+    // interface Locals {}
+    // interface PageData {}
+    // interface PageState {}
+    // interface Platform {}
+  }
 
-	// Build-time constants injected by Vite
-	const __BUILD_TIME__: string;
-	const __BUILD_HASH__: string;
+  // Build-time constants injected by Vite
+  const __BUILD_TIME__: string;
+  const __BUILD_HASH__: string;
 }
 
 export {};

@@ -1,5 +1,7 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
+  import { base } from '$app/paths';
+  import { goto } from '$app/navigation';
   import { Deck } from '@deck.gl/core';
   import { ScatterplotLayer, LineLayer } from '@deck.gl/layers';
   // Use d3-force-3d for better performance (even in 2D mode)
@@ -94,7 +96,7 @@
         console.debug('[NetworkGraph] DuckDB utils loaded');
       }
 
-      const parquetPath = '/gem-viz/all_trackers_ownership@1.parquet';
+      const parquetPath = `${base}/all_trackers_ownership@1.parquet`;
       console.debug('[NetworkGraph] Loading ownership parquet', { parquetPath });
       const ownershipResult = await loadParquetFromPath(parquetPath, 'ownership');
 
@@ -397,8 +399,8 @@
           new LineLayer({
             id: 'edges',
             data: lineData,
-            getSourcePosition: (d) => [d.source.x, d.source.y, config.use3D ? (d.source.z || 0) : 0],
-            getTargetPosition: (d) => [d.target.x, d.target.y, config.use3D ? (d.target.z || 0) : 0],
+            getSourcePosition: (d) => [d.source.x, d.source.y, config.use3D ? d.source.z || 0 : 0],
+            getTargetPosition: (d) => [d.target.x, d.target.y, config.use3D ? d.target.z || 0 : 0],
             getColor: (d) => {
               const shareAlpha = Math.min(255, Math.max(15, (d.share || 8) * 2.2));
               return [70, 70, 70, Math.round(shareAlpha * edgeOpacity)];
@@ -414,7 +416,7 @@
         new ScatterplotLayer({
           id: 'nodes',
           data: nodes,
-          getPosition: (d) => [d.x || 0, d.y || 0, config.use3D ? (d.z || 0) : 0],
+          getPosition: (d) => [d.x || 0, d.y || 0, config.use3D ? d.z || 0 : 0],
           getRadius: (d) => {
             const baseSize = Math.max(2, Math.log2(d.connections + 1) * 2.8);
             return baseSize * nodeScale;
@@ -432,6 +434,14 @@
           pickable: true,
           onHover: ({ object }) => {
             hoveredNode = object;
+          },
+          onClick: ({ object }) => {
+            if (object) {
+              // Assets start with G, entities with E
+              const isAsset = object.id.startsWith('G');
+              const path = isAsset ? `${base}/asset/${object.id}` : `${base}/entity/${object.id}`;
+              goto(path);
+            }
           },
           autoHighlight: true,
           highlightColor: [255, 220, 0, 255],
@@ -456,8 +466,20 @@
     const { OrthographicView, OrbitView } = await import('@deck.gl/core');
 
     const view = config.use3D
-      ? new OrbitView({ orbitAxis: 'Y' })
-      : new OrthographicView({ flipY: false });
+      ? new OrbitView({
+          orbitAxis: 'Y',
+          controller: {
+            dragMode: 'pan', // normal drag = pan
+            dragPan: true, // enable panning
+            dragRotate: true, // enable rotation (shift+drag when dragMode='pan')
+            scrollZoom: true,
+            touchZoom: true,
+            touchRotate: true, // two-finger rotate on touch devices
+            keyboard: true,
+            inertia: 150, // smooth momentum after drag
+          },
+        })
+      : new OrthographicView({ flipY: false, controller: true });
 
     const initialViewState = config.use3D
       ? { target: [0, 0, 0], rotationX: 30, rotationOrbit: -30, zoom: -1, minZoom: -3, maxZoom: 3 }
@@ -467,13 +489,6 @@
       parent: container,
       views: view,
       initialViewState,
-      controller: {
-        scrollZoom: true,
-        dragPan: true,           // Drag = pan (same in 2D and 3D)
-        dragRotate: config.use3D, // Shift+drag = rotate (3D only)
-        keyboard: true,
-        doubleClickZoom: true,
-      },
       onViewStateChange: handleViewStateChange,
       layers: [],
       getTooltip: ({ object }) => {
@@ -529,7 +544,7 @@
 
   <div class="controls">
     <div class="control-group">
-      <label>
+      <label title="Maximum ownership relationships to load. Higher = more complete but slower.">
         <span>Max Edges</span>
         <select bind:value={config.maxEdges} onchange={reloadWithConfig}>
           <option value={10000}>10K</option>
@@ -540,7 +555,9 @@
         </select>
       </label>
 
-      <label>
+      <label
+        title="How to select edges: Top Connected prioritizes major players, Random samples uniformly, Sequential takes first N."
+      >
         <span>Sample</span>
         <select bind:value={config.sampleMode} onchange={reloadWithConfig}>
           <option value="top">Top Connected</option>
@@ -549,7 +566,9 @@
         </select>
       </label>
 
-      <label>
+      <label
+        title="Only show entities with at least this many connections. Higher = less clutter, major players only."
+      >
         <span>Min Connections</span>
         <select bind:value={config.minConnections} onchange={reloadWithConfig}>
           <option value={1}>1+</option>
@@ -560,7 +579,9 @@
         </select>
       </label>
 
-      <label>
+      <label
+        title="Force simulation speed. Fast renders quickly, Precise takes longer but produces cleaner layouts."
+      >
         <span>Speed</span>
         <select bind:value={config.simulationSpeed} onchange={reloadWithConfig}>
           <option value="fast">Fast</option>
@@ -569,7 +590,7 @@
         </select>
       </label>
 
-      <label>
+      <label title="Visibility of connection lines between nodes.">
         <span>Edge Opacity</span>
         <input
           type="range"
@@ -581,12 +602,8 @@
         />
       </label>
 
-      <label class="toggle">
-        <input
-          type="checkbox"
-          bind:checked={config.use3D}
-          onchange={reloadWithConfig}
-        />
+      <label class="toggle" title="Enable 3D view with depth. Use shift+drag to rotate the view.">
+        <input type="checkbox" bind:checked={config.use3D} onchange={reloadWithConfig} />
         <span>3D Mode</span>
       </label>
     </div>
@@ -603,11 +620,15 @@
   </div>
 
   <div class="help">
-    <p>Drag to pan • Scroll to zoom{config.use3D ? ' • Shift+drag to rotate' : ''}</p>
+    <p>
+      Click node to view • Drag to pan • Scroll to zoom{config.use3D
+        ? ' • Shift+drag to rotate'
+        : ''}
+    </p>
     <p class="engine">d3-force-3d + deck.gl {config.use3D ? '(3D)' : '(2D)'}</p>
   </div>
 
-  <div bind:this={container} class="deck-container"></div>
+  <div bind:this={container} class="deck-container" class:clickable={hoveredNode}></div>
 </div>
 
 <style>
@@ -625,6 +646,10 @@
     position: absolute;
     top: 0;
     left: 0;
+  }
+
+  .deck-container.clickable {
+    cursor: pointer;
   }
 
   .loading,

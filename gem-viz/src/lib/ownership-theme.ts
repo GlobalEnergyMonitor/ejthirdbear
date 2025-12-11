@@ -270,10 +270,22 @@ function hslToRgb(h: number, s: number, l: number): { r: number; g: number; b: n
 export function regroupStatus(status: string | undefined): string {
   const s = status?.toLowerCase();
   if (['operating', 'operating pre-retirement'].includes(s || '')) return 'operating';
-  if (['proposed', 'announced', 'pre-permit', 'permitted', 'pre-construction', 'construction'].includes(s || ''))
+  if (
+    [
+      'proposed',
+      'announced',
+      'pre-permit',
+      'permitted',
+      'pre-construction',
+      'construction',
+    ].includes(s || '')
+  )
     return 'proposed';
-  if (['retired', 'mothballed', 'idle', 'mothballed pre-retirement'].includes(s || '')) return 'retired';
-  if (['cancelled', 'shelved', 'cancelled - inferred 4 y', 'shelved - inferred 2 y'].includes(s || ''))
+  if (['retired', 'mothballed', 'idle', 'mothballed pre-retirement'].includes(s || ''))
+    return 'retired';
+  if (
+    ['cancelled', 'shelved', 'cancelled - inferred 4 y', 'shelved - inferred 2 y'].includes(s || '')
+  )
     return 'cancelled';
   return 'unknown';
 }

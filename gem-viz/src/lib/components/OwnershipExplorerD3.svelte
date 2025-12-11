@@ -14,16 +14,14 @@
     colMaps,
     regroupStatus,
   } from '$lib/ownership-theme';
-  import {
-    fetchAssetBasics,
-    fetchOwnerPortfolio,
-  } from '$lib/component-data/schema';
+  import { fetchAssetBasics, fetchOwnerPortfolio } from '$lib/component-data/schema';
 
   let sectionEl;
   let loading = $state(true);
   let error = $state(null);
 
   let curCase = $state({ assetClassName: 'assets' });
+  let curData = $state(null);
 
   const colField = 'status';
   const col = colMaps.byStatus;
@@ -72,7 +70,7 @@
               name: u.name || u.id,
               tracker: u.tracker,
               status: u.status,
-              spotlightOwnershipSharePct: (portfolio.matchedEdges.get(g.id)?.value) || 0,
+              spotlightOwnershipSharePct: portfolio.matchedEdges.get(g.id)?.value || 0,
             }))
             .sort((a, b) => (a.name || '').localeCompare(b.name || '')),
         }))
@@ -129,7 +127,12 @@
       const lineHeight = 1.1;
       const y = text.attr('y');
       const dy = parseFloat(text.attr('dy')) || 0;
-      let tspan = text.text(null).append('tspan').attr('x', text.attr('x')).attr('y', y).attr('dy', dy + 'em');
+      let tspan = text
+        .text(null)
+        .append('tspan')
+        .attr('x', text.attr('x'))
+        .attr('y', y)
+        .attr('dy', dy + 'em');
       words.forEach((word) => {
         line.push(word);
         tspan.text(line.join(' '));
@@ -149,9 +152,23 @@
   }
 
   function createLinearGradient(defs) {
-    const gradient = defs.append('linearGradient').attr('id', 'gradient-fade').attr('x1', '0%').attr('y1', '0%').attr('x2', '0%').attr('y2', '100%');
-    gradient.append('stop').attr('offset', '0%').attr('stop-color', '#fdfcf9').attr('stop-opacity', 1);
-    gradient.append('stop').attr('offset', '100%').attr('stop-color', '#f9f7f2').attr('stop-opacity', 1);
+    const gradient = defs
+      .append('linearGradient')
+      .attr('id', 'gradient-fade')
+      .attr('x1', '0%')
+      .attr('y1', '0%')
+      .attr('x2', '0%')
+      .attr('y2', '100%');
+    gradient
+      .append('stop')
+      .attr('offset', '0%')
+      .attr('stop-color', '#fdfcf9')
+      .attr('stop-opacity', 1);
+    gradient
+      .append('stop')
+      .attr('offset', '100%')
+      .attr('stop-color', '#f9f7f2')
+      .attr('stop-opacity', 1);
   }
 
   function addStatusIcon(selection, unit, radius, translate = [0, 0]) {
@@ -207,19 +224,19 @@
   }
 
   function drawMiniBarChart(group, name, label, variable, color_var, x, y) {
-    const scale_width = d3.scaleLinear()
-      .domain([0, 1])
-      .range([0, 200]);
+    const scale_width = d3.scaleLinear().domain([0, 1]).range([0, 200]);
 
     const BAR_HEIGHT = 8;
     const BAR_PAD_X = 2;
 
-    let bar_group = group.filter((s) => s.summary_data?.[variable] && s.locations.length > 1)
+    let bar_group = group
+      .filter((s) => s.summary_data?.[variable] && s.locations.length > 1)
       .append('g')
       .attr('class', `bar-group-${name}`)
       .attr('transform', `translate(${x},${y})`);
 
-    bar_group.append('text')
+    bar_group
+      .append('text')
       .attr('class', 'bar-title')
       .attr('dy', '-0.5em')
       .style('font-size', '0.55em')
@@ -229,28 +246,31 @@
       .style('fill', '#797975')
       .text(label);
 
-    bar_group.selectAll('.bar')
+    bar_group
+      .selectAll('.bar')
       .data((d) => d.summary_data[variable])
       .join('rect')
-      .attr('x', (d, i) => d.x_percentage_offset = scale_width(d.x_percentage) + BAR_PAD_X * i)
+      .attr('x', (d, i) => (d.x_percentage_offset = scale_width(d.x_percentage) + BAR_PAD_X * i))
       .attr('y', 0)
       .attr('height', BAR_HEIGHT)
       .attr('width', (d) => scale_width(d.percentage))
       .attr('rx', BAR_HEIGHT * 0.25)
       .attr('ry', BAR_HEIGHT * 0.25)
       .style('fill', (d) => color_var.get(d[variable]))
-      .on('mouseover', function(_, d) {
+      .on('mouseover', function (_, d) {
         let xp = d.x_percentage_offset + scale_width(d.percentage) / 2;
         let yp = -10;
 
         const parent = d3.select(this.parentNode);
 
-        let hover = parent.append('g')
+        let hover = parent
+          .append('g')
           .attr('class', 'tooltip')
           .attr('transform', `translate(${xp},${yp})`)
           .style('pointer-events', 'none');
 
-        let rect = hover.append('rect')
+        let rect = hover
+          .append('rect')
           .attr('class', 'background-rect')
           .attr('x', 0)
           .attr('y', -13)
@@ -261,7 +281,8 @@
           .style('fill', '#004a63');
 
         let formatPercent = d3.format('.0%');
-        let labelText = hover.append('text')
+        let labelText = hover
+          .append('text')
           .attr('transform', `translate(${0},${-5})`)
           .attr('dy', '0.35em')
           .style('font-size', '0.6em')
@@ -275,9 +296,7 @@
 
         let bbox = labelText.node().getBBox().width;
         const TEXT_WIDTH = bbox + 16;
-        rect
-          .attr('x', -TEXT_WIDTH / 2)
-          .attr('width', TEXT_WIDTH);
+        rect.attr('x', -TEXT_WIDTH / 2).attr('width', TEXT_WIDTH);
       })
       .on('mouseout', () => {
         group.select('.tooltip').remove();
@@ -404,7 +423,10 @@
       .data(colLegend)
       .join('div')
       .attr('class', 'legend-item')
-      .html((d) => `<div class='legend-bubble' style="background-color:${d[0]};"></div><div>${d[1].descript}</div>`);
+      .html(
+        (d) =>
+          `<div class='legend-bubble' style="background-color:${d[0]};"></div><div>${d[1].descript}</div>`
+      );
 
     container
       .select('#additional-info')
@@ -464,7 +486,7 @@
 
     // Subsidiary circles + labels
     const PAD = 20;
-    const X_OFFSET_MAIN = (params.subsidiaryMarkHeight / 2) + params.subsidX;
+    const X_OFFSET_MAIN = params.subsidiaryMarkHeight / 2 + params.subsidX;
     const subsidiary_labels = subsidiary_group
       .selectAll('.subsidiary-item')
       .data(subsidiaryGroups)
@@ -474,7 +496,7 @@
       .attr('transform', (d) => `translate(${X_OFFSET_MAIN}, ${d.top + PAD})`);
 
     subsidiary_labels
-      .filter((d) => d.id !== 'Directly owned' && (portfolio.matchedEdges.get(d.id)?.value !== 100))
+      .filter((d) => d.id !== 'Directly owned' && portfolio.matchedEdges.get(d.id)?.value !== 100)
       .append('circle')
       .attr('class', 'background-circle')
       .attr('cx', 0)
@@ -551,7 +573,10 @@
       .data(subsidiaryGroups)
       .join('g')
       .attr('class', 'subsidiary-asset-group')
-      .attr('transform', (d) => `translate(${params.subsidiaryMarkHeight / 2 + params.subsidX}, ${d.top})`);
+      .attr(
+        'transform',
+        (d) => `translate(${params.subsidiaryMarkHeight / 2 + params.subsidX}, ${d.top})`
+      );
 
     const assets = assets_outer_group
       .selectAll('.asset')
@@ -600,7 +625,10 @@
           .style('mix-blend-mode', 'multiply');
 
         units.each((p, j) => {
-          addStatusIcon(el, p, little_r, [r * Math.cos((TAU * j) / N), r * Math.sin((TAU * j) / N)]);
+          addStatusIcon(el, p, little_r, [
+            r * Math.cos((TAU * j) / N),
+            r * Math.sin((TAU * j) / N),
+          ]);
         });
 
         const arc = d3
@@ -617,7 +645,10 @@
           .data((p) => p.units.filter((u) => u.spotlightOwnershipSharePct > 0))
           .join('path')
           .attr('class', 'unit-mark-pi')
-          .attr('transform', (p, j) => `translate(${r * Math.cos((TAU * j) / N)},${r * Math.sin((TAU * j) / N)})`)
+          .attr(
+            'transform',
+            (p, j) => `translate(${r * Math.cos((TAU * j) / N)},${r * Math.sin((TAU * j) / N)})`
+          )
           .attr('d', (p) =>
             arc({
               endAngle: 2 * Math.PI * ((p.spotlightOwnershipSharePct || 100) / 100),
@@ -642,7 +673,10 @@
       .style('fill', colors.navy)
       .text((d) => {
         let name = d.units[0].name;
-        name = name.replace(/\b(plant|station|project|center|centre|complex|facility)\b[\s\S]*$/i, '$1');
+        name = name.replace(
+          /\b(plant|station|project|center|centre|complex|facility)\b[\s\S]*$/i,
+          '$1'
+        );
         return name;
       });
   }

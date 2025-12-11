@@ -32,8 +32,4 @@ export {
 } from '$lib/ownership-theme';
 
 // Re-export data utilities
-export {
-  getAssetOwners,
-  formatForMermaid,
-  summarizeAssets,
-} from '$lib/ownership-data';
+export { getAssetOwners, formatForMermaid, summarizeAssets } from '$lib/ownership-data';

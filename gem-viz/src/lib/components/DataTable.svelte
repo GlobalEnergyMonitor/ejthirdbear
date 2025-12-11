@@ -586,7 +586,10 @@
     letter-spacing: 0.4px;
     cursor: pointer;
     font-family: inherit;
-    transition: background 0.12s, color 0.12s, transform 0.12s;
+    transition:
+      background 0.12s,
+      color 0.12s,
+      transform 0.12s;
     border-radius: 4px;
   }
 
