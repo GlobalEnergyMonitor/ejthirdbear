@@ -468,11 +468,10 @@
       views: view,
       initialViewState,
       controller: {
-        keyboard: { moveSpeed: 50 }, // Arrow keys to pan
         scrollZoom: true,
-        dragRotate: config.use3D,
-        dragPan: !config.use3D, // 2D: drag=pan, 3D: drag=rotate
-        touchRotate: config.use3D,
+        dragPan: true,           // Drag = pan (same in 2D and 3D)
+        dragRotate: config.use3D, // Shift+drag = rotate (3D only)
+        keyboard: true,
         doubleClickZoom: true,
       },
       onViewStateChange: handleViewStateChange,
@@ -604,7 +603,7 @@
   </div>
 
   <div class="help">
-    <p>{config.use3D ? 'Drag to rotate' : 'Drag to pan'} • Arrow keys to pan • Scroll to zoom</p>
+    <p>Drag to pan • Scroll to zoom{config.use3D ? ' • Shift+drag to rotate' : ''}</p>
     <p class="engine">d3-force-3d + deck.gl {config.use3D ? '(3D)' : '(2D)'}</p>
   </div>
 
