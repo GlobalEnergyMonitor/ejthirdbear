@@ -467,9 +467,14 @@
       parent: container,
       views: view,
       initialViewState,
-      // 3D: drag=rotate, shift+drag=pan, scroll=zoom (laptop-friendly)
-      // 2D: drag=pan, scroll=zoom
-      controller: true,
+      controller: {
+        keyboard: { moveSpeed: 50 }, // Arrow keys to pan
+        scrollZoom: true,
+        dragRotate: config.use3D,
+        dragPan: !config.use3D, // 2D: drag=pan, 3D: drag=rotate
+        touchRotate: config.use3D,
+        doubleClickZoom: true,
+      },
       onViewStateChange: handleViewStateChange,
       layers: [],
       getTooltip: ({ object }) => {
@@ -599,7 +604,7 @@
   </div>
 
   <div class="help">
-    <p>{config.use3D ? 'Drag to rotate • Shift+drag to pan' : 'Drag to pan'} • Scroll to zoom</p>
+    <p>{config.use3D ? 'Drag to rotate' : 'Drag to pan'} • Arrow keys to pan • Scroll to zoom</p>
     <p class="engine">d3-force-3d + deck.gl {config.use3D ? '(3D)' : '(2D)'}</p>
   </div>
 
