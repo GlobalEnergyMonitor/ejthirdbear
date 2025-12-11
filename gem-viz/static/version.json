@@ -1,9 +1,9 @@
 {
-  "version": "bf65f9e",
-  "commit": "bf65f9e",
-  "message": "Apply linter formatting across codebase",
+  "version": "6e2f59f",
+  "commit": "6e2f59f",
+  "message": "Fix DataTable filter row layout and enable prerender for search/export routes",
   "author": "EJ Fox",
-  "timestamp": "2025-12-09T23:19:23.465Z",
-  "deployed": "2025-12-09T23:19:23.465Z",
-  "buildTime": "12/9/2025, 6:19:23 PM"
+  "timestamp": "2025-12-10T23:46:55.926Z",
+  "deployed": "2025-12-10T23:46:55.926Z",
+  "buildTime": "12/10/2025, 6:46:55 PM"
 }

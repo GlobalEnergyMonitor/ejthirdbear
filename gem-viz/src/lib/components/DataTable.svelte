@@ -49,7 +49,7 @@
     }
 
     // Column filters
-    const activeFilterKeys = Object.entries(columnFilters).filter(([_, v]) => v && v.trim());
+    const activeFilterKeys = Object.entries(columnFilters).filter(([, v]) => v && v.trim());
     if (activeFilterKeys.length > 0) {
       result = result.filter((row) => {
         const matches = activeFilterKeys.map(([key, filterVal]) => {

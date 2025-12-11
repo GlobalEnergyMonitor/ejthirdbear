@@ -1,9 +1,17 @@
 <script>
   import '../app.css';
 
-  // Get version from package.json
-  const appVersion = '0.1.0';
+  /* global __BUILD_TIME__, __BUILD_HASH__ */
+  // Get version and build info
+  const appVersion = '0.1.1';
+  const buildTime = __BUILD_TIME__;
+  const buildHash = __BUILD_HASH__;
 </script>
+
+<svelte:head>
+  <meta name="build-time" content={buildTime} />
+  <meta name="build-hash" content={buildHash} />
+</svelte:head>
 
 <div class="app">
   <slot />
@@ -11,6 +19,7 @@
   <footer>
     <div class="footer-content">
       <span class="version">v{appVersion}</span>
+      <span class="build-info" title={buildTime}>build: {buildHash}</span>
     </div>
   </footer>
 </div>
@@ -41,5 +50,12 @@
 
   .version {
     font-family: Georgia, serif;
+  }
+
+  .build-info {
+    font-family: monospace;
+    font-size: 10px;
+    color: #666;
+    cursor: help;
   }
 </style>

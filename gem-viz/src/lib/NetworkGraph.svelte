@@ -603,7 +603,7 @@
   </div>
 
   <div class="help">
-    <p>Scroll to zoom • Drag to pan {config.use3D ? '• Right-drag to rotate' : ''} • Hover for details</p>
+    <p>Scroll to zoom • Drag to pan {config.use3D ? '• SHIFT+drag to rotate' : ''} • Hover for details</p>
     <p class="engine">d3-force-3d engine {config.use3D ? '(3D)' : '(2D)'}</p>
   </div>
 

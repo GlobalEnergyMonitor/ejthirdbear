@@ -2,11 +2,88 @@
   import { base } from '$app/paths';
   import AssetMap from '$lib/components/AssetMap.svelte';
   import OwnershipPie from '$lib/components/OwnershipPie.svelte';
+  import MermaidOwnership from '$lib/components/MermaidOwnership.svelte';
+  import OwnershipHierarchy from '$lib/components/OwnershipHierarchy.svelte';
+  import OwnershipExplorerD3 from '$lib/components/OwnershipExplorerD3.svelte';
+  import StatusIcon from '$lib/components/StatusIcon.svelte';
   import { colors, colorByStatus, colorByTracker } from '$lib/ownership-theme';
 
-  export let data;
+  let { data } = $props();
 
-  const { asset, tableName, columns, svgs, resolvedId, paramsId } = data;
+  // New grouped data structure: assetId, assetName, owners array, asset (first record)
+  const { assetId, assetName, owners, asset, tableName, columns, svgs } = data;
+
+  /**
+   * Parse ownership path strings into graph edges and nodes
+   * Input: "Government of Afghanistan  -> Ministry [100.0%] -> Company [10.0%] -> Asset [unknown %]"
+   * Output: { edges: [{source, target, value, depth}], nodes: [{id, Name}], nodeMap: Map }
+   */
+  function parseOwnershipPaths(ownerRecords, targetAssetId, targetAssetName) {
+    const edgeMap = new Map(); // Dedupe edges by source->target
+    const nodeMap = new Map(); // id -> {id, Name}
+
+    for (const record of ownerRecords) {
+      const pathStr = record['Ownership Path'];
+      if (!pathStr) continue;
+
+      // Split path by " -> "
+      const segments = pathStr.split(' -> ');
+      if (segments.length < 2) continue;
+
+      // Parse each segment: "Entity Name [percentage%]" or "Entity Name [unknown %]"
+      const parsedSegments = segments.map(seg => {
+        const match = seg.match(/^(.+?)\s*\[([^\]]+)\]$/);
+        if (match) {
+          const name = match[1].trim();
+          const pctStr = match[2].trim();
+          const pct = pctStr === 'unknown %' ? null : parseFloat(pctStr);
+          return { name, pct };
+        }
+        return { name: seg.trim(), pct: null };
+      });
+
+      // Create edges from each segment to the next
+      for (let i = 0; i < parsedSegments.length - 1; i++) {
+        const source = parsedSegments[i];
+        const target = parsedSegments[i + 1];
+        const depth = parsedSegments.length - 1 - i; // Depth from asset
+
+        // Generate stable IDs from names (entity IDs aren't in path strings)
+        const sourceId = source.name.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 50);
+        const targetId = target.name === targetAssetName
+          ? targetAssetId
+          : target.name.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 50);
+
+        // Add nodes
+        if (!nodeMap.has(sourceId)) {
+          nodeMap.set(sourceId, { id: sourceId, Name: source.name });
+        }
+        if (!nodeMap.has(targetId)) {
+          nodeMap.set(targetId, { id: targetId, Name: target.name });
+        }
+
+        // Add edge (use target's percentage as edge value)
+        const edgeKey = `${sourceId}->${targetId}`;
+        if (!edgeMap.has(edgeKey)) {
+          edgeMap.set(edgeKey, {
+            source: sourceId,
+            target: targetId,
+            value: target.pct,
+            depth,
+          });
+        }
+      }
+    }
+
+    return {
+      edges: Array.from(edgeMap.values()),
+      nodes: Array.from(nodeMap.values()),
+      nodeMap,
+    };
+  }
+
+  // Parse ownership data for visualization components
+  const ownershipGraph = $derived(parseOwnershipPaths(owners, assetId, assetName));
 
   // Find special columns for prominent display
   const nameCol = columns.find((c) => {
@@ -28,9 +105,9 @@
   const latCol = columns.find((c) => c.toLowerCase() === 'latitude' || c.toLowerCase() === 'lat');
   const lonCol = columns.find((c) => c.toLowerCase() === 'longitude' || c.toLowerCase() === 'lon');
   const gemLocationIdCol = columns.find((c) => c.toLowerCase() === 'gem location id');
-  const gemUnitIdCol = columns.find((c) => c.toLowerCase() === 'gem unit id');
-  const ownershipPctCol = columns.find((c) => c.toLowerCase().includes('share') || c.toLowerCase().includes('ownership'));
+  const ownershipPctCol = columns.find((c) => c.toLowerCase().includes('share'));
   const trackerCol = columns.find((c) => c.toLowerCase() === 'tracker');
+  const ownerEntityIdCol = columns.find((c) => c.toLowerCase() === 'owner gem entity id');
 
   // Get status color from theme
   const statusValue = statusCol && asset[statusCol] ? String(asset[statusCol]).toLowerCase() : null;
@@ -40,34 +117,31 @@
   const trackerValue = trackerCol && asset[trackerCol] ? asset[trackerCol] : null;
   const trackerColor = trackerValue ? (colorByTracker.get(trackerValue) || colors.orange) : colors.orange;
 
-  // Ownership percentage
-  const ownershipPct = ownershipPctCol && asset[ownershipPctCol] ? Number(asset[ownershipPctCol]) : null;
+  // Total ownership (sum of all owner shares)
+  const totalOwnership = owners.reduce((sum, o) => {
+    const share = ownershipPctCol && o[ownershipPctCol] ? Number(o[ownershipPctCol]) : 0;
+    return sum + share;
+  }, 0);
 
-  // Group remaining columns
-  const specialCols = [nameCol, statusCol, ownerCol, countryCol, latCol, lonCol, ownershipPctCol].filter(Boolean);
+  // Group remaining columns (exclude owner-specific columns from "All Properties")
+  const ownerSpecificCols = [ownerCol, ownershipPctCol, ownerEntityIdCol, 'Ownership Path', 'Immediate Project Owner', 'Immediate Project Owner GEM Entity ID'].filter(Boolean);
+  const specialCols = [nameCol, statusCol, countryCol, latCol, lonCol, ...ownerSpecificCols].filter(Boolean);
   const otherCols = columns.filter((c) => !specialCols.includes(c));
 </script>
 
 <svelte:head>
-  <title>{nameCol && asset[nameCol] ? asset[nameCol] : `ID: ${asset[columns[0]]}`} — GEM Viz</title>
+  <title>{assetName || assetId} — GEM Viz</title>
 </svelte:head>
 
 <main>
   <header>
-    <a href="{base}/asset/index.html" class="back-link">← All Assets</a>
+    <a href="{base}/asset.html" class="back-link">← All Assets</a>
     <span class="table-name">{tableName}</span>
   </header>
 
   <article class="asset-detail">
-    {#if nameCol && asset[nameCol]}
-      <h1>{asset[nameCol]}</h1>
-    {:else}
-      <h1>ID: {asset[columns[0]]}</h1>
-    {/if}
-
-    {#if resolvedId && paramsId && resolvedId !== paramsId}
-      <p class="resolved-id">Resolved to composite ID: {resolvedId}</p>
-    {/if}
+    <h1>{assetName || assetId}</h1>
+    <p class="asset-id">GEM Unit ID: {assetId}</p>
 
     <div class="meta-grid">
       {#if statusCol && asset[statusCol]}
@@ -76,6 +150,7 @@
           <span class="value status-badge" style="--status-color: {statusColor}">
             <span class="status-dot"></span>
             {asset[statusCol]}
+            <StatusIcon status={asset[statusCol]} size={12} />
           </span>
         </div>
       {/if}
@@ -90,23 +165,21 @@
         </div>
       {/if}
 
-      {#if ownerCol && asset[ownerCol]}
-        <div class="meta-item">
-          <span class="label">Owner</span>
-          <span class="value">{asset[ownerCol]}</span>
-        </div>
-      {/if}
+      <div class="meta-item">
+        <span class="label">Owners</span>
+        <span class="value">{owners.length} ownership record{owners.length !== 1 ? 's' : ''}</span>
+      </div>
 
-      {#if ownershipPct !== null}
+      {#if totalOwnership > 0}
         <div class="meta-item">
-          <span class="label">Ownership Share</span>
+          <span class="label">Total Tracked Ownership</span>
           <span class="value ownership-value">
             <OwnershipPie
-              percentage={ownershipPct}
+              percentage={Math.min(totalOwnership, 100)}
               size={24}
               fillColor={colors.navy}
             />
-            <span>{ownershipPct.toFixed(1)}%</span>
+            <span>{totalOwnership.toFixed(1)}%</span>
           </span>
         </div>
       {/if}
@@ -126,14 +199,95 @@
       {/if}
     </div>
 
+    <!-- Owners Table -->
+    <section class="owners-section">
+      <h2>Ownership ({owners.length})</h2>
+      <div class="owners-table-wrapper">
+        <table class="owners-table">
+          <thead>
+            <tr>
+              <th>Owner (Parent)</th>
+              <th>Share</th>
+              <th>Ownership Path</th>
+              <th>Country</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each owners as owner}
+              <tr>
+                <td class="owner-name">
+                  <StatusIcon status={owner['Status']} size={10} />
+                  {owner['Parent'] || owner[ownerCol] || '—'}
+                  {#if ownerEntityIdCol && owner[ownerEntityIdCol]}
+                    <span class="owner-id">{owner[ownerEntityIdCol]}</span>
+                  {/if}
+                </td>
+                <td class="owner-share">
+                  {#if ownershipPctCol && owner[ownershipPctCol]}
+                    <span class="share-value">
+                      <OwnershipPie
+                        percentage={Number(owner[ownershipPctCol])}
+                        size={18}
+                        fillColor={colors.navy}
+                      />
+                      {Number(owner[ownershipPctCol]).toFixed(1)}%
+                    </span>
+                  {:else}
+                    —
+                  {/if}
+                </td>
+                <td class="ownership-path">{owner['Ownership Path'] || '—'}</td>
+                <td>{owner['Parent Headquarters Country'] || owner['Parent Registration Country'] || '—'}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Ownership Visualization: Mermaid Flowchart -->
+    {#if ownershipGraph.edges.length > 0}
+      <section class="ownership-viz-section">
+        <h2>Ownership Structure</h2>
+        <p class="viz-subtitle">Interactive flowchart showing ownership paths to this asset</p>
+        <MermaidOwnership
+          edges={ownershipGraph.edges}
+          nodeMap={ownershipGraph.nodeMap}
+          assetId={assetId}
+          assetName={assetName}
+          zoom={0.7}
+          direction="TD"
+        />
+      </section>
+
+      <!-- Ownership Visualization: Force-directed Hierarchy -->
+      <section class="ownership-viz-section">
+        <h2>Ownership Network</h2>
+        <p class="viz-subtitle">Force-directed graph showing entity relationships</p>
+        <OwnershipHierarchy
+          assetId={assetId}
+          assetName={assetName}
+          edges={ownershipGraph.edges}
+          nodes={ownershipGraph.nodes}
+          width={800}
+          height={350}
+        />
+      </section>
+
+      <section class="ownership-explorer">
+        <h2>Owner Explorer</h2>
+        <OwnershipExplorerD3 />
+      </section>
+    {/if}
+
     <!-- Interactive location map -->
     {#if (latCol && lonCol && asset[latCol] && asset[lonCol]) || (gemLocationIdCol && asset[gemLocationIdCol])}
       <section class="map-section">
         <h2>Location</h2>
         <AssetMap
-          gemUnitId={asset[gemUnitIdCol]}
+          gemUnitId={assetId}
           gemLocationId={gemLocationIdCol && asset[gemLocationIdCol] ? asset[gemLocationIdCol] : null}
-          assetName={nameCol && asset[nameCol] ? asset[nameCol] : `ID: ${asset[columns[0]]}`}
+          assetName={assetName || assetId}
           lat={latCol && asset[latCol] ? asset[latCol] : null}
           lon={lonCol && asset[lonCol] ? asset[lonCol] : null}
         />
@@ -184,6 +338,30 @@
         </dl>
       </section>
     {/if}
+
+    <!-- Raw JSON Data Dump -->
+    <section class="json-dump">
+      <h2>Raw Data (JSON)</h2>
+      <p class="json-subtitle">Complete asset data for developers, debugging, and data nerds</p>
+      <details>
+        <summary>Show {owners.length} ownership record{owners.length !== 1 ? 's' : ''} as JSON ({JSON.stringify({ assetId, assetName, tableName, owners }).length.toLocaleString()} bytes)</summary>
+        <pre class="json-blob">{JSON.stringify({
+          meta: {
+            assetId,
+            assetName,
+            tableName,
+            totalOwners: owners.length,
+            columns
+          },
+          asset,
+          owners,
+          ownershipGraph: {
+            nodes: ownershipGraph.nodes,
+            edges: ownershipGraph.edges
+          }
+        }, null, 2)}</pre>
+      </details>
+    </section>
   </article>
 </main>
 
@@ -358,7 +536,7 @@
     border: 1px solid #ddd;
   }
 
-  .resolved-id {
+  :global(.resolved-id) {
     font-size: 11px;
     color: #555;
     margin-top: -20px;
@@ -400,6 +578,263 @@
     height: auto;
   }
 
+  :global(.ownership-section) {
+    margin: 40px 0;
+    border: 1px solid #000;
+  }
+
+  :global(.ownership-header) {
+    padding: 20px;
+    background: #fafafa;
+    border-bottom: 1px solid #ddd;
+  }
+
+  :global(.ownership-header h2) {
+    margin: 0 0 4px 0;
+    font-size: 18px;
+    font-weight: normal;
+    border: none;
+    padding: 0;
+  }
+
+  :global(.ownership-subtitle) {
+    font-size: 12px;
+    color: #666;
+  }
+
+  :global(.ownership-content) {
+    padding: 20px;
+  }
+
+  :global(.ownership-loading),
+  :global(.ownership-error) {
+    padding: 40px;
+    text-align: center;
+    color: #666;
+  }
+
+  :global(.ownership-error) {
+    color: red;
+  }
+
+  :global(.ownership-stats) {
+    display: flex;
+    gap: 30px;
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #f5f5f5;
+    font-size: 13px;
+  }
+
+  :global(.ownership-stats strong) {
+    font-size: 18px;
+    display: block;
+  }
+
+  :global(.ownership-chart-wrapper) {
+    overflow-x: auto;
+    padding: 10px 0;
+  }
+
+  .asset-id {
+    font-size: 12px;
+    color: #666;
+    font-family: monospace;
+    margin-bottom: 20px;
+  }
+
+  .owners-section {
+    margin: 40px 0;
+  }
+
+  .owners-table-wrapper {
+    overflow-x: auto;
+    border: 1px solid #ddd;
+  }
+
+  .owners-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  .owners-table th,
+  .owners-table td {
+    padding: 12px 15px;
+    text-align: left;
+    border-bottom: 1px solid #eee;
+  }
+
+  .owners-table th {
+    background: #fafafa;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #666;
+    font-weight: bold;
+    border-bottom: 1px solid #ddd;
+  }
+
+  .owners-table tbody tr:hover {
+    background: #f9f9f9;
+  }
+
+  .owner-name {
+    font-weight: 500;
+  }
+
+  .owner-id {
+    display: block;
+    font-size: 10px;
+    color: #999;
+    font-family: monospace;
+    margin-top: 2px;
+  }
+
+  .owner-share {
+    white-space: nowrap;
+  }
+
+  .share-value {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .ownership-path {
+    font-size: 12px;
+    color: #666;
+    max-width: 300px;
+  }
+
+  .ownership-viz-section {
+    margin: 40px 0;
+  }
+
+  .ownership-viz-section h2 {
+    font-size: 18px;
+    font-weight: normal;
+    margin: 0 0 10px 0;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 10px;
+  }
+
+  .viz-subtitle {
+    font-size: 12px;
+    color: #666;
+    margin: 0 0 15px 0;
+    font-style: italic;
+  }
+
+  /* Status icon styles ported from Observable */
+  :global(.status-icon) {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  :global(.status-icon-proposed) {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: #EEB100;
+  }
+
+  :global(.status-icon-cancelled),
+  :global(.status-icon-retired) {
+    width: 8px;
+    height: 8px;
+    position: relative;
+  }
+
+  :global(.status-icon-cancelled::before),
+  :global(.status-icon-cancelled::after),
+  :global(.status-icon-retired::before),
+  :global(.status-icon-retired::after) {
+    content: '';
+    position: absolute;
+    width: 8px;
+    height: 1.5px;
+    background-color: #808080;
+    top: 50%;
+    left: 0;
+    transform: translateY(-50%) rotate(45deg);
+  }
+
+  :global(.status-icon-cancelled::after),
+  :global(.status-icon-retired::after) {
+    transform: translateY(-50%) rotate(-45deg);
+  }
+
+  :global(.status-icon-retired::before),
+  :global(.status-icon-retired::after) {
+    background-color: #483C5A;
+  }
+
+  /* JSON Data Dump Styles */
+  .json-dump {
+    margin-top: 60px;
+    padding-top: 40px;
+    border-top: 2px solid #000;
+  }
+
+  .json-dump h2 {
+    font-family: monospace;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+  }
+
+  .json-subtitle {
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 15px;
+  }
+
+  .json-dump details {
+    background: #f8f8f8;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+  }
+
+  .json-dump summary {
+    padding: 12px 16px;
+    cursor: pointer;
+    font-family: monospace;
+    font-size: 12px;
+    color: #444;
+    user-select: none;
+    background: #f0f0f0;
+    border-bottom: 1px solid #ddd;
+  }
+
+  .json-dump summary:hover {
+    background: #e8e8e8;
+  }
+
+  .json-dump details[open] summary {
+    border-bottom: 1px solid #ddd;
+  }
+
+  .json-blob {
+    margin: 0;
+    padding: 20px;
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 11px;
+    line-height: 1.5;
+    overflow-x: auto;
+    background: #1e1e1e;
+    color: #d4d4d4;
+    white-space: pre;
+    max-height: 600px;
+    overflow-y: auto;
+  }
+
+  .ownership-explorer {
+    margin-top: 32px;
+  }
+
   @media (max-width: 768px) {
     .property {
       grid-template-columns: 1fr;
@@ -412,6 +847,11 @@
 
     .viz-grid {
       grid-template-columns: 1fr;
+    }
+
+    .ownership-stats {
+      flex-direction: column;
+      gap: 10px;
     }
   }
 </style>

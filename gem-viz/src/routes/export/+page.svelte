@@ -230,7 +230,7 @@
   }
 
   function handleRowClick(row) {
-    goto(`${base}/asset/${row.id}/index.html`);
+    goto(`${base}/asset/${row.id}.html`);
   }
 
   // Format data for DataTable

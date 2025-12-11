@@ -1,23 +1,32 @@
 /**
  * GEM Ownership Tools - Theme & Colors
- * Ported from Observable notebook: 088dde385b864f12
+ * Ported from Observable notebook: eab9bd6720b8c130 (Ownership Tools - Styles)
  */
 
-// Core brand colors
+// Core brand colors (from GEM brand guidelines)
 export const colors = {
+  // Primary
   navy: '#004A63',
   mint: '#9DF7E5',
+  mintDataviz: '#A5E9E4',
   orange: '#FE4F2D',
   teal: '#016B83',
   midnight: '#002430',
   warmWhite: '#F2F2EB',
   white: '#FFFFFF',
+  // Secondary
+  deepRed: '#7F142A',
+  yellow: '#FFE366',
+  mintGreen: '#95E6AF',
+  green: '#51BF7E',
+  midnightGreen: '#004F61',
+  blue: '#099ED8',
+  purple: '#A0AAE5',
+  midnightPurple: '#061F5F',
+  grey: '#BECCCF',
+  // Legacy (for compatibility)
   red: '#DC153D',
-  yellow: '#F4CA19',
-  green: '#32B24D',
-  purple: '#89549D',
   black: '#000000',
-  grey: '#808080',
 } as const;
 
 // Color manipulation utilities
@@ -42,30 +51,32 @@ export function adjustColLightness(col: string, pct: number): string {
   return rgbToHex(newRgb.r, newRgb.g, newRgb.b);
 }
 
-// Color by tracker type
+// Color by tracker type (from GEM brand guidelines)
 export const colorByTracker = new Map([
-  ['Coal Plant', setColLightness(colors.orange, 0.2)],
-  ['Coal Mine', setColLightness(colors.orange, 0.35)],
-  ['Gas Plant', colors.orange],
-  ['Oil & NGL Pipeline', setColLightness(colors.yellow, 0.4)],
-  ['Gas Pipeline', setColLightness(colors.orange, 0.75)],
-  ['Bioenergy Power', setColLightness(colors.purple, 0.4)],
-  ['Steel Plant', setColLightness(colors.purple, 0.65)],
-  ['Iron Ore Mine', colors.red],
-  ['Cement and Concrete', setColLightness(colors.yellow, 0.2)],
+  ['Coal Plant', colors.deepRed],
+  ['Coal Mine', '#CA4A50'], // Slightly lighter than deepRed
+  ['Gas Plant', colors.purple],
+  ['Gas Pipeline', '#4A57A8'], // Between purple and midnightPurple
+  ['Oil & NGL Pipeline', colors.midnightPurple],
+  ['Iron Ore Mine', '#FF6A4D'], // Slightly lighter than orange
+  ['Steel Plant', colors.midnightGreen],
+  ['Cement and Concrete', colors.grey],
+  ['Bioenergy Power', colors.green],
 ]);
 
-// Status color groupings
+// Renewable tracker colors
+export const colorByTrackerRenewable = new Map([
+  ['Nuclear', colors.mintGreen],
+  ['Hydropower', colors.blue],
+  ['Wind', colors.mintDataviz],
+  ['Geothermal', '#FF380F'],
+  ['Solar', colors.yellow],
+]);
+
+// Status color groupings (from GEM brand guidelines)
 export const statusColors = new Map([
   [
-    setColLightness(colors.orange, 0.2),
-    {
-      descript: 'operating',
-      statuses: ['operating', 'operating pre-retirement'],
-    },
-  ],
-  [
-    colors.orange,
+    colors.purple, // Prospective
     {
       descript: 'prospective',
       statuses: [
@@ -79,14 +90,21 @@ export const statusColors = new Map([
     },
   ],
   [
-    setColLightness(colors.grey, 0.4),
+    '#4A57A8', // Operating (between purple and midnightPurple)
+    {
+      descript: 'operating',
+      statuses: ['operating', 'operating pre-retirement'],
+    },
+  ],
+  [
+    colors.midnightPurple, // Retired
     {
       descript: 'retired/mothballed/idle',
       statuses: ['retired', 'mothballed', 'idle', 'mothballed pre-retirement'],
     },
   ],
   [
-    setColLightness(colors.grey, 0.7),
+    colors.grey, // Cancelled
     {
       descript: 'cancelled/shelved',
       statuses: ['cancelled', 'shelved', 'cancelled - inferred 4 y', 'shelved - inferred 2 y'],
@@ -247,3 +265,24 @@ function hslToRgb(h: number, s: number, l: number): { r: number; g: number; b: n
   }
   return { r: r * 255, g: g * 255, b: b * 255 };
 }
+
+// Regroup status into 4 categories (from Observable notebook)
+export function regroupStatus(status: string | undefined): string {
+  const s = status?.toLowerCase();
+  if (['operating', 'operating pre-retirement'].includes(s || '')) return 'operating';
+  if (['proposed', 'announced', 'pre-permit', 'permitted', 'pre-construction', 'construction'].includes(s || ''))
+    return 'proposed';
+  if (['retired', 'mothballed', 'idle', 'mothballed pre-retirement'].includes(s || '')) return 'retired';
+  if (['cancelled', 'shelved', 'cancelled - inferred 4 y', 'shelved - inferred 2 y'].includes(s || ''))
+    return 'cancelled';
+  return 'unknown';
+}
+
+// Aggregated color maps for export
+export const colMaps = {
+  byTracker: colorByTracker,
+  byStatus: colorByStatus,
+  byStatusProspective: colorByStatusProspective,
+  statusLegend: statusColors,
+  statusProspectiveLegend: statusColorsProspective,
+};

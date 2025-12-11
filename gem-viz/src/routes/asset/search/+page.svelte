@@ -41,7 +41,7 @@
 
   // Handle row click to navigate to asset page
   function handleRowClick(row) {
-    goto(`${base}/asset/${row.id}/index.html`);
+    goto(`${base}/asset/${row.id}.html`);
   }
 
   // Parse filter from URL params
@@ -256,13 +256,14 @@
 
     const whereClause = buildSpatialWhere(filter);
 
+    // Use GEM unit ID as the primary asset identifier
     const sql = `
       SELECT DISTINCT
-        o."GEM location ID" as id,
+        o."GEM unit ID" as id,
         o."Project" as name,
         o."Tracker" as tracker,
         o."Status" as status,
-        o."Owner" as owner,
+        FIRST(o."Owner") as owner,
         o."Capacity (MW)" as capacity_mw,
         l."Latitude" as lat,
         l."Longitude" as lon,
@@ -271,7 +272,9 @@
       JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
       WHERE l.Latitude IS NOT NULL
         AND l.Longitude IS NOT NULL
+        AND o."GEM unit ID" IS NOT NULL
         AND ${whereClause}
+      GROUP BY o."GEM unit ID", o."Project", o."Tracker", o."Status", o."Capacity (MW)", l."Latitude", l."Longitude", l."Country.Area"
       ORDER BY o."Capacity (MW)" DESC NULLS LAST
       LIMIT 500
     `;
@@ -316,7 +319,7 @@
       <span class="count">{results.length.toLocaleString()} assets found</span>
     {/if}
     {#if exportCount > 0}
-      <a href="{base}/export/index.html" class="export-link">Export List ({exportCount})</a>
+      <a href="{base}/export.html" class="export-link">Export List ({exportCount})</a>
     {/if}
   </header>
 
@@ -365,7 +368,7 @@
         Add All {results.length} to Export
       </button>
       {#if exportCount > 0}
-        <a href="{base}/export/index.html" class="action-btn primary">
+        <a href="{base}/export.html" class="action-btn primary">
           Go to Export ({exportCount} assets)
         </a>
       {/if}

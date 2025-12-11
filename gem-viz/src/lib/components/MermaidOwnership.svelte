@@ -58,10 +58,10 @@
 
       const targetId = e.target.replace(/[^a-zA-Z0-9]/g, '_');
 
-      // Format percentage label
-      const pctLabel = e.value ? `${e.value.toFixed(1)}%` : '';
+      // Format percentage label - only include edge label syntax if there's a value
+      const pctLabel = e.value ? `|${e.value.toFixed(1)}%|` : '';
 
-      return `  ${sourceId}["${sanitize(sourceName)}"] -->|${pctLabel}| ${targetId}["${sanitize(targetName)}"]`;
+      return `  ${sourceId}["${sanitize(sourceName)}"] -->${pctLabel} ${targetId}["${sanitize(targetName)}"]`;
     });
 
     return `graph ${direction};\n${lines.join('\n')}`;

@@ -4,6 +4,10 @@ import { defineConfig } from 'vite';
 import { ViteMinifyPlugin } from 'vite-plugin-minify';
 
 export default defineConfig({
+  define: {
+    __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+    __BUILD_HASH__: JSON.stringify(Date.now().toString(36))
+  },
   plugins: [
     sveltekit(),
     ViteMinifyPlugin({})

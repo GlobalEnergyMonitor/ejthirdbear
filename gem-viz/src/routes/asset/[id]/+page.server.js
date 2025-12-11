@@ -52,18 +52,17 @@ export async function entries() {
     `);
 
     const columns = schemaResult.data.map((c) => c.column_name);
-    const countryCol = columns.find((c) => c.toLowerCase() === 'country');
 
-    // For ownership tables, we need composite IDs since both owner and unit can have duplicates
+    // Find the GEM unit ID column (this is our primary key for assets)
+    const unitIdCol = columns.find((c) => c.toLowerCase() === 'gem unit id');
+
+    // Find owner ID column for ownership tables
     const ownerIdCol = columns.find(
       (c) => c.toLowerCase().includes('owner') && c.toLowerCase().includes('id')
     );
-    const unitIdCol = columns.find((c) => c.toLowerCase() === 'gem unit id');
-    const useCompositeId = ownerIdCol && unitIdCol;
 
-    // Fallback to single column ID if not an ownership table
-    const idCol =
-      columns.find((c) => c.toLowerCase() === 'gem unit id') ||
+    // Fallback ID column if not an ownership table
+    const idCol = unitIdCol ||
       columns.find((c) => {
         const lower = c.toLowerCase();
         return (
@@ -72,8 +71,7 @@ export async function entries() {
       }) ||
       columns[0];
 
-    // BULK FETCH: Get ALL asset data in one query (not just IDs!)
-    // Removed country filter - prerender ALL 62,366+ assets
+    // BULK FETCH: Get ALL asset data in one query
     const assetsResult = await motherduck.query(`
       SELECT *
       FROM ${fullTableName}
@@ -87,31 +85,26 @@ export async function entries() {
     // Close DB connection immediately - we have all the data we need!
     await motherduck.close();
     const fetchTime = ((Date.now() - startTime) / 1000).toFixed(2);
-    console.log(`  ✓ Fetched ${assetsResult.data.length} assets in ${fetchTime}s`);
+    console.log(`  ✓ Fetched ${assetsResult.data.length} ownership rows in ${fetchTime}s`);
     console.log(`  ✓ DB connection closed (total lifetime: ${fetchTime}s)`);
 
-    // Convert assets to Map for fast lookup
-    // For ownership tables, use composite IDs to ensure uniqueness per row
+    // GROUP BY GEM unit ID - each asset gets an array of ownership records
     const assetsMap = {};
-    for (const asset of assetsResult.data) {
-      let assetId;
-      if (useCompositeId) {
-        // Create composite ID: owner_unit (e.g., "E100000000014_G100000106283")
-        assetId = `${String(asset[ownerIdCol])}_${String(asset[unitIdCol])}`;
-      } else {
-        assetId = String(asset[idCol]);
+    for (const row of assetsResult.data) {
+      const assetId = String(row[unitIdCol] || row[idCol]);
+      if (!assetsMap[assetId]) {
+        assetsMap[assetId] = [];
       }
-      assetsMap[assetId] = asset;
+      assetsMap[assetId].push(row);
     }
 
-    // Store cache data (metadata + assets)
+    // Store cache data (metadata + grouped assets)
     const cacheData = {
       tableName: fullTableName,
       columns,
       idCol,
-      useCompositeId,
-      ownerIdCol,
       unitIdCol,
+      ownerIdCol,
       assets: assetsMap,
     };
 
@@ -126,17 +119,18 @@ export async function entries() {
     }
 
     writeFileSync(CACHE_FILE, cacheJSON);
-    console.log(
-      `  ✓ Wrote ${Object.keys(assetsMap).length} assets to disk cache (${cacheSizeMB} MB)`
-    );
 
-    // Return ALL assets for prerendering - no incremental build optimization
-    // (Incremental builds caused issues where stale build/ directories would skip all pages)
+    const uniqueAssets = Object.keys(assetsMap).length;
+    const totalRows = assetsResult.data.length;
+    console.log(`  ✓ Grouped ${totalRows} ownership rows into ${uniqueAssets} unique assets`);
+    console.log(`  ✓ Wrote cache to disk (${cacheSizeMB} MB)`);
+
+    // Return unique asset IDs for prerendering
     const allAssetIds = Object.keys(assetsMap);
     console.log(
       `  📋 Asset IDs to build: ${allAssetIds.slice(0, 3).join(', ')}${allAssetIds.length > 3 ? ` ... (${allAssetIds.length} total)` : ''}`
     );
-    console.log(`  🔨 Building ${allAssetIds.length} pages`);
+    console.log(`  🔨 Building ${allAssetIds.length} pages (down from ${totalRows} ownership rows)`);
     console.log(`  💾 Cache file: ${CACHE_FILE}`);
 
     // Return array of { id } objects for SvelteKit to prerender
@@ -157,13 +151,12 @@ function loadCacheFromDisk() {
           tableName: cacheData.tableName,
           columns: cacheData.columns,
           idCol: cacheData.idCol,
-          useCompositeId: cacheData.useCompositeId,
-          ownerIdCol: cacheData.ownerIdCol,
           unitIdCol: cacheData.unitIdCol,
+          ownerIdCol: cacheData.ownerIdCol,
         };
         ASSET_CACHE.assets = new Map(Object.entries(cacheData.assets));
         ASSET_CACHE.initialized = true;
-        console.log(`  ✓ Loaded cache: ${ASSET_CACHE.assets.size} assets from ${CACHE_FILE}`);
+        console.log(`  ✓ Loaded cache: ${ASSET_CACHE.assets.size} unique assets from ${CACHE_FILE}`);
       } catch (err) {
         console.error(`  ✗ Failed to load cache from ${CACHE_FILE}:`, err.message);
       }
@@ -180,61 +173,36 @@ export async function load({ params }) {
   // Load cache from disk if not already loaded
   loadCacheFromDisk();
 
-  // Try to serve from cache first (fast path)
+  // Try to serve from cache (fast path)
   if (ASSET_CACHE.initialized) {
-    let asset = ASSET_CACHE.assets.get(params.id);
-    let resolvedId = params.id;
+    // Assets are now arrays of ownership records grouped by GEM unit ID
+    const ownershipRecords = ASSET_CACHE.assets.get(params.id);
 
-    if (asset) {
-      const { tableName, columns } = ASSET_CACHE.metadata;
+    if (ownershipRecords && ownershipRecords.length > 0) {
+      const { tableName, columns, unitIdCol } = ASSET_CACHE.metadata;
+
+      // Extract asset info from first record (asset properties are same across all)
+      const firstRecord = ownershipRecords[0];
+
       return {
-        asset,
+        // The asset ID (GEM unit ID)
+        assetId: params.id,
+        // Asset name from Project column
+        assetName: firstRecord['Project'] || firstRecord['Unit Name'] || params.id,
+        // All ownership records for this asset
+        owners: ownershipRecords,
+        // First record for backward compatibility & basic asset info
+        asset: firstRecord,
+        // Metadata
         tableName,
         columns,
+        unitIdCol,
         svgs: { map: null, capacity: null, status: null },
-        resolvedId,
-        paramsId: params.id,
       };
-    }
-
-    // Fallback: ownership tables might be requested by only owner or unit ID.
-    const { useCompositeId, ownerIdCol, unitIdCol, tableName, columns } =
-      ASSET_CACHE.metadata || {};
-    if (useCompositeId && ownerIdCol && unitIdCol) {
-      const matches = [];
-      for (const [key, value] of ASSET_CACHE.assets.entries()) {
-        if (String(value[unitIdCol]) === params.id || String(value[ownerIdCol]) === params.id) {
-          matches.push({ key, asset: value });
-          if (matches.length >= 5) break;
-        }
-      }
-
-      if (matches.length === 1) {
-        ({ key: resolvedId, asset } = matches[0]);
-        console.warn(`⚠️  Fallback resolved ${params.id} -> ${resolvedId} for ownership table`);
-        return {
-          asset,
-          tableName,
-          columns,
-          svgs: { map: null, capacity: null, status: null },
-          resolvedId,
-          paramsId: params.id,
-        };
-      }
-
-      if (matches.length > 1) {
-        console.warn(`⚠️  Multiple matches for ${params.id}; suggest using composite ID`, {
-          requested: params.id,
-          suggestions: matches.map((m) => m.key),
-        });
-      } else {
-        console.warn(`⚠️  No ownership matches for ${params.id}; use composite owner_unit ID`);
-      }
     }
   }
 
   // Cache miss - asset not in cache
-  // This should rarely happen, but when it does, skip the asset instead of querying DB
   console.warn(`⚠️  Cache miss for ${params.id} - skipping (DB already closed after bulk fetch)`);
 
   // Throw 404 so SvelteKit handleHttpError can skip this page

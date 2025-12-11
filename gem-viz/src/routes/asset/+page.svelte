@@ -6,7 +6,6 @@
 
   const {
     assets,
-    tableName,
     idCol,
     nameCol,
     statusCol,
@@ -76,7 +75,7 @@
       id = `${row[ownerIdCol]}_${row[unitIdCol]}`;
     }
 
-    goto(`${base}/asset/${id}/index.html`);
+    goto(`${base}/asset/${id}.html`);
   }
 </script>
 

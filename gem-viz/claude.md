@@ -1,10 +1,30 @@
 # GEM Viz Development Status
 
-Last updated: 2025-11-25
+Last updated: 2025-12-10
 
-## Current Status: Production Ready ✅
+## Current Status: Rebuilding with New URL Architecture ✅
 
-Successfully building 62,366 static asset pages from MotherDuck data.
+### Major Change: GEM Unit ID URLs (Dec 10, 2025)
+
+**The Problem:** Asset URLs were using composite IDs like `/asset/E100000000834_G100000109409/` (entity + unit). Users couldn't navigate to assets using the bare GEM unit IDs they had.
+
+**The Solution:** URLs now use bare GEM unit IDs: `/asset/G100001057899/`
+
+**What Changed:**
+- `+page.server.js`: Groups ownership rows by GEM unit ID instead of composite IDs
+- `+page.svelte`: Displays all owners in a table per asset page
+- Search page: Returns GEM unit IDs, not composite IDs
+
+**Impact:**
+- Pages reduced from 62,366 → ~13,472 (one page per unique asset)
+- Average 4.6 ownership records per asset now shown as table
+- URLs match Stephen's example IDs: `G100000109409`, `G100001057899`, etc.
+
+---
+
+## Previous Status
+
+Successfully built 62,366 static asset pages from MotherDuck data (now rebuilding with new URL structure).
 
 ## Recent Accomplishments
 
@@ -59,31 +79,9 @@ Added comprehensive metrics to README:
 
 ## Deployment Path
 
-### Cloudflare Pages (Recommended - Nov 25, 2025)
+### Digital Ocean Spaces
 
-**Why not R2?** R2 is just object storage - it doesn't serve static websites. You'd need a Worker to handle routing, which defeats the purpose of pure static hosting.
-
-**Cloudflare Pages** is the right tool: pure static hosting, automatic CDN, no Workers needed.
-
-```bash
-# 1. Build the site (~20 min)
-npm run build
-
-# 2. Deploy to Cloudflare Pages
-npx wrangler pages deploy build --project-name=gem-viz
-```
-
-First deployment prompts for Cloudflare login and project creation. After that it's automatic.
-
-**Base path consideration:** Currently `svelte.config.js` has `base: '/gem-viz'`
-- Keep it → site at `gem-viz.pages.dev/gem-viz/`
-- Remove it → site at `gem-viz.pages.dev/` (cleaner)
-
-**TODO:** Add `deploy-pages` command to justfile once deployment is tested.
-
-### Digital Ocean Spaces (Legacy)
-
-Still available via `just deploy` - uses S3-compatible API:
+Deploy via `just deploy` - uses S3-compatible API:
 
 ```bash
 # Configure AWS CLI (one-time setup)
@@ -121,10 +119,7 @@ Expected upload times:
 
 ## Next Steps
 
-- [ ] **Deploy to Cloudflare Pages** - test `npx wrangler pages deploy build`
-- [ ] Decide on base path (keep `/gem-viz` or deploy to root)
-- [ ] Add `deploy-pages` command to justfile
-- [ ] Set up automated rebuilds (GitHub Actions → Pages)
+- [ ] Set up automated rebuilds (GitHub Actions)
 - [ ] Explore parquet loading for client-side filtering
 - [ ] Add more visualization types (capacity gauges, status badges)
 
@@ -146,8 +141,7 @@ npm run build:log        # Build with detailed logging
 npm run preview          # Preview production build locally
 
 # Deployment
-npx wrangler pages deploy build --project-name=gem-viz  # Cloudflare Pages
-just deploy              # Digital Ocean Spaces (legacy)
+just deploy              # Digital Ocean Spaces
 ```
 
 ## Commit History

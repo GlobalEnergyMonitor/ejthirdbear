@@ -12,7 +12,7 @@
     <h1>Ownership Network</h1>
     <nav>
       <a href="{base}/index.html">Map</a>
-      <a href="{base}/asset/index.html">Assets</a>
+      <a href="{base}/asset.html">Assets</a>
     </nav>
   </header>
 

@@ -14,7 +14,7 @@ try {
   commit = execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim();
   message = execSync('git log -1 --format=%s', { encoding: 'utf8' }).trim();
   author = execSync('git log -1 --format=%an', { encoding: 'utf8' }).trim();
-} catch (e) {
+} catch {
   console.warn('⚠️  Unable to read git info (running in CI/detached state?)');
 }
 

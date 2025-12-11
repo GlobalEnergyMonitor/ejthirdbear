@@ -1,5 +1,6 @@
 <script>
   import { base } from '$app/paths';
+  import OwnershipExplorerD3 from '$lib/components/OwnershipExplorerD3.svelte';
 
   export let data;
 
@@ -145,6 +146,11 @@
 
     <section class="metadata">
       <p class="gem-id">GEM Entity ID: <code>{entity['gem entity id']}</code></p>
+    </section>
+
+    <section class="ownership-explorer">
+      <h2>Owner Explorer</h2>
+      <OwnershipExplorerD3 />
     </section>
   </article>
 </main>
@@ -338,6 +344,10 @@
     padding: 2px 6px;
     border-radius: 2px;
     font-family: 'Monaco', 'Courier New', monospace;
+  }
+
+  .ownership-explorer {
+    margin-top: 32px;
   }
 
   @media (max-width: 768px) {

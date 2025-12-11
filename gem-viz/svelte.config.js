@@ -1,8 +1,15 @@
 import adapter from '@sveltejs/adapter-static';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
+import { readFileSync } from 'fs';
 
 // Entity pages are not prerendered at build time
 // They will return 404 errors (focus on asset pages)
+
+const packageJson = JSON.parse(readFileSync('./package.json', 'utf-8'));
+const version = packageJson.version;
+
+const isDev = process.env.NODE_ENV === 'development';
+const basePath = isDev ? '' : `/gem-viz/v${version}`;
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
@@ -26,7 +33,11 @@ const config = {
       handleUnseenRoutes: 'ignore'  // Ignore unseen routes (we're generating the list)
     },
     paths: {
-      base: '/gem-viz'
+      // Use root base path for local dev so Vite HMR works without a subpath
+      base: basePath,
+      // Use absolute paths for assets to fix nested route resolution
+      // Without this, /asset/[id]/ pages use wrong relative paths
+      relative: false
     },
     alias: {
       $lib: 'src/lib'

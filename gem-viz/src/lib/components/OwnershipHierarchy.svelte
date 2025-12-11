@@ -165,6 +165,7 @@
         <g
           transform="translate({node.x}, {node.y})"
           class="node"
+          role="group"
           onmouseenter={() => (hoveredNode = node)}
           onmouseleave={() => (hoveredNode = null)}
         >

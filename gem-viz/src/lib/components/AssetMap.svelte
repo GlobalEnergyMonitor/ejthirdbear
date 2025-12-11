@@ -1,35 +1,56 @@
 <script>
-  import { base } from '$app/paths';
+  import { page } from '$app/stores';
+  import { get } from 'svelte/store';
   import { onMount } from 'svelte';
   import maplibregl from 'maplibre-gl';
+  import 'maplibre-gl/dist/maplibre-gl.css';
 
-  export let gemUnitId = null;
-  export let gemLocationId = null;
-  export let assetName = '';
-  export let lat = null;
-  export let lon = null;
+  import {
+    fetchAssetBasics,
+    fetchCoordinatesByLocation,
+  } from '$lib/component-data/schema';
 
   let mapContainer;
   let map;
-  let loading = true;
-  let error = null;
+  let loading = $state(true);
+  let error = $state(null);
+  let assetName = $state('');
 
   onMount(async () => {
+    const params = get(page)?.params ?? {};
+    const url = typeof window !== 'undefined' ? new URL(window.location.href) : null;
+    const assetId = params.id || url?.searchParams.get('assetId') || null;
+
+    if (!assetId) {
+      error = 'Missing asset ID';
+      loading = false;
+      return;
+    }
+
     console.debug('[AssetMap] Mount', {
-      gemUnitId,
-      assetName,
+      assetId,
       location: typeof window !== 'undefined' ? window.location.href : 'ssr',
     });
 
-    const parsedLat = lat !== null ? Number(lat) : null;
-    const parsedLon = lon !== null ? Number(lon) : null;
+    const basics = await fetchAssetBasics(assetId);
+
+    if (!basics) {
+      error = `Asset ${assetId} not found`;
+      loading = false;
+      return;
+    }
+
+    assetName = basics.name || 'Asset';
+
+    const parsedLat = basics.lat !== null ? Number(basics.lat) : null;
+    const parsedLon = basics.lon !== null ? Number(basics.lon) : null;
     const hasDirectCoords =
       typeof parsedLat === 'number' &&
       !Number.isNaN(parsedLat) &&
       typeof parsedLon === 'number' &&
       !Number.isNaN(parsedLon);
 
-    if (!hasDirectCoords && !gemLocationId) {
+    if (!hasDirectCoords && !basics.locationId) {
       error = 'No coordinates or GEM location ID provided';
       loading = false;
       return;
@@ -40,57 +61,35 @@
       let finalLon = parsedLon;
 
       if (!hasDirectCoords) {
-        const pointsUrl = `${base}/points.geojson`;
-        console.debug('[AssetMap] Fetching points', pointsUrl);
+        const coords = basics.locationId
+          ? await fetchCoordinatesByLocation(basics.locationId)
+          : null;
 
-        const response = await fetch(pointsUrl);
-        if (!response.ok) {
-          const body = await response.text().catch(() => '<unavailable>');
-          throw new Error(
-            `Failed to load points (${response.status} ${response.statusText}): ${body.slice(0, 200)}`
-          );
-        }
-
-        let geojson;
-        try {
-          geojson = await response.json();
-        } catch (parseErr) {
-          console.error('[AssetMap] Failed to parse GeoJSON', parseErr);
-          throw new Error(`Invalid GeoJSON response: ${parseErr.message}`);
-        }
-
-        console.debug('[AssetMap] Loaded GeoJSON', {
-          featureCount: geojson?.features?.length ?? 0,
-          sampleProperties: geojson?.features?.[0]?.properties ?? null,
-        });
-
-        const feature = geojson.features.find((f) => {
-          const props = f.properties || {};
-          return gemLocationId
-            ? props['GEM location ID'] === gemLocationId || props.location_id === gemLocationId || props.id === gemLocationId
-            : false;
-        });
-
-        if (!feature) {
-          console.warn('[AssetMap] Feature not found', { gemUnitId, gemLocationId });
-          error = 'Location not found in GeoJSON';
+        if (!coords || coords.lat == null || coords.lon == null) {
+          console.warn('[AssetMap] Coordinates not found', {
+            assetId,
+            locationId: basics.locationId,
+          });
+          error = 'Location not found in data';
           loading = false;
           return;
         }
 
-        const coords = feature.geometry?.coordinates;
-        if (!Array.isArray(coords) || coords.length < 2) {
-          throw new Error(`Invalid coordinates for ${gemUnitId || gemLocationId}: ${JSON.stringify(coords)}`);
-        }
-
-        [finalLon, finalLat] = coords;
-        console.debug('[AssetMap] Using coordinates from GeoJSON', { lat: finalLat, lon: finalLon });
+        finalLat = Number(coords.lat);
+        finalLon = Number(coords.lon);
+        console.debug('[AssetMap] Using coordinates from MotherDuck', {
+          lat: finalLat,
+          lon: finalLon,
+        });
       }
 
       if (hasDirectCoords) {
         finalLat = parsedLat;
         finalLon = parsedLon;
-        console.debug('[AssetMap] Using coordinates from asset data', { lat: finalLat, lon: finalLon });
+        console.debug('[AssetMap] Using coordinates from asset data', {
+          lat: finalLat,
+          lon: finalLon,
+        });
       }
 
       // Initialize map
@@ -125,12 +124,11 @@
 </script>
 
 <div class="asset-map-wrapper">
+  <div bind:this={mapContainer} class="map"></div>
   {#if loading}
-    <div class="loading">Loading map...</div>
+    <div class="overlay loading">Loading map...</div>
   {:else if error}
-    <div class="error">{error}</div>
-  {:else}
-    <div bind:this={mapContainer} class="map"></div>
+    <div class="overlay error">{error}</div>
   {/if}
 </div>
 
@@ -148,17 +146,25 @@
     height: 100%;
   }
 
-  .loading,
-  .error {
+  .overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    height: 100%;
     font-size: 12px;
+    background: #fafafa;
+    z-index: 10;
+  }
+
+  .overlay.loading {
     color: #666;
   }
 
-  .error {
+  .overlay.error {
     color: #999;
   }
 

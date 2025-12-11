@@ -298,7 +298,7 @@
     <div class="filter-indicator">
       <span>Geographic filter active</span>
       <a
-        href="{base}/asset/search?{$mapFilter.type === 'polygon'
+        href="{base}/asset/search.html?{$mapFilter.type === 'polygon'
           ? `polygon=${encodeURIComponent(JSON.stringify($mapFilter.coordinates))}`
           : `bounds=${encodeURIComponent(JSON.stringify($mapFilter))}`}"
         class="view-assets-btn"

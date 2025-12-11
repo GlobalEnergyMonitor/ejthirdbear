@@ -1,9 +1,59 @@
 <script>
   import { base } from '$app/paths';
-  export let relationships;
-  export let currentAsset;
+  import { page } from '$app/stores';
+  import { get } from 'svelte/store';
+  import { onMount } from 'svelte';
+  import {
+    fetchAssetBasics,
+    fetchSameOwnerAssets,
+    fetchCoLocatedAssets,
+    fetchOwnershipChain,
+    fetchOwnerStats,
+  } from '$lib/component-data/schema';
 
-  const { sameOwnerAssets, coLocatedAssets, ownershipChain, ownerStats } = relationships;
+  let loading = $state(true);
+  let error = $state<string | null>(null);
+  let ownershipChain = $state([]);
+  let sameOwnerAssets = $state([]);
+  let coLocatedAssets = $state([]);
+  let ownerStats = $state(null);
+  let currentAsset = $state({});
+
+  onMount(async () => {
+    const params = get(page)?.params ?? {};
+    const assetId = params.id || null;
+    if (!assetId) {
+      error = 'Missing asset ID';
+      loading = false;
+      return;
+    }
+
+    const basics = await fetchAssetBasics(assetId);
+    if (!basics) {
+      error = `Asset ${assetId} not found`;
+      loading = false;
+      return;
+    }
+    currentAsset = basics;
+
+    const [chain, sameOwnerRes, coLocatedRes, stats] = await Promise.all([
+      fetchOwnershipChain(assetId),
+      basics.ownerEntityId
+        ? fetchSameOwnerAssets(basics.ownerEntityId, assetId)
+        : Promise.resolve({ success: true, data: [] }),
+      basics.locationId
+        ? fetchCoLocatedAssets(basics.locationId, assetId)
+        : Promise.resolve({ success: true, data: [] }),
+      basics.ownerEntityId ? fetchOwnerStats(basics.ownerEntityId) : Promise.resolve(null),
+    ]);
+
+    ownershipChain = chain || [];
+    sameOwnerAssets = sameOwnerRes.success ? sameOwnerRes.data || [] : [];
+    coLocatedAssets = coLocatedRes.success ? coLocatedRes.data || [] : [];
+    ownerStats = stats;
+    error = sameOwnerRes.success && coLocatedRes.success ? null : 'Failed to load relationships';
+    loading = false;
+  });
 
   // Format capacity with commas
   function formatCapacity(mw) {
@@ -22,110 +72,113 @@
   }
 </script>
 
-{#if ownershipChain && ownershipChain.length > 1}
-  <section class="ownership-network">
-    <h2>🏢 Ownership Network</h2>
+{#if loading}
+  <div class="loading">Loading relationships...</div>
+{:else if error}
+  <div class="error">{error}</div>
+{:else}
+  {#if ownershipChain && ownershipChain.length > 1}
+    <section class="ownership-network">
+      <h2>🏢 Ownership Network</h2>
 
-    <div class="ownership-flow">
-      {#each ownershipChain as node, i}
-        <div class="chain-node" class:is-asset={i === ownershipChain.length - 1}>
-          <div class="entity-name">{node.name}</div>
-          {#if node.share !== null}
-            <div class="ownership-share">{node.share}%</div>
+      <div class="ownership-flow">
+        {#each ownershipChain as node, i}
+          <div class="chain-node" class:is-asset={i === ownershipChain.length - 1}>
+            <div class="entity-name">{node.name}</div>
+            {#if node.share !== null}
+              <div class="ownership-share">{node.share}%</div>
+            {/if}
+          </div>
+
+          {#if i < ownershipChain.length - 1}
+            <div class="chain-arrow">
+              <svg width="40" height="20" viewBox="0 0 40 20">
+                <line x1="0" y1="10" x2="30" y2="10" stroke="#666" stroke-width="2" />
+                <polygon points="30,5 40,10 30,15" fill="#666" />
+              </svg>
+            </div>
           {/if}
-        </div>
+        {/each}
+      </div>
 
-        {#if i < ownershipChain.length - 1}
-          <div class="chain-arrow">
-            <svg width="40" height="20" viewBox="0 0 40 20">
-              <line x1="0" y1="10" x2="30" y2="10" stroke="#666" stroke-width="2" />
-              <polygon points="30,5 40,10 30,15" fill="#666" />
-            </svg>
-          </div>
-        {/if}
-      {/each}
-    </div>
-
-    {#if ownerStats}
-      <div class="portfolio-summary">
-        <span class="stat">
-          <strong>{ownerStats.total_assets?.toLocaleString()}</strong> total assets
-        </span>
-        {#if ownerStats.total_capacity_mw}
+      {#if ownerStats}
+        <div class="portfolio-summary">
           <span class="stat">
-            <strong>{formatCapacity(ownerStats.total_capacity_mw)}</strong> capacity
+            <strong>{ownerStats.total_assets?.toLocaleString()}</strong> total assets
           </span>
-        {/if}
-        <span class="stat">
-          <strong>{ownerStats.countries}</strong>
-          {ownerStats.countries === 1 ? 'country' : 'countries'}
-        </span>
-      </div>
-    {/if}
-  </section>
-{/if}
-
-{#if sameOwnerAssets && sameOwnerAssets.length > 0}
-  <section class="related-assets">
-    <h2>🔗 Other Assets by {currentAsset.Owner || 'Same Owner'}</h2>
-
-    <div class="asset-grid">
-      {#each sameOwnerAssets as asset}
-        <a href="{base}/asset/{asset['GEM unit ID']}/index.html" class="asset-card">
-          <div class="asset-header">
-            <div class="asset-name">{asset.Project}</div>
-            <div class="asset-status {statusClass(asset.Status)}">{asset.Status}</div>
-          </div>
-          <div class="asset-meta">
-            {#if asset['Capacity (MW)']}
-              <span class="capacity">{formatCapacity(asset['Capacity (MW)'])}</span>
-            {/if}
-            {#if asset.Tracker}
-              <span class="tracker">{asset.Tracker}</span>
-            {/if}
-          </div>
-        </a>
-      {/each}
-    </div>
-
-    {#if ownerStats && ownerStats.total_assets > sameOwnerAssets.length}
-      <div class="view-more">
-        Showing {sameOwnerAssets.length} of {ownerStats.total_assets} assets
-      </div>
-    {/if}
-  </section>
-{/if}
-
-{#if coLocatedAssets && coLocatedAssets.length > 0}
-  <section class="co-located">
-    <h2>📍 Co-Located Assets</h2>
-    <p class="location-note">
-      {coLocatedAssets.length + 1}
-      {coLocatedAssets.length === 0 ? 'unit' : 'units'} at this location
-      {#if coLocatedAssets.some((a) => a['Capacity (MW)'])}
-        • Combined capacity: {formatCapacity(
-          coLocatedAssets.reduce(
-            (sum, a) => sum + (a['Capacity (MW)'] || 0),
-            currentAsset['Capacity (MW)'] || 0
-          )
-        )}
+          {#if ownerStats.total_capacity_mw}
+            <span class="stat">
+              <strong>{formatCapacity(ownerStats.total_capacity_mw)}</strong> capacity
+            </span>
+          {/if}
+          <span class="stat">
+            <strong>{ownerStats.countries}</strong>
+            {ownerStats.countries === 1 ? 'country' : 'countries'}
+          </span>
+        </div>
       {/if}
-    </p>
+    </section>
+  {/if}
 
-    <div class="asset-list">
-      {#each coLocatedAssets as asset}
-        <a href="{base}/asset/{asset['GEM unit ID']}/index.html" class="list-item">
-          <span class="item-name">{asset.Project}</span>
-          <span class="item-meta">
-            {#if asset['Capacity (MW)']}
-              <span class="capacity">{formatCapacity(asset['Capacity (MW)'])}</span>
-            {/if}
-            <span class="status {statusClass(asset.Status)}">{asset.Status}</span>
-          </span>
-        </a>
-      {/each}
-    </div>
-  </section>
+  {#if sameOwnerAssets && sameOwnerAssets.length > 0}
+    <section class="related-assets">
+      <h2>🔗 Other Assets by {currentAsset.Owner || 'Same Owner'}</h2>
+
+      <div class="asset-grid">
+        {#each sameOwnerAssets as asset}
+          <a href="{base}/asset/{asset['GEM unit ID']}.html" class="asset-card">
+            <div class="asset-header">
+              <div class="asset-name">{asset.Project}</div>
+              <div class="asset-status {statusClass(asset.Status)}">{asset.Status}</div>
+            </div>
+            <div class="asset-meta">
+              {#if asset['Capacity (MW)']}
+                <span class="capacity">{formatCapacity(asset['Capacity (MW)'])}</span>
+              {/if}
+              {#if asset.Tracker}
+                <span class="tracker">{asset.Tracker}</span>
+              {/if}
+            </div>
+          </a>
+        {/each}
+      </div>
+
+      {#if ownerStats && ownerStats.total_assets > sameOwnerAssets.length}
+        <div class="view-more">
+          Showing {sameOwnerAssets.length} of {ownerStats.total_assets} assets
+        </div>
+      {/if}
+    </section>
+  {/if}
+
+  {#if coLocatedAssets && coLocatedAssets.length > 0}
+    <section class="co-located">
+      <h2>📍 Co-Located Assets</h2>
+      <p class="location-note">
+        {coLocatedAssets.length + 1}
+        {coLocatedAssets.length === 0 ? 'unit' : 'units'} at this location
+        {#if coLocatedAssets.some((a) => a['Capacity (MW)'])}
+          • Combined capacity: {formatCapacity(
+            coLocatedAssets.reduce((sum, a) => sum + (a['Capacity (MW)'] || 0), currentAsset.capacityMw || 0)
+          )}
+        {/if}
+      </p>
+
+      <div class="asset-list">
+        {#each coLocatedAssets as asset}
+          <a href="{base}/asset/{asset['GEM unit ID']}.html" class="list-item">
+            <span class="item-name">{asset.Project}</span>
+            <span class="item-meta">
+              {#if asset['Capacity (MW)']}
+                <span class="capacity">{formatCapacity(asset['Capacity (MW)'])}</span>
+              {/if}
+              <span class="status {statusClass(asset.Status)}">{asset.Status}</span>
+            </span>
+          </a>
+        {/each}
+      </div>
+    </section>
+  {/if}
 {/if}
 
 <style>

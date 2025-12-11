@@ -11,8 +11,8 @@
   <header>
     <h1>Global Energy Monitor</h1>
     <nav>
-      <a href="{base}/network/index.html">Ownership Network</a>
-      <a href="{base}/asset/index.html">View All Assets</a>
+      <a href="{base}/network.html">Ownership Network</a>
+      <a href="{base}/asset.html">View All Assets</a>
     </nav>
   </header>
 

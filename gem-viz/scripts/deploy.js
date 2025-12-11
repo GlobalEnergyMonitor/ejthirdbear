@@ -30,7 +30,9 @@ const BUCKET = process.env.DO_SPACES_BUCKET || 'ejthirdbear';
 const REGION = process.env.DO_SPACES_REGION || 'sfo3';
 const ENDPOINT = process.env.DO_SPACES_ENDPOINT || 'https://sfo3.digitaloceanspaces.com';
 const PROFILE = 'do-tor1';
-const DEPLOY_PATH = 'gem-viz'; // Subdirectory in bucket
+const DEPLOY_BASE = 'gem-viz'; // Base subdirectory in bucket
+// Deploy path matches svelte.config.js base path: /gem-viz/v${version}
+const DEPLOY_PATH = `${DEPLOY_BASE}/v${version}`;
 
 console.log('\n🚀 GEM Viz Deployment');
 console.log('===================\n');
@@ -73,13 +75,14 @@ try {
 
   // Upload to Digital Ocean Spaces using AWS CLI
   console.log('\n📦 Uploading to Digital Ocean Spaces...\n');
-
+  console.log(`→ Syncing to s3://${BUCKET}/${DEPLOY_PATH}/`);
   execSync(
     `aws s3 sync ${buildDir} s3://${BUCKET}/${DEPLOY_PATH}/ ` +
     `--endpoint-url ${ENDPOINT} ` +
     `--profile ${PROFILE} ` +
     `--acl public-read ` +
-    `--cache-control "public, max-age=3600"`,
+    `--cache-control "public, max-age=3600" ` +
+    `--only-show-errors`,
     { stdio: 'inherit' }
   );
 

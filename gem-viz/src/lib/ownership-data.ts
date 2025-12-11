@@ -280,4 +280,165 @@ export function summarizeAssets(assets: any[]) {
   };
 }
 
+/**
+ * Get all subsidiaries and assets owned by an entity (walks DOWN the ownership tree)
+ * This is for the "spotlight owner" chart view
+ */
+export interface SpotlightOwnerData {
+  spotlightOwner: { id: string; Name: string };
+  subsidiariesMatched: Map<string, any[]>;
+  directlyOwned: any[];
+  assets: any[];
+  entityMap: Map<string, { id: string; Name: string }>;
+  matchedEdges: Map<string, { value: number | null }>;
+  assetClassName: string;
+}
+
+export async function getSpotlightOwnerData(
+  entityId: string,
+  entityName?: string
+): Promise<SpotlightOwnerData | null> {
+  try {
+    // Load ownership parquet if not already loaded
+    await loadParquetFromPath('/gem-viz/all_trackers_ownership@1.parquet', 'ownership');
+
+    // First, find direct subsidiaries of this entity
+    const directSubsResult = await query(`
+      SELECT DISTINCT
+        "Subject Entity ID" as subsidiary_id,
+        "Subject Entity Name" as subsidiary_name,
+        "% Share of Ownership" as share
+      FROM ownership
+      WHERE "Interested Party ID" = '${entityId}'
+        AND "Subject Entity ID" IS NOT NULL
+    `);
+
+    const directSubs = directSubsResult.success ? directSubsResult.data || [] : [];
+
+    // Build entity map
+    const entityMap = new Map<string, { id: string; Name: string }>();
+    entityMap.set(entityId, { id: entityId, Name: entityName || entityId });
+
+    for (const sub of directSubs) {
+      if (sub.subsidiary_id) {
+        entityMap.set(sub.subsidiary_id, {
+          id: sub.subsidiary_id,
+          Name: sub.subsidiary_name || sub.subsidiary_id,
+        });
+      }
+    }
+
+    // Build matched edges map (ownership percentages)
+    const matchedEdges = new Map<string, { value: number | null }>();
+    for (const sub of directSubs) {
+      if (sub.subsidiary_id) {
+        matchedEdges.set(sub.subsidiary_id, { value: sub.share || null });
+      }
+    }
+
+    // Now find assets owned by each subsidiary
+    const subsidiaryIds = directSubs.map((s: any) => s.subsidiary_id).filter(Boolean);
+    const subsidiariesMatched = new Map<string, any[]>();
+    const allAssets: any[] = [];
+
+    if (subsidiaryIds.length > 0) {
+      const idList = subsidiaryIds.map((id: string) => `'${id}'`).join(', ');
+      const assetsResult = await query(`
+        SELECT
+          "GEM unit ID" as id,
+          "Unit" as name,
+          "Project" as project,
+          "Status" as Status,
+          "Tracker" as tracker,
+          "Country" as country,
+          "Owner GEM Entity ID" as owner_id,
+          "Owner" as owner_name,
+          "% Share of Ownership" as share
+        FROM ownership
+        WHERE "Owner GEM Entity ID" IN (${idList})
+          AND "GEM unit ID" IS NOT NULL
+      `);
+
+      if (assetsResult.success && assetsResult.data) {
+        // Group assets by their owner subsidiary
+        for (const asset of assetsResult.data) {
+          const ownerId = asset.owner_id;
+          if (!subsidiariesMatched.has(ownerId)) {
+            subsidiariesMatched.set(ownerId, []);
+          }
+          subsidiariesMatched.get(ownerId)!.push(asset);
+          allAssets.push(asset);
+        }
+      }
+    }
+
+    // Also check for directly owned assets
+    const directAssetsResult = await query(`
+      SELECT
+        "GEM unit ID" as id,
+        "Unit" as name,
+        "Project" as project,
+        "Status" as Status,
+        "Tracker" as tracker,
+        "Country" as country,
+        "Owner GEM Entity ID" as owner_id,
+        "Owner" as owner_name,
+        "% Share of Ownership" as share
+      FROM ownership
+      WHERE "Owner GEM Entity ID" = '${entityId}'
+        AND "GEM unit ID" IS NOT NULL
+    `);
+
+    const directlyOwned = directAssetsResult.success ? directAssetsResult.data || [] : [];
+    allAssets.push(...directlyOwned);
+
+    // Determine asset class from tracker types
+    const trackers = new Set(allAssets.map(a => a.tracker).filter(Boolean));
+    const assetClassName = trackers.size === 1
+      ? Array.from(trackers)[0]
+      : `assets (${trackers.size} types)`;
+
+    return {
+      spotlightOwner: { id: entityId, Name: entityName || entityId },
+      subsidiariesMatched,
+      directlyOwned,
+      assets: allAssets,
+      entityMap,
+      matchedEdges,
+      assetClassName,
+    };
+  } catch (err) {
+    console.error('Error fetching spotlight owner data:', err);
+    return null;
+  }
+}
+
+/**
+ * Get a list of top owners by asset count for demo purposes
+ */
+export async function getTopOwners(limit: number = 20): Promise<any[]> {
+  try {
+    await loadParquetFromPath('/gem-viz/all_trackers_ownership@1.parquet', 'ownership');
+
+    const result = await query(`
+      SELECT
+        "Owner GEM Entity ID" as id,
+        "Owner" as name,
+        COUNT(DISTINCT "GEM unit ID") as asset_count,
+        COUNT(*) as ownership_count
+      FROM ownership
+      WHERE "Owner GEM Entity ID" IS NOT NULL
+        AND "GEM unit ID" IS NOT NULL
+      GROUP BY "Owner GEM Entity ID", "Owner"
+      ORDER BY asset_count DESC
+      LIMIT ${limit}
+    `);
+
+    return result.success ? result.data || [] : [];
+  } catch (err) {
+    console.error('Error fetching top owners:', err);
+    return [];
+  }
+}
+
 export { idFields, capacityFields };
