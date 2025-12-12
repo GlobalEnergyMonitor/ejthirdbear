@@ -5,21 +5,85 @@
    *
    * Shows assets of selected asset classes for a spotlight owner,
    * with subsidiary groups, ownership percentages, and mini bar charts.
+   *
+   * Self-hydrating: fetches its own data from page params
    */
+  import { onMount } from 'svelte';
+  import { get } from 'svelte/store';
+  import { page } from '$app/stores';
+  import { fetchAssetBasics, fetchOwnerPortfolio } from '$lib/component-data/schema';
   import { colors, colorByTracker, regroupStatus } from '$lib/ownership-theme';
 
-  // Props
+  // Layout/display props only
   let {
-    spotlightOwner = null,
-    subsidiariesMatched = new Map(),
-    directlyOwned = [],
-    assets = [],
-    entityMap = new Map(),
-    matchedEdges = new Map(),
     assetClassName = 'assets',
     sortByOwnershipPct = true,
     includeUnitNames = false,
   } = $props();
+
+  // Internal state for fetched data
+  let spotlightOwner = $state(null);
+  let subsidiariesMatched = $state(new Map());
+  let directlyOwned = $state([]);
+  let assets = $state([]);
+  let entityMap = $state(new Map());
+  let matchedEdges = $state(new Map());
+  let loading = $state(true);
+  let error = $state(null);
+
+  // Fetch portfolio data
+  async function hydratePortfolio() {
+    try {
+      loading = true;
+      error = null;
+
+      const pageData = get(page);
+      const assetId = pageData.params?.id;
+      const pathname = pageData.url?.pathname || '';
+
+      let ownerId = null;
+      if (pathname.includes('/asset/')) {
+        const basics = await fetchAssetBasics(assetId);
+        if (basics?.ownerEntityId) {
+          ownerId = basics.ownerEntityId;
+        } else {
+          throw new Error('Owner entity not found for asset');
+        }
+      } else if (pathname.includes('/entity/')) {
+        ownerId = assetId;
+      }
+
+      if (!ownerId) {
+        throw new Error('No owner ID available');
+      }
+
+      const portfolio = await fetchOwnerPortfolio(ownerId);
+      if (!portfolio) {
+        throw new Error('Failed to load owner portfolio');
+      }
+
+      spotlightOwner = portfolio.spotlightOwner;
+      subsidiariesMatched = portfolio.subsidiariesMatched;
+      directlyOwned = portfolio.directlyOwned;
+      assets = portfolio.assets;
+      entityMap = portfolio.entityMap;
+      matchedEdges = portfolio.matchedEdges;
+    } catch (err) {
+      console.error('[AssetScreener] load error', err);
+      error = err?.message || String(err);
+    } finally {
+      loading = false;
+    }
+  }
+
+  onMount(() => {
+    hydratePortfolio();
+  });
+
+  /**
+   * @typedef {{ locationID: string, units: any[], y?: number, r?: number }} ProcessedLocation
+   * @typedef {{ id: string, assets: any[], isDirect: boolean, locations: ProcessedLocation[], top?: number, height?: number, bottom?: number, summaryData?: any }} ProcessedGroup
+   */
 
   // Layout parameters (from Observable notebook)
   const params = {
@@ -63,6 +127,7 @@
     }
 
     // Group assets by location within each subsidiary
+    /** @type {ProcessedGroup[]} */
     const processedGroups = groups.map((g) => {
       const locationMap = new Map();
       g.assets.forEach((asset) => {
@@ -73,6 +138,7 @@
         locationMap.get(locId).push(asset);
       });
 
+      /** @type {ProcessedLocation[]} */
       const locations = Array.from(locationMap.entries())
         .map(([locId, units]) => ({
           locationID: locId,
@@ -278,20 +344,25 @@
 </script>
 
 <div class="asset-screener">
-  <!-- Header -->
-  <div class="chart-header">
-    <div class="name-wrapper">
-      <p class="subtitle">Company</p>
-      <h3>{spotlightOwner?.Name || 'Unknown Owner'}</h3>
+  {#if loading}
+    <div class="loading-state">Loading owner portfolio...</div>
+  {:else if error}
+    <div class="error-state">{error}</div>
+  {:else}
+    <!-- Header -->
+    <div class="chart-header">
+      <div class="name-wrapper">
+        <p class="subtitle">Company</p>
+        <h3>{spotlightOwner?.Name || 'Unknown Owner'}</h3>
+      </div>
+      <div class="details-wrapper">
+        <p class="subtitle">Details</p>
+        <p class="details">
+          {assets.length}
+          {assetClassName} via {subsidiariesMatched.size} direct subsidiaries
+        </p>
+      </div>
     </div>
-    <div class="details-wrapper">
-      <p class="subtitle">Details</p>
-      <p class="details">
-        {assets.length}
-        {assetClassName} via {subsidiariesMatched.size} direct subsidiaries
-      </p>
-    </div>
-  </div>
 
   <!-- Main SVG -->
   <div class="chart-wrapper">
@@ -314,7 +385,7 @@
         />
 
         <!-- Subsidiary groups -->
-        {#each subsidiaryGroups as group, gi}
+        {#each subsidiaryGroups as group}
           <!-- Background shape -->
           <path d={subsidiaryPath(group)} fill="url(#gradient-fade)" class="subsidiary-bg" />
 
@@ -656,9 +727,25 @@
       {/if}
     </div>
   {/if}
+  {/if}
 </div>
 
 <style>
+  .loading-state,
+  .error-state {
+    padding: 60px 20px;
+    text-align: center;
+    font-size: 13px;
+  }
+
+  .loading-state {
+    color: #666;
+  }
+
+  .error-state {
+    color: #b10000;
+  }
+
   .asset-screener {
     position: relative;
     font-family: 'Plus Jakarta Sans', Georgia, serif;

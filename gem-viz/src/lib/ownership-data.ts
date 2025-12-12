@@ -35,8 +35,9 @@ const capacityFields = new Map([
 
 /**
  * Recursive CTE for traversing DOWNSTREAM from an entity to all subsidiaries
+ * Note: Kept for future use, currently only upstream traversal is implemented
  */
-function recursiveEdgesCteDownstream(entityId: string): string {
+function _recursiveEdgesCteDownstream(entityId: string): string {
   return `WITH RECURSIVE edges AS (
     SELECT
       o."Interested Party ID" AS parent,
@@ -261,7 +262,7 @@ export function summarizeAssets(assets: any[]) {
     types: new Set(v.map((d) => d.tracker)),
   });
 
-  const rollup = (arr: any[], keyFn: (d: any) => string) => {
+  const rollup = (arr: any[], keyFn: (_d: any) => string) => {
     const map = new Map<string, any[]>();
     arr.forEach((d) => {
       const key = keyFn(d);

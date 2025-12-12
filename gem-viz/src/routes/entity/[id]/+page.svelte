@@ -1,31 +1,36 @@
 <script>
   import { onMount } from 'svelte';
-  import { get } from 'svelte/store';
-  import { base } from '$app/paths';
+  import { goto } from '$app/navigation';
+  import { link, assetLink } from '$lib/links';
   import { page } from '$app/stores';
   import OwnershipExplorerD3 from '$lib/components/OwnershipExplorerD3.svelte';
-  import { fetchOwnerPortfolio, fetchOwnerStats, getTables } from '$lib/component-data/schema';
-  import motherduck from '$lib/motherduck-wasm';
+  import { fetchOwnerPortfolio, fetchOwnerStats } from '$lib/component-data/schema';
 
-  const SCHEMA_SQL = (schema, table) => `
-    SELECT column_name
-    FROM information_schema.columns
-    WHERE table_schema = '${schema}'
-      AND table_name = '${table}'
-    ORDER BY ordinal_position
-  `;
+  // Server data from +page.server.js (prerendered)
+  let { data } = $props();
 
-  let loading = $state(true);
+  // Check if this looks like an asset ID (starts with G) instead of entity ID (starts with E)
+  function isLikelyAssetId(id) {
+    return id && /^G\d+$/.test(id);
+  }
+
+  // Local state - initialized from server data if available
+  let loading = $state(!data?.entity);
   let error = $state(null);
 
-  let entityId = $state('');
-  let entityName = $state('');
-  let portfolio = $state(null);
-  let stats = $state(null);
-  let columns = $state([]);
+  let entityId = $state(data?.entityId || '');
+  let entityName = $state(data?.entityName || '');
+  let entity = $state(data?.entity || null);
+  let portfolio = $state(data?.portfolio || null);
+  let stats = $state(data?.stats || null);
 
-  const summaryAssets = $derived(() => (portfolio?.assets || []).slice(0, 20));
-  const trackerBreakdown = $derived(() => {
+  // Derived data from entity cache
+  const trackerBreakdown = $derived.by(() => {
+    if (entity?.trackers) {
+      // From server cache - trackers is an array
+      return entity.trackers.map(t => ({ tracker: t, count: 1 }));
+    }
+    // From client fetch - portfolio has assets
     const counts = new Map();
     (portfolio?.assets || []).forEach((a) => {
       const key = a.tracker || 'Unknown';
@@ -35,7 +40,8 @@
       (a, b) => b.count - a.count
     );
   });
-  const statusBreakdown = $derived(() => {
+
+  const statusBreakdown = $derived.by(() => {
     const counts = new Map();
     (portfolio?.assets || []).forEach((a) => {
       const key = a.status || 'Unknown';
@@ -46,12 +52,30 @@
     );
   });
 
+  const summaryAssets = $derived((portfolio?.assets || []).slice(0, 20));
+
+  // Client-side fetch for dev mode or when server data is missing
   onMount(async () => {
+    const paramsId = $page.params?.id;
+
+    // Redirect if this looks like an asset ID instead of entity ID
+    if (isLikelyAssetId(paramsId)) {
+      console.log(`[Entity] Redirecting ${paramsId} to asset page (G-prefix = asset ID)`);
+      goto(assetLink(paramsId), { replaceState: true });
+      return;
+    }
+
+    // If we have server data, we're done
+    if (data?.entity) {
+      loading = false;
+      return;
+    }
+
+    // Dev mode - fetch from MotherDuck client-side
     try {
       loading = true;
       error = null;
 
-      const paramsId = get(page)?.params?.id;
       if (!paramsId) throw new Error('Missing entity ID');
       entityId = paramsId;
 
@@ -63,11 +87,6 @@
       portfolio = portfolioResult;
       stats = statsResult;
       entityName = portfolio?.spotlightOwner?.Name || paramsId;
-
-      const { assetTable } = await getTables();
-      const [schemaName, rawTable] = assetTable.split('.');
-      const schemaResult = await motherduck.query(SCHEMA_SQL(schemaName, rawTable));
-      columns = schemaResult.data?.map((c) => c.column_name) ?? [];
     } catch (err) {
       console.error('Entity load error:', err);
       error = err?.message || 'Failed to load entity';
@@ -83,7 +102,7 @@
 
 <main>
   <header>
-    <a href="{base}/index.html" class="back-link">← Home</a>
+    <a href={link('index')} class="back-link">← Home</a>
     <span class="entity-type">Entity Profile</span>
   </header>
 
@@ -123,13 +142,6 @@
             <span class="value">{stats.countries}</span>
           </div>
         {/if}
-
-        {#if columns.length}
-          <div class="meta-item">
-            <span class="label">Columns scanned</span>
-            <span class="value">{columns.length}</span>
-          </div>
-        {/if}
       </div>
 
       {#if trackerBreakdown.length > 0}
@@ -167,7 +179,7 @@
             {#each summaryAssets as asset}
               <div class="asset-card">
                 <div class="asset-header">
-                  <a href="{base}/asset/{asset.id}.html" class="asset-link">
+                  <a href={assetLink(asset.id)} class="asset-link">
                     {asset.name || asset.id}
                   </a>
                   {#if asset.tracker}
@@ -193,7 +205,7 @@
 
       <section class="ownership-explorer">
         <h2>Owner Explorer</h2>
-        <OwnershipExplorerD3 />
+        <OwnershipExplorerD3 ownerEntityId={entityId} prebakedData={data?.ownerExplorerData} />
       </section>
     </article>
   {/if}

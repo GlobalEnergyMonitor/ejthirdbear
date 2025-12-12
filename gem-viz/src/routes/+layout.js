@@ -1,6 +1,6 @@
-// Flat files - generates /network.html not /network/index.html
-// Links will be /network.html which S3/Spaces serves directly
-export const trailingSlash = 'never';
+// Directory URLs - generates /network/index.html
+// DO Spaces requires explicit /index.html in URLs
+export const trailingSlash = 'always';
 
 // Prerender all pages
 export const prerender = true;

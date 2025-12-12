@@ -1,23 +1,23 @@
 <script>
   import { onMount } from 'svelte';
-  import { base } from '$app/paths';
   import { goto } from '$app/navigation';
-  import motherduck from '$lib/motherduck-wasm';
+  import { link, assetLink } from '$lib/links';
   import { getTables } from '$lib/component-data/schema';
+  import { SCHEMA_SQL } from '$lib/component-data/sql-helpers';
+  import { findCommonColumns, getAssetId } from '$lib/component-data/id-helpers';
   import DataTable from '$lib/components/DataTable.svelte';
 
-  // SQL helpers live at the top so each query is explicit
-  const SCHEMA_SQL = (schema, table) => `
-    SELECT column_name
-    FROM information_schema.columns
-    WHERE table_schema = '${schema}'
-      AND table_name = '${table}'
-    ORDER BY ordinal_position
-  `;
+  // MotherDuck WASM - dynamically imported to avoid SSR issues
+  let motherduck;
 
-  const LIST_SQL = (fullName, cols) => `
-    SELECT ${cols.map((c) => `"${c}"`).join(', ')}
+  // Query groups by asset to count ownership records and get unique assets
+  const LIST_SQL = (fullName, cols, unitIdCol) => `
+    SELECT
+      ${cols.map((c) => `FIRST("${c}") AS "${c}"`).join(', ')},
+      COUNT(*) AS owner_count
     FROM ${fullName}
+    GROUP BY "${unitIdCol}"
+    ORDER BY owner_count DESC
     LIMIT 10000
   `;
 
@@ -26,69 +26,20 @@
 
   let assets = $state([]);
   let tableName = $state('');
-  let columnsAvailable = $state([]);
+  let resolvedCols = $state({ idCol: null, unitIdCol: null, nameCol: null, statusCol: null, ownerCol: null, countryCol: null });
 
-  let idCol = $state('');
-  let nameCol = $state('');
-  let statusCol = $state('');
-  let ownerCol = $state('');
-  let countryCol = $state('');
-  let ownerIdCol = $state('');
-  let unitIdCol = $state('');
-  let useCompositeId = $state(false);
-
-  const columns = $derived(() => {
+  const columns = $derived.by(() => {
+    const { idCol, nameCol, statusCol, ownerCol, countryCol } = resolvedCols;
     if (!idCol) return [];
+
     const cols = [];
-
-    if (nameCol) {
-      cols.push({
-        key: nameCol,
-        label: 'Name',
-        sortable: true,
-        filterable: true,
-        width: '250px',
-      });
-    }
-
-    cols.push({
-      key: idCol,
-      label: 'ID',
-      sortable: true,
-      filterable: true,
-      width: '120px',
-    });
-
-    if (statusCol) {
-      cols.push({
-        key: statusCol,
-        label: 'Status',
-        sortable: true,
-        filterable: true,
-        width: '120px',
-      });
-    }
-
-    if (ownerCol) {
-      cols.push({
-        key: ownerCol,
-        label: 'Owner',
-        sortable: true,
-        filterable: true,
-        width: '200px',
-      });
-    }
-
-    if (countryCol) {
-      cols.push({
-        key: countryCol,
-        label: 'Country',
-        sortable: true,
-        filterable: true,
-        width: '150px',
-      });
-    }
-
+    if (nameCol) cols.push({ key: nameCol, label: 'Name', sortable: true, filterable: true, width: '250px' });
+    cols.push({ key: idCol, label: 'ID', sortable: true, filterable: true, width: '120px' });
+    // Owner count column - sorted by default (query orders by this)
+    cols.push({ key: 'owner_count', label: 'Owners', sortable: true, type: 'number', width: '80px' });
+    if (statusCol) cols.push({ key: statusCol, label: 'Status', sortable: true, filterable: true, width: '120px' });
+    if (ownerCol) cols.push({ key: ownerCol, label: 'Owner', sortable: true, filterable: true, width: '200px' });
+    if (countryCol) cols.push({ key: countryCol, label: 'Country', sortable: true, filterable: true, width: '150px' });
     return cols;
   });
 
@@ -97,65 +48,32 @@
       loading = true;
       error = null;
 
+      const md = await import('$lib/motherduck-wasm');
+      motherduck = md.default;
+
       const { assetTable } = await getTables();
       tableName = assetTable;
       const [schemaName, rawTable] = assetTable.split('.');
 
       const schemaResult = await motherduck.query(SCHEMA_SQL(schemaName, rawTable));
-      columnsAvailable = schemaResult.data?.map((c) => c.column_name) ?? [];
+      const availableCols = schemaResult.data?.map((c) => c.column_name) ?? [];
 
-      countryCol = columnsAvailable.find(
-        (c) => c.toLowerCase() === 'country' || c.toLowerCase() === 'country/area'
-      );
-      ownerCol = columnsAvailable.find((c) => c.toLowerCase() === 'owner');
-      ownerIdCol = columnsAvailable.find((c) => {
-        const lower = c.toLowerCase();
-        return lower.includes('owner') && lower.includes('id');
-      });
-      unitIdCol = columnsAvailable.find((c) => c.toLowerCase() === 'gem unit id');
-      useCompositeId = Boolean(ownerIdCol && unitIdCol);
+      // Use centralized column finder
+      resolvedCols = findCommonColumns(availableCols);
+      const { idCol, unitIdCol, nameCol, statusCol, ownerCol, countryCol } = resolvedCols;
 
-      idCol =
-        unitIdCol ||
-        columnsAvailable.find((c) => {
-          const lower = c.toLowerCase();
-          return (
-            lower === 'id' ||
-            lower === 'wiki page' ||
-            lower === 'project id' ||
-            lower.includes('_id')
-          );
-        }) ||
-        columnsAvailable[0] ||
-        '';
+      // Build SELECT list
+      const columnsToSelect = new Set([idCol]);
+      if (nameCol) columnsToSelect.add(nameCol);
+      if (statusCol) columnsToSelect.add(statusCol);
+      if (ownerCol) columnsToSelect.add(ownerCol);
+      if (countryCol) columnsToSelect.add(countryCol);
+      if (unitIdCol) columnsToSelect.add(unitIdCol);
 
-      nameCol = columnsAvailable.find((c) => {
-        const lower = c.toLowerCase();
-        return (
-          lower === 'mine' ||
-          lower === 'plant' ||
-          lower === 'project' ||
-          lower === 'facility' ||
-          lower === 'mine name' ||
-          lower === 'plant name' ||
-          lower === 'project name'
-        );
-      });
-
-      statusCol = columnsAvailable.find((c) => c.toLowerCase() === 'status');
-
-      const columnsToSelect = [idCol];
-      if (nameCol) columnsToSelect.push(nameCol);
-      if (statusCol) columnsToSelect.push(statusCol);
-      if (ownerCol) columnsToSelect.push(ownerCol);
-      if (countryCol) columnsToSelect.push(countryCol);
-      if (ownerIdCol) columnsToSelect.push(ownerIdCol);
-      if (unitIdCol) columnsToSelect.push(unitIdCol);
-
-      const listResult = await motherduck.query(LIST_SQL(tableName, columnsToSelect));
-      if (!listResult.success) {
-        throw new Error(listResult.error || 'Failed to load assets');
-      }
+      // Use unitIdCol for grouping, or fall back to idCol
+      const groupByCol = unitIdCol || idCol;
+      const listResult = await motherduck.query(LIST_SQL(tableName, [...columnsToSelect].filter(Boolean), groupByCol));
+      if (!listResult.success) throw new Error(listResult.error || 'Failed to load assets');
 
       assets = listResult.data ?? [];
     } catch (err) {
@@ -167,16 +85,9 @@
   });
 
   function handleRowClick(row) {
-    if (!idCol) return;
-
-    let id = row[idCol];
-
-    // Ownership tables need composite IDs to match prerendered pages
-    if (useCompositeId && ownerIdCol && unitIdCol && row[ownerIdCol] && row[unitIdCol]) {
-      id = `${row[ownerIdCol]}_${row[unitIdCol]}`;
-    }
-
-    goto(`${base}/asset/${id}.html`);
+    const id = getAssetId(row, resolvedCols);
+    if (!id) return;
+    goto(assetLink(id));
   }
 </script>
 
@@ -186,7 +97,7 @@
 
 <main>
   <header>
-    <a href="{base}/index.html" class="back-link">← Back to Overview</a>
+    <a href={link('index')} class="back-link">← Back to Overview</a>
     <span class="title">All Assets</span>
     <span class="count">
       {#if loading}

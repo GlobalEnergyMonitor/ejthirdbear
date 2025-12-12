@@ -1,5 +1,5 @@
 <script>
-  import { base } from '$app/paths';
+  import { link } from '$lib/links';
   import NetworkGraph from '$lib/NetworkGraph.svelte';
 </script>
 
@@ -11,8 +11,8 @@
   <header>
     <h1>Ownership Network</h1>
     <nav>
-      <a href="{base}/index.html">Map</a>
-      <a href="{base}/asset.html">Assets</a>
+      <a href={link('index')}>Map</a>
+      <a href={link('asset')}>Assets</a>
     </nav>
   </header>
 

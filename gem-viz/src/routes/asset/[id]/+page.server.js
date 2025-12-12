@@ -2,7 +2,8 @@ import { error } from '@sveltejs/kit';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 
-export const prerender = true;
+// Only prerender in production builds - dev mode uses client-side fetching
+export const prerender = process.env.NODE_ENV !== 'development';
 
 // Disk cache path (persists across worker processes)
 // Use .svelte-kit for build-time cache (not cleaned up like build/)
@@ -207,9 +208,25 @@ export async function load({ params }) {
     }
   }
 
-  // Cache miss - asset not in cache
-  console.warn(`⚠️  Cache miss for ${params.id} - skipping (DB already closed after bulk fetch)`);
+  // Cache miss - in dev mode, return empty data and let client-side hydration handle it
+  // In build mode, this means the asset doesn't exist
+  const isDev = process.env.NODE_ENV === 'development' || !ASSET_CACHE.initialized;
 
-  // Throw 404 so SvelteKit handleHttpError can skip this page
+  if (isDev) {
+    console.log(`  ℹ️  Dev mode: letting client-side fetch handle ${params.id}`);
+    return {
+      assetId: params.id,
+      assetName: params.id,
+      owners: [],
+      asset: {},
+      tableName: '',
+      columns: [],
+      unitIdCol: '',
+      svgs: { map: null, capacity: null, status: null },
+    };
+  }
+
+  // In production build, cache miss means asset doesn't exist
+  console.warn(`⚠️  Cache miss for ${params.id} - skipping (DB already closed after bulk fetch)`);
   throw error(404, `Asset ${params.id} not found in cache`);
 }

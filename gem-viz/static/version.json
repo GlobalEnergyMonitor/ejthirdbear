@@ -1,9 +1,10 @@
 {
-  "version": "65c9cbb",
-  "commit": "65c9cbb",
-  "message": "Remove failing CORS step from deploy (configured in DO dashboard)",
+  "version": "c27a01d",
+  "commit": "c27a01d",
+  "message": "Add E100001000348 to homepage and spot-check",
   "author": "EJ Fox",
-  "timestamp": "2025-12-11T18:10:37.951Z",
-  "deployed": "2025-12-11T18:10:37.951Z",
-  "buildTime": "12/11/2025, 1:10:37 PM"
+  "timestamp": "2025-12-12T20:59:14.218Z",
+  "deployed": "2025-12-12T20:59:14.218Z",
+  "buildTime": "12/12/2025, 3:59:14 PM",
+  "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.1.11"
 }

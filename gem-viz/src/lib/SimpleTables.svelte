@@ -1,6 +1,6 @@
 <script>
   import motherduck from '$lib/motherduck-wasm';
-  import { mapFilter } from '$lib/mapFilter';
+  import { mapFilter, isPolygonFilter, isBoundsFilter } from '$lib/mapFilter';
 
   export let tableName = 'data';
 
@@ -14,7 +14,7 @@
   function buildGeoFilter() {
     if (!$mapFilter) return '';
 
-    if ($mapFilter.type === 'polygon') {
+    if (isPolygonFilter($mapFilter)) {
       // For polygon filters, get bounding box for initial SQL filter
       const { coordinates, latCol, lonCol } = $mapFilter;
       const lons = coordinates.map((c) => c[0]);
@@ -26,11 +26,12 @@
       const north = Math.max(...lats);
 
       return `AND "${latCol}" BETWEEN ${south} AND ${north} AND "${lonCol}" BETWEEN ${west} AND ${east}`;
-    } else {
+    } else if (isBoundsFilter($mapFilter)) {
       // Rectangle bounds
       const { north, south, east, west, latCol, lonCol } = $mapFilter;
       return `AND "${latCol}" BETWEEN ${south} AND ${north} AND "${lonCol}" BETWEEN ${west} AND ${east}`;
     }
+    return '';
   }
 
   async function generateTables() {

@@ -46,7 +46,7 @@
   }
 
   // Calculate path based on type
-  let pathD = $derived(() => {
+  let pathD = $derived.by(() => {
     const dx = endX - startX;
     const dy = endY - startY;
 
@@ -63,7 +63,7 @@
 </script>
 
 <path
-  d={pathD()}
+  d={pathD}
   fill="none"
   stroke={strokeColor}
   stroke-width={strokeWidth}

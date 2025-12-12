@@ -2,10 +2,12 @@
   import '../app.css';
 
   /* global __BUILD_TIME__, __BUILD_HASH__ */
-  // Get version and build info
-  const appVersion = '0.1.1';
+  // Build info injected at build time
   const buildTime = __BUILD_TIME__;
   const buildHash = __BUILD_HASH__;
+
+  // Version - pulled from package.json at build time
+  const appVersion = __APP_VERSION__;
 </script>
 
 <svelte:head>

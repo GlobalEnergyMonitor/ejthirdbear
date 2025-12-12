@@ -100,7 +100,7 @@ export function estimateSize(tiles: TileInfo[]): { mb: number; rows: number; ass
  */
 export async function loadTiles(
   tiles: TileInfo[],
-  onProgress?: (loaded: number, total: number, current: string) => void
+  onProgress?: (_loaded: number, _total: number, _current: string) => void
 ): Promise<void> {
   await initDuckDB();
 
@@ -139,7 +139,7 @@ export async function loadTiles(
  * Query across all loaded tiles
  */
 export async function queryLoadedTiles<T>(
-  sqlTemplate: (tableNames: string[]) => string
+  sqlTemplate: (_tableNames: string[]) => string
 ): Promise<T[]> {
   if (loadedTiles.size === 0) {
     return [];
@@ -162,8 +162,8 @@ export async function queryLoadedTiles<T>(
  */
 export async function queryBounds<T>(
   bounds: MapBounds,
-  buildQuery: (tableNames: string[]) => string,
-  onProgress?: (loaded: number, total: number, current: string) => void
+  buildQuery: (_tableNames: string[]) => string,
+  onProgress?: (_loaded: number, _total: number, _current: string) => void
 ): Promise<{ data: T[]; tilesLoaded: number; estimatedSize: ReturnType<typeof estimateSize> }> {
   const m = await loadManifest();
   const tiles = findTilesForBounds(bounds, m);

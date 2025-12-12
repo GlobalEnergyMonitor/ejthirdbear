@@ -1,8 +1,46 @@
 # GEM Viz Development Status
 
-Last updated: 2025-12-10
+Last updated: 2025-12-12
 
-## Current Status: Rebuilding with New URL Architecture ✅
+## Current Status: Production Ready ✅
+
+### Latest Deploy: v0.1.11 (Dec 12, 2025)
+
+**Live URL:** https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.1.11/index.html
+
+### Changes This Session
+
+**1. DO Spaces URL Fix**
+- Changed `trailingSlash` to `'always'` → generates `/entity/E123/index.html`
+- Updated `links.ts` to generate explicit `/index.html` URLs in production
+- All internal links now work on static S3/Spaces hosting
+
+**2. Owner Explorer Pre-baking**
+- Removed dependency on MotherDuck WASM at runtime (requires COOP/COEP headers)
+- Pre-baked all portfolio data at build time in `+page.server.js`
+- Entity cache now includes full subsidiary/asset groupings (26.59 MB)
+- Component uses pre-baked data in production, falls back to WASM in dev
+
+**3. Map Color Coding by Type**
+- Added tracker-based coloring to SimpleMap
+- Coal Plant → Black, Coal Mine → Dark Gray, Gas Plant → Orange
+- Steel Plant → Purple, Iron Mine → Red, Bioenergy → Green
+- Added legend overlay in top-left corner
+
+**4. Cleanup**
+- Removed GitHub Pages workflow (`.github/workflows/deploy.yml`)
+- Removed AWS S3 workflow (`.github/workflows/deploy-s3.yml`)
+- Removed Cloudflare R2 script (`scripts/deploy-r2.sh`)
+- Removed VPS deploy scripts and SSR config
+
+### Recent Changes (Dec 12, 2025)
+- Removed ~400 lines of dead hydration code from ownership visualization components
+- Simplified `MermaidOwnership.svelte` and `OwnershipHierarchy.svelte` to props-only pattern
+- Added smart redirects: `/entity/G...` → `/asset/G...` and `/asset/E...` → `/entity/E...`
+- Fixed homepage links (was using `entityLink()` for asset IDs)
+- Added `E100001000348` (BlackRock Inc) to homepage featured entities and spot-check
+
+## Previous Status: URL Architecture ✅
 
 ### Major Change: GEM Unit ID URLs (Dec 10, 2025)
 

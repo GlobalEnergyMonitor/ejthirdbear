@@ -1,19 +1,83 @@
 <script>
+  import { onMount } from 'svelte';
+  import { get } from 'svelte/store';
+  import { page } from '$app/stores';
+  import { fetchAssetBasics, fetchOwnerPortfolio } from '$lib/component-data/schema';
   import { colors, colorByStatus } from '$lib/ownership-theme';
 
-  // Props
+  // Layout/display props only
   let {
-    spotlightOwner = null,
-    subsidiariesMatched = new Map(),
-    directlyOwned = [],
-    assets = [],
-    entityMap = new Map(),
-    matchedEdges = new Map(),
     assetClassName = 'assets',
     colField = 'Status',
     includeUnitNames = false,
-    projectNames = new Map(),
   } = $props();
+
+  // Internal state for fetched data
+  let spotlightOwner = $state(null);
+  let subsidiariesMatched = $state(new Map());
+  let directlyOwned = $state([]);
+  let assets = $state([]);
+  let entityMap = $state(new Map());
+  let matchedEdges = $state(new Map());
+  let projectNames = $state(new Map());
+  let loading = $state(true);
+  let error = $state(null);
+
+  // Fetch portfolio data
+  async function hydratePortfolio() {
+    try {
+      loading = true;
+      error = null;
+
+      const pageData = get(page);
+      const assetId = pageData.params?.id;
+      const pathname = pageData.url?.pathname || '';
+
+      let ownerId = null;
+      if (pathname.includes('/asset/')) {
+        const basics = await fetchAssetBasics(assetId);
+        if (basics?.ownerEntityId) {
+          ownerId = basics.ownerEntityId;
+        } else {
+          throw new Error('Owner entity not found for asset');
+        }
+      } else if (pathname.includes('/entity/')) {
+        ownerId = assetId;
+      }
+
+      if (!ownerId) {
+        throw new Error('No owner ID available');
+      }
+
+      const portfolio = await fetchOwnerPortfolio(ownerId);
+      if (!portfolio) {
+        throw new Error('Failed to load owner portfolio');
+      }
+
+      spotlightOwner = portfolio.spotlightOwner;
+      subsidiariesMatched = portfolio.subsidiariesMatched;
+      directlyOwned = portfolio.directlyOwned;
+      assets = portfolio.assets;
+      entityMap = portfolio.entityMap;
+      matchedEdges = portfolio.matchedEdges;
+
+      // Build project names map
+      const namesMap = new Map();
+      portfolio.assets.forEach((a) => {
+        if (a.id && a.name) namesMap.set(a.id, { name: a.name });
+      });
+      projectNames = namesMap;
+    } catch (err) {
+      console.error('[OwnershipChart] load error', err);
+      error = err?.message || String(err);
+    } finally {
+      loading = false;
+    }
+  }
+
+  onMount(() => {
+    hydratePortfolio();
+  });
 
   // Layout params
   const params = {
@@ -130,8 +194,13 @@
 </script>
 
 <div id="chart-container" class="ownership-chart">
-  <!-- Header: owner card + legend -->
-  <div class="chart-header">
+  {#if loading}
+    <div class="loading-state">Loading owner portfolio...</div>
+  {:else if error}
+    <div class="error-state">{error}</div>
+  {:else}
+    <!-- Header: owner card + legend -->
+    <div class="chart-header">
     <div class="owner-card">{spotlightOwner?.Name || 'Unknown Owner'}</div>
     <div class="legend">
       <div class="legend-summary">
@@ -286,9 +355,25 @@
       {/if}
     </div>
   {/if}
+  {/if}
 </div>
 
 <style>
+  .loading-state,
+  .error-state {
+    padding: 60px 20px;
+    text-align: center;
+    font-size: 13px;
+  }
+
+  .loading-state {
+    color: #666;
+  }
+
+  .error-state {
+    color: #b10000;
+  }
+
   .ownership-chart {
     position: relative;
     font-family: Georgia, serif;

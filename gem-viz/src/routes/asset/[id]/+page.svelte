@@ -1,8 +1,14 @@
 <script>
   import { onMount } from 'svelte';
   import { get } from 'svelte/store';
+  import { goto } from '$app/navigation';
   import { page } from '$app/stores';
-  import { base } from '$app/paths';
+  import { link, entityLink } from '$lib/links';
+
+  // Check if this looks like an entity ID (starts with E) instead of asset ID (starts with G)
+  function isLikelyEntityId(id) {
+    return id && /^E\d+$/.test(id);
+  }
   import AssetMap from '$lib/components/AssetMap.svelte';
   import OwnershipPie from '$lib/components/OwnershipPie.svelte';
   import MermaidOwnership from '$lib/components/MermaidOwnership.svelte';
@@ -10,107 +16,37 @@
   import OwnershipExplorerD3 from '$lib/components/OwnershipExplorerD3.svelte';
   import StatusIcon from '$lib/components/StatusIcon.svelte';
   import { getTables } from '$lib/component-data/schema';
-  import motherduck from '$lib/motherduck-wasm';
+  import { parseOwnershipPaths } from '$lib/component-data/ownership-parser';
+  import { SCHEMA_SQL, ASSET_SQL, escapeValue } from '$lib/component-data/sql-helpers';
+  import { findIdColumn, findUnitIdColumn, extractAssetName } from '$lib/component-data/id-helpers';
   import { colors, colorByStatus, colorByTracker } from '$lib/ownership-theme';
 
-  // SQL helpers kept up top for clarity
-  const SCHEMA_SQL = (schema, table) => `
-    SELECT column_name
-    FROM information_schema.columns
-    WHERE table_schema = '${schema}'
-      AND table_name = '${table}'
-    ORDER BY ordinal_position
-  `;
+  // Server data from +page.server.js (prerendered)
+  let { data } = $props();
 
-  const ASSET_SQL = (fullTableName, idColumn, id) => `
-    SELECT *
-    FROM ${fullTableName}
-    WHERE "${idColumn}" = '${id}'
-  `;
-
-  let loading = $state(true);
+  // Initialize from server data if available
+  let loading = $state(!data?.owners?.length);
   let error = $state(null);
 
-  let assetId = $state('');
-  let assetName = $state('');
-  let owners = $state([]);
-  let asset = $state({});
-  let tableName = $state('');
-  let columns = $state([]);
-  let unitIdCol = $state('');
-  let svgs = $state({ map: null, capacity: null, status: null });
+  let assetId = $state(data?.assetId || '');
+  let assetName = $state(data?.assetName || '');
+  let owners = $state(data?.owners || []);
+  let asset = $state(data?.asset || {});
+  let tableName = $state(data?.tableName || '');
+  let columns = $state(data?.columns || []);
+  let svgs = $state(data?.svgs || { map: null, capacity: null, status: null });
+  let mapHasLocation = $state(true);
 
-  function escapeValue(val) {
-    return String(val ?? '').replace(/'/g, "''");
-  }
-
-  /**
-   * Parse ownership path strings into graph edges and nodes
-   * Input: "Government of Afghanistan  -> Ministry [100.0%] -> Company [10.0%] -> Asset [unknown %]"
-   * Output: { edges: [{source, target, value, depth}], nodes: [{id, Name}], nodeMap: Map }
-   */
-  function parseOwnershipPaths(ownerRecords, targetAssetId, targetAssetName) {
-    const edgeMap = new Map(); // Dedupe edges by source->target
-    const nodeMap = new Map(); // id -> {id, Name}
-
-    for (const record of ownerRecords) {
-      const pathStr = record['Ownership Path'];
-      if (!pathStr) continue;
-
-      const segments = pathStr.split(' -> ');
-      if (segments.length < 2) continue;
-
-      const parsedSegments = segments.map((seg) => {
-        const match = seg.match(/^(.+?)\s*\[([^\]]+)\]$/);
-        if (match) {
-          const name = match[1].trim();
-          const pctStr = match[2].trim();
-          const pct = pctStr === 'unknown %' ? null : parseFloat(pctStr);
-          return { name, pct };
-        }
-        return { name: seg.trim(), pct: null };
-      });
-
-      for (let i = 0; i < parsedSegments.length - 1; i++) {
-        const source = parsedSegments[i];
-        const target = parsedSegments[i + 1];
-        const depth = parsedSegments.length - 1 - i; // Depth from asset
-
-        const sourceId = source.name.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 50);
-        const targetId =
-          target.name === targetAssetName
-            ? targetAssetId
-            : target.name.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 50);
-
-        if (!nodeMap.has(sourceId)) {
-          nodeMap.set(sourceId, { id: sourceId, Name: source.name });
-        }
-        if (!nodeMap.has(targetId)) {
-          nodeMap.set(targetId, { id: targetId, Name: target.name });
-        }
-
-        const edgeKey = `${sourceId}->${targetId}`;
-        if (!edgeMap.has(edgeKey)) {
-          edgeMap.set(edgeKey, {
-            source: sourceId,
-            target: targetId,
-            value: target.pct,
-            depth,
-          });
-        }
-      }
-    }
-
+  // Use shared ownership parser and add nodeMap for component compatibility
+  const ownershipGraph = $derived.by(() => {
+    const parsed = parseOwnershipPaths(owners, assetId, assetName);
     return {
-      edges: Array.from(edgeMap.values()),
-      nodes: Array.from(nodeMap.values()),
-      nodeMap,
+      ...parsed,
+      nodeMap: new Map(parsed.nodes.map((n) => [n.id, n])),
     };
-  }
+  });
 
-  const ownershipGraph = $derived(parseOwnershipPaths(owners, assetId, assetName));
-
-  const nameCol = $derived(() =>
+  const nameCol = $derived(
     columns.find((c) => {
       const lower = c.toLowerCase();
       return (
@@ -124,35 +60,40 @@
       );
     })
   );
-  const statusCol = $derived(() => columns.find((c) => c.toLowerCase() === 'status'));
-  const ownerCol = $derived(() =>
+  const statusCol = $derived(columns.find((c) => c.toLowerCase() === 'status'));
+  const ownerCol = $derived(
     columns.find((c) => c.toLowerCase() === 'owner' || c.toLowerCase() === 'parent')
   );
-  const countryCol = $derived(() => columns.find((c) => c.toLowerCase() === 'country'));
-  const latCol = $derived(() =>
+  const countryCol = $derived(columns.find((c) => c.toLowerCase() === 'country'));
+  const latCol = $derived(
     columns.find((c) => c.toLowerCase() === 'latitude' || c.toLowerCase() === 'lat')
   );
-  const lonCol = $derived(() =>
+  const lonCol = $derived(
     columns.find((c) => c.toLowerCase() === 'longitude' || c.toLowerCase() === 'lon')
   );
-  const gemLocationIdCol = $derived(() =>
+  const gemLocationIdCol = $derived(
     columns.find((c) => c.toLowerCase() === 'gem location id')
   );
-  const ownershipPctCol = $derived(() => columns.find((c) => c.toLowerCase().includes('share')));
-  const trackerCol = $derived(() => columns.find((c) => c.toLowerCase() === 'tracker'));
-  const ownerEntityIdCol = $derived(() =>
+  const ownershipPctCol = $derived(columns.find((c) => c.toLowerCase().includes('share')));
+  const trackerCol = $derived(columns.find((c) => c.toLowerCase() === 'tracker'));
+  const ownerEntityIdCol = $derived(
     columns.find((c) => c.toLowerCase() === 'owner gem entity id')
   );
 
-  const statusValue = $derived(() =>
+  // Get primary owner entity ID for OwnershipExplorerD3
+  const primaryOwnerEntityId = $derived(
+    ownerEntityIdCol && owners[0]?.[ownerEntityIdCol] ? owners[0][ownerEntityIdCol] : null
+  );
+
+  const statusValue = $derived(
     statusCol && asset[statusCol] ? String(asset[statusCol]).toLowerCase() : null
   );
-  const statusColor = $derived(() =>
+  const statusColor = $derived(
     statusValue ? colorByStatus.get(statusValue) || colors.grey : colors.grey
   );
 
-  const trackerValue = $derived(() => (trackerCol && asset[trackerCol] ? asset[trackerCol] : null));
-  const trackerColor = $derived(() =>
+  const trackerValue = $derived(trackerCol && asset[trackerCol] ? asset[trackerCol] : null);
+  const trackerColor = $derived(
     trackerValue ? colorByTracker.get(trackerValue) || colors.orange : colors.orange
   );
 
@@ -163,7 +104,7 @@
     }, 0)
   );
 
-  const ownerSpecificCols = $derived(() =>
+  const ownerSpecificCols = $derived(
     [
       ownerCol,
       ownershipPctCol,
@@ -173,19 +114,38 @@
       'Immediate Project Owner GEM Entity ID',
     ].filter(Boolean)
   );
-  const specialCols = $derived(() =>
+  const specialCols = $derived(
     [nameCol, statusCol, countryCol, latCol, lonCol, ...ownerSpecificCols].filter(Boolean)
   );
-  const otherCols = $derived(() => columns.filter((c) => !specialCols.includes(c)));
+  const otherCols = $derived(columns.filter((c) => !specialCols.includes(c)));
 
   onMount(async () => {
+    const paramsId = get(page)?.params?.id;
+
+    // Redirect if this looks like an entity ID instead of asset ID
+    if (isLikelyEntityId(paramsId)) {
+      console.log(`[Asset] Redirecting ${paramsId} to entity page (E-prefix = entity ID)`);
+      goto(entityLink(paramsId), { replaceState: true });
+      return;
+    }
+
+    // If we have server data, skip client-side fetch
+    if (data?.owners?.length) {
+      loading = false;
+      return;
+    }
+
+    // Dev mode or missing data - fetch from MotherDuck client-side
     try {
       loading = true;
       error = null;
 
-      const paramsId = get(page)?.params?.id;
       if (!paramsId) throw new Error('Missing asset ID');
       assetId = paramsId;
+
+      // Dynamic import to avoid SSR Worker error
+      const md = await import('$lib/motherduck-wasm');
+      const motherduck = md.default;
 
       const { assetTable } = await getTables();
       tableName = assetTable;
@@ -194,20 +154,8 @@
       const schemaResult = await motherduck.query(SCHEMA_SQL(schemaName, rawTable));
       columns = schemaResult.data?.map((c) => c.column_name) ?? [];
 
-      unitIdCol = columns.find((c) => c.toLowerCase() === 'gem unit id') || '';
-
-      const idColumn =
-        unitIdCol ||
-        columns.find((c) => {
-          const lower = c.toLowerCase();
-          return (
-            lower === 'id' ||
-            lower === 'wiki page' ||
-            lower === 'project id' ||
-            lower.includes('_id')
-          );
-        }) ||
-        columns[0];
+      // Use centralized ID column finder
+      const idColumn = findUnitIdColumn(columns) || findIdColumn(columns) || columns[0];
 
       const dataResult = await motherduck.query(
         ASSET_SQL(assetTable, idColumn, escapeValue(assetId))
@@ -219,7 +167,7 @@
 
       owners = dataResult.data;
       asset = dataResult.data[0] || {};
-      assetName = asset['Project'] || asset['Unit Name'] || asset['Project Name'] || assetId;
+      assetName = extractAssetName(asset, assetId);
     } catch (err) {
       console.error('Asset detail load error:', err);
       error = err?.message || 'Failed to load asset';
@@ -235,7 +183,7 @@
 
 <main>
   <header>
-    <a href="{base}/asset.html" class="back-link">← All Assets</a>
+    <a href={link('asset')} class="back-link">← All Assets</a>
     <span class="table-name">{tableName}</span>
   </header>
 
@@ -323,9 +271,13 @@
                 <tr>
                   <td class="owner-name">
                     <StatusIcon status={owner['Status']} size={10} />
-                    {owner['Parent'] || owner[ownerCol] || '—'}
                     {#if ownerEntityIdCol && owner[ownerEntityIdCol]}
-                      <span class="owner-id">{owner[ownerEntityIdCol]}</span>
+                      <a href={entityLink(owner[ownerEntityIdCol])} class="owner-link">
+                        {owner['Parent'] || owner[ownerCol] || '—'}
+                        <span class="owner-id">{owner[ownerEntityIdCol]}</span>
+                      </a>
+                    {:else}
+                      {owner['Parent'] || owner[ownerCol] || '—'}
                     {/if}
                   </td>
                   <td class="owner-share">
@@ -386,12 +338,12 @@
 
         <section class="ownership-explorer">
           <h2>Owner Explorer</h2>
-          <OwnershipExplorerD3 />
+          <OwnershipExplorerD3 ownerEntityId={primaryOwnerEntityId} />
         </section>
       {/if}
 
-      <!-- Interactive location map -->
-      {#if (latCol && lonCol && asset[latCol] && asset[lonCol]) || (gemLocationIdCol && asset[gemLocationIdCol])}
+      <!-- Interactive location map - hidden entirely if no location found -->
+      {#if mapHasLocation && ((latCol && lonCol && asset[latCol] && asset[lonCol]) || (gemLocationIdCol && asset[gemLocationIdCol]))}
         <section class="map-section">
           <h2>Location</h2>
           <AssetMap
@@ -402,6 +354,7 @@
             assetName={assetName || assetId}
             lat={latCol && asset[latCol] ? asset[latCol] : null}
             lon={lonCol && asset[lonCol] ? asset[lonCol] : null}
+            bind:hasLocation={mapHasLocation}
           />
         </section>
       {/if}
@@ -811,6 +764,15 @@
 
   .owner-name {
     font-weight: 500;
+  }
+
+  .owner-link {
+    color: #000;
+    text-decoration: underline;
+  }
+
+  .owner-link:hover {
+    text-decoration: none;
   }
 
   .owner-id {

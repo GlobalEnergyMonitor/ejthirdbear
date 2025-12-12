@@ -1,6 +1,6 @@
 <script>
-  import { base, assets as assetsPath } from '$app/paths';
   import { goto } from '$app/navigation';
+  import { link, assetLink, assetPath } from '$lib/links';
   import { initDuckDB, loadParquetFromPath, query } from '$lib/duckdb-utils';
   import { exportList } from '$lib/exportList';
   import { isValidSlug } from '$lib/slug';
@@ -19,11 +19,6 @@
     { key: 'tracker', label: 'Tracker', sortable: true, filterable: true, width: '120px' },
     { key: 'addedAt', label: 'Added', sortable: true, type: 'date', width: '120px' },
   ];
-
-  // Remove single asset
-  function removeAsset(id) {
-    exportList.remove(id);
-  }
 
   // Remove selected assets
   function removeSelected() {
@@ -50,15 +45,14 @@
     try {
       await initDuckDB();
 
-      const parquetBase = assetsPath || '';
       const ownershipResult = await loadParquetFromPath(
-        `${parquetBase}/all_trackers_ownership@1.parquet`,
+        assetPath('all_trackers_ownership@1.parquet'),
         'ownership'
       );
       if (!ownershipResult.success) throw new Error(ownershipResult.error);
 
       const locResult = await loadParquetFromPath(
-        `${parquetBase}/asset_locations.parquet`,
+        assetPath('asset_locations.parquet'),
         'locations'
       );
       if (!locResult.success) throw new Error(locResult.error);
@@ -230,7 +224,7 @@
   }
 
   function handleRowClick(row) {
-    goto(`${base}/asset/${row.id}.html`);
+    goto(assetLink(row.id));
   }
 
   // Format data for DataTable
@@ -252,7 +246,7 @@
 
 <main>
   <header>
-    <a href="{base}/index.html" class="back-link">← Back to Map</a>
+    <a href={link('index')} class="back-link">← Back to Map</a>
     <span class="title">Export List</span>
     <span class="count">{assetCount} assets</span>
   </header>
@@ -261,7 +255,7 @@
     <div class="empty-state">
       <h2>No assets in export list</h2>
       <p>Use the map to search for assets and add them to your export list.</p>
-      <a href="{base}/index.html" class="action-btn">Go to Map</a>
+      <a href={link('index')} class="action-btn">Go to Map</a>
     </div>
   {:else}
     <div class="export-actions">

@@ -2,11 +2,15 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import path from 'path';
 import { defineConfig } from 'vite';
 import { ViteMinifyPlugin } from 'vite-plugin-minify';
+import { readFileSync } from 'fs';
+
+const pkg = JSON.parse(readFileSync('./package.json', 'utf-8'));
 
 export default defineConfig({
   define: {
     __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
-    __BUILD_HASH__: JSON.stringify(Date.now().toString(36))
+    __BUILD_HASH__: JSON.stringify(Date.now().toString(36)),
+    __APP_VERSION__: JSON.stringify(pkg.version)
   },
   plugins: [
     sveltekit(),

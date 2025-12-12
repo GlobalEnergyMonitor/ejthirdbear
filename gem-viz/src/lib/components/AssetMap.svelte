@@ -1,11 +1,14 @@
 <script>
   import { page } from '$app/stores';
   import { get } from 'svelte/store';
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import maplibregl from 'maplibre-gl';
   import 'maplibre-gl/dist/maplibre-gl.css';
 
   import { fetchAssetBasics, fetchCoordinatesByLocation } from '$lib/component-data/schema';
+
+  // Bindable prop so parent can hide section when no location found
+  let { hasLocation = $bindable(true) } = $props();
 
   let mapContainer;
   let map;
@@ -33,6 +36,7 @@
 
     if (!basics) {
       error = `Asset ${assetId} not found`;
+      hasLocation = false;
       loading = false;
       return;
     }
@@ -49,6 +53,7 @@
 
     if (!hasDirectCoords && !basics.locationId) {
       error = 'No coordinates or GEM location ID provided';
+      hasLocation = false;
       loading = false;
       return;
     }
@@ -68,6 +73,7 @@
             locationId: basics.locationId,
           });
           error = 'Location not found in data';
+          hasLocation = false;
           loading = false;
           return;
         }
@@ -113,21 +119,21 @@
       error = `${err.name || 'Error'}: ${err.message}`;
       loading = false;
     }
+  });
 
-    return () => {
-      if (map) map.remove();
-    };
+  onDestroy(() => {
+    if (map) map.remove();
   });
 </script>
 
-<div class="asset-map-wrapper">
-  <div bind:this={mapContainer} class="map"></div>
-  {#if loading}
-    <div class="overlay loading">Loading map...</div>
-  {:else if error}
-    <div class="overlay error">{error}</div>
-  {/if}
-</div>
+{#if !error}
+  <div class="asset-map-wrapper">
+    <div bind:this={mapContainer} class="map"></div>
+    {#if loading}
+      <div class="overlay loading">Loading map...</div>
+    {/if}
+  </div>
+{/if}
 
 <style>
   .asset-map-wrapper {
@@ -159,10 +165,6 @@
 
   .overlay.loading {
     color: #666;
-  }
-
-  .overlay.error {
-    color: #999;
   }
 
   /* MapLibre popup styling to match brutalist design */

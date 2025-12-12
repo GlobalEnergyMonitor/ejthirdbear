@@ -40,7 +40,7 @@
   // Determine color field and scheme based on data
   let colorField = $derived(new Set(assets.map((a) => a.tracker)).size > 1 ? 'tracker' : 'status');
 
-  let colorScale = $derived(() => {
+  let colorScale = $derived.by(() => {
     if (colorField === 'tracker') {
       return colorByTracker;
     } else {
@@ -51,7 +51,7 @@
     }
   });
 
-  let legendData = $derived(() => {
+  let legendData = $derived.by(() => {
     if (colorField === 'tracker') {
       const trackers = new Set(assets.map((a) => a.tracker));
       return Array.from(colorByTracker)
@@ -68,7 +68,7 @@
   });
 
   // Build subsidiary groups with their assets
-  let subsidiaryGroups = $derived(() => {
+  let subsidiaryGroups = $derived.by(() => {
     let groups = Array.from(subsidiaries).map(([id, assetList]) => ({
       id,
       assets: assetList,
@@ -97,9 +97,9 @@
   });
 
   // Calculate vertical positions for each group
-  let groupPositions = $derived(() => {
+  let groupPositions = $derived.by(() => {
     let y = 0;
-    return subsidiaryGroups().map((group) => {
+    return subsidiaryGroups.map((group) => {
       const assetCount = group.assets.length;
       const contentHeight =
         assetCount * params.assetMarkHeight + (assetCount - 1) * params.assetSpacing;
@@ -111,8 +111,8 @@
   });
 
   // Total SVG height
-  let svgHeight = $derived(() => {
-    const positions = groupPositions();
+  let svgHeight = $derived.by(() => {
+    const positions = groupPositions;
     if (positions.length === 0) return 100;
     const last = positions[positions.length - 1];
     return last.top + last.height + params.svgMarginTop;
@@ -120,9 +120,8 @@
 
   // Get color for an asset
   function getAssetColor(asset) {
-    const scale = colorScale();
     const value = colorField === 'tracker' ? asset.tracker : asset.status?.toLowerCase();
-    return scale.get(value) || colors.grey;
+    return colorScale.get(value) || colors.grey;
   }
 
   // Text wrapping helper
@@ -174,11 +173,11 @@
 
     <div class="legend">
       <div class="legend-summary">
-        {assets.length} assets via {subsidiaryGroups().length}
-        {subsidiaryGroups().length === 1 ? 'path' : 'paths'}
+        {assets.length} assets via {subsidiaryGroups.length}
+        {subsidiaryGroups.length === 1 ? 'path' : 'paths'}
       </div>
       <div class="legend-items">
-        {#each legendData() as item}
+        {#each legendData as item}
           <div class="legend-item">
             <div class="legend-bubble" style="background-color: {item.color}"></div>
             <span>{item.label}</span>
@@ -189,10 +188,10 @@
   </div>
 
   <!-- Main SVG Chart -->
-  <svg width="900" height={svgHeight() + params.svgMarginTop * 2}>
+  <svg width="900" height={svgHeight + params.svgMarginTop * 2}>
     <g transform="translate(0, {params.svgMarginTop})">
       <!-- Paths from header to subsidiaries -->
-      {#each groupPositions() as group}
+      {#each groupPositions as group}
         <path
           d={subsidiaryPath(
             -params.svgMarginTop,
@@ -205,7 +204,7 @@
       {/each}
 
       <!-- Subsidiary groups -->
-      {#each groupPositions() as group}
+      {#each groupPositions as group}
         <g transform="translate({params.subsidX}, {group.top})">
           <!-- Subsidiary circle (not for directly owned) -->
           {#if group.id !== null}

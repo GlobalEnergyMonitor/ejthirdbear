@@ -52,7 +52,7 @@ export default [
   },
   {
     files: ['src/**/*.js', 'src/**/*.ts'],
-    ignores: ['src/**/*.server.js', 'src/**/*.server.ts'],
+    ignores: ['src/**/*.server.js', 'src/**/*.server.ts', 'src/**/*.svelte.ts', 'src/**/*.svelte.js'],
     plugins: {
       '@typescript-eslint': tsPlugin,
     },
@@ -63,6 +63,35 @@ export default [
       globals: {
         ...globals.browser,
         ...globals.es2021,
+      },
+    },
+    rules: {
+      'no-unused-vars': 'warn',
+      'no-console': 'off',
+      '@typescript-eslint/no-explicit-any': 'warn',
+    },
+  },
+  {
+    // Svelte 5 runes files (.svelte.ts, .svelte.js)
+    files: ['src/**/*.svelte.ts', 'src/**/*.svelte.js'],
+    plugins: {
+      '@typescript-eslint': tsPlugin,
+    },
+    languageOptions: {
+      parser: tsParser,
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: {
+        ...globals.browser,
+        ...globals.es2021,
+        // Svelte 5 runes
+        $state: 'readonly',
+        $derived: 'readonly',
+        $effect: 'readonly',
+        $props: 'readonly',
+        $bindable: 'readonly',
+        $inspect: 'readonly',
+        $host: 'readonly',
       },
     },
     rules: {

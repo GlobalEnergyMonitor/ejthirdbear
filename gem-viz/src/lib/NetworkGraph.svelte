@@ -1,6 +1,6 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
-  import { base } from '$app/paths';
+  import { assetPath, assetLink, entityLink } from '$lib/links';
   import { goto } from '$app/navigation';
   import { Deck } from '@deck.gl/core';
   import { ScatterplotLayer, LineLayer } from '@deck.gl/layers';
@@ -96,7 +96,7 @@
         console.debug('[NetworkGraph] DuckDB utils loaded');
       }
 
-      const parquetPath = `${base}/all_trackers_ownership@1.parquet`;
+      const parquetPath = assetPath('all_trackers_ownership@1.parquet');
       console.debug('[NetworkGraph] Loading ownership parquet', { parquetPath });
       const ownershipResult = await loadParquetFromPath(parquetPath, 'ownership');
 
@@ -439,8 +439,7 @@
             if (object) {
               // Assets start with G, entities with E
               const isAsset = object.id.startsWith('G');
-              const path = isAsset ? `${base}/asset/${object.id}` : `${base}/entity/${object.id}`;
-              goto(path);
+              goto(isAsset ? assetLink(object.id) : entityLink(object.id));
             }
           },
           autoHighlight: true,
@@ -482,8 +481,8 @@
       : new OrthographicView({ flipY: false, controller: true });
 
     const initialViewState = config.use3D
-      ? { target: [0, 0, 0], rotationX: 30, rotationOrbit: -30, zoom: -1, minZoom: -3, maxZoom: 3 }
-      : { target: [0, 0, 0], zoom: -1.5 };
+      ? { target: /** @type {[number, number, number]} */ ([0, 0, 0]), rotationX: 30, rotationOrbit: -30, zoom: -1, minZoom: -3, maxZoom: 3 }
+      : { target: /** @type {[number, number, number]} */ ([0, 0, 0]), zoom: -1.5 };
 
     deck = new Deck({
       parent: container,

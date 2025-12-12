@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 
 import { execSync } from 'child_process';
-import { writeFileSync, mkdirSync } from 'fs';
-import { dirname } from 'path';
+import { writeFileSync, readFileSync, mkdirSync } from 'fs';
 
 // Get git information
 let commit = 'unknown';
@@ -18,6 +17,17 @@ try {
   console.warn('⚠️  Unable to read git info (running in CI/detached state?)');
 }
 
+// Get package version for deploy URL
+let pkgVersion = 'latest';
+try {
+  const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+  pkgVersion = pkg.version || 'latest';
+} catch {
+  console.warn('⚠️  Unable to read package.json');
+}
+
+const deployUrl = `https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v${pkgVersion}`;
+
 const versionInfo = {
   version: commit,
   commit,
@@ -25,7 +35,8 @@ const versionInfo = {
   author,
   timestamp,
   deployed: timestamp,
-  buildTime: new Date().toLocaleString()
+  buildTime: new Date().toLocaleString(),
+  deployUrl
 };
 
 // Write to static directory so it gets served as a static file

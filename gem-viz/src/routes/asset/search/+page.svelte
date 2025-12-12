@@ -1,8 +1,8 @@
 <script>
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
-  import { base, assets as assetsPath } from '$app/paths';
   import { goto } from '$app/navigation';
+  import { link, assetLink, assetPath } from '$lib/links';
   import { initDuckDB, loadParquetFromPath, query } from '$lib/duckdb-utils';
   import { exportList } from '$lib/exportList';
   import {
@@ -41,7 +41,7 @@
 
   // Handle row click to navigate to asset page
   function handleRowClick(row) {
-    goto(`${base}/asset/${row.id}.html`);
+    goto(assetLink(row.id));
   }
 
   // Parse filter from URL params
@@ -240,16 +240,14 @@
     await initDuckDB();
     dbReady = true;
 
-    const parquetBase = assetsPath || '';
-
     const locResult = await loadParquetFromPath(
-      `${parquetBase}/all_trackers_ownership@1.parquet`,
+      assetPath('all_trackers_ownership@1.parquet'),
       'ownership'
     );
     if (!locResult.success) throw new Error(locResult.error);
 
     const coordResult = await loadParquetFromPath(
-      `${parquetBase}/asset_locations.parquet`,
+      assetPath('asset_locations.parquet'),
       'locations'
     );
     if (!coordResult.success) throw new Error(coordResult.error);
@@ -313,13 +311,13 @@
 
 <main>
   <header>
-    <a href="{base}/index.html" class="back-link">← Back to Map</a>
+    <a href={link('index')} class="back-link">← Back to Map</a>
     <span class="title">Spatial Search</span>
     {#if !loading}
       <span class="count">{results.length.toLocaleString()} assets found</span>
     {/if}
     {#if exportCount > 0}
-      <a href="{base}/export.html" class="export-link">Export List ({exportCount})</a>
+      <a href={link('export')} class="export-link">Export List ({exportCount})</a>
     {/if}
   </header>
 
@@ -360,7 +358,7 @@
   {:else if results.length === 0}
     <div class="empty-state">
       <p>No assets found in this area.</p>
-      <a href="{base}/index.html">← Draw a different region on the map</a>
+      <a href={link('index')}>← Draw a different region on the map</a>
     </div>
   {:else}
     <div class="bulk-actions">
@@ -368,7 +366,7 @@
         Add All {results.length} to Export
       </button>
       {#if exportCount > 0}
-        <a href="{base}/export.html" class="action-btn primary">
+        <a href={link('export')} class="action-btn primary">
           Go to Export ({exportCount} assets)
         </a>
       {/if}

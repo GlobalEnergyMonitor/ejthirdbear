@@ -8,6 +8,7 @@
    */
   import { colors } from '$lib/ownership-theme';
 
+  /** @type {{ percentage?: number, size?: number, fillColor?: string, strokeColor?: string, strokeWidth?: number, unknownColor?: string, interactive?: boolean, onHover?: (e: MouseEvent) => void, onLeave?: (e: MouseEvent) => void }} */
   let {
     percentage = 100,
     size = 30,
@@ -16,8 +17,8 @@
     strokeWidth = 2,
     unknownColor = '#B9B9B9',
     interactive = false,
-    onHover = () => {},
-    onLeave = () => {},
+    onHover = undefined,
+    onLeave = undefined,
   } = $props();
 
   // Calculate arc path using d3.arc() math
@@ -75,6 +76,7 @@
   );
 </script>
 
+<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <svg
   width={size}
   height={size}
@@ -82,7 +84,7 @@
   class="ownership-arc"
   class:interactive
   role={interactive ? 'button' : 'img'}
-  tabindex={interactive ? 0 : -1}
+  tabindex={interactive ? 0 : undefined}
   onmouseenter={interactive ? onHover : undefined}
   onmouseleave={interactive ? onLeave : undefined}
 >

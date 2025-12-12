@@ -169,13 +169,13 @@ export async function buildRelationshipCache(assets, motherduck, tableName) {
 
   // Query once per owner entity
   let queriesExecuted = 0;
-  for (const [ownerEntityId, assetIds] of assetsByOwner.entries()) {
+  for (const [, assetIds] of assetsByOwner.entries()) {
     // Get one representative asset to use for the query
-    const representativeAsset = assets[assetIds[0]];
+    const firstAsset = assets[assetIds[0]];
 
     // Compute relationships (this will query MotherDuck)
     const relationships = await computeAssetRelationships(
-      representativeAsset,
+      firstAsset,
       motherduck,
       tableName
     );
@@ -203,8 +203,6 @@ export async function buildRelationshipCache(assets, motherduck, tableName) {
   // Now add co-location data (separate pass to avoid complexity)
   for (const [locationId, assetIds] of assetsByLocation.entries()) {
     if (assetIds.length <= 1) continue; // Skip single-asset locations
-
-    const representativeAsset = assets[assetIds[0]];
 
     const coLocationQuery = `
       SELECT

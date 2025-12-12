@@ -16,12 +16,14 @@
   } from '$lib/ownership-theme';
   import { fetchAssetBasics, fetchOwnerPortfolio } from '$lib/component-data/schema';
 
+  // Accept owner entity ID and pre-baked data from parent to skip client-side fetch
+  let { ownerEntityId: propsOwnerEntityId = null, prebakedData = null } = $props();
+
   let sectionEl;
   let loading = $state(true);
   let error = $state(null);
 
   let curCase = $state({ assetClassName: 'assets' });
-  let curData = $state(null);
 
   const colField = 'status';
   const col = colMaps.byStatus;
@@ -353,12 +355,32 @@
   }
 
   async function loadData() {
+    // Use pre-baked data if available (production static build)
+    if (prebakedData) {
+      // Convert serialized arrays back to Maps
+      const portfolio = {
+        spotlightOwner: prebakedData.spotlightOwner,
+        subsidiariesMatched: new Map(prebakedData.subsidiariesMatched || []),
+        directlyOwned: prebakedData.directlyOwned || [],
+        matchedEdges: new Map(prebakedData.matchedEdges || []),
+        entityMap: new Map(prebakedData.entityMap || []),
+        assets: prebakedData.assets || [],
+      };
+      curCase = { assetClassName: 'assets' };
+      return portfolio;
+    }
+
+    // Fallback: client-side fetch from MotherDuck (dev mode)
     const pageData = get(page);
     const pathname = pageData.url?.pathname || '';
     const paramId = pageData.params?.id;
     let ownerId = null;
 
-    if (pathname.includes('/asset/')) {
+    // Use prop if provided (SSR mode)
+    if (propsOwnerEntityId) {
+      ownerId = propsOwnerEntityId;
+    } else if (pathname.includes('/asset/')) {
+      // Client-side: try to fetch asset basics
       const basics = await fetchAssetBasics(paramId);
       if (basics?.ownerEntityId) ownerId = basics.ownerEntityId;
       else throw new Error('Owner entity not found for asset');
@@ -371,7 +393,6 @@
     const portfolio = await fetchOwnerPortfolio(ownerId);
     if (!portfolio) throw new Error('Failed to load owner portfolio');
 
-    curData = portfolio;
     curCase = { assetClassName: 'assets' };
     return portfolio;
   }

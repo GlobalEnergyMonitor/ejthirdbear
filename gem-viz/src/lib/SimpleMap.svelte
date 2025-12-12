@@ -4,8 +4,8 @@
   import MapboxDraw from 'maplibre-gl-draw';
   import 'maplibre-gl/dist/maplibre-gl.css';
   import 'maplibre-gl-draw/dist/mapbox-gl-draw.css';
-  import { mapFilter, clearMapFilter, setMapFilter } from '$lib/mapFilter';
-  import { base } from '$app/paths';
+  import { mapFilter, clearMapFilter, setMapFilter, isPolygonFilter, isBoundsFilter } from '$lib/mapFilter';
+  import { link, assetPath } from '$lib/links';
 
   let mapContainer;
   let map;
@@ -29,7 +29,7 @@
 
       // Fetch static GeoJSON (generated at build time)
       console.log('Loading static GeoJSON...');
-      const response = await fetch(`${base}/points.geojson`);
+      const response = await fetch(assetPath('points.geojson'));
       if (!response.ok) {
         throw new Error(`Failed to load GeoJSON: ${response.statusText}`);
       }
@@ -167,9 +167,22 @@
           type: 'circle',
           source: 'points',
           paint: {
-            'circle-radius': 3,
-            'circle-color': '#007cbf',
-            'circle-opacity': 0.7,
+            'circle-radius': 4,
+            'circle-color': [
+              'match',
+              ['get', 'tracker'],
+              'Coal Plant', '#1a1a1a',      // Black - coal
+              'Coal Mine', '#4a4a4a',       // Dark gray - coal mining
+              'Gas Plant', '#e67e22',       // Orange - gas
+              'Steel Plant', '#8e44ad',     // Purple - steel
+              'Iron Mine', '#c0392b',       // Red - iron
+              'Bioenergy Power', '#27ae60', // Green - bioenergy
+              '#007cbf'                      // Default blue
+            ],
+            'circle-opacity': 0.8,
+            'circle-stroke-width': 1,
+            'circle-stroke-color': '#fff',
+            'circle-stroke-opacity': 0.5,
           },
         });
 
@@ -215,16 +228,17 @@
   // Update map visualization when filter changes
   $: if (map && map.getLayer('points') && map.getSource('points')) {
     if ($mapFilter) {
-      if ($mapFilter.type === 'polygon') {
+      if (isPolygonFilter($mapFilter)) {
         // For polygons, we need to re-filter the source data
         const source = map.getSource('points');
         const originalData = source._data;
+        const polyCoords = $mapFilter.coordinates;
 
         // Filter features by polygon
         const filteredFeatures = originalData.features.map((feature) => {
           const lon = feature.properties.lon;
           const lat = feature.properties.lat;
-          const isInside = pointInPolygon(lon, lat, $mapFilter.coordinates);
+          const isInside = pointInPolygon(lon, lat, polyCoords);
 
           return {
             ...feature,
@@ -254,7 +268,7 @@
           '#2196f3', // Selected - blue
           '#999', // Non-selected - gray
         ]);
-      } else {
+      } else if (isBoundsFilter($mapFilter)) {
         // Rectangle bounds filter
         const { north, south, east, west } = $mapFilter;
 
@@ -285,11 +299,40 @@
         ]);
       }
     } else {
-      // No filter - reset to default
-      map.setPaintProperty('points', 'circle-opacity', 0.7);
-      map.setPaintProperty('points', 'circle-color', '#007cbf');
+      // No filter - reset to default with type colors
+      map.setPaintProperty('points', 'circle-opacity', 0.8);
+      map.setPaintProperty('points', 'circle-color', [
+        'match',
+        ['get', 'tracker'],
+        'Coal Plant', '#1a1a1a',
+        'Coal Mine', '#4a4a4a',
+        'Gas Plant', '#e67e22',
+        'Steel Plant', '#8e44ad',
+        'Iron Mine', '#c0392b',
+        'Bioenergy Power', '#27ae60',
+        '#007cbf'
+      ]);
     }
   }
+
+  // Legend data
+  const legendItems = [
+    { label: 'Coal Plant', color: '#1a1a1a' },
+    { label: 'Coal Mine', color: '#4a4a4a' },
+    { label: 'Gas Plant', color: '#e67e22' },
+    { label: 'Steel Plant', color: '#8e44ad' },
+    { label: 'Iron Mine', color: '#c0392b' },
+    { label: 'Bioenergy', color: '#27ae60' },
+  ];
+
+  // Compute search URL with query params
+  $: searchUrl = $mapFilter
+    ? `${link('asset/search')}?${
+        isPolygonFilter($mapFilter)
+          ? `polygon=${encodeURIComponent(JSON.stringify($mapFilter.coordinates))}`
+          : `bounds=${encodeURIComponent(JSON.stringify($mapFilter))}`
+      }`
+    : '';
 </script>
 
 <div class="map-wrapper">
@@ -298,9 +341,7 @@
     <div class="filter-indicator">
       <span>Geographic filter active</span>
       <a
-        href="{base}/asset/search.html?{$mapFilter.type === 'polygon'
-          ? `polygon=${encodeURIComponent(JSON.stringify($mapFilter.coordinates))}`
-          : `bounds=${encodeURIComponent(JSON.stringify($mapFilter))}`}"
+        href={searchUrl}
         class="view-assets-btn"
       >
         View Assets
@@ -316,6 +357,14 @@
   {/if}
   <div class="map-instructions">
     SHIFT+drag for rectangle • Click polygon tool to draw custom shapes
+  </div>
+  <div class="legend">
+    {#each legendItems as item}
+      <div class="legend-item">
+        <span class="legend-dot" style="background: {item.color}"></span>
+        <span class="legend-label">{item.label}</span>
+      </div>
+    {/each}
   </div>
 </div>
 
@@ -428,5 +477,39 @@
     font-size: 10px;
     z-index: 20;
     pointer-events: none;
+  }
+
+  .legend {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 8px 12px;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 11px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    box-shadow: 0 0 2px rgba(0, 0, 0, 0.3);
+  }
+
+  .legend-label {
+    color: #333;
+    font-weight: 500;
   }
 </style>

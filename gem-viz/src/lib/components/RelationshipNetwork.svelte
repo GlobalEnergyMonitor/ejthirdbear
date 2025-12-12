@@ -1,5 +1,5 @@
 <script>
-  import { base } from '$app/paths';
+  import { assetLink } from '$lib/links';
   import { page } from '$app/stores';
   import { get } from 'svelte/store';
   import { onMount } from 'svelte';
@@ -126,7 +126,7 @@
 
       <div class="asset-grid">
         {#each sameOwnerAssets as asset}
-          <a href="{base}/asset/{asset['GEM unit ID']}.html" class="asset-card">
+          <a href={assetLink(asset['GEM unit ID'])} class="asset-card">
             <div class="asset-header">
               <div class="asset-name">{asset.Project}</div>
               <div class="asset-status {statusClass(asset.Status)}">{asset.Status}</div>
@@ -169,7 +169,7 @@
 
       <div class="asset-list">
         {#each coLocatedAssets as asset}
-          <a href="{base}/asset/{asset['GEM unit ID']}.html" class="list-item">
+          <a href={assetLink(asset['GEM unit ID'])} class="list-item">
             <span class="item-name">{asset.Project}</span>
             <span class="item-meta">
               {#if asset['Capacity (MW)']}
