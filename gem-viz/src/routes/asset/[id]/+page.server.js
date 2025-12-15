@@ -60,10 +60,17 @@ const ASSET_CACHE = {
 export async function entries() {
   // Use Node DuckDB for build time
   const motherduck = (await import('$lib/motherduck-node')).default;
+  const { getGeographyConfig, buildS2CellSQL, buildGeometrySQL } = await import(
+    '$lib/geography-config'
+  );
 
   try {
     console.log('🚀 BULK FETCH: Loading all assets into memory...');
     const startTime = Date.now();
+    const geoConfig = getGeographyConfig();
+
+    // Initialize motherduck with optional geography support
+    await motherduck.init({ includeGeography: geoConfig.enabled });
 
     // Query the catalog to find actual data tables
     const catalogResult = await motherduck.query(`
@@ -114,8 +121,36 @@ export async function entries() {
       columns[0];
 
     // BULK FETCH: Get ALL asset data in one query
+    // Optionally enhance with geography fields (S2 cells, geometries)
+    let selectClause = '*';
+    if (geoConfig.enabled) {
+      if (geoConfig.verbose) {
+        console.log('  🌍 Geography enabled - computing spatial fields...');
+      }
+      // Check if table has latitude/longitude columns
+      const hasLatLon = columns.some(
+        (c) => c.toLowerCase() === 'latitude' || c.toLowerCase() === 'lat'
+      );
+      if (hasLatLon) {
+        const latCol = columns.find((c) => c.toLowerCase() === 'latitude') || 'Latitude';
+        const lonCol = columns.find((c) => c.toLowerCase() === 'longitude') || 'Longitude';
+
+        let extraCols = '';
+        if (geoConfig.computeS2Cells) {
+          extraCols += buildS2CellSQL(latCol, lonCol, geoConfig.s2Levels);
+        }
+        if (geoConfig.computeGeometries) {
+          extraCols += buildGeometrySQL(latCol, lonCol);
+        }
+
+        if (extraCols) {
+          selectClause = `*, ${extraCols}`;
+        }
+      }
+    }
+
     const assetsResult = await motherduck.query(`
-      SELECT *
+      SELECT ${selectClause}
       FROM ${fullTableName}
     `);
 

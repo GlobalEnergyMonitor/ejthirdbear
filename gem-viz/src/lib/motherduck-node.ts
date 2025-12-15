@@ -7,6 +7,7 @@
 
 import duckdb from 'duckdb';
 import { PUBLIC_MOTHERDUCK_TOKEN } from '$env/static/public';
+import { getGeographyConfig, getGeographySetupSQL } from './geography-config';
 
 const { Database } = duckdb;
 let db: typeof Database.prototype | null = null;
@@ -21,7 +22,7 @@ export interface QueryResult<T = Record<string, any>> {
 /**
  * Initialize DuckDB connection to MotherDuck
  */
-async function init(): Promise<any> {
+async function init(options?: { includeGeography?: boolean }): Promise<any> {
   if (db) return db;
 
   return new Promise((resolve, reject) => {
@@ -32,25 +33,38 @@ async function init(): Promise<any> {
         return;
       }
 
-      // Install and load MotherDuck extension
-      db!.exec(
-        `
+      // Build initialization SQL
+      let initSQL = `
         INSTALL motherduck;
         LOAD motherduck;
         SET motherduck_token='${PUBLIC_MOTHERDUCK_TOKEN}';
         ATTACH 'md:gem_data' AS gem;
         USE gem;
-      `,
-        (err: Error | null) => {
-          if (err) {
-            console.error('Failed to connect to MotherDuck:', err);
-            reject(err);
-            return;
-          }
-          console.log('✓ Connected to MotherDuck (Node.js)');
-          resolve(db!);
+      `;
+
+      // Optionally load geography extension
+      const shouldLoadGeography = options?.includeGeography ?? getGeographyConfig().enabled;
+      if (shouldLoadGeography) {
+        const geoConfig = getGeographyConfig();
+        if (geoConfig.verbose) {
+          console.log('🌍 Loading DuckDB geography extension...');
         }
-      );
+        initSQL += '\n' + getGeographySetupSQL();
+      }
+
+      // Install and load MotherDuck extension
+      db!.exec(initSQL, (err: Error | null) => {
+        if (err) {
+          console.error('Failed to connect to MotherDuck:', err);
+          reject(err);
+          return;
+        }
+        console.log('✓ Connected to MotherDuck (Node.js)');
+        if (shouldLoadGeography) {
+          console.log('✓ Geography extension loaded');
+        }
+        resolve(db!);
+      });
     });
   });
 }
