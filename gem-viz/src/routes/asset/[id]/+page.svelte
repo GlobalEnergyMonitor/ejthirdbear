@@ -14,6 +14,7 @@
   import MermaidOwnership from '$lib/components/MermaidOwnership.svelte';
   import OwnershipHierarchy from '$lib/components/OwnershipHierarchy.svelte';
   import OwnershipExplorerD3 from '$lib/components/OwnershipExplorerD3.svelte';
+  import RelationshipNetwork from '$lib/components/RelationshipNetwork.svelte';
   import StatusIcon from '$lib/components/StatusIcon.svelte';
   import TrackerIcon from '$lib/components/TrackerIcon.svelte';
   import { getTables } from '$lib/component-data/schema';
@@ -339,6 +340,12 @@
         <section class="ownership-explorer">
           <h2>Owner Explorer</h2>
           <OwnershipExplorerD3 ownerEntityId={primaryOwnerEntityId} />
+        </section>
+
+        <section class="relationship-network-section">
+          <h2>Related Assets & Network</h2>
+          <p class="viz-subtitle">Ownership chain, same-owner assets, and co-located units</p>
+          <RelationshipNetwork />
         </section>
       {/if}
 
@@ -917,6 +924,12 @@
 
   .ownership-explorer {
     margin-top: 32px;
+  }
+
+  .relationship-network-section {
+    margin-top: 40px;
+    padding-top: 30px;
+    border-top: 1px solid #ddd;
   }
 
   @media (max-width: 768px) {

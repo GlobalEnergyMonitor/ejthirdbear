@@ -5,6 +5,7 @@
   import { page } from '$app/stores';
   import OwnershipExplorerD3 from '$lib/components/OwnershipExplorerD3.svelte';
   import OwnershipFlower from '$lib/components/OwnershipFlower.svelte';
+  import AssetScreener from '$lib/components/AssetScreener.svelte';
   import TrackerIcon from '$lib/components/TrackerIcon.svelte';
   import StatusIcon from '$lib/components/StatusIcon.svelte';
   import { fetchOwnerPortfolio, fetchOwnerStats } from '$lib/component-data/schema';
@@ -228,8 +229,14 @@
       {/if}
 
       <section class="ownership-explorer">
-        <h2>Owner Explorer</h2>
+        <h2>Owner Explorer (3D Network)</h2>
         <OwnershipExplorerD3 ownerEntityId={entityId} prebakedData={data?.ownerExplorerData} />
+      </section>
+
+      <section class="asset-screener-section">
+        <h2>Asset Screener (Observable)</h2>
+        <p class="section-subtitle">Full portfolio breakdown with subsidiary paths, mini bar charts, and status icons — ported from GEM's Observable notebook</p>
+        <AssetScreener />
       </section>
     </article>
   {/if}
@@ -506,6 +513,19 @@
 
   .ownership-explorer {
     margin-top: 32px;
+  }
+
+  .asset-screener-section {
+    margin-top: 40px;
+    padding-top: 30px;
+    border-top: 1px solid #ddd;
+  }
+
+  .section-subtitle {
+    font-size: 12px;
+    color: #666;
+    margin: -15px 0 20px 0;
+    font-family: system-ui, sans-serif;
   }
 
   @media (max-width: 768px) {

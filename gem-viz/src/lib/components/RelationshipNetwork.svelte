@@ -12,7 +12,8 @@
   } from '$lib/component-data/schema';
 
   let loading = $state(true);
-  let error = $state<string | null>(null);
+  /** @type {string | null} */
+  let error = $state(null);
   let ownershipChain = $state([]);
   let sameOwnerAssets = $state([]);
   let coLocatedAssets = $state([]);
