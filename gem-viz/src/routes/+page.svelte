@@ -5,14 +5,15 @@
   // Featured entity
   const featuredEntity = { name: 'Featured Entity', id: 'E100001000348' };
 
-  // Featured assets (G = coal plant, P = plant, M = mine)
+  // Featured assets - Coal Plants only for now (MotherDuck only has coal_plant_ownership)
+  // TODO: Add Steel, Mine, Pipeline assets when full parquet is loaded
   const featuredAssets = [
     { name: 'Sines Power Station', id: 'G100000109409' },
     { name: 'Baghlan Power Station', id: 'G100001057899' },
-    { name: 'CAP Acero Huachipato Steel Plant', id: 'P100000120066' },
-    { name: 'PKN Coal Mines', id: 'M4499' },
     { name: 'Maranhao Sao Luis Coal Plant', id: 'G100000106660' },
-    { name: 'Nanshan Aluminum Donghai Coal Plant', id: 'G100000107258' }
+    { name: 'Nanshan Aluminum Donghai Coal Plant', id: 'G100000107258' },
+    { name: 'Daqing Coal Plant', id: 'G100000105872' },
+    { name: 'Boryeong Coal Plant', id: 'G100000107719' }
   ];
 </script>
 
