@@ -1,19 +1,20 @@
 <script>
   import { link, assetLink, entityLink } from '$lib/links';
   import SimpleMap from '$lib/SimpleMap.svelte';
+  import TrackerIcon from '$lib/components/TrackerIcon.svelte';
 
-  // Featured entity
-  const featuredEntity = { name: 'Featured Entity', id: 'E100001000348' };
+  // Featured entity (BlackRock Inc)
+  const featuredEntity = { name: 'BlackRock Inc', id: 'E100001000348' };
 
   // Featured assets - Coal Plants only for now (MotherDuck only has coal_plant_ownership)
   // TODO: Add Steel, Mine, Pipeline assets when full parquet is loaded
   const featuredAssets = [
-    { name: 'Sines Power Station', id: 'G100000109409' },
-    { name: 'Baghlan Power Station', id: 'G100001057899' },
-    { name: 'Maranhao Sao Luis Coal Plant', id: 'G100000106660' },
-    { name: 'Nanshan Aluminum Donghai Coal Plant', id: 'G100000107258' },
-    { name: 'Daqing Coal Plant', id: 'G100000105872' },
-    { name: 'Boryeong Coal Plant', id: 'G100000107719' }
+    { name: 'Sines Power Station', id: 'G100000109409', tracker: 'Coal Plant' },
+    { name: 'Baghlan Power Station', id: 'G100001057899', tracker: 'Coal Plant' },
+    { name: 'Maranhao Sao Luis Coal Plant', id: 'G100000106660', tracker: 'Coal Plant' },
+    { name: 'Nanshan Aluminum Donghai Coal Plant', id: 'G100000107258', tracker: 'Coal Plant' },
+    { name: 'Daqing Coal Plant', id: 'G100000105872', tracker: 'Coal Plant' },
+    { name: 'Boryeong Coal Plant', id: 'G100000107719', tracker: 'Coal Plant' }
   ];
 </script>
 
@@ -34,7 +35,10 @@
     <p>Featured assets</p>
     <div class="link-list">
       {#each featuredAssets as asset}
-        <a href={assetLink(asset.id)}>{asset.name}</a>
+        <a href={assetLink(asset.id)} class="asset-link">
+          <TrackerIcon tracker={asset.tracker} size={10} />
+          {asset.name}
+        </a>
       {/each}
     </div>
   </section>
@@ -42,7 +46,10 @@
   <section class="asset-links">
     <p>Featured entity</p>
     <div class="link-list">
-      <a href={entityLink(featuredEntity.id)}>{featuredEntity.id}</a>
+      <a href={entityLink(featuredEntity.id)} class="entity-link">
+        <span class="entity-icon">E</span>
+        {featuredEntity.name}
+      </a>
     </div>
   </section>
 
@@ -120,5 +127,26 @@
 
   .link-list a:hover {
     text-decoration: none;
+  }
+
+  .asset-link,
+  .entity-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .entity-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    background: #004A63;
+    color: white;
+    border-radius: 50%;
+    font-size: 9px;
+    font-weight: bold;
+    flex-shrink: 0;
   }
 </style>

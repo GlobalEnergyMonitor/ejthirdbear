@@ -4,6 +4,9 @@
   import { link, assetLink } from '$lib/links';
   import { page } from '$app/stores';
   import OwnershipExplorerD3 from '$lib/components/OwnershipExplorerD3.svelte';
+  import OwnershipFlower from '$lib/components/OwnershipFlower.svelte';
+  import TrackerIcon from '$lib/components/TrackerIcon.svelte';
+  import StatusIcon from '$lib/components/StatusIcon.svelte';
   import { fetchOwnerPortfolio, fetchOwnerStats } from '$lib/component-data/schema';
 
   // Server data from +page.server.js (prerendered)
@@ -112,7 +115,27 @@
     <p class="loading error">{error}</p>
   {:else}
     <article class="entity-detail">
-      <h1>{entityName || `ID: ${entityId}`}</h1>
+      <div class="entity-header">
+        <div class="header-content">
+          <h1>{entityName || `ID: ${entityId}`}</h1>
+          <p class="entity-subtitle">
+            {#if stats?.total_assets || portfolio?.assets?.length}
+              {(stats?.total_assets ?? portfolio?.assets?.length ?? 0).toLocaleString()} assets
+              {#if stats?.total_capacity_mw}
+                · {Number(stats.total_capacity_mw).toLocaleString()} MW
+              {/if}
+              {#if stats?.countries}
+                · {stats.countries} countries
+              {/if}
+            {/if}
+          </p>
+        </div>
+        {#if portfolio}
+          <div class="header-flower">
+            <OwnershipFlower portfolio={portfolio} size="medium" showTitle={false} />
+          </div>
+        {/if}
+      </div>
 
       <div class="meta-grid">
         <div class="meta-item">
@@ -145,13 +168,13 @@
       </div>
 
       {#if trackerBreakdown.length > 0}
-        <section class="external-ids">
+        <section class="breakdown-section">
           <h2>Tracker Mix</h2>
-          <ul class="chip-list">
+          <ul class="tracker-list">
             {#each trackerBreakdown as row}
-              <li class="chip-row">
-                <span class="chip">{row.tracker}</span>
-                <span class="chip-count">{row.count.toLocaleString()}</span>
+              <li class="tracker-row">
+                <TrackerIcon tracker={row.tracker} size={14} showLabel variant="pill" />
+                <span class="tracker-count">{row.count.toLocaleString()} assets</span>
               </li>
             {/each}
           </ul>
@@ -159,13 +182,14 @@
       {/if}
 
       {#if statusBreakdown.length > 0}
-        <section class="external-ids">
+        <section class="breakdown-section">
           <h2>Status Breakdown</h2>
-          <ul class="chip-list">
+          <ul class="status-list">
             {#each statusBreakdown as row}
-              <li class="chip-row">
-                <span class="chip">{row.status}</span>
-                <span class="chip-count">{row.count.toLocaleString()}</span>
+              <li class="status-row">
+                <StatusIcon status={row.status} size={12} />
+                <span class="status-label">{row.status}</span>
+                <span class="status-count">{row.count.toLocaleString()}</span>
               </li>
             {/each}
           </ul>
@@ -179,19 +203,19 @@
             {#each summaryAssets as asset}
               <div class="asset-card">
                 <div class="asset-header">
+                  {#if asset.tracker}
+                    <TrackerIcon tracker={asset.tracker} size={10} />
+                  {/if}
                   <a href={assetLink(asset.id)} class="asset-link">
                     {asset.name || asset.id}
                   </a>
-                  {#if asset.tracker}
-                    <span class="badge">{asset.tracker}</span>
+                  {#if asset.status}
+                    <StatusIcon status={asset.status} size={10} />
                   {/if}
                 </div>
                 <div class="asset-meta">
                   {#if asset.status}
                     <span class="chip">{asset.status}</span>
-                  {/if}
-                  {#if asset.locationId}
-                    <span class="chip">Location {asset.locationId}</span>
                   {/if}
                   {#if asset.capacityMw}
                     <span class="chip">{Number(asset.capacityMw).toLocaleString()} MW</span>
@@ -261,11 +285,34 @@
     font-family: Georgia, serif;
   }
 
+  .entity-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 30px;
+    margin-bottom: 30px;
+  }
+
+  .header-content {
+    flex: 1;
+  }
+
+  .header-flower {
+    flex-shrink: 0;
+  }
+
   h1 {
     font-size: 32px;
     font-weight: normal;
-    margin: 0 0 30px 0;
+    margin: 0 0 10px 0;
     line-height: 1.2;
+  }
+
+  .entity-subtitle {
+    font-size: 14px;
+    color: #666;
+    margin: 0;
+    font-family: system-ui, sans-serif;
   }
 
   h2 {
@@ -320,40 +367,73 @@
     color: #2e7d32;
   }
 
-  .external-ids {
-    margin: 40px 0;
+  .breakdown-section {
+    margin: 30px 0;
     padding: 20px;
-    background: #f5f5f5;
-    border: 1px solid #ddd;
+    background: #fafafa;
+    border: 1px solid #e0e0e0;
   }
 
-  .chip-list {
+  .breakdown-section h2 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  .tracker-list,
+  .status-list {
     list-style: none;
     padding: 0;
-    margin: 10px 0 0 0;
+    margin: 0;
     display: flex;
     flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .tracker-row {
+    display: flex;
+    align-items: center;
     gap: 8px;
   }
 
-  .chip-row {
-    display: inline-flex;
+  .tracker-count {
+    font-size: 12px;
+    color: #666;
+    font-family: system-ui, sans-serif;
+  }
+
+  .status-row {
+    display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
+    padding: 4px 10px;
     background: #fff;
     border: 1px solid #ddd;
-    padding: 6px 10px;
+  }
+
+  .status-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    font-family: system-ui, sans-serif;
+  }
+
+  .status-count {
+    font-size: 12px;
+    color: #666;
+    font-family: system-ui, sans-serif;
+    margin-left: 4px;
   }
 
   .chip {
-    font-size: 11px;
+    font-size: 10px;
     text-transform: uppercase;
-    letter-spacing: 0.4px;
-  }
-
-  .chip-count {
-    font-size: 12px;
-    color: #666;
+    letter-spacing: 0.3px;
+    padding: 2px 6px;
+    background: #f0f0f0;
+    border: 1px solid #ddd;
+    font-family: system-ui, sans-serif;
   }
 
   .properties {
@@ -429,6 +509,15 @@
   }
 
   @media (max-width: 768px) {
+    .entity-header {
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .header-flower {
+      align-self: center;
+    }
+
     .meta-grid {
       grid-template-columns: 1fr;
     }

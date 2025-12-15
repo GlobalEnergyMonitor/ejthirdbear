@@ -15,6 +15,7 @@
   import OwnershipHierarchy from '$lib/components/OwnershipHierarchy.svelte';
   import OwnershipExplorerD3 from '$lib/components/OwnershipExplorerD3.svelte';
   import StatusIcon from '$lib/components/StatusIcon.svelte';
+  import TrackerIcon from '$lib/components/TrackerIcon.svelte';
   import { getTables } from '$lib/component-data/schema';
   import { parseOwnershipPaths } from '$lib/component-data/ownership-parser';
   import { SCHEMA_SQL, ASSET_SQL, escapeValue } from '$lib/component-data/sql-helpers';
@@ -211,9 +212,8 @@
         {#if trackerCol && asset[trackerCol]}
           <div class="meta-item">
             <span class="label">Tracker</span>
-            <span class="value tracker-badge" style="--tracker-color: {trackerColor}">
-              <span class="tracker-dot"></span>
-              {asset[trackerCol]}
+            <span class="value">
+              <TrackerIcon tracker={asset[trackerCol]} size={14} showLabel variant="pill" />
             </span>
           </div>
         {/if}
