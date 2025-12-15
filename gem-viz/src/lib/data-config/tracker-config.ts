@@ -337,9 +337,7 @@ export function getAllTrackerNames(): string[] {
 /**
  * Get trackers by asset type
  */
-export function getTrackersByType(
-  assetType: 'mine' | 'plant' | 'pipeline'
-): TrackerFieldMapping[] {
+export function getTrackersByType(assetType: 'mine' | 'plant' | 'pipeline'): TrackerFieldMapping[] {
   return Array.from(trackerConfigs.values()).filter((tc) => tc.assetType === assetType);
 }
 
@@ -450,5 +448,10 @@ export function extractLocation(
   const country = (record[location.countryField!] as string) || null;
   const state = (record[location.stateField!] as string) || null;
 
-  return { lat: lat && isFinite(lat) ? lat : null, lon: lon && isFinite(lon) ? lon : null, country, state };
+  return {
+    lat: lat && isFinite(lat) ? lat : null,
+    lon: lon && isFinite(lon) ? lon : null,
+    country,
+    state,
+  };
 }

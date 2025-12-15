@@ -15,11 +15,7 @@
   import { colors, colorByTracker, regroupStatus } from '$lib/ownership-theme';
 
   // Layout/display props only
-  let {
-    assetClassName = 'assets',
-    sortByOwnershipPct = true,
-    includeUnitNames = false,
-  } = $props();
+  let { assetClassName = 'assets', sortByOwnershipPct = true, includeUnitNames = false } = $props();
 
   // Internal state for fetched data
   let spotlightOwner = $state(null);
@@ -364,369 +360,372 @@
       </div>
     </div>
 
-  <!-- Main SVG -->
-  <div class="chart-wrapper">
-    <svg width={svgWidth} height={svgHeight + margin.top + margin.bottom}>
-      <defs>
-        <linearGradient id="gradient-fade" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#fafaf7" />
-          <stop offset="100%" stop-color="#f7f7f3" />
-        </linearGradient>
-      </defs>
+    <!-- Main SVG -->
+    <div class="chart-wrapper">
+      <svg width={svgWidth} height={svgHeight + margin.top + margin.bottom}>
+        <defs>
+          <linearGradient id="gradient-fade" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#fafaf7" />
+            <stop offset="100%" stop-color="#f7f7f3" />
+          </linearGradient>
+        </defs>
 
-      <g transform="translate({margin.left}, {margin.top})">
-        <!-- Vertical connection line -->
-        <path
-          d="M 0 {-margin.top - 5} L 0 {svgHeight + margin.bottom - 5}"
-          fill="none"
-          stroke="#d8d8ce"
-          stroke-width="3.5"
-          stroke-linecap="round"
-        />
-
-        <!-- Subsidiary groups -->
-        {#each subsidiaryGroups as group}
-          <!-- Background shape -->
-          <path d={subsidiaryPath(group)} fill="url(#gradient-fade)" class="subsidiary-bg" />
-
-          <!-- Top stroke -->
+        <g transform="translate({margin.left}, {margin.top})">
+          <!-- Vertical connection line -->
           <path
-            d="M 0 {group.top - params.yPadding} C 0 {group.top -
-              params.yPadding * 0.2}, {params.yPadding *
-              0.2} {group.top}, {params.yPadding} {group.top} L {params.subsidX +
-              params.assetsX -
-              params.assetSpacing * 2} {group.top}"
+            d="M 0 {-margin.top - 5} L 0 {svgHeight + margin.bottom - 5}"
             fill="none"
             stroke="#d8d8ce"
-            stroke-width="3"
+            stroke-width="3.5"
             stroke-linecap="round"
           />
 
-          <!-- Subsidiary content -->
-          <g
-            transform="translate({params.subsidiaryMarkHeight / 2 + params.subsidX}, {group.top +
-              20})"
-          >
-            <!-- Subsidiary circle with ownership pie (not for direct ownership) -->
-            {#if !group.isDirect}
-              {@const edgeData = matchedEdges.get(group.id)}
-              {@const pieRadius = (params.subsidiaryMarkHeight / 2) * 0.7}
+          <!-- Subsidiary groups -->
+          {#each subsidiaryGroups as group}
+            <!-- Background shape -->
+            <path d={subsidiaryPath(group)} fill="url(#gradient-fade)" class="subsidiary-bg" />
 
-              <!-- Background circle -->
-              {#if edgeData?.value !== 100}
-                <circle
-                  cx="0"
-                  cy={pieRadius}
-                  r={pieRadius + 1}
-                  fill="#cce1e6"
-                  stroke="#ffffff"
-                  stroke-width="1.25"
-                  class="subsidiary-circle"
-                  role="img"
-                  aria-label={`${entityMap.get(group.id)?.Name || 'Unknown'} ownership`}
-                  onmouseenter={() => (hoverData = { type: 'subsidiary', ...group, edgeData })}
-                  onmouseleave={() => (hoverData = null)}
-                />
-              {/if}
+            <!-- Top stroke -->
+            <path
+              d="M 0 {group.top - params.yPadding} C 0 {group.top -
+                params.yPadding * 0.2}, {params.yPadding *
+                0.2} {group.top}, {params.yPadding} {group.top} L {params.subsidX +
+                params.assetsX -
+                params.assetSpacing * 2} {group.top}"
+              fill="none"
+              stroke="#d8d8ce"
+              stroke-width="3"
+              stroke-linecap="round"
+            />
 
-              <!-- Ownership pie -->
-              <g transform="translate(0, {pieRadius})">
-                <path
-                  d={arcPath(edgeData?.value, pieRadius)}
-                  fill={edgeData?.value ? colors.teal : 'none'}
-                  class="ownership-pie"
-                />
-              </g>
-            {/if}
-
-            <!-- Subsidiary name -->
-            <text
-              x={params.subsidiaryMarkHeight / 2 + 5}
-              y={(params.subsidiaryMarkHeight / 2) * 0.7}
-              fill={colors.navy}
-              class="subsidiary-name"
+            <!-- Subsidiary content -->
+            <g
+              transform="translate({params.subsidiaryMarkHeight / 2 + params.subsidX}, {group.top +
+                20})"
             >
-              {#each wrapText(entityMap.get(group.id)?.Name || (group.isDirect ? 'Directly owned' : 'Unknown')) as line, i}
-                <tspan x={params.subsidiaryMarkHeight / 2 + 5} dy={i === 0 ? '0.35em' : '1.2em'}
-                  >{line}</tspan
-                >
-              {/each}
-            </text>
+              <!-- Subsidiary circle with ownership pie (not for direct ownership) -->
+              {#if !group.isDirect}
+                {@const edgeData = matchedEdges.get(group.id)}
+                {@const pieRadius = (params.subsidiaryMarkHeight / 2) * 0.7}
 
-            <!-- Mini bar charts (only for groups with multiple locations) -->
-            {#if group.locations.length > 1}
-              <!-- Tracker bar chart -->
-              <g
-                class="bar-chart"
-                transform="translate({params.subsidiaryMarkHeight / 2 + 235}, -10)"
-              >
-                <text class="bar-title" dy="-0.5em">Asset types</text>
-                {#each group.summaryData.tracker as bar, i}
-                  <rect
-                    x={bar.xPercentage * barWidth + i * 2}
-                    y="0"
-                    width={bar.percentage * barWidth}
-                    height={barHeight}
-                    rx={barHeight * 0.25}
-                    fill={colorByTracker.get(bar.tracker) || colors.grey}
-                    class="bar-segment"
+                <!-- Background circle -->
+                {#if edgeData?.value !== 100}
+                  <circle
+                    cx="0"
+                    cy={pieRadius}
+                    r={pieRadius + 1}
+                    fill="#cce1e6"
+                    stroke="#ffffff"
+                    stroke-width="1.25"
+                    class="subsidiary-circle"
                     role="img"
-                    aria-label={`${bar.tracker}: ${(bar.percentage * 100).toFixed(0)}%`}
-                    onmouseenter={() =>
-                      (hoverData = { type: 'bar', label: bar.tracker, pct: bar.percentage })}
+                    aria-label={`${entityMap.get(group.id)?.Name || 'Unknown'} ownership`}
+                    onmouseenter={() => (hoverData = { type: 'subsidiary', ...group, edgeData })}
                     onmouseleave={() => (hoverData = null)}
                   />
-                {/each}
-              </g>
-
-              <!-- Status bar chart -->
-              <g
-                class="bar-chart"
-                transform="translate({params.subsidiaryMarkHeight / 2 + 235}, 20)"
-              >
-                <text class="bar-title" dy="-0.5em">Asset status</text>
-                {#each group.summaryData.status as bar, i}
-                  <rect
-                    x={bar.xPercentage * barWidth + i * 2}
-                    y="0"
-                    width={bar.percentage * barWidth}
-                    height={barHeight}
-                    rx={barHeight * 0.25}
-                    fill={getStatusColor(bar.status)}
-                    class="bar-segment"
-                    role="img"
-                    aria-label={`${bar.status}: ${(bar.percentage * 100).toFixed(0)}%`}
-                    onmouseenter={() =>
-                      (hoverData = { type: 'bar', label: bar.status, pct: bar.percentage })}
-                    onmouseleave={() => (hoverData = null)}
-                  />
-                {/each}
-              </g>
-            {/if}
-          </g>
-
-          <!-- Asset locations -->
-          <g transform="translate({params.subsidiaryMarkHeight / 2 + params.subsidX}, {group.top})">
-            {#each group.locations as loc}
-              <g
-                transform="translate({params.assetsX}, {loc.y})"
-                class="asset-group"
-                role="img"
-                aria-label={loc.units[0]?.name || 'Asset'}
-                onmouseenter={() =>
-                  (hoverData = { type: 'asset', ...loc.units[0], allUnits: loc.units })}
-                onmouseleave={() => (hoverData = null)}
-              >
-                {#if loc.units.length === 1}
-                  <!-- Single unit -->
-                  {@const unit = loc.units[0]}
-                  {@const unitStatus = regroupStatus(unit.status || unit.Status)}
-                  <circle r={loc.r} fill={getAssetColor(unit)} class="asset-circle" />
-                  <!-- Status icon - positioned at r * 1.1 offset, size r * 0.225 -->
-                  {#if unitStatus === 'proposed'}
-                    <!-- Yellow circle for proposed -->
-                    <circle
-                      cx={loc.r * 1.1}
-                      cy={-loc.r * 1.1}
-                      r={loc.r * 0.225}
-                      fill={colors.yellow}
-                      class="status-icon"
-                    />
-                  {:else if unitStatus === 'cancelled'}
-                    <!-- X mark for cancelled -->
-                    {@const s = loc.r * 0.225}
-                    <path
-                      transform="translate({loc.r * 1.1}, {-loc.r * 1.1})"
-                      d="M {-s} {s} L {s} {-s} M {-s} {-s} L {s} {s}"
-                      fill="none"
-                      stroke={colors.grey}
-                      stroke-width="1.25"
-                      stroke-linecap="round"
-                      class="status-icon"
-                    />
-                  {:else if unitStatus === 'retired'}
-                    <!-- X mark for retired -->
-                    {@const s = loc.r * 0.225}
-                    <path
-                      transform="translate({loc.r * 1.1}, {-loc.r * 1.1})"
-                      d="M {-s} {s} L {s} {-s} M {-s} {-s} L {s} {s}"
-                      fill="none"
-                      stroke={colors.midnightPurple}
-                      stroke-width="1.25"
-                      stroke-linecap="round"
-                      class="status-icon"
-                    />
-                  {/if}
-                {:else}
-                  <!-- Multiple units - ring layout -->
-                  {@const n = loc.units.length}
-                  {@const TAU = Math.PI * 2}
-                  <!-- Background circle -->
-                  <circle r={loc.r} fill="none" stroke="#aab2c0" stroke-width="2" />
-                  <!-- Unit circles with mix-blend-mode multiply -->
-                  <g class="unit-ring" style="isolation: isolate;">
-                    {#each loc.units as unit, ui}
-                      {@const angle = (TAU * ui) / n}
-                      {@const cx = loc.r * Math.cos(angle)}
-                      {@const cy = loc.r * Math.sin(angle)}
-                      {@const unitR = (params.assetMarkHeightSingle / 2) * 0.6}
-                      {@const unitStatus = regroupStatus(unit.status || unit.Status)}
-                      <circle
-                        {cx}
-                        {cy}
-                        r={unitR}
-                        fill={getAssetColor(unit)}
-                        class="unit-circle"
-                        style="mix-blend-mode: multiply;"
-                      />
-                      <!-- Status icon for each unit - positioned at unitR * 1.1 offset -->
-                      {#if unitStatus === 'proposed'}
-                        <circle
-                          cx={cx + unitR * 1.1}
-                          cy={cy - unitR * 1.1}
-                          r={unitR * 0.225}
-                          fill={colors.yellow}
-                          class="status-icon"
-                        />
-                      {:else if unitStatus === 'cancelled'}
-                        {@const s = unitR * 0.225}
-                        <path
-                          transform="translate({cx + unitR * 1.1}, {cy - unitR * 1.1})"
-                          d="M {-s} {s} L {s} {-s} M {-s} {-s} L {s} {s}"
-                          fill="none"
-                          stroke={colors.grey}
-                          stroke-width="1.25"
-                          stroke-linecap="round"
-                          class="status-icon"
-                        />
-                      {:else if unitStatus === 'retired'}
-                        {@const s = unitR * 0.225}
-                        <path
-                          transform="translate({cx + unitR * 1.1}, {cy - unitR * 1.1})"
-                          d="M {-s} {s} L {s} {-s} M {-s} {-s} L {s} {s}"
-                          fill="none"
-                          stroke={colors.midnightPurple}
-                          stroke-width="1.25"
-                          stroke-linecap="round"
-                          class="status-icon"
-                        />
-                      {/if}
-                    {/each}
-                  </g>
                 {/if}
 
-                <!-- Asset label -->
-                <text x={params.assetMarkHeightCombined + 5} y="5" class="asset-name">
-                  {includeUnitNames ? loc.units[0].name : cleanAssetName(loc.units[0].name)}
-                </text>
-              </g>
-            {/each}
-          </g>
+                <!-- Ownership pie -->
+                <g transform="translate(0, {pieRadius})">
+                  <path
+                    d={arcPath(edgeData?.value, pieRadius)}
+                    fill={edgeData?.value ? colors.teal : 'none'}
+                    class="ownership-pie"
+                  />
+                </g>
+              {/if}
+
+              <!-- Subsidiary name -->
+              <text
+                x={params.subsidiaryMarkHeight / 2 + 5}
+                y={(params.subsidiaryMarkHeight / 2) * 0.7}
+                fill={colors.navy}
+                class="subsidiary-name"
+              >
+                {#each wrapText(entityMap.get(group.id)?.Name || (group.isDirect ? 'Directly owned' : 'Unknown')) as line, i}
+                  <tspan x={params.subsidiaryMarkHeight / 2 + 5} dy={i === 0 ? '0.35em' : '1.2em'}
+                    >{line}</tspan
+                  >
+                {/each}
+              </text>
+
+              <!-- Mini bar charts (only for groups with multiple locations) -->
+              {#if group.locations.length > 1}
+                <!-- Tracker bar chart -->
+                <g
+                  class="bar-chart"
+                  transform="translate({params.subsidiaryMarkHeight / 2 + 235}, -10)"
+                >
+                  <text class="bar-title" dy="-0.5em">Asset types</text>
+                  {#each group.summaryData.tracker as bar, i}
+                    <rect
+                      x={bar.xPercentage * barWidth + i * 2}
+                      y="0"
+                      width={bar.percentage * barWidth}
+                      height={barHeight}
+                      rx={barHeight * 0.25}
+                      fill={colorByTracker.get(bar.tracker) || colors.grey}
+                      class="bar-segment"
+                      role="img"
+                      aria-label={`${bar.tracker}: ${(bar.percentage * 100).toFixed(0)}%`}
+                      onmouseenter={() =>
+                        (hoverData = { type: 'bar', label: bar.tracker, pct: bar.percentage })}
+                      onmouseleave={() => (hoverData = null)}
+                    />
+                  {/each}
+                </g>
+
+                <!-- Status bar chart -->
+                <g
+                  class="bar-chart"
+                  transform="translate({params.subsidiaryMarkHeight / 2 + 235}, 20)"
+                >
+                  <text class="bar-title" dy="-0.5em">Asset status</text>
+                  {#each group.summaryData.status as bar, i}
+                    <rect
+                      x={bar.xPercentage * barWidth + i * 2}
+                      y="0"
+                      width={bar.percentage * barWidth}
+                      height={barHeight}
+                      rx={barHeight * 0.25}
+                      fill={getStatusColor(bar.status)}
+                      class="bar-segment"
+                      role="img"
+                      aria-label={`${bar.status}: ${(bar.percentage * 100).toFixed(0)}%`}
+                      onmouseenter={() =>
+                        (hoverData = { type: 'bar', label: bar.status, pct: bar.percentage })}
+                      onmouseleave={() => (hoverData = null)}
+                    />
+                  {/each}
+                </g>
+              {/if}
+            </g>
+
+            <!-- Asset locations -->
+            <g
+              transform="translate({params.subsidiaryMarkHeight / 2 + params.subsidX}, {group.top})"
+            >
+              {#each group.locations as loc}
+                <g
+                  transform="translate({params.assetsX}, {loc.y})"
+                  class="asset-group"
+                  role="img"
+                  aria-label={loc.units[0]?.name || 'Asset'}
+                  onmouseenter={() =>
+                    (hoverData = { type: 'asset', ...loc.units[0], allUnits: loc.units })}
+                  onmouseleave={() => (hoverData = null)}
+                >
+                  {#if loc.units.length === 1}
+                    <!-- Single unit -->
+                    {@const unit = loc.units[0]}
+                    {@const unitStatus = regroupStatus(unit.status || unit.Status)}
+                    <circle r={loc.r} fill={getAssetColor(unit)} class="asset-circle" />
+                    <!-- Status icon - positioned at r * 1.1 offset, size r * 0.225 -->
+                    {#if unitStatus === 'proposed'}
+                      <!-- Yellow circle for proposed -->
+                      <circle
+                        cx={loc.r * 1.1}
+                        cy={-loc.r * 1.1}
+                        r={loc.r * 0.225}
+                        fill={colors.yellow}
+                        class="status-icon"
+                      />
+                    {:else if unitStatus === 'cancelled'}
+                      <!-- X mark for cancelled -->
+                      {@const s = loc.r * 0.225}
+                      <path
+                        transform="translate({loc.r * 1.1}, {-loc.r * 1.1})"
+                        d="M {-s} {s} L {s} {-s} M {-s} {-s} L {s} {s}"
+                        fill="none"
+                        stroke={colors.grey}
+                        stroke-width="1.25"
+                        stroke-linecap="round"
+                        class="status-icon"
+                      />
+                    {:else if unitStatus === 'retired'}
+                      <!-- X mark for retired -->
+                      {@const s = loc.r * 0.225}
+                      <path
+                        transform="translate({loc.r * 1.1}, {-loc.r * 1.1})"
+                        d="M {-s} {s} L {s} {-s} M {-s} {-s} L {s} {s}"
+                        fill="none"
+                        stroke={colors.midnightPurple}
+                        stroke-width="1.25"
+                        stroke-linecap="round"
+                        class="status-icon"
+                      />
+                    {/if}
+                  {:else}
+                    <!-- Multiple units - ring layout -->
+                    {@const n = loc.units.length}
+                    {@const TAU = Math.PI * 2}
+                    <!-- Background circle -->
+                    <circle r={loc.r} fill="none" stroke="#aab2c0" stroke-width="2" />
+                    <!-- Unit circles with mix-blend-mode multiply -->
+                    <g class="unit-ring" style="isolation: isolate;">
+                      {#each loc.units as unit, ui}
+                        {@const angle = (TAU * ui) / n}
+                        {@const cx = loc.r * Math.cos(angle)}
+                        {@const cy = loc.r * Math.sin(angle)}
+                        {@const unitR = (params.assetMarkHeightSingle / 2) * 0.6}
+                        {@const unitStatus = regroupStatus(unit.status || unit.Status)}
+                        <circle
+                          {cx}
+                          {cy}
+                          r={unitR}
+                          fill={getAssetColor(unit)}
+                          class="unit-circle"
+                          style="mix-blend-mode: multiply;"
+                        />
+                        <!-- Status icon for each unit - positioned at unitR * 1.1 offset -->
+                        {#if unitStatus === 'proposed'}
+                          <circle
+                            cx={cx + unitR * 1.1}
+                            cy={cy - unitR * 1.1}
+                            r={unitR * 0.225}
+                            fill={colors.yellow}
+                            class="status-icon"
+                          />
+                        {:else if unitStatus === 'cancelled'}
+                          {@const s = unitR * 0.225}
+                          <path
+                            transform="translate({cx + unitR * 1.1}, {cy - unitR * 1.1})"
+                            d="M {-s} {s} L {s} {-s} M {-s} {-s} L {s} {s}"
+                            fill="none"
+                            stroke={colors.grey}
+                            stroke-width="1.25"
+                            stroke-linecap="round"
+                            class="status-icon"
+                          />
+                        {:else if unitStatus === 'retired'}
+                          {@const s = unitR * 0.225}
+                          <path
+                            transform="translate({cx + unitR * 1.1}, {cy - unitR * 1.1})"
+                            d="M {-s} {s} L {s} {-s} M {-s} {-s} L {s} {s}"
+                            fill="none"
+                            stroke={colors.midnightPurple}
+                            stroke-width="1.25"
+                            stroke-linecap="round"
+                            class="status-icon"
+                          />
+                        {/if}
+                      {/each}
+                    </g>
+                  {/if}
+
+                  <!-- Asset label -->
+                  <text x={params.assetMarkHeightCombined + 5} y="5" class="asset-name">
+                    {includeUnitNames ? loc.units[0].name : cleanAssetName(loc.units[0].name)}
+                  </text>
+                </g>
+              {/each}
+            </g>
+          {/each}
+        </g>
+      </svg>
+    </div>
+
+    <!-- Additional info footer -->
+    <div class="additional-info">
+      <p>
+        <span>
+          {spotlightOwner?.Name || 'This owner'} has stakes in additional assets identified in the Global
+          Energy Ownership Trackers
+        </span>
+      </p>
+    </div>
+
+    <!-- Legend -->
+    <div class="legend-container">
+      <div class="legend">
+        {#each colLegend as item}
+          <div class="legend-item">
+            <div class="legend-bubble" style:background-color={item.color}></div>
+            <div>{item.label}</div>
+          </div>
         {/each}
-      </g>
-    </svg>
-  </div>
-
-  <!-- Additional info footer -->
-  <div class="additional-info">
-    <p>
-      <span>
-        {spotlightOwner?.Name || 'This owner'} has stakes in additional assets identified in the Global
-        Energy Ownership Trackers
-      </span>
-    </p>
-  </div>
-
-  <!-- Legend -->
-  <div class="legend-container">
-    <div class="legend">
-      {#each colLegend as item}
-        <div class="legend-item">
-          <div class="legend-bubble" style:background-color={item.color}></div>
-          <div>{item.label}</div>
+      </div>
+      <!-- Status icon legend -->
+      <div class="status-icon-legend">
+        <div class="status-icon-item">
+          <svg width="16" height="16" viewBox="-8 -8 16 16">
+            <circle r="5" fill={colors.yellow} />
+          </svg>
+          <span>proposed</span>
         </div>
-      {/each}
-    </div>
-    <!-- Status icon legend -->
-    <div class="status-icon-legend">
-      <div class="status-icon-item">
-        <svg width="16" height="16" viewBox="-8 -8 16 16">
-          <circle r="5" fill={colors.yellow} />
-        </svg>
-        <span>proposed</span>
-      </div>
-      <div class="status-icon-item">
-        <svg width="16" height="16" viewBox="-8 -8 16 16">
-          <line
-            x1="-4"
-            y1="-4"
-            x2="4"
-            y2="4"
-            stroke={colors.grey}
-            stroke-width="2"
-            stroke-linecap="round"
-          />
-          <line
-            x1="4"
-            y1="-4"
-            x2="-4"
-            y2="4"
-            stroke={colors.grey}
-            stroke-width="2"
-            stroke-linecap="round"
-          />
-        </svg>
-        <span>cancelled</span>
-      </div>
-      <div class="status-icon-item">
-        <svg width="16" height="16" viewBox="-8 -8 16 16">
-          <line
-            x1="-4"
-            y1="-4"
-            x2="4"
-            y2="4"
-            stroke={colors.midnightPurple}
-            stroke-width="2"
-            stroke-linecap="round"
-          />
-          <line
-            x1="4"
-            y1="-4"
-            x2="-4"
-            y2="4"
-            stroke={colors.midnightPurple}
-            stroke-width="2"
-            stroke-linecap="round"
-          />
-        </svg>
-        <span>retired</span>
+        <div class="status-icon-item">
+          <svg width="16" height="16" viewBox="-8 -8 16 16">
+            <line
+              x1="-4"
+              y1="-4"
+              x2="4"
+              y2="4"
+              stroke={colors.grey}
+              stroke-width="2"
+              stroke-linecap="round"
+            />
+            <line
+              x1="4"
+              y1="-4"
+              x2="-4"
+              y2="4"
+              stroke={colors.grey}
+              stroke-width="2"
+              stroke-linecap="round"
+            />
+          </svg>
+          <span>cancelled</span>
+        </div>
+        <div class="status-icon-item">
+          <svg width="16" height="16" viewBox="-8 -8 16 16">
+            <line
+              x1="-4"
+              y1="-4"
+              x2="4"
+              y2="4"
+              stroke={colors.midnightPurple}
+              stroke-width="2"
+              stroke-linecap="round"
+            />
+            <line
+              x1="4"
+              y1="-4"
+              x2="-4"
+              y2="4"
+              stroke={colors.midnightPurple}
+              stroke-width="2"
+              stroke-linecap="round"
+            />
+          </svg>
+          <span>retired</span>
+        </div>
       </div>
     </div>
-  </div>
 
-  <!-- Tooltip -->
-  {#if hoverData}
-    <div class="tooltip">
-      {#if hoverData.type === 'subsidiary'}
-        <strong>{entityMap.get(hoverData.id)?.Name || 'Unknown'}</strong>
-        {#if hoverData.edgeData?.value}
-          <br /><span class="ownership-pct">{hoverData.edgeData.value.toFixed(1)}% ownership</span>
+    <!-- Tooltip -->
+    {#if hoverData}
+      <div class="tooltip">
+        {#if hoverData.type === 'subsidiary'}
+          <strong>{entityMap.get(hoverData.id)?.Name || 'Unknown'}</strong>
+          {#if hoverData.edgeData?.value}
+            <br /><span class="ownership-pct">{hoverData.edgeData.value.toFixed(1)}% ownership</span
+            >
+          {/if}
+          <br /><span class="asset-count">{hoverData.locations?.length || 0} assets</span>
+        {:else if hoverData.type === 'asset'}
+          <strong>{hoverData.name || hoverData.project || 'Unknown Asset'}</strong>
+          {#if hoverData.Status || hoverData.status}
+            <br /><span class="status">{hoverData.Status || hoverData.status}</span>
+          {/if}
+          {#if hoverData.allUnits?.length > 1}
+            <br /><span class="unit-count">{hoverData.allUnits.length} units</span>
+          {/if}
+        {:else if hoverData.type === 'bar'}
+          <strong>{hoverData.label}</strong>
+          <br /><span>{(hoverData.pct * 100).toFixed(0)}%</span>
         {/if}
-        <br /><span class="asset-count">{hoverData.locations?.length || 0} assets</span>
-      {:else if hoverData.type === 'asset'}
-        <strong>{hoverData.name || hoverData.project || 'Unknown Asset'}</strong>
-        {#if hoverData.Status || hoverData.status}
-          <br /><span class="status">{hoverData.Status || hoverData.status}</span>
-        {/if}
-        {#if hoverData.allUnits?.length > 1}
-          <br /><span class="unit-count">{hoverData.allUnits.length} units</span>
-        {/if}
-      {:else if hoverData.type === 'bar'}
-        <strong>{hoverData.label}</strong>
-        <br /><span>{(hoverData.pct * 100).toFixed(0)}%</span>
-      {/if}
-    </div>
-  {/if}
+      </div>
+    {/if}
   {/if}
 </div>
 

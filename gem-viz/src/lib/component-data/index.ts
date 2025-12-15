@@ -22,7 +22,13 @@ export {
   type ParsedOwnershipGraph,
 } from './ownership-parser';
 export * from './sql-helpers';
-export { getMotherDuck, getPageId, getPageType, requirePageId, createHydration } from './use-hydration.svelte';
+export {
+  getMotherDuck,
+  getPageId,
+  getPageType,
+  requirePageId,
+  createHydration,
+} from './use-hydration.svelte';
 
 // Schema functions (MotherDuck-based)
 export {

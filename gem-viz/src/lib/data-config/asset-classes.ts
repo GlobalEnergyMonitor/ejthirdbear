@@ -249,9 +249,7 @@ export function getAssetClassesForRecord(
  *   const fields = getRelevantFieldsForClass('Coal-Based Steel Plants');
  *   // fields.identifyingFields: ['Main production equipment', 'Plant name (English)']
  */
-export function getRelevantFieldsForClass(
-  className: string
-): AssetClassRelevantFields | undefined {
+export function getRelevantFieldsForClass(className: string): AssetClassRelevantFields | undefined {
   const assetClass = getAssetClass(className);
   return assetClass?.relevantFields;
 }
@@ -294,12 +292,7 @@ export const assetClassMetadata = {
     icon: '🏭',
     color: '#7F142A', // Coal color from GEM brand
     category: 'Energy Intensive Industry',
-    concernAreas: [
-      'Coal dependence',
-      'Air quality impacts',
-      'Closure risk',
-      'Capital intensity',
-    ],
+    concernAreas: ['Coal dependence', 'Air quality impacts', 'Closure risk', 'Capital intensity'],
   },
   CaptiveCoalPlant: {
     icon: '⚡',

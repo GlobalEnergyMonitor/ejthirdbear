@@ -81,8 +81,7 @@ export function parseOwnershipPaths(
       const depth = parsedSegments.length - 1 - i; // Distance from asset
 
       const sourceId = sanitizeId(source.name);
-      const targetId =
-        target.name === targetAssetName ? targetAssetId : sanitizeId(target.name);
+      const targetId = target.name === targetAssetName ? targetAssetId : sanitizeId(target.name);
 
       if (!nodeMap.has(sourceId)) {
         nodeMap.set(sourceId, { id: sourceId, Name: source.name });

@@ -140,11 +140,7 @@ export interface KeyedLoaderStore<T> {
   /** Get or create a loader for a specific key */
   getLoader: (key: string) => LoaderStore<T>;
   /** Load data for a key, with caching */
-  load: (
-    key: string,
-    fetcher: () => Promise<T>,
-    options?: LoadOptions
-  ) => Promise<T | null>;
+  load: (key: string, fetcher: () => Promise<T>, options?: LoadOptions) => Promise<T | null>;
   /** Get current state for a key */
   getState: (key: string) => LoaderState<T> | null;
   /** Clear all loaders */
@@ -166,11 +162,7 @@ export function createKeyedLoader<T>(): KeyedLoaderStore<T> {
       return loaders.get(key)!;
     },
 
-    async load(
-      key: string,
-      fetcher: () => Promise<T>,
-      options?: LoadOptions
-    ): Promise<T | null> {
+    async load(key: string, fetcher: () => Promise<T>, options?: LoadOptions): Promise<T | null> {
       return this.getLoader(key).load(fetcher, options);
     },
 

@@ -20,13 +20,7 @@ export const ID_COLUMNS = {
 } as const;
 
 // Priority order for finding asset ID columns
-const ASSET_ID_PRIORITIES = [
-  'gem unit id',
-  'gem_unit_id',
-  'id',
-  'wiki page',
-  'project id',
-];
+const ASSET_ID_PRIORITIES = ['gem unit id', 'gem_unit_id', 'id', 'wiki page', 'project id'];
 
 // Priority order for finding name columns
 const NAME_PRIORITIES = ['project', 'unit name', 'plant', 'mine', 'facility', 'name'];
@@ -61,10 +55,12 @@ export function findUnitIdColumn(cols: string[]): string | null {
  * Find the Owner Entity ID column (for ownership relationships)
  */
 export function findOwnerEntityIdColumn(cols: string[]): string | null {
-  return cols.find((c) => {
-    const lower = c.toLowerCase();
-    return lower.includes('owner') && lower.includes('entity') && lower.includes('id');
-  }) || null;
+  return (
+    cols.find((c) => {
+      const lower = c.toLowerCase();
+      return lower.includes('owner') && lower.includes('entity') && lower.includes('id');
+    }) || null
+  );
 }
 
 /**
@@ -102,14 +98,16 @@ export function findCommonColumns(cols: string[]): {
     unitIdCol: findUnitIdColumn(cols),
     nameCol: findNameColumn(cols),
     statusCol: cols[lower.indexOf('status')] || null,
-    ownerCol: cols.find((c) => {
-      const l = c.toLowerCase();
-      return l === 'owner' || l === 'parent';
-    }) || null,
-    countryCol: cols.find((c) => {
-      const l = c.toLowerCase();
-      return l === 'country' || l === 'country/area';
-    }) || null,
+    ownerCol:
+      cols.find((c) => {
+        const l = c.toLowerCase();
+        return l === 'owner' || l === 'parent';
+      }) || null,
+    countryCol:
+      cols.find((c) => {
+        const l = c.toLowerCase();
+        return l === 'country' || l === 'country/area';
+      }) || null,
     trackerCol: cols[lower.indexOf('tracker')] || null,
     ownerEntityIdCol: findOwnerEntityIdColumn(cols),
   };

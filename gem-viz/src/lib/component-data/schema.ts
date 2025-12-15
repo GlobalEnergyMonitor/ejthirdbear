@@ -362,8 +362,10 @@ export const DATA_CONTRACT = {
   endpoints: {
     assetBasics: 'GET /assets/:id -> AssetBasics',
     assetRelated: 'GET /assets/:id/related -> {sameOwnerAssets[], coLocatedAssets[]}',
-    ownershipChain: 'GET /assets/:id/ownership-chain -> OwnershipChainNode[] (parsed from Ownership Path)',
+    ownershipChain:
+      'GET /assets/:id/ownership-chain -> OwnershipChainNode[] (parsed from Ownership Path)',
     ownerStats: 'GET /owners/:id/stats -> OwnerStats',
-    ownerPortfolio: 'GET /owners/:id/portfolio -> OwnerPortfolio (assets grouped by immediate owner)',
+    ownerPortfolio:
+      'GET /owners/:id/portfolio -> OwnerPortfolio (assets grouped by immediate owner)',
   },
 };

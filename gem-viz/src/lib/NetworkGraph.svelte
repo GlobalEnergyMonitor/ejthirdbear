@@ -481,7 +481,14 @@
       : new OrthographicView({ flipY: false, controller: true });
 
     const initialViewState = config.use3D
-      ? { target: /** @type {[number, number, number]} */ ([0, 0, 0]), rotationX: 30, rotationOrbit: -30, zoom: -1, minZoom: -3, maxZoom: 3 }
+      ? {
+          target: /** @type {[number, number, number]} */ ([0, 0, 0]),
+          rotationX: 30,
+          rotationOrbit: -30,
+          zoom: -1,
+          minZoom: -3,
+          maxZoom: 3,
+        }
       : { target: /** @type {[number, number, number]} */ ([0, 0, 0]), zoom: -1.5 };
 
     deck = new Deck({

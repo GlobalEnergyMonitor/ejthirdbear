@@ -10,12 +10,7 @@
   import { colorByTracker, colors } from '$lib/ownership-theme';
 
   /** @type {{ tracker: string, size?: number, showLabel?: boolean, variant?: 'dot' | 'pill' }} */
-  let {
-    tracker = 'Unknown',
-    size = 12,
-    showLabel = false,
-    variant = 'dot',
-  } = $props();
+  let { tracker = 'Unknown', size = 12, showLabel = false, variant = 'dot' } = $props();
 
   const color = $derived(colorByTracker.get(tracker) || colors.grey);
 
@@ -43,9 +38,7 @@
   </span>
 {:else}
   <span class="tracker-dot-wrapper" title={tracker}>
-    <span
-      class="tracker-dot"
-      style="width: {size}px; height: {size}px; background-color: {color};"
+    <span class="tracker-dot" style="width: {size}px; height: {size}px; background-color: {color};"
     ></span>
     {#if showLabel}
       <span class="label" style="color: {color};">{label}</span>

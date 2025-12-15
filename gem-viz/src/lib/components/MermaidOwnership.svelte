@@ -13,7 +13,7 @@
     assetId = '',
     assetName = '',
     zoom = 0.6,
-    direction = 'TD'
+    direction = 'TD',
   } = $props();
 
   const MIN_HEIGHT = 380;
@@ -44,7 +44,9 @@
       const sourceName = fullNodeMap.get(e.source)?.Name || e.source;
       const targetName = fullNodeMap.get(e.target)?.Name || e.target;
       const specialNames = ['small shareholder(s)', 'natural person(s)'];
-      const sourceId = specialNames.includes(sourceName.toLowerCase()) ? `${e.source}_${i}` : e.source.replace(/[^a-zA-Z0-9]/g, '_');
+      const sourceId = specialNames.includes(sourceName.toLowerCase())
+        ? `${e.source}_${i}`
+        : e.source.replace(/[^a-zA-Z0-9]/g, '_');
       const targetId = e.target.replace(/[^a-zA-Z0-9]/g, '_');
       const pctLabel = e.value ? `|${e.value.toFixed(1)}%|` : '';
       return `  ${sourceId}["${sanitize(sourceName)}"] -->${pctLabel} ${targetId}["${sanitize(targetName)}"]`;
@@ -64,15 +66,24 @@
         startOnLoad: false,
         theme: 'base',
         themeVariables: {
-          primaryColor: colors.navy, primaryTextColor: '#fff', primaryBorderColor: colors.navy,
-          lineColor: colors.navy, secondaryColor: colors.warmWhite, tertiaryColor: colors.mint,
-          fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif', fontSize: '12px',
+          primaryColor: colors.navy,
+          primaryTextColor: '#fff',
+          primaryBorderColor: colors.navy,
+          lineColor: colors.navy,
+          secondaryColor: colors.warmWhite,
+          tertiaryColor: colors.mint,
+          fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif',
+          fontSize: '12px',
         },
         flowchart: { curve: 'basis', padding: 15, nodeSpacing: 50, rankSpacing: 50 },
       });
 
       const syntax = generateMermaidSyntax();
-      if (!syntax) { mermaidSvg = ''; loading = false; return; }
+      if (!syntax) {
+        mermaidSvg = '';
+        loading = false;
+        return;
+      }
 
       const { svg } = await mermaid.render('mermaid-ownership', syntax);
       mermaidSvg = svg;
@@ -113,14 +124,22 @@
   {:else if error}
     <div class="status error">
       <p>Error: {error}</p>
-      <details><summary>Mermaid syntax</summary><pre>{generateMermaidSyntax()}</pre></details>
+      <details>
+        <summary>Mermaid syntax</summary>
+        <pre>{generateMermaidSyntax()}</pre>
+      </details>
     </div>
   {:else if mermaidSvg}
     <div class="controls">
-      <label>Zoom: <input type="range" min="0.2" max="2" step="0.1" bind:value={zoom} /> <span>{(zoom * 100).toFixed(0)}%</span></label>
+      <label
+        >Zoom: <input type="range" min="0.2" max="2" step="0.1" bind:value={zoom} />
+        <span>{(zoom * 100).toFixed(0)}%</span></label
+      >
     </div>
     <div class="diagram-container">
-      <div class="diagram" style="transform: {transform}; transform-origin: top left;">{@html mermaidSvg}</div>
+      <div class="diagram" style="transform: {transform}; transform-origin: top left;">
+        {@html mermaidSvg}
+      </div>
     </div>
   {:else}
     <div class="status"><p>No ownership data to display</p></div>
@@ -128,17 +147,77 @@
 </div>
 
 <style>
-  .mermaid-ownership { border: 1px solid #000; background: #fafafa; min-height: 240px; width: 100%; }
-  .controls { padding: 10px; border-bottom: 1px solid #ddd; background: #fff; font-size: 11px; display: flex; gap: 10px; align-items: center; }
-  .controls label { display: flex; align-items: center; gap: 8px; text-transform: uppercase; letter-spacing: 0.5px; color: #666; }
-  .controls input[type='range'] { width: 100px; }
-  .diagram-container { padding: 20px; max-height: 720px; overflow: auto; width: 100%; min-height: 380px; }
-  .diagram { display: block; width: 100%; }
-  .diagram :global(svg) { width: 100% !important; height: auto !important; max-width: none !important; display: block; }
-  .diagram :global(.node rect), .diagram :global(.node polygon) { fill: var(--navy, #004a63) !important; stroke: var(--navy, #004a63) !important; }
-  .diagram :global(.edgeLabel) { background-color: #fff !important; font-size: 10px !important; }
-  .status { padding: 40px; text-align: center; }
-  .status p { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: #666; }
-  .status.error { color: red; }
-  .status.error pre { text-align: left; font-size: 10px; background: #f5f5f5; padding: 10px; overflow: auto; max-height: 200px; }
+  .mermaid-ownership {
+    border: 1px solid #000;
+    background: #fafafa;
+    min-height: 240px;
+    width: 100%;
+  }
+  .controls {
+    padding: 10px;
+    border-bottom: 1px solid #ddd;
+    background: #fff;
+    font-size: 11px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+  .controls label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #666;
+  }
+  .controls input[type='range'] {
+    width: 100px;
+  }
+  .diagram-container {
+    padding: 20px;
+    max-height: 720px;
+    overflow: auto;
+    width: 100%;
+    min-height: 380px;
+  }
+  .diagram {
+    display: block;
+    width: 100%;
+  }
+  .diagram :global(svg) {
+    width: 100% !important;
+    height: auto !important;
+    max-width: none !important;
+    display: block;
+  }
+  .diagram :global(.node rect),
+  .diagram :global(.node polygon) {
+    fill: var(--navy, #004a63) !important;
+    stroke: var(--navy, #004a63) !important;
+  }
+  .diagram :global(.edgeLabel) {
+    background-color: #fff !important;
+    font-size: 10px !important;
+  }
+  .status {
+    padding: 40px;
+    text-align: center;
+  }
+  .status p {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #666;
+  }
+  .status.error {
+    color: red;
+  }
+  .status.error pre {
+    text-align: left;
+    font-size: 10px;
+    background: #f5f5f5;
+    padding: 10px;
+    overflow: auto;
+    max-height: 200px;
+  }
 </style>

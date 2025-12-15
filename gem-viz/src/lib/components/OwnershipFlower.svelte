@@ -85,7 +85,10 @@
 
     const g = svg.append('g').attr('transform', `translate(${cx}, ${cy})`);
 
-    const petal = d3.arc().innerRadius(innerRadius).cornerRadius(size === 'small' ? 4 : 8);
+    const petal = d3
+      .arc()
+      .innerRadius(innerRadius)
+      .cornerRadius(size === 'small' ? 4 : 8);
 
     g.selectAll('path.petal')
       .data(petalsData)
@@ -186,7 +189,12 @@
   });
 </script>
 
-<div class="ownership-flower" class:small={size === 'small'} class:medium={size === 'medium'} class:large={size === 'large'}>
+<div
+  class="ownership-flower"
+  class:small={size === 'small'}
+  class:medium={size === 'medium'}
+  class:large={size === 'large'}
+>
   {#if loading}
     <p class="loading-msg">Loading flower…</p>
   {:else if error}

@@ -49,10 +49,7 @@ export interface CapacityData {
 /**
  * Get asset ID using tracker-specific rules
  */
-export function getAssetId(
-  trackerName: string,
-  record: Record<string, unknown>
-): string | null {
+export function getAssetId(trackerName: string, record: Record<string, unknown>): string | null {
   const config = getTrackerConfig(trackerName);
   if (!config) return null;
 
@@ -62,10 +59,7 @@ export function getAssetId(
 /**
  * Get asset name using tracker-specific concatenation rules
  */
-export function getAssetName(
-  trackerName: string,
-  record: Record<string, unknown>
-): string | null {
+export function getAssetName(trackerName: string, record: Record<string, unknown>): string | null {
   return constructAssetName(trackerName, record);
 }
 
@@ -112,10 +106,7 @@ export function getLocation(
 /**
  * Get capacity/production with units
  */
-export function getCapacity(
-  trackerName: string,
-  record: Record<string, unknown>
-): CapacityData {
+export function getCapacity(trackerName: string, record: Record<string, unknown>): CapacityData {
   const config = getTrackerConfig(trackerName);
 
   if (!config?.capacityField) {
@@ -147,7 +138,7 @@ export function getCapacity(
  */
 export function deepKeyLookup(
   trackerName: string,
-  dataType: 'asset_id' | 'asset_name' | 'operating_status' | 'capacity' | 'location',
+  dataType: 'asset_id' | 'asset_name' | 'operating_status' | 'capacity' | 'location'
 ): string | string[] | Record<string, string | null> | null {
   const config = getTrackerConfig(trackerName);
   if (!config) return null;
@@ -271,7 +262,8 @@ export const fieldDescriptions: Record<string, string> = {
   'Capacity (MW)': 'Electric generation capacity in megawatts',
   'Capacity (Mtpa)': 'Production capacity in million tonnes per annum',
   'Production 2023 (ttpa)': 'Actual production in 2023 measured in tonnes per annum',
-  'Nominal crude steel capacity (ttpa)': 'Maximum crude steel production capacity in tonnes per annum',
+  'Nominal crude steel capacity (ttpa)':
+    'Maximum crude steel production capacity in tonnes per annum',
   'Cement Capacity (millions metric tonnes per annum)':
     'Cement production capacity in millions of metric tonnes per year',
   CapacityBcm_y: 'Gas pipeline capacity in billions of cubic meters per year',
@@ -281,7 +273,8 @@ export const fieldDescriptions: Record<string, string> = {
   Longitude: 'Geographic longitude coordinate (decimal degrees)',
   'Country/Area': 'Country or territory where facility is located',
   'Subnational unit (province, state)': 'State, province, or other subnational jurisdiction',
-  'Ownership Path': 'Text representation of ownership chain from owner through intermediaries to asset',
+  'Ownership Path':
+    'Text representation of ownership chain from owner through intermediaries to asset',
   'Interested Party ID': 'Global Energy Monitor identifier for owning entity',
   'Subject Entity ID': 'Global Energy Monitor identifier for owned entity or asset',
   'Share of Ownership': 'Percentage ownership share (0-100)',

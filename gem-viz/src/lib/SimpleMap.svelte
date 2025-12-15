@@ -4,7 +4,13 @@
   import MapboxDraw from 'maplibre-gl-draw';
   import 'maplibre-gl/dist/maplibre-gl.css';
   import 'maplibre-gl-draw/dist/mapbox-gl-draw.css';
-  import { mapFilter, clearMapFilter, setMapFilter, isPolygonFilter, isBoundsFilter } from '$lib/mapFilter';
+  import {
+    mapFilter,
+    clearMapFilter,
+    setMapFilter,
+    isPolygonFilter,
+    isBoundsFilter,
+  } from '$lib/mapFilter';
   import { link, assetPath } from '$lib/links';
 
   let mapContainer;
@@ -171,13 +177,19 @@
             'circle-color': [
               'match',
               ['get', 'tracker'],
-              'Coal Plant', '#1a1a1a',      // Black - coal
-              'Coal Mine', '#4a4a4a',       // Dark gray - coal mining
-              'Gas Plant', '#e67e22',       // Orange - gas
-              'Steel Plant', '#8e44ad',     // Purple - steel
-              'Iron Mine', '#c0392b',       // Red - iron
-              'Bioenergy Power', '#27ae60', // Green - bioenergy
-              '#007cbf'                      // Default blue
+              'Coal Plant',
+              '#1a1a1a', // Black - coal
+              'Coal Mine',
+              '#4a4a4a', // Dark gray - coal mining
+              'Gas Plant',
+              '#e67e22', // Orange - gas
+              'Steel Plant',
+              '#8e44ad', // Purple - steel
+              'Iron Mine',
+              '#c0392b', // Red - iron
+              'Bioenergy Power',
+              '#27ae60', // Green - bioenergy
+              '#007cbf', // Default blue
             ],
             'circle-opacity': 0.8,
             'circle-stroke-width': 1,
@@ -304,13 +316,19 @@
       map.setPaintProperty('points', 'circle-color', [
         'match',
         ['get', 'tracker'],
-        'Coal Plant', '#1a1a1a',
-        'Coal Mine', '#4a4a4a',
-        'Gas Plant', '#e67e22',
-        'Steel Plant', '#8e44ad',
-        'Iron Mine', '#c0392b',
-        'Bioenergy Power', '#27ae60',
-        '#007cbf'
+        'Coal Plant',
+        '#1a1a1a',
+        'Coal Mine',
+        '#4a4a4a',
+        'Gas Plant',
+        '#e67e22',
+        'Steel Plant',
+        '#8e44ad',
+        'Iron Mine',
+        '#c0392b',
+        'Bioenergy Power',
+        '#27ae60',
+        '#007cbf',
       ]);
     }
   }
@@ -340,12 +358,7 @@
   {#if $mapFilter}
     <div class="filter-indicator">
       <span>Geographic filter active</span>
-      <a
-        href={searchUrl}
-        class="view-assets-btn"
-      >
-        View Assets
-      </a>
+      <a href={searchUrl} class="view-assets-btn"> View Assets </a>
       <button class="clear-filter-btn" on:click={handleClearFilter}> Clear (ESC) </button>
     </div>
   {/if}

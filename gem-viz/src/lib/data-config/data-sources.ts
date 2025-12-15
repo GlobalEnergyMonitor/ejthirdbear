@@ -79,7 +79,8 @@ export const OwnershipTrackerDatasets: Record<string, GEMDataset> = {
     ownershipTrackerTabs: ['Asset Ownership'],
     lastUpdated: '2025-12-01',
     rowCount: 150000,
-    notes: 'Source-target edges from direct-owning entities to assets with ownership %, source URLs, dates',
+    notes:
+      'Source-target edges from direct-owning entities to assets with ownership %, source URLs, dates',
   },
 };
 
