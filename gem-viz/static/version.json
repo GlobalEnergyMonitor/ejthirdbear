@@ -1,10 +1,10 @@
 {
-  "version": "c27a01d",
-  "commit": "c27a01d",
-  "message": "Add E100001000348 to homepage and spot-check",
+  "version": "9d41a8c",
+  "commit": "9d41a8c",
+  "message": "DO Spaces production deployment fixes + map colors",
   "author": "EJ Fox",
-  "timestamp": "2025-12-12T20:59:14.218Z",
-  "deployed": "2025-12-12T20:59:14.218Z",
-  "buildTime": "12/12/2025, 3:59:14 PM",
+  "timestamp": "2025-12-14T15:41:43.250Z",
+  "deployed": "2025-12-14T15:41:43.250Z",
+  "buildTime": "12/14/2025, 10:41:43 AM",
   "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.1.11"
 }
