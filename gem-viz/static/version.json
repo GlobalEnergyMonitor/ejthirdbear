@@ -1,10 +1,10 @@
 {
-  "version": "26505f1",
-  "commit": "26505f1",
-  "message": "Integrate Observable-style icons throughout the app",
+  "version": "15cba0c",
+  "commit": "15cba0c",
+  "message": "Integrate zombie components and remove redundant code",
   "author": "EJ Fox",
-  "timestamp": "2025-12-15T18:40:35.911Z",
-  "deployed": "2025-12-15T18:40:35.911Z",
-  "buildTime": "12/15/2025, 1:40:35 PM",
-  "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.1.11"
+  "timestamp": "2025-12-15T19:51:39.285Z",
+  "deployed": "2025-12-15T19:51:39.285Z",
+  "buildTime": "12/15/2025, 2:51:39 PM",
+  "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.1.13"
 }
