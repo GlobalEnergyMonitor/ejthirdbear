@@ -1,14 +1,22 @@
 <script>
+  // ============================================================================
+  // ASSET DETAIL PAGE
+  // Shows ownership records, visualizations, and metadata for a single asset
+  // ============================================================================
+
+  // --- IMPORTS ---
   import { onMount } from 'svelte';
   import { get } from 'svelte/store';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import { link, entityLink } from '$lib/links';
+  import { colors, colorByStatus, colorByTracker } from '$lib/ownership-theme';
+  import { getTables } from '$lib/component-data/schema';
+  import { parseOwnershipPaths } from '$lib/component-data/ownership-parser';
+  import { SCHEMA_SQL, ASSET_SQL, escapeValue } from '$lib/component-data/sql-helpers';
+  import { findIdColumn, findUnitIdColumn, extractAssetName } from '$lib/component-data/id-helpers';
 
-  // Check if this looks like an entity ID (starts with E) instead of asset ID (starts with G)
-  function isLikelyEntityId(id) {
-    return id && /^E\d+$/.test(id);
-  }
+  // Components
   import AssetMap from '$lib/components/AssetMap.svelte';
   import OwnershipPie from '$lib/components/OwnershipPie.svelte';
   import MermaidOwnership from '$lib/components/MermaidOwnership.svelte';
@@ -17,18 +25,14 @@
   import RelationshipNetwork from '$lib/components/RelationshipNetwork.svelte';
   import StatusIcon from '$lib/components/StatusIcon.svelte';
   import TrackerIcon from '$lib/components/TrackerIcon.svelte';
-  import { getTables } from '$lib/component-data/schema';
-  import { parseOwnershipPaths } from '$lib/component-data/ownership-parser';
-  import { SCHEMA_SQL, ASSET_SQL, escapeValue } from '$lib/component-data/sql-helpers';
-  import { findIdColumn, findUnitIdColumn, extractAssetName } from '$lib/component-data/id-helpers';
-  import { colors, colorByStatus, colorByTracker } from '$lib/ownership-theme';
 
-  // Server data from +page.server.js (prerendered)
+  // --- PROPS (from +page.server.js) ---
   let { data } = $props();
 
-  // Initialize from server data if available
+  // --- STATE ---
   let loading = $state(!data?.owners?.length);
   let error = $state(null);
+  let mapHasLocation = $state(true);
 
   let assetId = $state(data?.assetId || '');
   let assetName = $state(data?.assetName || '');
@@ -36,148 +40,113 @@
   let asset = $state(data?.asset || {});
   let tableName = $state(data?.tableName || '');
   let columns = $state(data?.columns || []);
-  let svgs = $state(data?.svgs || { map: null, capacity: null, status: null });
-  let mapHasLocation = $state(true);
+  let svgs = $state(data?.svgs || {});
 
-  // Use shared ownership parser and add nodeMap for component compatibility
+  // --- COLUMN FINDERS (find columns by name pattern) ---
+  const findCol = (pattern) => columns.find((c) => pattern.test(c.toLowerCase()));
+
+  const statusCol = $derived(findCol(/^status$/));
+  const countryCol = $derived(findCol(/^country$/));
+  const trackerCol = $derived(findCol(/^tracker$/));
+  const latCol = $derived(findCol(/^lat(itude)?$/));
+  const lonCol = $derived(findCol(/^lon(gitude)?$/));
+  const ownerCol = $derived(findCol(/^(owner|parent)$/));
+  const ownershipPctCol = $derived(findCol(/share/));
+  const ownerEntityIdCol = $derived(findCol(/owner gem entity id/));
+
+  // --- DATA TRANSFORMS ---
+
+  // Parse ownership paths into graph structure
   const ownershipGraph = $derived.by(() => {
     const parsed = parseOwnershipPaths(owners, assetId, assetName);
-    return {
-      ...parsed,
-      nodeMap: new Map(parsed.nodes.map((n) => [n.id, n])),
-    };
+    return { ...parsed, nodeMap: new Map(parsed.nodes.map((n) => [n.id, n])) };
   });
 
-  const nameCol = $derived(
-    columns.find((c) => {
-      const lower = c.toLowerCase();
-      return (
-        lower === 'mine' ||
-        lower === 'plant' ||
-        lower === 'project' ||
-        lower === 'facility' ||
-        lower === 'mine name' ||
-        lower === 'plant name' ||
-        lower === 'project name'
-      );
-    })
-  );
-  const statusCol = $derived(columns.find((c) => c.toLowerCase() === 'status'));
-  const ownerCol = $derived(
-    columns.find((c) => c.toLowerCase() === 'owner' || c.toLowerCase() === 'parent')
-  );
-  const countryCol = $derived(columns.find((c) => c.toLowerCase() === 'country'));
-  const latCol = $derived(
-    columns.find((c) => c.toLowerCase() === 'latitude' || c.toLowerCase() === 'lat')
-  );
-  const lonCol = $derived(
-    columns.find((c) => c.toLowerCase() === 'longitude' || c.toLowerCase() === 'lon')
-  );
-  const gemLocationIdCol = $derived(
-    columns.find((c) => c.toLowerCase() === 'gem location id')
-  );
-  const ownershipPctCol = $derived(columns.find((c) => c.toLowerCase().includes('share')));
-  const trackerCol = $derived(columns.find((c) => c.toLowerCase() === 'tracker'));
-  const ownerEntityIdCol = $derived(
-    columns.find((c) => c.toLowerCase() === 'owner gem entity id')
-  );
-
-  // Get primary owner entity ID for OwnershipExplorerD3
+  // Primary owner for OwnershipExplorerD3
   const primaryOwnerEntityId = $derived(
     ownerEntityIdCol && owners[0]?.[ownerEntityIdCol] ? owners[0][ownerEntityIdCol] : null
   );
 
-  const statusValue = $derived(
-    statusCol && asset[statusCol] ? String(asset[statusCol]).toLowerCase() : null
-  );
-  const statusColor = $derived(
-    statusValue ? colorByStatus.get(statusValue) || colors.grey : colors.grey
-  );
+  // Status/tracker colors
+  const statusColor = $derived(colorByStatus.get(asset[statusCol]?.toLowerCase?.()) || colors.grey);
+  const trackerColor = $derived(colorByTracker.get(asset[trackerCol]) || colors.orange);
 
-  const trackerValue = $derived(trackerCol && asset[trackerCol] ? asset[trackerCol] : null);
-  const trackerColor = $derived(
-    trackerValue ? colorByTracker.get(trackerValue) || colors.orange : colors.orange
-  );
-
+  // Total ownership percentage
   const totalOwnership = $derived(
-    owners.reduce((sum, o) => {
-      const share = ownershipPctCol && o[ownershipPctCol] ? Number(o[ownershipPctCol]) : 0;
-      return sum + share;
-    }, 0)
+    owners.reduce((sum, o) => sum + (Number(o[ownershipPctCol]) || 0), 0)
   );
 
-  const ownerSpecificCols = $derived(
+  // Columns to show in "All Properties" section
+  const hiddenCols = $derived(
     [
-      ownerCol,
+      'Status',
+      'Country',
+      'Tracker',
+      'Latitude',
+      'Longitude',
+      'Parent',
+      'Ownership Path',
+      'Owner',
       ownershipPctCol,
       ownerEntityIdCol,
-      'Ownership Path',
       'Immediate Project Owner',
       'Immediate Project Owner GEM Entity ID',
     ].filter(Boolean)
   );
-  const specialCols = $derived(
-    [nameCol, statusCol, countryCol, latCol, lonCol, ...ownerSpecificCols].filter(Boolean)
-  );
-  const otherCols = $derived(columns.filter((c) => !specialCols.includes(c)));
+  const otherCols = $derived(columns.filter((c) => !hiddenCols.includes(c)));
 
+  // --- DATA FETCHING (client-side for dev mode) ---
   onMount(async () => {
     const paramsId = get(page)?.params?.id;
 
-    // Redirect if this looks like an entity ID instead of asset ID
-    if (isLikelyEntityId(paramsId)) {
-      console.log(`[Asset] Redirecting ${paramsId} to entity page (E-prefix = entity ID)`);
+    // Redirect E-prefix IDs to entity page
+    if (paramsId?.match(/^E\d+$/)) {
       goto(entityLink(paramsId), { replaceState: true });
       return;
     }
 
-    // If we have server data, skip client-side fetch
+    // Skip fetch if we have server data
     if (data?.owners?.length) {
       loading = false;
       return;
     }
 
-    // Dev mode or missing data - fetch from MotherDuck client-side
+    // Dev mode: fetch from MotherDuck
     try {
       loading = true;
-      error = null;
-
       if (!paramsId) throw new Error('Missing asset ID');
       assetId = paramsId;
 
-      // Dynamic import to avoid SSR Worker error
       const md = await import('$lib/motherduck-wasm');
-      const motherduck = md.default;
-
       const { assetTable } = await getTables();
       tableName = assetTable;
-      const [schemaName, rawTable] = assetTable.split('.');
 
-      const schemaResult = await motherduck.query(SCHEMA_SQL(schemaName, rawTable));
+      const [schemaName, rawTable] = assetTable.split('.');
+      const schemaResult = await md.default.query(SCHEMA_SQL(schemaName, rawTable));
       columns = schemaResult.data?.map((c) => c.column_name) ?? [];
 
-      // Use centralized ID column finder
       const idColumn = findUnitIdColumn(columns) || findIdColumn(columns) || columns[0];
-
-      const dataResult = await motherduck.query(
+      const dataResult = await md.default.query(
         ASSET_SQL(assetTable, idColumn, escapeValue(assetId))
       );
 
-      if (!dataResult.success || !dataResult.data?.length) {
+      if (!dataResult.success || !dataResult.data?.length)
         throw new Error(`Asset ${assetId} not found`);
-      }
 
       owners = dataResult.data;
       asset = dataResult.data[0] || {};
       assetName = extractAssetName(asset, assetId);
     } catch (err) {
-      console.error('Asset detail load error:', err);
       error = err?.message || 'Failed to load asset';
     } finally {
       loading = false;
     }
   });
 </script>
+
+<!-- ============================================================================
+     TEMPLATE
+     ============================================================================ -->
 
 <svelte:head>
   <title>{assetName || assetId} — GEM Viz</title>
@@ -190,16 +159,18 @@
   </header>
 
   {#if loading}
-    <p class="loading">Fetching asset directly from MotherDuck…</p>
+    <p class="loading">Fetching asset from MotherDuck…</p>
   {:else if error}
     <p class="loading error">{error}</p>
   {:else}
     <article class="asset-detail">
+      <!-- Header -->
       <h1>{assetName || assetId}</h1>
       <p class="asset-id">GEM Unit ID: {assetId}</p>
 
+      <!-- Meta Grid -->
       <div class="meta-grid">
-        {#if statusCol && asset[statusCol]}
+        {#if asset[statusCol]}
           <div class="meta-item">
             <span class="label">Status</span>
             <span class="value status-badge" style="--status-color: {statusColor}">
@@ -210,7 +181,7 @@
           </div>
         {/if}
 
-        {#if trackerCol && asset[trackerCol]}
+        {#if asset[trackerCol]}
           <div class="meta-item">
             <span class="label">Tracker</span>
             <span class="value">
@@ -221,13 +192,12 @@
 
         <div class="meta-item">
           <span class="label">Owners</span>
-          <span class="value">{owners.length} ownership record{owners.length !== 1 ? 's' : ''}</span
-          >
+          <span class="value">{owners.length} record{owners.length !== 1 ? 's' : ''}</span>
         </div>
 
         {#if totalOwnership > 0}
           <div class="meta-item">
-            <span class="label">Total Tracked Ownership</span>
+            <span class="label">Total Ownership</span>
             <span class="value ownership-value">
               <OwnershipPie
                 percentage={Math.min(totalOwnership, 100)}
@@ -239,14 +209,14 @@
           </div>
         {/if}
 
-        {#if countryCol && asset[countryCol]}
+        {#if asset[countryCol]}
           <div class="meta-item">
             <span class="label">Country</span>
             <span class="value">{asset[countryCol]}</span>
           </div>
         {/if}
 
-        {#if latCol && lonCol && asset[latCol] && asset[lonCol]}
+        {#if asset[latCol] && asset[lonCol]}
           <div class="meta-item">
             <span class="label">Coordinates</span>
             <span class="value">{asset[latCol]}, {asset[lonCol]}</span>
@@ -272,7 +242,7 @@
                 <tr>
                   <td class="owner-name">
                     <StatusIcon status={owner['Status']} size={10} />
-                    {#if ownerEntityIdCol && owner[ownerEntityIdCol]}
+                    {#if owner[ownerEntityIdCol]}
                       <a href={entityLink(owner[ownerEntityIdCol])} class="owner-link">
                         {owner['Parent'] || owner[ownerCol] || '—'}
                         <span class="owner-id">{owner[ownerEntityIdCol]}</span>
@@ -282,7 +252,7 @@
                     {/if}
                   </td>
                   <td class="owner-share">
-                    {#if ownershipPctCol && owner[ownershipPctCol]}
+                    {#if owner[ownershipPctCol]}
                       <span class="share-value">
                         <OwnershipPie
                           percentage={Number(owner[ownershipPctCol])}
@@ -291,9 +261,7 @@
                         />
                         {Number(owner[ownershipPctCol]).toFixed(1)}%
                       </span>
-                    {:else}
-                      —
-                    {/if}
+                    {:else}—{/if}
                   </td>
                   <td class="ownership-path">{owner['Ownership Path'] || '—'}</td>
                   <td
@@ -308,11 +276,11 @@
         </div>
       </section>
 
-      <!-- Ownership Visualization: Mermaid Flowchart -->
+      <!-- Ownership Visualizations (only if we have edges) -->
       {#if ownershipGraph.edges.length > 0}
-        <section class="ownership-viz-section">
+        <section class="viz-section">
           <h2>Ownership Structure</h2>
-          <p class="viz-subtitle">Interactive flowchart showing ownership paths to this asset</p>
+          <p class="viz-subtitle">Interactive flowchart showing ownership paths</p>
           <MermaidOwnership
             edges={ownershipGraph.edges}
             nodeMap={ownershipGraph.nodeMap}
@@ -323,10 +291,9 @@
           />
         </section>
 
-        <!-- Ownership Visualization: Force-directed Hierarchy -->
-        <section class="ownership-viz-section">
+        <section class="viz-section">
           <h2>Ownership Network</h2>
-          <p class="viz-subtitle">Force-directed graph showing entity relationships</p>
+          <p class="viz-subtitle">Force-directed graph of entity relationships</p>
           <OwnershipHierarchy
             {assetId}
             {assetName}
@@ -337,62 +304,33 @@
           />
         </section>
 
-        <section class="ownership-explorer">
+        <section class="viz-section">
           <h2>Owner Explorer</h2>
           <OwnershipExplorerD3 ownerEntityId={primaryOwnerEntityId} />
         </section>
 
-        <section class="relationship-network-section">
-          <h2>Related Assets & Network</h2>
-          <p class="viz-subtitle">Ownership chain, same-owner assets, and co-located units</p>
+        <section class="viz-section">
+          <h2>Related Assets</h2>
+          <p class="viz-subtitle">Same-owner assets and co-located units</p>
           <RelationshipNetwork />
         </section>
       {/if}
 
-      <!-- Interactive location map - hidden entirely if no location found -->
-      <!-- AssetMap fetches its own data from URL params and GeoJSON -->
+      <!-- Location Map -->
       {#if mapHasLocation}
-        <section class="map-section">
+        <section class="viz-section">
           <h2>Location</h2>
           <AssetMap bind:hasLocation={mapHasLocation} />
         </section>
       {/if}
 
-      <!-- Pre-baked server-side SVGs - zero client overhead! -->
-      {#if svgs && (svgs.map || svgs.capacity || svgs.status)}
-        <section class="viz-section">
-          <h2>Visualizations</h2>
-          <div class="viz-grid">
-            {#if svgs.map}
-              <div class="viz-item">
-                <h3>Location Map</h3>
-                {@html svgs.map}
-              </div>
-            {/if}
-
-            {#if svgs.status}
-              <div class="viz-item inline-badge">
-                <h3>Status</h3>
-                {@html svgs.status}
-              </div>
-            {/if}
-
-            {#if svgs.capacity}
-              <div class="viz-item">
-                <h3>Capacity</h3>
-                {@html svgs.capacity}
-              </div>
-            {/if}
-          </div>
-        </section>
-      {/if}
-
+      <!-- All Properties -->
       {#if otherCols.length > 0}
         <section class="properties">
           <h2>All Properties</h2>
           <dl>
             {#each otherCols as col}
-              {#if asset[col] !== null && asset[col] !== undefined && asset[col] !== ''}
+              {#if asset[col] != null && asset[col] !== ''}
                 <div class="property">
                   <dt>{col}</dt>
                   <dd>{asset[col]}</dd>
@@ -403,31 +341,19 @@
         </section>
       {/if}
 
-      <!-- Raw JSON Data Dump -->
+      <!-- Raw JSON -->
       <section class="json-dump">
-        <h2>Raw Data (JSON)</h2>
-        <p class="json-subtitle">Complete asset data for developers, debugging, and data nerds</p>
+        <h2>Raw Data</h2>
         <details>
           <summary
-            >Show {owners.length} ownership record{owners.length !== 1 ? 's' : ''} as JSON ({JSON.stringify(
-              { assetId, assetName, tableName, owners }
-            ).length.toLocaleString()} bytes)</summary
+            >{owners.length} records ({JSON.stringify({ assetId, owners }).length.toLocaleString()} bytes)</summary
           >
           <pre class="json-blob">{JSON.stringify(
               {
-                meta: {
-                  assetId,
-                  assetName,
-                  tableName,
-                  totalOwners: owners.length,
-                  columns,
-                },
+                meta: { assetId, assetName, tableName },
                 asset,
                 owners,
-                ownershipGraph: {
-                  nodes: ownershipGraph.nodes,
-                  edges: ownershipGraph.edges,
-                },
+                ownershipGraph: { nodes: ownershipGraph.nodes, edges: ownershipGraph.edges },
               },
               null,
               2
@@ -438,24 +364,25 @@
   {/if}
 </main>
 
+<!-- ============================================================================
+     STYLES
+     ============================================================================ -->
+
 <style>
+  /* Layout */
   main {
-    width: 100%;
-    margin: 0;
-    padding: 40px;
     max-width: 1200px;
     margin: 0 auto;
+    padding: 40px;
   }
-
   header {
-    border-bottom: 1px solid #000;
-    padding-bottom: 15px;
-    margin-bottom: 30px;
     display: flex;
     justify-content: space-between;
     align-items: baseline;
+    border-bottom: 1px solid #000;
+    padding-bottom: 15px;
+    margin-bottom: 30px;
   }
-
   .back-link {
     color: #000;
     text-decoration: underline;
@@ -463,11 +390,9 @@
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
-
   .back-link:hover {
     text-decoration: none;
   }
-
   .table-name {
     font-size: 10px;
     color: #999;
@@ -475,26 +400,25 @@
     letter-spacing: 0.5px;
   }
 
+  /* Loading/Error */
   .loading {
-    padding: 30px 0 10px 0;
+    padding: 30px 0;
     color: #555;
   }
-
   .loading.error {
     color: #b10000;
   }
 
+  /* Typography */
   .asset-detail {
     font-family: Georgia, serif;
   }
-
   h1 {
     font-size: 32px;
     font-weight: normal;
-    margin: 0 0 30px 0;
+    margin: 0 0 10px 0;
     line-height: 1.2;
   }
-
   h2 {
     font-size: 18px;
     font-weight: normal;
@@ -502,23 +426,34 @@
     border-bottom: 1px solid #ddd;
     padding-bottom: 10px;
   }
+  .asset-id {
+    font-size: 12px;
+    color: #666;
+    font-family: monospace;
+    margin-bottom: 20px;
+  }
+  .viz-subtitle {
+    font-size: 12px;
+    color: #666;
+    margin: -10px 0 15px 0;
+    font-style: italic;
+  }
 
+  /* Meta Grid */
   .meta-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 20px;
-    margin-bottom: 40px;
     padding: 20px;
     background: #fafafa;
     border: 1px solid #ddd;
+    margin-bottom: 40px;
   }
-
   .meta-item {
     display: flex;
     flex-direction: column;
     gap: 5px;
   }
-
   .label {
     font-size: 9px;
     text-transform: uppercase;
@@ -526,227 +461,47 @@
     color: #999;
     font-weight: bold;
   }
-
   .value {
     font-size: 14px;
     color: #000;
   }
-
-  .value.status-badge {
+  .status-badge {
     display: flex;
     align-items: center;
     gap: 8px;
     font-weight: bold;
   }
-
   .status-dot {
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    background-color: var(--status-color, #808080);
-    flex-shrink: 0;
+    background: var(--status-color, #808080);
   }
-
-  .tracker-badge {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .tracker-dot {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background-color: var(--tracker-color, #fe4f2d);
-    flex-shrink: 0;
-  }
-
   .ownership-value {
     display: flex;
     align-items: center;
     gap: 8px;
   }
 
-  .properties dl {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 15px;
-  }
-
-  .property {
-    display: grid;
-    grid-template-columns: 250px 1fr;
-    gap: 20px;
-    padding: 12px 0;
-    border-bottom: 1px solid #f0f0f0;
-  }
-
-  .property:last-child {
-    border-bottom: none;
-  }
-
-  dt {
-    font-size: 11px;
-    font-weight: bold;
-    color: #666;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-  }
-
-  dd {
-    font-size: 13px;
-    color: #000;
-    margin: 0;
-  }
-
-  .map-section {
-    margin: 40px 0;
-  }
-
-  .map-section h2 {
-    font-size: 18px;
-    font-weight: normal;
-    margin: 0 0 20px 0;
-    border-bottom: 1px solid #ddd;
-    padding-bottom: 10px;
-  }
-
-  .viz-section {
-    margin: 40px 0;
-    padding: 20px;
-    background: #fafafa;
-    border: 1px solid #ddd;
-  }
-
-  :global(.resolved-id) {
-    font-size: 11px;
-    color: #555;
-    margin-top: -20px;
-    margin-bottom: 20px;
-  }
-
-  .viz-section h2 {
-    margin-top: 0;
-  }
-
-  .viz-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 30px;
-    margin-top: 20px;
-  }
-
-  .viz-item {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .viz-item.inline-badge {
-    align-items: flex-start;
-  }
-
-  .viz-item h3 {
-    font-size: 11px;
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: #666;
-    margin: 0;
-  }
-
-  .viz-item :global(svg) {
-    max-width: 100%;
-    height: auto;
-  }
-
-  :global(.ownership-section) {
-    margin: 40px 0;
-    border: 1px solid #000;
-  }
-
-  :global(.ownership-header) {
-    padding: 20px;
-    background: #fafafa;
-    border-bottom: 1px solid #ddd;
-  }
-
-  :global(.ownership-header h2) {
-    margin: 0 0 4px 0;
-    font-size: 18px;
-    font-weight: normal;
-    border: none;
-    padding: 0;
-  }
-
-  :global(.ownership-subtitle) {
-    font-size: 12px;
-    color: #666;
-  }
-
-  :global(.ownership-content) {
-    padding: 20px;
-  }
-
-  :global(.ownership-loading),
-  :global(.ownership-error) {
-    padding: 40px;
-    text-align: center;
-    color: #666;
-  }
-
-  :global(.ownership-error) {
-    color: red;
-  }
-
-  :global(.ownership-stats) {
-    display: flex;
-    gap: 30px;
-    margin-bottom: 20px;
-    padding: 15px;
-    background: #f5f5f5;
-    font-size: 13px;
-  }
-
-  :global(.ownership-stats strong) {
-    font-size: 18px;
-    display: block;
-  }
-
-  :global(.ownership-chart-wrapper) {
-    overflow-x: auto;
-    padding: 10px 0;
-  }
-
-  .asset-id {
-    font-size: 12px;
-    color: #666;
-    font-family: monospace;
-    margin-bottom: 20px;
-  }
-
+  /* Owners Table */
   .owners-section {
     margin: 40px 0;
   }
-
   .owners-table-wrapper {
     overflow-x: auto;
     border: 1px solid #ddd;
   }
-
   .owners-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 13px;
   }
-
   .owners-table th,
   .owners-table td {
     padding: 12px 15px;
     text-align: left;
     border-bottom: 1px solid #eee;
   }
-
   .owners-table th {
     background: #fafafa;
     font-size: 10px;
@@ -756,24 +511,19 @@
     font-weight: bold;
     border-bottom: 1px solid #ddd;
   }
-
   .owners-table tbody tr:hover {
     background: #f9f9f9;
   }
-
   .owner-name {
     font-weight: 500;
   }
-
   .owner-link {
     color: #000;
     text-decoration: underline;
   }
-
   .owner-link:hover {
     text-decoration: none;
   }
-
   .owner-id {
     display: block;
     font-size: 10px;
@@ -781,174 +531,104 @@
     font-family: monospace;
     margin-top: 2px;
   }
-
   .owner-share {
     white-space: nowrap;
   }
-
   .share-value {
     display: flex;
     align-items: center;
     gap: 6px;
   }
-
   .ownership-path {
     font-size: 12px;
     color: #666;
     max-width: 300px;
   }
 
-  .ownership-viz-section {
+  /* Viz Sections */
+  .viz-section {
     margin: 40px 0;
   }
-
-  .ownership-viz-section h2 {
-    font-size: 18px;
-    font-weight: normal;
-    margin: 0 0 10px 0;
-    border-bottom: 1px solid #ddd;
-    padding-bottom: 10px;
+  .viz-section h2 {
+    margin-top: 0;
   }
 
-  .viz-subtitle {
-    font-size: 12px;
+  /* Properties */
+  .properties dl {
+    display: grid;
+    gap: 15px;
+  }
+  .property {
+    display: grid;
+    grid-template-columns: 250px 1fr;
+    gap: 20px;
+    padding: 12px 0;
+    border-bottom: 1px solid #f0f0f0;
+  }
+  .property:last-child {
+    border-bottom: none;
+  }
+  dt {
+    font-size: 11px;
+    font-weight: bold;
     color: #666;
-    margin: 0 0 15px 0;
-    font-style: italic;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  dd {
+    font-size: 13px;
+    color: #000;
+    margin: 0;
   }
 
-  /* Status icon styles ported from Observable */
-  :global(.status-icon) {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-  }
-
-  :global(.status-icon-proposed) {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background-color: #eeb100;
-  }
-
-  :global(.status-icon-cancelled),
-  :global(.status-icon-retired) {
-    width: 8px;
-    height: 8px;
-    position: relative;
-  }
-
-  :global(.status-icon-cancelled::before),
-  :global(.status-icon-cancelled::after),
-  :global(.status-icon-retired::before),
-  :global(.status-icon-retired::after) {
-    content: '';
-    position: absolute;
-    width: 8px;
-    height: 1.5px;
-    background-color: #808080;
-    top: 50%;
-    left: 0;
-    transform: translateY(-50%) rotate(45deg);
-  }
-
-  :global(.status-icon-cancelled::after),
-  :global(.status-icon-retired::after) {
-    transform: translateY(-50%) rotate(-45deg);
-  }
-
-  :global(.status-icon-retired::before),
-  :global(.status-icon-retired::after) {
-    background-color: #483c5a;
-  }
-
-  /* JSON Data Dump Styles */
+  /* JSON Dump */
   .json-dump {
     margin-top: 60px;
     padding-top: 40px;
     border-top: 2px solid #000;
   }
-
   .json-dump h2 {
     font-family: monospace;
     font-size: 14px;
     text-transform: uppercase;
     letter-spacing: 1px;
-    margin-bottom: 8px;
   }
-
-  .json-subtitle {
-    font-size: 12px;
-    color: #666;
-    margin-bottom: 15px;
-  }
-
   .json-dump details {
     background: #f8f8f8;
     border: 1px solid #ddd;
     border-radius: 4px;
   }
-
   .json-dump summary {
     padding: 12px 16px;
     cursor: pointer;
     font-family: monospace;
     font-size: 12px;
     color: #444;
-    user-select: none;
     background: #f0f0f0;
-    border-bottom: 1px solid #ddd;
   }
-
   .json-dump summary:hover {
     background: #e8e8e8;
   }
-
-  .json-dump details[open] summary {
-    border-bottom: 1px solid #ddd;
-  }
-
   .json-blob {
     margin: 0;
     padding: 20px;
-    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-family: 'SFMono-Regular', Consolas, monospace;
     font-size: 11px;
     line-height: 1.5;
-    overflow-x: auto;
+    overflow: auto;
     background: #1e1e1e;
     color: #d4d4d4;
-    white-space: pre;
     max-height: 600px;
-    overflow-y: auto;
   }
 
-  .ownership-explorer {
-    margin-top: 32px;
-  }
-
-  .relationship-network-section {
-    margin-top: 40px;
-    padding-top: 30px;
-    border-top: 1px solid #ddd;
-  }
-
+  /* Responsive */
   @media (max-width: 768px) {
-    .property {
-      grid-template-columns: 1fr;
-      gap: 5px;
-    }
-
     .meta-grid {
       grid-template-columns: 1fr;
     }
-
-    .viz-grid {
+    .property {
       grid-template-columns: 1fr;
-    }
-
-    :global(.ownership-stats) {
-      flex-direction: column;
-      gap: 10px;
+      gap: 5px;
     }
   }
 </style>

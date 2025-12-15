@@ -1,4 +1,11 @@
 <script>
+  // ============================================================================
+  // ASSET LIST PAGE
+  // Shows all assets in a DataTable with filtering, sorting, pagination
+  // Data fetched client-side from MotherDuck (dev mode only)
+  // ============================================================================
+
+  // --- IMPORTS ---
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { link, assetLink } from '$lib/links';
@@ -7,10 +14,25 @@
   import { findCommonColumns, getAssetId } from '$lib/component-data/id-helpers';
   import DataTable from '$lib/components/DataTable.svelte';
 
-  // MotherDuck WASM - dynamically imported to avoid SSR issues
+  // --- STATE ---
+  /** @type {any} */
   let motherduck;
+  let loading = $state(true);
+  /** @type {string | null} */
+  let error = $state(null);
+  let assets = $state([]);
+  let tableName = $state('');
+  let resolvedCols = $state({
+    idCol: null,
+    unitIdCol: null,
+    nameCol: null,
+    statusCol: null,
+    ownerCol: null,
+    countryCol: null,
+  });
 
-  // Query groups by asset to count ownership records and get unique assets
+  // --- SQL BUILDERS ---
+  /** Query groups by asset to count ownership records */
   const LIST_SQL = (fullName, cols, unitIdCol) => `
     SELECT
       ${cols.map((c) => `FIRST("${c}") AS "${c}"`).join(', ')},
@@ -21,28 +43,56 @@
     LIMIT 10000
   `;
 
-  let loading = $state(true);
-  let error = $state(null);
-
-  let assets = $state([]);
-  let tableName = $state('');
-  let resolvedCols = $state({ idCol: null, unitIdCol: null, nameCol: null, statusCol: null, ownerCol: null, countryCol: null });
-
+  // --- DATA TRANSFORMS ---
   const columns = $derived.by(() => {
     const { idCol, nameCol, statusCol, ownerCol, countryCol } = resolvedCols;
     if (!idCol) return [];
 
     const cols = [];
-    if (nameCol) cols.push({ key: nameCol, label: 'Name', sortable: true, filterable: true, width: '250px' });
+    if (nameCol)
+      cols.push({ key: nameCol, label: 'Name', sortable: true, filterable: true, width: '250px' });
     cols.push({ key: idCol, label: 'ID', sortable: true, filterable: true, width: '120px' });
-    // Owner count column - sorted by default (query orders by this)
-    cols.push({ key: 'owner_count', label: 'Owners', sortable: true, type: 'number', width: '80px' });
-    if (statusCol) cols.push({ key: statusCol, label: 'Status', sortable: true, filterable: true, width: '120px' });
-    if (ownerCol) cols.push({ key: ownerCol, label: 'Owner', sortable: true, filterable: true, width: '200px' });
-    if (countryCol) cols.push({ key: countryCol, label: 'Country', sortable: true, filterable: true, width: '150px' });
+    cols.push({
+      key: 'owner_count',
+      label: 'Owners',
+      sortable: true,
+      type: 'number',
+      width: '80px',
+    });
+    if (statusCol)
+      cols.push({
+        key: statusCol,
+        label: 'Status',
+        sortable: true,
+        filterable: true,
+        width: '120px',
+      });
+    if (ownerCol)
+      cols.push({
+        key: ownerCol,
+        label: 'Owner',
+        sortable: true,
+        filterable: true,
+        width: '200px',
+      });
+    if (countryCol)
+      cols.push({
+        key: countryCol,
+        label: 'Country',
+        sortable: true,
+        filterable: true,
+        width: '150px',
+      });
     return cols;
   });
 
+  // --- HANDLERS ---
+  function handleRowClick(row) {
+    const id = getAssetId(row, resolvedCols);
+    if (id) goto(assetLink(id));
+  }
+
+  // --- DATA FETCHING ---
   onMount(async () => {
     try {
       loading = true;
@@ -55,6 +105,7 @@
       tableName = assetTable;
       const [schemaName, rawTable] = assetTable.split('.');
 
+      // Get schema to find columns
       const schemaResult = await motherduck.query(SCHEMA_SQL(schemaName, rawTable));
       const availableCols = schemaResult.data?.map((c) => c.column_name) ?? [];
 
@@ -70,9 +121,11 @@
       if (countryCol) columnsToSelect.add(countryCol);
       if (unitIdCol) columnsToSelect.add(unitIdCol);
 
-      // Use unitIdCol for grouping, or fall back to idCol
+      // Execute query
       const groupByCol = unitIdCol || idCol;
-      const listResult = await motherduck.query(LIST_SQL(tableName, [...columnsToSelect].filter(Boolean), groupByCol));
+      const listResult = await motherduck.query(
+        LIST_SQL(tableName, [...columnsToSelect].filter(Boolean), groupByCol)
+      );
       if (!listResult.success) throw new Error(listResult.error || 'Failed to load assets');
 
       assets = listResult.data ?? [];
@@ -83,13 +136,11 @@
       loading = false;
     }
   });
-
-  function handleRowClick(row) {
-    const id = getAssetId(row, resolvedCols);
-    if (!id) return;
-    goto(assetLink(id));
-  }
 </script>
+
+<!-- ============================================================================
+     TEMPLATE
+     ============================================================================ -->
 
 <svelte:head>
   <title>All Assets — GEM Viz</title>
@@ -100,11 +151,7 @@
     <a href={link('index')} class="back-link">← Back to Overview</a>
     <span class="title">All Assets</span>
     <span class="count">
-      {#if loading}
-        Loading…
-      {:else}
-        {assets.length.toLocaleString()} assets
-      {/if}
+      {#if loading}Loading…{:else}{assets.length.toLocaleString()} assets{/if}
     </span>
   </header>
 
@@ -131,7 +178,11 @@
   {/if}
 </main>
 
+<!-- ============================================================================
+     STYLES
+     ============================================================================ -->
 <style>
+  /* Layout */
   main {
     width: 100%;
     max-width: 1600px;
@@ -139,16 +190,16 @@
     padding: 20px 40px;
   }
 
+  /* Header */
   header {
-    border-bottom: 1px solid #e0e0e0;
-    padding-bottom: 18px;
-    margin-bottom: 20px;
     display: flex;
     gap: 16px;
     align-items: center;
     flex-wrap: wrap;
+    border-bottom: 1px solid #e0e0e0;
+    padding-bottom: 18px;
+    margin-bottom: 20px;
   }
-
   .back-link {
     color: #000;
     text-decoration: underline;
@@ -156,18 +207,15 @@
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
-
   .back-link:hover {
     text-decoration: none;
   }
-
   .title {
     font-size: 15px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.6px;
   }
-
   .count {
     font-size: 10px;
     color: #555;
@@ -178,6 +226,7 @@
     background: #f7f7f7;
   }
 
+  /* Empty States */
   .no-data {
     padding: 60px 20px;
     text-align: center;
@@ -186,6 +235,7 @@
     font-style: italic;
   }
 
+  /* Responsive */
   @media (max-width: 768px) {
     main {
       padding: 15px;

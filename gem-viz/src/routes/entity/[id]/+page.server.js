@@ -105,8 +105,8 @@ export async function entries() {
         if (!entityPortfolios[entityId]) {
           entityPortfolios[entityId] = {
             assets: [],
-            subsidiaries: {},  // immediate_owner_id -> { name, assets[], share }
-            directlyOwned: []
+            subsidiaries: {}, // immediate_owner_id -> { name, assets[], share }
+            directlyOwned: [],
           };
         }
 
@@ -128,7 +128,7 @@ export async function entries() {
             entityPortfolios[entityId].subsidiaries[subId] = {
               name: row.immediate_owner || subId,
               share: Number(row.share || 0),
-              assets: []
+              assets: [],
             };
           }
           entityPortfolios[entityId].subsidiaries[subId].assets.push(asset);
@@ -163,7 +163,11 @@ export async function entries() {
       }));
 
       // Get pre-built portfolio data for Owner Explorer
-      const portfolioData = entityPortfolios[entityId] || { assets: [], subsidiaries: {}, directlyOwned: [] };
+      const portfolioData = entityPortfolios[entityId] || {
+        assets: [],
+        subsidiaries: {},
+        directlyOwned: [],
+      };
 
       entitiesMap[entityId] = {
         id: entityId,
@@ -177,9 +181,9 @@ export async function entries() {
         // Full portfolio for Owner Explorer (serialized - no Maps)
         portfolioData: {
           assets: portfolioData.assets,
-          subsidiaries: portfolioData.subsidiaries,  // { subId: { name, share, assets[] } }
-          directlyOwned: portfolioData.directlyOwned
-        }
+          subsidiaries: portfolioData.subsidiaries, // { subId: { name, share, assets[] } }
+          directlyOwned: portfolioData.directlyOwned,
+        },
       };
     }
 
@@ -201,7 +205,9 @@ export async function entries() {
 
     const uniqueEntities = Object.keys(entitiesMap).length;
     console.log(`  ✓ Wrote entity cache to disk (${cacheSizeMB} MB)`);
-    console.log(`  📋 Entity IDs to build: ${Object.keys(entitiesMap).slice(0, 3).join(', ')}... (${uniqueEntities} total)`);
+    console.log(
+      `  📋 Entity IDs to build: ${Object.keys(entitiesMap).slice(0, 3).join(', ')}... (${uniqueEntities} total)`
+    );
 
     // Return array of { id } objects for SvelteKit to prerender
     return Object.keys(entitiesMap).map((id) => ({ id }));
@@ -222,7 +228,9 @@ function loadCacheFromDisk() {
         };
         ENTITY_CACHE.entities = new Map(Object.entries(cacheData.entities));
         ENTITY_CACHE.initialized = true;
-        console.log(`  ✓ Loaded entity cache: ${ENTITY_CACHE.entities.size} entities from ${CACHE_FILE}`);
+        console.log(
+          `  ✓ Loaded entity cache: ${ENTITY_CACHE.entities.size} entities from ${CACHE_FILE}`
+        );
       } catch (err) {
         console.error(`  ✗ Failed to load entity cache from ${CACHE_FILE}:`, err.message);
       }
@@ -240,15 +248,27 @@ export async function load({ params }) {
     if (entity) {
       // Build full portfolio in the format OwnershipExplorerD3 expects
       // Convert from serialized format to the structure the component needs
-      const portfolioData = entity.portfolioData || { assets: [], subsidiaries: {}, directlyOwned: [] };
+      const portfolioData = entity.portfolioData || {
+        assets: [],
+        subsidiaries: {},
+        directlyOwned: [],
+      };
 
       // Convert subsidiaries object to the format the component expects
       // subsidiariesMatched: array of [subId, assets[]]
       // matchedEdges: array of [subId, { value: share }]
       // entityMap: array of [subId, { id, Name, type }]
-      const subsidiariesMatched = Object.entries(portfolioData.subsidiaries).map(([subId, data]) => [subId, data.assets]);
-      const matchedEdges = Object.entries(portfolioData.subsidiaries).map(([subId, data]) => [subId, { value: data.share }]);
-      const entityMap = Object.entries(portfolioData.subsidiaries).map(([subId, data]) => [subId, { id: subId, Name: data.name, type: 'entity' }]);
+      const subsidiariesMatched = Object.entries(portfolioData.subsidiaries).map(
+        ([subId, data]) => [subId, data.assets]
+      );
+      const matchedEdges = Object.entries(portfolioData.subsidiaries).map(([subId, data]) => [
+        subId,
+        { value: data.share },
+      ]);
+      const entityMap = Object.entries(portfolioData.subsidiaries).map(([subId, data]) => [
+        subId,
+        { id: subId, Name: data.name, type: 'entity' },
+      ]);
 
       return {
         entityId: params.id,
@@ -267,10 +287,10 @@ export async function load({ params }) {
         // Full portfolio for Owner Explorer (serialized as arrays, not Maps)
         ownerExplorerData: {
           spotlightOwner: { id: params.id, Name: entity.name },
-          subsidiariesMatched,  // Array of [subId, assets[]]
+          subsidiariesMatched, // Array of [subId, assets[]]
           directlyOwned: portfolioData.directlyOwned,
-          matchedEdges,  // Array of [subId, { value }]
-          entityMap,  // Array of [subId, { id, Name, type }]
+          matchedEdges, // Array of [subId, { value }]
+          entityMap, // Array of [subId, { id, Name, type }]
           assets: portfolioData.assets,
         },
       };
@@ -288,7 +308,7 @@ export async function load({ params }) {
       entity: null,
       stats: null,
       portfolio: null,
-      ownerExplorerData: null,  // Let client fetch via MotherDuck WASM
+      ownerExplorerData: null, // Let client fetch via MotherDuck WASM
     };
   }
 
