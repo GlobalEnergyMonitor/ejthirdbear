@@ -343,19 +343,11 @@
       {/if}
 
       <!-- Interactive location map - hidden entirely if no location found -->
-      {#if mapHasLocation && ((latCol && lonCol && asset[latCol] && asset[lonCol]) || (gemLocationIdCol && asset[gemLocationIdCol]))}
+      <!-- AssetMap fetches its own data from URL params and GeoJSON -->
+      {#if mapHasLocation}
         <section class="map-section">
           <h2>Location</h2>
-          <AssetMap
-            gemUnitId={assetId}
-            gemLocationId={gemLocationIdCol && asset[gemLocationIdCol]
-              ? asset[gemLocationIdCol]
-              : null}
-            assetName={assetName || assetId}
-            lat={latCol && asset[latCol] ? asset[latCol] : null}
-            lon={lonCol && asset[lonCol] ? asset[lonCol] : null}
-            bind:hasLocation={mapHasLocation}
-          />
+          <AssetMap bind:hasLocation={mapHasLocation} />
         </section>
       {/if}
 
@@ -941,7 +933,7 @@
       grid-template-columns: 1fr;
     }
 
-    .ownership-stats {
+    :global(.ownership-stats) {
       flex-direction: column;
       gap: 10px;
     }

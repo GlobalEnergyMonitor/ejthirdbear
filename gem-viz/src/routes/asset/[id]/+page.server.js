@@ -5,6 +5,46 @@ import { join, dirname } from 'path';
 // Only prerender in production builds - dev mode uses client-side fetching
 export const prerender = process.env.NODE_ENV !== 'development';
 
+/**
+ * Tracker-specific ID field mapping
+ * Each tracker uses a different primary ID field in the parquet
+ * Source of truth: $lib/data-config/tracker-config.ts
+ */
+const TRACKER_ID_FIELDS = {
+  'Coal Plant': 'GEM unit ID',
+  'Gas Plant': 'GEM unit ID',
+  'Bioenergy Power': 'GEM unit ID',
+  'Coal Mine': 'GEM Mine ID',
+  'Iron Mine': 'GEM Asset ID',
+  'Gas Pipeline': 'ProjectID',
+  'Steel Plant': 'Steel Plant ID',
+  // Future trackers (not yet in parquet):
+  // 'Oil & NGL Pipeline': 'ProjectID',
+  // 'Cement and Concrete': 'GEM Plant ID',
+};
+
+/**
+ * Get the asset ID from a row using tracker-specific ID field
+ */
+function getAssetIdFromRow(row) {
+  const tracker = row['Tracker'];
+  const idField = TRACKER_ID_FIELDS[tracker];
+
+  if (idField && row[idField]) {
+    return String(row[idField]);
+  }
+
+  // Fallback for unknown trackers: try common ID fields
+  return (
+    String(row['GEM unit ID'] || '') ||
+    String(row['GEM Mine ID'] || '') ||
+    String(row['GEM Asset ID'] || '') ||
+    String(row['Steel Plant ID'] || '') ||
+    String(row['ProjectID'] || '') ||
+    null
+  );
+}
+
 // Disk cache path (persists across worker processes)
 // Use .svelte-kit for build-time cache (not cleaned up like build/)
 const CACHE_FILE = join(process.cwd(), '.svelte-kit/.asset-cache.json');
@@ -90,14 +130,22 @@ export async function entries() {
     console.log(`  ✓ Fetched ${assetsResult.data.length} ownership rows in ${fetchTime}s`);
     console.log(`  ✓ DB connection closed (total lifetime: ${fetchTime}s)`);
 
-    // GROUP BY GEM unit ID - each asset gets an array of ownership records
+    // GROUP BY tracker-specific ID field - each asset gets an array of ownership records
     const assetsMap = {};
+    let skippedRows = 0;
     for (const row of assetsResult.data) {
-      const assetId = String(row[unitIdCol] || row[idCol]);
+      const assetId = getAssetIdFromRow(row);
+      if (!assetId) {
+        skippedRows++;
+        continue;
+      }
       if (!assetsMap[assetId]) {
         assetsMap[assetId] = [];
       }
       assetsMap[assetId].push(row);
+    }
+    if (skippedRows > 0) {
+      console.log(`  ⚠️  Skipped ${skippedRows} rows with no valid ID`);
     }
 
     // Store cache data (metadata + grouped assets)

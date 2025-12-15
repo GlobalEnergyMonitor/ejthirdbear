@@ -3,7 +3,12 @@
  *
  * Single source of truth for asset ID resolution across all components.
  * GEM Unit ID is the canonical asset identifier for URLs and lookups.
+ *
+ * Integrates with tracker-config for tracker-specific ID field mappings.
+ * See also: $lib/data-config for comprehensive tracker metadata.
  */
+
+import { getTrackerConfig } from '$lib/data-config';
 
 // Column name constants (lowercase for comparison)
 export const ID_COLUMNS = {
@@ -200,4 +205,49 @@ export function assetPath(id: string): string {
  */
 export function entityPath(id: string): string {
   return `/entity/${id}`;
+}
+
+/**
+ * Get the ID field name for a specific tracker using tracker-config
+ * This is the canonical way to find the primary ID field for a tracker
+ *
+ * Usage:
+ *   const idField = getIdFieldForTracker('Coal Plant');
+ *   // Returns: 'GEM unit ID'
+ */
+export function getIdFieldForTracker(trackerName: string): string | null {
+  const config = getTrackerConfig(trackerName);
+  return config?.idField || null;
+}
+
+/**
+ * Extract asset ID using tracker-specific configuration
+ * Falls back to generic ID extraction if tracker config not found
+ *
+ * Usage:
+ *   const id = extractAssetIdByTracker('Coal Plant', coalPlantRow);
+ *   // Uses 'GEM unit ID' field from tracker config
+ */
+export function extractAssetIdByTracker(
+  trackerName: string,
+  record: Record<string, unknown>
+): string | null {
+  const config = getTrackerConfig(trackerName);
+
+  if (config && config.idField in record) {
+    return (record[config.idField] as string) || null;
+  }
+
+  // Fallback to generic ID extraction using priority list
+  const recordKeys = Object.keys(record);
+  const lowerKeys = recordKeys.map((k) => k.toLowerCase());
+
+  for (const idField of ASSET_ID_PRIORITIES) {
+    const idx = lowerKeys.indexOf(idField);
+    if (idx !== -1 && record[recordKeys[idx]]) {
+      return String(record[recordKeys[idx]]);
+    }
+  }
+
+  return null;
 }
