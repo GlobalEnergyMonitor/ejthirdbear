@@ -11,9 +11,11 @@
     assetName = '',
     edges = [],
     nodes = [],
-    width = 800,
-    height = 400
+    width: initialWidth = 800,
+    height: initialHeight = 400
   } = $props();
+
+  const MIN_HEIGHT = 420;
 
   let simulation;
   let nodePositions = $state([]);
@@ -21,6 +23,10 @@
   let hoveredNode = $state(null);
   let loading = $state(true);
   let error = $state(null);
+  let containerEl;
+  let resizeObserver;
+  let layoutWidth = $state(initialWidth);
+  let layoutHeight = $state(Math.max(MIN_HEIGHT, initialHeight));
 
   // Derived
   let nodeMap = $derived.by(() => {
@@ -44,7 +50,12 @@
   let maxDepth = $derived(Math.max(1, ...edges.map((e) => e.depth)));
 
   async function initSimulation() {
-    if (typeof window === 'undefined' || !edges.length) return;
+    if (typeof window === 'undefined' || !edges.length) {
+      loading = false;
+      return;
+    }
+
+    loading = true;
 
     const d3Force = await import('d3-force');
     const simNodes = Array.from(new Set(edges.flatMap((e) => [e.source, e.target]))).map((id) => {
@@ -53,9 +64,9 @@
       return {
         id,
         depth: minDepth,
-        fy: height - 30 - (minDepth * (height - 60)) / (maxDepth + 1),
-        x: Math.random() * width,
-        y: height / 2,
+        fy: layoutHeight - 30 - (minDepth * (layoutHeight - 60)) / (maxDepth + 1),
+        x: Math.random() * layoutWidth,
+        y: layoutHeight / 2,
       };
     });
 
@@ -72,12 +83,12 @@
         d3Force.forceLink(simLinks).id((d) => /** @type {{ id: string }} */ (d).id).distance(40).strength(0.5)
       )
       .force('charge', d3Force.forceManyBody().strength(-80))
-      .force('x', d3Force.forceX(width / 2).strength(0.05))
+      .force('x', d3Force.forceX(layoutWidth / 2).strength(0.05))
       .force('collide', d3Force.forceCollide(20))
       .on('tick', () => {
         nodePositions = simNodes.map((n) => ({
           id: n.id,
-          x: Math.max(20, Math.min(width - 20, n.x)),
+          x: Math.max(20, Math.min(layoutWidth - 20, n.x)),
           y: n.y,
           depth: n.depth,
           data: nodeMap.get(n.id),
@@ -94,8 +105,48 @@
     loading = false;
   }
 
-  onMount(() => initSimulation());
-  onDestroy(() => simulation?.stop());
+  const computeHeight = (nextWidth) =>
+    Math.max(MIN_HEIGHT, Math.min(900, (nextWidth || initialWidth) * 0.55));
+
+  function handleResize(entry) {
+    const nextWidth = entry?.contentRect?.width || initialWidth;
+    const nextHeight = computeHeight(nextWidth);
+    const widthChanged = Math.abs(nextWidth - layoutWidth) > 1;
+    const heightChanged = Math.abs(nextHeight - layoutHeight) > 1;
+    if (widthChanged || heightChanged) {
+      layoutWidth = nextWidth;
+      layoutHeight = nextHeight;
+      restartSimulation();
+    }
+  }
+
+  function restartSimulation() {
+    simulation?.stop();
+    initSimulation();
+  }
+
+  onMount(() => {
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver((entries) => handleResize(entries[0]));
+      if (containerEl) resizeObserver.observe(containerEl);
+      if (containerEl) handleResize({ contentRect: containerEl.getBoundingClientRect() });
+    } else if (containerEl) {
+      handleResize({ contentRect: containerEl.getBoundingClientRect() });
+    }
+    restartSimulation();
+  });
+
+  onDestroy(() => {
+    simulation?.stop();
+    resizeObserver?.disconnect();
+  });
+
+  $effect(() => {
+    // Re-run when input data changes
+    edges;
+    nodes;
+    restartSimulation();
+  });
 
   const getNodeColor = (node) =>
     !node?.data ? colors.grey : node.data.type === 'asset' ? colors.orange : node.depth === 0 ? colors.teal : colors.navy;
@@ -106,13 +157,13 @@
   const truncate = (name, max = 20) => (!name ? '' : name.length <= max ? name : name.slice(0, max - 1) + '...');
 </script>
 
-<div class="ownership-hierarchy">
+<div class="ownership-hierarchy" bind:this={containerEl}>
   {#if loading || error}
     <div class="overlay" class:error={Boolean(error)}>
       {loading ? 'Loading ownership graph…' : error}
     </div>
   {/if}
-  <svg {width} {height}>
+  <svg width={layoutWidth} height={layoutHeight}>
     <g class="links">
       {#each linkPositions as link}
         <line
@@ -152,7 +203,7 @@
       </text>
     {/each}
     {#each Array.from({ length: maxDepth + 1 }, (_, i) => i) as depth}
-      <text x="10" y={height - 30 - (depth * (height - 60)) / (maxDepth + 1)} font-size="9" fill={colors.grey} opacity="0.6">
+      <text x="10" y={layoutHeight - 30 - (depth * (layoutHeight - 60)) / (maxDepth + 1)} font-size="9" fill={colors.grey} opacity="0.6">
         {depth === 0 ? 'Asset' : `Depth ${depth}`}
       </text>
     {/each}
@@ -167,10 +218,10 @@
 </div>
 
 <style>
-  .ownership-hierarchy { position: relative; background: #fafafa; border: 1px solid #000; }
+  .ownership-hierarchy { position: relative; background: #fafafa; border: 1px solid #000; width: 100%; min-height: 420px; }
   .overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(250, 250, 250, 0.9); z-index: 2; font-size: 12px; color: #555; }
   .overlay.error { color: #b10000; background: rgba(250, 235, 235, 0.92); }
-  svg { display: block; }
+  svg { display: block; width: 100%; height: auto; }
   .node { cursor: pointer; }
   .node circle { transition: r 0.15s, fill-opacity 0.15s; }
   .node:hover circle { fill-opacity: 0.6; }

@@ -16,9 +16,15 @@
     direction = 'TD'
   } = $props();
 
+  const MIN_HEIGHT = 380;
+
   let mermaidSvg = $state('');
   let loading = $state(true);
   let error = $state(null);
+  let containerEl;
+  let containerWidth = $state(0);
+
+  const diagramHeight = $derived(Math.max(MIN_HEIGHT, containerWidth * 0.4));
 
   function generateMermaidSyntax() {
     if (!edges.length) return '';
@@ -78,12 +84,30 @@
     }
   }
 
-  onMount(() => renderMermaid());
+  function trackSize() {
+    if (typeof ResizeObserver === 'undefined' || !containerEl) return;
+    const resizeObserver = new ResizeObserver((entries) => {
+      const entry = entries?.[0];
+      if (!entry) return;
+      const nextWidth = entry.contentRect?.width ?? 0;
+      if (Math.abs(nextWidth - containerWidth) > 1) {
+        containerWidth = nextWidth;
+      }
+    });
+    resizeObserver.observe(containerEl);
+    return () => resizeObserver.disconnect();
+  }
+
+  onMount(() => {
+    const cleanup = trackSize();
+    renderMermaid();
+    return cleanup;
+  });
 
   let transform = $derived(`scale(${zoom})`);
 </script>
 
-<div class="mermaid-ownership">
+<div class="mermaid-ownership" bind:this={containerEl}>
   {#if loading}
     <div class="status"><p>Generating diagram...</p></div>
   {:else if error}
@@ -104,13 +128,13 @@
 </div>
 
 <style>
-  .mermaid-ownership { border: 1px solid #000; background: #fafafa; min-height: 200px; }
+  .mermaid-ownership { border: 1px solid #000; background: #fafafa; min-height: 240px; width: 100%; }
   .controls { padding: 10px; border-bottom: 1px solid #ddd; background: #fff; font-size: 11px; display: flex; gap: 10px; align-items: center; }
   .controls label { display: flex; align-items: center; gap: 8px; text-transform: uppercase; letter-spacing: 0.5px; color: #666; }
   .controls input[type='range'] { width: 100px; }
-  .diagram-container { padding: 20px; max-height: 600px; overflow: auto; }
-  .diagram { display: inline-block; }
-  .diagram :global(svg) { max-width: none !important; }
+  .diagram-container { padding: 20px; max-height: 720px; overflow: auto; width: 100%; min-height: 380px; }
+  .diagram { display: block; width: 100%; }
+  .diagram :global(svg) { width: 100% !important; height: auto !important; max-width: none !important; display: block; }
   .diagram :global(.node rect), .diagram :global(.node polygon) { fill: var(--navy, #004a63) !important; stroke: var(--navy, #004a63) !important; }
   .diagram :global(.edgeLabel) { background-color: #fff !important; font-size: 10px !important; }
   .status { padding: 40px; text-align: center; }

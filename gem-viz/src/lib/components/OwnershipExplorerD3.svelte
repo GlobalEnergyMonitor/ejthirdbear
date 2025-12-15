@@ -21,6 +21,7 @@
 
   let sectionEl;
   let loading = $state(true);
+  let loadingStatus = $state('Initializing...');
   let error = $state(null);
 
   let curCase = $state({ assetClassName: 'assets' });
@@ -357,6 +358,7 @@
   async function loadData() {
     // Use pre-baked data if available (production static build)
     if (prebakedData) {
+      loadingStatus = 'Loading cached portfolio data...';
       // Convert serialized arrays back to Maps
       const portfolio = {
         spotlightOwner: prebakedData.spotlightOwner,
@@ -371,6 +373,7 @@
     }
 
     // Fallback: client-side fetch from MotherDuck (dev mode)
+    loadingStatus = 'Connecting to database...';
     const pageData = get(page);
     const pathname = pageData.url?.pathname || '';
     const paramId = pageData.params?.id;
@@ -381,6 +384,7 @@
       ownerId = propsOwnerEntityId;
     } else if (pathname.includes('/asset/')) {
       // Client-side: try to fetch asset basics
+      loadingStatus = 'Fetching asset details...';
       const basics = await fetchAssetBasics(paramId);
       if (basics?.ownerEntityId) ownerId = basics.ownerEntityId;
       else throw new Error('Owner entity not found for asset');
@@ -390,9 +394,11 @@
       throw new Error('Unsupported route for ownership explorer');
     }
 
+    loadingStatus = 'Fetching ownership portfolio...';
     const portfolio = await fetchOwnerPortfolio(ownerId);
     if (!portfolio) throw new Error('Failed to load owner portfolio');
 
+    loadingStatus = 'Building visualization...';
     curCase = { assetClassName: 'assets' };
     return portfolio;
   }
@@ -728,7 +734,11 @@
 
 <section bind:this={sectionEl} class="ownership-explorer-d3">
   {#if loading}
-    <p>Loading owner explorer…</p>
+    <div class="loading-state">
+      <div class="loading-spinner"></div>
+      <p class="loading-status">{loadingStatus}</p>
+      <p class="loading-hint">Querying ownership relationships...</p>
+    </div>
   {:else if error}
     <p class="error">{error}</p>
   {/if}
@@ -737,6 +747,44 @@
 <style>
   .ownership-explorer-d3 {
     position: relative;
+  }
+
+  .loading-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    gap: 12px;
+    min-height: 200px;
+    background: #fafafa;
+    border: 1px solid #e0e0e0;
+  }
+
+  .loading-spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid #e0e0e0;
+    border-top-color: #333;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .loading-status {
+    font-size: 14px;
+    font-weight: 500;
+    color: #333;
+    margin: 0;
+  }
+
+  .loading-hint {
+    font-size: 12px;
+    color: #888;
+    margin: 0;
   }
 
   :global(.sticky-section) {
