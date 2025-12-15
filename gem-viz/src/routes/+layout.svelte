@@ -1,12 +1,9 @@
 <script>
   import '../app.css';
 
-  /* global __BUILD_TIME__, __BUILD_HASH__ */
-  // Build info injected at build time
+  // Build info injected by Vite at build time
   const buildTime = __BUILD_TIME__;
   const buildHash = __BUILD_HASH__;
-
-  // Version - pulled from package.json at build time
   const appVersion = __APP_VERSION__;
 </script>
 

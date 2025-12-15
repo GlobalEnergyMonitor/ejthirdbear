@@ -12,6 +12,7 @@ declare global {
   // Build-time constants injected by Vite
   const __BUILD_TIME__: string;
   const __BUILD_HASH__: string;
+  const __APP_VERSION__: string;
 }
 
 export {};

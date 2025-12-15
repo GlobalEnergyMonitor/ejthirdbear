@@ -113,6 +113,10 @@ export default [
       globals: {
         ...globals.browser,
         ...globals.es2021,
+        // Build-time constants (injected by Vite)
+        __BUILD_TIME__: 'readonly',
+        __BUILD_HASH__: 'readonly',
+        __APP_VERSION__: 'readonly',
       },
     },
     rules: {
