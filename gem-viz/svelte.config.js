@@ -18,7 +18,7 @@ const config = {
     adapter: adapter({
       pages: 'build',
       assets: 'build',
-      fallback: '200.html',  // SPA fallback for client-side routes (entity, etc.)
+      fallback: '404.html',  // Fallback page for missing routes (also serves as SPA fallback)
       precompress: false,  // Disable to reduce file descriptor pressure during prerender
       strict: false
     }),
