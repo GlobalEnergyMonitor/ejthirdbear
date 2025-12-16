@@ -100,8 +100,19 @@
     }
   }
 
+  // React to prebaked data changes (handles hydration correctly)
+  $effect(() => {
+    if (prebakedPortfolio) {
+      applyPortfolio(prebakedPortfolio);
+      loading = false;
+    }
+  });
+
+  // Fallback: fetch client-side if no prebaked data after mount
   onMount(() => {
-    hydratePortfolio();
+    if (!prebakedPortfolio) {
+      hydratePortfolio();
+    }
   });
 
   /**
