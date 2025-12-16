@@ -1,5 +1,6 @@
 <script>
   import '../app.css';
+  import SiteNav from '$lib/components/SiteNav.svelte';
 
   // Build info injected by Vite at build time
   const buildTime = __BUILD_TIME__;
@@ -13,6 +14,7 @@
 </svelte:head>
 
 <div class="app">
+  <SiteNav />
   <slot />
 
   <footer>

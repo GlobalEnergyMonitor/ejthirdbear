@@ -383,8 +383,7 @@
 <style>
   /* Layout */
   main {
-    max-width: 1200px;
-    margin: 0 auto;
+    width: 100%;
     padding: 40px;
   }
   header {
@@ -459,10 +458,9 @@
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 20px;
-    padding: 20px;
-    background: #fafafa;
-    border: 1px solid #ddd;
+    padding: 20px 0;
     margin-bottom: 40px;
+    border-bottom: 1px solid #ddd;
   }
   .meta-item {
     display: flex;
@@ -504,7 +502,6 @@
   }
   .owners-table-wrapper {
     overflow-x: auto;
-    border: 1px solid #ddd;
   }
   .owners-table {
     width: 100%;
@@ -518,16 +515,15 @@
     border-bottom: 1px solid #eee;
   }
   .owners-table th {
-    background: #fafafa;
     font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: #666;
     font-weight: bold;
-    border-bottom: 1px solid #ddd;
+    border-bottom: 1px solid #000;
   }
   .owners-table tbody tr:hover {
-    background: #f9f9f9;
+    background: #fafafa;
   }
   .owner-name {
     font-weight: 500;

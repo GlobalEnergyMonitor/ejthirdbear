@@ -1,10 +1,10 @@
 {
-  "version": "74c0e54",
-  "commit": "74c0e54",
-  "message": "Bump version to 0.1.13",
+  "version": "36672cf",
+  "commit": "36672cf",
+  "message": "Pre-bake Owner Explorer and Related Assets data at build time",
   "author": "EJ Fox",
-  "timestamp": "2025-12-15T20:19:32.271Z",
-  "deployed": "2025-12-15T20:19:32.271Z",
-  "buildTime": "12/15/2025, 3:19:32 PM",
-  "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.1.13"
+  "timestamp": "2025-12-16T16:41:59.100Z",
+  "deployed": "2025-12-16T16:41:59.100Z",
+  "buildTime": "12/16/2025, 11:41:59 AM",
+  "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.1.15"
 }

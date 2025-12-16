@@ -12,7 +12,7 @@
   import { page } from '$app/stores';
 
   // Links
-  import { link, assetLink } from '$lib/links';
+  import { assetLink } from '$lib/links';
 
   // Data fetching
   import { fetchOwnerPortfolio, fetchOwnerStats } from '$lib/component-data/schema';
@@ -23,6 +23,8 @@
   import AssetScreener from '$lib/components/AssetScreener.svelte';
   import TrackerIcon from '$lib/components/TrackerIcon.svelte';
   import StatusIcon from '$lib/components/StatusIcon.svelte';
+  import ConnectionFinder from '$lib/widgets/ConnectionFinder.svelte';
+  import AddToCartButton from '$lib/components/AddToCartButton.svelte';
 
   // --- PROPS (from +page.server.js) ---
   let { data } = $props();
@@ -134,7 +136,6 @@
 <main>
   <!-- Header -->
   <header>
-    <a href={link('index')} class="back-link">← Home</a>
     <span class="entity-type">Entity Profile</span>
   </header>
 
@@ -155,6 +156,14 @@
               {#if countryCount}· {countryCount} {countryCount === 1 ? 'country' : 'countries'}{/if}
             {/if}
           </p>
+          <div class="page-actions">
+            <AddToCartButton
+              id={entityId}
+              name={entityName || entityId}
+              type="entity"
+              metadata={{ assetCount: totalAssets, capacity: totalCapacity }}
+            />
+          </div>
         </div>
         {#if portfolio}
           <div class="header-flower">
@@ -186,6 +195,11 @@
           </div>
         {/if}
       </div>
+
+      <!-- Connected Entities (Co-Owners) -->
+      <section class="connection-section">
+        <ConnectionFinder {entityId} {entityName} title="Connected Entities (Co-Owners)" />
+      </section>
 
       <!-- Tracker Mix -->
       {#if trackerBreakdown.length > 0}
@@ -268,8 +282,6 @@
   /* Layout */
   main {
     width: 100%;
-    max-width: 1200px;
-    margin: 0 auto;
     padding: 40px;
   }
 
@@ -337,6 +349,9 @@
     margin: 0;
     font-family: system-ui, sans-serif;
   }
+  .page-actions {
+    margin-top: 12px;
+  }
 
   /* Section Headings */
   h2 {
@@ -353,9 +368,8 @@
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 20px;
     margin-bottom: 40px;
-    padding: 20px;
-    background: #fafafa;
-    border: 1px solid #ddd;
+    padding: 20px 0;
+    border-bottom: 1px solid #ddd;
   }
   .meta-item {
     display: flex;
@@ -377,9 +391,7 @@
   /* Breakdown Sections */
   .breakdown-section {
     margin: 30px 0;
-    padding: 20px;
-    background: #fafafa;
-    border: 1px solid #e0e0e0;
+    padding: 0;
   }
   .breakdown-section h2 {
     margin-top: 0;
@@ -410,9 +422,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 4px 10px;
-    background: #fff;
-    border: 1px solid #ddd;
+    padding: 4px 0;
   }
   .status-label {
     font-size: 11px;
@@ -437,9 +447,9 @@
     gap: 12px;
   }
   .asset-card {
-    border: 1px solid #ddd;
+    border: none;
     padding: 12px;
-    background: #fafafa;
+    background: transparent;
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -468,12 +478,15 @@
     text-transform: uppercase;
     letter-spacing: 0.3px;
     padding: 2px 6px;
-    background: #f0f0f0;
-    border: 1px solid #ddd;
+    background: transparent;
+    border: none;
     font-family: system-ui, sans-serif;
   }
 
   /* Sections */
+  .connection-section {
+    margin: 30px 0;
+  }
   .ownership-explorer {
     margin-top: 32px;
   }

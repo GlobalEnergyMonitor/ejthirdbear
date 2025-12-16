@@ -1,5 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import * as duckdb from '@duckdb/duckdb-wasm';
+// Use locally bundled WASM/worker assets to avoid CDN fetch failures (e.g. 403s offline)
+import duckdb_wasm_mvp from '@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url';
+import duckdb_worker_mvp from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url';
+import duckdb_wasm_eh from '@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url';
+import duckdb_worker_eh from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url';
 
 // Type definitions
 export interface QueryResult<T = Record<string, any>> {
@@ -34,31 +39,32 @@ export async function initDuckDB(): Promise<DuckDBInstance> {
   try {
     console.log('Initializing DuckDB-WASM...');
 
-    // Get bundles from jsdelivr CDN
-    const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
+    const MANUAL_BUNDLES: duckdb.DuckDBBundles = {
+      mvp: {
+        mainModule: duckdb_wasm_mvp,
+        mainWorker: duckdb_worker_mvp,
+      },
+      eh: {
+        mainModule: duckdb_wasm_eh,
+        mainWorker: duckdb_worker_eh,
+      },
+    };
 
-    // Select appropriate bundle
-    const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
+    // Select appropriate bundle (prefers eh when available)
+    const bundle = await duckdb.selectBundle(MANUAL_BUNDLES);
     console.debug('[duckdb-utils] Selected bundle', {
       mainModule: bundle.mainModule,
       mainWorker: bundle.mainWorker,
       version: (bundle as any)?.version ?? 'unknown',
     });
 
-    // Create worker for background processing
-    const worker_url = URL.createObjectURL(
-      new Blob([`importScripts("${bundle.mainWorker}");`], { type: 'text/javascript' })
-    );
-
-    const worker = new Worker(worker_url);
+    // Create worker for background processing using bundled worker file
+    const worker = new Worker(bundle.mainWorker);
     const logger = new duckdb.ConsoleLogger();
 
     // Initialize database
     db = new duckdb.AsyncDuckDB(logger, worker);
     await db.instantiate(bundle.mainModule);
-
-    // Clean up worker URL
-    URL.revokeObjectURL(worker_url);
 
     // Create connection
     conn = await db.connect();
@@ -179,16 +185,16 @@ export async function loadParquetFromPath(
       const sizeStr = contentLength
         ? `${(Number(contentLength) / 1024 / 1024).toFixed(2)} MB`
         : 'unknown size';
-      console.log(`✓ Fetched ${path} (${sizeStr})`);
+      console.log(`[OK] Fetched ${path} (${sizeStr})`);
 
       const blob = await response.blob();
-      console.log(`✓ Blob created: ${(blob.size / 1024 / 1024).toFixed(2)} MB`);
+      console.log(`[OK] Blob created: ${(blob.size / 1024 / 1024).toFixed(2)} MB`);
 
       const fileName = path.split('/').pop()!;
 
       // Create a File object from the blob
       const file = new File([blob], fileName, { type: 'application/octet-stream' });
-      console.log(`✓ File object created: ${fileName}`);
+      console.log(`[OK] File object created: ${fileName}`);
 
       // Register the file with DuckDB
       await db!.registerFileHandle(
@@ -197,7 +203,7 @@ export async function loadParquetFromPath(
         duckdb.DuckDBDataProtocol.BROWSER_FILEREADER,
         true
       );
-      console.log(`✓ File registered with DuckDB: ${fileName}`);
+      console.log(`[OK] File registered with DuckDB: ${fileName}`);
 
       // Create table from the file
       console.log(`Creating table ${tableName} from ${fileName}...`);
@@ -205,7 +211,7 @@ export async function loadParquetFromPath(
         CREATE OR REPLACE TABLE ${tableName} AS
         SELECT * FROM parquet_scan('${fileName}');
       `);
-      console.log(`✓ Table ${tableName} created`);
+      console.log(`[OK] Table ${tableName} created`);
 
       // Get row count
       const countResult = await conn!.query(`
@@ -213,11 +219,11 @@ export async function loadParquetFromPath(
       `);
 
       const count = countResult.toArray()[0].total;
-      console.log(`✓ Successfully loaded ${Number(count).toLocaleString()} rows from ${path}`);
+      console.log(`[OK] Successfully loaded ${Number(count).toLocaleString()} rows from ${path}`);
 
       return { success: true, rowCount: Number(count) };
     } catch (error) {
-      console.error(`✗ Attempt ${attempt + 1} failed:`, error);
+      console.error(`[ERROR] Attempt ${attempt + 1} failed:`, error);
 
       if (attempt < retries) {
         console.log(`Retrying in ${(attempt + 1) * 1000}ms...`);
@@ -255,10 +261,10 @@ export async function loadCSVFromPath(
       const sizeStr = contentLength
         ? `${(Number(contentLength) / 1024 / 1024).toFixed(2)} MB`
         : 'unknown size';
-      console.log(`✓ Fetched ${path} (${sizeStr})`);
+      console.log(`[OK] Fetched ${path} (${sizeStr})`);
 
       const csvText = await response.text();
-      console.log(`✓ CSV text loaded: ${(csvText.length / 1024 / 1024).toFixed(2)} MB`);
+      console.log(`[OK] CSV text loaded: ${(csvText.length / 1024 / 1024).toFixed(2)} MB`);
 
       const fileName = path.split('/').pop()!;
 
@@ -272,7 +278,7 @@ export async function loadCSVFromPath(
         duckdb.DuckDBDataProtocol.BROWSER_FILEREADER,
         true
       );
-      console.log(`✓ CSV registered with DuckDB: ${fileName}`);
+      console.log(`[OK] CSV registered with DuckDB: ${fileName}`);
 
       // Create table from the CSV file
       console.log(`Creating table ${tableName} from ${fileName}...`);
@@ -280,7 +286,7 @@ export async function loadCSVFromPath(
         CREATE OR REPLACE TABLE ${tableName} AS
         SELECT * FROM read_csv_auto('${fileName}');
       `);
-      console.log(`✓ Table ${tableName} created`);
+      console.log(`[OK] Table ${tableName} created`);
 
       // Get row count
       const countResult = await conn!.query(`
@@ -288,11 +294,11 @@ export async function loadCSVFromPath(
       `);
 
       const count = countResult.toArray()[0].total;
-      console.log(`✓ Successfully loaded ${Number(count).toLocaleString()} rows from ${path}`);
+      console.log(`[OK] Successfully loaded ${Number(count).toLocaleString()} rows from ${path}`);
 
       return { success: true, rowCount: Number(count) };
     } catch (error) {
-      console.error(`✗ Attempt ${attempt + 1} failed:`, error);
+      console.error(`[ERROR] Attempt ${attempt + 1} failed:`, error);
 
       if (attempt < retries) {
         console.log(`Retrying in ${(attempt + 1) * 1000}ms...`);

@@ -40,3 +40,4 @@ build-*.log
 # Generated files (build-time injection)
 src/lib/generated/
 scripts/.env
+.build-start

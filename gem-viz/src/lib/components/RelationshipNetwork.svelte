@@ -95,7 +95,7 @@
 {:else}
   {#if ownershipChain && ownershipChain.length > 1}
     <section class="ownership-network">
-      <h2>🏢 Ownership Network</h2>
+      <h2>Ownership Network</h2>
 
       <div class="ownership-flow">
         {#each ownershipChain as node, i}
@@ -138,7 +138,7 @@
 
   {#if sameOwnerAssets && sameOwnerAssets.length > 0}
     <section class="related-assets">
-      <h2>🔗 Other Assets by {/** @type {any} */ (currentAsset).Owner || 'Same Owner'}</h2>
+      <h2>Other Assets by {/** @type {any} */ (currentAsset).Owner || 'Same Owner'}</h2>
 
       <div class="asset-grid">
         {#each sameOwnerAssets as asset}
@@ -169,7 +169,7 @@
 
   {#if coLocatedAssets && coLocatedAssets.length > 0}
     <section class="co-located">
-      <h2>📍 Co-Located Assets</h2>
+      <h2>Co-Located Assets</h2>
       <p class="location-note">
         {coLocatedAssets.length + 1}
         {coLocatedAssets.length === 0 ? 'unit' : 'units'} at this location
@@ -205,8 +205,8 @@
   .ownership-network {
     margin: 40px 0;
     padding: 30px;
-    background: #f8f8f8;
-    border: 1px solid #ddd;
+    background: transparent;
+    border: none;
   }
 
   h2 {
@@ -233,7 +233,7 @@
     justify-content: center;
     padding: 15px 20px;
     background: white;
-    border: 2px solid #000;
+    border: none;
     min-width: 140px;
     min-height: 80px;
   }
@@ -272,7 +272,7 @@
     flex-wrap: wrap;
     padding: 15px;
     background: white;
-    border: 1px solid #ddd;
+    border: none;
     font-size: 12px;
   }
 
@@ -297,7 +297,7 @@
     display: block;
     padding: 15px;
     background: white;
-    border: 1px solid #ddd;
+    border: none;
     text-decoration: none;
     color: inherit;
     transition: all 0.2s;
@@ -328,7 +328,7 @@
     font-size: 9px;
     text-transform: uppercase;
     padding: 3px 6px;
-    border-radius: 2px;
+    border-radius: 0;
     font-weight: bold;
     white-space: nowrap;
   }
@@ -342,15 +342,15 @@
     color: white;
   }
   .status-construction {
-    background: #ff9800;
+    background: transparent;
     color: white;
   }
   .status-cancelled {
-    background: #f44336;
+    background: transparent;
     color: white;
   }
   .status-other {
-    background: #2196f3;
+    background: #333;
     color: white;
   }
 
@@ -378,8 +378,8 @@
     text-align: center;
     font-size: 11px;
     color: #666;
-    background: #f5f5f5;
-    border: 1px solid #ddd;
+    background: transparent;
+    border: none;
   }
 
   /* Co-Located Assets */
@@ -392,7 +392,7 @@
     color: #666;
     margin: 10px 0 20px 0;
     padding: 10px;
-    background: #f8f8f8;
+    background: transparent;
     border-left: 3px solid #000;
   }
 
@@ -415,7 +415,7 @@
   }
 
   .list-item:hover {
-    background: #f5f5f5;
+    background: transparent;
   }
 
   .item-name {
@@ -432,7 +432,7 @@
 
   .item-meta .status {
     padding: 3px 6px;
-    border-radius: 2px;
+    border-radius: 0;
     font-weight: bold;
   }
 

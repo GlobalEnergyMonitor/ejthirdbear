@@ -11,6 +11,8 @@
   import { onMount } from 'svelte';
   import { get } from 'svelte/store';
   import { page } from '$app/stores';
+  import { goto } from '$app/navigation';
+  import { assetLink, entityLink } from '$lib/links';
   import { fetchAssetBasics, fetchOwnerPortfolio } from '$lib/component-data/schema';
   import { colors, colorByTracker, regroupStatus } from '$lib/ownership-theme';
 
@@ -195,7 +197,7 @@
       trackerMap.set(t, (trackerMap.get(t) || 0) + 1);
     });
     const trackerData = Array.from(trackerMap.entries())
-      .map(([tracker, count]) => ({ tracker, count, percentage: count / total }))
+      .map(([tracker, count]) => ({ tracker, count, percentage: count / total, xPercentage: 0 }))
       .sort((a, b) => b.count - a.count);
     let xTracker = 0;
     trackerData.forEach((d) => {
@@ -211,7 +213,7 @@
     });
     const statusOrder = ['proposed', 'operating', 'retired', 'cancelled'];
     const statusData = Array.from(statusMap.entries())
-      .map(([status, count]) => ({ status, count, percentage: count / total }))
+      .map(([status, count]) => ({ status, count, percentage: count / total, xPercentage: 0 }))
       .sort((a, b) => statusOrder.indexOf(a.status) - statusOrder.indexOf(b.status));
     let xStatus = 0;
     statusData.forEach((d) => {
@@ -418,10 +420,13 @@
                     stroke="#ffffff"
                     stroke-width="1.25"
                     class="subsidiary-circle"
-                    role="img"
+                    role="button"
+                    tabindex="0"
                     aria-label={`${entityMap.get(group.id)?.Name || 'Unknown'} ownership`}
                     onmouseenter={() => (hoverData = { type: 'subsidiary', ...group, edgeData })}
                     onmouseleave={() => (hoverData = null)}
+                    onclick={() => goto(entityLink(group.id))}
+                    onkeydown={(e) => e.key === 'Enter' && goto(entityLink(group.id))}
                   />
                 {/if}
 
@@ -441,6 +446,12 @@
                 y={(params.subsidiaryMarkHeight / 2) * 0.7}
                 fill={colors.navy}
                 class="subsidiary-name"
+                class:clickable={!group.isDirect}
+                role={group.isDirect ? 'text' : 'button'}
+                tabindex={group.isDirect ? undefined : 0}
+                onclick={() => !group.isDirect && goto(entityLink(group.id))}
+                onkeydown={(e) =>
+                  !group.isDirect && e.key === 'Enter' && goto(entityLink(group.id))}
               >
                 {#each wrapText(entityMap.get(group.id)?.Name || (group.isDirect ? 'Directly owned' : 'Unknown')) as line, i}
                   <tspan x={params.subsidiaryMarkHeight / 2 + 5} dy={i === 0 ? '0.35em' : '1.2em'}
@@ -509,11 +520,14 @@
                 <g
                   transform="translate({params.assetsX}, {loc.y})"
                   class="asset-group"
-                  role="img"
+                  role="button"
+                  tabindex="0"
                   aria-label={loc.units[0]?.name || 'Asset'}
                   onmouseenter={() =>
                     (hoverData = { type: 'asset', ...loc.units[0], allUnits: loc.units })}
                   onmouseleave={() => (hoverData = null)}
+                  onclick={() => goto(assetLink(loc.units[0]?.id))}
+                  onkeydown={(e) => e.key === 'Enter' && goto(assetLink(loc.units[0]?.id))}
                 >
                   {#if loc.units.length === 1}
                     <!-- Single unit -->
@@ -748,7 +762,7 @@
   .asset-screener {
     position: relative;
     font-family: 'Plus Jakarta Sans', Georgia, serif;
-    max-width: 900px;
+    width: 100%;
   }
 
   .chart-header {
@@ -788,7 +802,7 @@
   .chart-wrapper {
     min-height: 420px;
     overflow: visible;
-    background: #fafaf7;
+    background: transparent;
   }
 
   .chart-wrapper svg {
@@ -816,6 +830,17 @@
     font-size: 0.9em;
     font-weight: 500;
     letter-spacing: 0.03em;
+  }
+
+  .subsidiary-name.clickable {
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-color: transparent;
+    transition: text-decoration-color 0.15s;
+  }
+
+  .subsidiary-name.clickable:hover {
+    text-decoration-color: currentColor;
   }
 
   .bar-chart .bar-title {
@@ -853,7 +878,7 @@
     font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.07em;
-    fill: #004a63;
+    fill: #333;
   }
 
   .additional-info {
@@ -864,7 +889,7 @@
   .additional-info p {
     margin: 0;
     font-style: italic;
-    color: #004a63;
+    color: #333;
     font-weight: 500;
     font-size: 0.95em;
   }
@@ -877,7 +902,7 @@
   .legend-container {
     padding: 0.6em 1.6em;
     border-top: 3px solid #016b83;
-    background: #fafaf7;
+    background: transparent;
   }
 
   .legend {
@@ -886,7 +911,7 @@
     gap: 1.5em;
     justify-content: center;
     font-size: 0.9em;
-    color: #004a63;
+    color: #333;
   }
 
   .legend-item {
@@ -929,7 +954,7 @@
     bottom: 100px;
     right: 20px;
     background: white;
-    border: 1px solid #004a63;
+    border: none;
     padding: 10px 14px;
     font-size: 12px;
     max-width: 250px;

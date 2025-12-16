@@ -36,7 +36,7 @@ export async function initMotherDuck(): Promise<MDConnection> {
     // Use the gem_data database by default
     await connection.evaluateQuery('USE gem_data');
 
-    console.log('✓ Connected to MotherDuck: gem_data');
+    console.log('[OK] Connected to MotherDuck: gem_data');
     return connection;
   } catch (error) {
     console.error('Failed to initialize MotherDuck:', error);

@@ -48,17 +48,21 @@ const DEFAULT_CONFIG: GeographyConfig = {
 
 /**
  * Load geography configuration from environment
+ * Uses import.meta.env for Vite compatibility
  */
 export function getGeographyConfig(): GeographyConfig {
-  const envEnabled = process.env.ENABLE_GEOGRAPHY === 'true';
+  // Use import.meta.env for Vite, fallback to defaults if not available
+  const env: Record<string, string | undefined> =
+    typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : {};
+  const envEnabled = env.VITE_ENABLE_GEOGRAPHY === 'true';
 
   return {
     ...DEFAULT_CONFIG,
     enabled: envEnabled,
-    computeS2Cells: envEnabled && process.env.GEOGRAPHY_S2_CELLS !== 'false',
-    computeGeometries: envEnabled && process.env.GEOGRAPHY_GEOMETRIES === 'true',
-    enrichGeography: envEnabled && process.env.GEOGRAPHY_ENRICH !== 'false',
-    verbose: envEnabled && process.env.GEOGRAPHY_VERBOSE === 'true',
+    computeS2Cells: envEnabled && env.VITE_GEOGRAPHY_S2_CELLS !== 'false',
+    computeGeometries: envEnabled && env.VITE_GEOGRAPHY_GEOMETRIES === 'true',
+    enrichGeography: envEnabled && env.VITE_GEOGRAPHY_ENRICH !== 'false',
+    verbose: envEnabled && env.VITE_GEOGRAPHY_VERBOSE === 'true',
   };
 }
 

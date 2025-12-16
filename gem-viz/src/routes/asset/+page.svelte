@@ -56,7 +56,7 @@
       key: 'owner_count',
       label: 'Owners',
       sortable: true,
-      type: 'number',
+      type: /** @type {'number'} */ ('number'),
       width: '80px',
     });
     if (statusCol)
@@ -148,7 +148,7 @@
 
 <main>
   <header>
-    <a href={link('index')} class="back-link">← Back to Overview</a>
+    <a href={link('index')} class="back-link">Back to Overview</a>
     <span class="title">All Assets</span>
     <span class="count">
       {#if loading}Loading…{:else}{assets.length.toLocaleString()} assets{/if}
@@ -185,8 +185,6 @@
   /* Layout */
   main {
     width: 100%;
-    max-width: 1600px;
-    margin: 0 auto;
     padding: 20px 40px;
   }
 

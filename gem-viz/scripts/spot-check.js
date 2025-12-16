@@ -153,18 +153,18 @@ async function main() {
     if (result.ok) {
       const csrTag = result.route.csr ? `${DIM}(CSR)${RESET} ` : '';
       console.log(
-        `${GREEN}✓${RESET} ${result.status} ${csrTag}` +
+        `${GREEN}[OK]${RESET} ${result.status} ${csrTag}` +
         `${DIM}${result.elapsed}ms ${formatSize(result.size)}${RESET}`
       );
     } else if (result.error) {
-      console.log(`${RED}✗ ERROR${RESET} ${result.error}`);
+      console.log(`${RED}[FAIL] ERROR${RESET} ${result.error}`);
     } else if (!result.contentOk) {
       console.log(
-        `${YELLOW}⚠${RESET} ${result.status} ` +
+        `${YELLOW}[WARN]${RESET} ${result.status} ` +
         `${DIM}(missing expected content: "${route.expect}")${RESET}`
       );
     } else {
-      console.log(`${RED}✗${RESET} ${result.status}`);
+      console.log(`${RED}[FAIL]${RESET} ${result.status}`);
     }
   }
 

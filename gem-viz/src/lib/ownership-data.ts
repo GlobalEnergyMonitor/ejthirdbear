@@ -6,6 +6,10 @@
  */
 
 import { query, loadParquetFromPath } from '$lib/duckdb-utils';
+import { base } from '$app/paths';
+
+// Helper to get the parquet file path (works in both dev and prod)
+const getOwnershipParquetPath = () => `${base}/all_trackers_ownership@1.parquet`;
 
 // ID field mapping by tracker type
 const idFields = new Map([
@@ -123,7 +127,7 @@ export interface AssetOwnersData {
 export async function getAssetOwners(gemAssetId: string): Promise<AssetOwnersData | null> {
   try {
     // Load ownership parquet if not already loaded
-    await loadParquetFromPath('/gem-viz/all_trackers_ownership@1.parquet', 'ownership');
+    await loadParquetFromPath(getOwnershipParquetPath(), 'ownership');
 
     // Get immediate owners of this asset
     const immediateResult = await query(`
@@ -300,7 +304,7 @@ export async function getSpotlightOwnerData(
 ): Promise<SpotlightOwnerData | null> {
   try {
     // Load ownership parquet if not already loaded
-    await loadParquetFromPath('/gem-viz/all_trackers_ownership@1.parquet', 'ownership');
+    await loadParquetFromPath(getOwnershipParquetPath(), 'ownership');
 
     // First, find direct subsidiaries of this entity
     const directSubsResult = await query(`
@@ -417,7 +421,7 @@ export async function getSpotlightOwnerData(
  */
 export async function getTopOwners(limit: number = 20): Promise<any[]> {
   try {
-    await loadParquetFromPath('/gem-viz/all_trackers_ownership@1.parquet', 'ownership');
+    await loadParquetFromPath(getOwnershipParquetPath(), 'ownership');
 
     const result = await query(`
       SELECT

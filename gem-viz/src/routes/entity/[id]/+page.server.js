@@ -21,7 +21,7 @@ export async function entries() {
   const motherduck = (await import('$lib/motherduck-node')).default;
 
   try {
-    console.log('🏢 ENTITY FETCH: Loading all entities into memory...');
+    console.log('ENTITY FETCH: Loading all entities into memory...');
     const startTime = Date.now();
 
     // Query the catalog to find the ownership table
@@ -77,7 +77,7 @@ export async function entries() {
     `);
 
     // Also fetch ALL assets with subsidiary info for Owner Explorer
-    console.log('  📊 Fetching full asset data for Owner Explorer...');
+    console.log('  Fetching full asset data for Owner Explorer...');
     const allAssetsResult = await motherduck.query(`
       SELECT
         "GEM Unit ID" AS asset_id,
@@ -137,7 +137,7 @@ export async function entries() {
         }
       }
     }
-    console.log(`  ✓ Built portfolios for ${Object.keys(entityPortfolios).length} entities`);
+    console.log(`  [OK] Built portfolios for ${Object.keys(entityPortfolios).length} entities`);
 
     if (!entitiesResult.success) {
       console.error('Failed to fetch entities for prerendering:', entitiesResult.error);
@@ -147,7 +147,7 @@ export async function entries() {
     // Close DB connection
     await motherduck.close();
     const fetchTime = ((Date.now() - startTime) / 1000).toFixed(2);
-    console.log(`  ✓ Fetched ${entitiesResult.data.length} unique entities in ${fetchTime}s`);
+    console.log(`  [OK] Fetched ${entitiesResult.data.length} unique entities in ${fetchTime}s`);
 
     // Build entities map - convert BigInts to Numbers for JSON serialization
     const entitiesMap = {};
@@ -204,9 +204,9 @@ export async function entries() {
     writeFileSync(CACHE_FILE, cacheJSON);
 
     const uniqueEntities = Object.keys(entitiesMap).length;
-    console.log(`  ✓ Wrote entity cache to disk (${cacheSizeMB} MB)`);
+    console.log(`  [OK] Wrote entity cache to disk (${cacheSizeMB} MB)`);
     console.log(
-      `  📋 Entity IDs to build: ${Object.keys(entitiesMap).slice(0, 3).join(', ')}... (${uniqueEntities} total)`
+      `  Entity IDs to build: ${Object.keys(entitiesMap).slice(0, 3).join(', ')}... (${uniqueEntities} total)`
     );
 
     // Return array of { id } objects for SvelteKit to prerender
@@ -229,10 +229,10 @@ function loadCacheFromDisk() {
         ENTITY_CACHE.entities = new Map(Object.entries(cacheData.entities));
         ENTITY_CACHE.initialized = true;
         console.log(
-          `  ✓ Loaded entity cache: ${ENTITY_CACHE.entities.size} entities from ${CACHE_FILE}`
+          `  [OK] Loaded entity cache: ${ENTITY_CACHE.entities.size} entities from ${CACHE_FILE}`
         );
       } catch (err) {
-        console.error(`  ✗ Failed to load entity cache from ${CACHE_FILE}:`, err.message);
+        console.error(`  [ERROR] Failed to load entity cache from ${CACHE_FILE}:`, err.message);
       }
     }
   }
@@ -301,7 +301,7 @@ export async function load({ params }) {
   const isDev = process.env.NODE_ENV === 'development' || !ENTITY_CACHE.initialized;
 
   if (isDev) {
-    console.log(`  ℹ️  Dev mode: letting client-side fetch handle entity ${params.id}`);
+    console.log(`  [INFO] Dev mode: letting client-side fetch handle entity ${params.id}`);
     return {
       entityId: params.id,
       entityName: params.id,
@@ -312,6 +312,6 @@ export async function load({ params }) {
     };
   }
 
-  console.warn(`⚠️  Entity cache miss for ${params.id}`);
+  console.warn(`WARNING: Entity cache miss for ${params.id}`);
   throw error(404, `Entity ${params.id} not found`);
 }

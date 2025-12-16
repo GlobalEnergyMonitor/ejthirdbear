@@ -57,8 +57,8 @@
     </div>
 
     <div class="actions">
-      <a href={link('index')} class="btn primary">← Back to Homepage</a>
-      <button class="btn secondary" onclick={() => history.back()}>Go Back</button>
+      <a href={link('index')} class="btn">Back to Homepage</a>
+      <button class="btn btn-outline" onclick={() => history.back()}>Go Back</button>
     </div>
 
     <div class="footer-note">
@@ -148,34 +148,8 @@
     margin-bottom: 40px;
   }
 
-  .btn {
+  .actions .btn {
     padding: 12px 24px;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    text-decoration: none;
-    border: 2px solid #000;
-    cursor: pointer;
-    font-weight: bold;
-    transition: all 0.15s ease;
-  }
-
-  .btn.primary {
-    background: #000;
-    color: #fff;
-  }
-
-  .btn.primary:hover {
-    background: #333;
-  }
-
-  .btn.secondary {
-    background: #fff;
-    color: #000;
-  }
-
-  .btn.secondary:hover {
-    background: #f0f0f0;
   }
 
   .footer-note {

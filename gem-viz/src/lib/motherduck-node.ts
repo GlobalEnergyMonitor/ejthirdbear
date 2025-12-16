@@ -47,7 +47,7 @@ async function init(options?: { includeGeography?: boolean }): Promise<any> {
       if (shouldLoadGeography) {
         const geoConfig = getGeographyConfig();
         if (geoConfig.verbose) {
-          console.log('🌍 Loading DuckDB geography extension...');
+          console.log('Loading DuckDB geography extension...');
         }
         initSQL += '\n' + getGeographySetupSQL();
       }
@@ -59,9 +59,9 @@ async function init(options?: { includeGeography?: boolean }): Promise<any> {
           reject(err);
           return;
         }
-        console.log('✓ Connected to MotherDuck (Node.js)');
+        console.log('[OK] Connected to MotherDuck (Node.js)');
         if (shouldLoadGeography) {
-          console.log('✓ Geography extension loaded');
+          console.log('[OK] Geography extension loaded');
         }
         resolve(db!);
       });

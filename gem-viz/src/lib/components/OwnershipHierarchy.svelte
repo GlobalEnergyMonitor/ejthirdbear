@@ -4,6 +4,8 @@
    * Props-only component - expects data from parent
    */
   import { onMount, onDestroy } from 'svelte';
+  import { goto } from '$app/navigation';
+  import { assetLink, entityLink } from '$lib/links';
   import { colors } from '$lib/ownership-theme';
 
   let {
@@ -166,6 +168,14 @@
 
   const truncate = (name, max = 20) =>
     !name ? '' : name.length <= max ? name : name.slice(0, max - 1) + '...';
+
+  // Navigate to asset or entity page on click
+  function handleNodeClick(node) {
+    if (!node?.id) return;
+    const isAsset = node.data?.type === 'asset' || node.id.startsWith('G');
+    const link = isAsset ? assetLink(node.id) : entityLink(node.id);
+    goto(link);
+  }
 </script>
 
 <div class="ownership-hierarchy" bind:this={containerEl}>
@@ -193,9 +203,12 @@
         <g
           transform="translate({node.x}, {node.y})"
           class="node"
-          role="group"
+          role="button"
+          tabindex="0"
           onmouseenter={() => (hoveredNode = node)}
           onmouseleave={() => (hoveredNode = null)}
+          onclick={() => handleNodeClick(node)}
+          onkeydown={(e) => e.key === 'Enter' && handleNodeClick(node)}
         >
           <circle
             r={getNodeRadius(node)}
@@ -248,8 +261,8 @@
 <style>
   .ownership-hierarchy {
     position: relative;
-    background: #fafafa;
-    border: 1px solid #000;
+    background: transparent;
+    border: none;
     width: 100%;
     min-height: 420px;
   }
@@ -289,7 +302,7 @@
     top: 10px;
     right: 10px;
     background: white;
-    border: 1px solid #000;
+    border: none;
     padding: 8px 12px;
     font-size: 11px;
     line-height: 1.4;

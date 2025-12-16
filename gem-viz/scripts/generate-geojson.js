@@ -39,7 +39,7 @@ async function initDB() {
           reject(err);
           return;
         }
-        console.log('✓ Connected to MotherDuck (Node.js)');
+        console.log('[OK] Connected to MotherDuck (Node.js)');
         resolve(db);
       });
     });
@@ -59,7 +59,7 @@ async function query(sql) {
 }
 
 async function generateGeoJSON() {
-  console.log('\n📍 Generating GeoJSON from MotherDuck...\n');
+  console.log('\nGenerating GeoJSON from MotherDuck...\n');
 
   try {
     // Fast path: build from local asset_locations.parquet if available
@@ -84,7 +84,7 @@ async function generateGeoJSON() {
         throw new Error(`Failed to load asset_locations.parquet: ${queryError}`);
       }
 
-      console.log(`✓ Loaded ${data.length.toLocaleString()} point rows from local parquet\n`);
+      console.log(`[OK] Loaded ${data.length.toLocaleString()} point rows from local parquet\n`);
 
       const features = data.map((row) => ({
         type: 'Feature',
@@ -126,12 +126,12 @@ async function generateGeoJSON() {
       fs.writeFileSync(outputPath, JSON.stringify(geojson, null, 2));
       const stats = fs.statSync(outputPath);
       const sizeMB = (stats.size / 1024 / 1024).toFixed(2);
-      console.log('📦 GeoJSON Statistics:');
+      console.log('GeoJSON Statistics:');
       console.log(`   File: static/points.geojson`);
       console.log(`   Size: ${sizeMB} MB (uncompressed)`);
       console.log(`   Features: ${geojson.features.length.toLocaleString()}`);
       console.log(`   Estimated gzip size: ~${(sizeMB / 5).toFixed(2)} MB`);
-      console.log('\n✅ GeoJSON generation complete!\n');
+      console.log('\nGeoJSON generation complete!\n');
       return;
     }
 
@@ -150,7 +150,7 @@ async function generateGeoJSON() {
       throw new Error('No data tables found in catalog');
     }
 
-    console.log(`🔍 Searching ${catalogResult.data.length} tables for geographic coordinates...\n`);
+    console.log(`Searching ${catalogResult.data.length} tables for geographic coordinates...\n`);
 
     let schema_name, table_name, row_count, columns, latCol, lonCol;
 
@@ -176,7 +176,7 @@ async function generateGeoJSON() {
         lonCol = lon;
         break;
       } else {
-        console.log(`  ⏭️  ${table.schema_name}.${table.table_name} - no coordinates`);
+        console.log(`  [SKIP] ${table.schema_name}.${table.table_name} - no coordinates`);
       }
     }
 
@@ -185,8 +185,8 @@ async function generateGeoJSON() {
     }
 
     const fullTableName = `${schema_name}.${table_name}`;
-    console.log(`\n✅ Found table with coordinates: ${fullTableName}`);
-    console.log(`📈 Total rows: ${row_count.toLocaleString()}\n`);
+    console.log(`\n[OK] Found table with coordinates: ${fullTableName}`);
+    console.log(`Total rows: ${row_count.toLocaleString()}\n`);
 
     // Find ID column
     const idCol = columns.find(c => {
@@ -205,7 +205,7 @@ async function generateGeoJSON() {
     const statusCol = columns.find(c => c.toLowerCase() === 'status');
     const countryCol = columns.find(c => c.toLowerCase() === 'country');
 
-    console.log(`🔍 Detected columns:`);
+    console.log(`Detected columns:`);
     console.log(`   ID: ${idCol}`);
     console.log(`   Name: ${nameCol || 'N/A'}`);
     console.log(`   Lat: ${latCol}`);
@@ -230,7 +230,7 @@ async function generateGeoJSON() {
       throw new Error(`Query failed: ${pointsResult.error}`);
     }
 
-    console.log(`✓ Loaded ${pointsResult.data.length.toLocaleString()} points\n`);
+    console.log(`[OK] Loaded ${pointsResult.data.length.toLocaleString()} points\n`);
 
     // Convert to GeoJSON
     const geojson = {
@@ -273,15 +273,15 @@ async function generateGeoJSON() {
     const stats = fs.statSync(outputPath);
     const sizeMB = (stats.size / 1024 / 1024).toFixed(2);
 
-    console.log('📦 GeoJSON Statistics:');
+    console.log('GeoJSON Statistics:');
     console.log(`   File: static/points.geojson`);
     console.log(`   Size: ${sizeMB} MB (uncompressed)`);
     console.log(`   Features: ${geojson.features.length.toLocaleString()}`);
     console.log(`   Estimated gzip size: ~${(sizeMB / 5).toFixed(2)} MB`);
-    console.log('\n✅ GeoJSON generation complete!\n');
+    console.log('\nGeoJSON generation complete!\n');
 
   } catch (error) {
-    console.error('\n❌ GeoJSON generation failed:', error);
+    console.error('\nERROR: GeoJSON generation failed:', error);
     process.exit(1);
   }
 }

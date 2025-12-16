@@ -4,7 +4,9 @@
    * Ported from Observable notebook mermaid pattern
    * Props-only component - expects data from parent
    */
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
+  import { goto } from '$app/navigation';
+  import { assetLink, entityLink } from '$lib/links';
   import { colors } from '$lib/ownership-theme';
 
   let {
@@ -87,12 +89,88 @@
 
       const { svg } = await mermaid.render('mermaid-ownership', syntax);
       mermaidSvg = svg;
+
+      // After svelte updates the DOM, attach click handlers to nodes
+      await tick();
+      attachNodeClickHandlers();
     } catch (err) {
       console.error('Mermaid render error:', err);
       error = err.message;
     } finally {
       loading = false;
     }
+  }
+
+  // Build a reverse lookup map from sanitized IDs to original IDs
+  function buildIdLookup() {
+    const lookup = new Map();
+    const sanitize = (id) => id.replace(/[^a-zA-Z0-9]/g, '_');
+
+    // Add all edges' source and target IDs
+    edges.forEach((e, i) => {
+      const sourceName = nodeMap.get(e.source)?.Name || e.source;
+      const specialNames = ['small shareholder(s)', 'natural person(s)'];
+      const sourceId = specialNames.includes(sourceName.toLowerCase())
+        ? `${e.source}_${i}`
+        : sanitize(e.source);
+      const targetId = sanitize(e.target);
+
+      lookup.set(sourceId, e.source);
+      lookup.set(targetId, e.target);
+    });
+
+    // Add asset ID
+    if (assetId) {
+      lookup.set(sanitize(assetId), assetId);
+    }
+
+    return lookup;
+  }
+
+  function attachNodeClickHandlers() {
+    if (!containerEl) return;
+
+    const svgEl = containerEl.querySelector('svg');
+    if (!svgEl) return;
+
+    const idLookup = buildIdLookup();
+    const nodes = svgEl.querySelectorAll('.node');
+
+    nodes.forEach((node) => {
+      // Mermaid node IDs are like "flowchart-E100001000348-0" or just the sanitized ID
+      const nodeId = node.id || '';
+
+      // Extract the original ID - try different patterns
+      let originalId = null;
+
+      // Pattern: flowchart-{sanitizedId}-{number}
+      const flowchartMatch = nodeId.match(/^flowchart-(.+?)-\d+$/);
+      if (flowchartMatch) {
+        originalId = idLookup.get(flowchartMatch[1]);
+      }
+
+      // If no match, try direct lookup
+      if (!originalId) {
+        for (const [sanitized, original] of idLookup) {
+          if (nodeId.includes(sanitized)) {
+            originalId = original;
+            break;
+          }
+        }
+      }
+
+      if (originalId) {
+        node.style.cursor = 'pointer';
+        node.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+
+          const isAsset = originalId.startsWith('G');
+          const link = isAsset ? assetLink(originalId) : entityLink(originalId);
+          goto(link);
+        });
+      }
+    });
   }
 
   function trackSize() {
@@ -148,8 +226,8 @@
 
 <style>
   .mermaid-ownership {
-    border: 1px solid #000;
-    background: #fafafa;
+    border: none;
+    background: transparent;
     min-height: 240px;
     width: 100%;
   }
@@ -192,8 +270,8 @@
   }
   .diagram :global(.node rect),
   .diagram :global(.node polygon) {
-    fill: var(--navy, #004a63) !important;
-    stroke: var(--navy, #004a63) !important;
+    fill: var(--navy, #333) !important;
+    stroke: var(--navy, #333) !important;
   }
   .diagram :global(.edgeLabel) {
     background-color: #fff !important;
@@ -215,7 +293,7 @@
   .status.error pre {
     text-align: left;
     font-size: 10px;
-    background: #f5f5f5;
+    background: transparent;
     padding: 10px;
     overflow: auto;
     max-height: 200px;

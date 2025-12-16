@@ -1,5 +1,20 @@
 <script>
-  /** @type {{ columns: Array<{key: string, label: string, sortable?: boolean, filterable?: boolean, type?: 'string' | 'number' | 'date', width?: string}> }} */
+  /**
+   * @type {{
+   *   columns?: Array<{key: string, label: string, sortable?: boolean, filterable?: boolean, type?: 'string' | 'number' | 'date', width?: string}>,
+   *   data?: Array<Record<string, any>>,
+   *   pageSize?: number,
+   *   showGlobalSearch?: boolean,
+   *   showColumnFilters?: boolean,
+   *   showPagination?: boolean,
+   *   showExport?: boolean,
+   *   showColumnToggle?: boolean,
+   *   stickyHeader?: boolean,
+   *   striped?: boolean,
+   *   onRowClick?: ((row: Record<string, any>, index?: number) => void) | null,
+   *   selectedRows?: Array<Record<string, any>>
+   * }}
+   */
   let {
     columns = [],
     data = [],
@@ -396,7 +411,8 @@
                     type="text"
                     placeholder="Filter..."
                     value={columnFilters[col.key] || ''}
-                    oninput={(e) => (columnFilters[col.key] = e.target.value)}
+                    oninput={(e) =>
+                      (columnFilters[col.key] = /** @type {HTMLInputElement} */ (e.target).value)}
                   />
                 {/if}
               </th>
@@ -518,7 +534,7 @@
     background: #fff;
     border: 1px solid #111;
     font-family: 'IBM Plex Mono', 'Fira Code', monospace;
-    border-radius: 6px;
+    border-radius: 0;
     overflow: hidden;
     box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
   }
@@ -530,7 +546,7 @@
     align-items: center;
     padding: 14px 18px;
     border-bottom: 1px solid #e0e0e0;
-    background: #fbfaf6;
+    background: transparent;
     flex-wrap: wrap;
     gap: 12px;
   }
@@ -555,7 +571,7 @@
     font-size: 12px;
     width: 260px;
     font-family: inherit;
-    border-radius: 4px;
+    border-radius: 0;
     background: #fff;
   }
 
@@ -573,57 +589,6 @@
     font-size: 11px;
     color: #666;
     font-weight: 500;
-  }
-
-  .btn {
-    padding: 7px 12px;
-    background: #111;
-    color: #fff;
-    border: 1px solid #111;
-    font-size: 10px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.4px;
-    cursor: pointer;
-    font-family: inherit;
-    transition:
-      background 0.12s,
-      color 0.12s,
-      transform 0.12s;
-    border-radius: 4px;
-  }
-
-  .btn:hover {
-    background: #fff;
-    color: #111;
-  }
-
-  .btn:disabled {
-    background: #e0e0e0;
-    color: #888;
-    border-color: #ccc;
-    cursor: not-allowed;
-  }
-
-  .btn-small {
-    padding: 5px 9px;
-    font-size: 10px;
-  }
-
-  .btn-danger {
-    background: #c62828;
-    border-color: #c62828;
-  }
-
-  .btn-danger:hover {
-    background: #fff;
-    color: #c62828;
-  }
-
-  .btn.active {
-    background: #fff;
-    color: #0066cc;
-    border-color: #0066cc;
   }
 
   /* Column toggle menu */
@@ -655,7 +620,7 @@
   }
 
   .column-menu label:hover {
-    background: #f0f0f0;
+    background: transparent;
   }
 
   /* Filter builder */
@@ -678,7 +643,7 @@
     border: 1px solid #ccc;
     font-size: 11px;
     font-family: inherit;
-    border-radius: 4px;
+    border-radius: 0;
   }
 
   .filter-builder select {
@@ -703,10 +668,10 @@
     align-items: center;
     gap: 6px;
     padding: 5px 9px;
-    background: #f3f3f3;
+    background: transparent;
     border: 1px solid #d0d0d0;
     font-size: 11px;
-    border-radius: 4px;
+    border-radius: 0;
   }
 
   .chip strong {
@@ -749,7 +714,7 @@
   }
 
   thead {
-    background: #f6f6f6;
+    background: transparent;
     color: #111;
   }
 
@@ -769,7 +734,7 @@
     font-size: 11px;
     font-family: inherit;
     background: #fff;
-    border-radius: 3px;
+    border-radius: 0;
   }
 
   th {
@@ -823,15 +788,15 @@
   }
 
   tbody tr:hover {
-    background: #f7f9fc;
+    background: transparent;
   }
 
   tbody tr.striped {
-    background: #fcfcfc;
+    background: transparent;
   }
 
   tbody tr.striped:hover {
-    background: #f1f4fb;
+    background: transparent;
   }
 
   tbody tr.selected {
@@ -864,7 +829,7 @@
     align-items: center;
     padding: 12px 16px;
     border-top: 1px solid #e0e0e0;
-    background: #fbfaf6;
+    background: transparent;
     flex-wrap: wrap;
     gap: 12px;
   }
@@ -899,7 +864,7 @@
     border: 1px solid #ccc;
     font-size: 11px;
     font-family: inherit;
-    border-radius: 4px;
+    border-radius: 0;
   }
 
   /* Responsive */

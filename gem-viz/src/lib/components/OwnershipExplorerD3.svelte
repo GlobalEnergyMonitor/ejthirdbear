@@ -3,6 +3,8 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { get } from 'svelte/store';
+  import { goto } from '$app/navigation';
+  import { assetLink, entityLink } from '$lib/links';
   import * as d3 from 'd3';
   import chroma from 'chroma-js';
   import {
@@ -84,9 +86,10 @@
     });
 
     // Calculate heights and Y positions
+    // @ts-ignore - dynamically adding layout properties
     let y = 0;
     processed.forEach((g) => {
-      g.top = y;
+      /** @type {any} */ (g).top = y;
       const nLocations = g.locations.length;
       g.locations.forEach((loc, j) => {
         const nUnits = loc.units.length;
@@ -97,20 +100,25 @@
                 params.assetMarkHeightSingle,
                 params.assetMarkHeightCombined * scaleR(nUnits)
               );
-        loc.y = y - g.top + height / 2;
-        loc.r =
+        /** @type {any} */ (loc).y = y - /** @type {any} */ (g).top + height / 2;
+        /** @type {any} */ (loc).r =
           nUnits === 1
             ? params.assetMarkHeightSingle / 2
             : (params.assetMarkHeightCombined / 2) * scaleR(nUnits);
         y += height + (j === nLocations - 1 ? 0 : params.assetSpacing);
       });
 
-      g.height = Math.max(y - g.top, params.subsidiaryMarkHeight, params.subsidiaryMinHeight);
-      g.bottom = g.top + g.height;
-      y = g.top + g.height + params.yPadding;
+      /** @type {any} */ (g).height = Math.max(
+        y - /** @type {any} */ (g).top,
+        params.subsidiaryMarkHeight,
+        params.subsidiaryMinHeight
+      );
+      /** @type {any} */ (g).bottom = /** @type {any} */ (g).top + /** @type {any} */ (g).height;
+      y = /** @type {any} */ (g).top + /** @type {any} */ (g).height + params.yPadding;
     });
 
-    svgHeight = processed.length > 0 ? processed[processed.length - 1].bottom : 200;
+    svgHeight =
+      processed.length > 0 ? /** @type {any} */ (processed[processed.length - 1]).bottom : 200;
     return processed;
   }
 
@@ -281,7 +289,7 @@
           .attr('width', '50px')
           .attr('rx', 4)
           .attr('ry', 4)
-          .style('fill', '#004a63');
+          .style('fill', '#333');
 
         let formatPercent = d3.format('.0%');
         let labelText = hover
@@ -329,7 +337,7 @@
       trackerMap.set(t, (trackerMap.get(t) || 0) + 1);
     });
     const trackerData = Array.from(trackerMap.entries())
-      .map(([tracker, count]) => ({ tracker, count, percentage: count / total }))
+      .map(([tracker, count]) => ({ tracker, count, percentage: count / total, x_percentage: 0 }))
       .sort((a, b) => b.count - a.count);
     let xTracker = 0;
     trackerData.forEach((d) => {
@@ -344,7 +352,7 @@
     });
     const statusOrder = ['proposed', 'operating', 'retired', 'cancelled'];
     const statusData = Array.from(statusMap.entries())
-      .map(([status, count]) => ({ status, count, percentage: count / total }))
+      .map(([status, count]) => ({ status, count, percentage: count / total, x_percentage: 0 }))
       .sort((a, b) => statusOrder.indexOf(a.status) - statusOrder.indexOf(b.status));
     let xStatus = 0;
     statusData.forEach((d) => {
@@ -452,7 +460,7 @@
       .attr('class', 'legend-item')
       .html(
         (d) =>
-          `<div class='legend-bubble' style="background-color:${d[0]};"></div><div>${d[1].descript}</div>`
+          `<div class='legend-bubble' style="background-color:${/** @type {[string, {descript: string}]} */ (d)[0]};"></div><div>${/** @type {[string, {descript: string}]} */ (d)[1].descript}</div>`
       );
 
     container
@@ -520,7 +528,7 @@
       .join('g')
       .attr('class', 'subsidiary-item')
       .attr('id', (d) => `subsidiary-${d.id}`)
-      .attr('transform', (d) => `translate(${X_OFFSET_MAIN}, ${d.top + PAD})`);
+      .attr('transform', (d) => `translate(${X_OFFSET_MAIN}, ${/** @type {any} */ (d).top + PAD})`);
 
     subsidiary_labels
       .filter((d) => d.id !== 'Directly owned' && portfolio.matchedEdges.get(d.id)?.value !== 100)
@@ -532,10 +540,17 @@
       .style('fill', '#cce1e6')
       .style('stroke', '#ffffff')
       .style('stroke-width', '1.25px')
+      .style('cursor', 'pointer')
       .on('mouseover', (e, d) => {
         // Hover hook
         void e;
         void d;
+      })
+      .on('click', (e, d) => {
+        e.stopPropagation();
+        if (d.id && d.id !== 'Directly owned') {
+          goto(entityLink(d.id));
+        }
       });
 
     const arcGen = d3
@@ -550,9 +565,11 @@
       .append('path')
       .attr('transform', `translate(0, ${(params.subsidiaryMarkHeight / 2) * 0.7})`)
       .attr('d', (d) =>
-        arcGen({
-          endAngle: 2 * Math.PI * ((portfolio.matchedEdges.get(d.id)?.value || 100) / 100),
-        })
+        arcGen(
+          /** @type {any} */ ({
+            endAngle: 2 * Math.PI * ((portfolio.matchedEdges.get(d.id)?.value || 100) / 100),
+          })
+        )
       )
       .style('pointer-events', 'none')
       .style('fill', (d) => (portfolio.matchedEdges.get(d.id)?.value ? colors.teal : 'none'));
@@ -568,8 +585,18 @@
       .style('font-size', '0.9em')
       .style('letter-spacing', '0.03em')
       .style('font-weight', 500)
+      .style('cursor', (d) => (d.id !== 'Directly owned' ? 'pointer' : 'default'))
+      .style('text-decoration', (d) => (d.id !== 'Directly owned' ? 'underline' : 'none'))
       .datum((d) => portfolio.entityMap.get(d.id)?.Name || 'Directly owned')
-      .call(wrapTextTwoLines, 25);
+      .call(wrapTextTwoLines, 25)
+      .on('click', function (e) {
+        e.stopPropagation();
+        const parent = d3.select(/** @type {Element} */ (this.parentNode));
+        const groupData = /** @type {any} */ (parent.datum());
+        if (groupData?.id && groupData.id !== 'Directly owned') {
+          goto(entityLink(groupData.id));
+        }
+      });
 
     const PAD_BAR_X = LABEL_OFFSET_X + 230;
     const PAD_BAR_Y = PAD - 10;
@@ -580,8 +607,7 @@
       'tracker',
       colMaps.byTracker,
       PAD_BAR_X,
-      PAD_BAR_Y,
-      X_OFFSET_MAIN
+      PAD_BAR_Y
     );
     drawMiniBarChart(
       subsidiary_labels,
@@ -590,8 +616,7 @@
       'status',
       colMaps.byStatus,
       PAD_BAR_X,
-      PAD_BAR_Y + 30,
-      X_OFFSET_MAIN
+      PAD_BAR_Y + 30
     );
 
     // Assets
@@ -602,7 +627,8 @@
       .attr('class', 'subsidiary-asset-group')
       .attr(
         'transform',
-        (d) => `translate(${params.subsidiaryMarkHeight / 2 + params.subsidX}, ${d.top})`
+        (d) =>
+          `translate(${params.subsidiaryMarkHeight / 2 + params.subsidX}, ${/** @type {any} */ (d).top})`
       );
 
     const assets = assets_outer_group
@@ -610,12 +636,20 @@
       .data((d) => d.locations)
       .join('g')
       .attr('class', 'asset')
-      .attr('transform', (d) => `translate(${params.assetsX}, ${d.y})`);
+      .attr('transform', (d) => `translate(${params.assetsX}, ${/** @type {any} */ (d).y})`)
+      .style('cursor', 'pointer')
+      .on('click', (e, d) => {
+        e.stopPropagation();
+        const assetId = d.units?.[0]?.id;
+        if (assetId) {
+          goto(assetLink(assetId));
+        }
+      });
 
     // Asset marks
     assets.each(function (d) {
       const el = d3.select(this);
-      const r = d.r;
+      const r = /** @type {any} */ (d).r;
       if (d.units.length === 1) {
         el.append('circle')
           .attr('r', r)
@@ -677,9 +711,11 @@
             (p, j) => `translate(${r * Math.cos((TAU * j) / N)},${r * Math.sin((TAU * j) / N)})`
           )
           .attr('d', (p) =>
-            arc({
-              endAngle: 2 * Math.PI * ((p.spotlightOwnershipSharePct || 100) / 100),
-            })
+            arc(
+              /** @type {any} */ ({
+                endAngle: 2 * Math.PI * ((p.spotlightOwnershipSharePct || 100) / 100),
+              })
+            )
           )
           .style('fill', (p) => {
             const COL = colMaps.byStatus.get((p.status || '').toLowerCase()) || '#797975';
@@ -757,14 +793,14 @@
     padding: 40px 20px;
     gap: 12px;
     min-height: 200px;
-    background: #fafafa;
-    border: 1px solid #e0e0e0;
+    background: transparent;
+    border: none;
   }
 
   .loading-spinner {
     width: 32px;
     height: 32px;
-    border: 3px solid #e0e0e0;
+    border: none;
     border-top-color: #333;
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
@@ -801,8 +837,8 @@
     position: sticky;
     top: 0;
     z-index: 5;
-    background: #f9f9f6;
-    border: 1px solid #000;
+    background: transparent;
+    border: none;
     padding: 12px 16px;
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -825,7 +861,7 @@
 
   :global(.chart) {
     min-height: 420px;
-    border: 1px solid #000;
+    border: none;
     background: #fff;
     padding: 8px;
   }
@@ -840,8 +876,8 @@
     position: sticky;
     bottom: 0;
     z-index: 5;
-    background: #fdfdfa;
-    border: 1px solid #000;
+    background: transparent;
+    border: none;
     padding: 8px 12px;
   }
 
@@ -863,7 +899,7 @@
     width: 14px;
     height: 14px;
     border-radius: 50%;
-    border: 1px solid #000;
+    border: none;
   }
 
   .error {

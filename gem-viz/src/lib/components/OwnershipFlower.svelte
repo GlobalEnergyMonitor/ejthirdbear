@@ -12,6 +12,8 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { get } from 'svelte/store';
+  import { goto } from '$app/navigation';
+  import { entityLink } from '$lib/links';
   import * as d3 from 'd3';
   import { colorByTracker, colors } from '$lib/ownership-theme';
   import { fetchAssetBasics, fetchOwnerPortfolio } from '$lib/component-data/schema';
@@ -38,6 +40,14 @@
   /** @type {string | null} */
   let error = $state(null);
   let title = $state(propsTitle);
+  let resolvedOwnerId = $state(ownerId);
+
+  // Navigate to entity page when clicked
+  function handleFlowerClick() {
+    if (resolvedOwnerId) {
+      goto(entityLink(resolvedOwnerId));
+    }
+  }
 
   function buildPetals(portfolio, sizeConfig) {
     const trackerGroups = d3.group(portfolio.assets, (d) => d.tracker || 'Unknown');
@@ -143,6 +153,10 @@
         if (!title && prebakedPortfolio.spotlightOwner?.Name) {
           title = prebakedPortfolio.spotlightOwner.Name;
         }
+        // Extract owner ID from portfolio if not provided
+        if (!resolvedOwnerId && prebakedPortfolio.spotlightOwner?.id) {
+          resolvedOwnerId = prebakedPortfolio.spotlightOwner.id;
+        }
         const petalsData = buildPetals(prebakedPortfolio, sizeConfig);
         render(petalsData, sizeConfig);
         loading = false;
@@ -158,24 +172,25 @@
       loading = true;
       error = null;
 
-      let resolvedOwner = ownerId;
-      if (!resolvedOwner) {
+      let fetchOwnerId = ownerId;
+      if (!fetchOwnerId) {
         const pageStore = get(page);
         const pathname = pageStore.url?.pathname || '';
         const paramId = pageStore.params?.id;
         if (pathname.includes('/asset/')) {
           const basics = await fetchAssetBasics(paramId);
-          resolvedOwner = basics?.ownerEntityId || null;
+          fetchOwnerId = basics?.ownerEntityId || null;
         } else if (pathname.includes('/entity/')) {
-          resolvedOwner = paramId;
+          fetchOwnerId = paramId;
         }
       }
 
-      if (!resolvedOwner) {
+      if (!fetchOwnerId) {
         throw new Error('Owner ID not available');
       }
 
-      const portfolio = await fetchOwnerPortfolio(resolvedOwner);
+      resolvedOwnerId = fetchOwnerId;
+      const portfolio = await fetchOwnerPortfolio(fetchOwnerId);
       if (!portfolio) throw new Error('Portfolio not found');
 
       title = portfolio.spotlightOwner.Name;
@@ -202,11 +217,23 @@
   {:else}
     {#if showTitle && title}
       <div class="header">
-        <div class="title">{title}</div>
+        {#if resolvedOwnerId}
+          <button class="title clickable" onclick={handleFlowerClick}>{title}</button>
+        {:else}
+          <div class="title">{title}</div>
+        {/if}
         <div class="subtitle">Tracker mix</div>
       </div>
     {/if}
-    <svg bind:this={svgEl} aria-label="Ownership flower showing tracker distribution"></svg>
+    <svg
+      bind:this={svgEl}
+      aria-label="Ownership flower showing tracker distribution"
+      class:clickable={Boolean(resolvedOwnerId)}
+      onclick={resolvedOwnerId ? handleFlowerClick : undefined}
+      role={resolvedOwnerId ? 'button' : 'img'}
+      tabindex={resolvedOwnerId ? 0 : undefined}
+      onkeydown={(e) => resolvedOwnerId && e.key === 'Enter' && handleFlowerClick()}
+    ></svg>
   {/if}
 </div>
 
@@ -218,9 +245,9 @@
   }
 
   .ownership-flower:not(.small) {
-    border: 1px solid #000;
+    border: none;
     padding: 12px;
-    background: #fdfbf7;
+    background: transparent;
   }
 
   .ownership-flower.small {
@@ -241,6 +268,30 @@
   .title {
     font-weight: 700;
     letter-spacing: 0.02em;
+  }
+
+  .title.clickable {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-color: transparent;
+    transition: text-decoration-color 0.15s;
+  }
+
+  .title.clickable:hover {
+    text-decoration-color: currentColor;
+  }
+
+  svg.clickable {
+    cursor: pointer;
+    transition: transform 0.15s ease;
+  }
+
+  svg.clickable:hover {
+    transform: scale(1.02);
   }
 
   .subtitle {

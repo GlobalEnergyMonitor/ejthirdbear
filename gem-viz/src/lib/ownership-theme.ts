@@ -3,29 +3,30 @@
  * Ported from Observable notebook: eab9bd6720b8c130 (Ownership Tools - Styles)
  */
 
-// Core brand colors (from GEM brand guidelines)
+// Core brand colors - MONOCHROME PALETTE
+// "Get it right in black and white!" - Curran
 export const colors = {
-  // Primary
-  navy: '#004A63',
-  mint: '#9DF7E5',
-  mintDataviz: '#A5E9E4',
-  orange: '#FE4F2D',
-  teal: '#016B83',
-  midnight: '#002430',
-  warmWhite: '#F2F2EB',
+  // Primary - Monochrome
+  navy: '#333333', // Was #004A63 - now dark grey
+  mint: '#e0e0e0', // Was #9DF7E5 - now light grey
+  mintDataviz: '#d0d0d0', // Was #A5E9E4 - now light grey
+  orange: '#666666', // Was #FE4F2D - now medium grey
+  teal: '#444444', // Was #016B83 - now dark grey
+  midnight: '#111111', // Was #002430 - now near black
+  warmWhite: '#F5F5F5', // Slightly off-white
   white: '#FFFFFF',
-  // Secondary
-  deepRed: '#7F142A',
-  yellow: '#FFE366',
-  mintGreen: '#95E6AF',
-  green: '#51BF7E',
-  midnightGreen: '#004F61',
-  blue: '#099ED8',
-  purple: '#A0AAE5',
-  midnightPurple: '#061F5F',
-  grey: '#BECCCF',
+  // Secondary - Monochrome
+  deepRed: '#222222', // Was #7F142A - now very dark grey
+  yellow: '#cccccc', // Was #FFE366 - now light grey
+  mintGreen: '#aaaaaa', // Was #95E6AF - now medium grey
+  green: '#888888', // Was #51BF7E - now medium grey
+  midnightGreen: '#333333', // Was #004F61 - now dark grey
+  blue: '#777777', // Was #099ED8 - now medium grey
+  purple: '#999999', // Was #A0AAE5 - now medium grey
+  midnightPurple: '#000000', // Was #061F5F - now black
+  grey: '#BECCCF', // Keep as-is (already grey)
   // Legacy (for compatibility)
-  red: '#DC153D',
+  red: '#444444', // Was #DC153D - now dark grey
   black: '#000000',
 } as const;
 
@@ -51,32 +52,33 @@ export function adjustColLightness(col: string, pct: number): string {
   return rgbToHex(newRgb.r, newRgb.g, newRgb.b);
 }
 
-// Color by tracker type (from GEM brand guidelines)
+// Color by tracker type - RESTORED COLORS for viz components
+// Nadieh-style flower visualizations need distinct colors
 export const colorByTracker = new Map([
-  ['Coal Plant', colors.deepRed],
-  ['Coal Mine', '#CA4A50'], // Slightly lighter than deepRed
-  ['Gas Plant', colors.purple],
-  ['Gas Pipeline', '#4A57A8'], // Between purple and midnightPurple
-  ['Oil & NGL Pipeline', colors.midnightPurple],
-  ['Iron Ore Mine', '#FF6A4D'], // Slightly lighter than orange
-  ['Steel Plant', colors.midnightGreen],
-  ['Cement and Concrete', colors.grey],
-  ['Bioenergy Power', colors.green],
+  ['Coal Plant', '#7F142A'], // Deep red (coal)
+  ['Coal Mine', '#4A0D19'], // Darker red
+  ['Gas Plant', '#A0AAE5'], // Purple
+  ['Gas Pipeline', '#7B86C9'], // Darker purple
+  ['Oil & NGL Pipeline', '#061F5F'], // Midnight blue
+  ['Iron Ore Mine', '#DC153D'], // Red
+  ['Steel Plant', '#004F61'], // Teal
+  ['Cement and Concrete', '#BECCCF'], // Grey
+  ['Bioenergy Power', '#51BF7E'], // Green
 ]);
 
-// Renewable tracker colors
+// Renewable tracker colors - MONOCHROME
 export const colorByTrackerRenewable = new Map([
-  ['Nuclear', colors.mintGreen],
-  ['Hydropower', colors.blue],
-  ['Wind', colors.mintDataviz],
-  ['Geothermal', '#FF380F'],
-  ['Solar', colors.yellow],
+  ['Nuclear', '#888888'], // Medium grey (was mintGreen)
+  ['Hydropower', '#666666'], // Medium grey (was blue)
+  ['Wind', '#aaaaaa'], // Light grey (was mintDataviz)
+  ['Geothermal', '#333333'], // Dark grey (was red)
+  ['Solar', '#cccccc'], // Very light grey (was yellow)
 ]);
 
-// Status color groupings (from GEM brand guidelines)
+// Status color groupings - MONOCHROME
 export const statusColors = new Map([
   [
-    colors.purple, // Prospective
+    '#888888', // Prospective - medium grey (was purple)
     {
       descript: 'prospective',
       statuses: [
@@ -90,21 +92,21 @@ export const statusColors = new Map([
     },
   ],
   [
-    '#4A57A8', // Operating (between purple and midnightPurple)
+    '#333333', // Operating - dark grey (was blue)
     {
       descript: 'operating',
       statuses: ['operating', 'operating pre-retirement'],
     },
   ],
   [
-    colors.midnightPurple, // Retired
+    '#000000', // Retired - black (was midnightPurple)
     {
       descript: 'retired/mothballed/idle',
       statuses: ['retired', 'mothballed', 'idle', 'mothballed pre-retirement'],
     },
   ],
   [
-    colors.grey, // Cancelled
+    '#bbbbbb', // Cancelled - light grey (was grey)
     {
       descript: 'cancelled/shelved',
       statuses: ['cancelled', 'shelved', 'cancelled - inferred 4 y', 'shelved - inferred 2 y'],

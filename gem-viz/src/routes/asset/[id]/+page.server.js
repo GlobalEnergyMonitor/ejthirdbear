@@ -65,7 +65,7 @@ export async function entries() {
   );
 
   try {
-    console.log('🚀 BULK FETCH: Loading all assets into memory...');
+    console.log('BULK FETCH: Loading all assets into memory...');
     const startTime = Date.now();
     const geoConfig = getGeographyConfig();
 
@@ -125,7 +125,7 @@ export async function entries() {
     let selectClause = '*';
     if (geoConfig.enabled) {
       if (geoConfig.verbose) {
-        console.log('  🌍 Geography enabled - computing spatial fields...');
+        console.log('  Geography enabled - computing spatial fields...');
       }
       // Check if table has latitude/longitude columns
       const hasLatLon = columns.some(
@@ -162,8 +162,8 @@ export async function entries() {
     // Close DB connection immediately - we have all the data we need!
     await motherduck.close();
     const fetchTime = ((Date.now() - startTime) / 1000).toFixed(2);
-    console.log(`  ✓ Fetched ${assetsResult.data.length} ownership rows in ${fetchTime}s`);
-    console.log(`  ✓ DB connection closed (total lifetime: ${fetchTime}s)`);
+    console.log(`  [OK] Fetched ${assetsResult.data.length} ownership rows in ${fetchTime}s`);
+    console.log(`  [OK] DB connection closed (total lifetime: ${fetchTime}s)`);
 
     // GROUP BY tracker-specific ID field - each asset gets an array of ownership records
     const assetsMap = {};
@@ -180,7 +180,7 @@ export async function entries() {
       assetsMap[assetId].push(row);
     }
     if (skippedRows > 0) {
-      console.log(`  ⚠️  Skipped ${skippedRows} rows with no valid ID`);
+      console.log(`  WARNING: Skipped ${skippedRows} rows with no valid ID`);
     }
 
     // Store cache data (metadata + grouped assets)
@@ -207,18 +207,18 @@ export async function entries() {
 
     const uniqueAssets = Object.keys(assetsMap).length;
     const totalRows = assetsResult.data.length;
-    console.log(`  ✓ Grouped ${totalRows} ownership rows into ${uniqueAssets} unique assets`);
-    console.log(`  ✓ Wrote cache to disk (${cacheSizeMB} MB)`);
+    console.log(`  [OK] Grouped ${totalRows} ownership rows into ${uniqueAssets} unique assets`);
+    console.log(`  [OK] Wrote cache to disk (${cacheSizeMB} MB)`);
 
     // Return unique asset IDs for prerendering
     const allAssetIds = Object.keys(assetsMap);
     console.log(
-      `  📋 Asset IDs to build: ${allAssetIds.slice(0, 3).join(', ')}${allAssetIds.length > 3 ? ` ... (${allAssetIds.length} total)` : ''}`
+      `  Asset IDs to build: ${allAssetIds.slice(0, 3).join(', ')}${allAssetIds.length > 3 ? ` ... (${allAssetIds.length} total)` : ''}`
     );
     console.log(
-      `  🔨 Building ${allAssetIds.length} pages (down from ${totalRows} ownership rows)`
+      `  Building ${allAssetIds.length} pages (down from ${totalRows} ownership rows)`
     );
-    console.log(`  💾 Cache file: ${CACHE_FILE}`);
+    console.log(`  Cache file: ${CACHE_FILE}`);
 
     // Return array of { id } objects for SvelteKit to prerender
     return allAssetIds.map((id) => ({ id }));
@@ -244,13 +244,13 @@ function loadCacheFromDisk() {
         ASSET_CACHE.assets = new Map(Object.entries(cacheData.assets));
         ASSET_CACHE.initialized = true;
         console.log(
-          `  ✓ Loaded cache: ${ASSET_CACHE.assets.size} unique assets from ${CACHE_FILE}`
+          `  [OK] Loaded cache: ${ASSET_CACHE.assets.size} unique assets from ${CACHE_FILE}`
         );
       } catch (err) {
-        console.error(`  ✗ Failed to load cache from ${CACHE_FILE}:`, err.message);
+        console.error(`  [ERROR] Failed to load cache from ${CACHE_FILE}:`, err.message);
       }
     } else {
-      console.warn(`  ⚠️  Cache file not found at ${CACHE_FILE}`);
+      console.warn(`  WARNING: Cache file not found at ${CACHE_FILE}`);
     }
   }
 }
@@ -490,7 +490,7 @@ export async function load({ params }) {
   const isDev = process.env.NODE_ENV === 'development' || !ASSET_CACHE.initialized;
 
   if (isDev) {
-    console.log(`  ℹ️  Dev mode: letting client-side fetch handle ${params.id}`);
+    console.log(`  [INFO] Dev mode: letting client-side fetch handle ${params.id}`);
     return {
       assetId: params.id,
       assetName: params.id,
@@ -506,6 +506,6 @@ export async function load({ params }) {
   }
 
   // In production build, cache miss means asset doesn't exist
-  console.warn(`⚠️  Cache miss for ${params.id} - skipping (DB already closed after bulk fetch)`);
+  console.warn(`WARNING: Cache miss for ${params.id} - skipping (DB already closed after bulk fetch)`);
   throw error(404, `Asset ${params.id} not found in cache`);
 }

@@ -2,7 +2,7 @@
   // ============================================================================
   // SPATIAL SEARCH PAGE
   // Shows assets within a geographic bounds/polygon filter
-  // Supports both tile-based loading (efficient) and legacy monolithic parquet
+  // Uses client-side GeoJSON filtering (no DuckDB WASM - works on static hosting)
   // ============================================================================
 
   // --- IMPORTS ---
@@ -10,40 +10,25 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { link, assetLink, assetPath } from '$lib/links';
-  import { initDuckDB, loadParquetFromPath, query } from '$lib/duckdb-utils';
   import { exportList } from '$lib/exportList';
-  import {
-    loadManifest,
-    findTilesForBounds,
-    estimateSize,
-    loadTiles,
-    buildUnionQuery,
-  } from '$lib/tileLoader';
   import DataTable from '$lib/components/DataTable.svelte';
 
   // --- STATE ---
-  let loading = true;
+  let loading = $state(true);
   /** @type {string | null} */
-  let error = null;
-  let results = [];
-  let queryTime = 0;
-  let filterDescription = '';
-  let dbReady = false;
-
-  // Tile loading progress
-  let useTiles = false;
-  let tilesLoaded = 0;
-  let tilesToLoad = 0;
-  let currentTile = '';
-  let estimatedDownload = { mb: 0, rows: 0, assets: 0 };
+  let error = $state(null);
+  let results = $state([]);
+  let queryTime = $state(0);
+  let filterDescription = $state('');
+  let loadingStatus = $state('Loading asset data...');
 
   // --- TABLE COLUMNS ---
+  /** @type {Array<{key: string, label: string, sortable?: boolean, filterable?: boolean, type?: 'string' | 'number' | 'date', width?: string}>} */
   const tableColumns = [
     { key: 'id', label: 'ID', sortable: true, filterable: true, width: '200px' },
     { key: 'name', label: 'Name', sortable: true, filterable: true },
     { key: 'tracker', label: 'Tracker', sortable: true, filterable: true, width: '120px' },
     { key: 'country', label: 'Country', sortable: true, filterable: true, width: '140px' },
-    { key: 'state', label: 'State', sortable: true, filterable: true, width: '120px' },
     { key: 'lat', label: 'Latitude', sortable: true, type: 'number', width: '100px' },
     { key: 'lon', label: 'Longitude', sortable: true, type: 'number', width: '100px' },
   ];
@@ -93,20 +78,6 @@
   }
 
   // --- HELPERS: SPATIAL ---
-  function buildSpatialWhere(filter) {
-    if (!filter) return '1=1';
-    if (filter.type === 'bounds') {
-      const { north, south, east, west } = filter;
-      return `Latitude >= ${south} AND Latitude <= ${north} AND Longitude >= ${west} AND Longitude <= ${east}`;
-    }
-    if (filter.type === 'polygon') {
-      const lons = filter.coordinates.map((c) => c[0]);
-      const lats = filter.coordinates.map((c) => c[1]);
-      return `Latitude >= ${Math.min(...lats)} AND Latitude <= ${Math.max(...lats)} AND Longitude >= ${Math.min(...lons)} AND Longitude <= ${Math.max(...lons)}`;
-    }
-    return '1=1';
-  }
-
   /** Ray casting point-in-polygon check */
   function pointInPolygon(lon, lat, polygon) {
     let inside = false;
@@ -121,105 +92,46 @@
     return inside;
   }
 
-  // --- DATA LOADING: TILES ---
-  async function loadWithTiles(bounds, filter) {
-    console.log('Loading with spatial tiles...');
-    useTiles = true;
-
-    const manifest = await loadManifest();
-    const tiles = findTilesForBounds(bounds, manifest);
-    estimatedDownload = estimateSize(tiles);
-    tilesToLoad = tiles.length;
-    console.log(`Need ${tiles.length} tiles (${estimatedDownload.mb.toFixed(1)} MB)`);
-
-    await initDuckDB();
-    dbReady = true;
-
-    await loadTiles(tiles, (loaded, total, current) => {
-      tilesLoaded = loaded;
-      currentTile = current;
-    });
-
-    const whereClause = buildSpatialWhere(filter);
-    const tableNames = tiles.map((t) => t.name.replace(/-/g, '_'));
-    const sql =
-      buildUnionQuery(
-        tableNames,
-        `DISTINCT id, id as name, tracker, country, state, "Latitude" as lat, "Longitude" as lon`,
-        `"Latitude" IS NOT NULL AND "Longitude" IS NOT NULL AND ${whereClause}`
-      ) + `\nORDER BY id\nLIMIT 500`;
-
-    const result = await query(sql);
-    if (!result.success) throw new Error(result.error);
-
-    let data = result.data || [];
-    if (filter?.type === 'polygon' && data.length > 0) {
-      data = data.filter((row) => pointInPolygon(row.lon, row.lat, filter.coordinates));
-    }
-    return data;
+  /** Check if point is within bounds */
+  function pointInBounds(lon, lat, bounds) {
+    return lat >= bounds.south && lat <= bounds.north && lon >= bounds.west && lon <= bounds.east;
   }
 
-  // --- DATA LOADING: LEGACY ---
-  async function loadLegacy(filter) {
-    console.log('Loading with legacy full parquet...');
-    useTiles = false;
-
-    await initDuckDB();
-    dbReady = true;
-
-    const locResult = await loadParquetFromPath(
-      assetPath('all_trackers_ownership@1.parquet'),
-      'ownership'
-    );
-    if (!locResult.success) throw new Error(locResult.error);
-
-    const coordResult = await loadParquetFromPath(
-      assetPath('asset_locations.parquet'),
-      'locations'
-    );
-    if (!coordResult.success) throw new Error(coordResult.error);
-
-    const whereClause = buildSpatialWhere(filter);
-    const sql = `
-      SELECT DISTINCT
-        o."GEM unit ID" as id, o."Project" as name, o."Tracker" as tracker, o."Status" as status,
-        FIRST(o."Owner") as owner, o."Capacity (MW)" as capacity_mw,
-        l."Latitude" as lat, l."Longitude" as lon, l."Country.Area" as country
-      FROM ownership o
-      JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
-      WHERE l.Latitude IS NOT NULL AND l.Longitude IS NOT NULL AND o."GEM unit ID" IS NOT NULL AND ${whereClause}
-      GROUP BY o."GEM unit ID", o."Project", o."Tracker", o."Status", o."Capacity (MW)", l."Latitude", l."Longitude", l."Country.Area"
-      ORDER BY o."Capacity (MW)" DESC NULLS LAST
-      LIMIT 500
-    `;
-
-    const result = await query(sql);
-    if (!result.success) throw new Error(result.error);
-
-    let data = result.data || [];
-    if (filter?.type === 'polygon' && data.length > 0) {
-      data = data.filter((row) => pointInPolygon(row.lon, row.lat, filter.coordinates));
-    }
-    return data;
-  }
-
-  // --- MAIN DATA LOADER ---
+  // --- MAIN DATA LOADER (GeoJSON-based, no DuckDB) ---
   async function loadData() {
     const filter = parseFilter();
     filterDescription = describeFilter(filter);
 
+    if (!filter) {
+      error = 'No filter specified. Draw a region on the map first.';
+      loading = false;
+      return;
+    }
+
     try {
       loading = true;
       error = null;
-      tilesLoaded = 0;
-      tilesToLoad = 0;
-      currentTile = '';
+      loadingStatus = 'Fetching asset locations...';
 
-      // Get bounds from filter
+      const startTime = performance.now();
+
+      // Load the GeoJSON file (same one used by the map)
+      const response = await fetch(assetPath('points.geojson'));
+      if (!response.ok) {
+        throw new Error(`Failed to load asset data: ${response.status}`);
+      }
+
+      loadingStatus = 'Parsing GeoJSON...';
+      const geojson = await response.json();
+      console.log(`Loaded ${geojson.features.length} features from points.geojson`);
+
+      loadingStatus = 'Filtering assets...';
+
+      // Get bounds for quick pre-filter
       let bounds = null;
-      if (filter?.type === 'bounds') {
+      if (filter.type === 'bounds') {
         bounds = filter;
-      } else if (filter?.type === 'polygon') {
+      } else if (filter.type === 'polygon') {
         const lons = filter.coordinates.map((c) => c[0]);
         const lats = filter.coordinates.map((c) => c[1]);
         bounds = {
@@ -230,25 +142,37 @@
         };
       }
 
-      let data = [];
-      const startTime = performance.now();
+      // Filter features
+      let filtered = geojson.features.filter((f) => {
+        const [lon, lat] = f.geometry.coordinates;
+        if (!lon || !lat) return false;
 
-      try {
-        if (bounds) {
-          data = await loadWithTiles(bounds, filter);
-        } else {
-          console.warn('No bounds filter - using legacy full parquet load');
-          data = await loadLegacy(filter);
+        // Quick bounds check first
+        if (bounds && !pointInBounds(lon, lat, bounds)) return false;
+
+        // For polygons, do precise check
+        if (filter.type === 'polygon') {
+          return pointInPolygon(lon, lat, filter.coordinates);
         }
-      } catch (tileErr) {
-        console.warn('Tile loading failed, falling back to legacy:', tileErr.message);
-        useTiles = false;
-        data = await loadLegacy(filter);
-      }
+
+        return true;
+      });
+
+      // Convert to table format and limit to 500
+      const data = filtered.slice(0, 500).map((f) => ({
+        id: f.properties.id || f.properties['GEM unit ID'],
+        name: f.properties.name || f.properties.Project || f.properties.id,
+        tracker: f.properties.tracker || f.properties.Tracker,
+        country: f.properties.country || f.properties['Country/Area'],
+        lat: f.geometry.coordinates[1],
+        lon: f.geometry.coordinates[0],
+      }));
 
       queryTime = performance.now() - startTime;
       results = data;
-      console.log(`Found ${results.length} assets in ${queryTime.toFixed(0)}ms`);
+      console.log(
+        `Found ${filtered.length} assets (showing ${data.length}) in ${queryTime.toFixed(0)}ms`
+      );
     } catch (err) {
       console.error('Search error:', err);
       error = err.message;
@@ -262,12 +186,8 @@
     loadData();
   });
 
-  // Reload when URL changes
-  $: if ($page.url.searchParams) {
-    if (dbReady) loadData();
-  }
-
-  $: exportCount = $exportList.length;
+  // Derived values
+  let exportCount = $derived($exportList.length);
 </script>
 
 <!-- ============================================================================
@@ -281,7 +201,7 @@
 <main>
   <!-- Header -->
   <header>
-    <a href={link('index')} class="back-link">← Back to Map</a>
+    <a href={link('index')} class="back-link">Back to Map</a>
     <span class="title">Spatial Search</span>
     {#if !loading}<span class="count">{results.length.toLocaleString()} assets found</span>{/if}
     {#if exportCount > 0}<a href={link('export')} class="export-link">Export List ({exportCount})</a
@@ -299,46 +219,30 @@
   {#if loading}
     <div class="loading-state">
       <div class="spinner"></div>
-      {#if useTiles && tilesToLoad > 0}
-        <p class="loading-title">Loading spatial tiles...</p>
-        <div class="tile-progress">
-          <div class="progress-bar">
-            <div class="progress-fill" style="width: {(tilesLoaded / tilesToLoad) * 100}%"></div>
-          </div>
-          <span class="progress-text">{tilesLoaded} / {tilesToLoad} tiles</span>
-        </div>
-        {#if currentTile && currentTile !== 'complete'}<p class="current-tile">
-            Loading: {currentTile}
-          </p>{/if}
-        <p class="download-estimate">
-          ~{estimatedDownload.mb.toFixed(1)} MB | {estimatedDownload.assets.toLocaleString()} assets
-        </p>
-      {:else}
-        <p>Initializing DuckDB and querying data...</p>
-      {/if}
+      <p>{loadingStatus}</p>
     </div>
 
     <!-- Error State -->
   {:else if error}
     <div class="error-state">
       <p>Error: {error}</p>
-      <button onclick={loadData}>Retry</button>
+      <button class="btn" onclick={loadData}>Retry</button>
     </div>
 
     <!-- Empty State -->
   {:else if results.length === 0}
     <div class="empty-state">
       <p>No assets found in this area.</p>
-      <a href={link('index')}>← Draw a different region on the map</a>
+      <a href={link('index')}>Draw a different region on the map</a>
     </div>
 
     <!-- Results -->
   {:else}
     <div class="bulk-actions">
-      <button class="action-btn secondary" onclick={addAllToExport}
+      <button class="btn btn-outline" onclick={addAllToExport}
         >Add All {results.length} to Export</button
       >
-      {#if exportCount > 0}<a href={link('export')} class="action-btn primary"
+      {#if exportCount > 0}<a href={link('export')} class="btn btn-primary"
           >Go to Export ({exportCount} assets)</a
         >{/if}
     </div>
@@ -372,8 +276,6 @@
   /* Layout */
   main {
     width: 100%;
-    max-width: 1400px;
-    margin: 0 auto;
     padding: 20px 40px;
   }
 
@@ -468,29 +370,6 @@
   .table-container {
     margin-bottom: 20px;
   }
-  .action-btn {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    padding: 6px 12px;
-    background: #000;
-    color: #fff;
-    border: none;
-    cursor: pointer;
-    text-decoration: none;
-  }
-  .action-btn:hover {
-    background: #333;
-  }
-  .action-btn.secondary {
-    background: #666;
-  }
-  .action-btn.primary {
-    background: #1976d2;
-  }
-  .action-btn.primary:hover {
-    background: #1565c0;
-  }
 
   /* States */
   .loading-state,
@@ -508,51 +387,6 @@
     border-radius: 50%;
     animation: spin 1s linear infinite;
     margin: 0 auto 20px;
-  }
-  .loading-title {
-    font-weight: bold;
-    font-size: 14px;
-    margin-bottom: 16px;
-    color: #333;
-  }
-  .tile-progress {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    max-width: 300px;
-    margin: 0 auto 12px;
-  }
-  .progress-bar {
-    flex: 1;
-    height: 6px;
-    background: #e0e0e0;
-    border-radius: 3px;
-    overflow: hidden;
-  }
-  .progress-fill {
-    height: 100%;
-    background: #000;
-    transition: width 0.3s ease;
-  }
-  .progress-text {
-    font-size: 11px;
-    font-family: monospace;
-    color: #666;
-    white-space: nowrap;
-  }
-  .current-tile {
-    font-size: 10px;
-    font-family: monospace;
-    color: #999;
-    margin-bottom: 8px;
-  }
-  .download-estimate {
-    font-size: 11px;
-    color: #666;
-    padding: 6px 12px;
-    background: #f5f5f5;
-    display: inline-block;
-    border: 1px solid #ddd;
   }
   @keyframes spin {
     to {

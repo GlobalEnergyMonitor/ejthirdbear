@@ -140,8 +140,8 @@
     position: relative;
     width: 100%;
     height: 400px;
-    border: 1px solid #ddd;
-    background: #fafafa;
+    border: none;
+    background: transparent;
   }
 
   .map {
@@ -159,7 +159,7 @@
     align-items: center;
     justify-content: center;
     font-size: 12px;
-    background: #fafafa;
+    background: transparent;
     z-index: 10;
   }
 
@@ -171,7 +171,7 @@
   :global(.maplibregl-popup-content) {
     font-family: Georgia, serif;
     padding: 12px;
-    border: 1px solid #000;
+    border: none;
     border-radius: 0;
     box-shadow: none;
   }

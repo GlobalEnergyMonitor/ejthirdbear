@@ -2,6 +2,14 @@
 
 import { execSync } from 'child_process';
 import { writeFileSync, readFileSync, mkdirSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const rootDir = join(__dirname, '..');
+
+// Record build start time for deploy.js to calculate total duration
+writeFileSync(join(rootDir, '.build-start'), Date.now().toString());
 
 // Get git information
 let commit = 'unknown';
@@ -14,7 +22,7 @@ try {
   message = execSync('git log -1 --format=%s', { encoding: 'utf8' }).trim();
   author = execSync('git log -1 --format=%an', { encoding: 'utf8' }).trim();
 } catch {
-  console.warn('⚠️  Unable to read git info (running in CI/detached state?)');
+  console.warn('WARNING: Unable to read git info (running in CI/detached state?)');
 }
 
 // Get package version for deploy URL
@@ -23,7 +31,7 @@ try {
   const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
   pkgVersion = pkg.version || 'latest';
 } catch {
-  console.warn('⚠️  Unable to read package.json');
+  console.warn('WARNING: Unable to read package.json');
 }
 
 const deployUrl = `https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v${pkgVersion}`;
@@ -44,7 +52,7 @@ const staticDir = 'static';
 mkdirSync(staticDir, { recursive: true });
 writeFileSync(`${staticDir}/version.json`, JSON.stringify(versionInfo, null, 2));
 
-console.log('✅ Version info injected');
+console.log('[OK] Version info injected');
 console.log(`   Commit: ${commit}`);
 console.log(`   Message: ${message}`);
 console.log(`   Timestamp: ${timestamp}`);

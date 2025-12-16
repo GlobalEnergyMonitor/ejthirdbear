@@ -68,7 +68,7 @@
           ...MapboxDraw.modes,
         },
       });
-      map.addControl(draw);
+      map.addControl(/** @type {any} */ (draw));
 
       // Handle draw.create event for when shapes are finished
       map.on('draw.create', (e) => {
@@ -189,7 +189,7 @@
               '#c0392b', // Red - iron
               'Bioenergy Power',
               '#27ae60', // Green - bioenergy
-              '#007cbf', // Default blue
+              '#666', // Default blue
             ],
             'circle-opacity': 0.8,
             'circle-stroke-width': 1,
@@ -277,7 +277,7 @@
         map.setPaintProperty('points', 'circle-color', [
           'case',
           ['get', 'selected'],
-          '#2196f3', // Selected - blue
+          '#333', // Selected - blue
           '#999', // Non-selected - gray
         ]);
       } else if (isBoundsFilter($mapFilter)) {
@@ -306,7 +306,7 @@
             ['>=', ['get', 'lon'], west],
             ['<=', ['get', 'lon'], east],
           ],
-          '#2196f3', // Selected points - blue
+          '#333', // Selected points - blue
           '#999', // Non-selected points - gray
         ]);
       }
@@ -328,7 +328,7 @@
         '#c0392b',
         'Bioenergy Power',
         '#27ae60',
-        '#007cbf',
+        '#666',
       ]);
     }
   }
@@ -430,7 +430,7 @@
     top: 10px;
     left: 50%;
     transform: translateX(-50%);
-    background: #2196f3;
+    background: #333;
     color: white;
     padding: 8px 16px;
     border-radius: 4px;
@@ -446,7 +446,7 @@
   .view-assets-btn {
     background: rgba(255, 255, 255, 0.9);
     border: 1px solid rgba(255, 255, 255, 1);
-    color: #2196f3;
+    color: #333;
     padding: 4px 12px;
     border-radius: 3px;
     cursor: pointer;

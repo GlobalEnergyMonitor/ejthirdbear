@@ -1,5 +1,4 @@
 <script>
-  import { link } from '$lib/links';
   import NetworkGraph from '$lib/NetworkGraph.svelte';
 </script>
 
@@ -10,10 +9,6 @@
 <main>
   <header>
     <h1>Ownership Network</h1>
-    <nav>
-      <a href={link('index')}>Map</a>
-      <a href={link('asset')}>Assets</a>
-    </nav>
   </header>
 
   <p class="intro">
@@ -38,9 +33,6 @@
     border-bottom: 1px solid #000;
     padding-bottom: 15px;
     margin-bottom: 20px;
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
   }
 
   h1 {
@@ -49,23 +41,6 @@
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin: 0;
-  }
-
-  nav {
-    display: flex;
-    gap: 20px;
-  }
-
-  nav a {
-    color: #000;
-    text-decoration: underline;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  nav a:hover {
-    text-decoration: none;
   }
 
   .intro {

@@ -20,7 +20,7 @@
   --color-success: #4caf50;
   --color-warning: #ff9800;
   --color-error: #f44336;
-  --color-info: #2196f3;
+  --color-info: #666;
 
   --spacing-xs: 5px;
   --spacing-sm: 10px;
@@ -211,4 +211,131 @@
 
 .text-tertiary {
   color: var(--color-text-tertiary);
+}
+
+/* ============================================================================
+   BUTTON STYLES
+   ============================================================================ */
+
+/* Base button reset */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-family: system-ui, sans-serif;
+  font-size: var(--font-size-md);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 2px solid var(--color-border-dark);
+  background: var(--color-border-dark);
+  color: var(--color-bg-primary);
+  padding: 6px 12px;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--color-bg-primary);
+  color: var(--color-border-dark);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Inverted state (for "active" or "selected" buttons) */
+.btn-active,
+.btn.active {
+  background: var(--color-bg-primary);
+  color: var(--color-border-dark);
+}
+
+.btn-active:hover:not(:disabled),
+.btn.active:hover:not(:disabled) {
+  background: var(--color-bg-tertiary);
+}
+
+/* Size variants */
+.btn-sm,
+.btn-small {
+  font-size: var(--font-size-sm);
+  padding: 5px 9px;
+}
+
+.btn-lg {
+  font-size: var(--font-size-lg);
+  padding: 8px 16px;
+}
+
+/* Danger variant */
+.btn-danger {
+  background: #c62828;
+  border-color: #c62828;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: var(--color-bg-primary);
+  color: #c62828;
+}
+
+/* Outline variant (white bg, black border) */
+.btn-outline {
+  background: var(--color-bg-primary);
+  color: var(--color-border-dark);
+  border-color: var(--color-border-dark);
+}
+
+.btn-outline:hover:not(:disabled) {
+  background: var(--color-border-dark);
+  color: var(--color-bg-primary);
+}
+
+/* Primary variant (slightly larger, bolder) */
+.btn-primary {
+  padding: 10px 20px;
+  font-size: var(--font-size-base);
+}
+
+/* Icon button (square) */
+.btn-icon {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.btn-icon.btn-sm {
+  width: 18px;
+  height: 18px;
+  font-size: 12px;
+}
+
+.btn-icon.btn-lg {
+  width: 32px;
+  height: 32px;
+  font-size: 18px;
+}
+
+/* Minimal/link style button */
+.btn-link {
+  border: none;
+  background: transparent;
+  color: var(--color-text-primary);
+  text-decoration: underline;
+  padding: 2px 4px;
+}
+
+.btn-link:hover:not(:disabled) {
+  background: transparent;
+  text-decoration: none;
+}
+
+.btn-link.active {
+  background: transparent;
+  color: var(--color-text-secondary);
+  border: none;
 }

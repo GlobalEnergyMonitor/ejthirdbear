@@ -15,7 +15,7 @@
  * 2. A function to identify/match assets in those trackers
  * 3. Additional fields/transformations relevant to that class
  *
- * ⚠️  IMPORTANT: DATA SOURCE REQUIREMENTS
+ * IMPORTANT: DATA SOURCE REQUIREMENTS
  *
  * The matchers in this file reference DETAILED tracker fields (e.g., 'Main production
  * equipment', 'Captive', 'Water Depth (m)') that are NOT available in the consolidated
@@ -289,19 +289,19 @@ export function buildFieldsForAssetClass(className: string): string[] {
  */
 export const assetClassMetadata = {
   CoalBasedSteel: {
-    icon: '🏭',
+    icon: 'CBS',
     color: '#7F142A', // Coal color from GEM brand
     category: 'Energy Intensive Industry',
     concernAreas: ['Coal dependence', 'Air quality impacts', 'Closure risk', 'Capital intensity'],
   },
   CaptiveCoalPlant: {
-    icon: '⚡',
+    icon: 'CCP',
     color: '#CA4A50',
     category: 'Stranded Assets',
     concernAreas: ['Industry decarbonization', 'Closure timing', 'Stranded costs'],
   },
   DeepWaterInfra: {
-    icon: '🌊',
+    icon: 'DWI',
     color: '#061F5F',
     category: 'Oil & Gas Infrastructure',
     concernAreas: ['Environmental risk', 'Capital intensity', 'Decommissioning costs'],

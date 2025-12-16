@@ -46,7 +46,7 @@ async function main() {
   const bumpType = process.argv[2] || 'patch';
 
   if (!['major', 'minor', 'patch'].includes(bumpType)) {
-    console.error('❌ Invalid bump type. Use: major, minor, or patch');
+    console.error('ERROR: Invalid bump type. Use: major, minor, or patch');
     process.exit(1);
   }
 
@@ -56,7 +56,7 @@ async function main() {
   const currentVersion = packageJson.version;
   const newVersion = bumpVersion(currentVersion, bumpType);
 
-  console.log('\n📦 GEM Viz Release');
+  console.log('\nGEM Viz Release');
   console.log('==================\n');
   console.log(`Current version: ${currentVersion}`);
   console.log(`New version: ${newVersion}`);
@@ -65,7 +65,7 @@ async function main() {
   const confirm = await question('Continue with release? (y/n) ');
 
   if (confirm.toLowerCase() !== 'y') {
-    console.log('❌ Release cancelled');
+    console.log('Release cancelled');
     rl.close();
     process.exit(0);
   }
@@ -77,7 +77,7 @@ async function main() {
       packageJsonPath,
       JSON.stringify(packageJson, null, 2) + '\n'
     );
-    console.log('✓ Updated package.json');
+    console.log('[OK] Updated package.json');
 
     // Update layout.svelte with new version
     const layoutPath = path.join(rootDir, 'src', 'routes', '+layout.svelte');
@@ -87,7 +87,7 @@ async function main() {
       `const appVersion = '${newVersion}';`
     );
     fs.writeFileSync(layoutPath, layoutContent);
-    console.log('✓ Updated layout.svelte');
+    console.log('[OK] Updated layout.svelte');
 
     // Update CHANGELOG.md
     const changelogPath = path.join(rootDir, 'CHANGELOG.md');
@@ -111,22 +111,22 @@ async function main() {
     );
 
     fs.writeFileSync(changelogPath, changelog);
-    console.log('✓ Updated CHANGELOG.md');
+    console.log('[OK] Updated CHANGELOG.md');
 
     // Git commit
-    console.log('\n📝 Creating git commit...');
+    console.log('\nCreating git commit...');
     execSync(`git add package.json src/routes/+layout.svelte CHANGELOG.md`, { stdio: 'inherit' });
     execSync(`git commit -m "Release v${newVersion}"`, { stdio: 'inherit' });
     execSync(`git tag -a v${newVersion} -m "Release v${newVersion}"`, { stdio: 'inherit' });
 
-    console.log('\n✅ Release v' + newVersion + ' created successfully!\n');
+    console.log('\nRelease v' + newVersion + ' created successfully!\n');
     console.log('Next steps:');
     console.log('  1. Review the changes: git show');
     console.log('  2. Push to remote: git push && git push --tags');
     console.log('  3. Deploy: npm run deploy\n');
 
   } catch (error) {
-    console.error('\n❌ Release failed:', error.message);
+    console.error('\nERROR: Release failed:', error.message);
     process.exit(1);
   }
 

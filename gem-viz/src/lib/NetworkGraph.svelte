@@ -38,7 +38,13 @@
     simulationSpeed: 'fast',
     warmupTicks: 100, // Synchronous warmup ticks before animation
     use3D: false, // Use 3D layout (z-axis)
+    autoRotate: true, // Auto-rotate in 3D mode
+    rotationSpeed: 0.15, // Degrees per frame (~9°/sec at 60fps)
   });
+
+  // Auto-rotation state
+  let rotationFrame;
+  let currentViewState = null; // Track view state for camera rotation
 
   // Graph data
   let nodes = [];
@@ -374,6 +380,10 @@
   function updateLayers() {
     if (!deck) return;
 
+    // Simple position getter - explicitly typed for deck.gl
+    /** @type {(d: any) => [number, number, number]} */
+    const getPos = (d) => [d.x || 0, d.y || 0, config.use3D ? d.z || 0 : 0];
+
     // Build line data from resolved links
     const lineData = [];
     for (const link of links) {
@@ -399,8 +409,8 @@
           new LineLayer({
             id: 'edges',
             data: lineData,
-            getSourcePosition: (d) => [d.source.x, d.source.y, config.use3D ? d.source.z || 0 : 0],
-            getTargetPosition: (d) => [d.target.x, d.target.y, config.use3D ? d.target.z || 0 : 0],
+            getSourcePosition: (d) => getPos(d.source),
+            getTargetPosition: (d) => getPos(d.target),
             getColor: (d) => {
               const shareAlpha = Math.min(255, Math.max(15, (d.share || 8) * 2.2));
               return [70, 70, 70, Math.round(shareAlpha * edgeOpacity)];
@@ -409,14 +419,16 @@
             widthMinPixels: 0.5,
             widthMaxPixels: 2,
             pickable: false,
-            updateTriggers: { getColor: [edgeOpacity] },
+            updateTriggers: {
+              getColor: [edgeOpacity],
+            },
           }),
 
         // Nodes
         new ScatterplotLayer({
           id: 'nodes',
           data: nodes,
-          getPosition: (d) => [d.x || 0, d.y || 0, config.use3D ? d.z || 0 : 0],
+          getPosition: (d) => getPos(d),
           getRadius: (d) => {
             const baseSize = Math.max(2, Math.log2(d.connections + 1) * 2.8);
             return baseSize * nodeScale;
@@ -444,7 +456,9 @@
           },
           autoHighlight: true,
           highlightColor: [255, 220, 0, 255],
-          updateTriggers: { getRadius: [nodeScale] },
+          updateTriggers: {
+            getRadius: [nodeScale],
+          },
         }),
       ].filter(Boolean),
     });
@@ -452,13 +466,66 @@
 
   function handleViewStateChange({ viewState }) {
     currentZoom = viewState.zoom;
+    currentViewState = { ...viewState };
     updateLayers();
+  }
+
+  function startAutoRotation() {
+    if (rotationFrame) cancelAnimationFrame(rotationFrame);
+    if (!config.use3D || !config.autoRotate || !deck) return;
+
+    console.log('[NetworkGraph] Starting camera auto-rotation');
+
+    function rotate() {
+      if (!config.autoRotate || !config.use3D || !deck || !currentViewState) {
+        console.log('[NetworkGraph] Stopping auto-rotation');
+        rotationFrame = null;
+        return;
+      }
+
+      // Increment orbit rotation
+      const newOrbit = ((currentViewState.rotationOrbit || 0) + config.rotationSpeed) % 360;
+
+      currentViewState = {
+        ...currentViewState,
+        rotationOrbit: newOrbit,
+      };
+
+      // Update deck with new view state
+      deck.setProps({
+        initialViewState: currentViewState,
+      });
+
+      rotationFrame = requestAnimationFrame(rotate);
+    }
+
+    rotationFrame = requestAnimationFrame(rotate);
+  }
+
+  function stopAutoRotation() {
+    if (rotationFrame) {
+      cancelAnimationFrame(rotationFrame);
+      rotationFrame = null;
+    }
+  }
+
+  function toggleAutoRotate() {
+    if (config.autoRotate) {
+      startAutoRotation();
+    } else {
+      stopAutoRotation();
+    }
   }
 
   async function reloadWithConfig() {
     if (animationFrame) cancelAnimationFrame(animationFrame);
+    if (rotationFrame) cancelAnimationFrame(rotationFrame);
     if (simulation) simulation.stop();
     await loadData();
+    // Start auto-rotation after data loads (if 3D mode)
+    if (config.use3D && config.autoRotate) {
+      startAutoRotation();
+    }
   }
 
   onMount(async () => {
@@ -491,6 +558,9 @@
         }
       : { target: /** @type {[number, number, number]} */ ([0, 0, 0]), zoom: -1.5 };
 
+    // Initialize current view state for auto-rotation
+    currentViewState = { ...initialViewState };
+
     deck = new Deck({
       parent: container,
       views: view,
@@ -517,10 +587,16 @@
     });
 
     await loadData();
+
+    // Start auto-rotation after initial load if 3D mode is enabled
+    if (config.use3D && config.autoRotate) {
+      startAutoRotation();
+    }
   });
 
   onDestroy(() => {
     if (animationFrame) cancelAnimationFrame(animationFrame);
+    if (rotationFrame) cancelAnimationFrame(rotationFrame);
     if (simulation) simulation.stop();
     if (deck) deck.finalize();
   });
@@ -612,6 +688,18 @@
         <input type="checkbox" bind:checked={config.use3D} onchange={reloadWithConfig} />
         <span>3D Mode</span>
       </label>
+
+      {#if config.use3D}
+        <label class="toggle" title="Slowly rotate the network for a cinematic view.">
+          <input type="checkbox" bind:checked={config.autoRotate} onchange={toggleAutoRotate} />
+          <span>Auto-Rotate</span>
+        </label>
+
+        <label title="Rotation speed in degrees per frame.">
+          <span>Rotation</span>
+          <input type="range" min="0.02" max="0.5" step="0.02" bind:value={config.rotationSpeed} />
+        </label>
+      {/if}
     </div>
   </div>
 
@@ -621,14 +709,14 @@
     <span class="secondary">/ {stats.totalEdges.toLocaleString()} total</span>
     <span class="zoom">z:{currentZoom.toFixed(1)}</span>
     {#if hoveredNode}
-      <span class="hovered">→ {hoveredNode.name} ({hoveredNode.connections})</span>
+      <span class="hovered">{hoveredNode.name} ({hoveredNode.connections})</span>
     {/if}
   </div>
 
   <div class="help">
     <p>
       Click node to view • Drag to pan • Scroll to zoom{config.use3D
-        ? ' • Shift+drag to rotate'
+        ? ' • Shift+drag to rotate' + (config.autoRotate ? ' • Auto-rotating' : '')
         : ''}
     </p>
     <p class="engine">d3-force-3d + deck.gl {config.use3D ? '(3D)' : '(2D)'}</p>
@@ -642,7 +730,7 @@
     flex: 1;
     position: relative;
     border: 1px solid #000;
-    background: #fafafa;
+    background: transparent;
     min-height: 600px;
   }
 

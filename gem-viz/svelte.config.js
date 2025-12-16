@@ -27,7 +27,7 @@ const config = {
       crawl: false,     // Don't crawl - entries() generates all routes from +page.server.js
       handleHttpError: ({ status, path, message }) => {
         // Skip 404/500 errors from problematic/missing assets and continue build
-        console.warn(`⚠️  Skipping ${path} (status ${status}: ${message})`);
+        console.warn(`WARNING: Skipping ${path} (status ${status}: ${message})`);
         // Don't throw - just log and continue
       },
       handleUnseenRoutes: 'ignore'  // Ignore unseen routes (we're generating the list)
