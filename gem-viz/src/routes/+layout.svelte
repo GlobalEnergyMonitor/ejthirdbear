@@ -1,6 +1,7 @@
 <script>
   import '../app.css';
   import SiteNav from '$lib/components/SiteNav.svelte';
+  import { link } from '$lib/links';
 
   // Build info injected by Vite at build time
   const buildTime = __BUILD_TIME__;
@@ -19,7 +20,7 @@
 
   <footer>
     <div class="footer-content">
-      <span class="version">v{appVersion}</span>
+      <a href={link('about')} class="version" title="View methodology and changelog">v{appVersion}</a>
       <span class="build-info" title={buildTime}>build: {buildHash}</span>
     </div>
   </footer>
@@ -51,6 +52,12 @@
 
   .version {
     font-family: Georgia, serif;
+    color: #000;
+    text-decoration: none;
+  }
+
+  .version:hover {
+    text-decoration: underline;
   }
 
   .build-info {
