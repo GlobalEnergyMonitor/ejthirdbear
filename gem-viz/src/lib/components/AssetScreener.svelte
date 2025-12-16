@@ -34,21 +34,23 @@
   let loading = $state(!prebakedPortfolio);
   let error = $state(null);
 
+  // Helper to convert data to Map (handles Map, Array of tuples, or Object)
+  function toMap(data) {
+    if (!data) return new Map();
+    if (data instanceof Map) return data;
+    if (Array.isArray(data)) return new Map(data);
+    return new Map(Object.entries(data));
+  }
+
   // Apply portfolio data (from prebaked or fetched)
   function applyPortfolio(portfolio) {
     if (!portfolio) return;
     spotlightOwner = portfolio.spotlightOwner;
-    subsidiariesMatched = portfolio.subsidiariesMatched instanceof Map
-      ? portfolio.subsidiariesMatched
-      : new Map(Object.entries(portfolio.subsidiariesMatched || {}));
+    subsidiariesMatched = toMap(portfolio.subsidiariesMatched);
     directlyOwned = portfolio.directlyOwned || [];
     assets = portfolio.assets || [];
-    entityMap = portfolio.entityMap instanceof Map
-      ? portfolio.entityMap
-      : new Map(Object.entries(portfolio.entityMap || {}));
-    matchedEdges = portfolio.matchedEdges instanceof Map
-      ? portfolio.matchedEdges
-      : new Map(Object.entries(portfolio.matchedEdges || {}));
+    entityMap = toMap(portfolio.entityMap);
+    matchedEdges = toMap(portfolio.matchedEdges);
   }
 
   // Fetch portfolio data (fallback if no prebaked data)
