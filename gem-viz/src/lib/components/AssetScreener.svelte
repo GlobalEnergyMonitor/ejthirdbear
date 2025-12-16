@@ -6,7 +6,7 @@
    * Shows assets of selected asset classes for a spotlight owner,
    * with subsidiary groups, ownership percentages, and mini bar charts.
    *
-   * Self-hydrating: fetches its own data from page params
+   * Accepts prebaked portfolio data, or falls back to client-side fetch
    */
   import { onMount } from 'svelte';
   import { get } from 'svelte/store';
@@ -16,8 +16,13 @@
   import { fetchAssetBasics, fetchOwnerPortfolio } from '$lib/component-data/schema';
   import { colors, colorByTracker, regroupStatus } from '$lib/ownership-theme';
 
-  // Layout/display props only
-  let { assetClassName = 'assets', sortByOwnershipPct = true, includeUnitNames = false } = $props();
+  // Props - can accept prebaked portfolio data
+  let {
+    assetClassName = 'assets',
+    sortByOwnershipPct = true,
+    includeUnitNames = false,
+    prebakedPortfolio = null,
+  } = $props();
 
   // Internal state for fetched data
   let spotlightOwner = $state(null);
@@ -26,11 +31,35 @@
   let assets = $state([]);
   let entityMap = $state(new Map());
   let matchedEdges = $state(new Map());
-  let loading = $state(true);
+  let loading = $state(!prebakedPortfolio);
   let error = $state(null);
 
-  // Fetch portfolio data
+  // Apply portfolio data (from prebaked or fetched)
+  function applyPortfolio(portfolio) {
+    if (!portfolio) return;
+    spotlightOwner = portfolio.spotlightOwner;
+    subsidiariesMatched = portfolio.subsidiariesMatched instanceof Map
+      ? portfolio.subsidiariesMatched
+      : new Map(Object.entries(portfolio.subsidiariesMatched || {}));
+    directlyOwned = portfolio.directlyOwned || [];
+    assets = portfolio.assets || [];
+    entityMap = portfolio.entityMap instanceof Map
+      ? portfolio.entityMap
+      : new Map(Object.entries(portfolio.entityMap || {}));
+    matchedEdges = portfolio.matchedEdges instanceof Map
+      ? portfolio.matchedEdges
+      : new Map(Object.entries(portfolio.matchedEdges || {}));
+  }
+
+  // Fetch portfolio data (fallback if no prebaked data)
   async function hydratePortfolio() {
+    // If we have prebaked data, use it
+    if (prebakedPortfolio) {
+      applyPortfolio(prebakedPortfolio);
+      loading = false;
+      return;
+    }
+
     try {
       loading = true;
       error = null;
@@ -60,12 +89,7 @@
         throw new Error('Failed to load owner portfolio');
       }
 
-      spotlightOwner = portfolio.spotlightOwner;
-      subsidiariesMatched = portfolio.subsidiariesMatched;
-      directlyOwned = portfolio.directlyOwned;
-      assets = portfolio.assets;
-      entityMap = portfolio.entityMap;
-      matchedEdges = portfolio.matchedEdges;
+      applyPortfolio(portfolio);
     } catch (err) {
       console.error('[AssetScreener] load error', err);
       error = err?.message || String(err);

@@ -269,7 +269,7 @@
           Full portfolio breakdown with subsidiary paths, mini bar charts, and status icons — ported
           from GEM's Observable notebook
         </p>
-        <AssetScreener />
+        <AssetScreener prebakedPortfolio={portfolio} />
       </section>
     </article>
   {/if}
