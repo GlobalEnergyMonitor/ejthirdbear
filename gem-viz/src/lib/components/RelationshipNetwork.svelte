@@ -11,6 +11,9 @@
     fetchOwnerStats,
   } from '$lib/component-data/schema';
 
+  // Accept pre-baked data from parent to skip client-side fetch
+  let { prebakedData = null } = $props();
+
   let loading = $state(true);
   /** @type {string | null} */
   let error = $state(null);
@@ -21,6 +24,18 @@
   let currentAsset = $state({});
 
   onMount(async () => {
+    // Use pre-baked data if available (production static build)
+    if (prebakedData) {
+      ownershipChain = prebakedData.ownershipChain || [];
+      sameOwnerAssets = prebakedData.sameOwnerAssets || [];
+      coLocatedAssets = prebakedData.coLocatedAssets || [];
+      ownerStats = prebakedData.ownerStats || null;
+      currentAsset = prebakedData.currentAsset || {};
+      loading = false;
+      return;
+    }
+
+    // Fallback: client-side fetch from MotherDuck (dev mode)
     const params = get(page)?.params ?? {};
     const assetId = params.id || null;
     if (!assetId) {
@@ -123,7 +138,7 @@
 
   {#if sameOwnerAssets && sameOwnerAssets.length > 0}
     <section class="related-assets">
-      <h2>🔗 Other Assets by {currentAsset.Owner || 'Same Owner'}</h2>
+      <h2>🔗 Other Assets by {/** @type {any} */ (currentAsset).Owner || 'Same Owner'}</h2>
 
       <div class="asset-grid">
         {#each sameOwnerAssets as asset}
@@ -162,7 +177,7 @@
           • Combined capacity: {formatCapacity(
             coLocatedAssets.reduce(
               (sum, a) => sum + (a['Capacity (MW)'] || 0),
-              currentAsset.capacityMw || 0
+              /** @type {any} */ (currentAsset).capacityMw || 0
             )
           )}
         {/if}

@@ -273,6 +273,181 @@ export async function load({ params }) {
       // Extract asset info from first record (asset properties are same across all)
       const firstRecord = ownershipRecords[0];
 
+      // Extract owner entity ID for pre-baking portfolio data
+      const ownerEntityId =
+        firstRecord['Owner GEM Entity ID'] || firstRecord['Immediate Project Owner GEM Entity ID'];
+      const locationId = firstRecord['GEM location ID'];
+      const ownerName = firstRecord['Parent'] || firstRecord['Immediate Project Owner'];
+
+      // Pre-bake owner portfolio data for OwnershipExplorerD3
+      let ownerExplorerData = null;
+      if (ownerEntityId) {
+        // Find all assets owned by this entity from the cache
+        const entityAssets = [];
+        const subsidiaries = {}; // immediate_owner_id -> { name, share, assets[] }
+        const directlyOwned = [];
+
+        for (const [assetId, records] of ASSET_CACHE.assets.entries()) {
+          const record = records[0];
+          if (
+            record['Owner GEM Entity ID'] === ownerEntityId ||
+            record['Immediate Project Owner GEM Entity ID'] === ownerEntityId
+          ) {
+            const asset = {
+              id: assetId,
+              name: record['Project'] || record['Unit Name'] || assetId,
+              tracker: record['Tracker'],
+              status: record['Status'],
+              locationId: record['GEM location ID'],
+              capacityMw: Number(record['Capacity (MW)'] || 0),
+            };
+            entityAssets.push(asset);
+
+            // Group by immediate owner (subsidiary) vs directly owned
+            const immediateOwnerId = record['Immediate Project Owner GEM Entity ID'];
+            if (immediateOwnerId && immediateOwnerId !== ownerEntityId) {
+              if (!subsidiaries[immediateOwnerId]) {
+                subsidiaries[immediateOwnerId] = {
+                  name: record['Immediate Project Owner'] || immediateOwnerId,
+                  share: Number(record['Share'] || 0),
+                  assets: [],
+                };
+              }
+              subsidiaries[immediateOwnerId].assets.push(asset);
+            } else {
+              directlyOwned.push(asset);
+            }
+          }
+        }
+
+        // Convert to the format OwnershipExplorerD3 expects
+        const subsidiariesMatched = Object.entries(subsidiaries).map(([subId, data]) => [
+          subId,
+          data.assets,
+        ]);
+        const matchedEdges = Object.entries(subsidiaries).map(([subId, data]) => [
+          subId,
+          { value: data.share },
+        ]);
+        const entityMap = Object.entries(subsidiaries).map(([subId, data]) => [
+          subId,
+          { id: subId, Name: data.name, type: 'entity' },
+        ]);
+
+        ownerExplorerData = {
+          spotlightOwner: { id: ownerEntityId, Name: ownerName || ownerEntityId },
+          subsidiariesMatched,
+          directlyOwned,
+          matchedEdges,
+          entityMap,
+          assets: entityAssets,
+        };
+      }
+
+      // Pre-bake relationship data for RelationshipNetwork
+      let relationshipData = null;
+      const sameOwnerAssets = [];
+      const coLocatedAssets = [];
+
+      // Find same-owner assets (limit to 24)
+      if (ownerEntityId) {
+        let count = 0;
+        for (const [assetId, records] of ASSET_CACHE.assets.entries()) {
+          if (assetId === params.id) continue;
+          const record = records[0];
+          if (record['Owner GEM Entity ID'] === ownerEntityId && count < 24) {
+            sameOwnerAssets.push({
+              'GEM unit ID': assetId,
+              Project: record['Project'] || record['Unit Name'],
+              Status: record['Status'],
+              Tracker: record['Tracker'],
+              'Capacity (MW)': record['Capacity (MW)'],
+            });
+            count++;
+          }
+        }
+        // Sort by capacity descending
+        sameOwnerAssets.sort(
+          (a, b) => (Number(b['Capacity (MW)']) || 0) - (Number(a['Capacity (MW)']) || 0)
+        );
+      }
+
+      // Find co-located assets
+      if (locationId) {
+        for (const [assetId, records] of ASSET_CACHE.assets.entries()) {
+          if (assetId === params.id) continue;
+          const record = records[0];
+          if (record['GEM location ID'] === locationId) {
+            coLocatedAssets.push({
+              'GEM unit ID': assetId,
+              Project: record['Project'] || record['Unit Name'],
+              Status: record['Status'],
+              Tracker: record['Tracker'],
+              'Capacity (MW)': record['Capacity (MW)'],
+            });
+          }
+        }
+      }
+
+      // Parse ownership chain from ownership paths
+      const ownershipChain = [];
+      const seenIds = new Set();
+      for (const record of ownershipRecords) {
+        const ownershipPath = record['Ownership Path'];
+        if (!ownershipPath) continue;
+
+        const segments = ownershipPath.split(' -> ');
+        segments.forEach((segment, i) => {
+          const match = segment.match(/^(.+?)\s*\[([^\]]+)\]$/);
+          const name = match ? match[1].trim() : segment.trim();
+          const pctStr = match ? match[2].trim() : null;
+          const share = pctStr && pctStr !== 'unknown %' ? parseFloat(pctStr) : null;
+          const id = name.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 50);
+
+          if (!seenIds.has(id)) {
+            seenIds.add(id);
+            ownershipChain.push({ id, name, share, depth: segments.length - 1 - i });
+          }
+        });
+      }
+      ownershipChain.sort((a, b) => b.depth - a.depth);
+
+      // Owner stats
+      let ownerStats = null;
+      if (ownerEntityId && ownerExplorerData) {
+        const countries = new Set();
+        let totalCapacity = 0;
+        for (const asset of ownerExplorerData.assets) {
+          totalCapacity += asset.capacityMw || 0;
+        }
+        // Count countries from cache
+        for (const [, records] of ASSET_CACHE.assets.entries()) {
+          const record = records[0];
+          if (record['Owner GEM Entity ID'] === ownerEntityId) {
+            const country = record['Parent Headquarters Country'];
+            if (country) countries.add(country);
+          }
+        }
+        ownerStats = {
+          total_assets: ownerExplorerData.assets.length,
+          total_capacity_mw: totalCapacity,
+          countries: countries.size,
+        };
+      }
+
+      relationshipData = {
+        sameOwnerAssets,
+        coLocatedAssets,
+        ownershipChain,
+        ownerStats,
+        currentAsset: {
+          id: params.id,
+          name: firstRecord['Project'] || firstRecord['Unit Name'] || params.id,
+          Owner: ownerName,
+          capacityMw: Number(firstRecord['Capacity (MW)'] || 0),
+        },
+      };
+
       return {
         // The asset ID (GEM unit ID)
         assetId: params.id,
@@ -287,6 +462,9 @@ export async function load({ params }) {
         columns,
         unitIdCol,
         svgs: { map: null, capacity: null, status: null },
+        // Pre-baked data for components
+        ownerExplorerData,
+        relationshipData,
       };
     }
   }
@@ -306,6 +484,8 @@ export async function load({ params }) {
       columns: [],
       unitIdCol: '',
       svgs: { map: null, capacity: null, status: null },
+      ownerExplorerData: null, // Let client fetch via MotherDuck WASM
+      relationshipData: null, // Let client fetch via MotherDuck WASM
     };
   }
 

@@ -9,7 +9,7 @@
   import { get } from 'svelte/store';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
-  import { link, entityLink } from '$lib/links';
+  import { entityLink } from '$lib/links';
   import { colors, colorByStatus, colorByTracker } from '$lib/ownership-theme';
   import { getTables } from '$lib/component-data/schema';
   import { parseOwnershipPaths } from '$lib/component-data/ownership-parser';
@@ -25,6 +25,7 @@
   import RelationshipNetwork from '$lib/components/RelationshipNetwork.svelte';
   import StatusIcon from '$lib/components/StatusIcon.svelte';
   import TrackerIcon from '$lib/components/TrackerIcon.svelte';
+  import AddToCartButton from '$lib/components/AddToCartButton.svelte';
 
   // --- PROPS (from +page.server.js) ---
   let { data } = $props();
@@ -154,7 +155,6 @@
 
 <main>
   <header>
-    <a href={link('asset')} class="back-link">← All Assets</a>
     <span class="table-name">{tableName}</span>
   </header>
 
@@ -167,6 +167,15 @@
       <!-- Header -->
       <h1>{assetName || assetId}</h1>
       <p class="asset-id">GEM Unit ID: {assetId}</p>
+      <div class="page-actions">
+        <AddToCartButton
+          id={assetId}
+          name={assetName || assetId}
+          type="asset"
+          tracker={asset[trackerCol]}
+          metadata={{ country: asset[countryCol], status: asset[statusCol] }}
+        />
+      </div>
 
       <!-- Meta Grid -->
       <div class="meta-grid">
@@ -306,13 +315,16 @@
 
         <section class="viz-section">
           <h2>Owner Explorer</h2>
-          <OwnershipExplorerD3 ownerEntityId={primaryOwnerEntityId} />
+          <OwnershipExplorerD3
+            ownerEntityId={primaryOwnerEntityId}
+            prebakedData={data?.ownerExplorerData}
+          />
         </section>
 
         <section class="viz-section">
           <h2>Related Assets</h2>
           <p class="viz-subtitle">Same-owner assets and co-located units</p>
-          <RelationshipNetwork />
+          <RelationshipNetwork prebakedData={data?.relationshipData} />
         </section>
       {/if}
 
@@ -430,6 +442,9 @@
     font-size: 12px;
     color: #666;
     font-family: monospace;
+    margin-bottom: 12px;
+  }
+  .page-actions {
     margin-bottom: 20px;
   }
   .viz-subtitle {
