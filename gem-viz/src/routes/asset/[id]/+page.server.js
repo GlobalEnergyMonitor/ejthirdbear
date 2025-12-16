@@ -280,12 +280,17 @@ export async function load({ params }) {
       const ownerName = firstRecord['Parent'] || firstRecord['Immediate Project Owner'];
 
       // Pre-bake owner portfolio data for OwnershipExplorerD3
+      // PERF: Cap assets to avoid quadratic bloat (owner with 2500 assets × 2500 pages = huge)
+      const MAX_ASSETS_PER_PAGE = 50;
+      const MAX_ASSETS_PER_SUBSIDIARY = 20;
+
       let ownerExplorerData = null;
       if (ownerEntityId) {
         // Find all assets owned by this entity from the cache
         const entityAssets = [];
         const subsidiaries = {}; // immediate_owner_id -> { name, share, assets[] }
         const directlyOwned = [];
+        let totalAssetCount = 0;
 
         for (const [assetId, records] of ASSET_CACHE.assets.entries()) {
           const record = records[0];
@@ -293,6 +298,7 @@ export async function load({ params }) {
             record['Owner GEM Entity ID'] === ownerEntityId ||
             record['Immediate Project Owner GEM Entity ID'] === ownerEntityId
           ) {
+            totalAssetCount++;
             const asset = {
               id: assetId,
               name: record['Project'] || record['Unit Name'] || assetId,
@@ -320,10 +326,19 @@ export async function load({ params }) {
           }
         }
 
-        // Convert to the format OwnershipExplorerD3 expects
+        // Sort by capacity and cap to avoid bloat
+        entityAssets.sort((a, b) => (b.capacityMw || 0) - (a.capacityMw || 0));
+        const cappedAssets = entityAssets.slice(0, MAX_ASSETS_PER_PAGE);
+        const cappedDirectlyOwned = directlyOwned
+          .sort((a, b) => (b.capacityMw || 0) - (a.capacityMw || 0))
+          .slice(0, MAX_ASSETS_PER_SUBSIDIARY);
+
+        // Convert to the format OwnershipExplorerD3 expects (with capped subsidiary assets)
         const subsidiariesMatched = Object.entries(subsidiaries).map(([subId, data]) => [
           subId,
-          data.assets,
+          data.assets
+            .sort((a, b) => (b.capacityMw || 0) - (a.capacityMw || 0))
+            .slice(0, MAX_ASSETS_PER_SUBSIDIARY),
         ]);
         const matchedEdges = Object.entries(subsidiaries).map(([subId, data]) => [
           subId,
@@ -337,10 +352,11 @@ export async function load({ params }) {
         ownerExplorerData = {
           spotlightOwner: { id: ownerEntityId, Name: ownerName || ownerEntityId },
           subsidiariesMatched,
-          directlyOwned,
+          directlyOwned: cappedDirectlyOwned,
           matchedEdges,
           entityMap,
-          assets: entityAssets,
+          assets: cappedAssets,
+          totalAssetCount, // Full count for "see all X assets" link
         };
       }
 
