@@ -24,13 +24,8 @@
     prebakedPortfolio = null,
   } = $props();
 
-  // Internal state for fetched data
-  let spotlightOwner = $state(null);
-  let subsidiariesMatched = $state(new Map());
-  let directlyOwned = $state([]);
-  let assets = $state([]);
-  let entityMap = $state(new Map());
-  let matchedEdges = $state(new Map());
+  // State for client-side fetched data (fallback when no prebaked data)
+  let fetchedPortfolio = $state(null);
   let loading = $state(!prebakedPortfolio);
   let error = $state(null);
 
@@ -42,22 +37,21 @@
     return new Map(Object.entries(data));
   }
 
-  // Apply portfolio data (from prebaked or fetched)
-  function applyPortfolio(portfolio) {
-    if (!portfolio) return;
-    spotlightOwner = portfolio.spotlightOwner;
-    subsidiariesMatched = toMap(portfolio.subsidiariesMatched);
-    directlyOwned = portfolio.directlyOwned || [];
-    assets = portfolio.assets || [];
-    entityMap = toMap(portfolio.entityMap);
-    matchedEdges = toMap(portfolio.matchedEdges);
-  }
+  // Effective portfolio: prefer prebaked, fallback to fetched
+  // Using $derived ensures SSR renders with prebaked data immediately
+  const effectivePortfolio = $derived(prebakedPortfolio || fetchedPortfolio);
+
+  // Derive all values from effectivePortfolio (works during SSR!)
+  const spotlightOwner = $derived(effectivePortfolio?.spotlightOwner ?? null);
+  const subsidiariesMatched = $derived(toMap(effectivePortfolio?.subsidiariesMatched));
+  const directlyOwned = $derived(effectivePortfolio?.directlyOwned || []);
+  const assets = $derived(effectivePortfolio?.assets || []);
+  const entityMap = $derived(toMap(effectivePortfolio?.entityMap));
+  const matchedEdges = $derived(toMap(effectivePortfolio?.matchedEdges));
 
   // Fetch portfolio data (fallback if no prebaked data)
   async function hydratePortfolio() {
-    // If we have prebaked data, use it
     if (prebakedPortfolio) {
-      applyPortfolio(prebakedPortfolio);
       loading = false;
       return;
     }
@@ -91,7 +85,8 @@
         throw new Error('Failed to load owner portfolio');
       }
 
-      applyPortfolio(portfolio);
+      // Set fetched portfolio - $derived values will update automatically
+      fetchedPortfolio = portfolio;
     } catch (err) {
       console.error('[AssetScreener] load error', err);
       error = err?.message || String(err);
@@ -100,18 +95,12 @@
     }
   }
 
-  // React to prebaked data changes (handles hydration correctly)
-  $effect(() => {
-    if (prebakedPortfolio) {
-      applyPortfolio(prebakedPortfolio);
-      loading = false;
-    }
-  });
-
   // Fallback: fetch client-side if no prebaked data after mount
   onMount(() => {
     if (!prebakedPortfolio) {
       hydratePortfolio();
+    } else {
+      loading = false;
     }
   });
 
