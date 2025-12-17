@@ -1,8 +1,14 @@
 import { error } from '@sveltejs/kit';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
+import {
+  getAsset,
+  getOwnershipGraph,
+  getEntityGraphDown,
+  graphToExplorerData,
+} from '$lib/ownership-api';
 
-// Only prerender in production builds - dev mode uses client-side fetching
+// Only prerender in production builds - dev mode uses API fetching
 export const prerender = process.env.NODE_ENV !== 'development';
 
 /**
@@ -121,7 +127,7 @@ export async function entries() {
       columns[0];
 
     // BULK FETCH: Get ALL asset data in one query
-    // Optionally enhance with geography fields (S2 cells, geometries)
+    // GEOGRAPHY ENHANCEMENT: Optionally enhance with S2 cells & geometries (API doesn't provide this)
     let selectClause = '*';
     if (geoConfig.enabled) {
       if (geoConfig.verbose) {
@@ -255,6 +261,130 @@ function loadCacheFromDisk() {
   }
 }
 
+/**
+ * API FALLBACK: Fetch asset data from Ownership API
+ * Used in dev mode when cache is not available
+ */
+async function fetchFromAPI(assetId) {
+  try {
+    console.log(`  [API] Fetching asset ${assetId} from Ownership API...`);
+
+    // Fetch asset basic info
+    const asset = await getAsset(assetId);
+
+    // Fetch ownership graph (trace upward to find all owners)
+    const ownershipGraph = await getOwnershipGraph({
+      root: assetId,
+      direction: 'up',
+    });
+
+    // Extract owner entity ID from the graph
+    const ownerNode = ownershipGraph.nodes.find(
+      (n) => n.type === 'entity' && n.id === asset.owner_entity_id
+    );
+    const ownerEntityId = ownerNode?.id;
+    const ownerName = ownerNode?.Name || asset.owner;
+
+    // Fetch owner portfolio if we have an owner entity ID
+    let ownerExplorerData = null;
+    if (ownerEntityId) {
+      const portfolioGraph = await getEntityGraphDown(ownerEntityId);
+      ownerExplorerData = graphToExplorerData(ownerEntityId, ownerName, portfolioGraph);
+    }
+
+    // Build ownership chain from graph
+    const ownershipChain = [];
+    const seenIds = new Set();
+
+    // Walk from asset up to terminal owners
+    const assetNode = ownershipGraph.nodes.find((n) => n.id === assetId);
+    if (assetNode) {
+      // Find path from asset to terminal owners
+      const terminals = ownershipGraph.nodes.filter((n) => n.is_terminal);
+      terminals.forEach((terminal) => {
+        // Find edges that lead to this terminal
+        const pathEdges = ownershipGraph.edges.filter(
+          (e) => e.target === terminal.id || e.source === terminal.id
+        );
+        pathEdges.forEach((edge) => {
+          const node = ownershipGraph.nodes.find((n) => n.id === edge.source);
+          if (node && !seenIds.has(node.id)) {
+            seenIds.add(node.id);
+            ownershipChain.push({
+              id: node.id,
+              name: node.Name,
+              share: edge.ownership_pct || null,
+              depth: 0, // API doesn't provide depth, would need to compute
+            });
+          }
+        });
+      });
+    }
+
+    // Build relationship data
+    const relationshipData = {
+      sameOwnerAssets: [], // Would need separate API call to get same-owner assets
+      coLocatedAssets: [], // Not available in API (needs GEM location ID)
+      ownershipChain,
+      ownerStats: ownerExplorerData
+        ? {
+            total_assets: ownerExplorerData.assets.length,
+            total_capacity_mw: 0, // Would need to sum from assets
+            countries: 0, // Not available in current API
+          }
+        : null,
+      currentAsset: {
+        id: assetId,
+        name: asset.facility_name || assetId,
+        Owner: ownerName,
+        capacityMw: Number(asset.capacity || 0),
+      },
+    };
+
+    console.log(`  [API] Successfully fetched asset ${assetId}`);
+
+    return {
+      assetId,
+      assetName: asset.facility_name || assetId,
+      owners: [
+        {
+          // Convert API asset to ownership record format
+          'GEM unit ID': asset.gem_unit_id,
+          Project: asset.facility_name,
+          Status: asset.status,
+          Tracker: asset.facility_type,
+          'Capacity (MW)': asset.capacity,
+          Latitude: asset.latitude,
+          Longitude: asset.longitude,
+          'Owner GEM Entity ID': asset.owner_entity_id,
+          Parent: asset.owner,
+        },
+      ],
+      asset: {
+        'GEM unit ID': asset.gem_unit_id,
+        Project: asset.facility_name,
+        Status: asset.status,
+        Tracker: asset.facility_type,
+        'Capacity (MW)': asset.capacity,
+        Latitude: asset.latitude,
+        Longitude: asset.longitude,
+        'Owner GEM Entity ID': asset.owner_entity_id,
+        Parent: asset.owner,
+      },
+      tableName: 'API',
+      columns: Object.keys(asset),
+      unitIdCol: 'gem_unit_id',
+      svgs: { map: null, capacity: null, status: null },
+      ownerExplorerData,
+      relationshipData,
+      fromAPI: true, // Flag to indicate this came from API
+    };
+  } catch (err) {
+    console.error(`  [API ERROR] Failed to fetch asset ${assetId}:`, err.message);
+    throw error(500, `Failed to fetch asset from API: ${err.message}`);
+  }
+}
+
 // Load function runs at build time for prerendered pages
 export async function load({ params }) {
   // Only runs at build time because prerender = true
@@ -262,7 +392,7 @@ export async function load({ params }) {
   // Load cache from disk if not already loaded
   loadCacheFromDisk();
 
-  // Try to serve from cache (fast path)
+  // Try to serve from cache (fast path - PRODUCTION MODE)
   if (ASSET_CACHE.initialized) {
     // Assets are now arrays of ownership records grouped by GEM unit ID
     const ownershipRecords = ASSET_CACHE.assets.get(params.id);
@@ -485,27 +615,36 @@ export async function load({ params }) {
     }
   }
 
-  // Cache miss - in dev mode, return empty data and let client-side hydration handle it
+  // Cache miss - in dev mode, try API fallback
   // In build mode, this means the asset doesn't exist
   const isDev = process.env.NODE_ENV === 'development' || !ASSET_CACHE.initialized;
 
   if (isDev) {
-    console.log(`  [INFO] Dev mode: letting client-side fetch handle ${params.id}`);
-    return {
-      assetId: params.id,
-      assetName: params.id,
-      owners: [],
-      asset: {},
-      tableName: '',
-      columns: [],
-      unitIdCol: '',
-      svgs: { map: null, capacity: null, status: null },
-      ownerExplorerData: null, // Let client fetch via MotherDuck WASM
-      relationshipData: null, // Let client fetch via MotherDuck WASM
-    };
+    console.log(`  [INFO] Dev mode: fetching ${params.id} from Ownership API...`);
+    try {
+      // NEW: Use API instead of returning empty data
+      return await fetchFromAPI(params.id);
+    } catch (err) {
+      // If API fails, return empty data and let client try
+      console.error(`  [ERROR] API fetch failed, returning empty data:`, err.message);
+      return {
+        assetId: params.id,
+        assetName: params.id,
+        owners: [],
+        asset: {},
+        tableName: '',
+        columns: [],
+        unitIdCol: '',
+        svgs: { map: null, capacity: null, status: null },
+        ownerExplorerData: null,
+        relationshipData: null,
+      };
+    }
   }
 
   // In production build, cache miss means asset doesn't exist
-  console.warn(`WARNING: Cache miss for ${params.id} - skipping (DB already closed after bulk fetch)`);
+  console.warn(
+    `WARNING: Cache miss for ${params.id} - skipping (DB already closed after bulk fetch)`
+  );
   throw error(404, `Asset ${params.id} not found in cache`);
 }

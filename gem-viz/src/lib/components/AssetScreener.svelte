@@ -6,28 +6,30 @@
    * Shows assets of selected asset classes for a spotlight owner,
    * with subsidiary groups, ownership percentages, and mini bar charts.
    *
-   * Accepts prebaked portfolio data, or falls back to client-side fetch
+   * DATA: fetchOwnerPortfolio(entityId) → OwnerPortfolio
    */
-  import { onMount } from 'svelte';
-  import { get } from 'svelte/store';
-  import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { assetLink, entityLink } from '$lib/links';
-  import { fetchAssetBasics, fetchOwnerPortfolio } from '$lib/component-data/schema';
+  import { fetchOwnerPortfolio } from '$lib/component-data/schema';
+  import { useFetch } from '$lib/component-data/use-fetch.svelte';
   import { colors, colorByTracker, regroupStatus } from '$lib/ownership-theme';
 
-  // Props - can accept prebaked portfolio data
+  // Props - entityId is required, component fetches its own data
   let {
+    entityId,
     assetClassName = 'assets',
     sortByOwnershipPct = true,
     includeUnitNames = false,
-    prebakedPortfolio = null,
   } = $props();
 
-  // State for client-side fetched data (fallback when no prebaked data)
-  let fetchedPortfolio = $state(null);
-  let loading = $state(!prebakedPortfolio);
-  let error = $state(null);
+  // ============================================================================
+  // DATA FETCHING - This component fetches: fetchOwnerPortfolio(entityId)
+  // ============================================================================
+  const {
+    data: portfolio,
+    loading,
+    error,
+  } = useFetch(() => fetchOwnerPortfolio(entityId), `portfolio:${entityId}`);
 
   // Helper to convert data to Map (handles Map, Array of tuples, or Object)
   function toMap(data) {
@@ -37,72 +39,13 @@
     return new Map(Object.entries(data));
   }
 
-  // Effective portfolio: prefer prebaked, fallback to fetched
-  // Using $derived ensures SSR renders with prebaked data immediately
-  const effectivePortfolio = $derived(prebakedPortfolio || fetchedPortfolio);
-
-  // Derive all values from effectivePortfolio (works during SSR!)
-  const spotlightOwner = $derived(effectivePortfolio?.spotlightOwner ?? null);
-  const subsidiariesMatched = $derived(toMap(effectivePortfolio?.subsidiariesMatched));
-  const directlyOwned = $derived(effectivePortfolio?.directlyOwned || []);
-  const assets = $derived(effectivePortfolio?.assets || []);
-  const entityMap = $derived(toMap(effectivePortfolio?.entityMap));
-  const matchedEdges = $derived(toMap(effectivePortfolio?.matchedEdges));
-
-  // Fetch portfolio data (fallback if no prebaked data)
-  async function hydratePortfolio() {
-    if (prebakedPortfolio) {
-      loading = false;
-      return;
-    }
-
-    try {
-      loading = true;
-      error = null;
-
-      const pageData = get(page);
-      const assetId = pageData.params?.id;
-      const pathname = pageData.url?.pathname || '';
-
-      let ownerId = null;
-      if (pathname.includes('/asset/')) {
-        const basics = await fetchAssetBasics(assetId);
-        if (basics?.ownerEntityId) {
-          ownerId = basics.ownerEntityId;
-        } else {
-          throw new Error('Owner entity not found for asset');
-        }
-      } else if (pathname.includes('/entity/')) {
-        ownerId = assetId;
-      }
-
-      if (!ownerId) {
-        throw new Error('No owner ID available');
-      }
-
-      const portfolio = await fetchOwnerPortfolio(ownerId);
-      if (!portfolio) {
-        throw new Error('Failed to load owner portfolio');
-      }
-
-      // Set fetched portfolio - $derived values will update automatically
-      fetchedPortfolio = portfolio;
-    } catch (err) {
-      console.error('[AssetScreener] load error', err);
-      error = err?.message || String(err);
-    } finally {
-      loading = false;
-    }
-  }
-
-  // Fallback: fetch client-side if no prebaked data after mount
-  onMount(() => {
-    if (!prebakedPortfolio) {
-      hydratePortfolio();
-    } else {
-      loading = false;
-    }
-  });
+  // Derive all values from portfolio
+  const spotlightOwner = $derived(portfolio?.spotlightOwner ?? null);
+  const subsidiariesMatched = $derived(toMap(portfolio?.subsidiariesMatched));
+  const directlyOwned = $derived(portfolio?.directlyOwned || []);
+  const assets = $derived(portfolio?.assets || []);
+  const entityMap = $derived(toMap(portfolio?.entityMap));
+  const matchedEdges = $derived(toMap(portfolio?.matchedEdges));
 
   /**
    * @typedef {{ locationID: string, units: any[], y?: number, r?: number }} ProcessedLocation
@@ -260,7 +203,7 @@
   // Color legend
   let colLegend = $derived.by(() => {
     const types = new Set(assets.map((a) => a.tracker).filter(Boolean));
-    const statuses = new Set(assets.map((a) => regroupStatus(a.status || a.Status)));
+    const statuses = new Set(assets.map((a) => regroupStatus(a.status)));
 
     // If multiple tracker types, color by tracker; otherwise by status
     if (types.size > 1) {

@@ -1,10 +1,12 @@
 /**
  * Central data contract for GEM viz components.
- * Each component pulls its own data from MotherDuck using these helpers.
- * Keep SQL here so frontend + backend share the same contract.
+ * Uses the Ownership Tracing API for ownership-related data.
+ * Falls back to MotherDuck WASM for data not available via API.
  */
 
-// Dynamic import to avoid SSR issues (Worker is not defined in Node.js)
+import * as ownershipAPI from '$lib/ownership-api';
+
+// Dynamic import for MotherDuck (fallback for non-API data)
 async function getMotherDuck() {
   const mod = await import('$lib/motherduck-wasm');
   return mod.default;
@@ -52,6 +54,7 @@ interface ResolvedTables {
 const TABLE_CACHE: Partial<ResolvedTables> = {};
 
 // Discover the primary asset table (largest non-metadata table)
+// Still needed for location-based queries not supported by API
 async function resolveAssetTable(): Promise<string> {
   if (TABLE_CACHE.assetTable) return TABLE_CACHE.assetTable;
 
@@ -69,7 +72,6 @@ async function resolveAssetTable(): Promise<string> {
   `);
 
   if (!result.success || !result.data?.length) {
-    // Fallback to known table name
     TABLE_CACHE.assetTable = 'public.assets';
     return TABLE_CACHE.assetTable;
   }
@@ -110,54 +112,78 @@ export async function getTables(): Promise<ResolvedTables> {
   return { assetTable, ownershipTable };
 }
 
+/**
+ * Fetch basic asset information
+ * NOW USES: Ownership API GET /assets/{id}
+ */
 export async function fetchAssetBasics(assetId: string): Promise<AssetBasics | null> {
-  const { assetTable } = await getTables();
+  try {
+    const asset = await ownershipAPI.getAsset(assetId);
 
-  const motherduck = await getMotherDuck();
-  const result = await motherduck.query<AssetBasics>(`
-    SELECT
-      "GEM unit ID" AS id,
-      COALESCE("Project", 'Unknown') AS name,
-      "GEM location ID" AS locationId,
-      "Owner GEM Entity ID" AS ownerEntityId,
-      NULL AS lat,
-      NULL AS lon,
-      "Status" AS status,
-      "Tracker" AS tracker,
-      CAST("Capacity (MW)" AS DOUBLE) AS capacityMw
-    FROM ${assetTable}
-    WHERE "GEM unit ID" = '${assetId}'
-    LIMIT 1;
-  `);
-
-  if (!result.success || !result.data?.length) return null;
-  return result.data[0];
+    return {
+      id: asset.gem_unit_id,
+      name: asset.facility_name || 'Unknown',
+      locationId: null, // API doesn't return location ID
+      ownerEntityId: asset.owner_entity_id || null,
+      lat: asset.latitude || null,
+      lon: asset.longitude || null,
+      status: asset.status || null,
+      tracker: asset.facility_type || null,
+      capacityMw: typeof asset.capacity === 'number' ? asset.capacity : null,
+    };
+  } catch (error) {
+    console.warn(`[fetchAssetBasics] API failed for ${assetId}, error:`, error);
+    return null;
+  }
 }
 
 export async function fetchCoordinatesByLocation(_locationId: string): Promise<{
   lat: number | null;
   lon: number | null;
 } | null> {
-  // Note: This table doesn't have Latitude/Longitude columns.
-  // Coordinates are stored in the GeoJSON file (static/points.geojson).
+  // Note: Coordinates are stored in the GeoJSON file (static/points.geojson).
   // Return null - the AssetMap component will fall back to GeoJSON lookup.
   return null;
 }
 
-export async function fetchSameOwnerAssets(ownerEntityId: string, excludeAssetId: string) {
-  const { assetTable } = await getTables();
+/**
+ * Fetch assets owned by the same entity
+ * NOW USES: Ownership API GET /entities/{id}/graph/down
+ */
+export async function fetchSameOwnerAssets(
+  ownerEntityId: string,
+  excludeAssetId: string
+): Promise<{ success: boolean; data: AssetBasics[] }> {
+  try {
+    const graphDown = await ownershipAPI.getEntityGraphDown(ownerEntityId);
 
-  const motherduck = await getMotherDuck();
-  return await motherduck.query<Record<string, unknown>>(`
-    SELECT *
-    FROM ${assetTable}
-    WHERE "Owner GEM Entity ID" = '${ownerEntityId}'
-      AND "GEM unit ID" <> '${excludeAssetId}'
-    ORDER BY "Capacity (MW)" DESC NULLS LAST
-    LIMIT 24;
-  `);
+    // Filter to assets only (not entities), exclude the current asset
+    const assets = graphDown.nodes
+      .filter((n) => n.type === 'asset' && n.id !== excludeAssetId)
+      .slice(0, 24)
+      .map((n) => ({
+        id: n.id,
+        name: n.Name,
+        locationId: null,
+        ownerEntityId: ownerEntityId,
+        lat: null,
+        lon: null,
+        status: null,
+        tracker: null,
+        capacityMw: null,
+      }));
+
+    return { success: true, data: assets };
+  } catch (error) {
+    console.warn(`[fetchSameOwnerAssets] API failed for ${ownerEntityId}:`, error);
+    return { success: false, data: [] };
+  }
 }
 
+/**
+ * Fetch assets at the same location
+ * STILL USES: MotherDuck (API doesn't support location-based queries)
+ */
 export async function fetchCoLocatedAssets(locationId: string, excludeAssetId: string) {
   const { assetTable } = await getTables();
 
@@ -170,202 +196,211 @@ export async function fetchCoLocatedAssets(locationId: string, excludeAssetId: s
   `);
 }
 
+/**
+ * Fetch owner statistics
+ * NOW USES: Ownership API GET /entities/{id}/graph/down for asset count
+ */
 export async function fetchOwnerStats(ownerEntityId: string): Promise<OwnerStats | null> {
-  const { assetTable } = await getTables();
+  try {
+    const [entity, graphDown] = await Promise.all([
+      ownershipAPI.getEntity(ownerEntityId),
+      ownershipAPI.getEntityGraphDown(ownerEntityId),
+    ]);
 
-  const motherduck = await getMotherDuck();
-  const result = await motherduck.query<OwnerStats>(`
-    SELECT
-      COUNT(DISTINCT "GEM unit ID") AS total_assets,
-      SUM(CAST("Capacity (MW)" AS DOUBLE)) AS total_capacity_mw,
-      COUNT(DISTINCT "Parent Headquarters Country") AS countries
-    FROM ${assetTable}
-    WHERE "Owner GEM Entity ID" = '${ownerEntityId}';
-  `);
+    // Count assets from graph
+    const assets = graphDown.nodes.filter((n) => n.type === 'asset');
 
-  if (!result.success || !result.data?.length) return null;
-  return result.data[0];
+    // Get unique countries from asset names (API doesn't provide country directly)
+    // This is a limitation - we'd need to fetch each asset for country info
+    const countries = new Set<string>();
+    // For now, estimate from entity headquarters
+    if (entity['Headquarters Country']) {
+      countries.add(entity['Headquarters Country']);
+    }
+
+    return {
+      total_assets: assets.length,
+      total_capacity_mw: null, // API doesn't aggregate capacity yet
+      countries: countries.size || 1,
+    };
+  } catch (error) {
+    console.warn(`[fetchOwnerStats] API failed for ${ownerEntityId}:`, error);
+    return null;
+  }
 }
 
+/**
+ * Fetch ownership chain for an asset (trace upward to ultimate owners)
+ * NOW USES: Ownership API GET /ownership/graph?root={id}&direction=up
+ */
 export async function fetchOwnershipChain(assetId: string): Promise<OwnershipChainNode[]> {
-  const { assetTable } = await getTables();
+  try {
+    const graph = await ownershipAPI.getOwnershipGraph({
+      root: assetId,
+      direction: 'up',
+      max_depth: 10,
+    });
 
-  const motherduck = await getMotherDuck();
+    // Convert graph nodes to chain format
+    const chainNodes: OwnershipChainNode[] = [];
+    const seenIds = new Set<string>();
 
-  // Get ownership paths for this asset
-  const result = await motherduck.query<{ ownership_path: string | null; share: number | null }>(`
-    SELECT
-      "Ownership Path" AS ownership_path,
-      CAST("Share" AS DOUBLE) AS share
-    FROM ${assetTable}
-    WHERE "GEM unit ID" = '${assetId}'
-    LIMIT 10;
-  `);
+    // Build depth map from edges
+    const depthMap = new Map<string, number>();
+    depthMap.set(assetId, 0);
 
-  if (!result.success || !result.data?.length) return [];
+    // BFS to calculate depths
+    const queue = [assetId];
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      const currentDepth = depthMap.get(current) || 0;
 
-  // Parse ownership paths into chain nodes
-  // Format: "Parent [50%] -> Subsidiary [75%] -> Asset [100%]"
-  const chainNodes: OwnershipChainNode[] = [];
-  const seenIds = new Set<string>();
+      for (const edge of graph.edges || []) {
+        if (edge.target === current && !depthMap.has(edge.source)) {
+          depthMap.set(edge.source, currentDepth + 1);
+          queue.push(edge.source);
+        }
+      }
+    }
 
-  for (const row of result.data) {
-    if (!row.ownership_path) continue;
+    // Convert nodes to chain format
+    for (const node of graph.nodes) {
+      if (node.type === 'entity' && !seenIds.has(node.id)) {
+        seenIds.add(node.id);
 
-    const segments = row.ownership_path.split(' -> ');
-    segments.forEach((segment, i) => {
-      const match = segment.match(/^(.+?)\s*\[([^\]]+)\]$/);
-      const name = match ? match[1].trim() : segment.trim();
-      const pctStr = match ? match[2].trim() : null;
-      const share = pctStr && pctStr !== 'unknown %' ? parseFloat(pctStr) : null;
-      const id = name.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 50);
+        // Find edge to get ownership percentage
+        const edge = graph.edges?.find((e) => e.source === node.id);
+        const share = edge?.ownership_pct || null;
 
-      if (!seenIds.has(id)) {
-        seenIds.add(id);
         chainNodes.push({
-          id,
-          name,
+          id: node.id,
+          name: node.Name,
           share,
-          depth: segments.length - 1 - i,
+          depth: depthMap.get(node.id) || 0,
         });
       }
-    });
-  }
+    }
 
-  // Sort by depth (ultimate parent first)
-  return chainNodes.sort((a, b) => b.depth - a.depth);
+    // Sort by depth (ultimate parent first)
+    return chainNodes.sort((a, b) => b.depth - a.depth);
+  } catch (error) {
+    console.warn(`[fetchOwnershipChain] API failed for ${assetId}:`, error);
+    return [];
+  }
 }
 
 /**
  * Build an owner portfolio: subsidiaries, directly owned assets, and edges.
- *
- * Note: This database embeds ownership in asset records (no separate edge table).
- * We derive subsidiaries by parsing "Ownership Path" strings.
+ * NOW USES: Ownership API GET /entities/{id}/graph/down
  */
 export async function fetchOwnerPortfolio(ownerEntityId: string): Promise<OwnerPortfolio | null> {
-  const { assetTable } = await getTables();
-  const motherduck = await getMotherDuck();
+  try {
+    const [entity, graphDown] = await Promise.all([
+      ownershipAPI.getEntity(ownerEntityId),
+      ownershipAPI.getEntityGraphDown(ownerEntityId),
+    ]);
 
-  // Get owner display name from assets table using "Parent" column
-  const ownerNameResult = await motherduck.query<{ owner: string | null }>(`
-    SELECT FIRST("Parent") AS owner
-    FROM ${assetTable}
-    WHERE "Owner GEM Entity ID" = '${ownerEntityId}'
-       OR "Immediate Project Owner GEM Entity ID" = '${ownerEntityId}'
-    LIMIT 1;
-  `);
-  const ownerName = ownerNameResult.success ? ownerNameResult.data?.[0]?.owner : null;
+    const ownerName = entity.Name || entity['Full Name'] || ownerEntityId;
 
-  // Get all assets owned by this entity - search multiple ownership columns
-  // to find assets where this entity is: ultimate parent, immediate owner, or ANYWHERE in the chain
-  // Also search by name since Ownership Path contains names, not IDs
-  const searchName = ownerName ? ownerName.replace(/'/g, "''") : null;
+    // Separate entities (subsidiaries) from assets
+    const subsidiaryNodes = graphDown.nodes.filter(
+      (n) => n.type === 'entity' && n.id !== ownerEntityId
+    );
+    const assetNodes = graphDown.nodes.filter((n) => n.type === 'asset');
 
-  const assetsResult = await motherduck.query<{
-    asset_id: string;
-    name: string | null;
-    tracker: string | null;
-    status: string | null;
-    location_id: string | null;
-    capacity_mw: number | null;
-    lat: number | null;
-    lon: number | null;
-    share: number | null;
-    ownership_path: string | null;
-    immediate_owner: string | null;
-    immediate_owner_id: string | null;
-    parent_entity_id: string | null;
-  }>(`
-    SELECT
-      "GEM unit ID" AS asset_id,
-      "Project" AS name,
-      "Tracker" AS tracker,
-      "Status" AS status,
-      "GEM location ID" AS location_id,
-      CAST("Capacity (MW)" AS DOUBLE) AS capacity_mw,
-      NULL AS lat,
-      NULL AS lon,
-      CAST("Share" AS DOUBLE) AS share,
-      "Ownership Path" AS ownership_path,
-      "Immediate Project Owner" AS immediate_owner,
-      "Immediate Project Owner GEM Entity ID" AS immediate_owner_id,
-      "Owner GEM Entity ID" AS parent_entity_id
-    FROM ${assetTable}
-    WHERE "Owner GEM Entity ID" = '${ownerEntityId}'
-       OR "Immediate Project Owner GEM Entity ID" = '${ownerEntityId}'
-       OR "Ownership Path" LIKE '%${ownerEntityId}%'
-       ${searchName ? `OR "Ownership Path" LIKE '%${searchName}%'` : ''};
-  `);
-
-  if (!assetsResult.success) return null;
-
-  const subsidiariesMatched = new Map<string, AssetBasics[]>();
-  const matchedEdges = new Map<string, { value: number | null }>();
-  const entityMap = new Map<string, { id: string; Name: string; type: string }>();
-  const directlyOwned: AssetBasics[] = [];
-
-  // Group assets by immediate owner (subsidiary) vs directly owned
-  assetsResult.data?.forEach((row) => {
-    const asset: AssetBasics = {
-      id: row.asset_id,
-      name: row.name || row.asset_id,
-      tracker: row.tracker,
-      status: row.status,
-      locationId: row.location_id,
-      ownerEntityId: row.immediate_owner_id || ownerEntityId,
-      lat: row.lat,
-      lon: row.lon,
-      capacityMw: row.capacity_mw,
-    };
-
-    // If immediate owner differs from our spotlight owner, it's via subsidiary
-    if (row.immediate_owner_id && row.immediate_owner_id !== ownerEntityId) {
-      const subId = row.immediate_owner_id;
-      if (!subsidiariesMatched.has(subId)) {
-        subsidiariesMatched.set(subId, []);
-        matchedEdges.set(subId, { value: row.share });
-        entityMap.set(subId, {
-          id: subId,
-          Name: row.immediate_owner || subId,
-          type: 'entity',
-        });
+    // Build edge lookup: source -> target -> percentage
+    const edgeLookup = new Map<string, Map<string, number>>();
+    for (const edge of graphDown.edges || []) {
+      if (!edgeLookup.has(edge.source)) {
+        edgeLookup.set(edge.source, new Map());
       }
-      subsidiariesMatched.get(subId)!.push(asset);
-    } else {
-      directlyOwned.push(asset);
+      edgeLookup.get(edge.source)!.set(edge.target, edge.ownership_pct || 0);
     }
-  });
 
-  const allAssets = [...Array.from(subsidiariesMatched.values()).flat(), ...directlyOwned];
+    // Build subsidiary data structures
+    const subsidiariesMatched = new Map<string, AssetBasics[]>();
+    const matchedEdges = new Map<string, { value: number | null }>();
+    const entityMap = new Map<string, { id: string; Name: string; type: string }>();
+    const directlyOwned: AssetBasics[] = [];
 
-  return {
-    spotlightOwner: { id: ownerEntityId, Name: ownerName || ownerEntityId },
-    subsidiariesMatched,
-    directlyOwned,
-    matchedEdges,
-    entityMap,
-    assets: allAssets,
-  };
+    // Add subsidiaries to entity map
+    for (const sub of subsidiaryNodes) {
+      entityMap.set(sub.id, { id: sub.id, Name: sub.Name, type: 'entity' });
+
+      // Get ownership edge from spotlight owner to subsidiary
+      const ownerEdges = edgeLookup.get(ownerEntityId);
+      const share = ownerEdges?.get(sub.id) || null;
+      matchedEdges.set(sub.id, { value: share });
+      subsidiariesMatched.set(sub.id, []);
+    }
+
+    // Categorize assets: directly owned vs via subsidiary
+    for (const assetNode of assetNodes) {
+      const asset: AssetBasics = {
+        id: assetNode.id,
+        name: assetNode.Name,
+        locationId: null,
+        ownerEntityId: ownerEntityId,
+        lat: null,
+        lon: null,
+        status: null,
+        tracker: null,
+        capacityMw: null,
+      };
+
+      // Find which entity owns this asset
+      let ownerOfAsset: string | null = null;
+      for (const [source, targets] of edgeLookup) {
+        if (targets.has(assetNode.id)) {
+          ownerOfAsset = source;
+          break;
+        }
+      }
+
+      if (ownerOfAsset && ownerOfAsset !== ownerEntityId && subsidiariesMatched.has(ownerOfAsset)) {
+        // Owned via subsidiary
+        subsidiariesMatched.get(ownerOfAsset)!.push(asset);
+      } else {
+        // Directly owned
+        directlyOwned.push(asset);
+      }
+    }
+
+    const allAssets = [...Array.from(subsidiariesMatched.values()).flat(), ...directlyOwned];
+
+    return {
+      spotlightOwner: { id: ownerEntityId, Name: ownerName },
+      subsidiariesMatched,
+      directlyOwned,
+      matchedEdges,
+      entityMap,
+      assets: allAssets,
+    };
+  } catch (error) {
+    console.warn(`[fetchOwnerPortfolio] API failed for ${ownerEntityId}:`, error);
+    return null;
+  }
 }
 
 /**
  * Exported contract summary (for backend/docs).
  *
- * Note: This GEM coal plant dataset embeds ownership in asset records via "Ownership Path" strings.
- * There is no separate ownership edges table - ownership is derived from parsing path strings.
+ * This now primarily uses the Ownership Tracing API.
+ * MotherDuck is only used for location-based queries.
  */
 export const DATA_CONTRACT = {
-  tables: {
-    assetTable:
-      'Primary asset facts table (cols: "GEM unit ID", "Project", "Tracker", "Status", "Capacity (MW)", "GEM location ID", "Owner GEM Entity ID", "Parent", "Ownership Path", "Share", "Immediate Project Owner", "Immediate Project Owner GEM Entity ID", "Parent Headquarters Country")',
+  api: {
+    base: 'Ownership Tracing API (configurable via PUBLIC_OWNERSHIP_API_URL)',
+    endpoints: {
+      getAsset: 'GET /assets/{id} -> Asset details',
+      getEntity: 'GET /entities/{id} -> Entity details',
+      getEntityOwners: 'GET /entities/{id}/owners -> Direct owners with %',
+      getEntityOwned: 'GET /entities/{id}/owned -> Directly owned entities',
+      getEntityGraphDown: 'GET /entities/{id}/graph/down -> Full ownership graph',
+      getOwnershipGraph: 'GET /ownership/graph?root={id}&direction=up|down -> Universal graph',
+    },
   },
-  endpoints: {
-    assetBasics: 'GET /assets/:id -> AssetBasics',
-    assetRelated: 'GET /assets/:id/related -> {sameOwnerAssets[], coLocatedAssets[]}',
-    ownershipChain:
-      'GET /assets/:id/ownership-chain -> OwnershipChainNode[] (parsed from Ownership Path)',
-    ownerStats: 'GET /owners/:id/stats -> OwnerStats',
-    ownerPortfolio:
-      'GET /owners/:id/portfolio -> OwnerPortfolio (assets grouped by immediate owner)',
+  fallback: {
+    motherduck: 'Used only for location-based queries (fetchCoLocatedAssets)',
   },
 };

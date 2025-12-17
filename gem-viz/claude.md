@@ -1,191 +1,228 @@
 # GEM Viz Development Status
 
-Last updated: 2025-12-12
+Last updated: 2025-12-17
 
-## Current Status: Production Ready ✅
+## Current Status: Production Ready (Local Changes Pending)
 
-### Latest Deploy: v0.1.11 (Dec 12, 2025)
+### Latest Deploy: v0.1.20 (Dec 16, 2025)
 
-**Live URL:** https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.1.11/index.html
-
-### Changes This Session
-
-**1. DO Spaces URL Fix**
-- Changed `trailingSlash` to `'always'` → generates `/entity/E123/index.html`
-- Updated `links.ts` to generate explicit `/index.html` URLs in production
-- All internal links now work on static S3/Spaces hosting
-
-**2. Owner Explorer Pre-baking**
-- Removed dependency on MotherDuck WASM at runtime (requires COOP/COEP headers)
-- Pre-baked all portfolio data at build time in `+page.server.js`
-- Entity cache now includes full subsidiary/asset groupings (26.59 MB)
-- Component uses pre-baked data in production, falls back to WASM in dev
-
-**3. Map Color Coding by Type**
-- Added tracker-based coloring to SimpleMap
-- Coal Plant → Black, Coal Mine → Dark Gray, Gas Plant → Orange
-- Steel Plant → Purple, Iron Mine → Red, Bioenergy → Green
-- Added legend overlay in top-left corner
-
-**4. Cleanup**
-- Removed GitHub Pages workflow (`.github/workflows/deploy.yml`)
-- Removed AWS S3 workflow (`.github/workflows/deploy-s3.yml`)
-- Removed Cloudflare R2 script (`scripts/deploy-r2.sh`)
-- Removed VPS deploy scripts and SSR config
-
-### Recent Changes (Dec 12, 2025)
-- Removed ~400 lines of dead hydration code from ownership visualization components
-- Simplified `MermaidOwnership.svelte` and `OwnershipHierarchy.svelte` to props-only pattern
-- Added smart redirects: `/entity/G...` → `/asset/G...` and `/asset/E...` → `/entity/E...`
-- Fixed homepage links (was using `entityLink()` for asset IDs)
-- Added `E100001000348` (BlackRock Inc) to homepage featured entities and spot-check
-
-## Previous Status: URL Architecture ✅
-
-### Major Change: GEM Unit ID URLs (Dec 10, 2025)
-
-**The Problem:** Asset URLs were using composite IDs like `/asset/E100000000834_G100000109409/` (entity + unit). Users couldn't navigate to assets using the bare GEM unit IDs they had.
-
-**The Solution:** URLs now use bare GEM unit IDs: `/asset/G100001057899/`
-
-**What Changed:**
-- `+page.server.js`: Groups ownership rows by GEM unit ID instead of composite IDs
-- `+page.svelte`: Displays all owners in a table per asset page
-- Search page: Returns GEM unit IDs, not composite IDs
-
-**Impact:**
-- Pages reduced from 62,366 → ~13,472 (one page per unique asset)
-- Average 4.6 ownership records per asset now shown as table
-- URLs match Stephen's example IDs: `G100000109409`, `G100001057899`, etc.
+**Live URL:** https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.1.20/
 
 ---
 
-## Previous Status
+### Local Changes (Not Yet Deployed)
 
-Successfully built 62,366 static asset pages from MotherDuck data (now rebuilding with new URL structure).
+**1. "Components Fetch Their Own Data" Pattern (Dec 17)**
+- New `src/lib/component-data/use-fetch.svelte.ts` - SSR-aware data fetching helper
+- Components call `useFetch()` which checks context cache first, then fetches on client
+- Entity pages set up SSR cache via `setContext(SSR_CACHE_KEY, buildSSRCache({...}))`
+- AssetScreener refactored to use this pattern instead of `prebakedPortfolio` prop
 
-## Recent Accomplishments
+**2. Investigation Cart Enhancements (Dec 17)**
+- CSV export split into two functions:
+  - `exportMetadataCSV()` - Summary, cart contents, geographic breakdown
+  - `exportDataCSV()` - Clean data files per tracker for Excel/Pandas import
+- Added "Clear Cart" button with confirmation modal dialog
 
-### Codebase Cleanup (Nov 22, 2025)
-Removed zombie code and outdated documentation:
-- Deleted unused lib files (query-helpers.js, svg-generator.js, motherduck-query.ts)
-- Removed old interactive query route (src/routes/asset/query/)
-- Removed unused API endpoint (src/routes/api/query/)
-- Removed changelog route dependent on outdated docs
-- Deleted outdated markdown files (CHANGELOG.md, DEPLOYMENT.md, MOTHERDUCK_INTEGRATION.md)
-- Cleaned up commented imports
+---
 
-Result: Cleaner codebase focused on current static site generation architecture.
+### Feature Branch: `feature/ownership-api-integration` (Dec 17)
 
-### Bulk Fetch Architecture (Nov 22, 2025)
-**Problem:** MotherDuck was timing out after 10 minutes when building 62k+ pages
-**Solution:** Single upfront bulk query loads ALL data into memory before rendering
+**New Ownership Tracing API Integration**
 
-**Implementation:**
-- `entries()` function fetches all 65,341 rows in 3.5s
-- Writes 2.6MB JSON cache to disk (`build/.asset-cache.json`)
-- Closes DB connection immediately
-- `load()` function reads from cache instead of querying DB
-- Composite IDs handle ownership tables: `E100000000014_G100000106283`
+Replaces MotherDuck queries with the new Ownership API (`https://6b7c36096b12.ngrok.app`).
 
-**Results:**
-- Build time: ~20 minutes (serial rendering, concurrency: 1)
-- Zero database timeout issues
-- 62,366 pages successfully generated
-- Total size: 842 MB (124,769 files)
+**New Files:**
+- `src/lib/ownership-api.ts` - API client with all endpoints
 
-### Asset Location Maps (Nov 22, 2025)
-Added interactive MapLibre maps to every asset detail page.
+**Modified Files:**
+- `src/lib/component-data/schema.ts` - Now uses API for ownership queries
+- `src/lib/ownership-data.ts` - Rewritten to use API instead of DuckDB
+- `src/routes/entity/[id]/+page.server.js` - Uses API for entity prebaking
+- `src/routes/asset/[id]/+page.server.js` - API fallback for dev mode
 
-**Implementation:**
-- Client-side component loads `points.geojson` (5.6 MB, 14k points)
-- Finds matching asset by GEM unit ID
-- Shows 400px map with marker and popup
-- Uses Carto Positron basemap (brutalist-friendly)
-- Graceful degradation if coordinates not found
+**API Endpoints Used:**
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /entities` | List/search entities (paginated) |
+| `GET /entities/{id}` | Entity details |
+| `GET /entities/{id}/owners` | Direct owners with % |
+| `GET /entities/{id}/graph/down` | Full ownership graph |
+| `GET /assets/{id}` | Asset details |
+| `GET /ownership/graph` | Universal graph traversal |
 
-**Files:**
-- `src/lib/components/AssetMap.svelte` - MapLibre component
-- `src/routes/asset/[id]/+page.svelte` - Updated to include map
+**What Still Uses MotherDuck:**
+- Asset `entries()` bulk fetch (for geography/S2 cells)
+- Co-located assets queries (API doesn't support location-based queries)
+- Production cache building (hybrid approach)
 
-### Performance Documentation (Nov 22, 2025)
-Added comprehensive metrics to README:
-- Build stats (62k pages, 842 MB, ~20 min)
-- Deployment time estimates for different connection speeds
-- Architecture optimizations explained
-- Deployment ready via `just deploy`
+---
 
-## Deployment Path
+## Recent Fix: Asset Screener SSR Bug (Dec 16, 2025)
 
-### Digital Ocean Spaces
+### The Problem
+Asset Screener on entity pages showed "Unknown Owner" with "0 assets via 0 direct subsidiaries" instead of real portfolio data. This happened despite prebaked data being passed correctly from the server.
 
-Deploy via `just deploy` - uses S3-compatible API:
+### Root Cause
+In Svelte 5, `$effect` only runs on the **client** during hydration. The server pre-renders HTML with default state values (null, empty Map, etc.), so the static HTML contained the wrong data.
 
-```bash
-# Configure AWS CLI (one-time setup)
-aws configure --profile do-tor1
-
-# Deploy (builds + uploads)
-just deploy
+```javascript
+// BROKEN: $effect doesn't run during SSR
+$effect(() => {
+  if (prebakedPortfolio) {
+    applyPortfolio(prebakedPortfolio);  // Never runs on server!
+  }
+});
 ```
 
-Expected upload times:
-- 10 Mbps: ~20-30 min initial, ~2-5 min incremental
-- 25 Mbps: ~10-15 min initial, ~1-3 min incremental
-- 100 Mbps: ~5-8 min initial, ~30-60 sec incremental
+### The Fix
+Changed from `$effect` + `$state` to `$derived` for all portfolio values. `$derived` computes values immediately from props during SSR.
 
-## Technical Architecture
+**File:** `src/lib/components/AssetScreener.svelte`
 
-### Build Process
-1. `scripts/generate-geojson.js` - Creates points.geojson from MotherDuck
-2. `entries()` in +page.server.js - Bulk fetch all assets, write cache
-3. SvelteKit prerenders 62k pages using cache
-4. Output: `build/` directory with 124k static files
+```javascript
+// FIXED: $derived works during SSR
+const effectivePortfolio = $derived(prebakedPortfolio || fetchedPortfolio);
+const spotlightOwner = $derived(effectivePortfolio?.spotlightOwner ?? null);
+const subsidiariesMatched = $derived(toMap(effectivePortfolio?.subsidiariesMatched));
+const directlyOwned = $derived(effectivePortfolio?.directlyOwned || []);
+const assets = $derived(effectivePortfolio?.assets || []);
+const entityMap = $derived(toMap(effectivePortfolio?.entityMap));
+const matchedEdges = $derived(toMap(effectivePortfolio?.matchedEdges));
+```
 
-### Data Flow
-- **Database**: MotherDuck (cloud DuckDB)
-- **Build Time**: Single bulk query (3.5s)
-- **Runtime**: Zero DB queries, all data pre-baked into HTML
-- **Maps**: Client-side GeoJSON lookup
+### Verification
+BlackRock entity page (E100001000348) now correctly shows:
+- **Company:** "BlackRock Inc" (was "Unknown Owner")
+- **Assets:** "1115 assets via 183 direct subsidiaries" (was "0 assets")
+- Full subsidiary groupings with mini bar charts
 
-### Key Files
-- `src/routes/asset/[id]/+page.server.js` - Bulk fetch & cache logic
-- `src/routes/asset/[id]/+page.svelte` - Asset detail page
-- `src/lib/components/AssetMap.svelte` - Location map component
-- `svelte.config.js` - Serial rendering, error handling
-- `scripts/deploy.js` - S3 sync to Digital Ocean Spaces
+### Key Lesson: Svelte 5 SSR
+- `$effect` = client-side only (like `onMount`)
+- `$derived` = computed during SSR and reactive on client
+- For prebaked data in static builds, always use `$derived` to ensure values are in the HTML
 
-## Next Steps
+---
 
-- [ ] Set up automated rebuilds (GitHub Actions)
-- [ ] Explore parquet loading for client-side filtering
-- [ ] Add more visualization types (capacity gauges, status badges)
+## Data Flow for Entity Pages
+
+```
+Build Time:
+  +page.server.js entries() → Bulk fetch from MotherDuck → .entity-cache.json
+
+  +page.server.js load() → Read cache → ownerExplorerData {
+    spotlightOwner: { id, Name },
+    subsidiariesMatched: [[subId, assets[]]],  // Array of tuples (JSON-safe)
+    directlyOwned: [],
+    matchedEdges: [[subId, { value }]],
+    entityMap: [[subId, { id, Name, type }]],
+    assets: []
+  }
+
+Page Render:
+  +page.svelte → passes data?.ownerExplorerData to AssetScreener
+
+  AssetScreener → $derived converts tuples back to Maps via toMap() helper
+```
+
+### toMap() Helper
+Handles the JSON serialization round-trip (Maps serialize as empty objects):
+```javascript
+function toMap(data) {
+  if (!data) return new Map();
+  if (data instanceof Map) return data;
+  if (Array.isArray(data)) return new Map(data);  // [[key, value]] tuples
+  return new Map(Object.entries(data));
+}
+```
+
+---
+
+## Build & Deploy
+
+### Commands
+```bash
+npm run dev          # Dev server (localhost:3737)
+npm run build        # Full build (~5 min build + prerender)
+npm run deploy       # Build + upload to DO Spaces (~50 min total)
+```
+
+### Build Stats
+- 13,472 asset pages
+- 3,952 entity pages
+- ~26 MB entity cache
+- ~42 MB asset cache
+- Upload time: ~50 minutes
+
+### Deploy Process
+1. `inject-version.js` - Stamps commit info into version.json
+2. `generate-geojson.js` - Creates points.geojson from MotherDuck
+3. Vite build - Compiles SSR + client bundles
+4. Static adapter - Prerenders all pages using cached data
+5. `deploy.js` - Syncs build/ to Digital Ocean Spaces via S3 API
+
+---
+
+## Key Files
+
+| File | Purpose |
+|------|---------|
+| `src/lib/component-data/use-fetch.svelte.ts` | SSR-aware data fetching helper (`useFetch()`) |
+| `src/lib/components/AssetScreener.svelte` | Portfolio visualization (uses useFetch pattern) |
+| `src/routes/entity/[id]/+page.server.js` | Entity cache + data prebaking |
+| `src/routes/entity/[id]/+page.svelte` | Entity detail page + SSR cache context |
+| `src/routes/report/+page.svelte` | Investigation cart, CSV exports, clear cart |
+| `src/lib/ownership-theme.ts` | Colors, status grouping |
+| `scripts/deploy.js` | S3 sync to DO Spaces |
+
+---
+
+## Recent Commits
+
+- `c827d9b` Fix AssetScreener SSR: use $derived instead of $effect (Dec 16)
+- `2110b34` Use $effect for prebaked data to fix hydration timing (Dec 16) - didn't work
+- `f09b0ef` Add optional DuckDB geography extension hooks
+- `74c0e54` Bump version to 0.1.13
+
+---
 
 ## Known Issues
 
-None currently! Build is stable and performant.
+**Parquet Schema Limitation:** The `all_trackers_ownership@1.parquet` file doesn't have a "Country" column directly. To get country data, queries must JOIN with the locations parquet: `LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"` and use `l."Country.Area"`.
 
-## Commands
+---
 
-```bash
-# Development
-npm run dev              # Start dev server (localhost:3737)
+## Architecture Notes
 
-# Building
-npm run build            # Full build (~20 min)
-npm run build:log        # Build with detailed logging
-
-# Preview
-npm run preview          # Preview production build locally
-
-# Deployment
-just deploy              # Digital Ocean Spaces
+### useFetch Pattern (New - Dec 17)
+Components declare their data needs clearly:
+```javascript
+const { data, loading, error } = useFetch(() => fetchOwnerPortfolio(id), `portfolio:${id}`);
 ```
 
-## Commit History
+How it works:
+1. During SSR/prerender: checks context cache (populated by +page.server.js)
+2. During client: calls the fetcher function via onMount
+3. Build-time caching layer can dedupe repeated fetches
 
-- `96ead47` Remove zombie code and outdated documentation (Nov 22, 2025)
-- `e3d64a8` Add bulk fetch architecture and asset location maps (Nov 22, 2025)
-- `9e715bb` Add automated GEM data processing pipeline
-- `ebb2d1c` Add directory-based URLs and server-side D3 SVG generation
-- `0f17022` Fix browser rendering and implement static GeoJSON generation
+Page setup (in +page.svelte):
+```javascript
+import { SSR_CACHE_KEY, buildSSRCache } from '$lib/component-data/use-fetch.svelte';
+setContext(SSR_CACHE_KEY, buildSSRCache({
+  [`portfolio:${data?.entityId}`]: data?.ownerExplorerData,
+}));
+```
+
+### Prebaked Data Pattern (Legacy)
+All visualization components follow this pattern for static builds:
+1. Server fetches data at build time in `+page.server.js`
+2. Data passed to page via `load()` return value
+3. Page passes data to components via props (`prebakedPortfolio`, `prebakedData`)
+4. Components use `$derived` to compute from props (NOT `$effect`)
+5. Fallback: `onMount` fetches client-side if no prebaked data (dev mode)
+
+### Why Not $effect for Prebaked Data?
+- SSR renders HTML on server before any effects run
+- Effects are deferred to client hydration
+- Static builds need data in the initial HTML
+- `$derived` evaluates immediately when props are available
