@@ -9,10 +9,63 @@
  * aws configure --profile do-spaces
  */
 
-import { execSync } from 'child_process';
+import { execSync, spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
+// ============================================================================
+// Claude Code Status Line Progress Tracking
+// ============================================================================
+const PROGRESS_FILE = '/tmp/claude_progress.json';
+
+function progressStart(task, icon = '📤', project = 'gem-viz') {
+  const data = {
+    project,
+    task,
+    status: 'starting',
+    progress: 0,
+    detail: '',
+    started: Math.floor(Date.now() / 1000),
+    icon,
+    done: false,
+    failed: false
+  };
+  fs.writeFileSync(PROGRESS_FILE, JSON.stringify(data, null, 2));
+}
+
+function progressUpdate(status, progress = null, detail = null) {
+  try {
+    const data = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf-8'));
+    data.status = status;
+    if (progress !== null) data.progress = progress;
+    if (detail !== null) data.detail = detail;
+    fs.writeFileSync(PROGRESS_FILE, JSON.stringify(data, null, 2));
+  } catch { /* ignore */ }
+}
+
+function progressDone(message = 'complete') {
+  try {
+    const data = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf-8'));
+    data.status = message;
+    data.done = true;
+    data.progress = 100;
+    fs.writeFileSync(PROGRESS_FILE, JSON.stringify(data, null, 2));
+    // Auto-clear after 30 seconds
+    setTimeout(() => { try { fs.unlinkSync(PROGRESS_FILE); } catch {} }, 30000);
+  } catch { /* ignore */ }
+}
+
+function progressFail(message = 'failed') {
+  try {
+    const data = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf-8'));
+    data.status = message;
+    data.failed = true;
+    fs.writeFileSync(PROGRESS_FILE, JSON.stringify(data, null, 2));
+    // Auto-clear after 60 seconds
+    setTimeout(() => { try { fs.unlinkSync(PROGRESS_FILE); } catch {} }, 60000);
+  } catch { /* ignore */ }
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..');
@@ -74,6 +127,11 @@ try {
   // Note: CORS is configured via Digital Ocean dashboard, not here
   console.log('\nUploading to Digital Ocean Spaces...\n');
   console.log(`Syncing to s3://${BUCKET}/${DEPLOY_PATH}/`);
+
+  // Start progress tracking
+  progressStart('deploy', '📤', 'gem-viz');
+  progressUpdate('uploading', 10, `v${version}`);
+
   execSync(
     `aws s3 sync ${buildDir} s3://${BUCKET}/${DEPLOY_PATH}/ ` +
     `--endpoint-url ${ENDPOINT} ` +
@@ -87,6 +145,9 @@ try {
   const now = Date.now();
   const uploadDuration = ((now - deployStart) / 1000).toFixed(1);
   const totalDuration = ((now - buildStart) / 1000).toFixed(1);
+
+  // Mark progress complete
+  progressDone(`v${version} live`);
 
   console.log('\nDeployment successful!\n');
   console.log(`URL: https://${BUCKET}.${REGION}.digitaloceanspaces.com/${DEPLOY_PATH}/`);
@@ -117,6 +178,9 @@ try {
   const now = Date.now();
   const uploadDuration = ((now - deployStart) / 1000).toFixed(1);
   const totalDuration = ((now - buildStart) / 1000).toFixed(1);
+
+  // Mark progress failed
+  progressFail('deploy failed');
 
   // Log failure
   const logEntry = [

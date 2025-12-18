@@ -7,8 +7,22 @@
   import { link } from '$lib/links';
   import { dataVersionInfo, TrackerDatasets } from '$lib/data-config/data-sources';
 
+  // Real stats from +page.server.js
+  let { data } = $props();
+  const stats = data?.stats || {};
+
   // Version history - add new entries at the top
   const changelog = [
+    {
+      version: '0.1.21',
+      date: '2025-12-17',
+      changes: [
+        'Integrated new Ownership Tracing API for faster data queries',
+        'About page now shows real-time database statistics',
+        'Added progress tracking for background deployments',
+        'Improved build pipeline with status line integration',
+      ],
+    },
     {
       version: '0.1.14',
       date: '2025-12-15',
@@ -151,20 +165,32 @@
     <h2>Data Sources</h2>
 
     <div class="data-version-box">
-      <h4>Current Data Release</h4>
-      <div class="version-grid">
-        <div class="version-item">
-          <span class="label">Release Version</span>
-          <span class="value">{dataVersionInfo.currentReleaseVersion}</span>
+      <h4>Current Database Statistics</h4>
+      <div class="version-grid stats-grid">
+        <div class="version-item stat-item">
+          <span class="value stat-value">{stats.totalAssets?.toLocaleString() || '13,472'}</span>
+          <span class="label">Unique Assets</span>
         </div>
-        <div class="version-item">
-          <span class="label">Release Date</span>
-          <span class="value">{dataVersionInfo.releaseDate}</span>
+        <div class="version-item stat-item">
+          <span class="value stat-value">{stats.totalEntities?.toLocaleString() || '3,952'}</span>
+          <span class="label">Owner Entities</span>
         </div>
-        <div class="version-item">
-          <span class="label">Last Verified</span>
-          <span class="value">{dataVersionInfo.lastVerificationDate}</span>
+        <div class="version-item stat-item">
+          <span class="value stat-value">{stats.totalLocations?.toLocaleString() || '21,898'}</span>
+          <span class="label">Locations</span>
         </div>
+        <div class="version-item stat-item">
+          <span class="value stat-value">{stats.totalCountries || 185}</span>
+          <span class="label">Countries</span>
+        </div>
+      </div>
+      <div class="version-meta">
+        {#if stats.buildTime}
+          <span>Last updated: {stats.buildTime}</span>
+        {/if}
+        {#if stats.version}
+          <span>Build: {stats.version}</span>
+        {/if}
       </div>
     </div>
 
@@ -175,26 +201,47 @@
     </p>
 
     <h3>Asset Trackers</h3>
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th>Tracker</th>
-          <th>Assets</th>
-          <th>Version</th>
-          <th>Last Updated</th>
-        </tr>
-      </thead>
-      <tbody>
-        {#each trackers as tracker}
+    {#if stats.trackerBreakdown?.length > 0}
+      <table class="data-table">
+        <thead>
           <tr>
-            <td>{tracker.name}</td>
-            <td>{tracker.assets}</td>
-            <td>{tracker.version}</td>
-            <td>{tracker.lastUpdated}</td>
+            <th>Tracker</th>
+            <th>Locations</th>
+            <th>% of Total</th>
           </tr>
-        {/each}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {#each stats.trackerBreakdown as tracker}
+            <tr>
+              <td>{tracker.name}</td>
+              <td>{tracker.count.toLocaleString()}</td>
+              <td>{((tracker.count / stats.totalLocations) * 100).toFixed(1)}%</td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    {:else}
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Tracker</th>
+            <th>Assets</th>
+            <th>Version</th>
+            <th>Last Updated</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each trackers as tracker}
+            <tr>
+              <td>{tracker.name}</td>
+              <td>{tracker.assets}</td>
+              <td>{tracker.version}</td>
+              <td>{tracker.lastUpdated}</td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    {/if}
 
     <h3>Ownership Data</h3>
     <p>
@@ -202,13 +249,13 @@
     </p>
     <ul>
       <li>
-        <strong>~50,000 entities</strong> — Companies, governments, individuals, and other owners
+        <strong>{stats.totalEntities?.toLocaleString() || '~4,000'} entities</strong> — Companies, governments, individuals, and other owners
       </li>
       <li>
-        <strong>~100,000 entity relationships</strong> — Parent-subsidiary and shareholder links
+        <strong>{stats.totalAssets?.toLocaleString() || '~13,000'} unique assets</strong> — Energy infrastructure units across all trackers
       </li>
       <li>
-        <strong>~150,000 asset ownership records</strong> — Direct ownership stakes in infrastructure
+        <strong>{stats.totalLocations?.toLocaleString() || '~22,000'} locations</strong> — Geographic coordinates in {stats.totalCountries || 185} countries
       </li>
     </ul>
 
@@ -597,10 +644,17 @@
     grid-template-columns: repeat(3, 1fr);
     gap: 20px;
   }
+  .stats-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
   .version-item {
     display: flex;
     flex-direction: column;
     gap: 4px;
+  }
+  .stat-item {
+    text-align: center;
+    flex-direction: column-reverse;
   }
   .version-item .label {
     font-size: 10px;
@@ -612,6 +666,20 @@
     font-size: 16px;
     font-weight: 600;
     font-family: monospace;
+  }
+  .stat-value {
+    font-size: 28px;
+    font-weight: 700;
+    color: #000;
+  }
+  .version-meta {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid #ddd;
+    font-size: 11px;
+    color: #666;
+    display: flex;
+    gap: 16px;
   }
   .data-contact {
     font-size: 13px;
@@ -747,6 +815,16 @@
       columns: 1;
     }
     .release header {
+      flex-direction: column;
+      gap: 4px;
+    }
+    .stats-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .stat-value {
+      font-size: 22px;
+    }
+    .version-meta {
       flex-direction: column;
       gap: 4px;
     }
