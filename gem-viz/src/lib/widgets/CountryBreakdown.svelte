@@ -21,14 +21,15 @@
     loading = true;
     error = null;
 
-    const trackerFilter = tracker ? `WHERE "Tracker" = '${tracker}'` : '';
+    const trackerFilter = tracker ? `WHERE o."Tracker" = '${tracker}'` : '';
 
     const sql = `
       SELECT
-        COALESCE("Country", 'Unknown') as country,
-        COUNT(DISTINCT "GEM unit ID") as asset_count,
-        SUM(COALESCE("Capacity (MW)", 0)) as total_capacity
-      FROM ownership
+        COALESCE(l."Country.Area", 'Unknown') as country,
+        COUNT(DISTINCT o."GEM unit ID") as asset_count,
+        SUM(COALESCE(o."Capacity (MW)", 0)) as total_capacity
+      FROM ownership o
+      LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
       ${trackerFilter}
       GROUP BY 1
       ORDER BY asset_count DESC
@@ -88,8 +89,8 @@
 
 <style>
   .widget {
-    background: #fff;
-    border: 1px solid #ddd;
+    background: var(--color-white);
+    border: 1px solid var(--color-border);
     padding: 16px;
   }
   header {
@@ -97,7 +98,7 @@
     justify-content: space-between;
     align-items: baseline;
     margin-bottom: 12px;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--color-gray-100);
     padding-bottom: 8px;
   }
   h3 {
@@ -108,7 +109,7 @@
   }
   .query-time {
     font-size: 10px;
-    color: #999;
+    color: var(--color-text-tertiary);
     font-family: monospace;
   }
 
@@ -116,12 +117,12 @@
   .error,
   .empty {
     font-size: 13px;
-    color: #666;
+    color: var(--color-text-secondary);
     padding: 20px 0;
     text-align: center;
   }
   .error {
-    color: #c00;
+    color: var(--color-error);
   }
 
   .bars {
@@ -140,22 +141,22 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    color: #333;
+    color: var(--color-gray-700);
   }
   .bar-container {
     flex: 1;
     height: 16px;
-    background: #f0f0f0;
+    background: var(--color-gray-100);
   }
   .bar {
     height: 100%;
-    background: #333;
+    background: var(--color-gray-700);
     transition: width 0.3s ease;
   }
   .count {
     min-width: 40px;
     text-align: right;
     font-family: monospace;
-    color: #666;
+    color: var(--color-text-secondary);
   }
 </style>

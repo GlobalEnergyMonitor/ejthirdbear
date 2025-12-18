@@ -1,22 +1,16 @@
 /**
  * Central data contract for GEM viz components.
  * Uses the Ownership Tracing API for ownership-related data.
- * Falls back to MotherDuck WASM for data not available via API.
  */
 
 import * as ownershipAPI from '$lib/ownership-api';
-
-// Dynamic import for MotherDuck (fallback for non-API data)
-async function getMotherDuck() {
-  const mod = await import('$lib/motherduck-wasm');
-  return mod.default;
-}
 
 export interface AssetBasics {
   id: string;
   name: string;
   locationId: string | null;
   ownerEntityId: string | null;
+  ownerName?: string | null;
   lat: number | null;
   lon: number | null;
   status: string | null;
@@ -46,72 +40,6 @@ export interface OwnerStats {
   countries: number;
 }
 
-interface ResolvedTables {
-  assetTable: string;
-  ownershipTable: string;
-}
-
-const TABLE_CACHE: Partial<ResolvedTables> = {};
-
-// Discover the primary asset table (largest non-metadata table)
-// Still needed for location-based queries not supported by API
-async function resolveAssetTable(): Promise<string> {
-  if (TABLE_CACHE.assetTable) return TABLE_CACHE.assetTable;
-
-  const motherduck = await getMotherDuck();
-  const result = await motherduck.query<{
-    schema_name: string;
-    table_name: string;
-  }>(`
-    SELECT schema_name, table_name
-    FROM catalog
-    WHERE row_count > 100
-      AND LOWER(table_name) NOT IN ('about', 'metadata', 'readme')
-    ORDER BY row_count DESC
-    LIMIT 1;
-  `);
-
-  if (!result.success || !result.data?.length) {
-    TABLE_CACHE.assetTable = 'public.assets';
-    return TABLE_CACHE.assetTable;
-  }
-
-  const { schema_name, table_name } = result.data[0];
-  TABLE_CACHE.assetTable = `${schema_name}.${table_name}`;
-  return TABLE_CACHE.assetTable;
-}
-
-// Discover ownership table (prefers names containing "ownership")
-async function resolveOwnershipTable(): Promise<string> {
-  if (TABLE_CACHE.ownershipTable) return TABLE_CACHE.ownershipTable;
-
-  const motherduck = await getMotherDuck();
-  const result = await motherduck.query<{ schema_name: string; table_name: string }>(`
-    SELECT schema_name, table_name
-    FROM catalog
-    WHERE LOWER(table_name) LIKE '%ownership%'
-    ORDER BY row_count DESC
-    LIMIT 1;
-  `);
-
-  if (!result.success || !result.data?.length) {
-    TABLE_CACHE.ownershipTable = 'public.ownership';
-    return TABLE_CACHE.ownershipTable;
-  }
-
-  const { schema_name, table_name } = result.data[0];
-  TABLE_CACHE.ownershipTable = `${schema_name}.${table_name}`;
-  return TABLE_CACHE.ownershipTable;
-}
-
-export async function getTables(): Promise<ResolvedTables> {
-  const [assetTable, ownershipTable] = await Promise.all([
-    resolveAssetTable(),
-    resolveOwnershipTable(),
-  ]);
-  return { assetTable, ownershipTable };
-}
-
 /**
  * Fetch basic asset information
  * NOW USES: Ownership API GET /assets/{id}
@@ -121,15 +49,16 @@ export async function fetchAssetBasics(assetId: string): Promise<AssetBasics | n
     const asset = await ownershipAPI.getAsset(assetId);
 
     return {
-      id: asset.gem_unit_id,
-      name: asset.facility_name || 'Unknown',
+      id: asset.id,
+      name: asset.name || asset.id,
       locationId: null, // API doesn't return location ID
-      ownerEntityId: asset.owner_entity_id || null,
+      ownerEntityId: asset.ownerEntityId || asset.parentEntityId || null,
+      ownerName: asset.ownerName || asset.parentName || null,
       lat: asset.latitude || null,
       lon: asset.longitude || null,
       status: asset.status || null,
-      tracker: asset.facility_type || null,
-      capacityMw: typeof asset.capacity === 'number' ? asset.capacity : null,
+      tracker: asset.facilityType || null,
+      capacityMw: asset.capacity,
     };
   } catch (error) {
     console.warn(`[fetchAssetBasics] API failed for ${assetId}, error:`, error);
@@ -155,25 +84,10 @@ export async function fetchSameOwnerAssets(
   excludeAssetId: string
 ): Promise<{ success: boolean; data: AssetBasics[] }> {
   try {
-    const graphDown = await ownershipAPI.getEntityGraphDown(ownerEntityId);
-
-    // Filter to assets only (not entities), exclude the current asset
-    const assets = graphDown.nodes
-      .filter((n) => n.type === 'asset' && n.id !== excludeAssetId)
-      .slice(0, 24)
-      .map((n) => ({
-        id: n.id,
-        name: n.Name,
-        locationId: null,
-        ownerEntityId: ownerEntityId,
-        lat: null,
-        lon: null,
-        status: null,
-        tracker: null,
-        capacityMw: null,
-      }));
-
-    return { success: true, data: assets };
+    console.warn(
+      `[fetchSameOwnerAssets] API does not expose assets for entity ${ownerEntityId}`
+    );
+    return { success: true, data: [] };
   } catch (error) {
     console.warn(`[fetchSameOwnerAssets] API failed for ${ownerEntityId}:`, error);
     return { success: false, data: [] };
@@ -182,18 +96,11 @@ export async function fetchSameOwnerAssets(
 
 /**
  * Fetch assets at the same location
- * STILL USES: MotherDuck (API doesn't support location-based queries)
+ * NOTE: Ownership API doesn't support location-based queries yet.
  */
-export async function fetchCoLocatedAssets(locationId: string, excludeAssetId: string) {
-  const { assetTable } = await getTables();
-
-  const motherduck = await getMotherDuck();
-  return await motherduck.query<Record<string, unknown>>(`
-    SELECT *
-    FROM ${assetTable}
-    WHERE "GEM location ID" = '${locationId}'
-      AND "GEM unit ID" <> '${excludeAssetId}';
-  `);
+export async function fetchCoLocatedAssets(_locationId: string, _excludeAssetId: string) {
+  console.warn('[fetchCoLocatedAssets] API does not expose co-located asset queries.');
+  return { success: true, data: [] };
 }
 
 /**
@@ -202,26 +109,16 @@ export async function fetchCoLocatedAssets(locationId: string, excludeAssetId: s
  */
 export async function fetchOwnerStats(ownerEntityId: string): Promise<OwnerStats | null> {
   try {
-    const [entity, graphDown] = await Promise.all([
-      ownershipAPI.getEntity(ownerEntityId),
-      ownershipAPI.getEntityGraphDown(ownerEntityId),
-    ]);
-
-    // Count assets from graph
-    const assets = graphDown.nodes.filter((n) => n.type === 'asset');
-
-    // Get unique countries from asset names (API doesn't provide country directly)
-    // This is a limitation - we'd need to fetch each asset for country info
+    const entity = await ownershipAPI.getEntity(ownerEntityId);
     const countries = new Set<string>();
-    // For now, estimate from entity headquarters
-    if (entity['Headquarters Country']) {
-      countries.add(entity['Headquarters Country']);
+    if (entity.headquartersCountry) {
+      countries.add(entity.headquartersCountry);
     }
 
     return {
-      total_assets: assets.length,
-      total_capacity_mw: null, // API doesn't aggregate capacity yet
-      countries: countries.size || 1,
+      total_assets: 0,
+      total_capacity_mw: null,
+      countries: countries.size || 0,
     };
   } catch (error) {
     console.warn(`[fetchOwnerStats] API failed for ${ownerEntityId}:`, error);
@@ -270,7 +167,7 @@ export async function fetchOwnershipChain(assetId: string): Promise<OwnershipCha
 
         // Find edge to get ownership percentage
         const edge = graph.edges?.find((e) => e.source === node.id);
-        const share = edge?.ownership_pct || null;
+        const share = edge?.value ?? null;
 
         chainNodes.push({
           id: node.id,
@@ -282,7 +179,18 @@ export async function fetchOwnershipChain(assetId: string): Promise<OwnershipCha
     }
 
     // Sort by depth (ultimate parent first)
-    return chainNodes.sort((a, b) => b.depth - a.depth);
+    const ordered = chainNodes.sort((a, b) => b.depth - a.depth);
+
+    // Append the asset itself as the terminal node
+    const assetNode = graph.nodes.find((n) => n.type === 'asset' && n.id === assetId);
+    ordered.push({
+      id: assetId,
+      name: assetNode?.Name || assetId,
+      share: null,
+      depth: 0,
+    });
+
+    return ordered;
   } catch (error) {
     console.warn(`[fetchOwnershipChain] API failed for ${assetId}:`, error);
     return [];
@@ -295,86 +203,29 @@ export async function fetchOwnershipChain(assetId: string): Promise<OwnershipCha
  */
 export async function fetchOwnerPortfolio(ownerEntityId: string): Promise<OwnerPortfolio | null> {
   try {
-    const [entity, graphDown] = await Promise.all([
+    const [entity, owned] = await Promise.all([
       ownershipAPI.getEntity(ownerEntityId),
-      ownershipAPI.getEntityGraphDown(ownerEntityId),
+      ownershipAPI.getEntityOwned(ownerEntityId),
     ]);
 
-    const ownerName = entity.Name || entity['Full Name'] || ownerEntityId;
-
-    // Separate entities (subsidiaries) from assets
-    const subsidiaryNodes = graphDown.nodes.filter(
-      (n) => n.type === 'entity' && n.id !== ownerEntityId
-    );
-    const assetNodes = graphDown.nodes.filter((n) => n.type === 'asset');
-
-    // Build edge lookup: source -> target -> percentage
-    const edgeLookup = new Map<string, Map<string, number>>();
-    for (const edge of graphDown.edges || []) {
-      if (!edgeLookup.has(edge.source)) {
-        edgeLookup.set(edge.source, new Map());
-      }
-      edgeLookup.get(edge.source)!.set(edge.target, edge.ownership_pct || 0);
-    }
-
-    // Build subsidiary data structures
+    const ownerName = entity.name || ownerEntityId;
     const subsidiariesMatched = new Map<string, AssetBasics[]>();
     const matchedEdges = new Map<string, { value: number | null }>();
     const entityMap = new Map<string, { id: string; Name: string; type: string }>();
-    const directlyOwned: AssetBasics[] = [];
 
-    // Add subsidiaries to entity map
-    for (const sub of subsidiaryNodes) {
-      entityMap.set(sub.id, { id: sub.id, Name: sub.Name, type: 'entity' });
-
-      // Get ownership edge from spotlight owner to subsidiary
-      const ownerEdges = edgeLookup.get(ownerEntityId);
-      const share = ownerEdges?.get(sub.id) || null;
-      matchedEdges.set(sub.id, { value: share });
-      subsidiariesMatched.set(sub.id, []);
+    for (const sub of owned) {
+      subsidiariesMatched.set(sub.entityId, []);
+      matchedEdges.set(sub.entityId, { value: sub.ownershipPct ?? null });
+      entityMap.set(sub.entityId, { id: sub.entityId, Name: sub.entityName, type: 'entity' });
     }
-
-    // Categorize assets: directly owned vs via subsidiary
-    for (const assetNode of assetNodes) {
-      const asset: AssetBasics = {
-        id: assetNode.id,
-        name: assetNode.Name,
-        locationId: null,
-        ownerEntityId: ownerEntityId,
-        lat: null,
-        lon: null,
-        status: null,
-        tracker: null,
-        capacityMw: null,
-      };
-
-      // Find which entity owns this asset
-      let ownerOfAsset: string | null = null;
-      for (const [source, targets] of edgeLookup) {
-        if (targets.has(assetNode.id)) {
-          ownerOfAsset = source;
-          break;
-        }
-      }
-
-      if (ownerOfAsset && ownerOfAsset !== ownerEntityId && subsidiariesMatched.has(ownerOfAsset)) {
-        // Owned via subsidiary
-        subsidiariesMatched.get(ownerOfAsset)!.push(asset);
-      } else {
-        // Directly owned
-        directlyOwned.push(asset);
-      }
-    }
-
-    const allAssets = [...Array.from(subsidiariesMatched.values()).flat(), ...directlyOwned];
 
     return {
       spotlightOwner: { id: ownerEntityId, Name: ownerName },
       subsidiariesMatched,
-      directlyOwned,
+      directlyOwned: [],
       matchedEdges,
       entityMap,
-      assets: allAssets,
+      assets: [],
     };
   } catch (error) {
     console.warn(`[fetchOwnerPortfolio] API failed for ${ownerEntityId}:`, error);
@@ -386,11 +237,11 @@ export async function fetchOwnerPortfolio(ownerEntityId: string): Promise<OwnerP
  * Exported contract summary (for backend/docs).
  *
  * This now primarily uses the Ownership Tracing API.
- * MotherDuck is only used for location-based queries.
+ * Ownership API is the primary source; location-based queries are not supported yet.
  */
 export const DATA_CONTRACT = {
   api: {
-    base: 'Ownership Tracing API (configurable via PUBLIC_OWNERSHIP_API_URL)',
+    base: 'Ownership Tracing API (configurable via PUBLIC_OWNERSHIP_API_BASE_URL)',
     endpoints: {
       getAsset: 'GET /assets/{id} -> Asset details',
       getEntity: 'GET /entities/{id} -> Entity details',
@@ -401,6 +252,6 @@ export const DATA_CONTRACT = {
     },
   },
   fallback: {
-    motherduck: 'Used only for location-based queries (fetchCoLocatedAssets)',
+    apiLimitations: 'Location-based and portfolio asset queries are not available via API yet.',
   },
 };

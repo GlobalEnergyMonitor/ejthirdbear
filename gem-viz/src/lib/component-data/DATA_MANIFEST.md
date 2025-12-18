@@ -281,12 +281,13 @@ await loadParquetFromPath('/all_trackers_ownership@1.parquet', 'ownership');
 const result = await query('SELECT * FROM ownership WHERE ...');
 ```
 
-### Option 2: MotherDuck Cloud
-Uses `$lib/motherduck-wasm.ts` for cloud DuckDB queries.
+### Option 2: Ownership Tracing API
+Uses `$lib/ownership-api.ts` for ownership graph and entity/asset detail queries.
 
 ```typescript
-import motherduck from '$lib/motherduck-wasm';
-const result = await motherduck.query('SELECT * FROM ...');
+import { getAsset, getOwnershipGraph } from '$lib/ownership-api';
+const asset = await getAsset('G100000109409');
+const graph = await getOwnershipGraph({ root: asset.id, direction: 'up' });
 ```
 
 ### Option 3: REST API (Backend Implementation)

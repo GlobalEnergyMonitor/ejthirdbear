@@ -7,22 +7,28 @@
 }
 
 html {
-  font-family: Georgia, serif;
-  font-size: 12px;
-  line-height: 1.5;
-  color: #333;
-  background: #fff;
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-normal);
+  color: var(--color-text-primary);
+  background: var(--color-bg-primary);
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: 'kern' 1, 'liga' 1;
 }
 
 body {
   padding: 0;
-  background: #fafafa;
+  background: var(--color-bg-secondary);
   min-height: 100vh;
 }
 
+/* Refined text selection */
 ::selection {
-  background: #333;
-  color: #fff;
+  background: var(--color-black);
+  color: var(--color-white);
 }
 
 /* Academic typography */
@@ -34,6 +40,14 @@ h5,
 h6 {
   font-weight: normal;
   margin: 0 0 10px 0;
+  text-wrap: balance;
+}
+
+/* Tabular numbers for data */
+.data-table td,
+.stat-value,
+[data-numeric] {
+  font-variant-numeric: tabular-nums;
 }
 
 /* Clean borders */
@@ -41,7 +55,101 @@ button,
 input,
 textarea,
 select {
-  border: 1px solid #ccc;
+  border: 1px solid var(--color-gray-300);
+}
+
+/* Accessible focus states */
+:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+button:focus-visible,
+a:focus-visible {
+  outline: 1px solid var(--color-focus);
+  outline-offset: 1px;
+}
+
+/* Subtle link transitions */
+a {
+  color: var(--color-text-primary);
+  transition: color var(--transition-base);
+}
+
+a:hover {
+  color: var(--color-black);
+}
+
+/* Refined scrollbars (Webkit) */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-gray-200);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-gray-300);
+}
+
+/* Hide scrollbar until hover (optional, content areas) */
+.scroll-fade {
+  scrollbar-gutter: stable;
+}
+
+.scroll-fade::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+
+.scroll-fade:hover::-webkit-scrollbar-thumb {
+  background: var(--color-gray-200);
+}
+
+/* Smooth image rendering */
+img {
+  image-rendering: -webkit-optimize-contrast;
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Print refinements */
+@media print {
+  body {
+    background: var(--color-white);
+  }
+
+  a[href]::after {
+    content: none;
+  }
+
+  /* Avoid breaking inside key elements */
+  h1, h2, h3, h4, h5, h6 {
+    break-after: avoid;
+  }
+
+  table, figure, .viz-section {
+    break-inside: avoid;
+  }
 }
 
 /* Remove Vite HMR indicator */

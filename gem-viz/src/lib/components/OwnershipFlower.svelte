@@ -7,7 +7,7 @@
    * Petal length -> total capacity for that tracker (scaled)
    * Petal color -> tracker color palette
    *
-   * Can receive data via props (for static builds) or fetch from MotherDuck (dev mode).
+   * Can receive data via props (for static builds) or fetch from Ownership API (dev mode).
    */
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
@@ -167,7 +167,7 @@
       return;
     }
 
-    // Otherwise fetch from MotherDuck (dev mode)
+    // Otherwise fetch from Ownership API (dev mode)
     try {
       loading = true;
       error = null;
@@ -296,19 +296,19 @@
 
   .subtitle {
     font-size: 11px;
-    color: #888;
+    color: var(--color-gray-500);
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
 
   .loading-msg {
     font-size: 11px;
-    color: #888;
+    color: var(--color-gray-500);
     margin: 0;
   }
 
   .error {
-    color: #b10000;
+    color: var(--color-error);
     margin: 0;
     font-size: 11px;
   }

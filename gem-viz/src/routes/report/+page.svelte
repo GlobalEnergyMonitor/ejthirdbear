@@ -11,6 +11,8 @@
   import { widgetQuery } from '$lib/widgets/widget-utils';
   import { link, assetLink, entityLink } from '$lib/links';
   import TrackerIcon from '$lib/components/TrackerIcon.svelte';
+  import PatternInsights from '$lib/components/PatternInsights.svelte';
+  import Citation from '$lib/components/Citation.svelte';
 
   // State
   let loading = $state(true);
@@ -18,7 +20,8 @@
   let sharedAssets = $state([]);
   let commonOwners = $state([]);
   let geoBreakdown = $state([]);
-  let entityPortfolios = $state([]); // NEW: Full portfolio for each entity
+  let entityPortfolios = $state([]); // Full portfolio for each entity
+  let assetDetails = $state([]); // Full details for assets in cart
   let summary = $state({
     totalAssets: 0,
     totalCapacity: 0,
@@ -29,6 +32,7 @@
   let queryTime = $state(0);
   let shareUrl = $state('');
   let copied = $state(false);
+  let showClearConfirm = $state(false);
 
   // Derived cart data
   const cartItems = $derived($investigationCart);
@@ -67,12 +71,13 @@
           o."Project" as asset_name,
           o."Tracker" as tracker,
           o."Status" as status,
-          o."Country" as country,
+          COALESCE(l."Country.Area", 'Unknown') as country,
           COALESCE(CAST(o."Capacity (MW)" AS DOUBLE), 0) as capacity_mw,
           o."Owner GEM Entity ID" as entity_id,
           o."Owner" as owner_name,
           COALESCE(CAST(o."Share" AS DOUBLE), 0) as share_pct
         FROM ownership o
+        LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
         INNER JOIN cart_entities c ON o."Owner GEM Entity ID" = c.entity_id
         WHERE o."GEM unit ID" IS NOT NULL
       ),
@@ -82,14 +87,14 @@
           asset_name,
           tracker,
           status,
-          country,
+          MAX(country) as country,
           MAX(capacity_mw) as capacity_mw,
           COUNT(DISTINCT entity_id) as co_owner_count,
           STRING_AGG(DISTINCT owner_name, '; ' ORDER BY owner_name) as co_owners,
           STRING_AGG(DISTINCT entity_id, '; ' ORDER BY entity_id) as co_owner_ids,
           SUM(share_pct) as total_share_pct
         FROM entity_assets
-        GROUP BY asset_id, asset_name, tracker, status, country
+        GROUP BY asset_id, asset_name, tracker, status
         HAVING COUNT(DISTINCT entity_id) > 1
       )
       SELECT * FROM shared
@@ -151,21 +156,22 @@
     return result.success ? result.data || [] : [];
   }
 
-  // Query for geographic breakdown
+  // Query for geographic breakdown (join locations parquet for asset country)
   async function queryGeoBreakdown() {
     const entityList = entityIds.length > 0 ? buildIdList(entityIds) : "'__none__'";
     const assetList = assetIds.length > 0 ? buildIdList(assetIds) : "'__none__'";
 
     const sql = `
       SELECT
-        COALESCE("Country", 'Unknown') as country,
-        COUNT(DISTINCT "GEM unit ID") as asset_count,
-        COALESCE(SUM(CAST("Capacity (MW)" AS DOUBLE)), 0) as total_capacity,
-        COUNT(DISTINCT "Owner GEM Entity ID") as entity_count,
-        STRING_AGG(DISTINCT "Tracker", ', ' ORDER BY "Tracker") as trackers
-      FROM ownership
-      WHERE "Owner GEM Entity ID" IN (${entityList})
-         OR "GEM unit ID" IN (${assetList})
+        COALESCE(l."Country.Area", 'Unknown') as country,
+        COUNT(DISTINCT o."GEM unit ID") as asset_count,
+        COALESCE(SUM(CAST(o."Capacity (MW)" AS DOUBLE)), 0) as total_capacity,
+        COUNT(DISTINCT o."Owner GEM Entity ID") as entity_count,
+        STRING_AGG(DISTINCT o."Tracker", ', ' ORDER BY o."Tracker") as trackers
+      FROM ownership o
+      LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
+      WHERE o."Owner GEM Entity ID" IN (${entityList})
+         OR o."GEM unit ID" IN (${assetList})
       GROUP BY 1
       ORDER BY asset_count DESC
       LIMIT 30
@@ -190,16 +196,54 @@
         COUNT(DISTINCT o."GEM unit ID") as asset_count,
         COALESCE(SUM(CAST(o."Capacity (MW)" AS DOUBLE)), 0) as total_capacity_mw,
         AVG(CAST(o."Share" AS DOUBLE)) as avg_ownership_pct,
-        COUNT(DISTINCT o."Country") as country_count,
+        COUNT(DISTINCT COALESCE(l."Country.Area", 'Unknown')) as country_count,
         STRING_AGG(DISTINCT o."Tracker", ', ' ORDER BY o."Tracker") as trackers,
-        STRING_AGG(DISTINCT o."Country", ', ' ORDER BY o."Country") as countries,
+        STRING_AGG(
+          DISTINCT COALESCE(l."Country.Area", 'Unknown'),
+          ', '
+          ORDER BY COALESCE(l."Country.Area", 'Unknown')
+        ) as countries,
         COUNT(DISTINCT CASE WHEN o."Status" = 'operating' THEN o."GEM unit ID" END) as operating_count,
         COUNT(DISTINCT CASE WHEN o."Status" = 'proposed' THEN o."GEM unit ID" END) as proposed_count,
         COUNT(DISTINCT CASE WHEN o."Status" = 'retired' THEN o."GEM unit ID" END) as retired_count
       FROM ownership o
+      LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
       WHERE o."Owner GEM Entity ID" IN (${idList})
       GROUP BY o."Owner GEM Entity ID", o."Owner"
       ORDER BY total_capacity_mw DESC
+    `;
+
+    const result = await widgetQuery(sql);
+    return result.success ? result.data || [] : [];
+  }
+
+  // Query for full asset details (for assets in cart)
+  // Uses only columns confirmed to exist in the ownership parquet
+  async function queryAssetDetails() {
+    if (assetIds.length === 0) return [];
+
+    const idList = buildIdList(assetIds);
+
+    const sql = `
+      SELECT
+        o."GEM unit ID" as asset_id,
+        o."Project" as asset_name,
+        o."Tracker" as tracker,
+        o."Status" as status,
+        o."GEM location ID" as location_id,
+        COALESCE(l."Country.Area", 'Unknown') as country,
+        COALESCE(CAST(o."Capacity (MW)" AS DOUBLE), 0) as capacity_mw,
+        o."Owner" as owner_name,
+        o."Owner GEM Entity ID" as owner_entity_id,
+        o."Owner Headquarters Country" as owner_hq_country,
+        o."Owner Registration Country" as owner_reg_country,
+        COALESCE(CAST(o."Share" AS DOUBLE), 0) as ownership_share,
+        o."Immediate Project Owner" as immediate_owner,
+        o."Immediate Project Owner GEM Entity ID" as immediate_owner_id
+      FROM ownership o
+      LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
+      WHERE o."GEM unit ID" IN (${idList})
+      ORDER BY o."Project"
     `;
 
     const result = await widgetQuery(sql);
@@ -213,15 +257,16 @@
 
     const sql = `
       SELECT
-        COUNT(DISTINCT "GEM unit ID") as total_assets,
-        COALESCE(SUM(CAST("Capacity (MW)" AS DOUBLE)), 0) as total_capacity,
-        COUNT(DISTINCT "Country") as countries,
-        COUNT(DISTINCT "Tracker") as tracker_count,
-        COUNT(DISTINCT "Owner GEM Entity ID") as total_entities,
-        STRING_AGG(DISTINCT "Tracker", ', ') as trackers
-      FROM ownership
-      WHERE "Owner GEM Entity ID" IN (${entityList})
-         OR "GEM unit ID" IN (${assetList})
+        COUNT(DISTINCT o."GEM unit ID") as total_assets,
+        COALESCE(SUM(CAST(o."Capacity (MW)" AS DOUBLE)), 0) as total_capacity,
+        COUNT(DISTINCT COALESCE(l."Country.Area", 'Unknown')) as countries,
+        COUNT(DISTINCT o."Tracker") as tracker_count,
+        COUNT(DISTINCT o."Owner GEM Entity ID") as total_entities,
+        STRING_AGG(DISTINCT o."Tracker", ', ') as trackers
+      FROM ownership o
+      LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
+      WHERE o."Owner GEM Entity ID" IN (${entityList})
+         OR o."GEM unit ID" IN (${assetList})
     `;
 
     const result = await widgetQuery(sql);
@@ -251,11 +296,12 @@
     const startTime = Date.now();
 
     try {
-      const [shared, common, geo, portfolios, stats] = await Promise.all([
+      const [shared, common, geo, portfolios, assets, stats] = await Promise.all([
         querySharedAssets(),
         queryCommonOwners(),
         queryGeoBreakdown(),
         queryEntityPortfolios(),
+        queryAssetDetails(),
         querySummary(),
       ]);
 
@@ -263,6 +309,7 @@
       commonOwners = common;
       geoBreakdown = geo;
       entityPortfolios = portfolios;
+      assetDetails = assets;
       summary = stats;
       queryTime = Date.now() - startTime;
 
@@ -276,121 +323,215 @@
     }
   }
 
-  // Export to CSV
-  function exportCSV() {
+  // CSV helper
+  const esc = (s) => `"${String(s || '').replace(/"/g, '""')}"`;
+
+  // Export metadata/summary CSV (human-readable report info)
+  function exportMetadataCSV() {
     const rows = [];
+    const ts = Date.now();
 
-    // Entity Portfolios section
-    if (entityPortfolios.length > 0) {
-      rows.push(['--- ENTITY PORTFOLIOS ---'].join(','));
-      rows.push(
-        [
-          'Entity ID',
-          'Entity Name',
-          'HQ Country',
-          'Registration Country',
-          'Asset Count',
-          'Total Capacity MW',
-          'Avg Ownership %',
-          'Countries',
-          'Operating',
-          'Proposed',
-          'Retired',
-          'Trackers',
-        ].join(',')
-      );
-      for (const entity of entityPortfolios) {
-        rows.push(
-          [
-            entity.entity_id,
-            `"${(entity.entity_name || '').replace(/"/g, '""')}"`,
-            entity.hq_country || '',
-            entity.registration_country || '',
-            entity.asset_count || 0,
-            Math.round(entity.total_capacity_mw || 0),
-            entity.avg_ownership_pct?.toFixed(2) || '',
-            entity.country_count || 0,
-            entity.operating_count || 0,
-            entity.proposed_count || 0,
-            entity.retired_count || 0,
-            `"${(entity.trackers || '').replace(/"/g, '""')}"`,
-          ].join(',')
-        );
-      }
-      rows.push(''); // Empty line separator
+    rows.push(['GEM Investigation Report Metadata']);
+    rows.push(['Generated', new Date().toISOString()]);
+    rows.push(['Total Cart Items', cartItems.length]);
+    rows.push(['Entities in Cart', entityIds.length]);
+    rows.push(['Assets in Cart', assetIds.length]);
+    rows.push(['Total Assets (all portfolios)', summary.totalAssets]);
+    rows.push(['Total Capacity MW', summary.totalCapacity]);
+    rows.push(['Countries', summary.countries]);
+    rows.push(['Trackers', summary.trackers.join('; ')]);
+    rows.push([]);
+    rows.push(['--- CART CONTENTS ---']);
+    rows.push(['Item ID', 'Item Name', 'Type', 'Tracker', 'Added At']);
+    for (const item of cartItems) {
+      rows.push([
+        item.id,
+        esc(item.name),
+        item.type,
+        item.tracker || '',
+        new Date(item.addedAt).toISOString(),
+      ]);
+    }
+    rows.push([]);
+    rows.push(['--- GEOGRAPHIC SUMMARY ---']);
+    rows.push(['Country', 'Asset Count', 'Capacity MW', 'Entity Count', 'Trackers']);
+    for (const g of geoBreakdown) {
+      rows.push([
+        g.country || '',
+        g.asset_count || 0,
+        Math.round(g.total_capacity || 0),
+        g.entity_count || 0,
+        g.trackers || '',
+      ]);
     }
 
-    // Shared Assets section
-    if (sharedAssets.length > 0) {
-      rows.push(['--- SHARED ASSETS ---'].join(','));
-      rows.push(
-        [
-          'Asset ID',
-          'Asset Name',
-          'Tracker',
-          'Country',
-          'Capacity MW',
-          'Co-Owner Count',
-          'Total Share %',
-          'Co-Owners',
-        ].join(',')
-      );
-      for (const asset of sharedAssets) {
-        rows.push(
-          [
-            asset.asset_id,
-            `"${(asset.asset_name || '').replace(/"/g, '""')}"`,
-            asset.tracker || '',
-            asset.country || '',
-            asset.capacity_mw || '',
-            asset.co_owner_count || 0,
-            asset.total_share_pct?.toFixed(2) || '',
-            `"${(asset.co_owners || '').replace(/"/g, '""')}"`,
-          ].join(',')
-        );
-      }
-      rows.push(''); // Empty line separator
-    }
-
-    // Common Owners section
-    if (commonOwners.length > 0) {
-      rows.push(['--- COMMON OWNERS ---'].join(','));
-      rows.push(
-        [
-          'Entity ID',
-          'Entity Name',
-          'HQ Country',
-          'Asset Count',
-          'Total Capacity MW',
-          'Avg Share %',
-          'Projects',
-        ].join(',')
-      );
-      for (const owner of commonOwners) {
-        rows.push(
-          [
-            owner.entity_id,
-            `"${(owner.entity_name || '').replace(/"/g, '""')}"`,
-            owner.hq_country || '',
-            owner.asset_count || 0,
-            Math.round(owner.total_capacity_mw || 0),
-            owner.avg_share_pct?.toFixed(2) || '',
-            `"${(owner.projects || '').replace(/"/g, '""')}"`,
-          ].join(',')
-        );
-      }
-    }
-
-    const csv = '\ufeff' + rows.join('\r\n'); // UTF-8 BOM for Excel
-    downloadFile(csv, `gem-investigation-${Date.now()}.csv`, 'text/csv;charset=utf-8');
+    const csv = '\ufeff' + rows.map((r) => r.join(',')).join('\r\n');
+    downloadFile(csv, `gem-report-metadata-${ts}.csv`, 'text/csv;charset=utf-8');
   }
 
-  // Export to JSON
+  // Export clean data CSV (proper format for Excel/Pandas/etc)
+  function exportDataCSV() {
+    const ts = Date.now();
+
+    // Asset details - clean CSV with header row
+    if (assetDetails.length > 0) {
+      const assetRows = [];
+      assetRows.push(
+        [
+          'asset_id',
+          'asset_name',
+          'tracker',
+          'status',
+          'location_id',
+          'capacity_mw',
+          'owner_name',
+          'owner_entity_id',
+          'owner_hq_country',
+          'owner_reg_country',
+          'ownership_share_pct',
+          'immediate_owner',
+          'immediate_owner_id',
+        ].join(',')
+      );
+      for (const a of assetDetails) {
+        assetRows.push(
+          [
+            a.asset_id || '',
+            esc(a.asset_name),
+            a.tracker || '',
+            a.status || '',
+            a.location_id || '',
+            a.capacity_mw || 0,
+            esc(a.owner_name),
+            a.owner_entity_id || '',
+            a.owner_hq_country || '',
+            a.owner_reg_country || '',
+            a.ownership_share || '',
+            esc(a.immediate_owner),
+            a.immediate_owner_id || '',
+          ].join(',')
+        );
+      }
+      const assetCsv = '\ufeff' + assetRows.join('\r\n');
+      downloadFile(assetCsv, `gem-assets-${ts}.csv`, 'text/csv;charset=utf-8');
+    }
+
+    // Entity portfolios - clean CSV
+    if (entityPortfolios.length > 0) {
+      const entityRows = [];
+      entityRows.push(
+        [
+          'entity_id',
+          'entity_name',
+          'hq_country',
+          'registration_country',
+          'asset_count',
+          'total_capacity_mw',
+          'avg_ownership_pct',
+          'operating_count',
+          'proposed_count',
+          'retired_count',
+          'trackers',
+        ].join(',')
+      );
+      for (const e of entityPortfolios) {
+        entityRows.push(
+          [
+            e.entity_id || '',
+            esc(e.entity_name),
+            e.hq_country || '',
+            e.registration_country || '',
+            e.asset_count || 0,
+            Math.round(e.total_capacity_mw || 0),
+            e.avg_ownership_pct?.toFixed(2) || '',
+            e.operating_count || 0,
+            e.proposed_count || 0,
+            e.retired_count || 0,
+            esc(e.trackers),
+          ].join(',')
+        );
+      }
+      const entityCsv = '\ufeff' + entityRows.join('\r\n');
+      downloadFile(entityCsv, `gem-entities-${ts}.csv`, 'text/csv;charset=utf-8');
+    }
+
+    // Co-ownership data - clean CSV
+    if (sharedAssets.length > 0) {
+      const sharedRows = [];
+      sharedRows.push(
+        [
+          'asset_id',
+          'asset_name',
+          'tracker',
+          'status',
+          'capacity_mw',
+          'co_owner_count',
+          'total_share_pct',
+          'co_owners',
+          'co_owner_ids',
+        ].join(',')
+      );
+      for (const a of sharedAssets) {
+        sharedRows.push(
+          [
+            a.asset_id || '',
+            esc(a.asset_name),
+            a.tracker || '',
+            a.status || '',
+            a.capacity_mw || '',
+            a.co_owner_count || 0,
+            a.total_share_pct?.toFixed(2) || '',
+            esc(a.co_owners),
+            esc(a.co_owner_ids),
+          ].join(',')
+        );
+      }
+      const sharedCsv = '\ufeff' + sharedRows.join('\r\n');
+      downloadFile(sharedCsv, `gem-shared-assets-${ts}.csv`, 'text/csv;charset=utf-8');
+    }
+
+    // Common owners - clean CSV
+    if (commonOwners.length > 0) {
+      const ownerRows = [];
+      ownerRows.push(
+        [
+          'entity_id',
+          'entity_name',
+          'hq_country',
+          'registration_country',
+          'asset_count',
+          'total_capacity_mw',
+          'avg_share_pct',
+          'trackers',
+          'projects',
+        ].join(',')
+      );
+      for (const o of commonOwners) {
+        ownerRows.push(
+          [
+            o.entity_id || '',
+            esc(o.entity_name),
+            o.hq_country || '',
+            o.registration_country || '',
+            o.asset_count || 0,
+            Math.round(o.total_capacity_mw || 0),
+            o.avg_share_pct?.toFixed(2) || '',
+            esc(o.trackers),
+            esc(o.projects),
+          ].join(',')
+        );
+      }
+      const ownerCsv = '\ufeff' + ownerRows.join('\r\n');
+      downloadFile(ownerCsv, `gem-common-owners-${ts}.csv`, 'text/csv;charset=utf-8');
+    }
+  }
+
+  // Export to JSON - comprehensive export with all details
   function exportJSON() {
     const data = {
       report: {
         generated: new Date().toISOString(),
-        version: '1.1',
+        version: '1.2',
         generator: 'GEM Viz Investigation Report',
       },
       cart: {
@@ -400,7 +541,8 @@
         items: cartItems,
       },
       summary,
-      entityPortfolios,
+      assetDetails, // Full details for each asset in cart
+      entityPortfolios, // Full portfolio for each entity in cart
       connections: {
         sharedAssets,
         commonOwners,
@@ -464,6 +606,12 @@
   // Print report
   function printReport() {
     setTimeout(() => window.print(), 100);
+  }
+
+  // Clear cart with confirmation
+  function clearCart() {
+    investigationCart.clear();
+    showClearConfirm = false;
   }
 
   // Load on mount and when cart changes
@@ -530,11 +678,26 @@
         <span class="query-time">{queryTime}ms</span>
       </div>
       <div class="toolbar-right">
-        <button class="btn btn-outline" class:active={copied} onclick={copyShareUrl} title="Copy shareable link">
+        <button
+          class="btn btn-outline"
+          class:active={copied}
+          onclick={copyShareUrl}
+          title="Copy shareable link"
+        >
           {copied ? 'Copied!' : 'Share Link'}
         </button>
         <button class="btn btn-outline" onclick={printReport}>Print / PDF</button>
-        <button class="btn btn-outline" onclick={exportCSV}>Export CSV</button>
+        <button
+          class="btn btn-outline"
+          onclick={exportMetadataCSV}
+          title="Summary, cart contents, geographic breakdown">Export Summary</button
+        >
+        <button
+          class="btn btn-outline"
+          onclick={exportDataCSV}
+          title="Clean CSV files for Excel/Pandas (downloads multiple files)"
+          >Export Data CSVs</button
+        >
         <button class="btn btn-outline" onclick={exportJSON}>Export JSON</button>
       </div>
     </section>
@@ -572,9 +735,26 @@
       {/if}
     </section>
 
+    <!-- Pattern Analysis -->
+    <PatternInsights
+      {entityPortfolios}
+      {sharedAssets}
+      {commonOwners}
+      {geoBreakdown}
+    />
+
     <!-- Cart Items -->
     <section class="cart-section">
-      <h2>Investigation Cart ({cartItems.length})</h2>
+      <div class="cart-header">
+        <h2>Investigation Cart ({cartItems.length})</h2>
+        <button
+          class="btn btn-danger btn-sm"
+          onclick={() => (showClearConfirm = true)}
+          disabled={cartItems.length === 0}
+        >
+          Clear Cart
+        </button>
+      </div>
       <div class="cart-grid">
         {#each cartItems as item}
           <div class="cart-item {item.type}">
@@ -802,11 +982,30 @@
       </section>
     {/if}
 
+    <!-- Citation -->
+    <Citation variant="full" trackers={summary.trackers} />
+
     <!-- Print Footer -->
     <footer class="print-footer print-only">
       <p>Generated by GEM Viz on {reportDate}</p>
       <p>Data source: Global Energy Monitor Ownership Tracker</p>
     </footer>
+  {/if}
+
+  <!-- Clear Cart Confirmation Modal -->
+  {#if showClearConfirm}
+    <div class="modal-overlay" onclick={() => (showClearConfirm = false)} onkeydown={(e) => e.key === 'Escape' && (showClearConfirm = false)} role="button" tabindex="-1" aria-label="Close modal">
+      <div class="modal-dialog" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()} role="alertdialog" aria-labelledby="clear-cart-title" tabindex="-1">
+        <h3 id="clear-cart-title">Clear Investigation Cart?</h3>
+        <p>
+          This will remove all {cartItems.length} items from your cart. This action cannot be undone.
+        </p>
+        <div class="modal-actions">
+          <button class="btn btn-outline" onclick={() => (showClearConfirm = false)}>Cancel</button>
+          <button class="btn btn-danger" onclick={clearCart}>Yes, Clear Cart</button>
+        </div>
+      </div>
+    </div>
   {/if}
 </main>
 
@@ -827,7 +1026,7 @@
     margin-bottom: 12px;
   }
   .breadcrumb a {
-    color: #333;
+    color: var(--color-gray-700);
     text-decoration: none;
   }
   .breadcrumb a:hover {
@@ -841,7 +1040,7 @@
   }
   .lead {
     font-size: 14px;
-    color: #666;
+    color: var(--color-text-secondary);
     margin: 0;
   }
 
@@ -856,16 +1055,16 @@
   }
   .loading-detail {
     font-size: 12px;
-    color: #999;
+    color: var(--color-text-tertiary);
   }
   .error {
-    color: #c00;
+    color: var(--color-error);
   }
   .empty-cart h2 {
     margin-top: 0;
   }
   .empty-cart a {
-    color: #333;
+    color: var(--color-gray-700);
   }
 
   /* Toolbar */
@@ -884,7 +1083,7 @@
   }
   .query-time {
     font-size: 10px;
-    color: #999;
+    color: var(--color-text-tertiary);
     font-family: monospace;
   }
 
@@ -900,7 +1099,7 @@
     font-size: 14px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    border-bottom: 1px solid #ddd;
+    border-bottom: 1px solid var(--color-border);
     padding-bottom: 8px;
   }
   .summary-grid {
@@ -916,13 +1115,13 @@
     display: block;
     font-size: 24px;
     font-weight: bold;
-    color: #000;
+    color: var(--color-black);
   }
   .stat-label {
     display: block;
     font-size: 10px;
     text-transform: uppercase;
-    color: #666;
+    color: var(--color-text-secondary);
     letter-spacing: 0.5px;
   }
   .tracker-list {
@@ -936,7 +1135,7 @@
     gap: 4px;
     padding: 4px 8px;
     font-size: 11px;
-    background: #fff;
+    background: var(--color-white);
     border: none;
   }
 
@@ -944,11 +1143,69 @@
   .cart-section {
     margin-bottom: 32px;
   }
+  .cart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
   .cart-section h2 {
     font-size: 14px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    margin: 0;
+  }
+  .btn-danger {
+    background: var(--color-error);
+    color: white;
+    border-color: var(--color-error);
+  }
+  .btn-danger:hover {
+    background: var(--color-error);
+    border-color: var(--color-error);
+  }
+  .btn-danger:disabled {
+    background: var(--color-gray-300);
+    border-color: var(--color-gray-300);
+    cursor: not-allowed;
+  }
+  .btn-sm {
+    padding: 4px 10px;
+    font-size: 11px;
+  }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+  .modal-dialog {
+    background: var(--color-white);
+    padding: 24px;
+    max-width: 400px;
+    border: 2px solid var(--color-black);
+  }
+  .modal-dialog h3 {
     margin: 0 0 12px 0;
+    font-size: 16px;
+  }
+  .modal-dialog p {
+    margin: 0 0 20px 0;
+    font-size: 13px;
+    color: var(--color-text-secondary);
+  }
+  .modal-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
   }
   .cart-grid {
     display: grid;
@@ -957,7 +1214,7 @@
   }
   .cart-item {
     padding: 8px 12px;
-    background: #fff;
+    background: var(--color-white);
     border: none;
     font-size: 12px;
   }
@@ -965,7 +1222,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    color: #000;
+    color: var(--color-black);
     text-decoration: none;
   }
   .cart-item a:hover {
@@ -974,7 +1231,7 @@
   .cart-item .item-id {
     display: block;
     font-size: 10px;
-    color: #999;
+    color: var(--color-text-tertiary);
     font-family: monospace;
     margin-top: 2px;
   }
@@ -984,7 +1241,7 @@
     justify-content: center;
     width: 16px;
     height: 16px;
-    background: #333;
+    background: var(--color-gray-700);
     color: white;
     border-radius: 50%;
     font-size: 9px;
@@ -999,17 +1256,17 @@
   .connections-section h2 {
     font-size: 16px;
     margin: 0 0 8px 0;
-    border-bottom: 1px solid #000;
+    border-bottom: 1px solid var(--color-black);
     padding-bottom: 8px;
   }
   .section-intro {
     font-size: 13px;
-    color: #666;
+    color: var(--color-text-secondary);
     margin: 0 0 16px 0;
   }
   .no-results {
     font-size: 13px;
-    color: #666;
+    color: var(--color-text-secondary);
     padding: 20px;
     background: transparent;
     text-align: center;
@@ -1051,7 +1308,7 @@
   }
   .asset-link,
   .entity-link {
-    color: #000;
+    color: var(--color-black);
     text-decoration: underline;
   }
   .entity-link {
@@ -1062,7 +1319,7 @@
   .co-owner-count {
     display: inline-block;
     padding: 2px 6px;
-    background: #333;
+    background: var(--color-gray-700);
     color: white;
     font-size: 10px;
     font-weight: bold;
@@ -1070,7 +1327,7 @@
   }
   .co-owner-names {
     font-size: 11px;
-    color: #666;
+    color: var(--color-text-secondary);
   }
   .country-name {
     font-weight: 600;
@@ -1087,7 +1344,7 @@
     gap: 4px;
     padding: 2px 6px;
     background: transparent;
-    border: 1px solid #eee;
+    border: 1px solid var(--color-gray-100);
     font-size: 10px;
   }
 
@@ -1098,9 +1355,9 @@
     gap: 16px;
   }
   .entity-portfolio-card {
-    background: #fff;
+    background: var(--color-white);
     border: none;
-    border-left: 4px solid #7b1fa2;
+    border-left: 4px solid var(--color-entity-text, #7b1fa2);
     padding: 16px;
   }
   .portfolio-header {
@@ -1115,7 +1372,7 @@
     gap: 8px;
     font-weight: 600;
     font-size: 14px;
-    color: #000;
+    color: var(--color-black);
     text-decoration: none;
   }
   .portfolio-header .entity-link:hover {
@@ -1130,13 +1387,13 @@
   .portfolio-header .entity-id {
     font-size: 10px;
     font-family: monospace;
-    color: #999;
+    color: var(--color-text-tertiary);
   }
   .portfolio-meta {
     display: flex;
     gap: 12px;
     font-size: 11px;
-    color: #666;
+    color: var(--color-text-secondary);
     margin-bottom: 12px;
   }
   .portfolio-meta .meta-item {
@@ -1149,8 +1406,8 @@
     grid-template-columns: repeat(4, 1fr);
     gap: 8px;
     padding: 12px 0;
-    border-top: 1px solid #eee;
-    border-bottom: 1px solid #eee;
+    border-top: 1px solid var(--color-gray-100);
+    border-bottom: 1px solid var(--color-gray-100);
     margin-bottom: 12px;
   }
   .portfolio-stat {
@@ -1160,13 +1417,13 @@
     display: block;
     font-size: 18px;
     font-weight: bold;
-    color: #000;
+    color: var(--color-black);
   }
   .portfolio-stat .stat-label {
     display: block;
     font-size: 9px;
     text-transform: uppercase;
-    color: #666;
+    color: var(--color-text-secondary);
     letter-spacing: 0.3px;
   }
   .portfolio-breakdown {
@@ -1181,16 +1438,16 @@
     border-radius: 2px;
   }
   .status-chip.operating {
-    background: #e8f5e9;
-    color: #2e7d32;
+    background: var(--color-status-operating-bg, #e8f5e9);
+    color: var(--color-status-operating, #2e7d32);
   }
   .status-chip.proposed {
     background: transparent;
-    color: #ef6c00;
+    color: var(--color-status-proposed, #ef6c00);
   }
   .status-chip.retired {
     background: transparent;
-    color: #7b1fa2;
+    color: var(--color-entity-text, #7b1fa2);
   }
   .portfolio-trackers {
     display: flex;
@@ -1211,15 +1468,15 @@
   }
   .report-meta {
     font-size: 10pt;
-    color: #666;
+    color: var(--color-text-secondary);
     margin: 4px 0;
   }
   .print-footer {
     margin-top: 40px;
     padding-top: 20px;
-    border-top: 1px solid #000;
+    border-top: 1px solid var(--color-black);
     font-size: 9pt;
-    color: #666;
+    color: var(--color-text-secondary);
     text-align: center;
   }
 
@@ -1237,7 +1494,7 @@
       margin: 2cm 1.5cm;
     }
 
-    body {
+    :global(body) {
       font-size: 10pt;
       line-height: 1.4;
     }
@@ -1269,7 +1526,7 @@
       font-size: 9pt;
     }
     .data-table th {
-      background: #f0f0f0 !important;
+      background: var(--color-gray-100) !important;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
@@ -1281,7 +1538,7 @@
     }
 
     .summary-grid {
-      border: 1pt solid #000;
+      border: 1pt solid var(--color-black);
       padding: 10pt;
     }
     .stat-value {
@@ -1289,7 +1546,7 @@
     }
 
     a {
-      color: #000;
+      color: var(--color-black);
       text-decoration: none;
     }
     a[href]:after {

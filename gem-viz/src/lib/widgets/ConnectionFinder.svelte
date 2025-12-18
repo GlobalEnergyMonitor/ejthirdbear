@@ -146,8 +146,8 @@
 
 <style>
   .widget {
-    background: #fff;
-    border: 1px solid #ddd;
+    background: var(--color-white);
+    border: 1px solid var(--color-border);
     padding: 16px;
   }
   header {
@@ -155,7 +155,7 @@
     justify-content: space-between;
     align-items: baseline;
     margin-bottom: 12px;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--color-gray-100);
     padding-bottom: 8px;
   }
   h3 {
@@ -166,7 +166,7 @@
   }
   .query-time {
     font-size: 10px;
-    color: #999;
+    color: var(--color-text-tertiary);
     font-family: monospace;
   }
 
@@ -174,12 +174,12 @@
   .error,
   .empty {
     font-size: 13px;
-    color: #666;
+    color: var(--color-text-secondary);
     padding: 20px 0;
     text-align: center;
   }
   .error {
-    color: #c00;
+    color: var(--color-error);
   }
 
   .intro-row {
@@ -190,7 +190,7 @@
   }
   .intro {
     font-size: 12px;
-    color: #666;
+    color: var(--color-text-secondary);
     margin: 0;
   }
 
@@ -204,7 +204,7 @@
     flex-direction: column;
     gap: 4px;
     padding: 10px 0;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid var(--color-gray-100);
   }
   .connections li:last-child {
     border-bottom: none;
@@ -219,7 +219,7 @@
     align-items: center;
     gap: 6px;
     text-decoration: none;
-    color: #333;
+    color: var(--color-gray-700);
     flex: 1;
   }
   .entity:hover .name {
@@ -231,7 +231,7 @@
     justify-content: center;
     width: 16px;
     height: 16px;
-    background: #333;
+    background: var(--color-gray-700);
     color: white;
     border-radius: 50%;
     font-size: 9px;
@@ -243,13 +243,13 @@
   }
   .shared {
     font-size: 11px;
-    color: #333;
+    color: var(--color-gray-700);
     font-weight: 600;
   }
   .samples {
     width: 100%;
     font-size: 11px;
-    color: #999;
+    color: var(--color-text-tertiary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

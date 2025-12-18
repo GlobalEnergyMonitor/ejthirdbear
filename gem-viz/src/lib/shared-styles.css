@@ -1,34 +1,219 @@
-/* Shared CSS Variables */
+/* ============================================================================
+   GEM VIZ DESIGN SYSTEM
+   ============================================================================
+   A comprehensive design system for the Global Energy Monitor visualization.
+
+   CONTENTS:
+   1. Typography Scale
+   2. Spacing Scale
+   3. Color Palette (UI)
+   4. Color Palette (Data Visualization)
+   5. Semantic Tokens
+   6. Transitions & Effects
+
+   USAGE:
+   - UI elements: Use semantic tokens (--color-text-primary, --color-bg-secondary)
+   - Data viz: Use tracker/status colors (--color-tracker-coal, --color-status-operating)
+   - Always prefer CSS variables over hardcoded hex values
+   ============================================================================ */
+
 :root {
-  --font-family: Georgia, serif;
-  --font-size-xs: 8px;
-  --font-size-sm: 9px;
-  --font-size-base: 10px;
-  --font-size-md: 11px;
-  --font-size-lg: 13px;
+  /* ==========================================================================
+     1. TYPOGRAPHY SCALE
+     Minor third ratio (1.2) from 12px base — restrained, academic
+     ========================================================================== */
 
-  --color-bg-primary: #fff;
-  --color-bg-secondary: #fafafa;
-  --color-bg-tertiary: #f0f0f0;
-  --color-border: #ddd;
-  --color-border-dark: #000;
+  --font-family: Georgia, 'Times New Roman', serif;
+  --font-family-mono: 'SF Mono', Consolas, 'Liberation Mono', Menlo, monospace;
+  --font-family-sans: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 
-  --color-text-primary: #000;
-  --color-text-secondary: #666;
-  --color-text-tertiary: #999;
+  /* Size scale: Each step = previous × 1.2 */
+  --font-size-xs: 8px;      /* Footnotes, superscripts */
+  --font-size-sm: 9px;      /* Captions, labels */
+  --font-size-base: 10px;   /* Data tables, dense UI */
+  --font-size-md: 11px;     /* Secondary text */
+  --font-size-body: 12px;   /* Body text (base) */
+  --font-size-lg: 14px;     /* Subheads */
+  --font-size-xl: 17px;     /* Section heads */
+  --font-size-2xl: 20px;    /* Page titles */
+  --font-size-3xl: 24px;    /* Display */
 
-  --color-success: #4caf50;
-  --color-warning: #ff9800;
-  --color-error: #f44336;
-  --color-info: #666;
+  /* Line heights */
+  --line-height-tight: 1.1;
+  --line-height-snug: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.65;
 
-  --spacing-xs: 5px;
-  --spacing-sm: 10px;
-  --spacing-md: 15px;
-  --spacing-lg: 20px;
+  /* Letter spacing */
+  --tracking-tight: -0.01em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.025em;
+  --tracking-wider: 0.05em;
+  --tracking-caps: 0.1em;
 
+  /* ==========================================================================
+     2. SPACING SCALE
+     4px base unit — allows for 4, 8, 12, 16, 20, 24, 32, 40, 48, 64
+     ========================================================================== */
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* Legacy aliases */
+  --spacing-xs: var(--space-1);
+  --spacing-sm: var(--space-2);
+  --spacing-md: var(--space-4);
+  --spacing-lg: var(--space-5);
+
+  /* ==========================================================================
+     3. COLOR PALETTE — UI (Warm Neutrals)
+     Subtle warmth for refined feel. Avoid harsh pure black/white.
+     ========================================================================== */
+
+  /* Neutrals (stone-tinted grays) */
+  --color-black: #1a1a1a;
+  --color-white: #fefefe;
+
+  --color-gray-50: #fafaf9;
+  --color-gray-100: #f5f5f4;
+  --color-gray-200: #e7e5e4;
+  --color-gray-300: #d6d3d1;
+  --color-gray-400: #a8a29e;
+  --color-gray-500: #78716c;
+  --color-gray-600: #57534e;
+  --color-gray-700: #44403c;
+  --color-gray-800: #292524;
+  --color-gray-900: #1c1917;
+
+  /* Accent (used sparingly) */
+  --color-accent: #1a1a1a;
+  --color-accent-muted: #57534e;
+
+  /* Feedback colors (muted, not garish) */
+  --color-success: #3d7a4a;
+  --color-success-light: #dcfce7;
+  --color-warning: #b45309;
+  --color-warning-light: #fef3c7;
+  --color-error: #b91c1c;
+  --color-error-light: #fee2e2;
+  --color-info: #57534e;
+  --color-info-light: #f5f5f4;
+
+  /* ==========================================================================
+     4. COLOR PALETTE — DATA VISUALIZATION
+     Distinct colors for trackers, statuses, and maps.
+     These need to be visually distinguishable in charts.
+     ========================================================================== */
+
+  /* --- Tracker Colors (GEM Brand) --- */
+  --color-tracker-coal-plant: #7F142A;      /* Deep red */
+  --color-tracker-coal-mine: #4A0D19;       /* Darker red */
+  --color-tracker-gas-plant: #A0AAE5;       /* Lavender */
+  --color-tracker-gas-pipeline: #7B86C9;    /* Purple */
+  --color-tracker-oil-pipeline: #061F5F;    /* Midnight blue */
+  --color-tracker-iron-ore: #DC153D;        /* Bright red */
+  --color-tracker-steel: #004F61;           /* Teal */
+  --color-tracker-cement: #BECCCF;          /* Warm gray */
+  --color-tracker-bioenergy: #51BF7E;       /* Green */
+
+  /* --- Tracker Colors (Renewable) --- */
+  --color-tracker-nuclear: #6B7280;         /* Gray */
+  --color-tracker-hydro: #0369A1;           /* Blue */
+  --color-tracker-wind: #06B6D4;            /* Cyan */
+  --color-tracker-geothermal: #DC2626;      /* Red */
+  --color-tracker-solar: #EAB308;           /* Yellow */
+
+  /* --- Status Colors --- */
+  --color-status-operating: #4A57A8;        /* Blue - active */
+  --color-status-prospective: #9CA3AF;      /* Gray - planned */
+  --color-status-retired: #1F2937;          /* Dark - closed */
+  --color-status-cancelled: #D1D5DB;        /* Light gray - cancelled */
+  --color-status-unknown: #E5E7EB;          /* Very light - unknown */
+
+  /* --- Status Colors (Granular Prospective) --- */
+  --color-status-proposed: #FDE68A;         /* Light yellow */
+  --color-status-announced: #FCD34D;        /* Yellow */
+  --color-status-permitted: #F59E0B;        /* Amber */
+  --color-status-construction: #D97706;     /* Dark amber */
+
+  /* --- Map Colors --- */
+  --color-map-coal: #1a1a1a;
+  --color-map-coal-mine: #4a4a4a;
+  --color-map-gas: #e67e22;
+  --color-map-steel: #8e44ad;
+  --color-map-iron: #c0392b;
+  --color-map-bioenergy: #27ae60;
+  --color-map-default: #666666;
+  --color-map-selected: #333333;
+  --color-map-unselected: #999999;
+
+  /* --- Ownership Hierarchy --- */
+  --color-owner-direct: #1a1a1a;
+  --color-owner-indirect: #666666;
+  --color-owner-ultimate: #333333;
+
+  /* ==========================================================================
+     5. SEMANTIC TOKENS
+     Use these in components. Maps to palette above.
+     ========================================================================== */
+
+  /* Backgrounds */
+  --color-bg-primary: var(--color-white);
+  --color-bg-secondary: var(--color-gray-50);
+  --color-bg-tertiary: var(--color-gray-100);
+  --color-bg-inverse: var(--color-black);
+  --color-bg-hover: var(--color-gray-100);
+  --color-bg-active: var(--color-gray-200);
+
+  /* Text */
+  --color-text-primary: var(--color-black);
+  --color-text-secondary: var(--color-gray-600);
+  --color-text-tertiary: var(--color-gray-400);
+  --color-text-inverse: var(--color-white);
+  --color-text-link: var(--color-black);
+  --color-text-link-hover: var(--color-gray-700);
+
+  /* Borders */
+  --color-border: var(--color-gray-200);
+  --color-border-dark: var(--color-black);
+  --color-border-light: var(--color-gray-100);
+
+  /* Interactive states */
+  --color-focus: var(--color-black);
+  --color-disabled: var(--color-gray-300);
+  --color-placeholder: var(--color-gray-400);
+
+  /* ==========================================================================
+     6. TRANSITIONS & EFFECTS
+     ========================================================================== */
+
+  --transition-fast: 100ms ease;
+  --transition-base: 150ms ease;
+  --transition-slow: 300ms ease;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.12);
+
+  /* Borders */
   --border-width: 1px;
   --border-radius: 0;
+  --border-radius-sm: 2px;
+
+  /* Z-index scale */
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-modal-backdrop: 900;
+  --z-modal: 1000;
+  --z-toast: 1100;
 }
 
 /* Common Panel Styles */
@@ -338,4 +523,381 @@
   background: transparent;
   color: var(--color-text-secondary);
   border: none;
+}
+
+/* ============================================================================
+   ADVANCED TYPOGRAPHY
+   Refined typographic treatments for a polished feel
+   ============================================================================ */
+
+/* Proper small caps (where supported) */
+.small-caps {
+  font-variant: small-caps;
+  letter-spacing: var(--tracking-wide);
+}
+
+/* Uppercase labels with proper tracking */
+.label-caps {
+  text-transform: uppercase;
+  font-size: var(--font-size-xs);
+  letter-spacing: var(--tracking-caps);
+  font-weight: normal;
+  color: var(--color-text-tertiary);
+}
+
+/* Lining figures for tabular data */
+.tabular-nums {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* Oldstyle figures for running text */
+.oldstyle-nums {
+  font-variant-numeric: oldstyle-nums proportional-nums;
+}
+
+/* Proper fractions */
+.fractions {
+  font-variant-numeric: diagonal-fractions;
+}
+
+/* Ordinals (1st, 2nd, 3rd) */
+.ordinals {
+  font-variant-numeric: ordinal;
+}
+
+/* Hanging punctuation (for pull quotes, lists) */
+.hang-punctuation {
+  hanging-punctuation: first last;
+}
+
+/* Optical margin alignment for body text */
+.optical-align {
+  text-align: justify;
+  text-justify: inter-character;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+}
+
+/* Measure (optimal line length ~66 characters) */
+.measure {
+  max-width: 66ch;
+}
+
+.measure-narrow {
+  max-width: 45ch;
+}
+
+.measure-wide {
+  max-width: 80ch;
+}
+
+/* Drop cap */
+.drop-cap::first-letter {
+  float: left;
+  font-size: 3.5em;
+  line-height: 0.8;
+  padding-right: 0.1em;
+  margin-top: 0.05em;
+  font-weight: normal;
+}
+
+/* Lead paragraph (slightly larger first paragraph) */
+.lead {
+  font-size: var(--font-size-lg);
+  line-height: var(--line-height-relaxed);
+  color: var(--color-text-secondary);
+}
+
+/* Run-in heading (heading that flows into paragraph) */
+.run-in {
+  display: inline;
+  font-weight: bold;
+  margin-right: 0.5em;
+}
+
+/* Sidenote reference number */
+.sidenote-ref {
+  font-size: var(--font-size-xs);
+  vertical-align: super;
+  line-height: 0;
+  color: var(--color-text-tertiary);
+}
+
+/* ============================================================================
+   MICRO-INTERACTIONS
+   Subtle feedback that makes the interface feel alive
+   ============================================================================ */
+
+/* Button press effect */
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+/* Card lift on hover */
+.card-interactive {
+  transition: box-shadow var(--transition-base), transform var(--transition-base);
+}
+
+.card-interactive:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+
+/* Link underline animation */
+.link-animated {
+  text-decoration: none;
+  background-image: linear-gradient(currentColor, currentColor);
+  background-size: 0% 1px;
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  transition: background-size var(--transition-base);
+}
+
+.link-animated:hover {
+  background-size: 100% 1px;
+}
+
+/* Fade in on load */
+.fade-in {
+  animation: fadeIn var(--transition-slow) ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Subtle pulse for loading states */
+.pulse {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Skeleton loading placeholder */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-gray-100) 0%,
+    var(--color-gray-50) 50%,
+    var(--color-gray-100) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton 1.5s ease-in-out infinite;
+  border-radius: 2px;
+}
+
+@keyframes skeleton {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ============================================================================
+   ACCESSIBILITY
+   Skip links and focus management
+   ============================================================================ */
+
+/* Skip to main content link */
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-black);
+  color: var(--color-white);
+  font-size: var(--font-size-sm);
+  text-decoration: none;
+  z-index: 10000;
+  transition: top var(--transition-fast);
+}
+
+.skip-link:focus {
+  top: var(--space-2);
+}
+
+/* Visually hidden but accessible */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ============================================================================
+   REFINED DETAILS
+   The small touches that show care
+   ============================================================================ */
+
+/* Proper horizontal rule */
+hr {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: var(--space-6) 0;
+}
+
+/* Refined blockquote */
+blockquote {
+  margin: var(--space-5) 0;
+  padding-left: var(--space-5);
+  border-left: 2px solid var(--color-gray-300);
+  font-style: italic;
+  color: var(--color-text-secondary);
+}
+
+blockquote cite {
+  display: block;
+  margin-top: var(--space-2);
+  font-size: var(--font-size-sm);
+  font-style: normal;
+  color: var(--color-text-tertiary);
+}
+
+blockquote cite::before {
+  content: '— ';
+}
+
+/* Refined code */
+code {
+  font-family: var(--font-family-mono);
+  font-size: 0.9em;
+  padding: 0.1em 0.3em;
+  background: var(--color-gray-100);
+  border-radius: 2px;
+}
+
+pre code {
+  display: block;
+  padding: var(--space-4);
+  overflow-x: auto;
+  background: var(--color-gray-900);
+  color: var(--color-gray-100);
+}
+
+/* Refined definition list */
+dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1) var(--space-4);
+}
+
+dt {
+  font-weight: normal;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-sm);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+}
+
+dd {
+  margin: 0;
+}
+
+/* Refined abbr */
+abbr[title] {
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+  cursor: help;
+}
+
+/* Refined mark (highlight) */
+mark {
+  background: #fef3c7;
+  padding: 0.1em 0.2em;
+  border-radius: 1px;
+}
+
+/* Empty state with personality */
+.empty-state {
+  padding: var(--space-10);
+  text-align: center;
+  color: var(--color-text-tertiary);
+}
+
+.empty-state::before {
+  content: '—';
+  display: block;
+  font-size: var(--font-size-2xl);
+  margin-bottom: var(--space-2);
+  opacity: 0.3;
+}
+
+/* Refined figure/caption */
+figure {
+  margin: var(--space-6) 0;
+}
+
+figcaption {
+  margin-top: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+  font-style: italic;
+}
+
+/* Footnote styling */
+.footnote {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  border-top: 1px solid var(--color-border);
+  margin-top: var(--space-8);
+  padding-top: var(--space-4);
+}
+
+.footnote-ref {
+  font-size: var(--font-size-xs);
+  vertical-align: super;
+  line-height: 0;
+  margin-left: 1px;
+}
+
+/* Proper cursor states */
+[disabled],
+[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+[role="button"],
+button,
+select,
+summary {
+  cursor: pointer;
+}
+
+/* Prevent text selection on UI elements */
+.no-select {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Allow text selection explicitly */
+.select-all {
+  user-select: all;
+}
+
+/* ============================================================================
+   DARK MODE PREPARATION
+   CSS custom properties make this trivial to add later
+   ============================================================================ */
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Uncomment to enable dark mode
+    --color-bg-primary: var(--color-gray-900);
+    --color-bg-secondary: var(--color-gray-800);
+    --color-bg-tertiary: var(--color-gray-700);
+    --color-border: var(--color-gray-700);
+    --color-border-dark: var(--color-gray-300);
+    --color-text-primary: var(--color-gray-100);
+    --color-text-secondary: var(--color-gray-400);
+    --color-text-tertiary: var(--color-gray-500);
+    */
+  }
 }

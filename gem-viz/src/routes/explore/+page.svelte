@@ -119,7 +119,7 @@
     margin-bottom: 12px;
   }
   .breadcrumb a {
-    color: #333;
+    color: var(--color-gray-700);
     text-decoration: none;
   }
   .breadcrumb a:hover {
@@ -133,7 +133,7 @@
   }
   .lead {
     font-size: 14px;
-    color: #666;
+    color: var(--color-text-secondary);
     margin: 0;
   }
 
@@ -152,7 +152,7 @@
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #666;
+    color: var(--color-text-secondary);
   }
   .filter-chips {
     display: flex;
@@ -163,17 +163,17 @@
     padding: 6px 12px;
     font-size: 12px;
     border: none;
-    background: #fff;
+    background: var(--color-white);
     cursor: pointer;
     transition: all 0.15s;
   }
   .chip:hover {
-    border-color: #999;
+    border-color: var(--color-text-tertiary);
   }
   .chip.active {
-    background: #000;
-    color: #fff;
-    border-color: #000;
+    background: var(--color-black);
+    color: var(--color-white);
+    border-color: var(--color-black);
   }
 
   .dashboard {
@@ -194,12 +194,12 @@
   }
 
   .page-footer {
-    border-top: 1px solid #ddd;
+    border-top: 1px solid var(--color-border);
     padding-top: 20px;
     font-size: 12px;
-    color: #666;
+    color: var(--color-text-secondary);
   }
   .page-footer a {
-    color: #333;
+    color: var(--color-gray-700);
   }
 </style>

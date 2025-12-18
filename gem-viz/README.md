@@ -136,12 +136,8 @@ See [CHANGELOG.md](./CHANGELOG.md) or visit `/changelog` in the app.
 Create a `.env` file:
 
 ```bash
-# MotherDuck (for build-time queries)
-MOTHERDUCK_TOKEN=your_token_here
-MOTHERDUCK_DB=gem_data
-
-# Public read-only token (safe for client-side)
-PUBLIC_MOTHERDUCK_TOKEN=your_read_only_token
+# Ownership Tracing API (primary runtime data source)
+PUBLIC_OWNERSHIP_API_BASE_URL=https://6b7c36096b12.ngrok.app
 
 # Digital Ocean Spaces (for deployment)
 DO_SPACES_BUCKET=ejthirdbear
@@ -152,7 +148,7 @@ DO_SPACES_ENDPOINT=https://sfo3.digitaloceanspaces.com
 ## Tech Stack
 
 - **Framework**: SvelteKit
-- **Database**: DuckDB WASM, MotherDuck WASM
+- **Database**: DuckDB WASM, Ownership Tracing API
 - **Maps**: MapLibre GL
 - **Drawing**: maplibre-gl-draw
 - **Styling**: Brutalist minimalism with Georgia serif

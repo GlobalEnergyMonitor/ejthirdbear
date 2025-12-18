@@ -30,7 +30,7 @@
   }
 
   header {
-    border-bottom: 1px solid #000;
+    border-bottom: 1px solid var(--color-black);
     padding-bottom: 15px;
     margin-bottom: 20px;
   }
@@ -46,6 +46,6 @@
   .intro {
     font-size: 12px;
     margin: 0 0 20px 0;
-    color: #666;
+    color: var(--color-text-secondary);
   }
 </style>

@@ -32,8 +32,13 @@ export async function initWidgetDB(): Promise<void> {
       throw new Error(`Failed to load ownership parquet: ${result.error}`);
     }
 
+    const locResult = await loadParquetFromPath(PARQUET_FILES.locations, 'locations');
+    if (!locResult.success) {
+      throw new Error(`Failed to load locations parquet: ${locResult.error}`);
+    }
+
     initialized = true;
-    console.log('Widget DB initialized with ownership table');
+    console.log('Widget DB initialized with ownership + locations tables');
   })();
 
   return initPromise;

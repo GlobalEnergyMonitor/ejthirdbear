@@ -10,8 +10,8 @@
   // Bindable prop so parent can hide section when no location found
   let { hasLocation = $bindable(true) } = $props();
 
-  let mapContainer;
-  let map;
+  let mapContainer = $state(null);
+  let map = $state(null);
   let loading = $state(true);
   let error = $state(null);
   let assetName = $state('');
@@ -80,7 +80,7 @@
 
         finalLat = Number(coords.lat);
         finalLon = Number(coords.lon);
-        console.debug('[AssetMap] Using coordinates from MotherDuck', {
+        console.debug('[AssetMap] Using coordinates from Ownership API', {
           lat: finalLat,
           lon: finalLon,
         });
@@ -164,7 +164,7 @@
   }
 
   .overlay.loading {
-    color: #666;
+    color: var(--color-text-secondary);
   }
 
   /* MapLibre popup styling to match brutalist design */

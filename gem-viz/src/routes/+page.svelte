@@ -14,7 +14,7 @@
   // Featured entity
   const featuredEntity = { name: 'BlackRock Inc', id: 'E100001000348' };
 
-  // Featured assets (Coal Plants - MotherDuck currently only has coal_plant_ownership)
+  // Featured assets (Coal Plants - current API sample IDs)
   const featuredAssets = [
     { name: 'Sines Power Station', id: 'G100000109409', tracker: 'Coal Plant' },
     { name: 'Baghlan Power Station', id: 'G100001057899', tracker: 'Coal Plant' },
@@ -96,7 +96,7 @@
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #444;
+    color: var(--color-gray-600);
   }
   .link-list {
     display: flex;
@@ -104,7 +104,7 @@
     flex-wrap: wrap;
   }
   .link-list a {
-    color: #000;
+    color: var(--color-black);
     font-size: 12px;
     text-decoration: underline;
   }
@@ -123,8 +123,8 @@
     justify-content: center;
     width: 16px;
     height: 16px;
-    background: #000;
-    color: white;
+    background: var(--color-black);
+    color: var(--color-white);
     border-radius: 50%;
     font-size: 9px;
     font-weight: bold;

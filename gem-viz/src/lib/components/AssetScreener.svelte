@@ -721,11 +721,11 @@
   }
 
   .loading-state {
-    color: #666;
+    color: var(--color-text-secondary);
   }
 
   .error-state {
-    color: #b10000;
+    color: var(--color-error);
   }
 
   .asset-screener {
@@ -847,7 +847,7 @@
     font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.07em;
-    fill: #333;
+    fill: var(--color-gray-700);
   }
 
   .additional-info {
@@ -858,7 +858,7 @@
   .additional-info p {
     margin: 0;
     font-style: italic;
-    color: #333;
+    color: var(--color-gray-700);
     font-weight: 500;
     font-size: 0.95em;
   }
@@ -880,7 +880,7 @@
     gap: 1.5em;
     justify-content: center;
     font-size: 0.9em;
-    color: #333;
+    color: var(--color-gray-700);
   }
 
   .legend-item {
@@ -901,7 +901,7 @@
     justify-content: center;
     margin-top: 0.5em;
     font-size: 0.8em;
-    color: #666;
+    color: var(--color-text-secondary);
   }
 
   .status-icon-item {
@@ -938,13 +938,13 @@
   }
 
   .tooltip .status {
-    color: #666;
+    color: var(--color-text-secondary);
     text-transform: capitalize;
   }
 
   .tooltip .asset-count,
   .tooltip .unit-count {
-    color: #888;
+    color: var(--color-gray-500);
     font-size: 0.9em;
   }
 </style>

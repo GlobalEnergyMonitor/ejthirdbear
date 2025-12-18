@@ -729,7 +729,7 @@
   .network-container {
     flex: 1;
     position: relative;
-    border: 1px solid #000;
+    border: 1px solid var(--color-black);
     background: transparent;
     min-height: 600px;
   }
@@ -754,9 +754,9 @@
     transform: translate(-50%, -50%);
     text-align: center;
     z-index: 10;
-    background: white;
+    background: var(--color-white);
     padding: 20px 40px;
-    border: 1px solid #000;
+    border: 1px solid var(--color-black);
   }
 
   .loading p,
@@ -774,25 +774,25 @@
   .progress-bar {
     width: 200px;
     height: 4px;
-    background: #eee;
-    border: 1px solid #000;
+    background: var(--color-gray-100);
+    border: 1px solid var(--color-black);
   }
 
   .progress {
     height: 100%;
-    background: #000;
+    background: var(--color-black);
     transition: width 0.1s;
   }
 
   .progress-text {
     font-size: 10px;
-    color: #666;
+    color: var(--color-text-secondary);
     margin-top: 5px;
   }
 
   .progress-text .fps {
     margin-left: 10px;
-    color: #999;
+    color: var(--color-text-tertiary);
   }
 
   .controls {
@@ -800,8 +800,8 @@
     top: 10px;
     right: 10px;
     z-index: 10;
-    background: white;
-    border: 1px solid #000;
+    background: var(--color-white);
+    border: 1px solid var(--color-black);
     padding: 10px;
     font-size: 10px;
   }
@@ -822,7 +822,7 @@
     min-width: 80px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #666;
+    color: var(--color-text-secondary);
   }
 
   .control-group select,
@@ -830,8 +830,8 @@
     font-family: inherit;
     font-size: 10px;
     padding: 2px 4px;
-    border: 1px solid #999;
-    background: white;
+    border: 1px solid var(--color-text-tertiary);
+    background: var(--color-white);
   }
 
   .control-group input[type='range'] {
@@ -843,14 +843,14 @@
     justify-content: flex-end;
     gap: 6px;
     padding-top: 4px;
-    border-top: 1px solid #eee;
+    border-top: 1px solid var(--color-gray-100);
     margin-top: 4px;
   }
 
   .control-group .toggle input[type='checkbox'] {
     width: 14px;
     height: 14px;
-    accent-color: #000;
+    accent-color: var(--color-black);
   }
 
   .stats {
@@ -864,30 +864,30 @@
     display: flex;
     gap: 10px;
     flex-wrap: wrap;
-    background: white;
+    background: var(--color-white);
     padding: 8px 12px;
-    border: 1px solid #000;
+    border: 1px solid var(--color-black);
     max-width: 50%;
   }
 
   .stats .primary {
-    color: #000;
+    color: var(--color-black);
     font-weight: bold;
   }
 
   .stats .secondary {
-    color: #999;
+    color: var(--color-text-tertiary);
     font-size: 9px;
   }
 
   .stats .zoom {
-    color: #666;
+    color: var(--color-text-secondary);
     font-family: monospace;
     font-size: 10px;
   }
 
   .stats .hovered {
-    color: #666;
+    color: var(--color-text-secondary);
     font-style: italic;
     text-transform: none;
     font-size: 10px;
@@ -900,9 +900,9 @@
     z-index: 10;
     background: rgba(255, 255, 255, 0.9);
     padding: 6px 10px;
-    border: 1px solid #ccc;
+    border: 1px solid var(--color-gray-300);
     font-size: 9px;
-    color: #666;
+    color: var(--color-text-secondary);
   }
 
   .help p {
@@ -910,7 +910,7 @@
   }
 
   .help .engine {
-    color: #aaa;
+    color: var(--color-gray-400);
     font-size: 8px;
     margin-top: 3px;
   }

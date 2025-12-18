@@ -21,10 +21,25 @@ export async function load() {
     version: null,
   };
 
-  // Load GeoJSON stats
+  // Load GeoJSON stats - check multiple possible locations during build
+  let geojson = null;
   try {
-    const geojsonPath = path.join(rootDir, 'static/points.geojson');
-    const geojson = JSON.parse(fs.readFileSync(geojsonPath, 'utf-8'));
+    const possiblePaths = [
+      path.join(rootDir, 'static/points.geojson'),
+      path.join(rootDir, '.svelte-kit/output/client/points.geojson'),
+      path.join(rootDir, 'build/points.geojson'),
+    ];
+
+    for (const geojsonPath of possiblePaths) {
+      if (fs.existsSync(geojsonPath)) {
+        geojson = JSON.parse(fs.readFileSync(geojsonPath, 'utf-8'));
+        break;
+      }
+    }
+
+    if (!geojson) {
+      throw new Error('GeoJSON not found in any expected location');
+    }
 
     stats.totalLocations = geojson.metadata?.count || geojson.features?.length || 0;
 
@@ -48,17 +63,31 @@ export async function load() {
       .sort((a, b) => b.count - a.count);
 
   } catch (e) {
-    console.warn('[about] Could not load GeoJSON stats:', e.message);
+    // GeoJSON stats are optional during prerender - silently continue with defaults
   }
 
-  // Load version info
+  // Load version info - check multiple possible locations during build
   try {
-    const versionPath = path.join(rootDir, 'static/version.json');
-    const version = JSON.parse(fs.readFileSync(versionPath, 'utf-8'));
-    stats.version = version.version;
-    stats.buildTime = version.buildTime;
+    const possiblePaths = [
+      path.join(rootDir, 'static/version.json'),
+      path.join(rootDir, '.svelte-kit/output/client/version.json'),
+      path.join(rootDir, 'build/version.json'),
+    ];
+
+    let version = null;
+    for (const versionPath of possiblePaths) {
+      if (fs.existsSync(versionPath)) {
+        version = JSON.parse(fs.readFileSync(versionPath, 'utf-8'));
+        break;
+      }
+    }
+
+    if (version) {
+      stats.version = version.version;
+      stats.buildTime = version.buildTime;
+    }
   } catch (e) {
-    console.warn('[about] Could not load version info:', e.message);
+    // Version info is optional - silently continue with defaults
   }
 
   // Load entity cache count if available

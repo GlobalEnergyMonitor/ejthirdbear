@@ -2,94 +2,41 @@
   // ============================================================================
   // ASSET LIST PAGE
   // Shows all assets in a DataTable with filtering, sorting, pagination
-  // Data fetched client-side from MotherDuck (dev mode only)
   // ============================================================================
 
   // --- IMPORTS ---
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { link, assetLink } from '$lib/links';
-  import { getTables } from '$lib/component-data/schema';
-  import { SCHEMA_SQL } from '$lib/component-data/sql-helpers';
-  import { findCommonColumns, getAssetId } from '$lib/component-data/id-helpers';
+  import { listAssets } from '$lib/ownership-api';
   import DataTable from '$lib/components/DataTable.svelte';
 
   // --- STATE ---
-  /** @type {any} */
-  let motherduck;
   let loading = $state(true);
   /** @type {string | null} */
   let error = $state(null);
   let assets = $state([]);
-  let tableName = $state('');
-  let resolvedCols = $state({
-    idCol: null,
-    unitIdCol: null,
-    nameCol: null,
-    statusCol: null,
-    ownerCol: null,
-    countryCol: null,
-  });
-
-  // --- SQL BUILDERS ---
-  /** Query groups by asset to count ownership records */
-  const LIST_SQL = (fullName, cols, unitIdCol) => `
-    SELECT
-      ${cols.map((c) => `FIRST("${c}") AS "${c}"`).join(', ')},
-      COUNT(*) AS owner_count
-    FROM ${fullName}
-    GROUP BY "${unitIdCol}"
-    ORDER BY owner_count DESC
-    LIMIT 10000
-  `;
 
   // --- DATA TRANSFORMS ---
-  const columns = $derived.by(() => {
-    const { idCol, nameCol, statusCol, ownerCol, countryCol } = resolvedCols;
-    if (!idCol) return [];
-
-    const cols = [];
-    if (nameCol)
-      cols.push({ key: nameCol, label: 'Name', sortable: true, filterable: true, width: '250px' });
-    cols.push({ key: idCol, label: 'ID', sortable: true, filterable: true, width: '120px' });
-    cols.push({
-      key: 'owner_count',
-      label: 'Owners',
+  const columns = $derived([
+    { key: 'name', label: 'Name', sortable: true, filterable: true, width: '260px' },
+    { key: 'id', label: 'ID', sortable: true, filterable: true, width: '130px' },
+    { key: 'status', label: 'Status', sortable: true, filterable: true, width: '120px' },
+    { key: 'facilityType', label: 'Facility Type', sortable: true, filterable: true, width: '150px' },
+    { key: 'ownerName', label: 'Owner', sortable: true, filterable: true, width: '220px' },
+    { key: 'country', label: 'Country', sortable: true, filterable: true, width: '160px' },
+    {
+      key: 'capacity',
+      label: 'Capacity',
       sortable: true,
       type: /** @type {'number'} */ ('number'),
-      width: '80px',
-    });
-    if (statusCol)
-      cols.push({
-        key: statusCol,
-        label: 'Status',
-        sortable: true,
-        filterable: true,
-        width: '120px',
-      });
-    if (ownerCol)
-      cols.push({
-        key: ownerCol,
-        label: 'Owner',
-        sortable: true,
-        filterable: true,
-        width: '200px',
-      });
-    if (countryCol)
-      cols.push({
-        key: countryCol,
-        label: 'Country',
-        sortable: true,
-        filterable: true,
-        width: '150px',
-      });
-    return cols;
-  });
+      width: '120px',
+    },
+  ]);
 
   // --- HANDLERS ---
   function handleRowClick(row) {
-    const id = getAssetId(row, resolvedCols);
-    if (id) goto(assetLink(id));
+    if (row?.id) goto(assetLink(row.id));
   }
 
   // --- DATA FETCHING ---
@@ -98,37 +45,19 @@
       loading = true;
       error = null;
 
-      const md = await import('$lib/motherduck-wasm');
-      motherduck = md.default;
+      const pageSize = 1000;
+      let offset = 0;
+      let hasMore = true;
+      const results = [];
 
-      const { assetTable } = await getTables();
-      tableName = assetTable;
-      const [schemaName, rawTable] = assetTable.split('.');
+      while (hasMore && results.length < 10000) {
+        const page = await listAssets({ limit: pageSize, offset });
+        results.push(...page.results);
+        offset += pageSize;
+        hasMore = page.results.length === pageSize;
+      }
 
-      // Get schema to find columns
-      const schemaResult = await motherduck.query(SCHEMA_SQL(schemaName, rawTable));
-      const availableCols = schemaResult.data?.map((c) => c.column_name) ?? [];
-
-      // Use centralized column finder
-      resolvedCols = findCommonColumns(availableCols);
-      const { idCol, unitIdCol, nameCol, statusCol, ownerCol, countryCol } = resolvedCols;
-
-      // Build SELECT list
-      const columnsToSelect = new Set([idCol]);
-      if (nameCol) columnsToSelect.add(nameCol);
-      if (statusCol) columnsToSelect.add(statusCol);
-      if (ownerCol) columnsToSelect.add(ownerCol);
-      if (countryCol) columnsToSelect.add(countryCol);
-      if (unitIdCol) columnsToSelect.add(unitIdCol);
-
-      // Execute query
-      const groupByCol = unitIdCol || idCol;
-      const listResult = await motherduck.query(
-        LIST_SQL(tableName, [...columnsToSelect].filter(Boolean), groupByCol)
-      );
-      if (!listResult.success) throw new Error(listResult.error || 'Failed to load assets');
-
-      assets = listResult.data ?? [];
+      assets = results;
     } catch (err) {
       console.error('Asset list load error:', err);
       error = err?.message || 'Failed to load assets';
@@ -156,7 +85,7 @@
   </header>
 
   {#if loading}
-    <p class="no-data">Fetching assets directly from MotherDuck…</p>
+    <p class="no-data">Fetching assets from Ownership API…</p>
   {:else if error}
     <p class="no-data">{error}</p>
   {:else if assets.length > 0}
@@ -194,12 +123,12 @@
     gap: 16px;
     align-items: center;
     flex-wrap: wrap;
-    border-bottom: 1px solid #e0e0e0;
+    border-bottom: 1px solid var(--color-gray-200);
     padding-bottom: 18px;
     margin-bottom: 20px;
   }
   .back-link {
-    color: #000;
+    color: var(--color-black);
     text-decoration: underline;
     font-size: 11px;
     text-transform: uppercase;
@@ -216,19 +145,19 @@
   }
   .count {
     font-size: 10px;
-    color: #555;
+    color: var(--color-gray-600);
     margin-left: auto;
     padding: 6px 10px;
-    border: 1px solid #e0e0e0;
+    border: 1px solid var(--color-gray-200);
     border-radius: 999px;
-    background: #f7f7f7;
+    background: var(--color-gray-50);
   }
 
   /* Empty States */
   .no-data {
     padding: 60px 20px;
     text-align: center;
-    color: #999;
+    color: var(--color-text-tertiary);
     font-size: 14px;
     font-style: italic;
   }

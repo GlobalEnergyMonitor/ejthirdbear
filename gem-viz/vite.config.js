@@ -51,7 +51,7 @@ export default defineConfig({
         }
       }
     },
-    chunkSizeWarningLimit: 1500,
+    chunkSizeWarningLimit: 4000, // DuckDB/MotherDuck chunks are legitimately large
     // Batch file writes to avoid exhausting file descriptors
     // Limit concurrent file operations during prerender/build
     reportCompressedSize: false

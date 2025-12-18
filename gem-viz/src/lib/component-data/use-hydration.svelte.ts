@@ -96,11 +96,3 @@ export function requirePageId(context: string = 'component'): string {
   if (!id) throw new Error(`Missing ID in URL params for ${context}`);
   return id;
 }
-
-/**
- * Dynamic import for MotherDuck to avoid SSR Worker error
- */
-export async function getMotherDuck() {
-  const mod = await import('$lib/motherduck-wasm');
-  return mod.default;
-}

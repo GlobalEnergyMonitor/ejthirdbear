@@ -35,7 +35,7 @@
       return;
     }
 
-    // Fallback: client-side fetch from MotherDuck (dev mode)
+    // Fallback: client-side fetch from Ownership API (dev mode)
     const params = get(page)?.params ?? {};
     const assetId = params.id || null;
     if (!assetId) {
@@ -138,7 +138,7 @@
 
   {#if sameOwnerAssets && sameOwnerAssets.length > 0}
     <section class="related-assets">
-      <h2>Other Assets by {/** @type {any} */ (currentAsset).Owner || 'Same Owner'}</h2>
+      <h2>Other Assets by {currentAsset.ownerName || 'Same Owner'}</h2>
 
       <div class="asset-grid">
         {#each sameOwnerAssets as asset}
@@ -177,7 +177,7 @@
           • Combined capacity: {formatCapacity(
             coLocatedAssets.reduce(
               (sum, a) => sum + (a['Capacity (MW)'] || 0),
-              /** @type {any} */ (currentAsset).capacityMw || 0
+              currentAsset.capacityMw || 0
             )
           )}
         {/if}
@@ -239,7 +239,7 @@
   }
 
   .chain-node.is-asset {
-    background: #000;
+    background: var(--color-black);
     color: white;
   }
 
@@ -253,11 +253,11 @@
   .ownership-share {
     font-size: 14px;
     margin-top: 5px;
-    color: #666;
+    color: var(--color-text-secondary);
   }
 
   .chain-node.is-asset .ownership-share {
-    color: #ccc;
+    color: var(--color-gray-300);
   }
 
   .chain-arrow {
@@ -304,8 +304,8 @@
   }
 
   .asset-card:hover {
-    border-color: #000;
-    box-shadow: 2px 2px 0 #000;
+    border-color: var(--color-black);
+    box-shadow: 2px 2px 0 var(--color-black);
     transform: translate(-1px, -1px);
   }
 
@@ -338,7 +338,7 @@
     color: white;
   }
   .status-retired {
-    background: #999;
+    background: var(--color-text-tertiary);
     color: white;
   }
   .status-construction {
@@ -350,7 +350,7 @@
     color: white;
   }
   .status-other {
-    background: #333;
+    background: var(--color-gray-700);
     color: white;
   }
 
@@ -358,16 +358,16 @@
     display: flex;
     gap: 10px;
     font-size: 11px;
-    color: #666;
+    color: var(--color-text-secondary);
   }
 
   .capacity {
     font-weight: bold;
-    color: #000;
+    color: var(--color-black);
   }
 
   .tracker {
-    color: #999;
+    color: var(--color-text-tertiary);
     text-transform: uppercase;
     letter-spacing: 0.3px;
   }
@@ -377,7 +377,7 @@
     padding: 10px;
     text-align: center;
     font-size: 11px;
-    color: #666;
+    color: var(--color-text-secondary);
     background: transparent;
     border: none;
   }
@@ -389,18 +389,18 @@
 
   .location-note {
     font-size: 12px;
-    color: #666;
+    color: var(--color-text-secondary);
     margin: 10px 0 20px 0;
     padding: 10px;
     background: transparent;
-    border-left: 3px solid #000;
+    border-left: 3px solid var(--color-black);
   }
 
   .asset-list {
     display: flex;
     flex-direction: column;
     gap: 1px;
-    background: #ddd;
+    background: var(--color-border);
   }
 
   .list-item {

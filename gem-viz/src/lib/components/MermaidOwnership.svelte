@@ -233,8 +233,8 @@
   }
   .controls {
     padding: 10px;
-    border-bottom: 1px solid #ddd;
-    background: #fff;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-white);
     font-size: 11px;
     display: flex;
     gap: 10px;
@@ -246,7 +246,7 @@
     gap: 8px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #666;
+    color: var(--color-text-secondary);
   }
   .controls input[type='range'] {
     width: 100px;
@@ -270,11 +270,11 @@
   }
   .diagram :global(.node rect),
   .diagram :global(.node polygon) {
-    fill: var(--navy, #333) !important;
-    stroke: var(--navy, #333) !important;
+    fill: var(--navy, var(--color-gray-700)) !important;
+    stroke: var(--navy, var(--color-gray-700)) !important;
   }
   .diagram :global(.edgeLabel) {
-    background-color: #fff !important;
+    background-color: var(--color-white) !important;
     font-size: 10px !important;
   }
   .status {
@@ -285,7 +285,7 @@
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #666;
+    color: var(--color-text-secondary);
   }
   .status.error {
     color: red;

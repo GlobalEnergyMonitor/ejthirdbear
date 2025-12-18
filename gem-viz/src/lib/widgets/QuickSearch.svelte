@@ -32,13 +32,14 @@
     // Search assets
     const assetSql = `
       SELECT DISTINCT
-        "Project" as name,
-        "GEM unit ID" as id,
-        "Tracker" as tracker,
-        "Status" as status,
-        "Country" as country
-      FROM ownership
-      WHERE LOWER("Project") LIKE LOWER('%${searchTerm}%')
+        o."Project" as name,
+        o."GEM unit ID" as id,
+        o."Tracker" as tracker,
+        o."Status" as status,
+        COALESCE(l."Country.Area", 'Unknown') as country
+      FROM ownership o
+      LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
+      WHERE LOWER(o."Project") LIKE LOWER('%${searchTerm}%')
       LIMIT ${limit}
     `;
 
@@ -163,8 +164,8 @@
 
 <style>
   .widget {
-    background: #fff;
-    border: 1px solid #ddd;
+    background: var(--color-white);
+    border: 1px solid var(--color-border);
     padding: 16px;
   }
 
@@ -175,12 +176,12 @@
     width: 100%;
     padding: 12px 16px;
     font-size: 14px;
-    border: 2px solid #000;
-    background: #fff;
+    border: 2px solid var(--color-black);
+    background: var(--color-white);
   }
   input:focus {
     outline: none;
-    border-color: #000;
+    border-color: var(--color-black);
   }
   .spinner {
     position: absolute;
@@ -189,8 +190,8 @@
     transform: translateY(-50%);
     width: 16px;
     height: 16px;
-    border: 2px solid #ddd;
-    border-top-color: #000;
+    border: 2px solid var(--color-border);
+    border-top-color: var(--color-black);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
   }
@@ -212,7 +213,7 @@
     font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #999;
+    color: var(--color-text-tertiary);
     margin: 0 0 8px 0;
   }
   .result-section ul {
@@ -221,7 +222,7 @@
     margin: 0;
   }
   .result-section li {
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid var(--color-gray-100);
     display: flex;
     align-items: center;
     gap: 8px;
@@ -235,11 +236,11 @@
     gap: 8px;
     padding: 10px 0;
     text-decoration: none;
-    color: #333;
+    color: var(--color-gray-700);
     flex: 1;
   }
   .result-section a:hover {
-    background: #f9f9f9;
+    background: var(--color-gray-50);
   }
   .name {
     flex: 1;
@@ -250,7 +251,7 @@
   }
   .meta {
     font-size: 11px;
-    color: #999;
+    color: var(--color-text-tertiary);
   }
   .entity-icon {
     display: inline-flex;
@@ -258,7 +259,7 @@
     justify-content: center;
     width: 16px;
     height: 16px;
-    background: #000;
+    background: var(--color-black);
     color: white;
     border-radius: 50%;
     font-size: 9px;
@@ -268,13 +269,13 @@
 
   .no-results {
     font-size: 13px;
-    color: #666;
+    color: var(--color-text-secondary);
     text-align: center;
     padding: 20px 0;
   }
   .query-time {
     font-size: 10px;
-    color: #999;
+    color: var(--color-text-tertiary);
     text-align: right;
     font-family: monospace;
     margin-top: 8px;

@@ -275,10 +275,10 @@
     background: rgba(250, 250, 250, 0.9);
     z-index: 2;
     font-size: 12px;
-    color: #555;
+    color: var(--color-gray-600);
   }
   .overlay.error {
-    color: #b10000;
+    color: var(--color-error);
     background: rgba(250, 235, 235, 0.92);
   }
   svg {
@@ -301,7 +301,7 @@
     position: absolute;
     top: 10px;
     right: 10px;
-    background: white;
+    background: var(--color-white);
     border: none;
     padding: 8px 12px;
     font-size: 11px;
@@ -314,7 +314,7 @@
     font-family: system-ui, sans-serif;
   }
   .tooltip .id {
-    color: #888;
+    color: var(--color-gray-500);
     font-size: 9px;
   }
 </style>

@@ -81,7 +81,7 @@
       date: '2025-11-22',
       changes: [
         'Initial release with static site generation',
-        'Bulk fetch architecture for MotherDuck data',
+        'Bulk fetch architecture for Ownership API data',
         'Interactive MapLibre maps on asset pages',
         'Digital Ocean Spaces deployment',
       ],
@@ -459,7 +459,7 @@
     <h3>Technical Stack</h3>
     <ul class="tech-list">
       <li>SvelteKit — Application framework</li>
-      <li>MotherDuck — Cloud data warehouse</li>
+      <li>Ownership Tracing API — Cloud ownership service</li>
       <li>MapLibre GL — Interactive maps</li>
       <li>D3.js — Data visualizations</li>
       <li>Digital Ocean Spaces — Static hosting</li>
@@ -508,14 +508,14 @@
   .page-header {
     margin-bottom: 40px;
     padding-bottom: 24px;
-    border-bottom: 2px solid #000;
+    border-bottom: 2px solid var(--color-black);
   }
   .breadcrumb {
     font-size: 12px;
     margin-bottom: 12px;
   }
   .breadcrumb a {
-    color: #333;
+    color: var(--color-gray-700);
     text-decoration: none;
   }
   .breadcrumb a:hover {
@@ -529,22 +529,22 @@
   }
   .lead {
     font-size: 18px;
-    color: #333;
+    color: var(--color-gray-700);
     margin: 0;
   }
 
   .toc {
-    background: #f9f9f9;
+    background: var(--color-gray-50);
     padding: 20px 24px;
     margin-bottom: 48px;
-    border: 1px solid #ddd;
+    border: 1px solid var(--color-border);
   }
   .toc h2 {
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin: 0 0 12px 0;
-    color: #666;
+    color: var(--color-text-secondary);
   }
   .toc ul {
     list-style: none;
@@ -555,7 +555,7 @@
     gap: 8px 24px;
   }
   .toc a {
-    color: #333;
+    color: var(--color-gray-700);
     text-decoration: none;
     font-size: 14px;
   }
@@ -570,7 +570,7 @@
     font-size: 24px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    border-bottom: 1px solid #000;
+    border-bottom: 1px solid var(--color-black);
     padding-bottom: 8px;
     margin: 0 0 20px 0;
   }
@@ -578,14 +578,14 @@
     font-size: 16px;
     font-weight: 600;
     margin: 28px 0 12px 0;
-    color: #333;
+    color: var(--color-gray-700);
   }
   section p {
     margin: 0 0 16px 0;
-    color: #333;
+    color: var(--color-gray-700);
   }
   .section-intro {
-    color: #666;
+    color: var(--color-text-secondary);
     font-size: 15px;
   }
 
@@ -602,7 +602,7 @@
   }
 
   a {
-    color: #333;
+    color: var(--color-gray-700);
   }
 
   .data-table {
@@ -615,21 +615,21 @@
   .data-table td {
     text-align: left;
     padding: 10px 12px;
-    border-bottom: 1px solid #ddd;
+    border-bottom: 1px solid var(--color-border);
   }
   .data-table th {
-    background: #f5f5f5;
+    background: var(--color-gray-50);
     font-weight: 600;
     font-size: 12px;
     text-transform: uppercase;
   }
   .data-table tbody tr:hover {
-    background: #fafafa;
+    background: var(--color-gray-50);
   }
 
   .data-version-box {
-    background: #f9f9f9;
-    border: 2px solid #000;
+    background: var(--color-gray-50);
+    border: 2px solid var(--color-black);
     padding: 20px;
     margin-bottom: 24px;
   }
@@ -659,7 +659,7 @@
   .version-item .label {
     font-size: 10px;
     text-transform: uppercase;
-    color: #666;
+    color: var(--color-text-secondary);
     letter-spacing: 0.5px;
   }
   .version-item .value {
@@ -670,39 +670,39 @@
   .stat-value {
     font-size: 28px;
     font-weight: 700;
-    color: #000;
+    color: var(--color-black);
   }
   .version-meta {
     margin-top: 16px;
     padding-top: 12px;
-    border-top: 1px solid #ddd;
+    border-top: 1px solid var(--color-border);
     font-size: 11px;
-    color: #666;
+    color: var(--color-text-secondary);
     display: flex;
     gap: 16px;
   }
   .data-contact {
     font-size: 13px;
-    color: #666;
+    color: var(--color-text-secondary);
     margin-top: 16px;
   }
 
   .example-box {
-    background: #f5f5f5;
+    background: var(--color-gray-50);
     padding: 16px 20px;
     margin: 16px 0 24px;
-    border-left: 3px solid #333;
+    border-left: 3px solid var(--color-gray-700);
   }
   .example-box code {
     display: block;
     font-size: 13px;
-    color: #333;
+    color: var(--color-gray-700);
     margin-bottom: 12px;
     word-break: break-word;
   }
   .example-note {
     font-size: 13px;
-    color: #666;
+    color: var(--color-text-secondary);
     margin: 0;
     font-style: italic;
   }
@@ -745,7 +745,7 @@
   }
   .viz-guide dd {
     margin: 4px 0 0 0;
-    color: #555;
+    color: var(--color-gray-600);
   }
 
   .changelog {
@@ -754,7 +754,7 @@
   .release {
     margin-bottom: 32px;
     padding-bottom: 24px;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--color-gray-100);
   }
   .release:last-child {
     border-bottom: none;
@@ -772,7 +772,7 @@
   }
   .release time {
     font-size: 13px;
-    color: #666;
+    color: var(--color-text-secondary);
   }
   .release ul {
     margin: 0;
@@ -780,7 +780,7 @@
   }
   .release li {
     font-size: 14px;
-    color: #444;
+    color: var(--color-gray-600);
     margin-bottom: 6px;
   }
 
@@ -795,10 +795,10 @@
   .page-footer {
     margin-top: 48px;
     padding-top: 24px;
-    border-top: 1px solid #ddd;
+    border-top: 1px solid var(--color-border);
   }
   .page-footer a {
-    color: #333;
+    color: var(--color-gray-700);
     text-decoration: none;
     font-size: 14px;
   }

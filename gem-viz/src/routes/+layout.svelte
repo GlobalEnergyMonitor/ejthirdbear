@@ -1,6 +1,7 @@
 <script>
   import '../app.css';
   import SiteNav from '$lib/components/SiteNav.svelte';
+  import CommandPalette from '$lib/components/CommandPalette.svelte';
   import { link } from '$lib/links';
 
   // Build info injected by Vite at build time
@@ -14,9 +15,13 @@
   <meta name="build-hash" content={buildHash} />
 </svelte:head>
 
+<a href="#main-content" class="skip-link">Skip to content</a>
 <div class="app">
   <SiteNav />
-  <slot />
+  <main id="main-content">
+    <slot />
+  </main>
+  <CommandPalette />
 
   <footer>
     <div class="footer-content">
@@ -47,12 +52,12 @@
     gap: 20px;
     align-items: center;
     font-size: 12px;
-    color: #000;
+    color: var(--color-black);
   }
 
   .version {
     font-family: Georgia, serif;
-    color: #000;
+    color: var(--color-black);
     text-decoration: none;
   }
 
@@ -63,7 +68,7 @@
   .build-info {
     font-family: monospace;
     font-size: 10px;
-    color: #666;
+    color: var(--color-text-secondary);
     cursor: help;
   }
 </style>

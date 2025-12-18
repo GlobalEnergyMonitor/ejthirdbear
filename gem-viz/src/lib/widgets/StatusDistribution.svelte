@@ -156,8 +156,8 @@
 
 <style>
   .widget {
-    background: #fff;
-    border: 1px solid #ddd;
+    background: var(--color-white);
+    border: 1px solid var(--color-border);
     padding: 16px;
   }
   header {
@@ -165,7 +165,7 @@
     justify-content: space-between;
     align-items: baseline;
     margin-bottom: 12px;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--color-gray-100);
     padding-bottom: 8px;
   }
   h3 {
@@ -176,7 +176,7 @@
   }
   .query-time {
     font-size: 10px;
-    color: #999;
+    color: var(--color-text-tertiary);
     font-family: monospace;
   }
 
@@ -184,12 +184,12 @@
   .error,
   .empty {
     font-size: 13px;
-    color: #666;
+    color: var(--color-text-secondary);
     padding: 20px 0;
     text-align: center;
   }
   .error {
-    color: #c00;
+    color: var(--color-error);
   }
 
   .chart-container {
@@ -205,7 +205,7 @@
   .total {
     font-size: 14px;
     font-weight: bold;
-    fill: #333;
+    fill: var(--color-gray-700);
   }
 
   .legend {
@@ -228,10 +228,10 @@
   .label {
     flex: 1;
     text-transform: capitalize;
-    color: #333;
+    color: var(--color-gray-700);
   }
   .pct {
     font-family: monospace;
-    color: #666;
+    color: var(--color-text-secondary);
   }
 </style>

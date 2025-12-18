@@ -285,12 +285,12 @@
     gap: 16px;
     align-items: center;
     flex-wrap: wrap;
-    border-bottom: 1px solid #e0e0e0;
+    border-bottom: 1px solid var(--color-gray-200);
     padding-bottom: 18px;
     margin-bottom: 18px;
   }
   .back-link {
-    color: #000;
+    color: var(--color-black);
     text-decoration: underline;
     font-size: 11px;
     text-transform: uppercase;
@@ -307,11 +307,11 @@
   }
   .count {
     font-size: 10px;
-    color: #555;
+    color: var(--color-gray-600);
     padding: 6px 10px;
-    border: 1px solid #e0e0e0;
+    border: 1px solid var(--color-gray-200);
     border-radius: 999px;
-    background: #f7f7f7;
+    background: var(--color-gray-50);
   }
   .export-link {
     margin-left: auto;
@@ -319,12 +319,12 @@
     text-transform: uppercase;
     letter-spacing: 0.5px;
     padding: 4px 10px;
-    background: #1976d2;
-    color: #fff;
+    background: var(--color-asset-text, #1565c0);
+    color: var(--color-white);
     text-decoration: none;
   }
   .export-link:hover {
-    background: #1565c0;
+    background: var(--color-asset-text, #1565c0);
   }
 
   /* Filter Info */
@@ -334,7 +334,7 @@
     gap: 10px;
     padding: 10px 14px;
     background: #fdfbf7;
-    border: 1px solid #e0e0e0;
+    border: 1px solid var(--color-gray-200);
     margin-bottom: 16px;
     font-size: 12px;
     border-radius: 6px;
@@ -343,16 +343,16 @@
     font-weight: bold;
     text-transform: uppercase;
     font-size: 10px;
-    color: #333;
+    color: var(--color-gray-700);
     letter-spacing: 0.4px;
   }
   .filter-desc {
     font-family: monospace;
-    color: #333;
+    color: var(--color-gray-700);
   }
   .query-time {
     margin-left: auto;
-    color: #666;
+    color: var(--color-text-secondary);
     font-size: 10px;
   }
 
@@ -362,8 +362,8 @@
     align-items: center;
     gap: 12px;
     padding: 12px 16px;
-    background: #fff;
-    border: 1px solid #ddd;
+    background: var(--color-white);
+    border: 1px solid var(--color-border);
     margin-bottom: 20px;
     flex-wrap: wrap;
   }
@@ -377,13 +377,13 @@
   .empty-state {
     text-align: center;
     padding: 60px 20px;
-    color: #666;
+    color: var(--color-text-secondary);
   }
   .spinner {
     width: 30px;
     height: 30px;
-    border: 3px solid #ddd;
-    border-top-color: #000;
+    border: 3px solid var(--color-border);
+    border-top-color: var(--color-black);
     border-radius: 50%;
     animation: spin 1s linear infinite;
     margin: 0 auto 20px;
@@ -394,20 +394,20 @@
     }
   }
   .error-state {
-    color: #d32f2f;
+    color: var(--color-error);
   }
   .error-state button {
     margin-top: 10px;
     padding: 8px 16px;
-    background: #000;
-    color: #fff;
+    background: var(--color-black);
+    color: var(--color-white);
     border: none;
     cursor: pointer;
   }
   .limit-notice {
     text-align: center;
     padding: 20px;
-    color: #666;
+    color: var(--color-text-secondary);
     font-size: 12px;
     font-style: italic;
   }

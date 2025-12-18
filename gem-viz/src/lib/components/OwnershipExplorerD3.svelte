@@ -380,7 +380,7 @@
       return portfolio;
     }
 
-    // Fallback: client-side fetch from MotherDuck (dev mode)
+    // Fallback: client-side fetch from Ownership API (dev mode)
     loadingStatus = 'Connecting to database...';
     const pageData = get(page);
     const pathname = pageData.url?.pathname || '';
@@ -801,7 +801,7 @@
     width: 32px;
     height: 32px;
     border: none;
-    border-top-color: #333;
+    border-top-color: var(--color-gray-700);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
   }
@@ -815,13 +815,13 @@
   .loading-status {
     font-size: 14px;
     font-weight: 500;
-    color: #333;
+    color: var(--color-gray-700);
     margin: 0;
   }
 
   .loading-hint {
     font-size: 12px;
-    color: #888;
+    color: var(--color-gray-500);
     margin: 0;
   }
 
@@ -862,7 +862,7 @@
   :global(.chart) {
     min-height: 420px;
     border: none;
-    background: #fff;
+    background: var(--color-white);
     padding: 8px;
   }
 
@@ -903,7 +903,7 @@
   }
 
   .error {
-    color: #b10000;
+    color: var(--color-error);
     margin: 0;
   }
 
