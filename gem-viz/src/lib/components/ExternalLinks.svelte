@@ -56,21 +56,21 @@
     name ? `https://news.google.com/search?q=${encodedName}` : null
   );
 
-  // Wayback Machine - historical website snapshots
+  // Wayback Machine - search for any archived pages mentioning the entity
   const waybackUrl = $derived(
     type === 'entity' && name
-      ? `https://web.archive.org/web/*/${name.replace(/ /g, '').toLowerCase()}.com`
+      ? `https://web.archive.org/web/*/${encodeURIComponent(name)}*`
       : null
   );
 
-  // Google Maps - for assets with coordinates
+  // Google Maps - for assets with coordinates (lat=0, lon=0 is valid!)
   const googleMapsUrl = $derived(
-    lat && lon ? `https://www.google.com/maps?q=${lat},${lon}&z=15` : null
+    lat != null && lon != null ? `https://www.google.com/maps?q=${lat},${lon}&z=15` : null
   );
 
   // Google Earth - for assets with coordinates (KML view)
   const googleEarthUrl = $derived(
-    lat && lon ? `https://earth.google.com/web/@${lat},${lon},1000a,1000d,35y,0h,0t,0r` : null
+    lat != null && lon != null ? `https://earth.google.com/web/@${lat},${lon},1000a,1000d,35y,0h,0t,0r` : null
   );
 
   // Map common country names to OpenCorporates jurisdiction codes

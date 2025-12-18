@@ -8,11 +8,14 @@
  * Docs: /docs (Swagger UI)
  */
 
-// API base URL - can be overridden via environment
+// API base URL - MUST be configured via environment variable
 const API_BASE =
   import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL ||
   import.meta.env.PUBLIC_OWNERSHIP_API_URL ||
-  'https://6b7c36096b12.ngrok.app';
+  '';
+
+// Default timeout for API requests (30 seconds)
+const API_TIMEOUT_MS = 30_000;
 
 // ============================================================================
 // TYPES
@@ -137,20 +140,49 @@ class OwnershipAPIError extends Error {
 }
 
 async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
-  const url = `${API_BASE}${endpoint}`;
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
-  });
-
-  if (!response.ok) {
-    throw new OwnershipAPIError(response.status, `API error: ${response.statusText}`);
+  if (!API_BASE) {
+    throw new OwnershipAPIError(0, 'API base URL not configured. Set PUBLIC_OWNERSHIP_API_BASE_URL.');
   }
 
-  return response.json();
+  const url = `${API_BASE}${endpoint}`;
+
+  // Add timeout via AbortController
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options?.headers,
+      },
+    });
+
+    if (!response.ok) {
+      // Try to get error details from response body
+      let errorMessage = `API error: ${response.statusText}`;
+      try {
+        const errorBody = await response.text();
+        if (errorBody && !errorBody.startsWith('<!')) {
+          errorMessage = `API error (${response.status}): ${errorBody.slice(0, 200)}`;
+        }
+      } catch {
+        // Ignore body read errors
+      }
+      throw new OwnershipAPIError(response.status, errorMessage);
+    }
+
+    return response.json();
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new OwnershipAPIError(0, `API request timed out after ${API_TIMEOUT_MS / 1000}s: ${endpoint}`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 function toNumber(value: unknown): number | null {
@@ -179,9 +211,16 @@ function extractEntityId(value: unknown): string | null {
   return null;
 }
 
-function normalizeEntity(raw: RawEntity): EntitySummary {
+function normalizeEntity(raw: RawEntity): EntitySummary | null {
   const idRaw = pickKey(raw, ['Entity ID', 'GEM Entity ID', 'entity_id', 'id']);
   const id = extractEntityId(idRaw) || String(idRaw || '').trim();
+
+  // Skip entities with empty IDs to prevent ghost entries
+  if (!id) {
+    console.warn('Skipping entity with empty ID:', raw);
+    return null as unknown as EntitySummary; // Will be filtered by caller
+  }
+
   const name =
     String(pickKey(raw, ['Name', 'Entity Name', 'entity_name', 'name']) || id || '').trim() || id;
   const fullName = pickKey(raw, ['Full Name', 'full_name']);

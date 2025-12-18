@@ -6,6 +6,7 @@
    */
   import { onMount, tick } from 'svelte';
   import { goto } from '$app/navigation';
+  import DOMPurify from 'isomorphic-dompurify';
   import { assetLink, entityLink } from '$lib/links';
   import { colors } from '$lib/ownership-theme';
 
@@ -88,7 +89,8 @@
       }
 
       const { svg } = await mermaid.render('mermaid-ownership', syntax);
-      mermaidSvg = svg;
+      // Sanitize SVG to prevent XSS from malicious entity/asset names
+      mermaidSvg = DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } });
 
       // After svelte updates the DOM, attach click handlers to nodes
       await tick();

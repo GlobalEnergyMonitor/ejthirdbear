@@ -102,6 +102,14 @@
   // Selectable items (exclude section headers)
   const selectableResults = $derived(allResults.filter(r => r.type !== 'section'));
 
+  // Clamp selectedIndex when results change to prevent out-of-bounds access
+  $effect(() => {
+    const maxIndex = selectableResults.length - 1;
+    if (selectedIndex > maxIndex) {
+      selectedIndex = Math.max(0, maxIndex);
+    }
+  });
+
   // Debounced search
   let searchTimeout;
   async function search(q) {
@@ -169,9 +177,14 @@
     } catch (e) {}
   }
 
-  // Execute selected action
+  // Execute selected action (with bounds checking)
   function executeSelected() {
-    const item = selectableResults[selectedIndex];
+    // Clamp index to valid range before accessing
+    const maxIndex = selectableResults.length - 1;
+    if (maxIndex < 0) return; // No results to execute
+
+    const safeIndex = Math.min(Math.max(0, selectedIndex), maxIndex);
+    const item = selectableResults[safeIndex];
     if (item?.action) {
       item.action();
     }
