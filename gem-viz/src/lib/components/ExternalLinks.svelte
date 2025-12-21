@@ -31,36 +31,26 @@
 
   // GEM Wiki URL (placeholder - will use API when available)
   // Format: https://www.gem.wiki/Entity_Name (with underscores)
-  const gemWikiUrl = $derived(
-    name ? `https://www.gem.wiki/${name.replace(/ /g, '_')}` : null
-  );
+  const gemWikiUrl = $derived(name ? `https://www.gem.wiki/${name.replace(/ /g, '_')}` : null);
 
   // Climate Trace - emissions data by facility
   // Search their map interface
   const climateTraceUrl = $derived(
-    type === 'asset' && name
-      ? `https://climatetrace.org/explore#search=${encodedName}`
-      : null
+    type === 'asset' && name ? `https://climatetrace.org/explore#search=${encodedName}` : null
   );
 
   // OpenOwnership Register - beneficial ownership data
   // Note: Register is being sunset but search still works
   const openOwnershipUrl = $derived(
-    type === 'entity' && name
-      ? `https://register.openownership.org/search?q=${encodedName}`
-      : null
+    type === 'entity' && name ? `https://register.openownership.org/search?q=${encodedName}` : null
   );
 
   // Google News - recent news articles
-  const googleNewsUrl = $derived(
-    name ? `https://news.google.com/search?q=${encodedName}` : null
-  );
+  const googleNewsUrl = $derived(name ? `https://news.google.com/search?q=${encodedName}` : null);
 
   // Wayback Machine - search for any archived pages mentioning the entity
   const waybackUrl = $derived(
-    type === 'entity' && name
-      ? `https://web.archive.org/web/*/${encodeURIComponent(name)}*`
-      : null
+    type === 'entity' && name ? `https://web.archive.org/web/*/${encodeURIComponent(name)}*` : null
   );
 
   // Google Maps - for assets with coordinates (lat=0, lon=0 is valid!)
@@ -70,43 +60,50 @@
 
   // Google Earth - for assets with coordinates (KML view)
   const googleEarthUrl = $derived(
-    lat != null && lon != null ? `https://earth.google.com/web/@${lat},${lon},1000a,1000d,35y,0h,0t,0r` : null
+    lat != null && lon != null
+      ? `https://earth.google.com/web/@${lat},${lon},1000a,1000d,35y,0h,0t,0r`
+      : null
   );
 
   // Map common country names to OpenCorporates jurisdiction codes
   function countryToJurisdiction(countryName) {
     const map = {
       'United States': 'us',
-      'USA': 'us',
+      USA: 'us',
       'United Kingdom': 'gb',
-      'UK': 'gb',
-      'China': 'cn',
-      'Japan': 'jp',
-      'Germany': 'de',
-      'France': 'fr',
-      'India': 'in',
-      'Australia': 'au',
-      'Canada': 'ca',
-      'Brazil': 'br',
+      UK: 'gb',
+      China: 'cn',
+      Japan: 'jp',
+      Germany: 'de',
+      France: 'fr',
+      India: 'in',
+      Australia: 'au',
+      Canada: 'ca',
+      Brazil: 'br',
       'South Korea': 'kr',
-      'Russia': 'ru',
-      'Indonesia': 'id',
+      Russia: 'ru',
+      Indonesia: 'id',
       'South Africa': 'za',
-      'Singapore': 'sg',
+      Singapore: 'sg',
       'Hong Kong': 'hk',
-      'Netherlands': 'nl',
-      'Switzerland': 'ch',
+      Netherlands: 'nl',
+      Switzerland: 'ch',
     };
     return map[countryName] || '';
   }
-
 </script>
 
 <div class="external-links">
   <span class="links-label">External:</span>
   <div class="links-list">
     {#if wikipediaUrl}
-      <a href={wikipediaUrl} target="_blank" rel="noopener" class="ext-link" title="Search Wikipedia">
+      <a
+        href={wikipediaUrl}
+        target="_blank"
+        rel="noopener"
+        class="ext-link"
+        title="Search Wikipedia"
+      >
         <span class="link-icon">W</span>
         <span class="link-text">Wikipedia</span>
       </a>
@@ -127,21 +124,39 @@
     {/if}
 
     {#if openCorporatesUrl}
-      <a href={openCorporatesUrl} target="_blank" rel="noopener" class="ext-link" title="Search OpenCorporates">
+      <a
+        href={openCorporatesUrl}
+        target="_blank"
+        rel="noopener"
+        class="ext-link"
+        title="Search OpenCorporates"
+      >
         <span class="link-icon oc">OC</span>
         <span class="link-text">OpenCorporates</span>
       </a>
     {/if}
 
     {#if climateTraceUrl}
-      <a href={climateTraceUrl} target="_blank" rel="noopener" class="ext-link" title="Climate Trace emissions data">
+      <a
+        href={climateTraceUrl}
+        target="_blank"
+        rel="noopener"
+        class="ext-link"
+        title="Climate Trace emissions data"
+      >
         <span class="link-icon ct">CT</span>
         <span class="link-text">Climate Trace</span>
       </a>
     {/if}
 
     {#if openOwnershipUrl}
-      <a href={openOwnershipUrl} target="_blank" rel="noopener" class="ext-link" title="OpenOwnership beneficial ownership">
+      <a
+        href={openOwnershipUrl}
+        target="_blank"
+        rel="noopener"
+        class="ext-link"
+        title="OpenOwnership beneficial ownership"
+      >
         <span class="link-icon oo">OO</span>
         <span class="link-text">OpenOwnership</span>
       </a>
@@ -155,21 +170,39 @@
     {/if}
 
     {#if waybackUrl}
-      <a href={waybackUrl} target="_blank" rel="noopener" class="ext-link" title="Wayback Machine archives">
+      <a
+        href={waybackUrl}
+        target="_blank"
+        rel="noopener"
+        class="ext-link"
+        title="Wayback Machine archives"
+      >
         <span class="link-icon wb">WB</span>
         <span class="link-text">Wayback</span>
       </a>
     {/if}
 
     {#if googleMapsUrl}
-      <a href={googleMapsUrl} target="_blank" rel="noopener" class="ext-link" title="View on Google Maps">
+      <a
+        href={googleMapsUrl}
+        target="_blank"
+        rel="noopener"
+        class="ext-link"
+        title="View on Google Maps"
+      >
         <span class="link-icon maps">📍</span>
         <span class="link-text">Maps</span>
       </a>
     {/if}
 
     {#if googleEarthUrl}
-      <a href={googleEarthUrl} target="_blank" rel="noopener" class="ext-link" title="View in Google Earth">
+      <a
+        href={googleEarthUrl}
+        target="_blank"
+        rel="noopener"
+        class="ext-link"
+        title="View in Google Earth"
+      >
         <span class="link-icon earth">🌍</span>
         <span class="link-text">Earth</span>
       </a>

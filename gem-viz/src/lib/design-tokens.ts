@@ -1,20 +1,20 @@
 /**
- * GEM Viz Design Tokens
- * ============================================================================
- * THE SINGLE SOURCE OF TRUTH FOR ALL COLORS AND DESIGN VALUES.
+ * @module design-tokens
+ * @description THE SINGLE SOURCE OF TRUTH FOR ALL COLORS AND DESIGN VALUES.
  *
- * This file contains:
+ * Contains:
  * - UI colors (grays, feedback)
  * - Data visualization colors (trackers, statuses)
- * - Typography
- * - Spacing
- * - Color utilities
+ * - Typography scales
+ * - Spacing system
+ * - Color manipulation utilities
  *
- * USAGE:
- *   import { colors, trackerColors, getStatusColor } from '$lib/design-tokens';
+ * CSS custom properties in shared-styles.css mirror these values.
  *
- * CSS custom properties are defined in shared-styles.css and mirror these values.
- * ============================================================================
+ * @example
+ * import { colors, getTrackerColor, withOpacity } from '$lib/design-tokens';
+ * const coalColor = getTrackerColor('Coal Plant');
+ * const faded = withOpacity(coalColor, 0.5);
  */
 
 // =============================================================================
@@ -98,11 +98,11 @@ export const trackerColors: Record<string, string> = {
   'Bioenergy Power': '#51BF7E',
 
   // Renewables
-  'Nuclear': '#6B7280',
-  'Hydropower': '#0369A1',
-  'Wind': '#06B6D4',
-  'Geothermal': '#DC2626',
-  'Solar': '#EAB308',
+  Nuclear: '#6B7280',
+  Hydropower: '#0369A1',
+  Wind: '#06B6D4',
+  Geothermal: '#DC2626',
+  Solar: '#EAB308',
 };
 
 // As Map for iteration
@@ -110,11 +110,11 @@ export const trackerColorMap = new Map(Object.entries(trackerColors));
 
 // Renewable-only subset
 export const renewableTrackerColors: Record<string, string> = {
-  'Nuclear': '#6B7280',
-  'Hydropower': '#0369A1',
-  'Wind': '#06B6D4',
-  'Geothermal': '#DC2626',
-  'Solar': '#EAB308',
+  Nuclear: '#6B7280',
+  Hydropower: '#0369A1',
+  Wind: '#06B6D4',
+  Geothermal: '#DC2626',
+  Solar: '#EAB308',
 };
 
 export const renewableTrackerColorMap = new Map(Object.entries(renewableTrackerColors));
@@ -135,26 +135,26 @@ export const statusColors: Record<string, string> = {
 // Granular status colors
 export const statusColorsGranular: Record<string, string> = {
   // Operating
-  'operating': '#4A57A8',
+  operating: '#4A57A8',
   'operating pre-retirement': '#4A57A8',
 
   // Prospective (gradient from light to dark)
-  'proposed': '#FDE68A',
-  'announced': '#FCD34D',
+  proposed: '#FDE68A',
+  announced: '#FCD34D',
   'pre-permit': '#F59E0B',
-  'permitted': '#F59E0B',
+  permitted: '#F59E0B',
   'pre-construction': '#D97706',
-  'construction': '#D97706',
+  construction: '#D97706',
 
   // Retired
-  'retired': '#1F2937',
-  'mothballed': '#1F2937',
-  'idle': '#1F2937',
+  retired: '#1F2937',
+  mothballed: '#1F2937',
+  idle: '#1F2937',
   'mothballed pre-retirement': '#1F2937',
 
   // Cancelled
-  'cancelled': '#D1D5DB',
-  'shelved': '#D1D5DB',
+  cancelled: '#D1D5DB',
+  shelved: '#D1D5DB',
   'cancelled - inferred 4 y': '#D1D5DB',
   'shelved - inferred 2 y': '#D1D5DB',
 };
@@ -162,9 +162,21 @@ export const statusColorsGranular: Record<string, string> = {
 // Status groupings
 export const statusGroups = {
   operating: ['operating', 'operating pre-retirement'] as const,
-  prospective: ['proposed', 'announced', 'pre-permit', 'permitted', 'pre-construction', 'construction'] as const,
+  prospective: [
+    'proposed',
+    'announced',
+    'pre-permit',
+    'permitted',
+    'pre-construction',
+    'construction',
+  ] as const,
   retired: ['retired', 'mothballed', 'idle', 'mothballed pre-retirement'] as const,
-  cancelled: ['cancelled', 'shelved', 'cancelled - inferred 4 y', 'shelved - inferred 2 y'] as const,
+  cancelled: [
+    'cancelled',
+    'shelved',
+    'cancelled - inferred 4 y',
+    'shelved - inferred 2 y',
+  ] as const,
 } as const;
 
 // Status color legend (for viz legends)
@@ -178,7 +190,11 @@ export const statusColorLegend = [
 // Prospective-only legend (more granular)
 export const prospectiveColorLegend = [
   { color: '#FDE68A', label: 'Proposed/Announced', statuses: ['proposed', 'announced'] },
-  { color: '#F59E0B', label: 'Pre-construction', statuses: ['pre-permit', 'permitted', 'pre-construction'] },
+  {
+    color: '#F59E0B',
+    label: 'Pre-construction',
+    statuses: ['pre-permit', 'permitted', 'pre-construction'],
+  },
   { color: '#D97706', label: 'Construction', statuses: ['construction'] },
 ];
 
@@ -227,7 +243,7 @@ export const ownershipColors = {
 export const fonts = {
   serif: "Georgia, 'Times New Roman', serif",
   mono: "'SF Mono', Consolas, 'Liberation Mono', Menlo, monospace",
-  sans: "system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+  sans: 'system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
 } as const;
 
 export const fontSizes = {
@@ -327,27 +343,44 @@ export function hexToRgb(hex: string): { r: number; g: number; b: number } | nul
  * Convert RGB to hex
  */
 export function rgbToHex(r: number, g: number, b: number): string {
-  return '#' + [r, g, b]
-    .map(x => Math.round(Math.max(0, Math.min(255, x))).toString(16).padStart(2, '0'))
-    .join('');
+  return (
+    '#' +
+    [r, g, b]
+      .map((x) =>
+        Math.round(Math.max(0, Math.min(255, x)))
+          .toString(16)
+          .padStart(2, '0')
+      )
+      .join('')
+  );
 }
 
 /**
  * Convert RGB to HSL
  */
 export function rgbToHsl(r: number, g: number, b: number): { h: number; s: number; l: number } {
-  r /= 255; g /= 255; b /= 255;
-  const max = Math.max(r, g, b), min = Math.min(r, g, b);
-  let h = 0, s = 0;
+  r /= 255;
+  g /= 255;
+  b /= 255;
+  const max = Math.max(r, g, b),
+    min = Math.min(r, g, b);
+  let h = 0,
+    s = 0;
   const l = (max + min) / 2;
 
   if (max !== min) {
     const d = max - min;
     s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
     switch (max) {
-      case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
-      case g: h = ((b - r) / d + 2) / 6; break;
-      case b: h = ((r - g) / d + 4) / 6; break;
+      case r:
+        h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+        break;
+      case g:
+        h = ((b - r) / d + 2) / 6;
+        break;
+      case b:
+        h = ((r - g) / d + 4) / 6;
+        break;
     }
   }
   return { h, s, l };
@@ -444,7 +477,10 @@ export const colorByStatus = new Map(Object.entries(statusColorsGranular));
 // Prospective status colors as Map (legacy format)
 export const statusColorsProspective = new Map([
   ['#FDE68A', { descript: 'proposed/announced', statuses: ['proposed', 'announced'] }],
-  ['#F59E0B', { descript: 'pre-construction', statuses: ['pre-permit', 'permitted', 'pre-construction'] }],
+  [
+    '#F59E0B',
+    { descript: 'pre-construction', statuses: ['pre-permit', 'permitted', 'pre-construction'] },
+  ],
   ['#D97706', { descript: 'construction', statuses: ['construction'] }],
 ]);
 
@@ -463,38 +499,19 @@ export const statusColorsMap = new Map([
 ]);
 
 // =============================================================================
-// 10. DATA CONFIG
+// 10. STATUS/TRACKER LISTS
 // =============================================================================
 
 export const fossilTrackers = ['Coal Plant', 'Gas Plant', 'Coal Mine', 'Gas Pipeline'];
 
 export const prospectiveStatuses = [
-  'permitted', 'pre-permit', 'pre-construction', 'construction', 'proposed', 'announced'
+  'permitted',
+  'pre-permit',
+  'pre-construction',
+  'construction',
+  'proposed',
+  'announced',
 ];
-
-export const idFields = new Map([
-  ['Bioenergy Power', 'GEM unit ID'],
-  ['Coal Plant', 'GEM unit ID'],
-  ['Gas Plant', 'GEM unit ID'],
-  ['Coal Mine', 'GEM Mine ID'],
-  ['Iron Ore Mine', 'GEM Asset ID'],
-  ['Gas Pipeline', 'ProjectID'],
-  ['Oil & NGL Pipeline', 'ProjectID'],
-  ['Steel Plant', 'Steel Plant ID'],
-  ['Cement and Concrete', 'GEM Plant ID'],
-]);
-
-export const capacityFields = new Map([
-  ['Bioenergy Power', 'Capacity (MW)'],
-  ['Coal Plant', 'Capacity (MW)'],
-  ['Gas Plant', 'Capacity (MW)'],
-  ['Coal Mine', 'Capacity (Mtpa)'],
-  ['Iron Ore Mine', 'Production 2023 (ttpa)'],
-  ['Gas Infrastructure', 'CapacityBcm/y'],
-  ['Oil Infrastructure', 'CapacityBOEd'],
-  ['Steel Plant', 'Nominal crude steel capacity (ttpa)'],
-  ['Cement and Concrete', 'Cement Capacity (millions metric tonnes per annum)'],
-]);
 
 // =============================================================================
 // AGGREGATED EXPORTS (for legacy imports from ownership-theme)

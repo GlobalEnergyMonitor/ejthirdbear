@@ -28,15 +28,15 @@
   --font-family-sans: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 
   /* Size scale: Each step = previous × 1.2 */
-  --font-size-xs: 8px;      /* Footnotes, superscripts */
-  --font-size-sm: 9px;      /* Captions, labels */
-  --font-size-base: 10px;   /* Data tables, dense UI */
-  --font-size-md: 11px;     /* Secondary text */
-  --font-size-body: 12px;   /* Body text (base) */
-  --font-size-lg: 14px;     /* Subheads */
-  --font-size-xl: 17px;     /* Section heads */
-  --font-size-2xl: 20px;    /* Page titles */
-  --font-size-3xl: 24px;    /* Display */
+  --font-size-xs: 8px; /* Footnotes, superscripts */
+  --font-size-sm: 9px; /* Captions, labels */
+  --font-size-base: 10px; /* Data tables, dense UI */
+  --font-size-md: 11px; /* Secondary text */
+  --font-size-body: 12px; /* Body text (base) */
+  --font-size-lg: 14px; /* Subheads */
+  --font-size-xl: 17px; /* Section heads */
+  --font-size-2xl: 20px; /* Page titles */
+  --font-size-3xl: 24px; /* Display */
 
   /* Line heights */
   --line-height-tight: 1.1;
@@ -114,35 +114,35 @@
      ========================================================================== */
 
   /* --- Tracker Colors (GEM Brand) --- */
-  --color-tracker-coal-plant: #7F142A;      /* Deep red */
-  --color-tracker-coal-mine: #4A0D19;       /* Darker red */
-  --color-tracker-gas-plant: #A0AAE5;       /* Lavender */
-  --color-tracker-gas-pipeline: #7B86C9;    /* Purple */
-  --color-tracker-oil-pipeline: #061F5F;    /* Midnight blue */
-  --color-tracker-iron-ore: #DC153D;        /* Bright red */
-  --color-tracker-steel: #004F61;           /* Teal */
-  --color-tracker-cement: #BECCCF;          /* Warm gray */
-  --color-tracker-bioenergy: #51BF7E;       /* Green */
+  --color-tracker-coal-plant: #7f142a; /* Deep red */
+  --color-tracker-coal-mine: #4a0d19; /* Darker red */
+  --color-tracker-gas-plant: #a0aae5; /* Lavender */
+  --color-tracker-gas-pipeline: #7b86c9; /* Purple */
+  --color-tracker-oil-pipeline: #061f5f; /* Midnight blue */
+  --color-tracker-iron-ore: #dc153d; /* Bright red */
+  --color-tracker-steel: #004f61; /* Teal */
+  --color-tracker-cement: #becccf; /* Warm gray */
+  --color-tracker-bioenergy: #51bf7e; /* Green */
 
   /* --- Tracker Colors (Renewable) --- */
-  --color-tracker-nuclear: #6B7280;         /* Gray */
-  --color-tracker-hydro: #0369A1;           /* Blue */
-  --color-tracker-wind: #06B6D4;            /* Cyan */
-  --color-tracker-geothermal: #DC2626;      /* Red */
-  --color-tracker-solar: #EAB308;           /* Yellow */
+  --color-tracker-nuclear: #6b7280; /* Gray */
+  --color-tracker-hydro: #0369a1; /* Blue */
+  --color-tracker-wind: #06b6d4; /* Cyan */
+  --color-tracker-geothermal: #dc2626; /* Red */
+  --color-tracker-solar: #eab308; /* Yellow */
 
   /* --- Status Colors --- */
-  --color-status-operating: #4A57A8;        /* Blue - active */
-  --color-status-prospective: #9CA3AF;      /* Gray - planned */
-  --color-status-retired: #1F2937;          /* Dark - closed */
-  --color-status-cancelled: #D1D5DB;        /* Light gray - cancelled */
-  --color-status-unknown: #E5E7EB;          /* Very light - unknown */
+  --color-status-operating: #4a57a8; /* Blue - active */
+  --color-status-prospective: #9ca3af; /* Gray - planned */
+  --color-status-retired: #1f2937; /* Dark - closed */
+  --color-status-cancelled: #d1d5db; /* Light gray - cancelled */
+  --color-status-unknown: #e5e7eb; /* Very light - unknown */
 
   /* --- Status Colors (Granular Prospective) --- */
-  --color-status-proposed: #FDE68A;         /* Light yellow */
-  --color-status-announced: #FCD34D;        /* Yellow */
-  --color-status-permitted: #F59E0B;        /* Amber */
-  --color-status-construction: #D97706;     /* Dark amber */
+  --color-status-proposed: #fde68a; /* Light yellow */
+  --color-status-announced: #fcd34d; /* Yellow */
+  --color-status-permitted: #f59e0b; /* Amber */
+  --color-status-construction: #d97706; /* Dark amber */
 
   /* --- Map Colors --- */
   --color-map-coal: #1a1a1a;
@@ -635,7 +635,9 @@
 
 /* Card lift on hover */
 .card-interactive {
-  transition: box-shadow var(--transition-base), transform var(--transition-base);
+  transition:
+    box-shadow var(--transition-base),
+    transform var(--transition-base);
 }
 
 .card-interactive:hover {
@@ -663,8 +665,12 @@
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 /* Subtle pulse for loading states */
@@ -673,8 +679,13 @@
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 /* Skeleton loading placeholder */
@@ -691,8 +702,12 @@
 }
 
 @keyframes skeleton {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 /* ============================================================================
@@ -860,11 +875,11 @@ figcaption {
 
 /* Proper cursor states */
 [disabled],
-[aria-disabled="true"] {
+[aria-disabled='true'] {
   cursor: not-allowed;
 }
 
-[role="button"],
+[role='button'],
 button,
 select,
 summary {

@@ -9,7 +9,7 @@
  * aws configure --profile do-spaces
  */
 
-import { execSync, spawn } from 'child_process';
+import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -52,7 +52,7 @@ function progressDone(message = 'complete') {
     data.progress = 100;
     fs.writeFileSync(PROGRESS_FILE, JSON.stringify(data, null, 2));
     // Auto-clear after 30 seconds
-    setTimeout(() => { try { fs.unlinkSync(PROGRESS_FILE); } catch {} }, 30000);
+    setTimeout(() => { try { fs.unlinkSync(PROGRESS_FILE); } catch { /* file may not exist */ } }, 30000);
   } catch { /* ignore */ }
 }
 
@@ -63,7 +63,7 @@ function progressFail(message = 'failed') {
     data.failed = true;
     fs.writeFileSync(PROGRESS_FILE, JSON.stringify(data, null, 2));
     // Auto-clear after 60 seconds
-    setTimeout(() => { try { fs.unlinkSync(PROGRESS_FILE); } catch {} }, 60000);
+    setTimeout(() => { try { fs.unlinkSync(PROGRESS_FILE); } catch { /* file may not exist */ } }, 60000);
   } catch { /* ignore */ }
 }
 

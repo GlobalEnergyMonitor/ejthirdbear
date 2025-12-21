@@ -22,7 +22,13 @@
     { key: 'name', label: 'Name', sortable: true, filterable: true, width: '260px' },
     { key: 'id', label: 'ID', sortable: true, filterable: true, width: '130px' },
     { key: 'status', label: 'Status', sortable: true, filterable: true, width: '120px' },
-    { key: 'facilityType', label: 'Facility Type', sortable: true, filterable: true, width: '150px' },
+    {
+      key: 'facilityType',
+      label: 'Facility Type',
+      sortable: true,
+      filterable: true,
+      width: '150px',
+    },
     { key: 'ownerName', label: 'Owner', sortable: true, filterable: true, width: '220px' },
     { key: 'country', label: 'Country', sortable: true, filterable: true, width: '160px' },
     {

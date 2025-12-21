@@ -10,6 +10,7 @@
   import { investigationCart } from '$lib/investigationCart';
   import { widgetQuery } from '$lib/widgets/widget-utils';
   import { link, assetLink, entityLink } from '$lib/links';
+  import { buildIdList } from '$lib/utils/sql';
   import TrackerIcon from '$lib/components/TrackerIcon.svelte';
   import PatternInsights from '$lib/components/PatternInsights.svelte';
   import Citation from '$lib/components/Citation.svelte';
@@ -44,16 +45,6 @@
 
   // Format timestamp
   const reportDate = new Date().toLocaleString();
-
-  // Escape SQL string
-  function escapeSQL(str) {
-    return str.replace(/'/g, "''");
-  }
-
-  // Build ID list for SQL IN clause
-  function buildIdList(ids) {
-    return ids.map((id) => `'${escapeSQL(id)}'`).join(',');
-  }
 
   // Query for shared assets (when entities in cart)
   async function querySharedAssets() {
@@ -736,12 +727,7 @@
     </section>
 
     <!-- Pattern Analysis -->
-    <PatternInsights
-      {entityPortfolios}
-      {sharedAssets}
-      {commonOwners}
-      {geoBreakdown}
-    />
+    <PatternInsights {entityPortfolios} {sharedAssets} {commonOwners} {geoBreakdown} />
 
     <!-- Cart Items -->
     <section class="cart-section">
@@ -994,8 +980,22 @@
 
   <!-- Clear Cart Confirmation Modal -->
   {#if showClearConfirm}
-    <div class="modal-overlay" onclick={() => (showClearConfirm = false)} onkeydown={(e) => e.key === 'Escape' && (showClearConfirm = false)} role="button" tabindex="-1" aria-label="Close modal">
-      <div class="modal-dialog" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()} role="alertdialog" aria-labelledby="clear-cart-title" tabindex="-1">
+    <div
+      class="modal-overlay"
+      onclick={() => (showClearConfirm = false)}
+      onkeydown={(e) => e.key === 'Escape' && (showClearConfirm = false)}
+      role="button"
+      tabindex="-1"
+      aria-label="Close modal"
+    >
+      <div
+        class="modal-dialog"
+        onclick={(e) => e.stopPropagation()}
+        onkeydown={(e) => e.stopPropagation()}
+        role="alertdialog"
+        aria-labelledby="clear-cart-title"
+        tabindex="-1"
+      >
         <h3 id="clear-cart-title">Clear Investigation Cart?</h3>
         <p>
           This will remove all {cartItems.length} items from your cart. This action cannot be undone.

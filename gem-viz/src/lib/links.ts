@@ -1,10 +1,14 @@
 /**
- * Link utilities for dev/production compatibility
+ * @module links
+ * @description URL and path helpers for consistent linking.
  *
- * In dev mode: /network/
- * In production: /gem-viz/v0.1.11/network/index.html
+ * Handles dev/production URL differences:
+ * - Dev: `/network/` (SvelteKit handles routing)
+ * - Prod: `/gem-viz/v0.1.x/network/index.html` (DO Spaces requires explicit paths)
  *
- * DO Spaces requires explicit /index.html - no auto-serving from directories
+ * @example
+ * import { assetLink, entityLink, link } from '$lib/links';
+ * const url = assetLink('G100000109409');
  */
 
 import { base } from '$app/paths';

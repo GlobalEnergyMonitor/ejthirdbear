@@ -16,7 +16,9 @@ html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-  font-feature-settings: 'kern' 1, 'liga' 1;
+  font-feature-settings:
+    'kern' 1,
+    'liga' 1;
 }
 
 body {
@@ -143,11 +145,18 @@ img {
   }
 
   /* Avoid breaking inside key elements */
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     break-after: avoid;
   }
 
-  table, figure, .viz-section {
+  table,
+  figure,
+  .viz-section {
     break-inside: avoid;
   }
 }

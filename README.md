@@ -5,9 +5,8 @@ Cross-tracker ownership visualization and geospatial analysis.
 ## Structure
 
 - `gem-viz/` - SvelteKit static site generator
-- `data-processing/` - Data pipeline scripts
+- `data-processing/` - Data pipeline scripts and source data
 - `docs/` - Technical documentation
-- `Onwership_ConvertDataToParquet.R` - R data conversion
 
 ## Quick Start
 

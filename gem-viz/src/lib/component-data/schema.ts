@@ -84,9 +84,7 @@ export async function fetchSameOwnerAssets(
   excludeAssetId: string
 ): Promise<{ success: boolean; data: AssetBasics[] }> {
   try {
-    console.warn(
-      `[fetchSameOwnerAssets] API does not expose assets for entity ${ownerEntityId}`
-    );
+    console.warn(`[fetchSameOwnerAssets] API does not expose assets for entity ${ownerEntityId}`);
     return { success: true, data: [] };
   } catch (error) {
     console.warn(`[fetchSameOwnerAssets] API failed for ${ownerEntityId}:`, error);

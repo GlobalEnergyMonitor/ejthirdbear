@@ -35,21 +35,101 @@
   // Commands - static actions
   const commands = [
     // Navigation
-    { id: 'home', label: 'Go to Home', shortcut: 'g h', action: () => goto(link('index')), section: 'Navigation' },
-    { id: 'explore', label: 'Go to Explore', shortcut: 'g e', action: () => goto(link('explore')), section: 'Navigation' },
-    { id: 'report', label: 'Go to Report', shortcut: 'g r', action: () => goto(link('report')), section: 'Navigation' },
-    { id: 'export', label: 'Go to Export', shortcut: 'g x', action: () => goto(link('export')), section: 'Navigation' },
-    { id: 'about', label: 'Go to About', shortcut: 'g a', action: () => goto(link('about')), section: 'Navigation' },
-    { id: 'map-search', label: 'Search by Map', shortcut: 'g m', action: () => goto('/asset/search'), section: 'Navigation' },
-    { id: 'back', label: 'Go Back', shortcut: 'b', action: () => history.back(), section: 'Navigation' },
+    {
+      id: 'home',
+      label: 'Go to Home',
+      shortcut: 'g h',
+      action: () => goto(link('index')),
+      section: 'Navigation',
+    },
+    {
+      id: 'explore',
+      label: 'Go to Explore',
+      shortcut: 'g e',
+      action: () => goto(link('explore')),
+      section: 'Navigation',
+    },
+    {
+      id: 'report',
+      label: 'Go to Report',
+      shortcut: 'g r',
+      action: () => goto(link('report')),
+      section: 'Navigation',
+    },
+    {
+      id: 'export',
+      label: 'Go to Export',
+      shortcut: 'g x',
+      action: () => goto(link('export')),
+      section: 'Navigation',
+    },
+    {
+      id: 'about',
+      label: 'Go to About',
+      shortcut: 'g a',
+      action: () => goto(link('about')),
+      section: 'Navigation',
+    },
+    {
+      id: 'map-search',
+      label: 'Search by Map',
+      shortcut: 'g m',
+      action: () => goto('/asset/search'),
+      section: 'Navigation',
+    },
+    {
+      id: 'back',
+      label: 'Go Back',
+      shortcut: 'b',
+      action: () => history.back(),
+      section: 'Navigation',
+    },
     // Actions
-    { id: 'add-cart', label: 'Add to Cart', shortcut: 'a', action: () => addCurrentToCart(), section: 'Actions' },
-    { id: 'copy-id', label: 'Copy ID to Clipboard', shortcut: 'c', action: () => copyCurrentId(), section: 'Actions' },
-    { id: 'copy-url', label: 'Copy Page URL', shortcut: 'u', action: () => copyUrl(), section: 'Actions' },
-    { id: 'clear-cart', label: 'Clear Investigation Cart', action: () => { investigationCart.clear(); close(); }, section: 'Actions' },
-    { id: 'print', label: 'Print Current Page', shortcut: '⌘ p', action: () => window.print(), section: 'Actions' },
+    {
+      id: 'add-cart',
+      label: 'Add to Cart',
+      shortcut: 'a',
+      action: () => addCurrentToCart(),
+      section: 'Actions',
+    },
+    {
+      id: 'copy-id',
+      label: 'Copy ID to Clipboard',
+      shortcut: 'c',
+      action: () => copyCurrentId(),
+      section: 'Actions',
+    },
+    {
+      id: 'copy-url',
+      label: 'Copy Page URL',
+      shortcut: 'u',
+      action: () => copyUrl(),
+      section: 'Actions',
+    },
+    {
+      id: 'clear-cart',
+      label: 'Clear Investigation Cart',
+      action: () => {
+        investigationCart.clear();
+        close();
+      },
+      section: 'Actions',
+    },
+    {
+      id: 'print',
+      label: 'Print Current Page',
+      shortcut: '⌘ p',
+      action: () => window.print(),
+      section: 'Actions',
+    },
     // Help
-    { id: 'shortcuts', label: 'Show All Shortcuts', shortcut: '?', action: () => toggleHelp(), section: 'Help' },
+    {
+      id: 'shortcuts',
+      label: 'Show All Shortcuts',
+      shortcut: '?',
+      action: () => toggleHelp(),
+      section: 'Help',
+    },
   ];
 
   // All results combined for keyboard navigation
@@ -59,48 +139,52 @@
     // Recent searches first (if no query)
     if (!query && recentSearches.length > 0) {
       results.push({ type: 'section', label: 'Recent' });
-      recentSearches.slice(0, 3).forEach(r => results.push({ ...r, type: 'recent' }));
+      recentSearches.slice(0, 3).forEach((r) => results.push({ ...r, type: 'recent' }));
     }
 
     // Commands (filtered by query)
     const filteredCommands = query
-      ? commands.filter(c => c.label.toLowerCase().includes(query.toLowerCase()))
+      ? commands.filter((c) => c.label.toLowerCase().includes(query.toLowerCase()))
       : commands;
 
     if (filteredCommands.length > 0) {
       results.push({ type: 'section', label: 'Commands' });
-      filteredCommands.forEach(c => results.push({ ...c, type: 'command' }));
+      filteredCommands.forEach((c) => results.push({ ...c, type: 'command' }));
     }
 
     // Entities
     if (entityResults.length > 0) {
       results.push({ type: 'section', label: 'Entities' });
-      entityResults.forEach(e => results.push({
-        type: 'entity',
-        id: e['Entity ID'],
-        label: e.Name || e['Entity ID'],
-        sublabel: e['Headquarters Country'],
-        action: () => navigateTo('entity', e['Entity ID'], e.Name),
-      }));
+      entityResults.forEach((e) =>
+        results.push({
+          type: 'entity',
+          id: e['Entity ID'],
+          label: e.Name || e['Entity ID'],
+          sublabel: e['Headquarters Country'],
+          action: () => navigateTo('entity', e['Entity ID'], e.Name),
+        })
+      );
     }
 
     // Assets
     if (assetResults.length > 0) {
       results.push({ type: 'section', label: 'Assets' });
-      assetResults.forEach(a => results.push({
-        type: 'asset',
-        id: a.gem_unit_id,
-        label: a.facility_name || a.gem_unit_id,
-        sublabel: [a.facility_type, a.country].filter(Boolean).join(' · '),
-        action: () => navigateTo('asset', a.gem_unit_id, a.facility_name),
-      }));
+      assetResults.forEach((a) =>
+        results.push({
+          type: 'asset',
+          id: a.gem_unit_id,
+          label: a.facility_name || a.gem_unit_id,
+          sublabel: [a.facility_type, a.country].filter(Boolean).join(' · '),
+          action: () => navigateTo('asset', a.gem_unit_id, a.facility_name),
+        })
+      );
     }
 
     return results;
   });
 
   // Selectable items (exclude section headers)
-  const selectableResults = $derived(allResults.filter(r => r.type !== 'section'));
+  const selectableResults = $derived(allResults.filter((r) => r.type !== 'section'));
 
   // Clamp selectedIndex when results change to prevent out-of-bounds access
   $effect(() => {
@@ -156,7 +240,7 @@
 
   // Add to recent searches
   function addToRecent(item) {
-    const filtered = recentSearches.filter(r => r.id !== item.id);
+    const filtered = recentSearches.filter((r) => r.id !== item.id);
     recentSearches = [item, ...filtered].slice(0, 10);
     saveRecent();
   }
@@ -165,7 +249,7 @@
   function saveRecent() {
     try {
       localStorage.setItem('gem-recent-searches', JSON.stringify(recentSearches));
-    } catch (e) {}
+    } catch { /* localStorage may be unavailable */ }
   }
 
   function loadRecent() {
@@ -174,7 +258,7 @@
       if (stored) {
         recentSearches = JSON.parse(stored);
       }
-    } catch (e) {}
+    } catch { /* localStorage may be unavailable */ }
   }
 
   // Execute selected action (with bounds checking)
@@ -233,18 +317,20 @@
     // Shortcut sequences (g + key)
     if (!open && e.key === 'g' && !isInputFocused()) {
       waitingForSecondKey = true;
-      setTimeout(() => { waitingForSecondKey = false; }, 500);
+      setTimeout(() => {
+        waitingForSecondKey = false;
+      }, 500);
       return;
     }
 
     if (waitingForSecondKey && !isInputFocused()) {
       const shortcutMap = {
-        'h': () => goto(link('index')),
-        'e': () => goto(link('explore')),
-        'r': () => goto(link('report')),
-        'x': () => goto(link('export')),
-        'a': () => goto(link('about')),
-        'm': () => goto('/asset/search'),
+        h: () => goto(link('index')),
+        e: () => goto(link('explore')),
+        r: () => goto(link('report')),
+        x: () => goto(link('export')),
+        a: () => goto(link('about')),
+        m: () => goto('/asset/search'),
       };
 
       if (shortcutMap[e.key]) {
@@ -432,7 +518,9 @@
   // Show toast notification
   function showToast(message) {
     toast = message;
-    setTimeout(() => { toast = ''; }, 2000);
+    setTimeout(() => {
+      toast = '';
+    }, 2000);
   }
 
   // Scroll to section by index
@@ -497,10 +585,12 @@
     }
 
     // Check if most are open or closed
-    const openCount = Array.from(details).filter(d => d.open).length;
+    const openCount = Array.from(details).filter((d) => d.open).length;
     const shouldOpen = openCount < details.length / 2;
 
-    details.forEach(d => { d.open = shouldOpen; });
+    details.forEach((d) => {
+      d.open = shouldOpen;
+    });
     showToast(shouldOpen ? 'Expanded all' : 'Collapsed all');
   }
 
@@ -512,7 +602,7 @@
 
     // Find current position
     const linksArray = Array.from(assetLinks);
-    const currentIndex = linksArray.findIndex(a => a.getAttribute('href') === currentPath);
+    const currentIndex = linksArray.findIndex((a) => a.getAttribute('href') === currentPath);
 
     if (currentIndex === -1 && linksArray.length > 0) {
       // We're on an asset page, try to find it in a list
@@ -549,7 +639,9 @@
 
   function isInputFocused() {
     const active = document.activeElement;
-    return active?.tagName === 'INPUT' || active?.tagName === 'TEXTAREA' || active?.isContentEditable;
+    return (
+      active?.tagName === 'INPUT' || active?.tagName === 'TEXTAREA' || active?.isContentEditable
+    );
   }
 
   function toggle() {
@@ -592,10 +684,23 @@
 
 {#if open}
   <!-- Backdrop -->
-  <div class="palette-backdrop" onclick={close} onkeydown={(e) => e.key === 'Escape' && close()} role="button" tabindex="-1" aria-label="Close palette"></div>
+  <div
+    class="palette-backdrop"
+    onclick={close}
+    onkeydown={(e) => e.key === 'Escape' && close()}
+    role="button"
+    tabindex="-1"
+    aria-label="Close palette"
+  ></div>
 
   <!-- Palette -->
-  <div class="palette" onkeydown={handleKeydown} role="dialog" aria-label="Command palette" tabindex="-1">
+  <div
+    class="palette"
+    onkeydown={handleKeydown}
+    role="dialog"
+    aria-label="Command palette"
+    tabindex="-1"
+  >
     <div class="palette-header">
       <input
         bind:this={inputEl}
@@ -624,9 +729,16 @@
               class="result-item"
               class:selected={selectableIndex === selectedIndex}
               onclick={() => item.action?.()}
-              onmouseenter={() => { selectedIndex = selectableIndex; }}
+              onmouseenter={() => {
+                selectedIndex = selectableIndex;
+              }}
             >
-              <span class="result-icon" class:entity={item.type === 'entity'} class:asset={item.type === 'asset'} class:recent={item.type === 'recent'}>
+              <span
+                class="result-icon"
+                class:entity={item.type === 'entity'}
+                class:asset={item.type === 'asset'}
+                class:recent={item.type === 'recent'}
+              >
                 {#if item.type === 'entity' || (item.type === 'recent' && item.id?.startsWith?.('E'))}E
                 {:else if item.type === 'asset' || (item.type === 'recent' && item.id?.startsWith?.('G'))}G
                 {:else if item.type === 'command'}⌘
@@ -668,11 +780,18 @@
 
 <!-- Help modal -->
 {#if showHelp}
-  <div class="help-backdrop" onclick={() => showHelp = false} onkeydown={(e) => e.key === 'Escape' && (showHelp = false)} role="button" tabindex="-1" aria-label="Close help"></div>
+  <div
+    class="help-backdrop"
+    onclick={() => (showHelp = false)}
+    onkeydown={(e) => e.key === 'Escape' && (showHelp = false)}
+    role="button"
+    tabindex="-1"
+    aria-label="Close help"
+  ></div>
   <div class="help-modal">
     <div class="help-header">
       <h2>Keyboard Shortcuts</h2>
-      <button class="help-close" onclick={() => showHelp = false}>×</button>
+      <button class="help-close" onclick={() => (showHelp = false)}>×</button>
     </div>
 
     <div class="help-content">
@@ -929,7 +1048,10 @@
     font-family: monospace;
     font-size: 10px;
     opacity: 0;
-    transition: opacity 0.3s, color 0.2s, border-color 0.2s;
+    transition:
+      opacity 0.3s,
+      color 0.2s,
+      border-color 0.2s;
     z-index: 100;
   }
 
@@ -985,18 +1107,30 @@
     font-family: monospace;
     border-radius: 3px;
     z-index: 10000;
-    animation: toastIn 0.15s ease-out, toastOut 0.15s ease-in 1.7s forwards;
+    animation:
+      toastIn 0.15s ease-out,
+      toastOut 0.15s ease-in 1.7s forwards;
     pointer-events: none;
   }
 
   @keyframes toastIn {
-    from { opacity: 0; transform: translateY(4px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   @keyframes toastOut {
-    from { opacity: 1; }
-    to { opacity: 0; }
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
   }
 
   /* Help modal - refined and minimal */

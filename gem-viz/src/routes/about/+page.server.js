@@ -14,7 +14,7 @@ export async function load() {
     // Default values (will be overwritten with real data if available)
     totalLocations: 0,
     totalCountries: 0,
-    totalAssets: 13472,  // From build stats
+    totalAssets: 13472, // From build stats
     totalEntities: 3952, // From build stats
     trackerBreakdown: [],
     buildTime: null,
@@ -61,7 +61,6 @@ export async function load() {
     stats.trackerBreakdown = Object.entries(trackerCounts)
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => b.count - a.count);
-
   } catch (e) {
     // GeoJSON stats are optional during prerender - silently continue with defaults
   }

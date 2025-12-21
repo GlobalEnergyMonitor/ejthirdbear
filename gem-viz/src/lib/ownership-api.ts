@@ -10,9 +10,7 @@
 
 // API base URL - MUST be configured via environment variable
 const API_BASE =
-  import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL ||
-  import.meta.env.PUBLIC_OWNERSHIP_API_URL ||
-  '';
+  import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL || import.meta.env.PUBLIC_OWNERSHIP_API_URL || '';
 
 // Default timeout for API requests (30 seconds)
 const API_TIMEOUT_MS = 30_000;
@@ -139,9 +137,13 @@ class OwnershipAPIError extends Error {
   }
 }
 
+// eslint-disable-next-line no-undef
 async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
   if (!API_BASE) {
-    throw new OwnershipAPIError(0, 'API base URL not configured. Set PUBLIC_OWNERSHIP_API_BASE_URL.');
+    throw new OwnershipAPIError(
+      0,
+      'API base URL not configured. Set PUBLIC_OWNERSHIP_API_BASE_URL.'
+    );
   }
 
   const url = `${API_BASE}${endpoint}`;
@@ -177,7 +179,10 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
     return response.json();
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
-      throw new OwnershipAPIError(0, `API request timed out after ${API_TIMEOUT_MS / 1000}s: ${endpoint}`);
+      throw new OwnershipAPIError(
+        0,
+        `API request timed out after ${API_TIMEOUT_MS / 1000}s: ${endpoint}`
+      );
     }
     throw err;
   } finally {

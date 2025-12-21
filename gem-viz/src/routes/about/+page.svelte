@@ -249,13 +249,16 @@
     </p>
     <ul>
       <li>
-        <strong>{stats.totalEntities?.toLocaleString() || '~4,000'} entities</strong> — Companies, governments, individuals, and other owners
+        <strong>{stats.totalEntities?.toLocaleString() || '~4,000'} entities</strong> — Companies, governments,
+        individuals, and other owners
       </li>
       <li>
-        <strong>{stats.totalAssets?.toLocaleString() || '~13,000'} unique assets</strong> — Energy infrastructure units across all trackers
+        <strong>{stats.totalAssets?.toLocaleString() || '~13,000'} unique assets</strong> — Energy infrastructure
+        units across all trackers
       </li>
       <li>
-        <strong>{stats.totalLocations?.toLocaleString() || '~22,000'} locations</strong> — Geographic coordinates in {stats.totalCountries || 185} countries
+        <strong>{stats.totalLocations?.toLocaleString() || '~22,000'} locations</strong> —
+        Geographic coordinates in {stats.totalCountries || 185} countries
       </li>
     </ul>
 
@@ -501,7 +504,8 @@
   }
 
   /* Keep prose sections readable */
-  main p, main li {
+  main p,
+  main li {
     max-width: 65ch;
   }
 

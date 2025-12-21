@@ -44,7 +44,7 @@ Each asset class includes:
 Standardized accessors for common field types.
 
 Provides:
-- `getAssetId()` - Extract asset ID using tracker rules
+- `getAssetIdByTracker()` - Extract asset ID using tracker-specific rules
 - `getAssetName()` - Construct name using tracker rules
 - `getOperatingStatus()` - Normalize status to 4-state (operating/proposed/retired/cancelled)
 - `getLocation()` - Extract lat/lon/country/state

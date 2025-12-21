@@ -62,8 +62,6 @@ export {
   // Data config
   fossilTrackers,
   prospectiveStatuses,
-  idFields,
-  capacityFields,
 
   // Aggregated export object
   colMaps,

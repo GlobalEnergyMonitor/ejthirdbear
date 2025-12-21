@@ -49,9 +49,7 @@
     }))
   );
 
-  const statusColor = $derived(
-    colorByStatus.get(asset?.status?.toLowerCase?.()) || colors.grey
-  );
+  const statusColor = $derived(colorByStatus.get(asset?.status?.toLowerCase?.()) || colors.grey);
 
   const totalOwnership = $derived(
     ownerEdges.reduce((sum, edge) => sum + (Number(edge.value) || 0), 0)
@@ -235,7 +233,7 @@
           <h2>Ownership Structure</h2>
           <MermaidOwnership
             edges={graphEdges}
-            nodeMap={nodeMap}
+            {nodeMap}
             {assetId}
             {assetName}
             zoom={0.7}
@@ -277,7 +275,10 @@
         <h2>Source Data</h2>
         <details>
           <summary
-            >{ownerRows.length} records ({JSON.stringify({ assetId, ownerRows }).length.toLocaleString()} bytes)</summary
+            >{ownerRows.length} records ({JSON.stringify({
+              assetId,
+              ownerRows,
+            }).length.toLocaleString()} bytes)</summary
           >
           <pre class="json-blob">{JSON.stringify(
               {

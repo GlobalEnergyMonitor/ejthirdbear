@@ -3,6 +3,7 @@
   import { link, assetLink, entityLink, assetPath } from '$lib/links';
   import { initDuckDB, loadParquetFromPath, query } from '$lib/duckdb-utils';
   import { investigationCart } from '$lib/investigationCart';
+  import { buildIdList } from '$lib/utils/sql';
   import TrackerIcon from '$lib/components/TrackerIcon.svelte';
 
   let loading = $state(false);
@@ -113,16 +114,6 @@
     }
   }
 
-  // Escape SQL string
-  function escapeSQL(str) {
-    return str.replace(/'/g, "''");
-  }
-
-  // Build ID list for SQL IN clause
-  function buildIdList(ids) {
-    return ids.map((id) => `'${escapeSQL(id)}'`).join(',');
-  }
-
   async function describeTable(tableName) {
     const res = await query(`DESCRIBE SELECT * FROM ${tableName}`);
     if (!res.success) return null;
@@ -135,7 +126,8 @@
 
   async function getPreflightStats({ assetIds = [], entityIds = [] }) {
     const whereParts = [];
-    if (entityIds.length > 0) whereParts.push(`o."Owner GEM Entity ID" IN (${buildIdList(entityIds)})`);
+    if (entityIds.length > 0)
+      whereParts.push(`o."Owner GEM Entity ID" IN (${buildIdList(entityIds)})`);
     if (assetIds.length > 0) whereParts.push(`o."GEM unit ID" IN (${buildIdList(assetIds)})`);
     const whereClause = whereParts.length > 0 ? `WHERE ${whereParts.join(' OR ')}` : 'WHERE 1=0';
 
@@ -332,7 +324,10 @@
         ORDER BY o."GEM unit ID", o."Owner"
       `;
 
-      addLog('Executing query', { hash: hashStringFNV1a(sql), sqlPreview: sql.trim().slice(0, 260) });
+      addLog('Executing query', {
+        hash: hashStringFNV1a(sql),
+        sqlPreview: sql.trim().slice(0, 260),
+      });
       const result = await query(sql);
       if (!result.success) throw new Error(result.error || 'Query failed');
 
@@ -451,7 +446,10 @@
         ORDER BY o."Owner", o."Project"
       `;
 
-      addLog('Executing query', { hash: hashStringFNV1a(sql), sqlPreview: sql.trim().slice(0, 260) });
+      addLog('Executing query', {
+        hash: hashStringFNV1a(sql),
+        sqlPreview: sql.trim().slice(0, 260),
+      });
       const result = await query(sql);
       if (!result.success) throw new Error(result.error || 'Query failed');
 
@@ -719,7 +717,7 @@
 
       if (onProgress && (i + 1) % chunkSize === 0) {
         onProgress({ done: i + 1, total });
-        // eslint-disable-next-line no-await-in-loop
+         
         await new Promise((resolve) => requestAnimationFrame(resolve));
       }
     }
@@ -815,7 +813,11 @@
           {:else}
             <span class="muted">Not analyzed yet</span>
           {/if}
-          <button class="btn btn-small" onclick={runAnalysis} disabled={analysisLoading || loading || exporting}>
+          <button
+            class="btn btn-small"
+            onclick={runAnalysis}
+            disabled={analysisLoading || loading || exporting}
+          >
             Refresh
           </button>
         </div>
@@ -830,7 +832,9 @@
           {#if analysis.combined?.summary}
             <div class="stat-card">
               <div class="stat-title">Combined Export</div>
-              <div class="stat-value">{formatNumber(analysis.combined.summary.ownership_rows)} rows</div>
+              <div class="stat-value">
+                {formatNumber(analysis.combined.summary.ownership_rows)} rows
+              </div>
               <div class="stat-sub">
                 {formatNumber(analysis.combined.summary.distinct_assets)} assets ·
                 {formatNumber(analysis.combined.summary.distinct_entities)} entities ·
@@ -841,7 +845,9 @@
           {#if analysis.assets?.summary}
             <div class="stat-card">
               <div class="stat-title">Assets Export</div>
-              <div class="stat-value">{formatNumber(analysis.assets.summary.ownership_rows)} rows</div>
+              <div class="stat-value">
+                {formatNumber(analysis.assets.summary.ownership_rows)} rows
+              </div>
               <div class="stat-sub">
                 {formatNumber(analysis.assets.summary.distinct_assets)} assets ·
                 {formatNumber(analysis.assets.summary.distinct_entities)} owners ·
@@ -852,7 +858,9 @@
           {#if analysis.entities?.summary}
             <div class="stat-card">
               <div class="stat-title">Entities Export</div>
-              <div class="stat-value">{formatNumber(analysis.entities.summary.ownership_rows)} rows</div>
+              <div class="stat-value">
+                {formatNumber(analysis.entities.summary.ownership_rows)} rows
+              </div>
               <div class="stat-sub">
                 {formatNumber(analysis.entities.summary.distinct_assets)} assets ·
                 {formatNumber(analysis.entities.summary.distinct_entities)} entities ·
@@ -943,13 +951,17 @@
               <div>
                 <div class="details-title">Ownership Columns</div>
                 <div class="details-mono">
-                  {analysis.ownershipSchema ? analysis.ownershipSchema.map((c) => `${c.name} (${c.type})`).join('\n') : 'Unavailable'}
+                  {analysis.ownershipSchema
+                    ? analysis.ownershipSchema.map((c) => `${c.name} (${c.type})`).join('\n')
+                    : 'Unavailable'}
                 </div>
               </div>
               <div>
                 <div class="details-title">Locations Columns</div>
                 <div class="details-mono">
-                  {analysis.locationsSchema ? analysis.locationsSchema.map((c) => `${c.name} (${c.type})`).join('\n') : 'Unavailable'}
+                  {analysis.locationsSchema
+                    ? analysis.locationsSchema.map((c) => `${c.name} (${c.type})`).join('\n')
+                    : 'Unavailable'}
                 </div>
               </div>
             </div>
@@ -997,11 +1009,14 @@
           </div>
           <div class="manifest-item">
             <div class="manifest-k">Build</div>
-            <div class="manifest-v">v{lastExportManifest.app.version} ({lastExportManifest.app.buildHash})</div>
+            <div class="manifest-v">
+              v{lastExportManifest.app.version} ({lastExportManifest.app.buildHash})
+            </div>
           </div>
         </div>
         <p class="muted">
-          Each export also downloads a JSON manifest + README with SQL hashes, timings, and selection metadata.
+          Each export also downloads a JSON manifest + README with SQL hashes, timings, and
+          selection metadata.
         </p>
       </section>
     {/if}
@@ -1022,7 +1037,13 @@
         <h2>Assets ({assetCount})</h2>
         <div class="item-grid">
           {#each assetItems as item}
-            <div class="item-card asset" onclick={() => handleRowClick(item)} onkeydown={(e) => e.key === 'Enter' && handleRowClick(item)} role="button" tabindex="0">
+            <div
+              class="item-card asset"
+              onclick={() => handleRowClick(item)}
+              onkeydown={(e) => e.key === 'Enter' && handleRowClick(item)}
+              role="button"
+              tabindex="0"
+            >
               <div class="item-header">
                 {#if item.tracker}
                   <TrackerIcon tracker={item.tracker} size={12} />
@@ -1054,7 +1075,13 @@
         <h2>Entities ({entityCount})</h2>
         <div class="item-grid">
           {#each entityItems as item}
-            <div class="item-card entity" onclick={() => handleRowClick(item)} onkeydown={(e) => e.key === 'Enter' && handleRowClick(item)} role="button" tabindex="0">
+            <div
+              class="item-card entity"
+              onclick={() => handleRowClick(item)}
+              onkeydown={(e) => e.key === 'Enter' && handleRowClick(item)}
+              role="button"
+              tabindex="0"
+            >
               <div class="item-header">
                 <span class="entity-icon">E</span>
                 <span class="item-name">{item.name}</span>
@@ -1334,7 +1361,8 @@
   }
 
   .details-mono {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+    font-family:
+      ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
     font-size: 10px;
     white-space: pre-wrap;
     border: 1px solid var(--color-gray-100);
@@ -1367,7 +1395,8 @@
 
   .log-detail {
     grid-column: 1 / -1;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+    font-family:
+      ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
     color: var(--color-text-secondary);
     white-space: pre-wrap;
   }
@@ -1395,7 +1424,8 @@
 
   .manifest-v {
     font-size: 12px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+    font-family:
+      ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
   }
 
   .btn.btn-small {

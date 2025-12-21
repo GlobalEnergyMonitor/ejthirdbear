@@ -83,9 +83,18 @@
   }
 
   @keyframes loading {
-    0% { width: 0; left: 0; }
-    50% { width: 40%; left: 30%; }
-    100% { width: 0; left: 100%; }
+    0% {
+      width: 0;
+      left: 0;
+    }
+    50% {
+      width: 40%;
+      left: 30%;
+    }
+    100% {
+      width: 0;
+      left: 100%;
+    }
   }
 
   .nav-brand a {
@@ -117,7 +126,9 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    transition: color 0.15s, border-color 0.15s;
+    transition:
+      color 0.15s,
+      border-color 0.15s;
   }
 
   .nav-links a:hover {

@@ -1,13 +1,19 @@
 /**
- * Pattern Detection & Statistical Analysis
+ * @module analysis/patterns
+ * @description Statistical analysis and pattern detection for ownership data.
  *
- * Implements established analytical techniques for ownership data.
  * All methods are based on peer-reviewed or regulatory-standard approaches.
  *
- * References:
+ * **References:**
  * - HHI: U.S. Department of Justice Horizontal Merger Guidelines
  * - Gini: Corrado Gini (1912), "Variabilità e mutabilità"
  * - Z-scores: Standard statistical practice for outlier detection
+ *
+ * @example
+ * import { calculateHHI, findOutliers, analyzePortfolio } from '$lib/analysis';
+ *
+ * const hhi = calculateHHI([50, 30, 20]); // 3800
+ * const concentration = interpretHHI(hhi); // { level: 'concentrated', ... }
  */
 
 // ============================================================================
@@ -305,7 +311,10 @@ export function analyzeCoInvestment(
   // Count entity pairs that co-invest
   const pairCounts = new Map<string, number>();
   for (const asset of sharedAssets) {
-    const ids = (asset.co_owner_ids || '').split(';').map((s) => s.trim()).filter(Boolean);
+    const ids = (asset.co_owner_ids || '')
+      .split(';')
+      .map((s) => s.trim())
+      .filter(Boolean);
     // Generate pairs
     for (let i = 0; i < ids.length; i++) {
       for (let j = i + 1; j < ids.length; j++) {
@@ -383,7 +392,8 @@ export function analyzePortfolio(portfolio: {
   const medianCapacity =
     capacities.length > 0
       ? capacities.length % 2 === 0
-        ? (sortedCapacities[capacities.length / 2 - 1] + sortedCapacities[capacities.length / 2]) / 2
+        ? (sortedCapacities[capacities.length / 2 - 1] + sortedCapacities[capacities.length / 2]) /
+          2
         : sortedCapacities[Math.floor(capacities.length / 2)]
       : 0;
 
@@ -453,7 +463,8 @@ export function analyzePortfolio(portfolio: {
     );
   }
 
-  const operatingPct = statusBreakdown.find((s) => s.status.toLowerCase() === 'operating')?.percentage || 0;
+  const operatingPct =
+    statusBreakdown.find((s) => s.status.toLowerCase() === 'operating')?.percentage || 0;
   if (operatingPct > 80) {
     insights.push(`Mature portfolio: ${operatingPct.toFixed(0)}% operating assets`);
   }

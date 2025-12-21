@@ -14,7 +14,6 @@
     if (n == null) return '—';
     return n.toLocaleString();
   }
-
 </script>
 
 <svelte:head>
@@ -46,7 +45,7 @@
     </ul>
   </nav>
 
-    <!-- Ownership API -->
+  <!-- Ownership API -->
   <section id="api-info">
     <h2>Ownership API</h2>
     <p class="section-desc">Primary runtime data source for asset/entity ownership.</p>
@@ -56,7 +55,7 @@
     </div>
   </section>
 
-<!-- Tracker Configs -->
+  <!-- Tracker Configs -->
   <section id="tracker-configs">
     <h2>Tracker Configurations</h2>
     <p class="section-desc">Field mappings for each asset tracker type.</p>

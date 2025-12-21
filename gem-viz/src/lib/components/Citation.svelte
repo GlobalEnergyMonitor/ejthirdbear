@@ -25,15 +25,13 @@
     'Gas Plant': 'https://globalenergymonitor.org/projects/global-gas-plant-tracker/',
     'Steel Plant': 'https://globalenergymonitor.org/projects/global-steel-plant-tracker/',
     'Iron Mine': 'https://globalenergymonitor.org/projects/global-iron-mine-tracker/',
-    'Bioenergy': 'https://globalenergymonitor.org/projects/global-bioenergy-power-tracker/',
+    Bioenergy: 'https://globalenergymonitor.org/projects/global-bioenergy-power-tracker/',
     'Oil/Gas': 'https://globalenergymonitor.org/projects/global-oil-gas-extraction-tracker/',
   };
 
   // Get relevant tracker URLs
   const relevantTrackers = $derived(
-    trackers
-      .filter((t) => trackerUrls[t])
-      .map((t) => ({ name: t, url: trackerUrls[t] }))
+    trackers.filter((t) => trackerUrls[t]).map((t) => ({ name: t, url: trackerUrls[t] }))
   );
 
   // Citation formats
@@ -69,11 +67,16 @@
   <footer class="citation-footer">
     <div class="citation-content">
       <p class="source">
-        Data: <a href="https://globalenergymonitor.org/" target="_blank" rel="noopener">Global Energy Monitor</a>
+        Data: <a href="https://globalenergymonitor.org/" target="_blank" rel="noopener"
+          >Global Energy Monitor</a
+        >
         {#if relevantTrackers.length > 0}
           <span class="tracker-links">
             ({#each relevantTrackers as tracker, i}
-              <a href={tracker.url} target="_blank" rel="noopener">{tracker.name}</a>{i < relevantTrackers.length - 1 ? ', ' : ''}
+              <a href={tracker.url} target="_blank" rel="noopener">{tracker.name}</a>{i <
+              relevantTrackers.length - 1
+                ? ', '
+                : ''}
             {/each})
           </span>
         {/if}
@@ -84,27 +87,35 @@
       {copied ? 'Copied' : 'Cite'}
     </button>
   </footer>
-
 {:else if variant === 'compact'}
   <span class="citation-compact">
-    Source: <a href="https://globalenergymonitor.org/" target="_blank" rel="noopener">Global Energy Monitor</a> ({citationDate})
+    Source: <a href="https://globalenergymonitor.org/" target="_blank" rel="noopener"
+      >Global Energy Monitor</a
+    >
+    ({citationDate})
   </span>
-
 {:else if variant === 'full'}
   <section class="citation-full">
     <h3>Data Source & Citation</h3>
 
     <div class="source-info">
       <p>
-        This data is provided by <a href="https://globalenergymonitor.org/" target="_blank" rel="noopener">Global Energy Monitor</a>,
-        a nonprofit research organization cataloging fossil fuel and renewable energy projects worldwide.
+        This data is provided by <a
+          href="https://globalenergymonitor.org/"
+          target="_blank"
+          rel="noopener">Global Energy Monitor</a
+        >, a nonprofit research organization cataloging fossil fuel and renewable energy projects
+        worldwide.
       </p>
 
       {#if relevantTrackers.length > 0}
         <p class="tracker-info">
           Data sources:
           {#each relevantTrackers as tracker, i}
-            <a href={tracker.url} target="_blank" rel="noopener">{tracker.name}</a>{i < relevantTrackers.length - 1 ? ', ' : ''}
+            <a href={tracker.url} target="_blank" rel="noopener">{tracker.name}</a>{i <
+            relevantTrackers.length - 1
+              ? ', '
+              : ''}
           {/each}
         </p>
       {/if}
@@ -129,8 +140,11 @@
     </div>
 
     <p class="license-note">
-      GEM data is licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>.
-      Please attribute Global Energy Monitor when using this data.
+      GEM data is licensed under <a
+        href="https://creativecommons.org/licenses/by/4.0/"
+        target="_blank"
+        rel="noopener">CC BY 4.0</a
+      >. Please attribute Global Energy Monitor when using this data.
     </p>
   </section>
 {/if}

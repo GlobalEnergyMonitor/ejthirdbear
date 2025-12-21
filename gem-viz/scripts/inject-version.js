@@ -34,7 +34,8 @@ try {
   console.warn('WARNING: Unable to read package.json');
 }
 
-const deployUrl = `https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v${pkgVersion}`;
+const DEPLOY_BASE_URL = process.env.DEPLOY_BASE_URL || 'https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz';
+const deployUrl = `${DEPLOY_BASE_URL}/v${pkgVersion}`;
 
 const versionInfo = {
   version: commit,

@@ -243,7 +243,9 @@
           {/if}
 
           <div class="owner-meta">
-            <span class="chain-length">{owner.pathLength} step{owner.pathLength !== 1 ? 's' : ''} up</span>
+            <span class="chain-length"
+              >{owner.pathLength} step{owner.pathLength !== 1 ? 's' : ''} up</span
+            >
           </div>
         </div>
       {/each}
@@ -251,8 +253,8 @@
 
     {#if ultimateOwners.length > 0}
       <p class="methodology-note">
-        Effective ownership calculated by multiplying ownership percentages through the chain.
-        Only includes ownership relationships recorded in GEM data.
+        Effective ownership calculated by multiplying ownership percentages through the chain. Only
+        includes ownership relationships recorded in GEM data.
       </p>
     {/if}
   {/if}

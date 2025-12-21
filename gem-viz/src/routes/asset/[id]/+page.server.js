@@ -36,7 +36,7 @@ export async function entries() {
   } catch (err) {
     console.error('\n❌ ASSET ENTRIES FAILED: Ownership API is not reachable!');
     console.error(`   Error: ${err.message || err}`);
-    console.error('   Is your collaborator\'s machine running with ngrok?\n');
+    console.error("   Is your collaborator's machine running with ngrok?\n");
     process.exit(1);
   }
 }

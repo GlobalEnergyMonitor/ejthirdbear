@@ -3,7 +3,8 @@
 Reference notes on what data we fetch, where it comes from, and the column shapes we assume in the UI and prerenderers.
 
 ## Data Stack
-- **Primary DB:** MotherDuck `gem_data` (server-side via `src/lib/motherduck-node.ts`, client-side via `src/lib/motherduck-wasm.ts`).
+- **Primary DB:** MotherDuck `gem_data` (client-side via `src/lib/motherduck-wasm.ts`).
+- **Ownership API:** REST API (`src/lib/ownership-api.ts`) for ownership graph queries.
 - **Local engine:** DuckDB WASM (`src/lib/duckdb-utils.ts`) for client queries against static Parquet/GeoJSON assets.
 - **Routing helper:** `src/lib/db.ts` swaps between the two for shared query helpers.
 
@@ -25,8 +26,8 @@ Reference notes on what data we fetch, where it comes from, and the column shape
   - `asset_locations.parquet`  
     - Used for map/search/export location joins.  
     - Columns referenced: `"GEM.location.ID"` (or `"GEM location ID"`), `"Latitude"`, `"Longitude"`, `"Country.Area"`, `"State.Province"`.
-  - `tiles/*.parquet` + `tiles/manifest.json` (spatial tiles built at deploy time)  
-    - Manifest shape (`src/lib/tileLoader.ts`): `version`, `generated`, `tileSize`, `totalAssets`, `totalRows`, `tiles[]` where each tile has `{ name, file, bounds{minLat,maxLat,minLon,maxLon}, tileBounds{minLat,maxLat,minLon,maxLon}, assetCount, rowCount, sizeMB }`.  
+  - `tiles/*.parquet` + `tiles/manifest.json` (spatial tiles built at deploy time)
+    - Manifest shape: `version`, `generated`, `tileSize`, `totalAssets`, `totalRows`, `tiles[]` where each tile has `{ name, file, bounds{minLat,maxLat,minLon,maxLon}, tileBounds{minLat,maxLat,minLon,maxLon}, assetCount, rowCount, sizeMB }`.
     - Tile tables are named from the file (hyphens -> underscores) and store location-level rows with at least `id`, `tracker`, `country`, `state`, `"Latitude"`, `"Longitude"` (queried in `src/routes/asset/search/+page.svelte`).
 - **Static GeoJSON**  
   - `points.geojson` (generated from `asset_locations.parquet`) with `metadata.columns` mapping `{ locationId, lat, lon, country, state, tracker }`; features carry those properties and point geometries. Consumed by `src/lib/SimpleMap.svelte`.
@@ -40,11 +41,11 @@ Reference notes on what data we fetch, where it comes from, and the column shape
 - **Ownership helper mappings (`src/lib/ownership-data.ts`):**  
   - `idFields` map tracker → ID column (e.g., `Coal Plant` → `"GEM unit ID"`, `Coal Mine` → `"GEM Mine ID"`, `Steel Plant` → `"Steel Plant ID"`).  
   - `capacityFields` map tracker → numeric capacity column.
-- **Tile manifest interfaces:** `TileManifest`, `TileInfo`, `MapBounds` in `src/lib/tileLoader.ts`.
+- **Tile manifest interfaces:** `TileManifest`, `TileInfo`, `MapBounds` (defined inline where used).
 - **Query result shapes:** `QueryResult` in `src/lib/db.ts` / `src/lib/duckdb-utils.ts` adds `{ data?: T[], executionTime?, success, error?, rowCount? }`; MotherDuck WASM uses similar `MotherDuckQueryResult`.
 
 ## Data Fetching Flows
-- **Server prerender (MotherDuck Node)**  
+- **Server prerender**
   - **Asset list** (`src/routes/asset/+page.server.js`): pick largest catalog table (non-`about`/`metadata`), detect columns (country, owner, owner/entity IDs, name/status), fetch up to 10k rows for list, return column names for client rendering.  
   - **Asset detail** (`src/routes/asset/[id]/+page.server.js`): bulk fetch *all* rows from the chosen table, group by `"GEM unit ID"` (fallback to first ID-like column), cache to `.svelte-kit/.asset-cache.json`; prerender entries are unique asset IDs.  
   - **Entity detail** (`src/routes/entity/[id]/+page.server.js`): bulk aggregate over the same table, grouping by `"Owner GEM Entity ID"` and `"Parent"`; derives counts, capacity sums, tracker lists, sample assets (`ROW_NUMBER` window), and full portfolios (direct vs subsidiary ownership) for Owner Explorer; cached to `.svelte-kit/.entity-cache.json`.
@@ -60,6 +61,5 @@ Reference notes on what data we fetch, where it comes from, and the column shape
 - **Link helpers** (`src/lib/links.ts`): `assetPath()` prepends `$app/paths` `base` for static assets so paths above resolve in dev/prod.
 
 ## Caching & Filesystem Notes
-- Asset/entity prerender caches live at `.svelte-kit/.asset-cache.json` and `.svelte-kit/.entity-cache.json` and are reused across build workers.  
-- Tile loading keeps an in-memory `loadedTiles` set (`src/lib/tileLoader.ts`) to avoid re-fetching.  
+- Asset/entity prerender caches live at `.svelte-kit/.asset-cache.json` and `.svelte-kit/.entity-cache.json` and are reused across build workers.
 - DuckDB query helpers coerce `bigint` → `number` for JSON serialization in WASM (`src/lib/duckdb-utils.ts`).

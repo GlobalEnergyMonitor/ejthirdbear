@@ -17,18 +17,15 @@
   } from '$lib/analysis/patterns';
 
   // Props - data from the report queries
-  let {
-    entityPortfolios = [],
-    sharedAssets = [],
-    commonOwners = [],
-    geoBreakdown = [],
-  } = $props();
+  let { entityPortfolios = [], sharedAssets = [], commonOwners = [], geoBreakdown = [] } = $props();
 
   // Calculate ownership concentration (HHI) for entities by capacity
   const ownershipConcentration = $derived.by(() => {
     if (!entityPortfolios || entityPortfolios.length < 2) return null;
 
-    const capacities = entityPortfolios.map((e) => Number(e.total_capacity_mw) || 0).filter((c) => c > 0);
+    const capacities = entityPortfolios
+      .map((e) => Number(e.total_capacity_mw) || 0)
+      .filter((c) => c > 0);
     if (capacities.length < 2) return null;
 
     const hhi = calculateHHI(capacities);
@@ -78,7 +75,9 @@
   const capacityGini = $derived.by(() => {
     if (!entityPortfolios || entityPortfolios.length < 3) return null;
 
-    const capacities = entityPortfolios.map((e) => Number(e.total_capacity_mw) || 0).filter((c) => c > 0);
+    const capacities = entityPortfolios
+      .map((e) => Number(e.total_capacity_mw) || 0)
+      .filter((c) => c > 0);
     if (capacities.length < 3) return null;
 
     const gini = calculateGini(capacities);
@@ -106,9 +105,7 @@
     <h2>Pattern Analysis</h2>
     <p class="section-intro">
       Statistical insights using established analytical methods.
-      <span class="methodology-link"
-        ><a href="#methodology-notes">Methodology notes below</a></span
-      >
+      <span class="methodology-link"><a href="#methodology-notes">Methodology notes below</a></span>
     </p>
 
     <div class="insights-grid">
@@ -153,7 +150,9 @@
           </div>
           {#if geoConcentration.topCountry}
             <p class="metric-description">
-              Top: {geoConcentration.topCountry.country} ({geoConcentration.topCountry.percentage.toFixed(0)}%)
+              Top: {geoConcentration.topCountry.country} ({geoConcentration.topCountry.percentage.toFixed(
+                0
+              )}%)
             </p>
           {/if}
           <p class="metric-context">
@@ -175,7 +174,8 @@
           </p>
           {#if coInvestment.frequentPairs.length > 0}
             <p class="metric-context">
-              Most frequent pair: {coInvestment.frequentPairs[0].pair} ({coInvestment.frequentPairs[0].count} assets)
+              Most frequent pair: {coInvestment.frequentPairs[0].pair} ({coInvestment
+                .frequentPairs[0].count} assets)
             </p>
           {/if}
         </div>
@@ -197,7 +197,9 @@
               <ul>
                 {#each capacityOutliers as outlier}
                   <li>
-                    <span class="outlier-name">{outlier.item.entity_name || outlier.item.entity_id}</span>
+                    <span class="outlier-name"
+                      >{outlier.item.entity_name || outlier.item.entity_id}</span
+                    >
                     <span class="outlier-value"
                       >{Math.round(outlier.value).toLocaleString()} MW</span
                     >
@@ -216,7 +218,9 @@
               <ul>
                 {#each shareOutliers as outlier}
                   <li>
-                    <span class="outlier-name">{outlier.item.entity_name || outlier.item.entity_id}</span>
+                    <span class="outlier-name"
+                      >{outlier.item.entity_name || outlier.item.entity_id}</span
+                    >
                     <span class="outlier-value">{outlier.value.toFixed(1)}% avg</span>
                     <span class="outlier-zscore" class:high={outlier.direction === 'high'}>
                       Z={outlier.zScore.toFixed(1)}
@@ -236,20 +240,20 @@
       <dl>
         <dt>HHI (Herfindahl-Hirschman Index)</dt>
         <dd>
-          Sum of squared market shares. Used by U.S. DOJ/FTC for antitrust analysis.
-          Scale: 0-10,000. Under 1,500 = unconcentrated, 1,500-2,500 = moderate, over 2,500 = concentrated.
+          Sum of squared market shares. Used by U.S. DOJ/FTC for antitrust analysis. Scale:
+          0-10,000. Under 1,500 = unconcentrated, 1,500-2,500 = moderate, over 2,500 = concentrated.
         </dd>
 
         <dt>Gini Coefficient</dt>
         <dd>
-          Measures inequality of distribution (Gini, 1912). Range 0-1.
-          0 = perfect equality, 1 = maximum inequality.
+          Measures inequality of distribution (Gini, 1912). Range 0-1. 0 = perfect equality, 1 =
+          maximum inequality.
         </dd>
 
         <dt>Z-Score Outliers</dt>
         <dd>
-          Standard deviations from the mean. Values with |Z| > 2 are flagged as unusual
-          (occurs in ~5% of a normal distribution).
+          Standard deviations from the mean. Values with |Z| > 2 are flagged as unusual (occurs in
+          ~5% of a normal distribution).
         </dd>
       </dl>
     </div>
