@@ -55,6 +55,8 @@
   let autoRotateResumeTimeout;
   let autoRotatePaused = $state(false);
   let rotationVelocity = 0;
+  let hoverFrame;
+  let hoverTimeout;
 
   // Graph data
   let nodes = [];
@@ -583,8 +585,7 @@
               depthTest: false,
             },
             onHover: ({ object }) => {
-              hoveredNode = object;
-              updateLayers();
+              handleHover(object);
             },
             onClick: ({ object }) => {
               if (object) {
@@ -593,7 +594,7 @@
               }
             },
             autoHighlight: true,
-            highlightColor: [255, 220, 0, 255],
+            highlightColor: [255, 220, 0, 120],
             getColor: (d) => {
               const isVisible = !visibleNodeIds || visibleNodeIds.has(d.id);
               return [255, 255, 255, isVisible ? 255 : 20];
@@ -648,8 +649,7 @@
             depthTest: false,
           },
           onHover: ({ object }) => {
-            hoveredNode = object;
-            updateLayers(); // Re-render to show/hide based on hover
+            handleHover(object);
           },
           onClick: ({ object }) => {
             if (object) {
@@ -667,6 +667,33 @@
           },
         }),
       ].filter(Boolean),
+    });
+  }
+
+  function handleHover(object) {
+    if (hoverTimeout) {
+      clearTimeout(hoverTimeout);
+      hoverTimeout = null;
+    }
+
+    if (object?.id === hoveredNode?.id) return;
+
+    if (object) {
+      hoveredNode = object;
+      scheduleHoverUpdate();
+    } else {
+      hoverTimeout = setTimeout(() => {
+        hoveredNode = null;
+        scheduleHoverUpdate();
+      }, 80);
+    }
+  }
+
+  function scheduleHoverUpdate() {
+    if (hoverFrame) return;
+    hoverFrame = requestAnimationFrame(() => {
+      hoverFrame = null;
+      updateLayers();
     });
   }
 
@@ -880,6 +907,8 @@
     if (animationFrame) cancelAnimationFrame(animationFrame);
     if (rotationFrame) cancelAnimationFrame(rotationFrame);
     if (autoRotateResumeTimeout) clearTimeout(autoRotateResumeTimeout);
+    if (hoverFrame) cancelAnimationFrame(hoverFrame);
+    if (hoverTimeout) clearTimeout(hoverTimeout);
     if (simulation) simulation.stop();
     if (deck) deck.finalize();
   });
