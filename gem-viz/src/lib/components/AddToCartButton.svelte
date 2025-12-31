@@ -85,5 +85,23 @@
   title={ariaLabel}
   {disabled}
 >
+  {#if inCart}
+    <span class="check">✓</span>
+  {/if}
   {buttonText}
 </button>
+
+<style>
+  .check {
+    margin-right: 4px;
+  }
+  .btn.active {
+    background: #333;
+    color: #fff;
+    border-color: #333;
+  }
+  .btn-icon.active {
+    background: #333;
+    color: #fff;
+  }
+</style>

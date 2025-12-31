@@ -303,16 +303,6 @@
     padding-bottom: 15px;
     margin-bottom: 30px;
   }
-  .back-link {
-    color: #000;
-    text-decoration: underline;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-  .back-link:hover {
-    text-decoration: none;
-  }
   .entity-type {
     font-size: 10px;
     color: #999;
@@ -365,7 +355,7 @@
   /* Meta Grid */
   .meta-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 20px;
     margin-bottom: 40px;
     padding: 20px 0;
@@ -486,9 +476,6 @@
   /* Sections */
   .connection-section {
     margin: 30px 0;
-  }
-  .ownership-explorer {
-    margin-top: 32px;
   }
   .asset-screener-section {
     margin-top: 40px;

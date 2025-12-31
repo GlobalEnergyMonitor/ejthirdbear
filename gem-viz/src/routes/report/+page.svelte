@@ -1105,7 +1105,7 @@
   .entity-portfolio-card {
     background: #fff;
     border: none;
-    border-left: 4px solid #7b1fa2;
+    border-left: 4px solid #333;
     padding: 16px;
   }
   .portfolio-header {
@@ -1183,19 +1183,16 @@
   .status-chip {
     font-size: 10px;
     padding: 3px 8px;
-    border-radius: 2px;
+    border: 1px solid currentColor;
   }
   .status-chip.operating {
-    background: #e8f5e9;
-    color: #2e7d32;
+    color: #333;
   }
   .status-chip.proposed {
-    background: transparent;
-    color: #ef6c00;
+    color: #888;
   }
   .status-chip.retired {
-    background: transparent;
-    color: #7b1fa2;
+    color: #000;
   }
   .portfolio-trackers {
     display: flex;

@@ -600,7 +600,7 @@
   }
 
   .item-card.entity {
-    border-left: 3px solid #7b1fa2;
+    border-left: 3px solid #333;
   }
 
   .item-header {
@@ -634,7 +634,7 @@
   }
 
   .asset-count {
-    color: #7b1fa2;
+    color: #666;
   }
 
   .entity-icon {
@@ -643,7 +643,7 @@
     justify-content: center;
     width: 18px;
     height: 18px;
-    background: #7b1fa2;
+    background: #333;
     color: white;
     border-radius: 50%;
     font-size: 10px;

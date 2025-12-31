@@ -282,7 +282,7 @@
       {#if ownershipGraph.edges.length > 0}
         <section class="viz-section">
           <h2>Ownership Structure</h2>
-          <p class="viz-subtitle">Interactive flowchart showing ownership paths</p>
+          <p class="section-subtitle">Interactive flowchart showing ownership paths</p>
           <MermaidOwnership
             edges={ownershipGraph.edges}
             nodeMap={ownershipGraph.nodeMap}
@@ -295,7 +295,7 @@
 
         <section class="viz-section">
           <h2>Ownership Network</h2>
-          <p class="viz-subtitle">Force-directed graph of entity relationships</p>
+          <p class="section-subtitle">Force-directed graph of entity relationships</p>
           <OwnershipHierarchy
             {assetId}
             {assetName}
@@ -313,7 +313,7 @@
 
         <section class="viz-section">
           <h2>Related Assets</h2>
-          <p class="viz-subtitle">Same-owner assets and co-located units</p>
+          <p class="section-subtitle">Same-owner assets and co-located units</p>
           <RelationshipNetwork prebakedData={data?.relationshipData} />
         </section>
       {/if}
@@ -384,16 +384,6 @@
     padding-bottom: 15px;
     margin-bottom: 30px;
   }
-  .back-link {
-    color: #000;
-    text-decoration: underline;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-  .back-link:hover {
-    text-decoration: none;
-  }
   .table-name {
     font-size: 10px;
     color: #999;
@@ -436,11 +426,11 @@
   .page-actions {
     margin-bottom: 20px;
   }
-  .viz-subtitle {
+  .section-subtitle {
     font-size: 12px;
     color: #666;
     margin: -10px 0 15px 0;
-    font-style: italic;
+    font-family: system-ui, sans-serif;
   }
 
   /* Meta Grid */
