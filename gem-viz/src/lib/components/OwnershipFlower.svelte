@@ -303,6 +303,16 @@
     transform: scale(1.02);
   }
 
+  /* Petal hover effects - applied via D3 */
+  :global(.ownership-flower .petal) {
+    transition: fill-opacity 0.15s, transform 0.15s;
+    transform-origin: center;
+  }
+  :global(.ownership-flower .petal:hover) {
+    fill-opacity: 1;
+    transform: scale(1.05);
+  }
+
   .subtitle {
     font-size: 11px;
     color: #888;

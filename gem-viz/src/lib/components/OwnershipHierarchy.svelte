@@ -250,10 +250,14 @@
     {/each}
   </svg>
   {#if hoveredNode?.data}
+    {@const incomingEdge = edges.find(e => e.target === hoveredNode.id)}
     <div class="tooltip">
       <strong>{hoveredNode.data.Name || hoveredNode.id}</strong><br />
       <span class="id">{hoveredNode.id}</span>
-      {#if hoveredNode.data.type !== 'asset'}<br />Depth: {hoveredNode.depth}{/if}
+      {#if incomingEdge?.value}
+        <br /><span class="ownership">{incomingEdge.value.toFixed(1)}% ownership</span>
+      {/if}
+      {#if hoveredNode.data.type !== 'asset'}<br /><span class="depth">Depth: {hoveredNode.depth}</span>{/if}
     </div>
   {/if}
 </div>
@@ -316,5 +320,12 @@
   .tooltip .id {
     color: #888;
     font-size: 9px;
+  }
+  .tooltip .ownership {
+    color: #016b83;
+    font-weight: 600;
+  }
+  .tooltip .depth {
+    color: #666;
   }
 </style>

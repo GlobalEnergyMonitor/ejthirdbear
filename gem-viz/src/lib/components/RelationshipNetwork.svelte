@@ -334,23 +334,23 @@
   }
 
   .status-operating {
-    background: #4caf50;
+    background: #333;
     color: white;
   }
   .status-retired {
-    background: #999;
+    background: #000;
     color: white;
   }
   .status-construction {
-    background: transparent;
+    background: #666;
     color: white;
   }
   .status-cancelled {
-    background: transparent;
-    color: white;
+    background: #bbb;
+    color: #333;
   }
   .status-other {
-    background: #333;
+    background: #888;
     color: white;
   }
 
