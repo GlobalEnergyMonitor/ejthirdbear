@@ -52,7 +52,10 @@
 
 <style>
   .data-insights {
-    font-family: system-ui, -apple-system, sans-serif;
+    font-family:
+      system-ui,
+      -apple-system,
+      sans-serif;
     font-size: 12px;
     border-left: 2px solid #e0e0e0;
     padding-left: 16px;

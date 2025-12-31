@@ -18,9 +18,9 @@ export interface LoaderState<T> {
 }
 
 export interface LoaderStore<T> extends Readable<LoaderState<T>> {
-  load: (fetcher: () => Promise<T>, options?: LoadOptions) => Promise<T | null>;
+  load: (_fetcher: () => Promise<T>, _options?: LoadOptions) => Promise<T | null>;
   reset: () => void;
-  setError: (error: string) => void;
+  setError: (_error: string) => void;
 }
 
 export interface LoadOptions {
@@ -138,11 +138,11 @@ export function createLoader<T>(): LoaderStore<T> {
 
 export interface KeyedLoaderStore<T> {
   /** Get or create a loader for a specific key */
-  getLoader: (key: string) => LoaderStore<T>;
+  getLoader: (_key: string) => LoaderStore<T>;
   /** Load data for a key, with caching */
-  load: (key: string, fetcher: () => Promise<T>, options?: LoadOptions) => Promise<T | null>;
+  load: (_key: string, _fetcher: () => Promise<T>, _options?: LoadOptions) => Promise<T | null>;
   /** Get current state for a key */
-  getState: (key: string) => LoaderState<T> | null;
+  getState: (_key: string) => LoaderState<T> | null;
   /** Clear all loaders */
   clear: () => void;
 }

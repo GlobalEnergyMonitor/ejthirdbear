@@ -30,9 +30,15 @@
  * @typedef {Object} FilterState
  * @property {string[]} trackers - Selected tracker types
  * @property {string[]} statuses - Selected statuses
- * @property {string[]} countries - Selected countries
+ * @property {string[]} countries - Selected countries (asset location)
+ * @property {string[]} ownerCountries - Selected owner headquarters countries
+ * @property {string[]} owners - Selected owner names
  * @property {number|null} capacityMin - Minimum capacity (MW)
  * @property {number|null} capacityMax - Maximum capacity (MW)
+ * @property {number|null} shareMin - Minimum ownership share (%)
+ * @property {number|null} shareMax - Maximum ownership share (%)
+ * @property {number|null} startYearMin - Minimum start year
+ * @property {number|null} startYearMax - Maximum start year
  * @property {string} logic - Filter logic: 'AND' or 'OR'
  * @property {string} search - Free text search
  */
@@ -46,8 +52,14 @@ export function emptyFilterState() {
     trackers: [],
     statuses: [],
     countries: [],
+    ownerCountries: [],
+    owners: [],
     capacityMin: null,
     capacityMax: null,
+    shareMin: null,
+    shareMax: null,
+    startYearMin: null,
+    startYearMax: null,
     logic: 'AND',
     search: '',
   };
@@ -61,20 +73,41 @@ export function emptyFilterState() {
 export function encodeFilters(filters) {
   const params = new URLSearchParams();
 
+  // Encode array values with URI encoding to handle commas in values
+  const encodeArray = (arr) => arr.map((v) => encodeURIComponent(v)).join(',');
+
   if (filters.trackers?.length) {
-    params.set('trackers', filters.trackers.join(','));
+    params.set('trackers', encodeArray(filters.trackers));
   }
   if (filters.statuses?.length) {
-    params.set('statuses', filters.statuses.join(','));
+    params.set('statuses', encodeArray(filters.statuses));
   }
   if (filters.countries?.length) {
-    params.set('countries', filters.countries.join(','));
+    params.set('countries', encodeArray(filters.countries));
+  }
+  if (filters.ownerCountries?.length) {
+    params.set('ownerCountries', encodeArray(filters.ownerCountries));
+  }
+  if (filters.owners?.length) {
+    params.set('owners', encodeArray(filters.owners));
   }
   if (filters.capacityMin != null) {
     params.set('capacityMin', String(filters.capacityMin));
   }
   if (filters.capacityMax != null) {
     params.set('capacityMax', String(filters.capacityMax));
+  }
+  if (filters.shareMin != null) {
+    params.set('shareMin', String(filters.shareMin));
+  }
+  if (filters.shareMax != null) {
+    params.set('shareMax', String(filters.shareMax));
+  }
+  if (filters.startYearMin != null) {
+    params.set('startYearMin', String(filters.startYearMin));
+  }
+  if (filters.startYearMax != null) {
+    params.set('startYearMax', String(filters.startYearMax));
   }
   if (filters.logic && filters.logic !== 'AND') {
     params.set('logic', filters.logic);
@@ -93,36 +126,61 @@ export function encodeFilters(filters) {
  */
 export function decodeFilters(searchParams) {
   const params =
-    typeof searchParams === 'string'
-      ? new URLSearchParams(searchParams)
-      : searchParams;
+    typeof searchParams === 'string' ? new URLSearchParams(searchParams) : searchParams;
 
   const filters = emptyFilterState();
 
+  // Decode array values with URI decoding to handle commas in values
+  const decodeArray = (str) =>
+    str
+      .split(',')
+      .map((v) => {
+        try {
+          return decodeURIComponent(v);
+        } catch {
+          return v; // Return as-is if decoding fails
+        }
+      })
+      .filter(Boolean);
+
   const trackers = params.get('trackers');
   if (trackers) {
-    filters.trackers = trackers.split(',').filter(Boolean);
+    filters.trackers = decodeArray(trackers);
   }
 
   const statuses = params.get('statuses');
   if (statuses) {
-    filters.statuses = statuses.split(',').filter(Boolean);
+    filters.statuses = decodeArray(statuses);
   }
 
   const countries = params.get('countries');
   if (countries) {
-    filters.countries = countries.split(',').filter(Boolean);
+    filters.countries = decodeArray(countries);
   }
 
-  const capacityMin = params.get('capacityMin');
-  if (capacityMin) {
-    filters.capacityMin = Number(capacityMin);
+  const ownerCountries = params.get('ownerCountries');
+  if (ownerCountries) {
+    filters.ownerCountries = decodeArray(ownerCountries);
   }
 
-  const capacityMax = params.get('capacityMax');
-  if (capacityMax) {
-    filters.capacityMax = Number(capacityMax);
+  const owners = params.get('owners');
+  if (owners) {
+    filters.owners = decodeArray(owners);
   }
+
+  // Helper to parse numbers safely (returns null if invalid/NaN)
+  const parseNum = (val) => {
+    if (!val) return null;
+    const num = Number(val);
+    return isNaN(num) ? null : num;
+  };
+
+  filters.capacityMin = parseNum(params.get('capacityMin'));
+  filters.capacityMax = parseNum(params.get('capacityMax'));
+  filters.shareMin = parseNum(params.get('shareMin'));
+  filters.shareMax = parseNum(params.get('shareMax'));
+  filters.startYearMin = parseNum(params.get('startYearMin'));
+  filters.startYearMax = parseNum(params.get('startYearMax'));
 
   const logic = params.get('logic');
   if (logic === 'OR') {
@@ -159,8 +217,14 @@ export function hasActiveFilters(filters) {
     filters.trackers?.length > 0 ||
     filters.statuses?.length > 0 ||
     filters.countries?.length > 0 ||
+    filters.ownerCountries?.length > 0 ||
+    filters.owners?.length > 0 ||
     filters.capacityMin != null ||
     filters.capacityMax != null ||
+    filters.shareMin != null ||
+    filters.shareMax != null ||
+    filters.startYearMin != null ||
+    filters.startYearMax != null ||
     filters.search?.length > 0
   );
 }
@@ -175,8 +239,11 @@ export function countActiveFilters(filters) {
   if (filters.trackers?.length > 0) count++;
   if (filters.statuses?.length > 0) count++;
   if (filters.countries?.length > 0) count++;
-  if (filters.capacityMin != null) count++;
-  if (filters.capacityMax != null) count++;
+  if (filters.ownerCountries?.length > 0) count++;
+  if (filters.owners?.length > 0) count++;
+  if (filters.capacityMin != null || filters.capacityMax != null) count++;
+  if (filters.shareMin != null || filters.shareMax != null) count++;
+  if (filters.startYearMin != null || filters.startYearMax != null) count++;
   if (filters.search?.length > 0) count++;
   return count;
 }
@@ -186,35 +253,94 @@ export function countActiveFilters(filters) {
  * @param {FilterState} filters
  * @returns {string} SQL WHERE clause (without WHERE keyword)
  */
-export function buildSqlWhere(filters) {
+export function buildSqlWhere(filters, tableAlias = '', columnNames = {}) {
   const conditions = [];
+  const prefix = tableAlias ? `${tableAlias}.` : '';
+  const columns = {
+    tracker: 'Tracker',
+    status: 'Status',
+    country: null,
+    ownerCountry: 'Owner Headquarters Country',
+    owner: 'Owner',
+    capacity: 'Capacity (MW)',
+    share: 'Share',
+    startYear: 'Start Year',
+    project: 'Project',
+    ...columnNames,
+  };
 
-  if (filters.trackers?.length) {
+  if (filters.trackers?.length && columns.tracker) {
     const escaped = filters.trackers.map((t) => `'${t.replace(/'/g, "''")}'`);
-    conditions.push(`"Tracker" IN (${escaped.join(', ')})`);
+    conditions.push(`${prefix}"${columns.tracker}" IN (${escaped.join(', ')})`);
   }
 
-  if (filters.statuses?.length) {
+  if (filters.statuses?.length && columns.status) {
     const escaped = filters.statuses.map((s) => `'${s.replace(/'/g, "''")}'`);
-    conditions.push(`"Status" IN (${escaped.join(', ')})`);
+    conditions.push(
+      `LOWER(${prefix}"${columns.status}") IN (${escaped.map((s) => s.toLowerCase()).join(', ')})`
+    );
   }
 
   if (filters.countries?.length) {
     const escaped = filters.countries.map((c) => `'${c.replace(/'/g, "''")}'`);
-    conditions.push(`"Country" IN (${escaped.join(', ')})`);
+    if (columns.country) {
+      conditions.push(`${prefix}"${columns.country}" IN (${escaped.join(', ')})`);
+    } else {
+      // Country comes from locations table (l), not ownership (o)
+      conditions.push(`l."Country.Area" IN (${escaped.join(', ')})`);
+    }
   }
 
-  if (filters.capacityMin != null) {
-    conditions.push(`CAST("Capacity (MW)" AS DOUBLE) >= ${filters.capacityMin}`);
+  if (filters.ownerCountries?.length && columns.ownerCountry) {
+    const escaped = filters.ownerCountries.map((c) => `'${c.replace(/'/g, "''")}'`);
+    conditions.push(`${prefix}"${columns.ownerCountry}" IN (${escaped.join(', ')})`);
   }
 
-  if (filters.capacityMax != null) {
-    conditions.push(`CAST("Capacity (MW)" AS DOUBLE) <= ${filters.capacityMax}`);
+  if (filters.owners?.length && columns.owner) {
+    const escaped = filters.owners.map((o) => `'${o.replace(/'/g, "''")}'`);
+    conditions.push(`${prefix}"${columns.owner}" IN (${escaped.join(', ')})`);
+  }
+
+  if (filters.capacityMin != null && columns.capacity) {
+    conditions.push(`CAST(${prefix}"${columns.capacity}" AS DOUBLE) >= ${filters.capacityMin}`);
+  }
+
+  if (filters.capacityMax != null && columns.capacity) {
+    conditions.push(`CAST(${prefix}"${columns.capacity}" AS DOUBLE) <= ${filters.capacityMax}`);
+  }
+
+  if (filters.shareMin != null && columns.share) {
+    conditions.push(`CAST(${prefix}"${columns.share}" AS DOUBLE) >= ${filters.shareMin}`);
+  }
+
+  if (filters.shareMax != null && columns.share) {
+    conditions.push(`CAST(${prefix}"${columns.share}" AS DOUBLE) <= ${filters.shareMax}`);
+  }
+
+  if (filters.startYearMin != null && columns.startYear) {
+    conditions.push(`CAST(${prefix}"${columns.startYear}" AS INTEGER) >= ${filters.startYearMin}`);
+  }
+
+  if (filters.startYearMax != null && columns.startYear) {
+    conditions.push(`CAST(${prefix}"${columns.startYear}" AS INTEGER) <= ${filters.startYearMax}`);
   }
 
   if (filters.search) {
-    const escaped = filters.search.replace(/'/g, "''");
-    conditions.push(`("Project" ILIKE '%${escaped}%' OR "Owner" ILIKE '%${escaped}%')`);
+    // Escape SQL string quotes and LIKE wildcard characters
+    const escaped = filters.search
+      .replace(/'/g, "''") // SQL string escaping
+      .replace(/%/g, '\\%') // LIKE wildcard %
+      .replace(/_/g, '\\_'); // LIKE wildcard _
+    const searchColumns = [];
+    if (columns.project) {
+      searchColumns.push(`${prefix}"${columns.project}" ILIKE '%${escaped}%' ESCAPE '\\'`);
+    }
+    if (columns.owner) {
+      searchColumns.push(`${prefix}"${columns.owner}" ILIKE '%${escaped}%' ESCAPE '\\'`);
+    }
+    if (searchColumns.length > 0) {
+      conditions.push(`(${searchColumns.join(' OR ')})`);
+    }
   }
 
   if (conditions.length === 0) return '1=1';

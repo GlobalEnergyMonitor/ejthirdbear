@@ -5,6 +5,7 @@ This module encodes the **Ownership Data Processing and Access Plan** (December 
 ## Overview
 
 Instead of maintaining data specifications in documentation, these files define data contracts that are:
+
 - **Executable**: Code can reference and validate against these definitions
 - **Type-safe**: TypeScript interfaces prevent runtime errors
 - **Single source of truth**: Reduces duplication and inconsistency
@@ -12,9 +13,11 @@ Instead of maintaining data specifications in documentation, these files define 
 ## Files
 
 ### `tracker-config.ts`
+
 Tracker metadata: field mappings for all asset types.
 
 Encodes:
+
 - Which field contains the asset ID for each tracker
 - How to construct asset names (single or concatenated fields)
 - Capacity field names and units
@@ -25,15 +28,18 @@ Encodes:
 **Plan Section**: "Deep key lookups" - Asset Type / Tracker names and spreadsheet tabs
 
 ### `asset-classes.ts`
+
 Asset class definitions and matching rules.
 
 Defines:
+
 - "Coal-Based Steel Plants" - steel plants with blast furnaces
 - "Captive Coal Plants" - coal plants serving non-grid purposes
 - "Deep Water Infrastructure" - offshore pipelines and platforms
 - Plus metadata (icons, colors, concern areas)
 
 Each asset class includes:
+
 - Applicable trackers
 - Matcher function to identify assets in this class
 - Relevant fields to expose for this class
@@ -41,9 +47,11 @@ Each asset class includes:
 **Plan Section**: "Asset classes" - Asset Class Rulebook with tracker/function/field definitions
 
 ### `field-mappings.ts`
+
 Standardized accessors for common field types.
 
 Provides:
+
 - `getAssetId()` - Extract asset ID using tracker rules
 - `getAssetName()` - Construct name using tracker rules
 - `getOperatingStatus()` - Normalize status to 4-state (operating/proposed/retired/cancelled)
@@ -54,9 +62,11 @@ Provides:
 **Plan Section**: "Deep key lookups" - Single interface for accessing various field types
 
 ### `data-sources.ts`
+
 Documents where all data comes from and how it's versioned.
 
 Defines:
+
 - Ownership Tracker tabs (All Entities, Entity Ownership, Asset Ownership)
 - Individual tracker datasets (Coal Plant, Gas Plant, Coal Mine, etc.)
 - Derived/auxiliary datasets (deduplication mapping, location filtering, asset class lookup)
@@ -66,6 +76,7 @@ Defines:
 **Plan Section**: "Data sources" - GEM published datasets and versions
 
 ### `index.ts`
+
 Re-exports all public APIs from this module.
 
 ## Usage Examples
@@ -84,14 +95,11 @@ console.log(config.nameFields); // ['Plant name', 'Unit name']
 ### Extracting standardized data
 
 ```typescript
-import {
-  getAssetName,
-  getOperatingStatus,
-  getLocation,
-  getCapacity
-} from '$lib/data-config';
+import { getAssetName, getOperatingStatus, getLocation, getCapacity } from '$lib/data-config';
 
-const coalPlantRecord = { /* ... */ };
+const coalPlantRecord = {
+  /* ... */
+};
 
 const name = getAssetName('Coal Plant', coalPlantRecord);
 const status = getOperatingStatus('Coal Plant', coalPlantRecord);
@@ -133,38 +141,45 @@ const locationFields = deepKeyLookup('Gas Pipeline', 'location');
 
 ## Mapping Plan Sections to Code
 
-| Plan Section | Code File | Key Types/Functions |
-|---|---|---|
-| Taxonomy (Entity/Asset/Unit) | All files | Types define these concepts implicitly |
-| Data sources | `data-sources.ts` | `OwnershipTrackerDatasets`, `TrackerDatasets`, `DerivedDatasets` |
-| Deep key lookups | `field-mappings.ts`, `tracker-config.ts` | `deepKeyLookup()`, `getTrackerConfig()` |
-| Tracker metadata | `tracker-config.ts` | `TrackerFieldMapping`, `trackerConfigs` map |
-| Asset classes | `asset-classes.ts` | `AssetClassDefinition`, `allAssetClasses` |
-| Status transformations | `tracker-config.ts`, `field-mappings.ts` | `statusMap` in config, `normalizeStatus()` |
-| Name field mappings | `tracker-config.ts` | `nameFields` + `nameSeparator` |
-| Location field mappings | `tracker-config.ts` | `location` object with lat/lon/country/state |
-| Capacity field mappings | `tracker-config.ts` | `capacityField` + `capacityUnit` |
-| ID field mappings | `tracker-config.ts` | `idField` |
+| Plan Section                 | Code File                                | Key Types/Functions                                              |
+| ---------------------------- | ---------------------------------------- | ---------------------------------------------------------------- |
+| Taxonomy (Entity/Asset/Unit) | All files                                | Types define these concepts implicitly                           |
+| Data sources                 | `data-sources.ts`                        | `OwnershipTrackerDatasets`, `TrackerDatasets`, `DerivedDatasets` |
+| Deep key lookups             | `field-mappings.ts`, `tracker-config.ts` | `deepKeyLookup()`, `getTrackerConfig()`                          |
+| Tracker metadata             | `tracker-config.ts`                      | `TrackerFieldMapping`, `trackerConfigs` map                      |
+| Asset classes                | `asset-classes.ts`                       | `AssetClassDefinition`, `allAssetClasses`                        |
+| Status transformations       | `tracker-config.ts`, `field-mappings.ts` | `statusMap` in config, `normalizeStatus()`                       |
+| Name field mappings          | `tracker-config.ts`                      | `nameFields` + `nameSeparator`                                   |
+| Location field mappings      | `tracker-config.ts`                      | `location` object with lat/lon/country/state                     |
+| Capacity field mappings      | `tracker-config.ts`                      | `capacityField` + `capacityUnit`                                 |
+| ID field mappings            | `tracker-config.ts`                      | `idField`                                                        |
 
 ## Core Architectural Decisions
 
 ### 1. Data is always from published sources
+
 All data comes from GEM's publicly published datasets. This is enforced by `validateDataSourcesArePublished()` and documented in `data-sources.ts`.
 
 ### 2. Tracker-specific field mappings are centralized
+
 Rather than scattering field names throughout component code, `tracker-config.ts` is the single source of truth. Components import from there.
 
 ### 3. Normalization happens at the access layer
+
 Functions like `getOperatingStatus()` and `getCapacity()` normalize data to consistent formats (4-state status, numbers with units).
 
 ### 4. Asset classes are data-driven
+
 Asset class definitions are code, but their matching logic is testable. This enables features like:
+
 - Asset class filtering UI
 - Bulk analysis by asset class
 - Asset class-specific data exports
 
 ### 5. Taxonomy is implicit, not explicit
+
 The plan defines Entity, Asset, Unit as taxonomy concepts. Rather than creating a `taxonomy.ts` file, these are implicit in:
+
 - Entity records come from `All Entities` sheet
 - Assets have IDs from trackers (GEM unit ID, GEM Plant ID, etc.)
 - Units are the granular elements of plants/mines
@@ -172,7 +187,9 @@ The plan defines Entity, Asset, Unit as taxonomy concepts. Rather than creating 
 ## Future Enhancements
 
 ### ID Deduplication Mapping
+
 When IDs are consolidated (e.g., two "G..." IDs merge into one), maintain a mapping:
+
 ```typescript
 // src/lib/data-config/id-deduplication.ts
 export const idDeduplicationMap = new Map([
@@ -183,7 +200,9 @@ export const idDeduplicationMap = new Map([
 ```
 
 ### Field Metadata/Manifest
+
 Comprehensive metadata for all columns (description, units, null meanings, constraints):
+
 ```typescript
 // src/lib/data-config/field-manifest.ts
 export const fieldMetadata = {
@@ -197,7 +216,9 @@ export const fieldMetadata = {
 ```
 
 ### Tracker Versioning
+
 Point-in-time snapshot of tracker states for historical analysis:
+
 ```typescript
 // src/lib/data-config/tracker-versions.ts
 export const trackerVersionHistory = {

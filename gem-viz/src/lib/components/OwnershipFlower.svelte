@@ -305,7 +305,9 @@
 
   /* Petal hover effects - applied via D3 */
   :global(.ownership-flower .petal) {
-    transition: fill-opacity 0.15s, transform 0.15s;
+    transition:
+      fill-opacity 0.15s,
+      transform 0.15s;
     transform-origin: center;
   }
   :global(.ownership-flower .petal:hover) {

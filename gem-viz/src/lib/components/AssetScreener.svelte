@@ -13,6 +13,7 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { assetLink, entityLink } from '$lib/links';
+  import { formatCount } from '$lib/format';
   import { colors, colorByTracker, regroupStatus } from '$lib/ownership-theme';
   import {
     LAYOUT_PARAMS,
@@ -135,7 +136,7 @@
   // Build subsidiary groups with layout
   let subsidiaryGroups = $derived.by(() => {
     // Early return for truncated or empty portfolios
-    if (isTruncated || subsidiariesMatched.size === 0 && directlyOwned.length === 0) {
+    if (isTruncated || (subsidiariesMatched.size === 0 && directlyOwned.length === 0)) {
       return [];
     }
 
@@ -310,7 +311,7 @@
     <!-- Truncated portfolio - too large for prebaked display -->
     <div class="truncated-state">
       <h3>{spotlightOwner?.Name || 'Unknown Owner'}</h3>
-      <p>This entity owns <strong>{totalAssetCount.toLocaleString()}</strong> assets.</p>
+      <p>This entity owns <strong>{formatCount(totalAssetCount)}</strong> assets.</p>
       <p>View the full portfolio on the <a href="/entity/{spotlightOwner?.id}/">entity page</a>.</p>
     </div>
   {:else}

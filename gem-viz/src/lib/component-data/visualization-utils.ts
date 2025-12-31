@@ -178,13 +178,13 @@ export function arcPath(value: number | undefined, radius: number): string {
  * @returns SVG path string
  */
 export function subsidiaryPath(
-  group: { top: number; bottom: number },
+  group: { top?: number; bottom?: number },
   params: typeof LAYOUT_PARAMS = LAYOUT_PARAMS
 ): string {
   const xS = 0;
-  const yS = group.top;
+  const yS = group.top ?? 0;
   const xE = params.subsidX + params.assetsX - params.assetSpacing * 2;
-  const yE = group.bottom;
+  const yE = group.bottom ?? 0;
   const radius = params.yPadding;
   const rC = radius * 0.3;
 

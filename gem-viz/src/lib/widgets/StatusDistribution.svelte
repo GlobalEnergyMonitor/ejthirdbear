@@ -2,14 +2,12 @@
   /**
    * StatusDistribution Widget
    * Donut chart showing operating vs proposed vs retired vs cancelled
-   *
-   * REFACTORED: Uses createAsyncState() composable for state management
    */
 
   import { onMount } from 'svelte';
-  import { createAsyncState } from '$lib/composables.svelte';
   import { widgetQuery } from './widget-utils';
   import { regroupStatus, colors } from '$lib/ownership-theme';
+  import { formatCount } from '$lib/format';
   import LoadingWrapper from '$lib/components/LoadingWrapper.svelte';
 
   interface StatusRow {
@@ -20,12 +18,14 @@
   // Props
   let { tracker = null as string | null, title = 'Status Distribution' } = $props();
 
-  // State - using composable instead of 5 separate $state() calls
-  const state = createAsyncState<StatusRow[]>([]);
+  // State
+  let loading = $state(true);
+  let error = $state<string | null>(null);
+  let data = $state<StatusRow[]>([]);
+  let queryTime = $state(0);
 
-  // Derived values from state.data
-  const results = $derived(state.data || []);
-  const total = $derived(results.reduce((sum, r) => sum + r.count, 0));
+  // Derived values
+  const total = $derived(data.reduce((sum, r) => sum + r.count, 0));
 
   // Status colors
   const statusColors: Record<string, string> = {
@@ -37,20 +37,23 @@
   };
 
   async function loadData() {
+    loading = true;
+    error = null;
+    const startTime = Date.now();
+
     const trackerFilter = tracker ? `WHERE "Tracker" = '${tracker}'` : '';
 
-    const sql = `
-      SELECT
-        "Status" as status,
-        COUNT(DISTINCT "GEM unit ID") as count
-      FROM ownership
-      ${trackerFilter}
-      GROUP BY "Status"
-      ORDER BY count DESC
-    `;
+    try {
+      const result = await widgetQuery<{ status: string; count: number }>(`
+        SELECT
+          "Status" as status,
+          COUNT(DISTINCT "GEM unit ID") as count
+        FROM ownership
+        ${trackerFilter}
+        GROUP BY "Status"
+        ORDER BY count DESC
+      `);
 
-    await state.run(async () => {
-      const result = await widgetQuery<{ status: string; count: number }>(sql);
       if (!result.success) {
         throw new Error(result.error || 'Query failed');
       }
@@ -62,10 +65,17 @@
         grouped[group] = (grouped[group] || 0) + Number(row.count);
       }
 
-      return Object.entries(grouped)
+      data = Object.entries(grouped)
         .map(([status, count]) => ({ status, count }))
         .sort((a, b) => b.count - a.count);
-    });
+
+      queryTime = Date.now() - startTime;
+    } catch (err) {
+      error = err instanceof Error ? err.message : String(err);
+      queryTime = Date.now() - startTime;
+    } finally {
+      loading = false;
+    }
   }
 
   onMount(() => {
@@ -78,7 +88,7 @@
   });
 
   // Calculate arc paths for donut
-  function getArcs(data: StatusRow[], total: number) {
+  function getArcs(items: StatusRow[], totalCount: number) {
     const arcs: Array<{ path: string; color: string; status: string; count: number; pct: number }> =
       [];
     let startAngle = -Math.PI / 2;
@@ -87,8 +97,8 @@
       r = 50,
       innerR = 30;
 
-    for (const item of data) {
-      const angle = (item.count / total) * 2 * Math.PI;
+    for (const item of items) {
+      const angle = (item.count / totalCount) * 2 * Math.PI;
       const endAngle = startAngle + angle;
 
       const x1 = cx + r * Math.cos(startAngle);
@@ -107,7 +117,7 @@
         color: statusColors[item.status] || statusColors.unknown,
         status: item.status,
         count: item.count,
-        pct: Math.round((item.count / total) * 100),
+        pct: Math.round((item.count / totalCount) * 100),
       });
 
       startAngle = endAngle;
@@ -116,21 +126,16 @@
     return arcs;
   }
 
-  const arcs = $derived(total > 0 ? getArcs(results, total) : []);
+  const arcs = $derived(total > 0 ? getArcs(data, total) : []);
 </script>
 
 <div class="widget status-distribution">
   <header>
     <h3>{title}</h3>
-    <span class="query-time">{state.queryTime}ms</span>
+    <span class="query-time">{queryTime}ms</span>
   </header>
 
-  <LoadingWrapper
-    loading={state.loading}
-    error={state.error}
-    empty={results.length === 0}
-    loadingMessage="Loading status..."
-  >
+  <LoadingWrapper {loading} {error} empty={data.length === 0} loadingMessage="Loading status...">
     <div class="chart-container">
       <svg viewBox="0 0 120 120" class="donut">
         {#each arcs as arc}
@@ -139,7 +144,7 @@
           </path>
         {/each}
         <text x="60" y="60" text-anchor="middle" dominant-baseline="middle" class="total">
-          {total.toLocaleString()}
+          {formatCount(total)}
         </text>
       </svg>
 

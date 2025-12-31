@@ -88,9 +88,16 @@
           .distance(40)
           .strength(0.5)
       )
-      .force('charge', d3Force.forceManyBody().strength(-80))
+      .force('charge', d3Force.forceManyBody().strength(-120))
       .force('x', d3Force.forceX(layoutWidth / 2).strength(0.05))
-      .force('collide', d3Force.forceCollide(20))
+      .force(
+        'collide',
+        d3Force.forceCollide((d) => {
+          // Dynamic collision radius based on node degree
+          const degree = nodeDegrees[d.id] || 1;
+          return 10 + Math.sqrt(degree) * 5;
+        })
+      )
       .on('tick', () => {
         nodePositions = simNodes.map((n) => ({
           id: n.id,
@@ -163,8 +170,26 @@
           ? colors.teal
           : colors.navy;
 
-  const getNodeRadius = (node) =>
-    !node?.data ? 4 : node.data.type === 'asset' ? 8 : node.depth <= 1 ? 6 : 4;
+  // Count connections per node for sizing
+  let nodeDegrees = $derived.by(() => {
+    const degrees = {};
+    edges.forEach((e) => {
+      degrees[e.source] = (degrees[e.source] || 0) + 1;
+      degrees[e.target] = (degrees[e.target] || 0) + 1;
+    });
+    return degrees;
+  });
+
+  const getNodeRadius = (node) => {
+    if (!node?.data) return 5;
+    if (node.data.type === 'asset') return 14; // Asset always prominent
+
+    // Use sqrt scale for entity nodes based on connection count
+    const degree = nodeDegrees[node.id] || 1;
+    const baseSize = 6;
+    const scaleFactor = 4;
+    return baseSize + Math.sqrt(degree) * scaleFactor;
+  };
 
   const truncate = (name, max = 20) =>
     !name ? '' : name.length <= max ? name : name.slice(0, max - 1) + '...';
@@ -192,9 +217,9 @@
           y1={link.source.y}
           x2={link.target.x}
           y2={link.target.y}
-          stroke={colors.navy}
-          stroke-width="0.5"
-          stroke-opacity="0.4"
+          stroke="#999"
+          stroke-width="1"
+          stroke-opacity="0.5"
         />
       {/each}
     </g>
@@ -210,12 +235,14 @@
           onclick={() => handleNodeClick(node)}
           onkeydown={(e) => e.key === 'Enter' && handleNodeClick(node)}
         >
+          <!-- White background to mask links -->
+          <circle r={getNodeRadius(node) + 2} fill="white" />
           <circle
             r={getNodeRadius(node)}
             fill={getNodeColor(node)}
-            fill-opacity="0.3"
+            fill-opacity="0.9"
             stroke={getNodeColor(node)}
-            stroke-width="1"
+            stroke-width="1.5"
           />
           {#if hoveredNode?.id === node.id}
             <text y="-10" text-anchor="middle" font-size="10" fill={colors.navy}>
@@ -250,14 +277,16 @@
     {/each}
   </svg>
   {#if hoveredNode?.data}
-    {@const incomingEdge = edges.find(e => e.target === hoveredNode.id)}
+    {@const incomingEdge = edges.find((e) => e.target === hoveredNode.id)}
     <div class="tooltip">
       <strong>{hoveredNode.data.Name || hoveredNode.id}</strong><br />
       <span class="id">{hoveredNode.id}</span>
       {#if incomingEdge?.value}
         <br /><span class="ownership">{incomingEdge.value.toFixed(1)}% ownership</span>
       {/if}
-      {#if hoveredNode.data.type !== 'asset'}<br /><span class="depth">Depth: {hoveredNode.depth}</span>{/if}
+      {#if hoveredNode.data.type !== 'asset'}<br /><span class="depth"
+          >Depth: {hoveredNode.depth}</span
+        >{/if}
     </div>
   {/if}
 </div>

@@ -7,10 +7,12 @@
    * so it doesn't use the standard composables. The loading flow is user-triggered.
    */
 
+  import { tick } from 'svelte';
   import { widgetQuery } from './widget-utils';
   import { assetLink, entityLink } from '$lib/links';
   import TrackerIcon from '$lib/components/TrackerIcon.svelte';
   import AddToCartButton from '$lib/components/AddToCartButton.svelte';
+  import { staggerIn } from '$lib/animations';
 
   interface AssetResult {
     name: string;
@@ -40,6 +42,17 @@
   let results = $state<SearchResults>({ assets: [], entities: [] });
   let queryTime = $state(0);
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  let resultsEl = $state<HTMLElement | null>(null);
+
+  async function animateResults() {
+    await tick();
+    if (resultsEl) {
+      const items = resultsEl.querySelectorAll('li');
+      if (items.length > 0) {
+        staggerIn(Array.from(items), { staggerDelay: 30, duration: 300, distance: 10 });
+      }
+    }
+  }
 
   async function search() {
     if (query.length < 2) {
@@ -51,30 +64,60 @@
 
     const searchTerm = query.replace(/'/g, "''"); // Escape quotes
 
-    // Search assets
+    // Use LIKE for reliable substring matching with smart relevance scoring
     const assetSql = `
-      SELECT DISTINCT
-        "Project" as name,
-        "GEM unit ID" as id,
-        "Tracker" as tracker,
-        "Status" as status,
-        "Country" as country
-      FROM ownership
-      WHERE LOWER("Project") LIKE LOWER('%${searchTerm}%')
+      WITH base AS (
+        SELECT DISTINCT
+          o."Project" as name,
+          o."GEM unit ID" as id,
+          o."Tracker" as tracker,
+          o."Status" as status,
+          l."Country.Area" as country
+        FROM ownership o
+        LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
+        WHERE LOWER(o."Project") LIKE LOWER('%${searchTerm}%')
+      ),
+      scored AS (
+        SELECT *,
+          CASE
+            WHEN LOWER(name) = LOWER('${searchTerm}') THEN 100
+            WHEN LOWER(name) LIKE LOWER('${searchTerm}%') THEN 60
+            WHEN LOWER(name) LIKE LOWER('% ${searchTerm}%') THEN 40
+            ELSE 20
+          END as score
+        FROM base
+      )
+      SELECT name, id, tracker, status, country, score
+      FROM scored
+      ORDER BY score DESC
       LIMIT ${limit}
     `;
 
-    // Search entities
     const entitySql = `
-      SELECT DISTINCT
-        "Owner" as name,
-        "Owner GEM Entity ID" as id,
-        COUNT(DISTINCT "GEM unit ID") as asset_count
-      FROM ownership
-      WHERE LOWER("Owner") LIKE LOWER('%${searchTerm}%')
-        AND "Owner" IS NOT NULL
-      GROUP BY "Owner", "Owner GEM Entity ID"
-      ORDER BY asset_count DESC
+      WITH base AS (
+        SELECT
+          "Owner" as name,
+          "Owner GEM Entity ID" as id,
+          COUNT(DISTINCT "GEM unit ID") as asset_count
+        FROM ownership
+        WHERE LOWER("Owner") LIKE LOWER('%${searchTerm}%')
+          AND "Owner" IS NOT NULL
+        GROUP BY "Owner", "Owner GEM Entity ID"
+      ),
+      scored AS (
+        SELECT *,
+          CASE
+            WHEN LOWER(name) = LOWER('${searchTerm}') THEN 100
+            WHEN LOWER(name) LIKE LOWER('${searchTerm}%') THEN 60
+            WHEN LOWER(name) LIKE LOWER('% ${searchTerm}%') THEN 40
+            ELSE 20
+          END as text_score,
+          LOG10(GREATEST(asset_count, 1)) * 20 as importance_score
+        FROM base
+      )
+      SELECT name, id, asset_count, (text_score + importance_score) as score
+      FROM scored
+      ORDER BY score DESC, asset_count DESC
       LIMIT ${limit}
     `;
 
@@ -90,6 +133,8 @@
 
     queryTime = Math.max(assetResult.executionTime || 0, entityResult.executionTime || 0);
     loading = false;
+    // Animate results appearing
+    animateResults();
   }
 
   function handleInput(e: Event) {
@@ -122,7 +167,7 @@
   </div>
 
   {#if query.length >= 2}
-    <div class="results">
+    <div class="results" bind:this={resultsEl}>
       {#if results.assets.length > 0}
         <div class="result-section">
           <h4>Assets</h4>

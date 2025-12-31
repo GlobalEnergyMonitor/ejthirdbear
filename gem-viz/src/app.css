@@ -79,7 +79,7 @@ vite-error-overlay {
   button:not(.print-include),
   .maplibregl-ctrl,
   .maplibregl-control-container,
-  [aria-label="Page sections"] {
+  [aria-label='Page sections'] {
     display: none !important;
   }
 

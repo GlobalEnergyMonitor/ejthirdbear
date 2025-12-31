@@ -184,7 +184,7 @@
       </p>
 
       <div class="asset-list">
-        {#each coLocatedAssets as asset}
+        {#each [...coLocatedAssets].sort( (a, b) => (a.Project || '').localeCompare(b.Project || '') ) as asset}
           <a href={assetLink(asset['GEM unit ID'])} class="list-item">
             <span class="item-name">{asset.Project}</span>
             <span class="item-meta">

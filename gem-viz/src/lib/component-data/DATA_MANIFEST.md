@@ -10,9 +10,11 @@ Backend developers can provide data in any format/source as long as the final sh
 ## Primary Data Source
 
 ### Ownership Parquet File
+
 **File:** `all_trackers_ownership@1.parquet`
 
 **Key columns:**
+
 - `GEM unit ID` / `Asset ID` / `ProjectID` - Asset identifiers
 - `Owner GEM Entity ID` - Immediate owner entity ID
 - `Interested Party ID` - Parent entity in ownership edge
@@ -30,7 +32,8 @@ Backend developers can provide data in any format/source as long as the final sh
 ## Core Query Patterns (from Observable notebooks)
 
 ### 1. Get Immediate Owners of an Asset
-*From notebook: bdcdb445752833fa*
+
+_From notebook: bdcdb445752833fa_
 
 ```sql
 SELECT * FROM ownership
@@ -40,7 +43,8 @@ WHERE "GEM unit ID" = '{assetId}'
 ```
 
 ### 2. Recursive Upstream Traversal (Asset -> Ultimate Parent)
-*From notebook: bdcdb445752833fa*
+
+_From notebook: bdcdb445752833fa_
 
 ```sql
 WITH RECURSIVE edges AS (
@@ -68,7 +72,8 @@ FROM edges e
 ```
 
 ### 3. Get Subsidiaries of an Entity (Spotlight Owner)
-*From notebook: 32dcab6db3a0f0b6*
+
+_From notebook: 32dcab6db3a0f0b6_
 
 ```sql
 SELECT DISTINCT
@@ -81,7 +86,8 @@ WHERE "Interested Party ID" = '{entityId}'
 ```
 
 ### 4. Get Assets Owned by Subsidiaries
-*From notebook: 32dcab6db3a0f0b6*
+
+_From notebook: 32dcab6db3a0f0b6_
 
 ```sql
 SELECT
@@ -120,21 +126,23 @@ LIMIT {limit}
 ## Component Data Contracts
 
 ### AssetMap
+
 **Purpose:** Display single asset location on map
 
 ```typescript
 interface AssetMapData {
-  assetId: string;        // GEM unit ID
-  name: string;           // Display name
-  lat: number | null;     // Latitude
-  lon: number | null;     // Longitude
-  locationId?: string;    // For coordinate lookup fallback
+  assetId: string; // GEM unit ID
+  name: string; // Display name
+  lat: number | null; // Latitude
+  lon: number | null; // Longitude
+  locationId?: string; // For coordinate lookup fallback
 }
 ```
 
 ---
 
 ### OwnershipHierarchy / MermaidOwnership
+
 **Purpose:** Visualize ownership path from ultimate parent to asset
 
 **Data source:** `Ownership Path` column parsed by `parseOwnershipPaths()` in `$lib/component-data/ownership-parser.ts`
@@ -144,10 +152,10 @@ interface OwnershipPathData {
   assetId: string;
   assetName: string;
   edges: Array<{
-    source: string;       // Sanitized entity ID
-    target: string;       // Sanitized entity/asset ID
+    source: string; // Sanitized entity ID
+    target: string; // Sanitized entity/asset ID
     value: number | null; // Ownership percentage
-    depth: number;        // Distance from asset (0 = direct owner)
+    depth: number; // Distance from asset (0 = direct owner)
   }>;
   nodes: Array<{
     id: string;
@@ -161,6 +169,7 @@ interface OwnershipPathData {
 ---
 
 ### AssetScreener / OwnershipChart / OwnershipExplorer
+
 **Purpose:** Display all assets owned by an entity through subsidiaries
 
 **Reference:** `getSpotlightOwnerData()` in `$lib/ownership-data.ts`
@@ -168,29 +177,30 @@ interface OwnershipPathData {
 ```typescript
 interface SpotlightOwnerData {
   spotlightOwner: { id: string; Name: string };
-  subsidiariesMatched: Map<string, Asset[]>;  // Subsidiary ID -> Assets
+  subsidiariesMatched: Map<string, Asset[]>; // Subsidiary ID -> Assets
   directlyOwned: Asset[];
-  assets: Asset[];                             // All assets flat
+  assets: Asset[]; // All assets flat
   entityMap: Map<string, { id: string; Name: string }>;
   matchedEdges: Map<string, { value: number | null }>;
-  assetClassName: string;                      // e.g., "Coal Plant"
+  assetClassName: string; // e.g., "Coal Plant"
 }
 
 interface Asset {
-  id: string;           // GEM unit ID
-  name: string;         // Unit/Project name
-  project?: string;     // Project name
-  Status: string;       // Operating, Retired, etc.
-  tracker?: string;     // GCPT, GGIT, etc.
+  id: string; // GEM unit ID
+  name: string; // Unit/Project name
+  project?: string; // Project name
+  Status: string; // Operating, Retired, etc.
+  tracker?: string; // GCPT, GGIT, etc.
   country?: string;
   owner_id?: string;
-  share?: number;       // Ownership percentage
+  share?: number; // Ownership percentage
 }
 ```
 
 ---
 
 ### RelationshipNetwork
+
 **Purpose:** Show ownership chain, same-owner assets, co-located assets
 
 **Reference:** `getAssetOwners()` in `$lib/ownership-data.ts`
@@ -222,6 +232,7 @@ interface AssetOwnersData {
 ---
 
 ### NetworkGraph
+
 **Purpose:** Force-directed graph of all ownership relationships
 
 **Source:** `all_trackers_ownership@1.parquet` loaded via DuckDB WASM
@@ -229,15 +240,15 @@ interface AssetOwnersData {
 ```typescript
 interface NetworkGraphData {
   edges: Array<{
-    "Owner Entity ID": string;
-    "GEM unit ID": string;
-    "Share (%)": number | null;
+    'Owner Entity ID': string;
+    'GEM unit ID': string;
+    'Share (%)': number | null;
     Owner?: string;
   }>;
   nodes: Array<{
     id: string;
     name: string;
-    type: "entity" | "asset";
+    type: 'entity' | 'asset';
     connections: number;
   }>;
 }
@@ -246,16 +257,17 @@ interface NetworkGraphData {
 ---
 
 ### SimpleMap
+
 **Purpose:** Interactive map with all asset points
 
 **Source:** `points.geojson` (pre-generated GeoJSON)
 
 ```typescript
 interface MapPointsData {
-  type: "FeatureCollection";
+  type: 'FeatureCollection';
   features: Array<{
-    type: "Feature";
-    geometry: { type: "Point"; coordinates: [number, number] };
+    type: 'Feature';
+    geometry: { type: 'Point'; coordinates: [number, number] };
     properties: {
       id: string;
       name: string;
@@ -272,6 +284,7 @@ interface MapPointsData {
 ## Data Loading Options
 
 ### Option 1: Client-side Parquet (Current)
+
 Uses `$lib/duckdb-utils.ts` to load parquet files in browser via DuckDB WASM.
 
 ```typescript
@@ -282,6 +295,7 @@ const result = await query('SELECT * FROM ownership WHERE ...');
 ```
 
 ### Option 2: MotherDuck Cloud
+
 Uses `$lib/motherduck-wasm.ts` for cloud DuckDB queries.
 
 ```typescript
@@ -290,6 +304,7 @@ const result = await motherduck.query('SELECT * FROM ...');
 ```
 
 ### Option 3: REST API (Backend Implementation)
+
 Backend implements the query patterns above and exposes REST endpoints:
 
 ```
@@ -305,17 +320,17 @@ GET /api/owners/top?limit=20
 
 Different trackers use different ID columns:
 
-| Tracker | ID Field |
-|---------|----------|
-| Bioenergy Power | GEM unit ID |
-| Coal Plant | GEM unit ID |
-| Gas Plant | GEM unit ID |
-| Coal Mine | GEM Mine ID |
-| Iron Ore Mine | GEM Asset ID |
-| Gas Pipeline | ProjectID |
-| Oil & NGL Pipeline | ProjectID |
-| Steel Plant | Steel Plant ID |
-| Cement and Concrete | GEM Plant ID |
+| Tracker             | ID Field       |
+| ------------------- | -------------- |
+| Bioenergy Power     | GEM unit ID    |
+| Coal Plant          | GEM unit ID    |
+| Gas Plant           | GEM unit ID    |
+| Coal Mine           | GEM Mine ID    |
+| Iron Ore Mine       | GEM Asset ID   |
+| Gas Pipeline        | ProjectID      |
+| Oil & NGL Pipeline  | ProjectID      |
+| Steel Plant         | Steel Plant ID |
+| Cement and Concrete | GEM Plant ID   |
 
 ---
 

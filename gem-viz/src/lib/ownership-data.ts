@@ -307,7 +307,7 @@ export function summarizeAssets(assets: SummarizableAsset[]) {
 
   const rollup = (
     arr: SummarizableAsset[],
-    keyFn: (d: SummarizableAsset) => string | undefined
+    keyFn: (_d: SummarizableAsset) => string | undefined
   ) => {
     const map = new Map<string, SummarizableAsset[]>();
     arr.forEach((d) => {
@@ -332,9 +332,9 @@ export function summarizeAssets(assets: SummarizableAsset[]) {
  */
 export interface SpotlightOwnerData {
   spotlightOwner: { id: string; Name: string };
-  subsidiariesMatched: Map<string, any[]>;
-  directlyOwned: any[];
-  assets: any[];
+  subsidiariesMatched: Map<string, unknown[]>;
+  directlyOwned: unknown[];
+  assets: unknown[];
   entityMap: Map<string, { id: string; Name: string }>;
   matchedEdges: Map<string, { value: number | null }>;
   assetClassName: string;
@@ -383,9 +383,11 @@ export async function getSpotlightOwnerData(
     }
 
     // Now find assets owned by each subsidiary
-    const subsidiaryIds = directSubs.map((s: any) => s.subsidiary_id).filter(Boolean);
-    const subsidiariesMatched = new Map<string, any[]>();
-    const allAssets: any[] = [];
+    const subsidiaryIds = directSubs
+      .map((s: { subsidiary_id?: string }) => s.subsidiary_id)
+      .filter(Boolean);
+    const subsidiariesMatched = new Map<string, unknown[]>();
+    const allAssets: unknown[] = [];
 
     if (subsidiaryIds.length > 0) {
       const idList = subsidiaryIds.map((id: string) => `'${id}'`).join(', ');
@@ -439,7 +441,9 @@ export async function getSpotlightOwnerData(
     allAssets.push(...directlyOwned);
 
     // Determine asset class from tracker types
-    const trackers = new Set(allAssets.map((a) => a.tracker).filter(Boolean));
+    const trackers = new Set(
+      allAssets.map((a) => (a as { tracker?: string }).tracker).filter(Boolean)
+    );
     const assetClassName =
       trackers.size === 1 ? Array.from(trackers)[0] : `assets (${trackers.size} types)`;
 
@@ -461,7 +465,7 @@ export async function getSpotlightOwnerData(
 /**
  * Get a list of top owners by asset count for demo purposes
  */
-export async function getTopOwners(limit: number = 20): Promise<any[]> {
+export async function getTopOwners(limit: number = 20): Promise<unknown[]> {
   try {
     await loadParquetFromPath(getOwnershipParquetPath(), 'ownership');
 

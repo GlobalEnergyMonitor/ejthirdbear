@@ -60,13 +60,13 @@ export interface AsyncState<T> {
   /** Time taken for the last fetch in milliseconds */
   readonly queryTime: number;
   /** Run an async fetcher, updating state automatically */
-  run: (fetcher: () => Promise<T>) => Promise<T | null>;
+  run: (_fetcher: () => Promise<T>) => Promise<T | null>;
   /** Reset to initial state */
   reset: () => void;
   /** Manually set an error */
-  setError: (msg: string) => void;
+  setError: (_msg: string) => void;
   /** Manually set data (for prebaked data) */
-  setData: (data: T) => void;
+  setData: (_data: T) => void;
 }
 
 /**
@@ -171,7 +171,7 @@ async function getWidgetQuery() {
 
 export interface WidgetState<T> extends AsyncState<T[]> {
   /** Run a SQL query against the widget DB */
-  query: (sql: string) => Promise<T[] | null>;
+  query: (_sql: string) => Promise<T[] | null>;
 }
 
 /**
@@ -222,7 +222,7 @@ export function createWidgetState<T = Record<string, unknown>>(): WidgetState<T>
 export interface ToggleState {
   readonly value: boolean;
   toggle: () => void;
-  set: (v: boolean) => void;
+  set: (_v: boolean) => void;
   on: () => void;
   off: () => void;
 }
@@ -259,11 +259,11 @@ export interface SelectionState<T> {
   readonly selected: Set<T>;
   readonly count: number;
   readonly hasSelection: boolean;
-  isSelected: (item: T) => boolean;
-  toggle: (item: T) => void;
-  select: (item: T) => void;
-  deselect: (item: T) => void;
-  selectAll: (items: T[]) => void;
+  isSelected: (_item: T) => boolean;
+  toggle: (_item: T) => void;
+  select: (_item: T) => void;
+  deselect: (_item: T) => void;
+  selectAll: (_items: T[]) => void;
   clear: () => void;
   toArray: () => T[];
 }
@@ -345,10 +345,10 @@ export interface PaginationState {
   readonly totalPages: number;
   readonly hasNext: boolean;
   readonly hasPrev: boolean;
-  setTotal: (total: number) => void;
+  setTotal: (_total: number) => void;
   next: () => void;
   prev: () => void;
-  goTo: (page: number) => void;
+  goTo: (_page: number) => void;
   reset: () => void;
 }
 

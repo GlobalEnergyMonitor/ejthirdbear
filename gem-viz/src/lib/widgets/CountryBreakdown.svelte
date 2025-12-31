@@ -2,16 +2,14 @@
   /**
    * CountryBreakdown Widget
    * Assets grouped by country with bar visualization
-   *
-   * REFACTORED: Uses createWidgetState() composable for state management
    */
 
   import { onMount } from 'svelte';
-  import { createWidgetState } from '$lib/composables.svelte';
+  import { widgetQuery } from './widget-utils';
   import LoadingWrapper from '$lib/components/LoadingWrapper.svelte';
 
   interface CountryRow {
-    country: string;
+    country_name: string;
     asset_count: number;
     total_capacity: number;
   }
@@ -19,29 +17,48 @@
   // Props
   let { limit = 15, tracker = null as string | null, title = 'Assets by Country' } = $props();
 
-  // State - using composable instead of 5 separate $state() calls
-  const state = createWidgetState<CountryRow>();
+  // State
+  let loading = $state(true);
+  let error = $state<string | null>(null);
+  let data = $state<CountryRow[]>([]);
+  let queryTime = $state(0);
 
-  // Derived values from state.data
-  const results = $derived(state.data || []);
-  const maxValue = $derived(
-    results.length > 0 ? Math.max(...results.map((r) => r.asset_count)) : 0
-  );
+  // Derived values
+  const maxValue = $derived(data.length > 0 ? Math.max(...data.map((r) => r.asset_count)) : 0);
 
   async function loadData() {
-    const trackerFilter = tracker ? `WHERE "Tracker" = '${tracker}'` : '';
+    loading = true;
+    error = null;
+    const startTime = Date.now();
 
-    await state.query(`
-      SELECT
-        COALESCE("Country", 'Unknown') as country,
-        COUNT(DISTINCT "GEM unit ID") as asset_count,
-        SUM(COALESCE("Capacity (MW)", 0)) as total_capacity
-      FROM ownership
-      ${trackerFilter}
-      GROUP BY 1
-      ORDER BY asset_count DESC
-      LIMIT ${limit}
-    `);
+    const trackerCondition = tracker ? `WHERE o."Tracker" = '${tracker}'` : '';
+
+    try {
+      const result = await widgetQuery<CountryRow>(`
+        SELECT
+          COALESCE(l."Country.Area", 'Unknown') as country_name,
+          COUNT(DISTINCT o."GEM unit ID") as asset_count,
+          SUM(COALESCE(o."Capacity (MW)", 0)) as total_capacity
+        FROM ownership o
+        LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
+        ${trackerCondition}
+        GROUP BY country_name
+        ORDER BY asset_count DESC
+        LIMIT ${limit}
+      `);
+
+      if (!result.success) {
+        throw new Error(result.error || 'Query failed');
+      }
+
+      data = result.data || [];
+      queryTime = Date.now() - startTime;
+    } catch (err) {
+      error = err instanceof Error ? err.message : String(err);
+      queryTime = Date.now() - startTime;
+    } finally {
+      loading = false;
+    }
   }
 
   onMount(() => {
@@ -58,19 +75,14 @@
 <div class="widget country-breakdown">
   <header>
     <h3>{title}</h3>
-    <span class="query-time">{state.queryTime}ms</span>
+    <span class="query-time">{queryTime}ms</span>
   </header>
 
-  <LoadingWrapper
-    loading={state.loading}
-    error={state.error}
-    empty={results.length === 0}
-    loadingMessage="Loading countries..."
-  >
+  <LoadingWrapper {loading} {error} empty={data.length === 0} loadingMessage="Loading countries...">
     <div class="bars">
-      {#each results as row}
+      {#each data as row}
         <div class="bar-row">
-          <span class="country">{row.country}</span>
+          <span class="country">{row.country_name}</span>
           <div class="bar-container">
             <div class="bar" style="width: {(row.asset_count / maxValue) * 100}%"></div>
           </div>

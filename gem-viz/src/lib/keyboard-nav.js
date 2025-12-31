@@ -38,7 +38,7 @@ const routes = {
  * Check if user is in an input field
  */
 function isTyping() {
-  const active = document.activeElement;
+  const active = /** @type {HTMLElement | null} */ (document.activeElement);
   if (!active) return false;
   const tag = active.tagName.toLowerCase();
   return tag === 'input' || tag === 'textarea' || tag === 'select' || active.isContentEditable;
@@ -48,8 +48,10 @@ function isTyping() {
  * Focus the search input if it exists
  */
 function focusSearch() {
-  const searchInput = document.querySelector(
-    'input[type="search"], input[placeholder*="Search"], .quick-search input'
+  const searchInput = /** @type {HTMLInputElement | null} */ (
+    document.querySelector(
+      'input[type="search"], input[placeholder*="Search"], .quick-search input'
+    )
   );
   if (searchInput) {
     searchInput.focus();
@@ -87,6 +89,7 @@ function showShortcuts() {
         </div>
         <div class="shortcut-group">
           <h4>Actions</h4>
+          <div class="shortcut"><kbd>⌘</kbd> <kbd>K</kbd> <span>Command palette</span></div>
           <div class="shortcut"><kbd>/</kbd> <span>Focus search</span></div>
           <div class="shortcut"><kbd>p</kbd> <span>Print page</span></div>
           <div class="shortcut"><kbd>Esc</kbd> <span>Close / clear</span></div>
@@ -197,7 +200,7 @@ function handleKeydown(event) {
   if (isTyping()) {
     // Escape clears focus from inputs
     if (event.key === 'Escape') {
-      document.activeElement?.blur();
+      /** @type {HTMLElement | null} */ (document.activeElement)?.blur();
     }
     return;
   }
@@ -243,7 +246,7 @@ function handleKeydown(event) {
       showShortcuts();
       break;
 
-    case 'escape':
+    case 'escape': {
       // Close modals
       const modal = document.getElementById('keyboard-shortcuts-modal');
       if (modal) {
@@ -252,6 +255,7 @@ function handleKeydown(event) {
       // Clear any selection
       window.getSelection()?.removeAllRanges();
       break;
+    }
 
     case 'p':
       event.preventDefault();

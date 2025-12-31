@@ -2,14 +2,14 @@
   /**
    * TopOwners Widget
    * Rankings of entities by asset count or total capacity
-   *
-   * REFACTORED: Uses createWidgetState() composable for state management
    */
 
-  import { onMount } from 'svelte';
-  import { createWidgetState } from '$lib/composables.svelte';
+  import { onMount, tick } from 'svelte';
+  import { widgetQuery } from './widget-utils';
   import { entityLink } from '$lib/links';
+  import { formatCount, formatCapacity } from '$lib/format';
   import LoadingWrapper from '$lib/components/LoadingWrapper.svelte';
+  import { staggerIn } from '$lib/animations';
 
   interface OwnerRow {
     owner_name: string;
@@ -26,26 +26,59 @@
     title = 'Top Owners',
   } = $props();
 
-  // State - now a single composable instead of 4 separate $state() calls
-  const state = createWidgetState<OwnerRow>();
+  // State
+  let loading = $state(true);
+  let error = $state<string | null>(null);
+  let data = $state<OwnerRow[]>([]);
+  let queryTime = $state(0);
+  let listEl: HTMLElement | null = null;
+
+  async function animateList() {
+    await tick();
+    if (listEl) {
+      const items = listEl.querySelectorAll('li');
+      if (items.length > 0) {
+        staggerIn(Array.from(items), { staggerDelay: 40, duration: 350, distance: 12 });
+      }
+    }
+  }
 
   async function loadData() {
-    const trackerFilter = tracker ? `WHERE "Tracker" = '${tracker}'` : '';
-    const capacityCol = metric === 'capacity' ? 'SUM(COALESCE("Capacity (MW)", 0))' : 'COUNT(*)';
+    loading = true;
+    error = null;
+    const startTime = Date.now();
 
-    await state.query(`
-      SELECT
-        "Owner" as owner_name,
-        "Owner GEM Entity ID" as entity_id,
-        ${capacityCol} as value,
-        COUNT(DISTINCT "GEM unit ID") as asset_count
-      FROM ownership
-      ${trackerFilter}
-      WHERE "Owner" IS NOT NULL AND "Owner" != ''
-      GROUP BY "Owner", "Owner GEM Entity ID"
-      ORDER BY value DESC
-      LIMIT ${limit}
-    `);
+    const capacityCol = metric === 'capacity' ? 'SUM(COALESCE("Capacity (MW)", 0))' : 'COUNT(*)';
+    const trackerCondition = tracker ? `AND "Tracker" = '${tracker}'` : '';
+
+    try {
+      const result = await widgetQuery<OwnerRow>(`
+        SELECT
+          "Owner" as owner_name,
+          "Owner GEM Entity ID" as entity_id,
+          ${capacityCol} as value,
+          COUNT(DISTINCT "GEM unit ID") as asset_count
+        FROM ownership
+        WHERE "Owner" IS NOT NULL AND "Owner" != ''
+        ${trackerCondition}
+        GROUP BY "Owner", "Owner GEM Entity ID"
+        ORDER BY value DESC
+        LIMIT ${limit}
+      `);
+
+      if (!result.success) {
+        throw new Error(result.error || 'Query failed');
+      }
+
+      data = result.data || [];
+      queryTime = Date.now() - startTime;
+      animateList();
+    } catch (err) {
+      error = err instanceof Error ? err.message : String(err);
+      queryTime = Date.now() - startTime;
+    } finally {
+      loading = false;
+    }
   }
 
   onMount(() => loadData());
@@ -62,24 +95,19 @@
 <div class="widget top-owners">
   <header>
     <h3>{title}</h3>
-    <span class="query-time">{state.queryTime}ms</span>
+    <span class="query-time">{queryTime}ms</span>
   </header>
 
-  <LoadingWrapper
-    loading={state.loading}
-    error={state.error}
-    empty={state.data?.length === 0}
-    loadingMessage="Loading rankings..."
-  >
-    <ol class="rankings">
-      {#each state.data || [] as row, i}
+  <LoadingWrapper {loading} {error} empty={data.length === 0} loadingMessage="Loading rankings...">
+    <ol class="rankings" bind:this={listEl}>
+      {#each data as row, i}
         <li>
           <span class="rank">#{i + 1}</span>
           <a href={entityLink(row.entity_id)} class="name">{row.owner_name}</a>
           <span class="value">
             {metric === 'capacity'
-              ? `${Math.round(row.value).toLocaleString()} MW`
-              : `${row.asset_count} assets`}
+              ? formatCapacity(row.value)
+              : `${formatCount(row.asset_count)} assets`}
           </span>
         </li>
       {/each}

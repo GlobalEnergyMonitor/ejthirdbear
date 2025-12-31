@@ -1,4 +1,6 @@
 <script>
+  import { formatCount } from '$lib/format';
+
   /**
    * @type {{
    *   columns?: Array<{key: string, label: string, sortable?: boolean, filterable?: boolean, type?: 'string' | 'number' | 'date', width?: string}>,
@@ -278,7 +280,7 @@
       {/if}
 
       <div class="result-count">
-        {sortedData.length.toLocaleString()} of {data.length.toLocaleString()} rows
+        {formatCount(sortedData.length)} of {formatCount(data.length)} rows
       </div>
     </div>
 
@@ -465,7 +467,7 @@
               <td>
                 {#if row[col.key] != null}
                   {#if col.type === 'number'}
-                    {Number(row[col.key]).toLocaleString()}
+                    {formatCount(Number(row[col.key]))}
                   {:else}
                     {row[col.key]}
                   {/if}
@@ -488,7 +490,7 @@
   {#if showPagination && totalPages > 1}
     <div class="pagination">
       <div class="pagination-info">
-        Showing {startRow} - {endRow} of {sortedData.length.toLocaleString()}
+        Showing {startRow} - {endRow} of {formatCount(sortedData.length)}
       </div>
 
       <div class="pagination-controls">

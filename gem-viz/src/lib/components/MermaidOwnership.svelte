@@ -14,7 +14,6 @@
     nodeMap = new Map(),
     assetId = '',
     assetName = '',
-    zoom = 0.6,
     direction = 'TD',
   } = $props();
 
@@ -190,8 +189,6 @@
     renderMermaid();
     return cleanup;
   });
-
-  let transform = $derived(`scale(${zoom})`);
 </script>
 
 <div class="mermaid-ownership" bind:this={containerEl}>
@@ -206,14 +203,8 @@
       </details>
     </div>
   {:else if mermaidSvg}
-    <div class="controls">
-      <label
-        >Zoom: <input type="range" min="0.2" max="2" step="0.1" bind:value={zoom} />
-        <span>{(zoom * 100).toFixed(0)}%</span></label
-      >
-    </div>
     <div class="diagram-container">
-      <div class="diagram" style="transform: {transform}; transform-origin: top left;">
+      <div class="diagram">
         {@html mermaidSvg}
       </div>
     </div>
@@ -228,26 +219,6 @@
     background: transparent;
     min-height: 240px;
     width: 100%;
-  }
-  .controls {
-    padding: 10px;
-    border-bottom: 1px solid #ddd;
-    background: #fff;
-    font-size: 11px;
-    display: flex;
-    gap: 10px;
-    align-items: center;
-  }
-  .controls label {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: #666;
-  }
-  .controls input[type='range'] {
-    width: 100px;
   }
   .diagram-container {
     padding: 20px;

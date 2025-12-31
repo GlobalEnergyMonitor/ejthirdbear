@@ -3,24 +3,26 @@
 ## Current State
 
 ### Total LOC by Component (visualization components)
-| Component | Lines | Self-Hydrating | Data Source |
-|-----------|-------|----------------|-------------|
-| AssetScreener.svelte | 950 | Yes | fetchOwnerPortfolio |
-| DataTable.svelte | 926 | No (props) | Props from parent |
-| OwnershipExplorerD3.svelte | 806 | Yes | MotherDuck |
-| OwnershipChart.svelte | 494 | Yes | fetchOwnerPortfolio |
-| RelationshipNetwork.svelte | 445 | Yes | MotherDuck |
-| OwnershipScreener.svelte | 417 | No (props) | Props from parent |
-| OwnershipHierarchy.svelte | 387 | Yes | MotherDuck + parseOwnershipPaths |
-| MermaidOwnership.svelte | 333 | Yes | MotherDuck + parseOwnershipPaths |
-| OwnershipFlower.svelte | 187 | Yes | MotherDuck |
-| AssetMap.svelte | 181 | Yes | fetchAssetBasics |
+
+| Component                  | Lines | Self-Hydrating | Data Source                      |
+| -------------------------- | ----- | -------------- | -------------------------------- |
+| AssetScreener.svelte       | 950   | Yes            | fetchOwnerPortfolio              |
+| DataTable.svelte           | 926   | No (props)     | Props from parent                |
+| OwnershipExplorerD3.svelte | 806   | Yes            | MotherDuck                       |
+| OwnershipChart.svelte      | 494   | Yes            | fetchOwnerPortfolio              |
+| RelationshipNetwork.svelte | 445   | Yes            | MotherDuck                       |
+| OwnershipScreener.svelte   | 417   | No (props)     | Props from parent                |
+| OwnershipHierarchy.svelte  | 387   | Yes            | MotherDuck + parseOwnershipPaths |
+| MermaidOwnership.svelte    | 333   | Yes            | MotherDuck + parseOwnershipPaths |
+| OwnershipFlower.svelte     | 187   | Yes            | MotherDuck                       |
+| AssetMap.svelte            | 181   | Yes            | fetchAssetBasics                 |
 
 ---
 
 ## Duplicated Patterns Found
 
 ### 1. Loading/Error State (13 instances)
+
 ```javascript
 let loading = $state(true);
 let error = $state(null);
@@ -31,6 +33,7 @@ RelationshipNetwork, OwnershipFlower, AssetMap, OwnershipExplorerD3, NetworkGrap
 asset/+page, asset/[id]/+page, entity/[id]/+page, export/+page
 
 ### 2. SQL Template Functions (5 instances of SCHEMA_SQL, 3 of ASSET_SQL)
+
 ```javascript
 const SCHEMA_SQL = (schema, table) => `
   SELECT column_name
@@ -50,6 +53,7 @@ const ASSET_SQL = (fullTableName, idColumn, id) => `
 **Files:** OwnershipHierarchy, MermaidOwnership, asset/+page, asset/[id]/+page, entity/[id]/+page
 
 ### 3. escapeValue Function (3 instances)
+
 ```javascript
 function escapeValue(val) {
   return String(val ?? '').replace(/'/g, "''");
@@ -59,6 +63,7 @@ function escapeValue(val) {
 **Files:** OwnershipHierarchy, MermaidOwnership, asset/[id]/+page
 
 ### 4. Page ID Resolution (6+ instances)
+
 ```javascript
 const resolvedId = get(page)?.params?.id;
 if (!resolvedId) throw new Error('Missing asset ID');
@@ -67,6 +72,7 @@ if (!resolvedId) throw new Error('Missing asset ID');
 **Files:** OwnershipHierarchy, MermaidOwnership, AssetScreener, OwnershipChart, etc.
 
 ### 5. Hydration Pattern (8+ instances)
+
 ```javascript
 async function hydrateXxx() {
   try {
@@ -90,6 +96,7 @@ onMount(() => {
 ## Proposed Consolidations
 
 ### A. Create `sql-helpers.ts` (~30 LOC savings across 5 files)
+
 ```typescript
 // src/lib/component-data/sql-helpers.ts
 export const SCHEMA_SQL = (schema: string, table: string) => `...`;
@@ -100,6 +107,7 @@ export function findNameColumn(cols: string[]): string | null { ... }
 ```
 
 ### B. Create `useAssetData` hook (~50 LOC savings per component)
+
 ```typescript
 // src/lib/component-data/use-asset-data.ts
 export function useAssetData<T>() {
@@ -128,6 +136,7 @@ export function useAssetData<T>() {
 ### C. Merge Similar Components
 
 **Candidates for merge:**
+
 - `OwnershipHierarchy` + `MermaidOwnership` → Both parse ownership paths, one renders SVG, one renders Mermaid
 - `AssetScreener` + `OwnershipChart` → Both use fetchOwnerPortfolio, different visualizations
 - `OwnershipExplorer` is already just a wrapper for `AssetScreener`
@@ -137,28 +146,33 @@ export function useAssetData<T>() {
 ## Per-Component Data Concerns
 
 ### AssetMap
+
 - **Input:** Asset ID from URL
 - **Fetches:** `fetchAssetBasics(assetId)`
 - **Data shape:** `{ lat, lon, name, locationId }`
 - **Fallback:** If no coords, tries `fetchCoordinatesByLocation(locationId)`
 
 ### OwnershipHierarchy / MermaidOwnership
+
 - **Input:** Asset ID from URL
 - **Fetches:** Raw ownership records via MotherDuck
 - **Transforms:** `parseOwnershipPaths()` → edges + nodes
 - **Data shape:** `{ edges: OwnershipEdge[], nodes: OwnershipNode[] }`
 
 ### AssetScreener / OwnershipChart
+
 - **Input:** Asset ID or Entity ID from URL
 - **Fetches:** `fetchOwnerPortfolio(ownerId)`
 - **Data shape:** `SpotlightOwnerData` (subsidiaries, assets, edges)
 
 ### RelationshipNetwork
+
 - **Input:** Asset ID from URL
 - **Fetches:** Multiple queries (ownership chain, same-owner, co-located)
 - **Data shape:** Custom aggregation
 
 ### NetworkGraph
+
 - **Input:** None (global view)
 - **Fetches:** Parquet file via DuckDB WASM
 - **Data shape:** All edges from ownership parquet

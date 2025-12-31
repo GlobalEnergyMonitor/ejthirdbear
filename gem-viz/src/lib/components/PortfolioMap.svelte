@@ -8,7 +8,7 @@
    * @example
    * <PortfolioMap assets={portfolio.assets} entityName="RWE AG" />
    */
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, tick } from 'svelte';
   import maplibregl from 'maplibre-gl';
   import 'maplibre-gl/dist/maplibre-gl.css';
   import { assetPath, assetLink } from '$lib/links';
@@ -20,8 +20,8 @@
   let {
     /** Array of assets with locationId property */
     assets = [],
-    /** Entity name for display */
-    entityName = 'Portfolio',
+    /** Entity name for display (reserved for future use) */
+    entityName: _entityName = 'Portfolio',
     /** Map height */
     height = 300,
   } = $props();
@@ -29,11 +29,12 @@
   // ---------------------------------------------------------------------------
   // State
   // ---------------------------------------------------------------------------
-  let mapContainer;
-  let map;
+  let mapContainer = $state(null);
+  let map = $state(null);
   let loading = $state(true);
-  let error = $state(null);
+  let _error = $state(null); // Track errors internally
   let matchedCount = $state(0);
+  let hasValidCoordinates = $state(false);
 
   // ---------------------------------------------------------------------------
   // Lifecycle
@@ -46,12 +47,10 @@
 
     try {
       // Build set of location IDs to match
-      const locationIds = new Set(
-        assets.map((a) => a.locationId || a.location_id).filter(Boolean)
-      );
+      const locationIds = new Set(assets.map((a) => a.locationId || a.location_id).filter(Boolean));
 
       if (locationIds.size === 0) {
-        error = 'No location data available';
+        _error = 'No location data available';
         loading = false;
         return;
       }
@@ -64,13 +63,27 @@
 
       // Filter to matching locations
       const matchedFeatures = geojson.features.filter((f) =>
-        locationIds.has(f.properties?.locationId || f.properties?.['GEM.location.ID'])
+        locationIds.has(
+          f.properties?.id || f.properties?.['GEM location ID'] || f.properties?.locationId
+        )
       );
 
       matchedCount = matchedFeatures.length;
 
       if (matchedFeatures.length === 0) {
-        error = 'No coordinates found for assets';
+        // No coordinates - component will render nothing
+        loading = false;
+        return;
+      }
+
+      hasValidCoordinates = true;
+
+      // Wait for DOM to update so mapContainer is bound
+      await tick();
+
+      // Safety check - container must exist
+      if (!mapContainer) {
+        console.error('[PortfolioMap] Container not ready after tick');
         loading = false;
         return;
       }
@@ -89,8 +102,6 @@
         zoom: 1,
         attributionControl: false,
       });
-
-      map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
 
       map.on('load', () => {
         // Add source
@@ -141,7 +152,7 @@
       });
     } catch (err) {
       console.error('[PortfolioMap] Error:', err);
-      error = err.message;
+      _error = err.message;
       loading = false;
     }
   });
@@ -152,19 +163,15 @@
 </script>
 
 <!-- ---------------------------------------------------------------------------
-     Template
+     Template: Container always exists for binding, visibility controlled by CSS
      --------------------------------------------------------------------------- -->
-{#if assets.length > 0}
+{#if loading || hasValidCoordinates}
   <div class="portfolio-map" style="height: {height}px">
     <div bind:this={mapContainer} class="map"></div>
     {#if loading}
       <div class="overlay">Loading map...</div>
-    {:else if error}
-      <div class="overlay error">{error}</div>
     {:else}
-      <div class="map-label">
-        {matchedCount} locations
-      </div>
+      <div class="map-label">{matchedCount} locations</div>
     {/if}
   </div>
 {/if}
