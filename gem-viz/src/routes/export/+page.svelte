@@ -132,7 +132,7 @@
       exportProgress = `Querying portfolio for ${ids.length} entities...`;
       const idList = buildIdList(ids);
 
-      // Query all assets owned by these entities
+      // Query all assets owned by these entities (join with locations for country)
       const sql = `
         SELECT
           'Entity Portfolio' as "Record Type",
@@ -145,11 +145,12 @@
           o."Unit" as "Unit Name",
           o."Tracker" as "Asset Type",
           o."Status" as "Asset Status",
-          o."Country" as "Asset Country",
+          l."Country.Area" as "Asset Country",
           CAST(o."Capacity (MW)" AS DOUBLE) as "Capacity MW",
           CAST(o."Share" AS DOUBLE) as "Ownership Share %",
           o."Ownership Path" as "Ownership Path"
         FROM ownership o
+        LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
         WHERE o."Owner GEM Entity ID" IN (${idList})
         ORDER BY o."Owner", o."Project"
       `;
@@ -205,7 +206,7 @@
             o."Project" as "Name",
             o."Tracker" as "Type",
             o."Status",
-            o."Country",
+            l."Country.Area" as "Country",
             CAST(o."Capacity (MW)" AS DOUBLE) as "Capacity MW",
             o."Owner" as "Owner Name",
             o."Owner GEM Entity ID" as "Owner ID",
@@ -233,14 +234,15 @@
             o."Owner" as "Name",
             o."Tracker" as "Type",
             o."Status",
-            o."Country",
+            l."Country.Area" as "Country",
             CAST(o."Capacity (MW)" AS DOUBLE) as "Capacity MW",
             o."Project" as "Owned Asset",
             o."GEM unit ID" as "Owned Asset ID",
             CAST(o."Share" AS DOUBLE) as "Ownership %",
-            NULL as "Latitude",
-            NULL as "Longitude"
+            l."Latitude",
+            l."Longitude"
           FROM ownership o
+          LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
           WHERE o."Owner GEM Entity ID" IN (${entityIdList})
         `;
         const entityResult = await query(entitySql);

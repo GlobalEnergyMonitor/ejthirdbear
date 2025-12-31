@@ -9,10 +9,16 @@
   import { get } from 'svelte/store';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
-  import { entityLink } from '$lib/links';
+  import { base } from '$app/paths';
+  import { PUBLIC_SITE_URL } from '$env/static/public';
+  import { assetLink, entityLink } from '$lib/links';
+  import { formatCapacity } from '$lib/format';
   import { colors, colorByStatus } from '$lib/ownership-theme';
   import { getTables } from '$lib/component-data/schema';
-  import { parseOwnershipPaths, extractOwnershipChainWithIds } from '$lib/component-data/ownership-parser';
+  import {
+    parseOwnershipPaths,
+    extractOwnershipChainWithIds,
+  } from '$lib/component-data/ownership-parser';
   import { SCHEMA_SQL, ASSET_SQL, escapeValue } from '$lib/component-data/sql-helpers';
   import { findIdColumn, findUnitIdColumn, extractAssetName } from '$lib/component-data/id-helpers';
 
@@ -56,6 +62,7 @@
   const ownerCol = $derived(findCol(/^(owner|parent)$/));
   const ownershipPctCol = $derived(findCol(/share/));
   const ownerEntityIdCol = $derived(findCol(/owner gem entity id/));
+  const capacityCol = $derived(findCol(/capacity/));
 
   // --- DATA TRANSFORMS ---
 
@@ -69,9 +76,7 @@
   const ownershipChain = $derived(extractOwnershipChainWithIds(owners));
 
   // Detect data anomalies
-  const anomalies = $derived(
-    detectAssetAnomalies({ owners, asset, ownershipChain })
-  );
+  const anomalies = $derived(detectAssetAnomalies({ owners, asset, ownershipChain }));
 
   // Status color for header styling
   const statusColor = $derived(colorByStatus.get(asset[statusCol]?.toLowerCase?.()) || colors.grey);
@@ -80,6 +85,32 @@
   const totalOwnership = $derived(
     owners.reduce((sum, o) => sum + (Number(o[ownershipPctCol]) || 0), 0)
   );
+
+  const siteUrl = PUBLIC_SITE_URL ? PUBLIC_SITE_URL.replace(/\/$/, '') : '';
+  const ogTitle = $derived(assetName || assetId || 'Asset');
+  const ogDescription = $derived.by(() => {
+    const tracker = asset[trackerCol];
+    const status = asset[statusCol];
+    const country = asset[countryCol];
+    const capacity = asset[capacityCol];
+    const parts = [];
+    if (tracker) parts.push(`Tracker: ${tracker}`);
+    if (status) parts.push(`Status: ${status}`);
+    if (country) parts.push(`Country: ${country}`);
+    if (owners.length) parts.push(`Owners: ${owners.length}`);
+    if (capacity != null && !isNaN(Number(capacity))) {
+      parts.push(`Capacity: ${formatCapacity(Number(capacity))}`);
+    }
+    return parts.length ? parts.join(' | ') : 'GEM asset profile';
+  });
+  const ogPath = $derived(
+    assetId ? `${base}/og/asset/${assetId}.svg` : `${base}/og/asset/default.svg`
+  );
+  const ogImage = $derived(siteUrl ? `${siteUrl}${ogPath}` : ogPath);
+  const ogUrl = $derived.by(() => {
+    const path = assetId ? assetLink(assetId) : `${base}/asset/`;
+    return siteUrl ? `${siteUrl}${path}` : path;
+  });
 
   // Columns to show in "All Properties" section
   const hiddenCols = $derived(
@@ -155,6 +186,17 @@
 
 <svelte:head>
   <title>{assetName || assetId} — GEM Viz</title>
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content={ogTitle} />
+  <meta property="og:description" content={ogDescription} />
+  <meta property="og:url" content={ogUrl} />
+  <meta property="og:image" content={ogImage} />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content={ogTitle} />
+  <meta name="twitter:description" content={ogDescription} />
+  <meta name="twitter:image" content={ogImage} />
 </svelte:head>
 
 <main>
@@ -316,7 +358,6 @@
             nodeMap={ownershipGraph.nodeMap}
             {assetId}
             {assetName}
-            zoom={0.7}
             direction="TD"
           />
         </section>

@@ -8,7 +8,7 @@
   import TopOwners from '$lib/widgets/TopOwners.svelte';
   import CountryBreakdown from '$lib/widgets/CountryBreakdown.svelte';
   import StatusDistribution from '$lib/widgets/StatusDistribution.svelte';
-  import QuickSearch from '$lib/widgets/QuickSearch.svelte';
+  import CommandPalette from '$lib/components/CommandPalette.svelte';
 
   // Filter state
   let selectedTracker = $state(null);
@@ -41,7 +41,7 @@
 
   <!-- Search -->
   <section class="search-section">
-    <QuickSearch placeholder="Search for assets or owners..." limit={8} />
+    <CommandPalette embedded={true} placeholder="Search for assets or owners..." limit={8} />
   </section>
 
   <!-- Tracker Filter -->

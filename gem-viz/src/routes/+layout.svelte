@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import '../app.css';
   import SiteNav from '$lib/components/SiteNav.svelte';
+  import CommandPalette from '$lib/components/CommandPalette.svelte';
   import { link } from '$lib/links';
   import { initKeyboardNav } from '$lib/keyboard-nav';
 
@@ -21,6 +22,8 @@
   <meta name="build-time" content={buildTime} />
   <meta name="build-hash" content={buildHash} />
 </svelte:head>
+
+<CommandPalette />
 
 <div class="app">
   <SiteNav />

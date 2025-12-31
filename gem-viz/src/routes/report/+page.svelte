@@ -67,13 +67,14 @@
           o."Project" as asset_name,
           o."Tracker" as tracker,
           o."Status" as status,
-          o."Country" as country,
+          l."Country.Area" as country,
           COALESCE(CAST(o."Capacity (MW)" AS DOUBLE), 0) as capacity_mw,
           o."Owner GEM Entity ID" as entity_id,
           o."Owner" as owner_name,
           COALESCE(CAST(o."Share" AS DOUBLE), 0) as share_pct
         FROM ownership o
         INNER JOIN cart_entities c ON o."Owner GEM Entity ID" = c.entity_id
+        LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
         WHERE o."GEM unit ID" IS NOT NULL
       ),
       shared AS (
@@ -158,14 +159,15 @@
 
     const sql = `
       SELECT
-        COALESCE("Country", 'Unknown') as country,
-        COUNT(DISTINCT "GEM unit ID") as asset_count,
-        COALESCE(SUM(CAST("Capacity (MW)" AS DOUBLE)), 0) as total_capacity,
-        COUNT(DISTINCT "Owner GEM Entity ID") as entity_count,
-        STRING_AGG(DISTINCT "Tracker", ', ' ORDER BY "Tracker") as trackers
-      FROM ownership
-      WHERE "Owner GEM Entity ID" IN (${entityList})
-         OR "GEM unit ID" IN (${assetList})
+        COALESCE(l."Country.Area", 'Unknown') as country,
+        COUNT(DISTINCT o."GEM unit ID") as asset_count,
+        COALESCE(SUM(CAST(o."Capacity (MW)" AS DOUBLE)), 0) as total_capacity,
+        COUNT(DISTINCT o."Owner GEM Entity ID") as entity_count,
+        STRING_AGG(DISTINCT o."Tracker", ', ' ORDER BY o."Tracker") as trackers
+      FROM ownership o
+      LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
+      WHERE o."Owner GEM Entity ID" IN (${entityList})
+         OR o."GEM unit ID" IN (${assetList})
       GROUP BY 1
       ORDER BY asset_count DESC
       LIMIT 30
@@ -190,13 +192,14 @@
         COUNT(DISTINCT o."GEM unit ID") as asset_count,
         COALESCE(SUM(CAST(o."Capacity (MW)" AS DOUBLE)), 0) as total_capacity_mw,
         AVG(CAST(o."Share" AS DOUBLE)) as avg_ownership_pct,
-        COUNT(DISTINCT o."Country") as country_count,
+        COUNT(DISTINCT l."Country.Area") as country_count,
         STRING_AGG(DISTINCT o."Tracker", ', ' ORDER BY o."Tracker") as trackers,
-        STRING_AGG(DISTINCT o."Country", ', ' ORDER BY o."Country") as countries,
+        STRING_AGG(DISTINCT l."Country.Area", ', ' ORDER BY l."Country.Area") as countries,
         COUNT(DISTINCT CASE WHEN o."Status" = 'operating' THEN o."GEM unit ID" END) as operating_count,
         COUNT(DISTINCT CASE WHEN o."Status" = 'proposed' THEN o."GEM unit ID" END) as proposed_count,
         COUNT(DISTINCT CASE WHEN o."Status" = 'retired' THEN o."GEM unit ID" END) as retired_count
       FROM ownership o
+      LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
       WHERE o."Owner GEM Entity ID" IN (${idList})
       GROUP BY o."Owner GEM Entity ID", o."Owner"
       ORDER BY total_capacity_mw DESC
@@ -213,15 +216,16 @@
 
     const sql = `
       SELECT
-        COUNT(DISTINCT "GEM unit ID") as total_assets,
-        COALESCE(SUM(CAST("Capacity (MW)" AS DOUBLE)), 0) as total_capacity,
-        COUNT(DISTINCT "Country") as countries,
-        COUNT(DISTINCT "Tracker") as tracker_count,
-        COUNT(DISTINCT "Owner GEM Entity ID") as total_entities,
-        STRING_AGG(DISTINCT "Tracker", ', ') as trackers
-      FROM ownership
-      WHERE "Owner GEM Entity ID" IN (${entityList})
-         OR "GEM unit ID" IN (${assetList})
+        COUNT(DISTINCT o."GEM unit ID") as total_assets,
+        COALESCE(SUM(CAST(o."Capacity (MW)" AS DOUBLE)), 0) as total_capacity,
+        COUNT(DISTINCT l."Country.Area") as countries,
+        COUNT(DISTINCT o."Tracker") as tracker_count,
+        COUNT(DISTINCT o."Owner GEM Entity ID") as total_entities,
+        STRING_AGG(DISTINCT o."Tracker", ', ') as trackers
+      FROM ownership o
+      LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
+      WHERE o."Owner GEM Entity ID" IN (${entityList})
+         OR o."GEM unit ID" IN (${assetList})
     `;
 
     const result = await widgetQuery(sql);
@@ -583,21 +587,34 @@
       <div class="cart-grid">
         {#each cartItems as item}
           <div class="cart-item {item.type}">
-            {#if item.type === 'asset'}
-              <a href={assetLink(item.id)}>
-                {#if item.tracker}<TrackerIcon tracker={item.tracker} size={10} />{/if}
-                {item.name}
-              </a>
-            {:else}
-              <a href={entityLink(item.id)}>
-                <span class="entity-icon">E</span>
-                {item.name}
-              </a>
-            {/if}
-            <span class="item-id">{item.id}</span>
+            <div class="cart-item-content">
+              {#if item.type === 'asset'}
+                <a href={assetLink(item.id)}>
+                  {#if item.tracker}<TrackerIcon tracker={item.tracker} size={10} />{/if}
+                  {item.name}
+                </a>
+              {:else}
+                <a href={entityLink(item.id)}>
+                  <span class="entity-icon">E</span>
+                  {item.name}
+                </a>
+              {/if}
+              <span class="item-id">{item.id}</span>
+            </div>
+            <button
+              class="remove-btn"
+              onclick={() => investigationCart.remove(item.id)}
+              title="Remove from cart"
+              aria-label="Remove {item.name} from cart">×</button
+            >
           </div>
         {/each}
       </div>
+      {#if cartItems.length > 0}
+        <button class="clear-cart-btn" onclick={() => investigationCart.clear()}>
+          Clear all items
+        </button>
+      {/if}
     </section>
 
     <!-- Entity Portfolios (detailed breakdown per entity) -->
@@ -706,9 +723,21 @@
                 </td>
                 <td>{asset.country || '-'}</td>
                 <td class="numeric">{asset.capacity_mw?.toLocaleString() || '-'} MW</td>
-                <td>
+                <td class="co-owners-cell">
                   <span class="co-owner-count">{asset.co_owner_count}</span>
-                  <span class="co-owner-names">{asset.co_owners}</span>
+                  <span class="co-owner-names">
+                    {#each (asset.co_owners || '').split('; ').filter(Boolean) as ownerName, i}
+                      {#if i > 0};
+                      {/if}
+                      {@const ownerIds = (asset.co_owner_ids || '').split('; ')}
+                      {@const ownerId = ownerIds[i]}
+                      {#if ownerId && ownerId.startsWith('E')}
+                        <a href={entityLink(ownerId)} class="owner-link">{ownerName}</a>
+                      {:else}
+                        {ownerName}
+                      {/if}
+                    {/each}
+                  </span>
                 </td>
                 <td class="numeric">{asset.total_share_pct?.toFixed(1) || '-'}%</td>
               </tr>
@@ -961,10 +990,18 @@
     gap: 8px;
   }
   .cart-item {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
     padding: 8px 12px;
     background: #fff;
     border: none;
     font-size: 12px;
+  }
+  .cart-item-content {
+    flex: 1;
+    min-width: 0;
   }
   .cart-item a {
     display: flex;
@@ -982,6 +1019,47 @@
     color: #999;
     font-family: monospace;
     margin-top: 2px;
+  }
+  .remove-btn {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid transparent;
+    color: #999;
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+    transition: all 0.15s;
+  }
+  .remove-btn:hover {
+    color: #c00;
+    border-color: #c00;
+  }
+  .clear-cart-btn {
+    margin-top: 12px;
+    padding: 6px 12px;
+    background: transparent;
+    border: 1px solid #000;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    cursor: pointer;
+    font-family: system-ui, sans-serif;
+  }
+  .clear-cart-btn:hover {
+    background: #000;
+    color: #fff;
+  }
+  @media print {
+    .remove-btn,
+    .clear-cart-btn {
+      display: none;
+    }
   }
   .entity-icon {
     display: inline-flex;
@@ -1055,7 +1133,8 @@
     white-space: nowrap;
   }
   .asset-link,
-  .entity-link {
+  .entity-link,
+  .owner-link {
     color: #000;
     text-decoration: underline;
   }
@@ -1063,6 +1142,18 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
+  }
+  .owner-link {
+    text-decoration: none;
+  }
+  .owner-link:hover {
+    text-decoration: underline;
+  }
+  .co-owners-cell {
+    max-width: 250px;
+  }
+  .co-owner-names {
+    display: inline;
   }
   .co-owner-count {
     display: inline-block;

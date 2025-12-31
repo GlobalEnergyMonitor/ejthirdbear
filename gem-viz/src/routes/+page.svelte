@@ -8,7 +8,7 @@
   import { assetLink, entityLink } from '$lib/links';
   import SimpleMap from '$lib/SimpleMap.svelte';
   import TrackerIcon from '$lib/components/TrackerIcon.svelte';
-  import QuickSearch from '$lib/widgets/QuickSearch.svelte';
+  import CommandPalette from '$lib/components/CommandPalette.svelte';
 
   // --- DATA ---
   // Featured entity
@@ -36,7 +36,7 @@
 <main>
   <!-- Quick Search -->
   <section class="search-section">
-    <QuickSearch placeholder="Search for assets or owners..." limit={6} />
+    <CommandPalette embedded={true} placeholder="Search for assets or owners..." limit={6} />
   </section>
 
   <!-- Featured Assets -->

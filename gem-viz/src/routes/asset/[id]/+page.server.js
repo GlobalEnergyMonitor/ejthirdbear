@@ -215,7 +215,7 @@ export async function entries() {
     // GROUP BY tracker-specific ID field - each asset gets an array of ownership records
     // Also build indices for fast lookups during page rendering
     const assetsMap = {};
-    const ownerIndex = {};  // ownerEntityId -> [assetId, ...] for O(1) lookups
+    const ownerIndex = {}; // ownerEntityId -> [assetId, ...] for O(1) lookups
     let skippedRows = 0;
     for (const row of assetsResult.data) {
       const assetId = getAssetIdFromRow(row);
@@ -229,7 +229,8 @@ export async function entries() {
       assetsMap[assetId].push(row);
 
       // Build owner index for fast portfolio lookups
-      const ownerEntityId = row['Owner GEM Entity ID'] || row['Immediate Project Owner GEM Entity ID'];
+      const ownerEntityId =
+        row['Owner GEM Entity ID'] || row['Immediate Project Owner GEM Entity ID'];
       if (ownerEntityId) {
         if (!ownerIndex[ownerEntityId]) {
           ownerIndex[ownerEntityId] = new Set();
@@ -256,7 +257,7 @@ export async function entries() {
       unitIdCol,
       ownerIdCol,
       assets: assetsMap,
-      ownerIndex: ownerIndexSerialized,  // NEW: O(1) owner->assets lookup
+      ownerIndex: ownerIndexSerialized, // NEW: O(1) owner->assets lookup
     };
 
     // Write to disk (persists across worker processes)
@@ -348,8 +349,8 @@ export async function load({ params }) {
       // Pre-bake owner portfolio data for AssetScreener
       // PERF: Cap assets aggressively for asset pages to reduce build size
       // Entity pages have their own larger limits - asset pages just need a summary view
-      const MAX_ASSETS_PER_PAGE = 12;       // Down from 50 - just show top assets
-      const MAX_ASSETS_PER_SUBSIDIARY = 6;  // Down from 20 - summary only
+      const MAX_ASSETS_PER_PAGE = 12; // Down from 50 - just show top assets
+      const MAX_ASSETS_PER_SUBSIDIARY = 6; // Down from 20 - summary only
 
       let ownerExplorerData = null;
       if (ownerEntityId) {
