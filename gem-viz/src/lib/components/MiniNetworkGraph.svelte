@@ -7,7 +7,7 @@
   import { assetPath, assetLink, entityLink } from '$lib/links';
   import { goto } from '$app/navigation';
   import { Deck } from '@deck.gl/core';
-  import { ScatterplotLayer, PathLayer } from '@deck.gl/layers';
+  import { ScatterplotLayer, PathLayer, IconLayer } from '@deck.gl/layers';
   import {
     forceSimulation,
     forceLink,
@@ -30,6 +30,9 @@
   let error = $state(null);
   let stats = $state({ nodes: 0, edges: 0 });
   let hoveredNode = $state(null);
+  let currentZoom = $state(-1.5);
+  let hoverFrame;
+  let hoverTimeout;
 
   // Graph data
   let nodes = [];
@@ -45,8 +48,8 @@
     target: [0, 0, 0],
     rotationX: 25,
     rotationOrbit: -20,
-    zoom: -1.5,
-    minZoom: -3,
+    zoom: -1.8,
+    minZoom: -4,
     maxZoom: 2,
   };
 
@@ -269,6 +272,9 @@
     const getPos = (d) => [(d.x || 0) * 8, (d.y || 0) * 8, (d.z || 0) * 8];
 
     const visibleNodeIds = hoveredNode ? getNodesWithinHops(hoveredNode.id, 1) : null;
+    const nodeScale = Math.pow(2, -currentZoom * 0.25);
+    const flowerNodes = nodes.filter((n) => n.id?.startsWith('E'));
+    const circleNodes = nodes.filter((n) => !n.id?.startsWith('E'));
 
     // Build line data
     const lineData = [];
@@ -281,10 +287,22 @@
         }
         const sourcePos = getPos(source);
         const targetPos = getPos(target);
+        const dx = targetPos[0] - sourcePos[0];
+        const dy = targetPos[1] - sourcePos[1];
+        const distance = Math.hypot(dx, dy) || 1;
+        const bend = Math.min(40, distance * 0.12);
+        const normX = -dy / distance;
+        const normY = dx / distance;
+        const midZ = (sourcePos[2] + targetPos[2]) / 2;
+        const mid = [
+          (sourcePos[0] + targetPos[0]) / 2 + normX * bend,
+          (sourcePos[1] + targetPos[1]) / 2 + normY * bend,
+          midZ + bend * 0.2,
+        ];
         const fullyVisible =
           !visibleNodeIds || (visibleNodeIds.has(source.id) && visibleNodeIds.has(target.id));
         lineData.push({
-          path: [sourcePos, targetPos],
+          path: [sourcePos, mid, targetPos],
           share: link.share || 0,
           fullyVisible,
         });
@@ -313,18 +331,65 @@
           parameters: { depthTest: true },
           updateTriggers: { getColor: [hoveredNode?.id] },
         }),
+        new IconLayer({
+          id: 'flower-nodes',
+          data: flowerNodes,
+          autoPacking: true,
+          getPosition: getPos,
+          getIcon: (d) => {
+            const filename = d?.id ? `${d.id}.svg` : 'default.svg';
+            return {
+              url: assetPath(`flowers/${filename}`),
+              width: 64,
+              height: 64,
+              anchorX: 32,
+              anchorY: 32,
+              mask: false,
+            };
+          },
+          sizeUnits: 'pixels',
+          getSize: (d) => {
+            const baseSize = d.isTarget ? 16 : Math.max(6, Math.log2(d.connections + 1) * 3.2);
+            return baseSize * nodeScale;
+          },
+          sizeMinPixels: 5,
+          sizeMaxPixels: 28,
+          billboard: true,
+          pickable: true,
+          parameters: { depthTest: false },
+          onHover: ({ object }) => handleHover(object),
+          onClick: ({ object }) => {
+            if (object) {
+              const isAsset = object.id.startsWith('G');
+              goto(isAsset ? assetLink(object.id) : entityLink(object.id));
+            }
+          },
+          autoHighlight: true,
+          highlightColor: [255, 220, 0, 120],
+          getColor: (d) => {
+            const isVisible = !visibleNodeIds || visibleNodeIds.has(d.id);
+            return [255, 255, 255, isVisible ? 255 : 20];
+          },
+          updateTriggers: {
+            getSize: [nodeScale],
+            getColor: [hoveredNode?.id],
+          },
+        }),
         new ScatterplotLayer({
           id: 'nodes',
-          data: nodes,
+          data: circleNodes,
           getPosition: getPos,
           billboard: true,
           getRadius: (d) => {
             if (d.isTarget) return 12;
-            return 4 + Math.sqrt(d.connections) * 2;
+            return (4 + Math.sqrt(d.connections) * 2) * nodeScale;
           },
           getFillColor: (d) => {
             const isVisible = !visibleNodeIds || visibleNodeIds.has(d.id);
             if (d.isTarget) return [255, 100, 50, isVisible ? 255 : 40];
+            if (flowerNodes.length) {
+              return [130, 130, 130, isVisible ? 160 : 16];
+            }
             const t = Math.min(1, d.connections / 20);
             const r = Math.round(90 + t * 165);
             const g = Math.round(50 + t * 50 - t * t * 80);
@@ -336,17 +401,14 @@
             const isVisible = !visibleNodeIds || visibleNodeIds.has(d.id);
             return d.isTarget
               ? [255, 255, 255, isVisible ? 255 : 40]
-              : [255, 255, 255, isVisible ? 180 : 20];
+              : [255, 255, 255, isVisible ? 140 : 20];
           },
           lineWidthMinPixels: 1,
           radiusMinPixels: 3,
           radiusMaxPixels: 20,
           pickable: true,
           parameters: { depthTest: false },
-          onHover: ({ object }) => {
-            hoveredNode = object;
-            updateLayers();
-          },
+          onHover: ({ object }) => handleHover(object),
           onClick: ({ object }) => {
             if (object) {
               const isAsset = object.id.startsWith('G');
@@ -354,13 +416,40 @@
             }
           },
           autoHighlight: true,
-          highlightColor: [255, 220, 0, 255],
+          highlightColor: [255, 220, 0, 120],
           updateTriggers: {
             getFillColor: [hoveredNode?.id],
             getLineColor: [hoveredNode?.id],
           },
         }),
       ],
+    });
+  }
+
+  function handleHover(object) {
+    if (hoverTimeout) {
+      clearTimeout(hoverTimeout);
+      hoverTimeout = null;
+    }
+
+    if (object?.id === hoveredNode?.id) return;
+
+    if (object) {
+      hoveredNode = object;
+      scheduleHoverUpdate();
+    } else {
+      hoverTimeout = setTimeout(() => {
+        hoveredNode = null;
+        scheduleHoverUpdate();
+      }, 80);
+    }
+  }
+
+  function scheduleHoverUpdate() {
+    if (hoverFrame) return;
+    hoverFrame = requestAnimationFrame(() => {
+      hoverFrame = null;
+      updateLayers();
     });
   }
 
@@ -371,9 +460,14 @@
       orbitAxis: 'Y',
       controller: {
         dragMode: 'pan',
-        scrollZoom: true,
+        dragPan: true,
+        dragRotate: true,
+        scrollZoom: { speed: 0.08, smooth: true },
         touchZoom: true,
         touchRotate: true,
+        doubleClickZoom: false,
+        keyboard: true,
+        inertia: 120,
       },
     });
 
@@ -382,6 +476,10 @@
       views: orbitView,
       initialViewState: VIEW_STATE,
       layers: [],
+      onViewStateChange: ({ viewState }) => {
+        currentZoom = viewState.zoom;
+        updateLayers();
+      },
       onClick: ({ object }) => {
         if (object) {
           const isAsset = object.id.startsWith('G');
@@ -406,6 +504,8 @@
 
   onDestroy(() => {
     if (simulation) simulation.stop();
+    if (hoverFrame) cancelAnimationFrame(hoverFrame);
+    if (hoverTimeout) clearTimeout(hoverTimeout);
     if (deck) deck.finalize();
   });
 

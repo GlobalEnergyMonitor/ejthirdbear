@@ -332,22 +332,25 @@
            Geographic Footprint
            Mini-map showing all asset locations for this entity
            ----------------------------------------------------------------------- -->
-      {#if portfolio?.assets?.length > 0}
-        <section id="map" class="map-section">
-          <h2>Geographic Footprint</h2>
-          <PortfolioMap assets={portfolio.assets} {entityName} height={280} />
-        </section>
-      {/if}
+      <div class="map-network-grid">
+        {#if portfolio?.assets?.length > 0}
+          <section id="map" class="map-section">
+            <h2>Geographic Footprint</h2>
+            <p class="section-subtitle">Locations of known assets in this portfolio.</p>
+            <PortfolioMap assets={portfolio.assets} {entityName} height={320} />
+          </section>
+        {/if}
 
-      <!-- Ownership Network (3D Visualization) -->
-      <section id="network" class="network-section">
-        <h2>Ownership Network</h2>
-        <p class="section-subtitle">
-          Interactive 3D view of connected assets and co-owners. Drag to pan, scroll to zoom,
-          shift+drag to rotate.
-        </p>
-        <MiniNetworkGraph {entityId} {entityName} maxHops={2} height={350} />
-      </section>
+        <!-- Ownership Network (3D Visualization) -->
+        <section id="network" class="network-section">
+          <h2>Ownership Network</h2>
+          <p class="section-subtitle">
+            Interactive 3D view of connected assets and co-owners. Drag to pan, scroll to zoom,
+            shift+drag to rotate.
+          </p>
+          <MiniNetworkGraph {entityId} {entityName} maxHops={2} height={320} />
+        </section>
+      </div>
 
       <!-- Connected Entities (Co-Owners) -->
       <section id="connections" class="connection-section">
@@ -809,15 +812,23 @@
     font-family: system-ui, sans-serif;
   }
 
+  .map-network-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 24px;
+    align-items: start;
+    margin: 30px 0;
+  }
+
   /* Sections */
   .map-section {
-    margin: 30px 0;
+    margin: 0;
   }
   .map-section h2 {
     margin-top: 0;
   }
   .network-section {
-    margin: 30px 0;
+    margin: 0;
   }
   .network-section h2 {
     margin-top: 0;
@@ -842,6 +853,11 @@
     .entity-header {
       flex-direction: column;
       gap: 20px;
+    }
+    .map-network-grid {
+      grid-template-columns: 1fr;
+      gap: 20px;
+      margin: 20px 0;
     }
     .header-flower {
       align-self: center;
