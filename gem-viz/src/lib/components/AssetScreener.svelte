@@ -13,8 +13,12 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { assetLink, entityLink } from '$lib/links';
-  import { fetchAssetBasics, fetchOwnerPortfolio } from '$lib/component-data/schema';
   import { colors, colorByTracker, regroupStatus } from '$lib/ownership-theme';
+  // Dynamic import to avoid SSR issues - schema.ts imports WASM client
+  /** @type {typeof import('$lib/component-data/schema').fetchAssetBasics} */
+  let fetchAssetBasics;
+  /** @type {typeof import('$lib/component-data/schema').fetchOwnerPortfolio} */
+  let fetchOwnerPortfolio;
 
   // Props - can accept prebaked portfolio data
   let {
@@ -43,6 +47,8 @@
 
   // Derive all values from effectivePortfolio (works during SSR!)
   const spotlightOwner = $derived(effectivePortfolio?.spotlightOwner ?? null);
+  const isTruncated = $derived(effectivePortfolio?.truncated === true);
+  const totalAssetCount = $derived(effectivePortfolio?.totalAssetCount ?? 0);
   const subsidiariesMatched = $derived(toMap(effectivePortfolio?.subsidiariesMatched));
   const directlyOwned = $derived(effectivePortfolio?.directlyOwned || []);
   const assets = $derived(effectivePortfolio?.assets || []);
@@ -55,6 +61,11 @@
       loading = false;
       return;
     }
+
+    // Dynamic import to avoid SSR bundling of WASM client
+    const schema = await import('$lib/component-data/schema');
+    fetchAssetBasics = schema.fetchAssetBasics;
+    fetchOwnerPortfolio = schema.fetchOwnerPortfolio;
 
     try {
       loading = true;
@@ -131,9 +142,14 @@
 
   // Build subsidiary groups with layout
   let subsidiaryGroups = $derived.by(() => {
+    // Early return for truncated or empty portfolios
+    if (isTruncated || subsidiariesMatched.size === 0 && directlyOwned.length === 0) {
+      return [];
+    }
+
     let groups = Array.from(subsidiariesMatched).map(([id, assetList]) => ({
       id,
-      assets: assetList,
+      assets: assetList || [], // Guard against null/undefined
       isDirect: false,
     }));
 
@@ -154,7 +170,8 @@
     /** @type {ProcessedGroup[]} */
     const processedGroups = groups.map((g) => {
       const locationMap = new Map();
-      g.assets.forEach((asset) => {
+      const assetsList = Array.isArray(g.assets) ? g.assets : [];
+      assetsList.forEach((asset) => {
         const locId = asset.locationID || asset.id;
         if (!locationMap.has(locId)) {
           locationMap.set(locId, []);
@@ -372,6 +389,13 @@
     <div class="loading-state">Loading owner portfolio...</div>
   {:else if error}
     <div class="error-state">{error}</div>
+  {:else if isTruncated}
+    <!-- Truncated portfolio - too large for prebaked display -->
+    <div class="truncated-state">
+      <h3>{spotlightOwner?.Name || 'Unknown Owner'}</h3>
+      <p>This entity owns <strong>{totalAssetCount.toLocaleString()}</strong> assets.</p>
+      <p>View the full portfolio on the <a href="/entity/{spotlightOwner?.id}/">entity page</a>.</p>
+    </div>
   {:else}
     <!-- Header -->
     <div class="chart-header">
@@ -771,7 +795,8 @@
 
 <style>
   .loading-state,
-  .error-state {
+  .error-state,
+  .truncated-state {
     padding: 60px 20px;
     text-align: center;
     font-size: 13px;
@@ -783,6 +808,18 @@
 
   .error-state {
     color: #b10000;
+  }
+
+  .truncated-state {
+    color: #333;
+  }
+  .truncated-state h3 {
+    font-size: 16px;
+    margin-bottom: 12px;
+  }
+  .truncated-state a {
+    color: #000;
+    text-decoration: underline;
   }
 
   .asset-screener {

@@ -1,25 +1,34 @@
-<script>
+<script lang="ts">
   /**
    * StatusDistribution Widget
    * Donut chart showing operating vs proposed vs retired vs cancelled
+   *
+   * REFACTORED: Uses createAsyncState() composable for state management
    */
 
   import { onMount } from 'svelte';
+  import { createAsyncState } from '$lib/composables.svelte';
   import { widgetQuery } from './widget-utils';
   import { regroupStatus, colors } from '$lib/ownership-theme';
+  import LoadingWrapper from '$lib/components/LoadingWrapper.svelte';
+
+  interface StatusRow {
+    status: string;
+    count: number;
+  }
 
   // Props
-  let { tracker = null, title = 'Status Distribution' } = $props();
+  let { tracker = null as string | null, title = 'Status Distribution' } = $props();
 
-  // State
-  let loading = $state(true);
-  let error = $state(null);
-  let results = $state([]);
-  let queryTime = $state(0);
-  let total = $state(0);
+  // State - using composable instead of 5 separate $state() calls
+  const state = createAsyncState<StatusRow[]>([]);
+
+  // Derived values from state.data
+  const results = $derived(state.data || []);
+  const total = $derived(results.reduce((sum, r) => sum + r.count, 0));
 
   // Status colors
-  const statusColors = {
+  const statusColors: Record<string, string> = {
     operating: '#4A57A8',
     proposed: colors.yellow,
     retired: colors.midnightPurple,
@@ -28,9 +37,6 @@
   };
 
   async function loadData() {
-    loading = true;
-    error = null;
-
     const trackerFilter = tracker ? `WHERE "Tracker" = '${tracker}'` : '';
 
     const sql = `
@@ -43,27 +49,23 @@
       ORDER BY count DESC
     `;
 
-    const result = await widgetQuery(sql);
+    await state.run(async () => {
+      const result = await widgetQuery<{ status: string; count: number }>(sql);
+      if (!result.success) {
+        throw new Error(result.error || 'Query failed');
+      }
 
-    if (result.success) {
       // Regroup statuses
-      const grouped = {};
+      const grouped: Record<string, number> = {};
       for (const row of result.data || []) {
         const group = regroupStatus(String(row.status));
         grouped[group] = (grouped[group] || 0) + Number(row.count);
       }
 
-      results = Object.entries(grouped)
+      return Object.entries(grouped)
         .map(([status, count]) => ({ status, count }))
         .sort((a, b) => b.count - a.count);
-
-      total = results.reduce((sum, r) => sum + r.count, 0);
-      queryTime = result.executionTime || 0;
-    } else {
-      error = result.error;
-    }
-
-    loading = false;
+    });
   }
 
   onMount(() => {
@@ -76,8 +78,9 @@
   });
 
   // Calculate arc paths for donut
-  function getArcs(data, total) {
-    const arcs = [];
+  function getArcs(data: StatusRow[], total: number) {
+    const arcs: Array<{ path: string; color: string; status: string; count: number; pct: number }> =
+      [];
     let startAngle = -Math.PI / 2;
     const cx = 60,
       cy = 60,
@@ -119,16 +122,15 @@
 <div class="widget status-distribution">
   <header>
     <h3>{title}</h3>
-    <span class="query-time">{queryTime}ms</span>
+    <span class="query-time">{state.queryTime}ms</span>
   </header>
 
-  {#if loading}
-    <div class="loading">Loading status...</div>
-  {:else if error}
-    <div class="error">{error}</div>
-  {:else if results.length === 0}
-    <div class="empty">No data available</div>
-  {:else}
+  <LoadingWrapper
+    loading={state.loading}
+    error={state.error}
+    empty={results.length === 0}
+    loadingMessage="Loading status..."
+  >
     <div class="chart-container">
       <svg viewBox="0 0 120 120" class="donut">
         {#each arcs as arc}
@@ -151,7 +153,7 @@
         {/each}
       </div>
     </div>
-  {/if}
+  </LoadingWrapper>
 </div>
 
 <style>
@@ -178,18 +180,6 @@
     font-size: 10px;
     color: #999;
     font-family: monospace;
-  }
-
-  .loading,
-  .error,
-  .empty {
-    font-size: 13px;
-    color: #666;
-    padding: 20px 0;
-    text-align: center;
-  }
-  .error {
-    color: #c00;
   }
 
   .chart-container {

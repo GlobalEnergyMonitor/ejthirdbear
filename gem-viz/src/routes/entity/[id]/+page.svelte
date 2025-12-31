@@ -2,7 +2,7 @@
   // ============================================================================
   // ENTITY DETAIL PAGE
   // Shows entity profile with ownership flower, tracker/status breakdowns,
-  // representative assets, 3D network explorer, and Observable asset screener
+  // representative assets, and asset screener
   // ============================================================================
 
   // --- IMPORTS ---
@@ -14,11 +14,14 @@
   // Links
   import { assetLink } from '$lib/links';
 
-  // Data fetching
-  import { fetchOwnerPortfolio, fetchOwnerStats } from '$lib/component-data/schema';
+  // Data fetching - dynamic import to avoid SSR issues
+  /** @type {typeof import('$lib/component-data/schema').fetchOwnerPortfolio} */
+  let fetchOwnerPortfolio;
+  /** @type {typeof import('$lib/component-data/schema').fetchOwnerStats} */
+  let fetchOwnerStats;
 
   // Components
-  import OwnershipExplorerD3 from '$lib/components/OwnershipExplorerD3.svelte';
+  // import OwnershipExplorerD3 from '$lib/components/OwnershipExplorerD3.svelte'; // Replaced with AssetScreener
   import OwnershipFlower from '$lib/components/OwnershipFlower.svelte';
   import AssetScreener from '$lib/components/AssetScreener.svelte';
   import TrackerIcon from '$lib/components/TrackerIcon.svelte';
@@ -102,6 +105,11 @@
     }
 
     // Dev mode: fetch from MotherDuck client-side
+    // Dynamic import to avoid SSR bundling of WASM client
+    const schema = await import('$lib/component-data/schema');
+    fetchOwnerPortfolio = schema.fetchOwnerPortfolio;
+    fetchOwnerStats = schema.fetchOwnerStats;
+
     try {
       loading = true;
       error = null;
@@ -256,18 +264,18 @@
         </section>
       {/if}
 
-      <!-- 3D Network Explorer -->
+      <!-- 3D Network Explorer - COMMENTED OUT: Using AssetScreener instead
       <section class="ownership-explorer">
         <h2>Owner Explorer (3D Network)</h2>
         <OwnershipExplorerD3 ownerEntityId={entityId} prebakedData={data?.ownerExplorerData} />
       </section>
+      -->
 
-      <!-- Observable Asset Screener -->
+      <!-- Asset Screener -->
       <section class="asset-screener-section">
-        <h2>Asset Screener (Observable)</h2>
+        <h2>Asset Portfolio</h2>
         <p class="section-subtitle">
-          Full portfolio breakdown with subsidiary paths, mini bar charts, and status icons — ported
-          from GEM's Observable notebook
+          Full portfolio breakdown with subsidiary paths, mini bar charts, and status icons
         </p>
         <AssetScreener prebakedPortfolio={data?.ownerExplorerData} />
       </section>

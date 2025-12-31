@@ -1,29 +1,37 @@
-<script>
+<script lang="ts">
   /**
    * CountryBreakdown Widget
    * Assets grouped by country with bar visualization
+   *
+   * REFACTORED: Uses createWidgetState() composable for state management
    */
 
   import { onMount } from 'svelte';
-  import { widgetQuery } from './widget-utils';
+  import { createWidgetState } from '$lib/composables.svelte';
+  import LoadingWrapper from '$lib/components/LoadingWrapper.svelte';
+
+  interface CountryRow {
+    country: string;
+    asset_count: number;
+    total_capacity: number;
+  }
 
   // Props
-  let { limit = 15, tracker = null, title = 'Assets by Country' } = $props();
+  let { limit = 15, tracker = null as string | null, title = 'Assets by Country' } = $props();
 
-  // State
-  let loading = $state(true);
-  let error = $state(null);
-  let results = $state([]);
-  let queryTime = $state(0);
-  let maxValue = $state(0);
+  // State - using composable instead of 5 separate $state() calls
+  const state = createWidgetState<CountryRow>();
+
+  // Derived values from state.data
+  const results = $derived(state.data || []);
+  const maxValue = $derived(
+    results.length > 0 ? Math.max(...results.map((r) => r.asset_count)) : 0
+  );
 
   async function loadData() {
-    loading = true;
-    error = null;
-
     const trackerFilter = tracker ? `WHERE "Tracker" = '${tracker}'` : '';
 
-    const sql = `
+    await state.query(`
       SELECT
         COALESCE("Country", 'Unknown') as country,
         COUNT(DISTINCT "GEM unit ID") as asset_count,
@@ -33,19 +41,7 @@
       GROUP BY 1
       ORDER BY asset_count DESC
       LIMIT ${limit}
-    `;
-
-    const result = await widgetQuery(sql);
-
-    if (result.success) {
-      results = result.data || [];
-      maxValue = results.length > 0 ? Math.max(...results.map((r) => r.asset_count)) : 0;
-      queryTime = result.executionTime || 0;
-    } else {
-      error = result.error;
-    }
-
-    loading = false;
+    `);
   }
 
   onMount(() => {
@@ -62,16 +58,15 @@
 <div class="widget country-breakdown">
   <header>
     <h3>{title}</h3>
-    <span class="query-time">{queryTime}ms</span>
+    <span class="query-time">{state.queryTime}ms</span>
   </header>
 
-  {#if loading}
-    <div class="loading">Loading countries...</div>
-  {:else if error}
-    <div class="error">{error}</div>
-  {:else if results.length === 0}
-    <div class="empty">No data available</div>
-  {:else}
+  <LoadingWrapper
+    loading={state.loading}
+    error={state.error}
+    empty={results.length === 0}
+    loadingMessage="Loading countries..."
+  >
     <div class="bars">
       {#each results as row}
         <div class="bar-row">
@@ -83,7 +78,7 @@
         </div>
       {/each}
     </div>
-  {/if}
+  </LoadingWrapper>
 </div>
 
 <style>
@@ -110,18 +105,6 @@
     font-size: 10px;
     color: #999;
     font-family: monospace;
-  }
-
-  .loading,
-  .error,
-  .empty {
-    font-size: 13px;
-    color: #666;
-    padding: 20px 0;
-    text-align: center;
-  }
-  .error {
-    color: #c00;
   }
 
   .bars {

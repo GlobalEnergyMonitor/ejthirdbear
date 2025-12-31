@@ -454,7 +454,8 @@
   }
 
   /* Keep prose sections readable */
-  main p, main li {
+  main p,
+  main li {
     max-width: 65ch;
   }
 

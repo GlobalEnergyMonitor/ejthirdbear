@@ -16,7 +16,11 @@
   import { entityLink } from '$lib/links';
   import * as d3 from 'd3';
   import { colorByTracker, colors } from '$lib/ownership-theme';
-  import { fetchAssetBasics, fetchOwnerPortfolio } from '$lib/component-data/schema';
+  // Dynamic import to avoid SSR issues - schema.ts imports WASM client
+  /** @type {typeof import('$lib/component-data/schema').fetchAssetBasics} */
+  let fetchAssetBasics;
+  /** @type {typeof import('$lib/component-data/schema').fetchOwnerPortfolio} */
+  let fetchOwnerPortfolio;
 
   /** @type {{ ownerId?: string | null, portfolio?: any, size?: 'small' | 'medium' | 'large', showLabels?: boolean, showTitle?: boolean, title?: string }} */
   let {
@@ -168,6 +172,11 @@
     }
 
     // Otherwise fetch from MotherDuck (dev mode)
+    // Dynamic import to avoid SSR bundling of WASM client
+    const schema = await import('$lib/component-data/schema');
+    fetchAssetBasics = schema.fetchAssetBasics;
+    fetchOwnerPortfolio = schema.fetchOwnerPortfolio;
+
     try {
       loading = true;
       error = null;

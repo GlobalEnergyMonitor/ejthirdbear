@@ -23,7 +23,11 @@ const config = {
       strict: false
     }),
     prerender: {
-      concurrency: 1,   // Render 1 page at a time - eliminates cache/timing race conditions
+      // Higher concurrency is safe because:
+      // 1. All data is fetched upfront in entries() and written to disk cache
+      // 2. Page rendering only reads from the JSON cache (no DB calls)
+      // 3. File reads are thread-safe
+      concurrency: 4,   // Parallel page rendering (balance between speed and I/O pressure)
       crawl: false,     // Don't crawl - entries() generates all routes from +page.server.js
       handleHttpError: ({ status, path, message }) => {
         // Skip 404/500 errors from problematic/missing assets and continue build

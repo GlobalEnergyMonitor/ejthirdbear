@@ -1,7 +1,10 @@
-<script>
+<script lang="ts">
   /**
    * QuickSearch Widget
    * Search for assets or entities by name
+   *
+   * NOTE: This widget has a unique pattern with debounced input and parallel queries,
+   * so it doesn't use the standard composables. The loading flow is user-triggered.
    */
 
   import { widgetQuery } from './widget-utils';
@@ -9,15 +12,34 @@
   import TrackerIcon from '$lib/components/TrackerIcon.svelte';
   import AddToCartButton from '$lib/components/AddToCartButton.svelte';
 
+  interface AssetResult {
+    name: string;
+    id: string;
+    tracker: string;
+    status: string;
+    country: string;
+  }
+
+  interface EntityResult {
+    name: string;
+    id: string;
+    asset_count: number;
+  }
+
+  interface SearchResults {
+    assets: AssetResult[];
+    entities: EntityResult[];
+  }
+
   // Props
   let { placeholder = 'Search assets or owners...', limit = 10 } = $props();
 
   // State
   let query = $state('');
   let loading = $state(false);
-  let results = $state({ assets: [], entities: [] });
+  let results = $state<SearchResults>({ assets: [], entities: [] });
   let queryTime = $state(0);
-  let debounceTimer = null;
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   async function search() {
     if (query.length < 2) {
@@ -57,8 +79,8 @@
     `;
 
     const [assetResult, entityResult] = await Promise.all([
-      widgetQuery(assetSql),
-      widgetQuery(entitySql),
+      widgetQuery<AssetResult>(assetSql),
+      widgetQuery<EntityResult>(entitySql),
     ]);
 
     results = {
@@ -70,13 +92,14 @@
     loading = false;
   }
 
-  function handleInput(e) {
-    query = e.target.value;
+  function handleInput(e: Event) {
+    const target = e.target as HTMLInputElement;
+    query = target.value;
     if (debounceTimer) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(search, 300);
   }
 
-  function handleKeydown(e) {
+  function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
       query = '';
       results = { assets: [], entities: [] };

@@ -1,9 +1,42 @@
 import { error } from '@sveltejs/kit';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
+import { extractOwnershipChainWithIds } from '$lib/component-data/ownership-parser.js';
 
 // Only prerender in production builds - dev mode uses client-side fetching
 export const prerender = process.env.NODE_ENV !== 'development';
+
+/**
+ * Columns to include in the minimal "owners" array sent to the page.
+ * The page only uses these columns in the ownership table - no need for 50+ fields.
+ * This reduces per-page size from ~300KB to ~30KB.
+ */
+const MINIMAL_OWNER_COLS = [
+  'Status',
+  'Owner GEM Entity ID',
+  'Parent',
+  'Owner',
+  'Share',
+  'Ownership Path',
+  'Parent Headquarters Country',
+  'Parent Registration Country',
+  'Immediate Project Owner',
+  'Immediate Project Owner GEM Entity ID',
+  'Tracker',
+];
+
+/**
+ * Create a minimal owner record with only the columns needed for display.
+ */
+function minimalOwner(record) {
+  const minimal = {};
+  for (const col of MINIMAL_OWNER_COLS) {
+    if (record[col] !== undefined) {
+      minimal[col] = record[col];
+    }
+  }
+  return minimal;
+}
 
 /**
  * Tracker-specific ID field mapping
@@ -58,6 +91,20 @@ const ASSET_CACHE = {
 
 // This function tells SvelteKit which asset IDs to prerender at build time
 export async function entries() {
+  // FAST PATH: Reuse existing cache if SKIP_CACHE is set and cache exists
+  // This saves ~30s by avoiding MotherDuck fetch
+  if (process.env.SKIP_CACHE === 'true' && existsSync(CACHE_FILE)) {
+    try {
+      const cacheData = JSON.parse(readFileSync(CACHE_FILE, 'utf-8'));
+      const assetIds = Object.keys(cacheData.assets);
+      console.log(`CACHE REUSE: Using existing cache with ${assetIds.length} assets`);
+      console.log(`  (set SKIP_CACHE=false to refresh from MotherDuck)`);
+      return assetIds.map((id) => ({ id }));
+    } catch (err) {
+      console.warn('Cache reuse failed, falling back to fresh fetch:', err.message);
+    }
+  }
+
   // Use Node DuckDB for build time
   const motherduck = (await import('$lib/motherduck-node')).default;
   const { getGeographyConfig, buildS2CellSQL, buildGeometrySQL } = await import(
@@ -166,7 +213,9 @@ export async function entries() {
     console.log(`  [OK] DB connection closed (total lifetime: ${fetchTime}s)`);
 
     // GROUP BY tracker-specific ID field - each asset gets an array of ownership records
+    // Also build indices for fast lookups during page rendering
     const assetsMap = {};
+    const ownerIndex = {};  // ownerEntityId -> [assetId, ...] for O(1) lookups
     let skippedRows = 0;
     for (const row of assetsResult.data) {
       const assetId = getAssetIdFromRow(row);
@@ -178,12 +227,28 @@ export async function entries() {
         assetsMap[assetId] = [];
       }
       assetsMap[assetId].push(row);
+
+      // Build owner index for fast portfolio lookups
+      const ownerEntityId = row['Owner GEM Entity ID'] || row['Immediate Project Owner GEM Entity ID'];
+      if (ownerEntityId) {
+        if (!ownerIndex[ownerEntityId]) {
+          ownerIndex[ownerEntityId] = new Set();
+        }
+        ownerIndex[ownerEntityId].add(assetId);
+      }
     }
     if (skippedRows > 0) {
       console.log(`  WARNING: Skipped ${skippedRows} rows with no valid ID`);
     }
 
-    // Store cache data (metadata + grouped assets)
+    // Convert Set to Array for JSON serialization
+    const ownerIndexSerialized = {};
+    for (const [ownerId, assetSet] of Object.entries(ownerIndex)) {
+      ownerIndexSerialized[ownerId] = Array.from(assetSet);
+    }
+    console.log(`  [OK] Built owner index with ${Object.keys(ownerIndexSerialized).length} owners`);
+
+    // Store cache data (metadata + grouped assets + indices)
     const cacheData = {
       tableName: fullTableName,
       columns,
@@ -191,6 +256,7 @@ export async function entries() {
       unitIdCol,
       ownerIdCol,
       assets: assetsMap,
+      ownerIndex: ownerIndexSerialized,  // NEW: O(1) owner->assets lookup
     };
 
     // Write to disk (persists across worker processes)
@@ -215,9 +281,7 @@ export async function entries() {
     console.log(
       `  Asset IDs to build: ${allAssetIds.slice(0, 3).join(', ')}${allAssetIds.length > 3 ? ` ... (${allAssetIds.length} total)` : ''}`
     );
-    console.log(
-      `  Building ${allAssetIds.length} pages (down from ${totalRows} ownership rows)`
-    );
+    console.log(`  Building ${allAssetIds.length} pages (down from ${totalRows} ownership rows)`);
     console.log(`  Cache file: ${CACHE_FILE}`);
 
     // Return array of { id } objects for SvelteKit to prerender
@@ -242,6 +306,8 @@ function loadCacheFromDisk() {
           ownerIdCol: cacheData.ownerIdCol,
         };
         ASSET_CACHE.assets = new Map(Object.entries(cacheData.assets));
+        // Load owner index for O(1) portfolio lookups (NEW)
+        ASSET_CACHE.ownerIndex = cacheData.ownerIndex || {};
         ASSET_CACHE.initialized = true;
         console.log(
           `  [OK] Loaded cache: ${ASSET_CACHE.assets.size} unique assets from ${CACHE_FILE}`
@@ -280,25 +346,36 @@ export async function load({ params }) {
       const ownerName = firstRecord['Parent'] || firstRecord['Immediate Project Owner'];
 
       // Pre-bake owner portfolio data for OwnershipExplorerD3
-      // PERF: Cap assets to avoid quadratic bloat (owner with 2500 assets × 2500 pages = huge)
-      const MAX_ASSETS_PER_PAGE = 50;
-      const MAX_ASSETS_PER_SUBSIDIARY = 20;
+      // PERF: Cap assets aggressively for asset pages to reduce build size
+      // Entity pages have their own larger limits - asset pages just need a summary view
+      const MAX_ASSETS_PER_PAGE = 12;       // Down from 50 - just show top assets
+      const MAX_ASSETS_PER_SUBSIDIARY = 6;  // Down from 20 - summary only
 
       let ownerExplorerData = null;
       if (ownerEntityId) {
-        // Find all assets owned by this entity from the cache
-        const entityAssets = [];
-        const subsidiaries = {}; // immediate_owner_id -> { name, share, assets[] }
-        const directlyOwned = [];
-        let totalAssetCount = 0;
+        // OPTIMIZED: Use owner index for O(1) lookup instead of O(n) iteration
+        const ownedAssetIds = ASSET_CACHE.ownerIndex[ownerEntityId] || [];
 
-        for (const [assetId, records] of ASSET_CACHE.assets.entries()) {
-          const record = records[0];
-          if (
-            record['Owner GEM Entity ID'] === ownerEntityId ||
-            record['Immediate Project Owner GEM Entity ID'] === ownerEntityId
-          ) {
-            totalAssetCount++;
+        // Skip ownerExplorerData for massive portfolios (>200 assets)
+        // These would just bloat the page - user can click to entity page for full view
+        if (ownedAssetIds.length > 200) {
+          ownerExplorerData = {
+            spotlightOwner: { id: ownerEntityId, Name: ownerName || ownerEntityId },
+            totalAssetCount: ownedAssetIds.length,
+            truncated: true, // Signal to component to show "view full portfolio" link
+          };
+        } else {
+          // Normal flow for smaller portfolios
+          const entityAssets = [];
+          const subsidiaries = {}; // immediate_owner_id -> { name, share, assets[] }
+          const directlyOwned = [];
+          let totalAssetCount = ownedAssetIds.length;
+
+          for (const assetId of ownedAssetIds) {
+            const records = ASSET_CACHE.assets.get(assetId);
+            if (!records || records.length === 0) continue;
+            const record = records[0];
+
             const asset = {
               id: assetId,
               name: record['Project'] || record['Unit Name'] || assetId,
@@ -324,40 +401,40 @@ export async function load({ params }) {
               directlyOwned.push(asset);
             }
           }
-        }
 
-        // Sort by capacity and cap to avoid bloat
-        entityAssets.sort((a, b) => (b.capacityMw || 0) - (a.capacityMw || 0));
-        const cappedAssets = entityAssets.slice(0, MAX_ASSETS_PER_PAGE);
-        const cappedDirectlyOwned = directlyOwned
-          .sort((a, b) => (b.capacityMw || 0) - (a.capacityMw || 0))
-          .slice(0, MAX_ASSETS_PER_SUBSIDIARY);
-
-        // Convert to the format OwnershipExplorerD3 expects (with capped subsidiary assets)
-        const subsidiariesMatched = Object.entries(subsidiaries).map(([subId, data]) => [
-          subId,
-          data.assets
+          // Sort by capacity and cap to avoid bloat
+          entityAssets.sort((a, b) => (b.capacityMw || 0) - (a.capacityMw || 0));
+          const cappedAssets = entityAssets.slice(0, MAX_ASSETS_PER_PAGE);
+          const cappedDirectlyOwned = directlyOwned
             .sort((a, b) => (b.capacityMw || 0) - (a.capacityMw || 0))
-            .slice(0, MAX_ASSETS_PER_SUBSIDIARY),
-        ]);
-        const matchedEdges = Object.entries(subsidiaries).map(([subId, data]) => [
-          subId,
-          { value: data.share },
-        ]);
-        const entityMap = Object.entries(subsidiaries).map(([subId, data]) => [
-          subId,
-          { id: subId, Name: data.name, type: 'entity' },
-        ]);
+            .slice(0, MAX_ASSETS_PER_SUBSIDIARY);
 
-        ownerExplorerData = {
-          spotlightOwner: { id: ownerEntityId, Name: ownerName || ownerEntityId },
-          subsidiariesMatched,
-          directlyOwned: cappedDirectlyOwned,
-          matchedEdges,
-          entityMap,
-          assets: cappedAssets,
-          totalAssetCount, // Full count for "see all X assets" link
-        };
+          // Convert to the format OwnershipExplorerD3 expects (with capped subsidiary assets)
+          const subsidiariesMatched = Object.entries(subsidiaries).map(([subId, data]) => [
+            subId,
+            data.assets
+              .sort((a, b) => (b.capacityMw || 0) - (a.capacityMw || 0))
+              .slice(0, MAX_ASSETS_PER_SUBSIDIARY),
+          ]);
+          const matchedEdges = Object.entries(subsidiaries).map(([subId, data]) => [
+            subId,
+            { value: data.share },
+          ]);
+          const entityMap = Object.entries(subsidiaries).map(([subId, data]) => [
+            subId,
+            { id: subId, Name: data.name, type: 'entity' },
+          ]);
+
+          ownerExplorerData = {
+            spotlightOwner: { id: ownerEntityId, Name: ownerName || ownerEntityId },
+            subsidiariesMatched,
+            directlyOwned: cappedDirectlyOwned,
+            matchedEdges,
+            entityMap,
+            assets: cappedAssets,
+            totalAssetCount, // Full count for "see all X assets" link
+          };
+        }
       }
 
       // Pre-bake relationship data for RelationshipNetwork
@@ -365,13 +442,13 @@ export async function load({ params }) {
       const sameOwnerAssets = [];
       const coLocatedAssets = [];
 
-      // Find same-owner assets (limit to 24)
+      // Find same-owner assets (limit to 8 for size reduction)
       if (ownerEntityId) {
         let count = 0;
         for (const [assetId, records] of ASSET_CACHE.assets.entries()) {
           if (assetId === params.id) continue;
           const record = records[0];
-          if (record['Owner GEM Entity ID'] === ownerEntityId && count < 24) {
+          if (record['Owner GEM Entity ID'] === ownerEntityId && count < 8) {
             sameOwnerAssets.push({
               'GEM unit ID': assetId,
               Project: record['Project'] || record['Unit Name'],
@@ -405,32 +482,12 @@ export async function load({ params }) {
         }
       }
 
-      // Parse ownership chain from ownership paths
-      const ownershipChain = [];
-      const seenIds = new Set();
-      for (const record of ownershipRecords) {
-        const ownershipPath = record['Ownership Path'];
-        if (!ownershipPath) continue;
+      // Parse ownership chain from ownership paths (using consolidated parser)
+      const ownershipChain = extractOwnershipChainWithIds(ownershipRecords);
 
-        const segments = ownershipPath.split(' -> ');
-        segments.forEach((segment, i) => {
-          const match = segment.match(/^(.+?)\s*\[([^\]]+)\]$/);
-          const name = match ? match[1].trim() : segment.trim();
-          const pctStr = match ? match[2].trim() : null;
-          const share = pctStr && pctStr !== 'unknown %' ? parseFloat(pctStr) : null;
-          const id = name.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 50);
-
-          if (!seenIds.has(id)) {
-            seenIds.add(id);
-            ownershipChain.push({ id, name, share, depth: segments.length - 1 - i });
-          }
-        });
-      }
-      ownershipChain.sort((a, b) => b.depth - a.depth);
-
-      // Owner stats
+      // Owner stats (skip if truncated portfolio with no asset data)
       let ownerStats = null;
-      if (ownerEntityId && ownerExplorerData) {
+      if (ownerEntityId && ownerExplorerData && ownerExplorerData.assets) {
         const countries = new Set();
         let totalCapacity = 0;
         for (const asset of ownerExplorerData.assets) {
@@ -464,13 +521,17 @@ export async function load({ params }) {
         },
       };
 
+      // Create minimal owners array (only columns needed for the table display)
+      // This reduces page size from ~300KB to ~30KB per page
+      const minimalOwners = ownershipRecords.map(minimalOwner);
+
       return {
         // The asset ID (GEM unit ID)
         assetId: params.id,
         // Asset name from Project column
         assetName: firstRecord['Project'] || firstRecord['Unit Name'] || params.id,
-        // All ownership records for this asset
-        owners: ownershipRecords,
+        // MINIMAL ownership records (only columns used in the table)
+        owners: minimalOwners,
         // First record for backward compatibility & basic asset info
         asset: firstRecord,
         // Metadata
@@ -506,6 +567,8 @@ export async function load({ params }) {
   }
 
   // In production build, cache miss means asset doesn't exist
-  console.warn(`WARNING: Cache miss for ${params.id} - skipping (DB already closed after bulk fetch)`);
+  console.warn(
+    `WARNING: Cache miss for ${params.id} - skipping (DB already closed after bulk fetch)`
+  );
   throw error(404, `Asset ${params.id} not found in cache`);
 }

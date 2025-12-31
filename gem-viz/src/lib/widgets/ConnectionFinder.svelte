@@ -1,33 +1,42 @@
-<script>
+<script lang="ts">
   /**
    * ConnectionFinder Widget
    * Find connections between entities - shared assets, co-ownership
+   *
+   * REFACTORED: Uses createAsyncState() composable for state management
    */
 
   import { onMount } from 'svelte';
+  import { createAsyncState } from '$lib/composables.svelte';
   import { widgetQuery } from './widget-utils';
-  import { assetLink, entityLink } from '$lib/links';
+  import { entityLink } from '$lib/links';
   import AddToCartButton from '$lib/components/AddToCartButton.svelte';
+  import LoadingWrapper from '$lib/components/LoadingWrapper.svelte';
   import { investigationCart } from '$lib/investigationCart';
 
-  // Props
-  let { entityId = null, entityName = '', title = 'Connected Entities' } = $props();
+  interface Connection {
+    entity_name: string;
+    entity_id: string;
+    shared_assets: number;
+    sample_projects: string;
+    samples: string[];
+  }
 
-  // State
-  let loading = $state(true);
-  let error = $state(null);
-  let connections = $state([]);
-  let queryTime = $state(0);
+  // Props
+  let {
+    entityId = null as string | null,
+    entityName = '',
+    title = 'Connected Entities',
+  } = $props();
+
+  // State - using composable instead of 4 separate $state() calls
+  const state = createAsyncState<Connection[]>([]);
 
   async function loadConnections() {
     if (!entityId && !entityName) {
-      connections = [];
-      loading = false;
+      state.setData([]);
       return;
     }
-
-    loading = true;
-    error = null;
 
     // Find other entities that co-own assets with this entity
     const whereClause = entityId
@@ -58,19 +67,17 @@
       SELECT * FROM co_owners
     `;
 
-    const result = await widgetQuery(sql);
-
-    if (result.success) {
-      connections = (result.data || []).map((row) => ({
+    await state.run(async () => {
+      const result = await widgetQuery<Omit<Connection, 'samples'>>(sql);
+      if (!result.success) {
+        throw new Error(result.error || 'Query failed');
+      }
+      // Transform results to include parsed samples
+      return (result.data || []).map((row) => ({
         ...row,
         samples: row.sample_projects ? String(row.sample_projects).split(',').slice(0, 3) : [],
       }));
-      queryTime = result.executionTime || 0;
-    } else {
-      error = result.error;
-    }
-
-    loading = false;
+    });
   }
 
   onMount(() => {
@@ -83,32 +90,34 @@
     loadConnections();
   });
 
+  // Convenience accessor for template
+  const connections = $derived(state.data || []);
+
   // Add all co-owners to investigation cart
   function addAllToCart() {
     const items = connections.map((conn) => ({
       id: conn.entity_id,
       name: conn.entity_name,
-      type: /** @type {'entity'} */ ('entity'),
+      type: 'entity' as const,
       metadata: { assetCount: conn.shared_assets },
     }));
-    const added = investigationCart.addMany(items);
-    // Could show a toast here
+    investigationCart.addMany(items);
   }
 </script>
 
 <div class="widget connection-finder">
   <header>
     <h3>{title}</h3>
-    <span class="query-time">{queryTime}ms</span>
+    <span class="query-time">{state.queryTime}ms</span>
   </header>
 
-  {#if loading}
-    <div class="loading">Finding connections...</div>
-  {:else if error}
-    <div class="error">{error}</div>
-  {:else if connections.length === 0}
-    <div class="empty">No co-owners found</div>
-  {:else}
+  <LoadingWrapper
+    loading={state.loading}
+    error={state.error}
+    empty={connections.length === 0}
+    loadingMessage="Finding connections..."
+    emptyMessage="No co-owners found"
+  >
     <div class="intro-row">
       <p class="intro">Entities that co-own assets with {entityName || entityId}:</p>
       <button class="btn btn-outline btn-sm" onclick={addAllToCart}>
@@ -141,7 +150,7 @@
         </li>
       {/each}
     </ul>
-  {/if}
+  </LoadingWrapper>
 </div>
 
 <style>
@@ -168,18 +177,6 @@
     font-size: 10px;
     color: #999;
     font-family: monospace;
-  }
-
-  .loading,
-  .error,
-  .empty {
-    font-size: 13px;
-    color: #666;
-    padding: 20px 0;
-    text-align: center;
-  }
-  .error {
-    color: #c00;
   }
 
   .intro-row {

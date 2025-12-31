@@ -18,15 +18,11 @@
     direction = 'TD',
   } = $props();
 
-  const MIN_HEIGHT = 380;
-
   let mermaidSvg = $state('');
   let loading = $state(true);
   let error = $state(null);
   let containerEl;
   let containerWidth = $state(0);
-
-  const diagramHeight = $derived(Math.max(MIN_HEIGHT, containerWidth * 0.4));
 
   function generateMermaidSyntax() {
     if (!edges.length) return '';
@@ -45,11 +41,13 @@
     const lines = uniqueEdges.map((e, i) => {
       const sourceName = fullNodeMap.get(e.source)?.Name || e.source;
       const targetName = fullNodeMap.get(e.target)?.Name || e.target;
+      // Special names like "small shareholder(s)" can appear multiple times,
+      // so append edge index to make Mermaid node IDs unique
       const specialNames = ['small shareholder(s)', 'natural person(s)'];
       const sourceId = specialNames.includes(sourceName.toLowerCase())
         ? `${e.source}_${i}`
-        : e.source.replace(/[^a-zA-Z0-9]/g, '_');
-      const targetId = e.target.replace(/[^a-zA-Z0-9]/g, '_');
+        : e.source; // Already sanitized by ownership-parser
+      const targetId = e.target; // Already sanitized by ownership-parser
       const pctLabel = e.value ? `|${e.value.toFixed(1)}%|` : '';
       return `  ${sourceId}["${sanitize(sourceName)}"] -->${pctLabel} ${targetId}["${sanitize(targetName)}"]`;
     });
@@ -101,27 +99,27 @@
     }
   }
 
-  // Build a reverse lookup map from sanitized IDs to original IDs
+  // Build a reverse lookup map from Mermaid node IDs to original entity IDs
   function buildIdLookup() {
     const lookup = new Map();
-    const sanitize = (id) => id.replace(/[^a-zA-Z0-9]/g, '_');
 
     // Add all edges' source and target IDs
     edges.forEach((e, i) => {
       const sourceName = nodeMap.get(e.source)?.Name || e.source;
       const specialNames = ['small shareholder(s)', 'natural person(s)'];
+      // Match the same ID generation logic as generateMermaidSyntax
       const sourceId = specialNames.includes(sourceName.toLowerCase())
         ? `${e.source}_${i}`
-        : sanitize(e.source);
-      const targetId = sanitize(e.target);
+        : e.source; // Already sanitized
+      const targetId = e.target; // Already sanitized
 
       lookup.set(sourceId, e.source);
       lookup.set(targetId, e.target);
     });
 
-    // Add asset ID
+    // Add asset ID (already sanitized)
     if (assetId) {
-      lookup.set(sanitize(assetId), assetId);
+      lookup.set(assetId, assetId);
     }
 
     return lookup;

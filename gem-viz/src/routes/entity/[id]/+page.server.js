@@ -17,6 +17,18 @@ const ENTITY_CACHE = {
 
 // This function tells SvelteKit which entity IDs to prerender at build time
 export async function entries() {
+  // FAST PATH: Reuse existing cache if SKIP_CACHE is set and cache exists
+  if (process.env.SKIP_CACHE === 'true' && existsSync(CACHE_FILE)) {
+    try {
+      const cacheData = JSON.parse(readFileSync(CACHE_FILE, 'utf-8'));
+      const entityIds = Object.keys(cacheData.entities);
+      console.log(`ENTITY CACHE REUSE: Using existing cache with ${entityIds.length} entities`);
+      return entityIds.map((id) => ({ id }));
+    } catch (err) {
+      console.warn('Entity cache reuse failed, falling back to fresh fetch:', err.message);
+    }
+  }
+
   // Use Node DuckDB for build time
   const motherduck = (await import('$lib/motherduck-node')).default;
 

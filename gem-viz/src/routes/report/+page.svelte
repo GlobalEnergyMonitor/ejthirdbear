@@ -530,7 +530,12 @@
         <span class="query-time">{queryTime}ms</span>
       </div>
       <div class="toolbar-right">
-        <button class="btn btn-outline" class:active={copied} onclick={copyShareUrl} title="Copy shareable link">
+        <button
+          class="btn btn-outline"
+          class:active={copied}
+          onclick={copyShareUrl}
+          title="Copy shareable link"
+        >
           {copied ? 'Copied!' : 'Share Link'}
         </button>
         <button class="btn btn-outline" onclick={printReport}>Print / PDF</button>

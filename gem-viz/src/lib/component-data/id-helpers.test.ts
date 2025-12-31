@@ -18,6 +18,12 @@ import {
   extractUnitIdFromComposite,
   assetPath,
   entityPath,
+  // Sanitized graph IDs
+  sanitizeId,
+  getIdType,
+  isValidAssetId,
+  isValidEntityId,
+  normalizeAssetId,
 } from './id-helpers';
 
 describe('findIdColumn', () => {
@@ -235,5 +241,108 @@ describe('assetPath', () => {
 describe('entityPath', () => {
   it('generates entity path', () => {
     expect(entityPath('E100001000348')).toBe('/entity/E100001000348');
+  });
+});
+
+// ============================================================================
+// PART 5: SANITIZED GRAPH IDS
+// ============================================================================
+
+describe('sanitizeId', () => {
+  it('converts name to valid graph ID with hash suffix', () => {
+    const id = sanitizeId('BlackRock Inc');
+    expect(id).toMatch(/^BlackRock_Inc_[a-z0-9]{4}$/);
+  });
+
+  it('removes special characters', () => {
+    const id = sanitizeId('Company (Holdings) Ltd.');
+    expect(id).toMatch(/^Company__Holdings__Ltd__[a-z0-9]{4}$/);
+  });
+
+  it('produces different IDs for similar names', () => {
+    const id1 = sanitizeId('ABC Corp');
+    const id2 = sanitizeId('ABC Corp.');
+    expect(id1).not.toBe(id2);
+  });
+
+  it('is deterministic - same input always gives same output', () => {
+    const id1 = sanitizeId('Test Company');
+    const id2 = sanitizeId('Test Company');
+    expect(id1).toBe(id2);
+  });
+
+  it('truncates long names but keeps hash for uniqueness', () => {
+    const longName =
+      'Very Long Company Name That Exceeds The Maximum Length Limit Incorporated LLC';
+    const id = sanitizeId(longName);
+    expect(id.length).toBeLessThanOrEqual(50);
+    expect(id).toMatch(/_[a-z0-9]{4}$/);
+  });
+
+  it('respects custom maxLen parameter', () => {
+    const id = sanitizeId('Test Company Name', 20);
+    expect(id.length).toBeLessThanOrEqual(20);
+  });
+});
+
+describe('getIdType', () => {
+  it('identifies GEM asset IDs', () => {
+    expect(getIdType('G100000109409')).toBe('gem_asset');
+  });
+
+  it('identifies GEM entity IDs', () => {
+    expect(getIdType('E100001000348')).toBe('gem_entity');
+  });
+
+  it('identifies composite IDs', () => {
+    expect(getIdType('E100000000834_G100000109409')).toBe('composite');
+  });
+
+  it('identifies sanitized graph IDs', () => {
+    const sanitized = sanitizeId('BlackRock Inc');
+    expect(getIdType(sanitized)).toBe('sanitized');
+  });
+
+  it('returns unknown for unrecognized formats', () => {
+    expect(getIdType('random_string')).toBe('unknown');
+  });
+});
+
+describe('isValidAssetId', () => {
+  it('returns true for valid G-prefix IDs', () => {
+    expect(isValidAssetId('G100000109409')).toBe(true);
+  });
+
+  it('returns false for E-prefix IDs', () => {
+    expect(isValidAssetId('E100001000348')).toBe(false);
+  });
+
+  it('returns false for sanitized IDs', () => {
+    expect(isValidAssetId('BlackRock_Inc_7k2m')).toBe(false);
+  });
+});
+
+describe('isValidEntityId', () => {
+  it('returns true for valid E-prefix IDs', () => {
+    expect(isValidEntityId('E100001000348')).toBe(true);
+  });
+
+  it('returns false for G-prefix IDs', () => {
+    expect(isValidEntityId('G100000109409')).toBe(false);
+  });
+});
+
+describe('normalizeAssetId', () => {
+  it('passes through valid asset IDs', () => {
+    expect(normalizeAssetId('G100000109409')).toBe('G100000109409');
+  });
+
+  it('extracts asset ID from composite', () => {
+    expect(normalizeAssetId('E100_G100000109409')).toBe('G100000109409');
+  });
+
+  it('returns null for non-asset IDs', () => {
+    expect(normalizeAssetId('E100001000348')).toBeNull();
+    expect(normalizeAssetId('BlackRock_Inc_7k2m')).toBeNull();
   });
 });

@@ -20,7 +20,9 @@
 
   <footer>
     <div class="footer-content">
-      <a href={link('about')} class="version" title="View methodology and changelog">v{appVersion}</a>
+      <a href={link('about')} class="version" title="View methodology and changelog"
+        >v{appVersion}</a
+      >
       <span class="build-info" title={buildTime}>build: {buildHash}</span>
     </div>
   </footer>

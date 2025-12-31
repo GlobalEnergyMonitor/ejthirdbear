@@ -1,10 +1,10 @@
 {
-  "version": "36672cf",
-  "commit": "36672cf",
-  "message": "Pre-bake Owner Explorer and Related Assets data at build time",
+  "version": "c827d9b",
+  "commit": "c827d9b",
+  "message": "Fix AssetScreener SSR: use $derived instead of $effect",
   "author": "EJ Fox",
-  "timestamp": "2025-12-16T16:41:59.100Z",
-  "deployed": "2025-12-16T16:41:59.100Z",
-  "buildTime": "12/16/2025, 11:41:59 AM",
-  "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.1.15"
+  "timestamp": "2025-12-31T00:05:42.113Z",
+  "deployed": "2025-12-31T00:05:42.113Z",
+  "buildTime": "12/30/2025, 7:05:42 PM",
+  "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.1.19"
 }

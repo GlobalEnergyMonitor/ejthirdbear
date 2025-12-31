@@ -110,13 +110,44 @@ export interface EntityNode {
   [key: string]: unknown;
 }
 
+/** Raw ownership record from parquet file */
+interface OwnershipRecord {
+  'Owner GEM Entity ID'?: string;
+  'Immediate Owner Entity ID'?: string;
+  '% Share of Ownership'?: number;
+  'Share Imputed?'?: string;
+  Unit?: string;
+  Project?: string;
+  [key: string]: unknown;
+}
+
+/** Parent owner record from recursive CTE */
+interface ParentOwnerRecord {
+  parent_id: string;
+  child_id: string;
+  depth: number;
+  '% Share of Ownership'?: number;
+  'Data Source URL'?: string;
+  'Share Imputed?'?: string;
+}
+
+/** Asset for summarization */
+export interface SummarizableAsset {
+  id: string;
+  locationID?: string;
+  tracker?: string;
+  country?: string;
+  status?: string;
+  [key: string]: unknown;
+}
+
 export interface AssetOwnersData {
   assetId: string;
   assetName: string;
   edges: OwnershipEdge[];
   nodes: EntityNode[];
-  immediateOwners: unknown[];
-  parentOwners: unknown[];
+  immediateOwners: OwnershipRecord[];
+  parentOwners: ParentOwnerRecord[];
   allEntityIds: string[];
 }
 
@@ -142,13 +173,13 @@ export async function getAssetOwners(gemAssetId: string): Promise<AssetOwnersDat
       return null;
     }
 
-    const immediateOwners = immediateResult.data;
+    const immediateOwners = immediateResult.data as OwnershipRecord[];
     const immediateOwnerIds = immediateOwners
       .map((d) => d['Owner GEM Entity ID'] || d['Immediate Owner Entity ID'])
-      .filter(Boolean);
+      .filter((id): id is string => Boolean(id));
 
     // Get parent owners recursively
-    let parentOwners: unknown[] = [];
+    let parentOwners: ParentOwnerRecord[] = [];
     if (immediateOwnerIds.length > 0) {
       const parentResult = await query(`
         ${recursiveEdgesCteUpstream(immediateOwnerIds)}
@@ -157,13 +188,13 @@ export async function getAssetOwners(gemAssetId: string): Promise<AssetOwnersDat
       `);
 
       if (parentResult.success && parentResult.data) {
-        parentOwners = parentResult.data;
+        parentOwners = parentResult.data as ParentOwnerRecord[];
       }
     }
 
     // Format as edges
     const edges: OwnershipEdge[] = [
-      ...parentOwners.map((d: any) => ({
+      ...parentOwners.map((d: ParentOwnerRecord) => ({
         source: d.parent_id,
         target: d.child_id,
         value: d['% Share of Ownership'] || null,
@@ -172,8 +203,8 @@ export async function getAssetOwners(gemAssetId: string): Promise<AssetOwnersDat
         imputedShare: d['Share Imputed?'] === 'imputed value',
         depth: d.depth,
       })),
-      ...immediateOwners.map((d: any) => ({
-        source: d['Owner GEM Entity ID'] || d['Immediate Owner Entity ID'],
+      ...immediateOwners.map((d: OwnershipRecord) => ({
+        source: d['Owner GEM Entity ID'] || d['Immediate Owner Entity ID'] || '',
         target: gemAssetId,
         value: d['% Share of Ownership'] || null,
         type: 'leafEdge' as const,
@@ -253,23 +284,34 @@ export function formatForMermaid(
     .join('\n');
 }
 
+/** Stats returned by asset summarization */
+interface AssetStats {
+  assetCount: number;
+  unitCount: number;
+  types: Set<string | undefined>;
+}
+
 /**
  * Summarize assets by various dimensions
  * Ported from Observable summarizeAssets2()
  */
-export function summarizeAssets(assets: any[]) {
-  const uniqueCount = (arr: any[], field: string) => new Set(arr.map((d) => d[field])).size;
+export function summarizeAssets(assets: SummarizableAsset[]) {
+  const uniqueCount = (arr: SummarizableAsset[], field: keyof SummarizableAsset) =>
+    new Set(arr.map((d) => d[field])).size;
 
-  const getStats = (v: any[]) => ({
+  const getStats = (v: SummarizableAsset[]): AssetStats => ({
     assetCount: uniqueCount(v, 'locationID') || uniqueCount(v, 'id'),
     unitCount: uniqueCount(v, 'id'),
     types: new Set(v.map((d) => d.tracker)),
   });
 
-  const rollup = (arr: any[], keyFn: (_d: any) => string) => {
-    const map = new Map<string, any[]>();
+  const rollup = (
+    arr: SummarizableAsset[],
+    keyFn: (d: SummarizableAsset) => string | undefined
+  ) => {
+    const map = new Map<string, SummarizableAsset[]>();
     arr.forEach((d) => {
-      const key = keyFn(d);
+      const key = keyFn(d) || 'unknown';
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(d);
     });

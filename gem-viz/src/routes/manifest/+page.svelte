@@ -7,7 +7,7 @@
   /** @type {{ data: import('./$types').PageData }} */
   let { data } = $props();
 
-  const { tables, trackerConfigs, dataSources, dataVersionInfo, staticFiles, meta } = data;
+  const { tables, trackerConfigs, dataSources, dataVersionInfo, meta } = data;
 
   // Helpers
   function formatNumber(n) {
@@ -19,12 +19,6 @@
     if (!str) return '—';
     const s = String(str);
     return s.length > len ? s.slice(0, len) + '...' : s;
-  }
-
-  function formatBytes(bytes) {
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   }
 </script>
 

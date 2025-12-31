@@ -10,7 +10,7 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import { entityLink } from '$lib/links';
-  import { colors, colorByStatus, colorByTracker } from '$lib/ownership-theme';
+  import { colors, colorByStatus } from '$lib/ownership-theme';
   import { getTables } from '$lib/component-data/schema';
   import { parseOwnershipPaths } from '$lib/component-data/ownership-parser';
   import { SCHEMA_SQL, ASSET_SQL, escapeValue } from '$lib/component-data/sql-helpers';
@@ -21,7 +21,8 @@
   import OwnershipPie from '$lib/components/OwnershipPie.svelte';
   import MermaidOwnership from '$lib/components/MermaidOwnership.svelte';
   import OwnershipHierarchy from '$lib/components/OwnershipHierarchy.svelte';
-  import OwnershipExplorerD3 from '$lib/components/OwnershipExplorerD3.svelte';
+  // import OwnershipExplorerD3 from '$lib/components/OwnershipExplorerD3.svelte'; // Replaced with AssetScreener
+  import AssetScreener from '$lib/components/AssetScreener.svelte';
   import RelationshipNetwork from '$lib/components/RelationshipNetwork.svelte';
   import StatusIcon from '$lib/components/StatusIcon.svelte';
   import TrackerIcon from '$lib/components/TrackerIcon.svelte';
@@ -41,7 +42,6 @@
   let asset = $state(data?.asset || {});
   let tableName = $state(data?.tableName || '');
   let columns = $state(data?.columns || []);
-  let svgs = $state(data?.svgs || {});
 
   // --- COLUMN FINDERS (find columns by name pattern) ---
   const findCol = (pattern) => columns.find((c) => pattern.test(c.toLowerCase()));
@@ -63,14 +63,13 @@
     return { ...parsed, nodeMap: new Map(parsed.nodes.map((n) => [n.id, n])) };
   });
 
-  // Primary owner for OwnershipExplorerD3
-  const primaryOwnerEntityId = $derived(
-    ownerEntityIdCol && owners[0]?.[ownerEntityIdCol] ? owners[0][ownerEntityIdCol] : null
-  );
+  // Primary owner - no longer used after switching to AssetScreener
+  // const primaryOwnerEntityId = $derived(
+  //   ownerEntityIdCol && owners[0]?.[ownerEntityIdCol] ? owners[0][ownerEntityIdCol] : null
+  // );
 
-  // Status/tracker colors
+  // Status color for header styling
   const statusColor = $derived(colorByStatus.get(asset[statusCol]?.toLowerCase?.()) || colors.grey);
-  const trackerColor = $derived(colorByTracker.get(asset[trackerCol]) || colors.orange);
 
   // Total ownership percentage
   const totalOwnership = $derived(
@@ -314,11 +313,8 @@
         </section>
 
         <section class="viz-section">
-          <h2>Owner Explorer</h2>
-          <OwnershipExplorerD3
-            ownerEntityId={primaryOwnerEntityId}
-            prebakedData={data?.ownerExplorerData}
-          />
+          <h2>Owner Portfolio</h2>
+          <AssetScreener prebakedPortfolio={data?.ownerExplorerData} />
         </section>
 
         <section class="viz-section">

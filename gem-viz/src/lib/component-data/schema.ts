@@ -4,8 +4,16 @@
  * Keep SQL here so frontend + backend share the same contract.
  */
 
+import { browser } from '$app/environment';
+import { parseSegment } from './ownership-parser';
+import { sanitizeId } from './id-helpers';
+
 // Dynamic import to avoid SSR issues (Worker is not defined in Node.js)
 async function getMotherDuck() {
+  // Prevent WASM import during SSR - only works in browser
+  if (!browser) {
+    throw new Error('MotherDuck WASM client is only available in the browser');
+  }
   const mod = await import('$lib/motherduck-wasm');
   return mod.default;
 }
@@ -204,8 +212,7 @@ export async function fetchOwnershipChain(assetId: string): Promise<OwnershipCha
 
   if (!result.success || !result.data?.length) return [];
 
-  // Parse ownership paths into chain nodes
-  // Format: "Parent [50%] -> Subsidiary [75%] -> Asset [100%]"
+  // Parse ownership paths into chain nodes using shared parser
   const chainNodes: OwnershipChainNode[] = [];
   const seenIds = new Set<string>();
 
@@ -214,18 +221,15 @@ export async function fetchOwnershipChain(assetId: string): Promise<OwnershipCha
 
     const segments = row.ownership_path.split(' -> ');
     segments.forEach((segment, i) => {
-      const match = segment.match(/^(.+?)\s*\[([^\]]+)\]$/);
-      const name = match ? match[1].trim() : segment.trim();
-      const pctStr = match ? match[2].trim() : null;
-      const share = pctStr && pctStr !== 'unknown %' ? parseFloat(pctStr) : null;
-      const id = name.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 50);
+      const parsed = parseSegment(segment);
+      const id = sanitizeId(parsed.name);
 
       if (!seenIds.has(id)) {
         seenIds.add(id);
         chainNodes.push({
           id,
-          name,
-          share,
+          name: parsed.name,
+          share: parsed.pct,
           depth: segments.length - 1 - i,
         });
       }

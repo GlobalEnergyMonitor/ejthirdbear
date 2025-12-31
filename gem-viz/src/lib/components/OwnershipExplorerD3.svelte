@@ -16,7 +16,11 @@
     colMaps,
     regroupStatus,
   } from '$lib/ownership-theme';
-  import { fetchAssetBasics, fetchOwnerPortfolio } from '$lib/component-data/schema';
+  // Dynamic import to avoid SSR issues - schema.ts imports WASM client
+  /** @type {typeof import('$lib/component-data/schema').fetchAssetBasics} */
+  let fetchAssetBasics;
+  /** @type {typeof import('$lib/component-data/schema').fetchOwnerPortfolio} */
+  let fetchOwnerPortfolio;
 
   // Accept owner entity ID and pre-baked data from parent to skip client-side fetch
   let { ownerEntityId: propsOwnerEntityId = null, prebakedData = null } = $props();
@@ -381,6 +385,11 @@
     }
 
     // Fallback: client-side fetch from MotherDuck (dev mode)
+    // Dynamic import to avoid SSR bundling of WASM client
+    const schema = await import('$lib/component-data/schema');
+    fetchAssetBasics = schema.fetchAssetBasics;
+    fetchOwnerPortfolio = schema.fetchOwnerPortfolio;
+
     loadingStatus = 'Connecting to database...';
     const pageData = get(page);
     const pathname = pageData.url?.pathname || '';

@@ -1,37 +1,39 @@
-<script>
+<script lang="ts">
   /**
    * TopOwners Widget
    * Rankings of entities by asset count or total capacity
+   *
+   * REFACTORED: Uses createWidgetState() composable for state management
    */
 
   import { onMount } from 'svelte';
-  import { widgetQuery } from './widget-utils';
+  import { createWidgetState } from '$lib/composables.svelte';
   import { entityLink } from '$lib/links';
+  import LoadingWrapper from '$lib/components/LoadingWrapper.svelte';
+
+  interface OwnerRow {
+    owner_name: string;
+    entity_id: string;
+    value: number;
+    asset_count: number;
+  }
 
   // Props
   let {
     limit = 10,
     metric = 'assets', // 'assets' or 'capacity'
-    tracker = null, // null for all, or specific tracker name
+    tracker = null as string | null, // null for all, or specific tracker name
     title = 'Top Owners',
   } = $props();
 
-  // State
-  let loading = $state(true);
-  let error = $state(null);
-  let results = $state([]);
-  let queryTime = $state(0);
-
-  const metricLabel = $derived(metric === 'capacity' ? 'Capacity (MW)' : 'Assets');
+  // State - now a single composable instead of 4 separate $state() calls
+  const state = createWidgetState<OwnerRow>();
 
   async function loadData() {
-    loading = true;
-    error = null;
-
     const trackerFilter = tracker ? `WHERE "Tracker" = '${tracker}'` : '';
     const capacityCol = metric === 'capacity' ? 'SUM(COALESCE("Capacity (MW)", 0))' : 'COUNT(*)';
 
-    const sql = `
+    await state.query(`
       SELECT
         "Owner" as owner_name,
         "Owner GEM Entity ID" as entity_id,
@@ -43,27 +45,13 @@
       GROUP BY "Owner", "Owner GEM Entity ID"
       ORDER BY value DESC
       LIMIT ${limit}
-    `;
-
-    const result = await widgetQuery(sql);
-
-    if (result.success) {
-      results = result.data || [];
-      queryTime = result.executionTime || 0;
-    } else {
-      error = result.error;
-    }
-
-    loading = false;
+    `);
   }
 
-  onMount(() => {
-    loadData();
-  });
+  onMount(() => loadData());
 
   // Reload when props change
   $effect(() => {
-    // Track dependencies
     void limit;
     void metric;
     void tracker;
@@ -74,18 +62,17 @@
 <div class="widget top-owners">
   <header>
     <h3>{title}</h3>
-    <span class="query-time">{queryTime}ms</span>
+    <span class="query-time">{state.queryTime}ms</span>
   </header>
 
-  {#if loading}
-    <div class="loading">Loading rankings...</div>
-  {:else if error}
-    <div class="error">{error}</div>
-  {:else if results.length === 0}
-    <div class="empty">No data available</div>
-  {:else}
+  <LoadingWrapper
+    loading={state.loading}
+    error={state.error}
+    empty={state.data?.length === 0}
+    loadingMessage="Loading rankings..."
+  >
     <ol class="rankings">
-      {#each results as row, i}
+      {#each state.data || [] as row, i}
         <li>
           <span class="rank">#{i + 1}</span>
           <a href={entityLink(row.entity_id)} class="name">{row.owner_name}</a>
@@ -97,7 +84,7 @@
         </li>
       {/each}
     </ol>
-  {/if}
+  </LoadingWrapper>
 </div>
 
 <style>
@@ -124,18 +111,6 @@
     font-size: 10px;
     color: #999;
     font-family: monospace;
-  }
-
-  .loading,
-  .error,
-  .empty {
-    font-size: 13px;
-    color: #666;
-    padding: 20px 0;
-    text-align: center;
-  }
-  .error {
-    color: #c00;
   }
 
   .rankings {

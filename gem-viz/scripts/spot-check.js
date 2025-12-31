@@ -100,7 +100,7 @@ async function checkRoute(baseUrl, route) {
         contentOk: hasExpected,
         size: text.length,
       };
-    } catch (err) {
+    } catch {
       // Network error - try next variant
       continue;
     }

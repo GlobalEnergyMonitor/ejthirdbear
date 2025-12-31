@@ -33,8 +33,6 @@
  * Based on: Ownership Data Processing and Access Plan (Dec 2025)
  */
 
-import { getTrackerConfig } from './tracker-config';
-
 /**
  * Additional data fields relevant to an asset class
  * Tells data processing which fields to pull when querying this class
@@ -67,7 +65,7 @@ export interface AssetClassDefinition {
    * Function to test if an asset row belongs to this class
    * Returns true if asset matches this class definition
    */
-  matcher: (record: Record<string, unknown>) => boolean;
+  matcher: (_record: Record<string, unknown>) => boolean;
 
   /**
    * Fields that are relevant to this asset class

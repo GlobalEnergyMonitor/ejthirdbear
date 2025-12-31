@@ -155,7 +155,7 @@ export function exampleDistanceQuery(): string {
 /**
  * Enhanced asset row with optional geography fields
  */
-export interface AssetRowWithGeography extends Record<string, any> {
+export interface AssetRowWithGeography extends Record<string, unknown> {
   // Original fields
   Tracker?: string;
   Latitude?: number;

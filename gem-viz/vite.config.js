@@ -2,9 +2,12 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import path from 'path';
 import { defineConfig } from 'vite';
 import { ViteMinifyPlugin } from 'vite-plugin-minify';
+import { visualizer } from 'rollup-plugin-visualizer';
 import { readFileSync } from 'fs';
 
 const pkg = JSON.parse(readFileSync('./package.json', 'utf-8'));
+const isProd = process.env.NODE_ENV === 'production';
+const isAnalyze = process.env.ANALYZE === 'true';
 
 export default defineConfig({
   define: {
@@ -14,8 +17,16 @@ export default defineConfig({
   },
   plugins: [
     sveltekit(),
-    ViteMinifyPlugin({})
-  ],
+    // Only minify HTML in production
+    isProd && ViteMinifyPlugin({}),
+    // Bundle analysis - run with ANALYZE=true npm run build
+    isAnalyze && visualizer({
+      filename: 'build/stats.html',
+      open: true,
+      gzipSize: true,
+      brotliSize: true,
+    })
+  ].filter(Boolean),
 
   server: {
     port: 3737,
@@ -27,8 +38,12 @@ export default defineConfig({
   },
 
   build: {
-    sourcemap: true,
-    minify: 'terser',
+    // Disable source maps in production for faster builds and smaller output
+    sourcemap: false,
+    // esbuild is much faster than terser (~10-100x) with similar output size
+    minify: 'esbuild',
+    // Target modern browsers for smaller bundles
+    target: 'es2022',
     rollupOptions: {
       external: [
         // Exclude Node.js-only packages from browser bundle
@@ -38,22 +53,27 @@ export default defineConfig({
         'nock'
       ],
       output: {
+        // Better chunk splitting for caching
         manualChunks: (id) => {
           // Don't chunk DuckDB/MotherDuck for SSR build
           if (id.includes('@duckdb') || id.includes('@motherduck')) {
             return undefined;
           }
           if (id.includes('node_modules')) {
-            if (id.includes('d3')) return 'vendor-d3';
-            if (id.includes('maplibre')) return 'vendor-maplibre';
+            // Heavy visualization libraries get their own chunks
+            if (id.includes('maplibre-gl')) return 'vendor-maplibre';
+            if (id.includes('mermaid')) return 'vendor-mermaid';
+            if (id.includes('d3-')) return 'vendor-d3';  // d3 submodules
+            if (id.includes('/d3/')) return 'vendor-d3'; // d3 main
+            if (id.includes('deck.gl') || id.includes('@deck.gl')) return 'vendor-deckgl';
+            if (id.includes('@luma.gl')) return 'vendor-luma';
+            // Everything else in a general vendor chunk
             return 'vendor';
           }
         }
       }
     },
-    chunkSizeWarningLimit: 1500,
-    // Batch file writes to avoid exhausting file descriptors
-    // Limit concurrent file operations during prerender/build
+    chunkSizeWarningLimit: 1000, // Lowered to catch large chunks earlier
     reportCompressedSize: false
   },
 
@@ -70,6 +90,8 @@ export default defineConfig({
   },
 
   ssr: {
+    // Externalize WASM packages from SSR bundle - they only work in browsers
+    external: ['@motherduck/wasm-client', '@duckdb/duckdb-wasm'],
     noExternal: []
   }
 });
