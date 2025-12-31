@@ -48,3 +48,176 @@ select {
 vite-error-overlay {
   display: none !important;
 }
+
+/* =============================================================================
+   PRINT STYLES
+   Professional report output for investigators
+   ============================================================================= */
+@media print {
+  /* Page setup */
+  @page {
+    size: A4;
+    margin: 2cm 1.5cm;
+  }
+
+  /* Reset backgrounds */
+  body {
+    background: white;
+    color: black;
+    font-size: 10pt;
+    line-height: 1.4;
+  }
+
+  /* Hide non-essential elements */
+  header,
+  nav,
+  .jump-links,
+  .page-actions,
+  .add-to-cart-btn,
+  .share-section,
+  .pagination,
+  button:not(.print-include),
+  .maplibregl-ctrl,
+  .maplibregl-control-container,
+  [aria-label="Page sections"] {
+    display: none !important;
+  }
+
+  /* Clean up layout */
+  main {
+    padding: 0 !important;
+    max-width: none !important;
+  }
+
+  .entity-header,
+  .asset-detail {
+    margin: 0;
+  }
+
+  /* Typography for print */
+  h1 {
+    font-size: 18pt;
+    margin-bottom: 6pt;
+    border-bottom: 1pt solid black;
+    padding-bottom: 6pt;
+  }
+
+  h2 {
+    font-size: 12pt;
+    margin-top: 18pt;
+    margin-bottom: 8pt;
+    page-break-after: avoid;
+  }
+
+  /* Keep sections together */
+  section,
+  .meta-grid,
+  .data-insights,
+  table {
+    page-break-inside: avoid;
+  }
+
+  /* Tables */
+  table {
+    font-size: 9pt;
+    border-collapse: collapse;
+    width: 100%;
+  }
+
+  th,
+  td {
+    border: 0.5pt solid #999;
+    padding: 4pt 6pt;
+  }
+
+  th {
+    background: #f0f0f0 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Links */
+  a {
+    color: black;
+    text-decoration: none;
+  }
+
+  a[href]::after {
+    content: none; /* Don't show URLs inline */
+  }
+
+  /* Meta grid */
+  .meta-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12pt;
+    border: 0.5pt solid #ccc;
+    padding: 12pt;
+    margin: 12pt 0;
+  }
+
+  /* Data insights */
+  .data-insights {
+    border: 0.5pt solid black;
+    padding: 10pt;
+    margin: 12pt 0;
+    background: #f9f9f9 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Maps: show placeholder */
+  .portfolio-map,
+  .asset-map {
+    height: 150pt !important;
+    border: 0.5pt solid #ccc;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .portfolio-map::after,
+  .asset-map::after {
+    content: '[Map - see digital version]';
+    color: #999;
+    font-style: italic;
+    font-size: 9pt;
+  }
+
+  .map {
+    display: none;
+  }
+
+  /* Footer with print date */
+  body::after {
+    content: 'GEM Viz Report — Printed ' attr(data-print-date);
+    position: fixed;
+    bottom: 0;
+    right: 0;
+    font-size: 8pt;
+    color: #666;
+  }
+
+  /* Ownership chain */
+  .ultimate-parent-chain {
+    border: 0.5pt solid #ccc;
+    padding: 8pt;
+    margin: 8pt 0;
+    background: #fafafa !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Tracker/status icons - ensure visibility */
+  .tracker-icon,
+  .status-icon {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Capacity bar */
+  .capacity-bar {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

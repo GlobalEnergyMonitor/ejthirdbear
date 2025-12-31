@@ -1,12 +1,20 @@
 <script>
+  import { onMount } from 'svelte';
   import '../app.css';
   import SiteNav from '$lib/components/SiteNav.svelte';
   import { link } from '$lib/links';
+  import { initKeyboardNav } from '$lib/keyboard-nav';
 
   // Build info injected by Vite at build time
   const buildTime = __BUILD_TIME__;
   const buildHash = __BUILD_HASH__;
   const appVersion = __APP_VERSION__;
+
+  // Initialize keyboard navigation
+  onMount(() => {
+    const cleanup = initKeyboardNav();
+    return cleanup;
+  });
 </script>
 
 <svelte:head>

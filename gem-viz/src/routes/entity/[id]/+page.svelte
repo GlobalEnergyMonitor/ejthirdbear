@@ -29,6 +29,8 @@
   import AddToCartButton from '$lib/components/AddToCartButton.svelte';
   import PortfolioMap from '$lib/components/PortfolioMap.svelte';
   import CrossTrackerBadge from '$lib/components/CrossTrackerBadge.svelte';
+  import DataInsights from '$lib/components/DataInsights.svelte';
+  import { detectEntityAnomalies } from '$lib/anomaly-detection';
 
   // --- PROPS (from +page.server.js) ---
   let { data } = $props();
@@ -123,6 +125,15 @@
 
   // Tracker diversity (for cross-tracker badge)
   const entityTrackers = $derived(entity?.trackers || []);
+
+  // Detect data anomalies
+  const anomalies = $derived(
+    detectEntityAnomalies({
+      entity,
+      assets: portfolio?.assets || [],
+      stats,
+    })
+  );
 
   // --- DATA FETCHING (client-side for dev mode) ---
   onMount(async () => {
@@ -260,6 +271,11 @@
           </div>
         {/if}
       </div>
+
+      <!-- Data Insights (automatic anomaly detection) -->
+      {#if anomalies.length > 0}
+        <DataInsights {anomalies} />
+      {/if}
 
       <!-- -----------------------------------------------------------------------
            Geographic Footprint

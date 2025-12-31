@@ -27,6 +27,8 @@
   import TrackerIcon from '$lib/components/TrackerIcon.svelte';
   import AddToCartButton from '$lib/components/AddToCartButton.svelte';
   import UltimateParentChain from '$lib/components/UltimateParentChain.svelte';
+  import DataInsights from '$lib/components/DataInsights.svelte';
+  import { detectAssetAnomalies } from '$lib/anomaly-detection';
 
   // --- PROPS (from +page.server.js) ---
   let { data } = $props();
@@ -65,6 +67,11 @@
 
   // Extract ownership chain (ultimate parent → asset)
   const ownershipChain = $derived(extractOwnershipChainWithIds(owners));
+
+  // Detect data anomalies
+  const anomalies = $derived(
+    detectAssetAnomalies({ owners, asset, ownershipChain })
+  );
 
   // Status color for header styling
   const statusColor = $derived(colorByStatus.get(asset[statusCol]?.toLowerCase?.()) || colors.grey);
@@ -241,6 +248,11 @@
           </div>
         {/if}
       </div>
+
+      <!-- Data Insights (automatic anomaly detection) -->
+      {#if anomalies.length > 0}
+        <DataInsights {anomalies} />
+      {/if}
 
       <!-- Owners Table -->
       <section class="owners-section">
