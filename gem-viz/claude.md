@@ -1,6 +1,6 @@
 # GEM Viz Development Status
 
-Last updated: 2025-12-12
+Last updated: 2025-12-31
 
 ## Current Status: Production Ready ✅
 
@@ -9,6 +9,15 @@ Last updated: 2025-12-12
 **Live URL:** https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.1.11/index.html
 
 ### Changes This Session
+
+**1. Compose UI + Live Results**
+- Composer now renders a two-column layout with the shared DataTable component
+- Filters update results and URL in real time, with schema-aware SQL to avoid DuckDB binder errors
+
+**2. Share Cards (OG)**
+- Added OG/Twitter meta tags for asset + entity pages
+- Build-time SVG generator writes academic, gridded share cards into `build/og`
+- Build pipeline now runs the OG generator after `vite build`
 
 **1. DO Spaces URL Fix**
 - Changed `trailingSlash` to `'always'` → generates `/entity/E123/index.html`
