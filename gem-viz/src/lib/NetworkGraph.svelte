@@ -587,12 +587,7 @@
             onHover: ({ object }) => {
               handleHover(object);
             },
-            onClick: ({ object }) => {
-              if (object) {
-                const isAsset = object.id.startsWith('G');
-                goto(isAsset ? assetLink(object.id) : entityLink(object.id));
-              }
-            },
+            onClick: ({ object }) => handleNodeClick(object),
             autoHighlight: true,
             highlightColor: [255, 220, 0, 120],
             getColor: (d) => {
@@ -651,13 +646,7 @@
           onHover: ({ object }) => {
             handleHover(object);
           },
-          onClick: ({ object }) => {
-            if (object) {
-              // Assets start with G, entities with E
-              const isAsset = object.id.startsWith('G');
-              goto(isAsset ? assetLink(object.id) : entityLink(object.id));
-            }
-          },
+          onClick: ({ object }) => handleNodeClick(object),
           autoHighlight: true,
           highlightColor: [255, 220, 0, 255],
           updateTriggers: {
@@ -695,6 +684,13 @@
       hoverFrame = null;
       updateLayers();
     });
+  }
+
+  function handleNodeClick(object) {
+    const nodeId = typeof object?.id === 'string' ? object.id : null;
+    if (!nodeId) return;
+    const isAsset = nodeId.startsWith('G');
+    goto(isAsset ? assetLink(nodeId) : entityLink(nodeId));
   }
 
   function scheduleAutoRotateResume() {
@@ -875,6 +871,7 @@
       views: config.use3D ? orbitView : orthoView,
       initialViewState,
       onViewStateChange: handleViewStateChange,
+      onClick: ({ object }) => handleNodeClick(object),
       layers: [],
       getTooltip: ({ object }) => {
         if (!object) return null;

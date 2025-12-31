@@ -18,6 +18,7 @@
 
   // Formatting
   import { formatCount, formatCapacity } from '$lib/format';
+  import { colors, colorByTracker, regroupStatus } from '$lib/ownership-theme';
 
   // Data fetching - dynamic import to avoid SSR issues
   /** @type {typeof import('$lib/component-data/schema').fetchOwnerPortfolio} */
@@ -78,6 +79,26 @@
     })).sort((a, b) => b.mw - a.mw);
   });
 
+  const assetColorMode = $derived(() => {
+    const trackers = new Set((portfolio?.assets || []).map((a) => a.tracker).filter(Boolean));
+    return trackers.size > 1 ? 'tracker' : 'status';
+  });
+
+  const assetStatusColors = {
+    proposed: colors.purple,
+    operating: '#4A57A8',
+    retired: colors.midnightPurple,
+    cancelled: colors.grey,
+  };
+
+  function getAssetListColor(asset) {
+    if (assetColorMode === 'tracker') {
+      return colorByTracker.get(asset.tracker) || colors.grey;
+    }
+    const status = regroupStatus(asset.status || asset.Status);
+    return assetStatusColors[status] || colors.grey;
+  }
+
   // -------------------------------------------------------------------------
   // Subsidiary count (how many intermediaries own assets for this entity)
   // Extracted from ownerExplorerData if available
@@ -137,13 +158,37 @@
     selectedStatus = selectedStatus === status ? null : status;
   }
 
+  const BRAILLE_DOTS = [1, 2, 4, 8, 16, 32, 64, 128];
+  const BRAILLE_BASE = 0x2800;
+  const DOTS_PER_CELL = 8;
+  const DOT_MW = 10;
+  const MAX_BRAILLE_CELLS = 24;
+
+  function capacityBraille(mw) {
+    const dots = Math.max(0, Math.floor((Number(mw) || 0) / DOT_MW));
+    if (!dots) return '';
+    const cells = Math.min(MAX_BRAILLE_CELLS, Math.ceil(dots / DOTS_PER_CELL));
+    let out = '';
+    for (let i = 0; i < cells; i++) {
+      const remaining = dots - i * DOTS_PER_CELL;
+      const count = Math.max(0, Math.min(DOTS_PER_CELL, remaining));
+      let mask = 0;
+      for (let d = 0; d < count; d++) mask |= BRAILLE_DOTS[d];
+      out += String.fromCharCode(BRAILLE_BASE + mask);
+    }
+    if (dots > cells * DOTS_PER_CELL) out += '+';
+    return out;
+  }
+
   // Stats helpers
   const totalAssets = $derived(stats?.total_assets ?? portfolio?.assets?.length ?? 0);
   const totalCapacity = $derived(stats?.total_capacity_mw || 0);
   const countryCount = $derived(stats?.countries || 0);
 
   // Tracker diversity (for cross-tracker badge) - defined before OG description that uses it
-  const entityTrackers = $derived(entity?.trackers || []);
+  const entityTrackers = $derived.by(() =>
+    trackerBreakdown.map((t) => t.tracker).filter(Boolean)
+  );
 
   const siteUrl = PUBLIC_SITE_URL ? PUBLIC_SITE_URL.replace(/\/$/, '') : '';
   const ogTitle = $derived(entityName || entityId || 'Entity');
@@ -277,7 +322,7 @@
             />
           </div>
         </div>
-        {#if portfolio && entityTrackers.length > 1}
+        {#if portfolio && entityTrackers.length > 0}
           <div class="header-flower">
             <OwnershipFlower {portfolio} size="medium" showTitle={false} />
           </div>
@@ -446,16 +491,35 @@
           </h2>
           <div class="asset-list">
             {#each summaryAssets as asset}
-              <div class="asset-card">
+              <div class="asset-card" class:is-retired={regroupStatus(asset.status) === 'retired'}>
                 <div class="asset-header">
-                  {#if asset.tracker}<TrackerIcon tracker={asset.tracker} size={10} />{/if}
+                  <div class="asset-icon" style="--asset-color: {getAssetListColor(asset)}">
+                    <span class="asset-dot" aria-hidden="true"></span>
+                    {#if asset.status}
+                      {@const statusGroup = regroupStatus(asset.status)}
+                      {#if statusGroup !== 'operating'}
+                        <span class="asset-status">
+                          <StatusIcon status={asset.status} size={10} />
+                        </span>
+                      {/if}
+                    {/if}
+                  </div>
                   <a href={assetLink(asset.id)} class="asset-link">{asset.name || asset.id}</a>
-                  {#if asset.status}<StatusIcon status={asset.status} size={10} />{/if}
                 </div>
                 <div class="asset-meta">
                   {#if asset.status}<span class="chip">{asset.status}</span>{/if}
-                  {#if asset.capacityMw}<span class="chip">{formatCapacity(asset.capacityMw)}</span
-                    >{/if}
+                  {#if asset.capacityMw}
+                    <span class="chip capacity-chip">
+                      {formatCapacity(asset.capacityMw)}
+                      <span
+                        class="braille-chart"
+                        title="{Math.floor(asset.capacityMw / 10)} dots (10 MW each)"
+                        aria-label="{formatCapacity(asset.capacityMw)}"
+                      >
+                        {capacityBraille(asset.capacityMw)}
+                      </span>
+                    </span>
+                  {/if}
                 </div>
               </div>
             {/each}
@@ -810,6 +874,43 @@
     background: transparent;
     border: none;
     font-family: system-ui, sans-serif;
+  }
+  .asset-card.is-retired {
+    opacity: 0.8;
+  }
+  .asset-icon {
+    position: relative;
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+  }
+  .asset-dot {
+    position: absolute;
+    inset: 0;
+    border-radius: 999px;
+    background: var(--asset-color, #bbb);
+    border: 1px solid rgba(0, 0, 0, 0.35);
+  }
+  .asset-status {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: #fff;
+    border-radius: 999px;
+    padding: 1px;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2);
+  }
+  .capacity-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .braille-chart {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+      'Courier New', monospace;
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: #444;
   }
 
   .map-network-grid {

@@ -331,6 +331,19 @@
           parameters: { depthTest: true },
           updateTriggers: { getColor: [hoveredNode?.id] },
         }),
+        new ScatterplotLayer({
+          id: 'target-glow',
+          data: nodes.filter((n) => n.isTarget),
+          getPosition: getPos,
+          radiusUnits: 'pixels',
+          getRadius: () => 22 * nodeScale,
+          getFillColor: () => [255, 140, 90, 120],
+          stroked: false,
+          radiusMinPixels: 12,
+          radiusMaxPixels: 36,
+          pickable: false,
+          parameters: { depthTest: false },
+        }),
         new IconLayer({
           id: 'flower-nodes',
           data: flowerNodes,
@@ -349,11 +362,11 @@
           },
           sizeUnits: 'pixels',
           getSize: (d) => {
-            const baseSize = d.isTarget ? 16 : Math.max(6, Math.log2(d.connections + 1) * 3.2);
+            const baseSize = d.isTarget ? 18 : Math.max(6, Math.log2(d.connections + 1) * 3.2);
             return baseSize * nodeScale;
           },
           sizeMinPixels: 5,
-          sizeMaxPixels: 28,
+          sizeMaxPixels: 32,
           billboard: true,
           pickable: true,
           parameters: { depthTest: false },
@@ -368,7 +381,8 @@
           highlightColor: [255, 220, 0, 120],
           getColor: (d) => {
             const isVisible = !visibleNodeIds || visibleNodeIds.has(d.id);
-            return [255, 255, 255, isVisible ? 255 : 20];
+            if (d.isTarget) return [255, 255, 255, isVisible ? 255 : 80];
+            return [255, 255, 255, isVisible ? 140 : 20];
           },
           updateTriggers: {
             getSize: [nodeScale],
