@@ -12,7 +12,7 @@
   import { entityLink } from '$lib/links';
   import { colors, colorByStatus } from '$lib/ownership-theme';
   import { getTables } from '$lib/component-data/schema';
-  import { parseOwnershipPaths } from '$lib/component-data/ownership-parser';
+  import { parseOwnershipPaths, extractOwnershipChainWithIds } from '$lib/component-data/ownership-parser';
   import { SCHEMA_SQL, ASSET_SQL, escapeValue } from '$lib/component-data/sql-helpers';
   import { findIdColumn, findUnitIdColumn, extractAssetName } from '$lib/component-data/id-helpers';
 
@@ -26,6 +26,7 @@
   import StatusIcon from '$lib/components/StatusIcon.svelte';
   import TrackerIcon from '$lib/components/TrackerIcon.svelte';
   import AddToCartButton from '$lib/components/AddToCartButton.svelte';
+  import UltimateParentChain from '$lib/components/UltimateParentChain.svelte';
 
   // --- PROPS (from +page.server.js) ---
   let { data } = $props();
@@ -61,6 +62,9 @@
     const parsed = parseOwnershipPaths(owners, assetId, assetName);
     return { ...parsed, nodeMap: new Map(parsed.nodes.map((n) => [n.id, n])) };
   });
+
+  // Extract ownership chain (ultimate parent → asset)
+  const ownershipChain = $derived(extractOwnershipChainWithIds(owners));
 
   // Status color for header styling
   const statusColor = $derived(colorByStatus.get(asset[statusCol]?.toLowerCase?.()) || colors.grey);
@@ -169,6 +173,18 @@
           metadata={{ country: asset[countryCol], status: asset[statusCol] }}
         />
       </div>
+
+      <!-- Ultimate Parent Chain -->
+      {#if ownershipChain.length > 1}
+        <div class="ownership-chain-wrapper">
+          <UltimateParentChain
+            chain={ownershipChain}
+            {assetId}
+            {assetName}
+            showPercentages={true}
+          />
+        </div>
+      {/if}
 
       <!-- Meta Grid -->
       <div class="meta-grid">
@@ -425,6 +441,12 @@
   }
   .page-actions {
     margin-bottom: 20px;
+  }
+  .ownership-chain-wrapper {
+    margin: 16px 0 24px 0;
+    padding: 12px 16px;
+    background: #fafafa;
+    border-left: 3px solid #333;
   }
   .section-subtitle {
     font-size: 12px;

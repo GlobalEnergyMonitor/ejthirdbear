@@ -28,6 +28,7 @@
   import ConnectionFinder from '$lib/widgets/ConnectionFinder.svelte';
   import AddToCartButton from '$lib/components/AddToCartButton.svelte';
   import PortfolioMap from '$lib/components/PortfolioMap.svelte';
+  import CrossTrackerBadge from '$lib/components/CrossTrackerBadge.svelte';
 
   // --- PROPS (from +page.server.js) ---
   let { data } = $props();
@@ -120,6 +121,9 @@
   const totalCapacity = $derived(stats?.total_capacity_mw || 0);
   const countryCount = $derived(stats?.countries || 0);
 
+  // Tracker diversity (for cross-tracker badge)
+  const entityTrackers = $derived(entity?.trackers || []);
+
   // --- DATA FETCHING (client-side for dev mode) ---
   onMount(async () => {
     const paramsId = $page.params?.id;
@@ -198,6 +202,11 @@
               {#if subsidiaryCount > 0}· via {subsidiaryCount} {subsidiaryCount === 1 ? 'subsidiary' : 'subsidiaries'}{/if}
             {/if}
           </p>
+          {#if entityTrackers.length >= 2}
+            <div class="cross-tracker-wrapper">
+              <CrossTrackerBadge trackers={entityTrackers} expanded={false} />
+            </div>
+          {/if}
           <div class="page-actions">
             <AddToCartButton
               id={entityId}
@@ -433,6 +442,9 @@
     color: #666;
     margin: 0;
     font-family: system-ui, sans-serif;
+  }
+  .cross-tracker-wrapper {
+    margin: 12px 0;
   }
   .page-actions {
     margin-top: 12px;
