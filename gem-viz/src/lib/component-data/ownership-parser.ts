@@ -26,7 +26,7 @@
  * ----------
  * - OwnershipHierarchy.svelte
  * - MermaidOwnership.svelte
- * - OwnershipExplorerD3.svelte
+ * - AssetScreener.svelte
  * - asset/[id]/+page.svelte
  * - schema.ts (fetchOwnershipChain)
  *

@@ -21,7 +21,6 @@
   let fetchOwnerStats;
 
   // Components
-  // import OwnershipExplorerD3 from '$lib/components/OwnershipExplorerD3.svelte'; // Replaced with AssetScreener
   import OwnershipFlower from '$lib/components/OwnershipFlower.svelte';
   import AssetScreener from '$lib/components/AssetScreener.svelte';
   import TrackerIcon from '$lib/components/TrackerIcon.svelte';
@@ -263,13 +262,6 @@
           </div>
         </section>
       {/if}
-
-      <!-- 3D Network Explorer - COMMENTED OUT: Using AssetScreener instead
-      <section class="ownership-explorer">
-        <h2>Owner Explorer (3D Network)</h2>
-        <OwnershipExplorerD3 ownerEntityId={entityId} prebakedData={data?.ownerExplorerData} />
-      </section>
-      -->
 
       <!-- Asset Screener -->
       <section class="asset-screener-section">

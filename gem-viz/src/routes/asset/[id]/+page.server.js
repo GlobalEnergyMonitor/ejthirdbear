@@ -345,7 +345,7 @@ export async function load({ params }) {
       const locationId = firstRecord['GEM location ID'];
       const ownerName = firstRecord['Parent'] || firstRecord['Immediate Project Owner'];
 
-      // Pre-bake owner portfolio data for OwnershipExplorerD3
+      // Pre-bake owner portfolio data for AssetScreener
       // PERF: Cap assets aggressively for asset pages to reduce build size
       // Entity pages have their own larger limits - asset pages just need a summary view
       const MAX_ASSETS_PER_PAGE = 12;       // Down from 50 - just show top assets
@@ -409,7 +409,7 @@ export async function load({ params }) {
             .sort((a, b) => (b.capacityMw || 0) - (a.capacityMw || 0))
             .slice(0, MAX_ASSETS_PER_SUBSIDIARY);
 
-          // Convert to the format OwnershipExplorerD3 expects (with capped subsidiary assets)
+          // Convert to the format AssetScreener expects (with capped subsidiary assets)
           const subsidiariesMatched = Object.entries(subsidiaries).map(([subId, data]) => [
             subId,
             data.assets

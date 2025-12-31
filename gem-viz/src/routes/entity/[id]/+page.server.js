@@ -258,7 +258,7 @@ export async function load({ params }) {
     const entity = ENTITY_CACHE.entities.get(params.id);
 
     if (entity) {
-      // Build full portfolio in the format OwnershipExplorerD3 expects
+      // Build full portfolio in the format AssetScreener expects
       // Convert from serialized format to the structure the component needs
       const portfolioData = entity.portfolioData || {
         assets: [],

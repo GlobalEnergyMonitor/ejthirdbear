@@ -21,7 +21,6 @@
   import OwnershipPie from '$lib/components/OwnershipPie.svelte';
   import MermaidOwnership from '$lib/components/MermaidOwnership.svelte';
   import OwnershipHierarchy from '$lib/components/OwnershipHierarchy.svelte';
-  // import OwnershipExplorerD3 from '$lib/components/OwnershipExplorerD3.svelte'; // Replaced with AssetScreener
   import AssetScreener from '$lib/components/AssetScreener.svelte';
   import RelationshipNetwork from '$lib/components/RelationshipNetwork.svelte';
   import StatusIcon from '$lib/components/StatusIcon.svelte';
@@ -62,11 +61,6 @@
     const parsed = parseOwnershipPaths(owners, assetId, assetName);
     return { ...parsed, nodeMap: new Map(parsed.nodes.map((n) => [n.id, n])) };
   });
-
-  // Primary owner - no longer used after switching to AssetScreener
-  // const primaryOwnerEntityId = $derived(
-  //   ownerEntityIdCol && owners[0]?.[ownerEntityIdCol] ? owners[0][ownerEntityIdCol] : null
-  // );
 
   // Status color for header styling
   const statusColor = $derived(colorByStatus.get(asset[statusCol]?.toLowerCase?.()) || colors.grey);

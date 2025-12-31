@@ -14,6 +14,15 @@
   import { goto } from '$app/navigation';
   import { assetLink, entityLink } from '$lib/links';
   import { colors, colorByTracker, regroupStatus } from '$lib/ownership-theme';
+  import {
+    LAYOUT_PARAMS,
+    SVG_MARGIN,
+    SVG_WIDTH,
+    scaleR,
+    calculateFrequencyTables,
+    arcPath,
+    subsidiaryPath,
+  } from '$lib/component-data/visualization-utils';
   // Dynamic import to avoid SSR issues - schema.ts imports WASM client
   /** @type {typeof import('$lib/component-data/schema').fetchAssetBasics} */
   let fetchAssetBasics;
@@ -120,25 +129,8 @@
    * @typedef {{ id: string, assets: any[], isDirect: boolean, locations: ProcessedLocation[], top?: number, height?: number, bottom?: number, summaryData?: any }} ProcessedGroup
    */
 
-  // Layout parameters (from Observable notebook)
-  const params = {
-    subsidX: 20,
-    subsidiaryMarkHeight: 19,
-    subsidiaryMinHeight: 90,
-    yPadding: 50,
-    assetsX: 500,
-    assetSpacing: 8,
-    assetMarkHeightSingle: 16,
-    assetMarkHeightCombined: 26,
-  };
-
-  // Scale for combined unit radius
-  function scaleR(n) {
-    if (n <= 2) return 0.5;
-    if (n <= 10) return 0.5 + (n - 2) * (0.5 / 8);
-    if (n <= 20) return 1 + (n - 10) * (0.5 / 10);
-    return 1.5;
-  }
+  // Use shared layout parameters
+  const params = LAYOUT_PARAMS;
 
   // Build subsidiary groups with layout
   let subsidiaryGroups = $derived.by(() => {
@@ -228,51 +220,12 @@
     return processedGroups;
   });
 
-  // Calculate frequency tables for mini bar charts
-  function calculateFrequencyTables(units) {
-    const total = units.length;
-    if (total === 0) return { tracker: [], status: [] };
-
-    // Tracker frequency
-    const trackerMap = new Map();
-    units.forEach((u) => {
-      const t = u.tracker || 'Unknown';
-      trackerMap.set(t, (trackerMap.get(t) || 0) + 1);
-    });
-    const trackerData = Array.from(trackerMap.entries())
-      .map(([tracker, count]) => ({ tracker, count, percentage: count / total, xPercentage: 0 }))
-      .sort((a, b) => b.count - a.count);
-    let xTracker = 0;
-    trackerData.forEach((d) => {
-      d.xPercentage = xTracker;
-      xTracker += d.percentage;
-    });
-
-    // Status frequency (grouped)
-    const statusMap = new Map();
-    units.forEach((u) => {
-      const s = regroupStatus(u.status || u.Status);
-      statusMap.set(s, (statusMap.get(s) || 0) + 1);
-    });
-    const statusOrder = ['proposed', 'operating', 'retired', 'cancelled'];
-    const statusData = Array.from(statusMap.entries())
-      .map(([status, count]) => ({ status, count, percentage: count / total, xPercentage: 0 }))
-      .sort((a, b) => statusOrder.indexOf(a.status) - statusOrder.indexOf(b.status));
-    let xStatus = 0;
-    statusData.forEach((d) => {
-      d.xPercentage = xStatus;
-      xStatus += d.percentage;
-    });
-
-    return { tracker: trackerData, status: statusData };
-  }
-
-  // SVG dimensions
+  // SVG dimensions (using shared constants)
   let svgHeight = $derived(
     subsidiaryGroups.length > 0 ? subsidiaryGroups[subsidiaryGroups.length - 1].bottom : 200
   );
-  const svgWidth = 900;
-  const margin = { top: 70, right: 10, bottom: 30, left: 40 };
+  const svgWidth = SVG_WIDTH;
+  const margin = SVG_MARGIN;
 
   // Color legend
   let colLegend = $derived.by(() => {
@@ -316,42 +269,6 @@
       cancelled: colors.grey,
     };
     return statusColorMap[status] || colors.grey;
-  }
-
-  // Generate arc path for ownership percentage pie
-  function arcPath(value, radius) {
-    const pct = (value || 100) / 100;
-    const endAngle = 2 * Math.PI * pct;
-    const largeArc = endAngle > Math.PI ? 1 : 0;
-    const x1 = 0;
-    const y1 = -radius;
-    const x2 = radius * Math.sin(endAngle);
-    const y2 = -radius * Math.cos(endAngle);
-    if (pct >= 1) {
-      return `M 0 ${-radius} A ${radius} ${radius} 0 1 1 0 ${radius} A ${radius} ${radius} 0 1 1 0 ${-radius}`;
-    }
-    return `M 0 0 L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2} Z`;
-  }
-
-  // Subsidiary path from header to subsidiary group
-  function subsidiaryPath(group) {
-    const xS = 0;
-    const yS = group.top;
-    const xE = params.subsidX + params.assetsX - params.assetSpacing * 2;
-    const yE = group.bottom;
-    const radius = params.yPadding;
-    const rC = radius * 0.3;
-
-    return `
-      M ${xS} ${yS - radius}
-      C ${xS} ${yS - radius * 0.2}, ${xS + radius * 0.2} ${yS}, ${xS + radius} ${yS}
-      L ${xE} ${yS}
-      L ${xE} ${yE - rC}
-      A ${rC} ${rC} 0 0 1 ${xE - rC} ${yE}
-      L ${xS + rC} ${yE}
-      A ${rC} ${rC} 0 0 1 ${xS} ${yE - rC}
-      Z
-    `;
   }
 
   // Wrap text into two lines
