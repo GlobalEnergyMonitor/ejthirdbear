@@ -27,6 +27,7 @@
   import StatusIcon from '$lib/components/StatusIcon.svelte';
   import ConnectionFinder from '$lib/widgets/ConnectionFinder.svelte';
   import AddToCartButton from '$lib/components/AddToCartButton.svelte';
+  import PortfolioMap from '$lib/components/PortfolioMap.svelte';
 
   // --- PROPS (from +page.server.js) ---
   let { data } = $props();
@@ -48,6 +49,39 @@
   }
 
   // --- DATA TRANSFORMS ---
+
+  // -------------------------------------------------------------------------
+  // Capacity by tracker (MW distribution, not just counts)
+  // Shows what % of total capacity comes from each tracker type
+  // -------------------------------------------------------------------------
+  const capacityByTracker = $derived.by(() => {
+    const totals = new Map();
+    (portfolio?.assets || []).forEach((a) => {
+      const key = a.tracker || 'Unknown';
+      const mw = Number(a.capacityMw) || 0;
+      totals.set(key, (totals.get(key) || 0) + mw);
+    });
+    const total = Array.from(totals.values()).reduce((a, b) => a + b, 0);
+    return Array.from(totals, ([tracker, mw]) => ({
+      tracker,
+      mw,
+      pct: total > 0 ? (mw / total) * 100 : 0,
+    })).sort((a, b) => b.mw - a.mw);
+  });
+
+  // -------------------------------------------------------------------------
+  // Subsidiary count (how many intermediaries own assets for this entity)
+  // Extracted from ownerExplorerData if available
+  // -------------------------------------------------------------------------
+  const subsidiaryCount = $derived.by(() => {
+    const subs = data?.ownerExplorerData?.subsidiariesMatched;
+    if (!subs) return 0;
+    // Handle both Map and Array formats
+    if (subs instanceof Map) return subs.size;
+    if (Array.isArray(subs)) return subs.length;
+    if (typeof subs === 'object') return Object.keys(subs).length;
+    return 0;
+  });
 
   // Tracker breakdown: count assets by tracker type
   const trackerBreakdown = $derived.by(() => {
@@ -161,6 +195,7 @@
               {totalAssets.toLocaleString()} assets
               {#if totalCapacity}· {Number(totalCapacity).toLocaleString()} MW{/if}
               {#if countryCount}· {countryCount} {countryCount === 1 ? 'country' : 'countries'}{/if}
+              {#if subsidiaryCount > 0}· via {subsidiaryCount} {subsidiaryCount === 1 ? 'subsidiary' : 'subsidiaries'}{/if}
             {/if}
           </p>
           <div class="page-actions">
@@ -179,8 +214,22 @@
         {/if}
       </div>
 
+      <!-- -----------------------------------------------------------------------
+           Jump Links (Table of Contents)
+           Quick navigation to main sections on the page
+           ----------------------------------------------------------------------- -->
+      <nav class="jump-links" aria-label="Page sections">
+        <a href="#overview">Overview</a>
+        {#if portfolio?.assets?.length > 0}<a href="#map">Map</a>{/if}
+        <a href="#connections">Connections</a>
+        {#if trackerBreakdown.length > 0}<a href="#trackers">Trackers</a>{/if}
+        {#if capacityByTracker.length > 1}<a href="#capacity">Capacity</a>{/if}
+        {#if summaryAssets.length > 0}<a href="#assets">Assets</a>{/if}
+        <a href="#portfolio">Portfolio</a>
+      </nav>
+
       <!-- Meta Grid -->
-      <div class="meta-grid">
+      <div id="overview" class="meta-grid">
         <div class="meta-item">
           <span class="label">GEM Entity ID</span>
           <span class="value"><code>{entityId}</code></span>
@@ -203,14 +252,25 @@
         {/if}
       </div>
 
+      <!-- -----------------------------------------------------------------------
+           Geographic Footprint
+           Mini-map showing all asset locations for this entity
+           ----------------------------------------------------------------------- -->
+      {#if portfolio?.assets?.length > 0}
+        <section id="map" class="map-section">
+          <h2>Geographic Footprint</h2>
+          <PortfolioMap assets={portfolio.assets} entityName={entityName} height={280} />
+        </section>
+      {/if}
+
       <!-- Connected Entities (Co-Owners) -->
-      <section class="connection-section">
+      <section id="connections" class="connection-section">
         <ConnectionFinder {entityId} {entityName} title="Connected Entities (Co-Owners)" />
       </section>
 
       <!-- Tracker Mix -->
       {#if trackerBreakdown.length > 0}
-        <section class="breakdown-section">
+        <section id="trackers" class="breakdown-section">
           <h2>Tracker Mix</h2>
           <ul class="tracker-list">
             {#each trackerBreakdown as row}
@@ -239,9 +299,44 @@
         </section>
       {/if}
 
+      <!-- -----------------------------------------------------------------------
+           Capacity Distribution
+           Shows MW breakdown by tracker type as a stacked bar
+           More informative than asset counts alone
+           ----------------------------------------------------------------------- -->
+      {#if capacityByTracker.length > 1 && totalCapacity > 0}
+        <section id="capacity" class="breakdown-section">
+          <h2>Capacity Distribution</h2>
+          <p class="section-subtitle">{Number(totalCapacity).toLocaleString()} MW total</p>
+          <div class="capacity-bar">
+            {#each capacityByTracker as item}
+              <div
+                class="capacity-segment"
+                style="width: {item.pct}%"
+                title="{item.tracker}: {Number(item.mw).toLocaleString()} MW ({item.pct.toFixed(1)}%)"
+              >
+                {#if item.pct > 15}
+                  <span class="segment-label">{item.pct.toFixed(0)}%</span>
+                {/if}
+              </div>
+            {/each}
+          </div>
+          <ul class="capacity-legend">
+            {#each capacityByTracker as item}
+              <li>
+                <TrackerIcon tracker={item.tracker} size={12} />
+                <span class="tracker-name">{item.tracker}</span>
+                <span class="tracker-mw">{Number(item.mw).toLocaleString()} MW</span>
+                <span class="tracker-pct">({item.pct.toFixed(1)}%)</span>
+              </li>
+            {/each}
+          </ul>
+        </section>
+      {/if}
+
       <!-- Representative Assets -->
       {#if summaryAssets.length > 0}
-        <section class="properties">
+        <section id="assets" class="properties">
           <h2>Representative Assets</h2>
           <div class="asset-list">
             {#each summaryAssets as asset}
@@ -264,7 +359,7 @@
       {/if}
 
       <!-- Asset Screener -->
-      <section class="asset-screener-section">
+      <section id="portfolio" class="asset-screener-section">
         <h2>Asset Portfolio</h2>
         <p class="section-subtitle">
           Full portfolio breakdown with subsidiary paths, mini bar charts, and status icons
@@ -341,6 +436,91 @@
   }
   .page-actions {
     margin-top: 12px;
+  }
+
+  /* -------------------------------------------------------------------------
+     Jump Links (Table of Contents)
+     Sticky mini-nav for quick section access
+     ------------------------------------------------------------------------- */
+  .jump-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 20px;
+    padding: 12px 0;
+    border-bottom: 1px solid #eee;
+  }
+  .jump-links a {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #666;
+    text-decoration: none;
+    padding: 4px 8px;
+    border: 1px solid #ddd;
+    transition: all 0.15s;
+  }
+  .jump-links a:hover {
+    color: #000;
+    border-color: #000;
+  }
+
+  /* -------------------------------------------------------------------------
+     Capacity Distribution Bar
+     Stacked horizontal bar showing MW breakdown by tracker
+     ------------------------------------------------------------------------- */
+  .capacity-bar {
+    display: flex;
+    height: 24px;
+    background: #f0f0f0;
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+  .capacity-segment {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #333;
+    color: white;
+    font-size: 10px;
+    font-weight: bold;
+    min-width: 2px;
+    transition: opacity 0.15s;
+  }
+  .capacity-segment:nth-child(1) { background: #1a1a1a; }
+  .capacity-segment:nth-child(2) { background: #4a4a4a; }
+  .capacity-segment:nth-child(3) { background: #666; }
+  .capacity-segment:nth-child(4) { background: #888; }
+  .capacity-segment:nth-child(5) { background: #aaa; }
+  .capacity-segment:hover {
+    opacity: 0.8;
+  }
+  .segment-label {
+    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  }
+  .capacity-legend {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .capacity-legend li {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-family: system-ui, sans-serif;
+  }
+  .tracker-name {
+    font-weight: 500;
+  }
+  .tracker-mw {
+    color: #000;
+  }
+  .tracker-pct {
+    color: #888;
   }
 
   /* Section Headings */
@@ -474,6 +654,12 @@
   }
 
   /* Sections */
+  .map-section {
+    margin: 30px 0;
+  }
+  .map-section h2 {
+    margin-top: 0;
+  }
   .connection-section {
     margin: 30px 0;
   }
