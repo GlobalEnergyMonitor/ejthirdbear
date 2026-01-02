@@ -1,5 +1,7 @@
 <script>
+  import { tick } from 'svelte';
   import { formatCount } from '$lib/format';
+  import { staggerIn, timing, shouldAnimate } from '$lib/animations';
 
   /**
    * @type {{
@@ -42,6 +44,35 @@
   let showColumnMenu = $state(false);
   let activeFilters = $state([]);
   let filterLogic = $state('AND'); // AND or OR
+
+  // Animation state
+  /** @type {HTMLElement | null} */
+  let tbodyEl = $state(null);
+  let prevPage = $state(1);
+
+  // Animate rows when page changes
+  async function animateRows() {
+    if (!shouldAnimate()) return;
+    await tick();
+    if (tbodyEl) {
+      const rows = tbodyEl.querySelectorAll('tr');
+      if (rows.length > 0) {
+        staggerIn(Array.from(rows), {
+          staggerDelay: timing.staggerFast,
+          duration: timing.quick,
+          distance: timing.distanceSubtle,
+        });
+      }
+    }
+  }
+
+  // Trigger animation on pagination
+  $effect(() => {
+    if (currentPage !== prevPage) {
+      prevPage = currentPage;
+      animateRows();
+    }
+  });
 
   // Reset page when filters change
   $effect(() => {
@@ -448,7 +479,7 @@
           {/each}
         </tr>
       </thead>
-      <tbody>
+      <tbody bind:this={tbodyEl}>
         {#each paginatedData as row, i}
           <tr
             class:striped={striped && i % 2 === 1}
@@ -772,10 +803,18 @@
   .sort-indicator {
     font-size: 8px;
     opacity: 0.6;
+    transition:
+      transform 150ms ease,
+      opacity 100ms ease;
+  }
+
+  th:hover .sort-indicator {
+    opacity: 0.8;
   }
 
   th.sorted .sort-indicator {
     opacity: 1;
+    transform: scale(1.1);
   }
 
   .checkbox-col {
@@ -789,16 +828,23 @@
     vertical-align: middle;
   }
 
+  tbody tr {
+    transition:
+      background 80ms ease,
+      box-shadow 80ms ease;
+  }
+
   tbody tr:hover {
-    background: transparent;
+    background: rgba(0, 0, 0, 0.02);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   }
 
   tbody tr.striped {
-    background: transparent;
+    background: rgba(0, 0, 0, 0.015);
   }
 
   tbody tr.striped:hover {
-    background: transparent;
+    background: rgba(0, 0, 0, 0.04);
   }
 
   tbody tr.selected {
@@ -811,6 +857,10 @@
 
   tbody tr.clickable {
     cursor: pointer;
+  }
+
+  tbody tr.clickable:active {
+    transform: scale(0.995);
   }
 
   .null-value {

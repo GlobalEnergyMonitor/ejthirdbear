@@ -1,15 +1,35 @@
 <script>
   import { onMount } from 'svelte';
+  import { onNavigate } from '$app/navigation';
   import '../app.css';
   import SiteNav from '$lib/components/SiteNav.svelte';
   import CommandPalette from '$lib/components/CommandPalette.svelte';
   import { link } from '$lib/links';
   import { initKeyboardNav } from '$lib/keyboard-nav';
+  import { timing, shouldAnimate } from '$lib/animations';
 
   // Build info injected by Vite at build time
   const buildTime = __BUILD_TIME__;
   const buildHash = __BUILD_HASH__;
   const appVersion = __APP_VERSION__;
+
+  // Page transition state
+  let navigating = $state(false);
+
+  // Handle page transitions
+  onNavigate((navigation) => {
+    // Only animate for actual page changes, not hash links
+    if (!shouldAnimate()) return;
+    if (navigation.from?.route.id !== navigation.to?.route.id) {
+      navigating = true;
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          navigating = false;
+          resolve();
+        }, timing.quick);
+      });
+    }
+  });
 
   // Initialize keyboard navigation
   onMount(() => {
@@ -27,7 +47,9 @@
 
 <div class="app">
   <SiteNav />
-  <slot />
+  <div class="page-content" class:navigating>
+    <slot />
+  </div>
 
   <footer>
     <div class="footer-content">
@@ -44,6 +66,30 @@
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+  }
+
+  .page-content {
+    flex: 1;
+    opacity: 1;
+    transform: translateY(0);
+    transition:
+      opacity 80ms ease,
+      transform 80ms ease;
+  }
+
+  .page-content.navigating {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .page-content {
+      transition: none;
+    }
+    .page-content.navigating {
+      opacity: 1;
+      transform: none;
+    }
   }
 
   footer {

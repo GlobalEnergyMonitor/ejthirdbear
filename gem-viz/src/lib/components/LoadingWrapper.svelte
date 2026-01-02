@@ -14,23 +14,19 @@
    *   </ul>
    * </LoadingWrapper>
    *
-   * @example With custom messages
-   * <LoadingWrapper
-   *   {loading}
-   *   {error}
-   *   loadingMessage="Fetching data..."
-   *   emptyMessage="No results found"
-   * >
+   * @example With skeleton loading
+   * <LoadingWrapper {loading} {error} skeleton="card">
    *   ...
    * </LoadingWrapper>
    *
-   * @example With query time
-   * <LoadingWrapper {loading} {error} {queryTime}>
+   * @example With multiple skeleton rows
+   * <LoadingWrapper {loading} {error} skeleton="table-row" skeletonCount={5}>
    *   ...
    * </LoadingWrapper>
    */
 
   import { type Snippet } from 'svelte';
+  import Skeleton from './Skeleton.svelte';
 
   let {
     loading = false,
@@ -40,6 +36,8 @@
     errorMessage = null, // Uses error prop if not provided
     emptyMessage = 'No data available',
     queryTime = null,
+    skeleton = null,
+    skeletonCount = 1,
     children,
     loadingSlot = null,
     errorSlot = null,
@@ -52,6 +50,8 @@
     errorMessage?: string | null;
     emptyMessage?: string;
     queryTime?: number | null;
+    skeleton?: 'text' | 'card' | 'table-row' | 'stat' | 'paragraph' | null;
+    skeletonCount?: number;
     children: Snippet;
     loadingSlot?: Snippet | null;
     errorSlot?: Snippet<[string]> | null;
@@ -64,6 +64,12 @@
 {#if loading}
   {#if loadingSlot}
     {@render loadingSlot()}
+  {:else if skeleton}
+    <div class="loading-wrapper-state loading skeleton-container">
+      {#each Array(skeletonCount) as _}
+        <Skeleton variant={skeleton} />
+      {/each}
+    </div>
   {:else}
     <div class="loading-wrapper-state loading">
       <div class="spinner"></div>
@@ -144,5 +150,13 @@
     font-size: 11px;
     color: #999;
     font-family: monospace;
+  }
+
+  .skeleton-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 0;
+    background: none;
   }
 </style>

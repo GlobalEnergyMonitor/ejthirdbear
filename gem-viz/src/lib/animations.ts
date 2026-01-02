@@ -8,6 +8,36 @@
 import { animate, stagger, spring } from 'animejs';
 
 // ---------------------------------------------------------------------------
+// Timing Constants (snappy as hell - 50-200ms max)
+// ---------------------------------------------------------------------------
+export const timing = {
+  // Core durations (in ms)
+  instant: 50, // hover states, micro-feedback
+  quick: 80, // micro-interactions (buttons, toggles)
+  standard: 120, // default animations
+  moderate: 150, // entrance animations
+  slow: 200, // page transitions (still fast)
+
+  // Stagger delays (tight spacing)
+  staggerFast: 15, // dense lists (>20 items)
+  staggerStandard: 25, // normal lists (5-20 items)
+  staggerSlow: 40, // few items, more emphasis (<5)
+
+  // Entrance distances (in px) - smaller for speed
+  distanceSubtle: 6, // cards, small elements
+  distanceStandard: 10, // list items
+  distanceLarge: 16, // panels, modals
+} as const;
+
+/**
+ * Check if animations should run (respects prefers-reduced-motion)
+ */
+export function shouldAnimate(): boolean {
+  if (typeof window === 'undefined') return false;
+  return !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+// ---------------------------------------------------------------------------
 // Spring Presets
 // ---------------------------------------------------------------------------
 export const springs = {

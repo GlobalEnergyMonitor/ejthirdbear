@@ -91,18 +91,36 @@
     color: #000;
     text-decoration: none;
     padding: 4px 0;
-    border-bottom: 2px solid transparent;
+    position: relative;
     display: inline-flex;
     align-items: center;
     gap: 4px;
   }
 
-  .nav-links a:hover {
-    border-bottom-color: #999;
+  /* Animated underline */
+  .nav-links a::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background: #999;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 120ms ease-out;
+  }
+
+  .nav-links a:hover::after {
+    transform: scaleX(1);
+  }
+
+  .nav-links a.active::after {
+    background: #000;
+    transform: scaleX(1);
   }
 
   .nav-links a.active {
-    border-bottom-color: #000;
     font-weight: 600;
   }
 
@@ -117,6 +135,21 @@
     color: white;
     font-size: 9px;
     font-weight: bold;
+    animation: badge-pop 300ms ease-out;
+  }
+
+  @keyframes badge-pop {
+    0% {
+      transform: scale(0.6);
+      opacity: 0;
+    }
+    50% {
+      transform: scale(1.15);
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
   }
 
   @media (max-width: 768px) {

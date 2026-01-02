@@ -96,6 +96,16 @@
     padding: 4px 10px;
     background: #f0f0f0;
     border-left: 3px solid #666;
+    transition:
+      box-shadow 100ms ease,
+      transform 100ms ease,
+      background 100ms ease;
+  }
+
+  .cross-tracker-badge:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    transform: translateY(-1px);
+    background: #e8e8e8;
   }
 
   .cross-tracker-badge.conglomerate {

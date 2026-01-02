@@ -94,12 +94,41 @@
 <style>
   .check {
     margin-right: 4px;
+    display: inline-block;
+    animation: check-pop 250ms cubic-bezier(0.34, 1.56, 0.64, 1);
   }
+
+  @keyframes check-pop {
+    0% {
+      transform: scale(0);
+      opacity: 0;
+    }
+    60% {
+      transform: scale(1.3);
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  .btn {
+    transition:
+      background 80ms ease,
+      border-color 80ms ease,
+      transform 80ms ease;
+  }
+
+  .btn:active {
+    transform: scale(0.97);
+  }
+
   .btn.active {
     background: #333;
     color: #fff;
     border-color: #333;
   }
+
   .btn-icon.active {
     background: #333;
     color: #fff;

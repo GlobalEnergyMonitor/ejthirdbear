@@ -7,14 +7,20 @@
 
   // --- IMPORTS ---
   // Core
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import { base } from '$app/paths';
   import { PUBLIC_SITE_URL } from '$env/static/public';
 
+  // Animations
+  import { staggerIn, staggerScaleIn, timing, shouldAnimate } from '$lib/animations';
+
+  // Loading state
+  import Skeleton from '$lib/components/Skeleton.svelte';
+
   // Links
-  import { assetLink, entityLink } from '$lib/links';
+  import { assetLink, entityLink, assetPath } from '$lib/links';
 
   // Formatting
   import { formatCount, formatCapacity } from '$lib/format';
@@ -27,7 +33,6 @@
   let fetchOwnerStats;
 
   // Components
-  import OwnershipFlower from '$lib/components/OwnershipFlower.svelte';
   import AssetScreener from '$lib/components/AssetScreener.svelte';
   import TrackerIcon from '$lib/components/TrackerIcon.svelte';
   import StatusIcon from '$lib/components/StatusIcon.svelte';
@@ -79,7 +84,7 @@
     })).sort((a, b) => b.mw - a.mw);
   });
 
-  const assetColorMode = $derived(() => {
+  const assetColorMode = $derived.by(() => {
     const trackers = new Set((portfolio?.assets || []).map((a) => a.tracker).filter(Boolean));
     return trackers.size > 1 ? 'tracker' : 'status';
   });
@@ -186,9 +191,7 @@
   const countryCount = $derived(stats?.countries || 0);
 
   // Tracker diversity (for cross-tracker badge) - defined before OG description that uses it
-  const entityTrackers = $derived.by(() =>
-    trackerBreakdown.map((t) => t.tracker).filter(Boolean)
-  );
+  const entityTrackers = $derived.by(() => trackerBreakdown.map((t) => t.tracker).filter(Boolean));
 
   const siteUrl = PUBLIC_SITE_URL ? PUBLIC_SITE_URL.replace(/\/$/, '') : '';
   const ogTitle = $derived(entityName || entityId || 'Entity');
@@ -217,6 +220,101 @@
       stats,
     })
   );
+
+  let flowerSrc = $state(assetPath('flowers/default.svg'));
+
+  $effect(() => {
+    flowerSrc = entityId ? assetPath(`flowers/${entityId}.svg`) : assetPath('flowers/default.svg');
+  });
+
+  // --- ANIMATION REFS ---
+  /** @type {HTMLElement | null} */
+  let metaGridEl = $state(null);
+  /** @type {HTMLElement | null} */
+  let trackerListEl = $state(null);
+  /** @type {HTMLElement | null} */
+  let statusListEl = $state(null);
+  /** @type {HTMLElement | null} */
+  let assetListEl = $state(null);
+  /** @type {HTMLElement | null} */
+  let jumpLinksEl = $state(null);
+
+  // Animate page sections on load
+  async function animatePage() {
+    if (!shouldAnimate()) return;
+    await tick();
+
+    // Jump links - quick stagger
+    if (jumpLinksEl) {
+      const links = jumpLinksEl.querySelectorAll('a');
+      if (links.length > 0) {
+        staggerIn(Array.from(links), {
+          staggerDelay: timing.staggerFast,
+          duration: timing.quick,
+          distance: timing.distanceSubtle,
+        });
+      }
+    }
+
+    // Meta grid items - stagger from center
+    if (metaGridEl) {
+      const items = metaGridEl.querySelectorAll('.meta-item');
+      if (items.length > 0) {
+        staggerIn(Array.from(items), {
+          delay: 30,
+          staggerDelay: timing.staggerStandard,
+          duration: timing.moderate,
+          distance: timing.distanceSubtle,
+          from: 'center',
+        });
+      }
+    }
+
+    // Tracker breakdown rows
+    if (trackerListEl) {
+      const rows = trackerListEl.querySelectorAll('.tracker-row');
+      if (rows.length > 0) {
+        staggerIn(Array.from(rows), {
+          delay: 80,
+          staggerDelay: timing.staggerStandard,
+          duration: timing.standard,
+          distance: timing.distanceStandard,
+        });
+      }
+    }
+
+    // Status breakdown rows
+    if (statusListEl) {
+      const rows = statusListEl.querySelectorAll('.status-row');
+      if (rows.length > 0) {
+        staggerIn(Array.from(rows), {
+          delay: 80,
+          staggerDelay: timing.staggerStandard,
+          duration: timing.standard,
+          distance: timing.distanceStandard,
+        });
+      }
+    }
+
+    // Asset cards grid - scale in from center for visual punch
+    if (assetListEl) {
+      const cards = assetListEl.querySelectorAll('.asset-card');
+      if (cards.length > 0) {
+        staggerScaleIn(Array.from(cards), {
+          delay: 120,
+          staggerDelay: timing.staggerFast,
+          duration: timing.moderate,
+        });
+      }
+    }
+  }
+
+  // Trigger animations when data loads
+  $effect(() => {
+    if (!loading && portfolio) {
+      animatePage();
+    }
+  });
 
   // --- DATA FETCHING (client-side for dev mode) ---
   onMount(async () => {
@@ -290,7 +388,22 @@
   </header>
 
   {#if loading}
-    <p class="loading">Loading entity directly from MotherDuck…</p>
+    <div class="loading-skeleton">
+      <div class="skeleton-header">
+        <Skeleton variant="text" width="40%" height="32px" />
+        <Skeleton variant="text" width="60%" height="16px" />
+      </div>
+      <div class="skeleton-meta">
+        {#each Array(4) as _}
+          <Skeleton variant="stat" />
+        {/each}
+      </div>
+      <div class="skeleton-cards">
+        {#each Array(6) as _}
+          <Skeleton variant="card" />
+        {/each}
+      </div>
+    </div>
   {:else if error}
     <p class="loading error">{error}</p>
   {:else}
@@ -324,7 +437,13 @@
         </div>
         {#if portfolio && entityTrackers.length > 0}
           <div class="header-flower">
-            <OwnershipFlower {portfolio} size="medium" showTitle={false} />
+            <img
+              src={flowerSrc}
+              alt="Entity tracker flower"
+              width="120"
+              height="120"
+              onerror={() => (flowerSrc = assetPath('flowers/default.svg'))}
+            />
           </div>
         {/if}
       </div>
@@ -333,7 +452,7 @@
            Jump Links (Table of Contents)
            Quick navigation to main sections on the page
            ----------------------------------------------------------------------- -->
-      <nav class="jump-links" aria-label="Page sections">
+      <nav class="jump-links" aria-label="Page sections" bind:this={jumpLinksEl}>
         <a href="#overview">Overview</a>
         {#if portfolio?.assets?.length > 0}<a href="#map">Map</a>{/if}
         <a href="#network">Network</a>
@@ -345,7 +464,7 @@
       </nav>
 
       <!-- Meta Grid -->
-      <div id="overview" class="meta-grid">
+      <div id="overview" class="meta-grid" bind:this={metaGridEl}>
         <div class="meta-item">
           <span class="label">GEM Entity ID</span>
           <span class="value"><code>{entityId}</code></span>
@@ -406,7 +525,7 @@
       {#if trackerBreakdown.length > 0}
         <section id="trackers" class="breakdown-section">
           <h2>Tracker Mix</h2>
-          <ul class="tracker-list">
+          <ul class="tracker-list" bind:this={trackerListEl}>
             {#each trackerBreakdown as row}
               <li class="tracker-row">
                 <TrackerIcon tracker={row.tracker} size={14} showLabel variant="pill" />
@@ -421,7 +540,7 @@
       {#if statusBreakdown.length > 0}
         <section class="breakdown-section">
           <h2>Status Breakdown</h2>
-          <ul class="status-list">
+          <ul class="status-list" bind:this={statusListEl}>
             {#each statusBreakdown as row}
               <button
                 class="status-row"
@@ -489,7 +608,7 @@
               Representative Assets
             {/if}
           </h2>
-          <div class="asset-list">
+          <div class="asset-list" bind:this={assetListEl}>
             {#each summaryAssets as asset}
               <div class="asset-card" class:is-retired={regroupStatus(asset.status) === 'retired'}>
                 <div class="asset-header">
@@ -499,7 +618,7 @@
                       {@const statusGroup = regroupStatus(asset.status)}
                       {#if statusGroup !== 'operating'}
                         <span class="asset-status">
-                          <StatusIcon status={asset.status} size={10} />
+                          <StatusIcon status={asset.status} size={9} />
                         </span>
                       {/if}
                     {/if}
@@ -514,7 +633,7 @@
                       <span
                         class="braille-chart"
                         title="{Math.floor(asset.capacityMw / 10)} dots (10 MW each)"
-                        aria-label="{formatCapacity(asset.capacityMw)}"
+                        aria-label={formatCapacity(asset.capacityMw)}
                       >
                         {capacityBraille(asset.capacityMw)}
                       </span>
@@ -559,6 +678,28 @@
   }
   .loading.error {
     color: #b10000;
+  }
+
+  /* Skeleton loading layout */
+  .loading-skeleton {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+  }
+  .skeleton-header {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .skeleton-meta {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 20px;
+  }
+  .skeleton-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 12px;
   }
 
   /* Header */
@@ -880,8 +1021,8 @@
   }
   .asset-icon {
     position: relative;
-    width: 14px;
-    height: 14px;
+    width: 12px;
+    height: 12px;
     flex-shrink: 0;
   }
   .asset-dot {
@@ -889,16 +1030,16 @@
     inset: 0;
     border-radius: 999px;
     background: var(--asset-color, #bbb);
-    border: 1px solid rgba(0, 0, 0, 0.35);
+    border: none;
   }
   .asset-status {
     position: absolute;
-    top: -4px;
-    right: -4px;
-    background: #fff;
-    border-radius: 999px;
-    padding: 1px;
-    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2);
+    top: -3px;
+    right: -3px;
+    background: transparent;
+    padding: 0;
+    box-shadow: none;
+    pointer-events: none;
   }
   .capacity-chip {
     display: inline-flex;
@@ -906,8 +1047,9 @@
     gap: 6px;
   }
   .braille-chart {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
-      'Courier New', monospace;
+    font-family:
+      ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
+      monospace;
     font-size: 11px;
     letter-spacing: 1px;
     color: #444;

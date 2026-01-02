@@ -21,7 +21,7 @@
   import { colorByStatus } from '$lib/ownership-theme';
   import TrackerIcon from './TrackerIcon.svelte';
   import MiniFlower from './MiniFlower.svelte';
-  import { staggerIn, modalIn, modalOut } from '$lib/animations';
+  import { staggerIn, modalIn, modalOut, timing, shouldAnimate } from '$lib/animations';
   import { animate } from 'animejs';
   import { widgetQuery, initWidgetDB } from '$lib/widgets/widget-utils';
 
@@ -575,16 +575,16 @@
     if (backdropEl) {
       animate(backdropEl, {
         opacity: [0, 1],
-        duration: 200,
+        duration: timing.standard,
         ease: 'out(2)',
       });
     }
     // Animate palette modal in
     if (paletteEl) {
-      modalIn(paletteEl, { duration: 250 });
+      modalIn(paletteEl, { duration: timing.moderate });
     }
     // Focus input after animation starts
-    setTimeout(() => inputEl?.focus(), 50);
+    setTimeout(() => inputEl?.focus(), 30);
   }
 
   function close() {
@@ -593,15 +593,15 @@
       if (backdropEl) {
         animate(backdropEl, {
           opacity: [1, 0],
-          duration: 150,
+          duration: timing.quick,
           ease: 'in(2)',
         });
       }
-      modalOut(paletteEl, { duration: 150 });
+      modalOut(paletteEl, { duration: timing.quick });
       setTimeout(() => {
         open = false;
         query = '';
-      }, 150);
+      }, timing.quick);
     } else {
       open = false;
       query = '';
@@ -610,11 +610,16 @@
 
   // Animate search results when they appear
   async function animateResults() {
+    if (!shouldAnimate()) return;
     await tick();
     if (resultsEl) {
       const items = resultsEl.querySelectorAll('.result-item-wrapper');
       if (items.length > 0) {
-        staggerIn(Array.from(items), { staggerDelay: 35, duration: 300, distance: 15 });
+        staggerIn(Array.from(items), {
+          staggerDelay: timing.staggerFast,
+          duration: timing.standard,
+          distance: timing.distanceStandard,
+        });
       }
     }
   }

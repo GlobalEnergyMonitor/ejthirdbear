@@ -71,4 +71,26 @@
     margin-left: 4px;
     flex-shrink: 0;
   }
+
+  .status-icon.proposed {
+    animation: gentle-pulse 2.5s ease-in-out infinite;
+  }
+
+  @keyframes gentle-pulse {
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.7;
+      transform: scale(1.1);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .status-icon.proposed {
+      animation: none;
+    }
+  }
 </style>
