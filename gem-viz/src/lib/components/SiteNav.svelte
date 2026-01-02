@@ -26,6 +26,7 @@
   const navLinks = [
     { path: 'index', label: 'Home' },
     { path: 'explore', label: 'Explore' },
+    { path: 'presets', label: 'Presets' },
     { path: 'network', label: 'Network' },
     { path: 'report', label: 'Investigation', showBadge: true },
     { path: 'asset', label: 'Assets' },

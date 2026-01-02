@@ -456,11 +456,11 @@
         <a href="#overview">Overview</a>
         {#if portfolio?.assets?.length > 0}<a href="#map">Map</a>{/if}
         <a href="#network">Network</a>
+        <a href="#portfolio">Portfolio</a>
         <a href="#connections">Connections</a>
         {#if trackerBreakdown.length > 0}<a href="#trackers">Trackers</a>{/if}
         {#if capacityByTracker.length > 1}<a href="#capacity">Capacity</a>{/if}
         {#if summaryAssets.length > 0}<a href="#assets">Assets</a>{/if}
-        <a href="#portfolio">Portfolio</a>
       </nav>
 
       <!-- Meta Grid -->
@@ -515,6 +515,15 @@
           <MiniNetworkGraph {entityId} {entityName} maxHops={2} height={320} />
         </section>
       </div>
+
+      <!-- Asset Screener (Full Portfolio) -->
+      <section id="portfolio" class="asset-screener-section">
+        <h2>Asset Portfolio</h2>
+        <p class="section-subtitle">
+          Full portfolio breakdown with subsidiary paths, mini bar charts, and status icons
+        </p>
+        <AssetScreener prebakedPortfolio={data?.ownerExplorerData} />
+      </section>
 
       <!-- Connected Entities (Co-Owners) -->
       <section id="connections" class="connection-section">
@@ -646,14 +655,6 @@
         </section>
       {/if}
 
-      <!-- Asset Screener -->
-      <section id="portfolio" class="asset-screener-section">
-        <h2>Asset Portfolio</h2>
-        <p class="section-subtitle">
-          Full portfolio breakdown with subsidiary paths, mini bar charts, and status icons
-        </p>
-        <AssetScreener prebakedPortfolio={data?.ownerExplorerData} />
-      </section>
     </article>
   {/if}
 </main>
