@@ -38,6 +38,7 @@ jobs:
         env:
           MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
           PUBLIC_MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+          PUBLIC_SITE_URL: https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz
 
       - name: Get version
         id: version
