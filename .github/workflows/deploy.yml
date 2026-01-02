@@ -36,7 +36,7 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          MOTHERDUCK_TOKEN: $\{{ secrets.MOTHERDUCK_TOKEN }}
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
 
       - name: Get version
         id: version
@@ -45,23 +45,23 @@ jobs:
       - name: Configure AWS CLI for DO Spaces
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: $\{{ secrets.DO_SPACES_ACCESS_KEY }}
-          aws-secret-access-key: $\{{ secrets.DO_SPACES_SECRET_KEY }}
+          aws-access-key-id: ${{ secrets.DO_SPACES_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.DO_SPACES_SECRET_KEY }}
           aws-region: us-east-1
 
       - name: Deploy to Digital Ocean Spaces
         run: |
-          VERSION=$\{{ steps.version.outputs.version }}
+          VERSION=${{ steps.version.outputs.version }}
           echo "Deploying v${VERSION} to DO Spaces..."
-          aws s3 sync build s3://$\{{ env.DO_SPACES_BUCKET }}/gem-viz/v${VERSION}/ \
-            --endpoint-url $\{{ env.DO_SPACES_ENDPOINT }} \
+          aws s3 sync build s3://${DO_SPACES_BUCKET}/gem-viz/v${VERSION}/ \
+            --endpoint-url ${DO_SPACES_ENDPOINT} \
             --acl public-read \
             --cache-control "public, max-age=3600" \
             --delete
 
       - name: Deployment summary
         run: |
-          VERSION=$\{{ steps.version.outputs.version }}
+          VERSION=${{ steps.version.outputs.version }}
           echo "## Deployment Complete" >> $GITHUB_STEP_SUMMARY
           echo "**Version:** v${VERSION}" >> $GITHUB_STEP_SUMMARY
-          echo "**URL:** https://$\{{ env.DO_SPACES_BUCKET }}.$\{{ env.DO_SPACES_REGION }}.digitaloceanspaces.com/gem-viz/v${VERSION}/" >> $GITHUB_STEP_SUMMARY
+          echo "**URL:** https://${DO_SPACES_BUCKET}.${DO_SPACES_REGION}.digitaloceanspaces.com/gem-viz/v${VERSION}/" >> $GITHUB_STEP_SUMMARY
