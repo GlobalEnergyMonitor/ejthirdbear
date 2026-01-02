@@ -37,6 +37,7 @@ jobs:
         run: npm run build
         env:
           MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+          PUBLIC_MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
 
       - name: Get version
         id: version
