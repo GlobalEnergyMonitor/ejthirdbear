@@ -397,6 +397,24 @@ export function savePreset(name, filters) {
 }
 
 /**
+ * Add or replace a preset by ID.
+ * @param {FilterPreset} preset
+ * @returns {FilterPreset}
+ */
+export function upsertPreset(preset) {
+  if (typeof localStorage === 'undefined') return preset;
+  const presets = getPresets();
+  const idx = presets.findIndex((p) => p.id === preset.id);
+  if (idx >= 0) {
+    presets[idx] = preset;
+  } else {
+    presets.push(preset);
+  }
+  localStorage.setItem(PRESETS_KEY, JSON.stringify(presets));
+  return preset;
+}
+
+/**
  * Delete a preset by ID
  * @param {string} id
  */

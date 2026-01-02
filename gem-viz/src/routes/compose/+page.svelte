@@ -13,7 +13,7 @@
   import { goto } from '$app/navigation';
   import { browser } from '$app/environment';
 
-  import { assetLink } from '$lib/links';
+  import { assetLink, link } from '$lib/links';
   import { formatCount, formatCompact } from '$lib/format';
   import TrackerIcon from '$lib/components/TrackerIcon.svelte';
   import StatusIcon from '$lib/components/StatusIcon.svelte';
@@ -34,6 +34,7 @@
     savePreset,
     deletePreset,
   } from '$lib/filter-state';
+  import { buildExportPreset, importPreset } from '$lib/presets';
 
   // ---------------------------------------------------------------------------
   // State
@@ -66,6 +67,7 @@
   let presets = $state([]);
   let showPresets = $state(false);
   let newPresetName = $state('');
+  let importError = $state('');
   let copied = $state(false);
   let queryTime = $state(0);
 
@@ -687,6 +689,38 @@
     presets = getPresets();
   }
 
+  function downloadPresetFile(preset) {
+    if (!browser) return;
+    const exportPreset = buildExportPreset(preset);
+    const json = JSON.stringify(exportPreset, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${exportPreset.id}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function handleImportPreset(event) {
+    if (!browser) return;
+    importError = '';
+    const target = /** @type {HTMLInputElement} */ (event.currentTarget);
+    const file = target?.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      importPreset(data);
+      presets = getPresets();
+    } catch (err) {
+      importError = 'Failed to import preset JSON.';
+      console.error('[Compose] Failed to import preset:', err);
+    } finally {
+      target.value = '';
+    }
+  }
+
   function handleRowClick(row) {
     if (!row?.asset_id) return;
     goto(assetLink(row.asset_id));
@@ -1007,6 +1041,9 @@
                   <button class="preset-name" onclick={() => handleLoadPreset(preset)}>
                     {preset.name}
                   </button>
+                  <button class="preset-export" onclick={() => downloadPresetFile(preset)}>
+                    Export
+                  </button>
                   <button class="preset-delete" onclick={() => handleDeletePreset(preset.id)}>
                     ×
                   </button>
@@ -1023,6 +1060,16 @@
             />
             <button onclick={handleSavePreset}>Save</button>
           </div>
+          <div class="preset-io">
+            <label class="import-btn">
+              Import JSON
+              <input type="file" accept="application/json" onchange={handleImportPreset} />
+            </label>
+            <a class="preset-link" href={link('presets')}>View featured presets</a>
+          </div>
+          {#if importError}
+            <p class="import-error">{importError}</p>
+          {/if}
         </div>
       {/if}
     </aside>
@@ -1515,8 +1562,8 @@
 
   .preset-list li {
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    gap: 6px;
     padding: 6px 0;
     border-bottom: 1px solid #eee;
   }
@@ -1527,12 +1574,25 @@
     font-size: 12px;
     cursor: pointer;
     text-align: left;
+    flex: 1;
     text-decoration: underline;
     text-decoration-color: transparent;
   }
 
   .preset-name:hover {
     text-decoration-color: currentColor;
+  }
+
+  .preset-export {
+    font-size: 11px;
+    padding: 4px 6px;
+    border: 1px solid #ddd;
+    background: #f7f7f7;
+    cursor: pointer;
+  }
+
+  .preset-export:hover {
+    background: #efefef;
   }
 
   .preset-delete {
@@ -1566,6 +1626,40 @@
     color: white;
     border: none;
     cursor: pointer;
+  }
+
+  .preset-io {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+  }
+
+  .import-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    border: 1px solid #ddd;
+    padding: 6px 10px;
+    cursor: pointer;
+    background: #fff;
+  }
+
+  .import-btn input {
+    display: none;
+  }
+
+  .preset-link {
+    font-size: 12px;
+    color: #111;
+    text-decoration: underline;
+  }
+
+  .import-error {
+    margin-top: 6px;
+    color: #b00020;
+    font-size: 12px;
   }
 
   /* Results Panel */

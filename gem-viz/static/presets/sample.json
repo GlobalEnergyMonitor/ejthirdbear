@@ -1,0 +1,25 @@
+{
+  "id": "operating-coal-plants",
+  "title": "Operating Coal Plants",
+  "description": "Coal plants with operating status across all countries.",
+  "icon": "coal",
+  "filters": {
+    "trackers": ["Coal Plant"],
+    "statuses": ["operating"],
+    "countries": [],
+    "ownerCountries": [],
+    "owners": [],
+    "capacityMin": null,
+    "capacityMax": null,
+    "shareMin": null,
+    "shareMax": null,
+    "startYearMin": null,
+    "startYearMax": null,
+    "logic": "AND",
+    "search": ""
+  },
+  "trackerScope": "all",
+  "createdAt": "2025-01-15T00:00:00Z",
+  "createdBy": "GEM",
+  "version": 1
+}
