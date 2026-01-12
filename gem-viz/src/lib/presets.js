@@ -1,14 +1,32 @@
 import { assetPath } from '$lib/links';
-import { getPresets, upsertPreset } from '$lib/filter-state';
+import { emptyFilterState, getPresets, upsertPreset } from '$lib/filter-state';
 
 const DEFAULT_ICON = 'preset';
 const DEFAULT_SCOPE = 'all';
 const DEFAULT_VERSION = 1;
 
+/** @typedef {import('$lib/filter-state').FilterState} FilterState */
+
+/**
+ * @typedef {Object} NormalizedPreset
+ * @property {string} id
+ * @property {string} title
+ * @property {string} description
+ * @property {string} icon
+ * @property {FilterState} filters
+ * @property {string} trackerScope
+ * @property {string | number | null} createdAt
+ * @property {string | null} createdBy
+ * @property {number} version
+ * @property {'featured' | 'local'} source
+ * @property {string | null} sourceFile
+ */
+
 /**
  * Normalize preset data for UI display.
  * @param {Record<string, unknown>} preset
  * @param {'featured' | 'local'} source
+ * @returns {NormalizedPreset}
  */
 export function normalizePreset(preset, source = 'featured') {
   const safePreset = preset && typeof preset === 'object' ? preset : {};
@@ -16,6 +34,18 @@ export function normalizePreset(preset, source = 'featured') {
     (typeof safePreset.title === 'string' && safePreset.title.trim()) ||
     (typeof safePreset.name === 'string' && safePreset.name.trim()) ||
     'Untitled preset';
+  const rawFilters =
+    typeof safePreset.filters === 'object' && safePreset.filters ? safePreset.filters : {};
+  const filters = { ...emptyFilterState(), ...rawFilters };
+  const trackerScope =
+    typeof safePreset.trackerScope === 'string' ? safePreset.trackerScope : DEFAULT_SCOPE;
+  const createdAt =
+    typeof safePreset.createdAt === 'string' || typeof safePreset.createdAt === 'number'
+      ? safePreset.createdAt
+      : null;
+  const createdBy = typeof safePreset.createdBy === 'string' ? safePreset.createdBy : null;
+  const version = typeof safePreset.version === 'number' ? safePreset.version : DEFAULT_VERSION;
+  const sourceFile = typeof safePreset.sourceFile === 'string' ? safePreset.sourceFile : null;
 
   return {
     id:
@@ -28,13 +58,13 @@ export function normalizePreset(preset, source = 'featured') {
       typeof safePreset.icon === 'string' && safePreset.icon.trim()
         ? safePreset.icon
         : DEFAULT_ICON,
-    filters: typeof safePreset.filters === 'object' && safePreset.filters ? safePreset.filters : {},
-    trackerScope: safePreset.trackerScope || DEFAULT_SCOPE,
-    createdAt: safePreset.createdAt || null,
-    createdBy: safePreset.createdBy || null,
-    version: safePreset.version || DEFAULT_VERSION,
+    filters,
+    trackerScope,
+    createdAt,
+    createdBy,
+    version,
     source,
-    sourceFile: safePreset.sourceFile || null,
+    sourceFile,
   };
 }
 
@@ -67,7 +97,12 @@ export function buildExportPreset(preset) {
  */
 export function importPreset(rawPreset) {
   const normalized = normalizePreset(rawPreset, 'local');
-  const createdAt = normalized.createdAt ? Date.parse(normalized.createdAt) : Date.now();
+  const createdAt =
+    typeof normalized.createdAt === 'string'
+      ? Date.parse(normalized.createdAt)
+      : typeof normalized.createdAt === 'number'
+        ? normalized.createdAt
+        : Date.now();
   return upsertPreset({
     id: normalized.id,
     name: normalized.title,
