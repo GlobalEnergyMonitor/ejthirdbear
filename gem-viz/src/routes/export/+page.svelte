@@ -308,6 +308,17 @@
       goto(assetLink(row.id));
     }
   }
+
+  function handleRowKeydown(event, row) {
+    if (event.key === 'Enter') {
+      handleRowClick(row);
+      return;
+    }
+    if (event.key === ' ' || event.key === 'Spacebar') {
+      event.preventDefault();
+      handleRowClick(row);
+    }
+  }
 </script>
 
 <svelte:head>
@@ -380,7 +391,13 @@
         <h2>Assets ({assetCount})</h2>
         <div class="item-grid">
           {#each assetItems as item}
-            <div class="item-card asset" onclick={() => handleRowClick(item)}>
+            <div
+              class="item-card asset"
+              role="button"
+              tabindex="0"
+              onclick={() => handleRowClick(item)}
+              onkeydown={(event) => handleRowKeydown(event, item)}
+            >
               <div class="item-header">
                 {#if item.tracker}
                   <TrackerIcon tracker={item.tracker} size={12} />
@@ -412,7 +429,13 @@
         <h2>Entities ({entityCount})</h2>
         <div class="item-grid">
           {#each entityItems as item}
-            <div class="item-card entity" onclick={() => handleRowClick(item)}>
+            <div
+              class="item-card entity"
+              role="button"
+              tabindex="0"
+              onclick={() => handleRowClick(item)}
+              onkeydown={(event) => handleRowKeydown(event, item)}
+            >
               <div class="item-header">
                 <span class="entity-icon">E</span>
                 <span class="item-name">{item.name}</span>

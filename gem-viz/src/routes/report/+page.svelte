@@ -1330,11 +1330,6 @@
       margin: 2cm 1.5cm;
     }
 
-    body {
-      font-size: 10pt;
-      line-height: 1.4;
-    }
-
     .report-container {
       max-width: 100%;
       padding: 0;

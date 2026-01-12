@@ -1369,16 +1369,8 @@
 
   .result-item.selected .result-meta,
   .result-item.selected .result-id,
-  .result-item.selected .result-country,
-  .result-item.selected .result-assets,
-  .result-item.selected .result-trackers,
-  .result-item.selected .result-capacity {
+  .result-item.selected .result-country {
     color: rgba(255, 255, 255, 0.7);
-  }
-
-  .result-item.selected .entity-icon {
-    background: white;
-    color: black;
   }
 
   .result-main {
@@ -1392,18 +1384,6 @@
     flex-shrink: 0;
     width: 32px;
     height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .entity-icon {
-    width: 24px;
-    height: 24px;
-    background: #000;
-    color: white;
-    font-size: 12px;
-    font-weight: 600;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1439,26 +1419,6 @@
     align-items: center;
     gap: 8px;
     flex-shrink: 0;
-  }
-
-  .result-capacity {
-    font-family: monospace;
-    font-size: 12px;
-    color: #666;
-  }
-
-  .result-score {
-    font-family: monospace;
-    font-size: 9px;
-    color: #999;
-    background: #f0f0f0;
-    padding: 2px 4px;
-    cursor: help;
-  }
-
-  .result-item.selected .result-score {
-    background: rgba(255, 255, 255, 0.2);
-    color: rgba(255, 255, 255, 0.6);
   }
 
   /* Empty / No Results */
@@ -1705,18 +1665,6 @@
 
   .asset-count-badge svg {
     opacity: 0.5;
-  }
-
-  .multi-tracker-badge {
-    font-size: 9px;
-    padding: 1px 4px;
-    background: #e8f5e9;
-    color: #2e7d32;
-  }
-
-  .result-item.selected .multi-tracker-badge {
-    background: rgba(255, 255, 255, 0.2);
-    color: rgba(255, 255, 255, 0.9);
   }
 
   .geo-badge {

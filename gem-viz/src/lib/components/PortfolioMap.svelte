@@ -202,10 +202,6 @@
     color: #666;
   }
 
-  .overlay.error {
-    color: #b10000;
-  }
-
   .map-label {
     position: absolute;
     bottom: 8px;

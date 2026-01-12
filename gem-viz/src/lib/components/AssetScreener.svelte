@@ -409,24 +409,36 @@
               {/if}
 
               <!-- Subsidiary name -->
-              <text
-                x={params.subsidiaryMarkHeight / 2 + 5}
-                y={(params.subsidiaryMarkHeight / 2) * 0.7}
-                fill={colors.navy}
-                class="subsidiary-name"
-                class:clickable={!group.isDirect}
-                role={group.isDirect ? 'text' : 'button'}
-                tabindex={group.isDirect ? undefined : 0}
-                onclick={() => !group.isDirect && goto(entityLink(group.id))}
-                onkeydown={(e) =>
-                  !group.isDirect && e.key === 'Enter' && goto(entityLink(group.id))}
-              >
-                {#each wrapText(entityMap.get(group.id)?.Name || (group.isDirect ? 'Directly owned' : 'Unknown')) as line, i}
-                  <tspan x={params.subsidiaryMarkHeight / 2 + 5} dy={i === 0 ? '0.35em' : '1.2em'}
-                    >{line}</tspan
+              {#if group.isDirect}
+                <text
+                  x={params.subsidiaryMarkHeight / 2 + 5}
+                  y={(params.subsidiaryMarkHeight / 2) * 0.7}
+                  fill={colors.navy}
+                  class="subsidiary-name"
+                >
+                  {#each wrapText(entityMap.get(group.id)?.Name || 'Directly owned') as line, i}
+                    <tspan x={params.subsidiaryMarkHeight / 2 + 5} dy={i === 0 ? '0.35em' : '1.2em'}
+                      >{line}</tspan
+                    >
+                  {/each}
+                </text>
+              {:else}
+                <a href={entityLink(group.id)} class="subsidiary-link">
+                  <text
+                    x={params.subsidiaryMarkHeight / 2 + 5}
+                    y={(params.subsidiaryMarkHeight / 2) * 0.7}
+                    fill={colors.navy}
+                    class="subsidiary-name clickable"
                   >
-                {/each}
-              </text>
+                    {#each wrapText(entityMap.get(group.id)?.Name || 'Unknown') as line, i}
+                      <tspan
+                        x={params.subsidiaryMarkHeight / 2 + 5}
+                        dy={i === 0 ? '0.35em' : '1.2em'}>{line}</tspan
+                      >
+                    {/each}
+                  </text>
+                </a>
+              {/if}
 
               <!-- Mini bar charts (only for groups with multiple locations) -->
               {#if group.locations.length > 1}

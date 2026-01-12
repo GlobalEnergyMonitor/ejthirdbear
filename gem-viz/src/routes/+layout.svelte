@@ -8,6 +8,8 @@
   import { initKeyboardNav } from '$lib/keyboard-nav';
   import { timing, shouldAnimate } from '$lib/animations';
 
+  let { children } = $props();
+
   // Build info injected by Vite at build time
   const buildTime = __BUILD_TIME__;
   const buildHash = __BUILD_HASH__;
@@ -48,7 +50,7 @@
 <div class="app">
   <SiteNav />
   <div class="page-content" class:navigating>
-    <slot />
+    {@render children()}
   </div>
 
   <footer>

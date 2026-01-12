@@ -36,13 +36,24 @@
   import AssetScreener from '$lib/components/AssetScreener.svelte';
   import TrackerIcon from '$lib/components/TrackerIcon.svelte';
   import StatusIcon from '$lib/components/StatusIcon.svelte';
+  import OwnershipFlower from '$lib/components/OwnershipFlower.svelte';
+  import MiniFlower from '$lib/components/MiniFlower.svelte';
+  import MiniHistogram from '$lib/components/MiniHistogram.svelte';
+  import MiniBarChart from '$lib/components/MiniBarChart.svelte';
+  import Sparkline from '$lib/components/Sparkline.svelte';
+  import DataTable from '$lib/components/DataTable.svelte';
+  import CommandPalette from '$lib/components/CommandPalette.svelte';
   import ConnectionFinder from '$lib/widgets/ConnectionFinder.svelte';
   import AddToCartButton from '$lib/components/AddToCartButton.svelte';
   import PortfolioMap from '$lib/components/PortfolioMap.svelte';
   import CrossTrackerBadge from '$lib/components/CrossTrackerBadge.svelte';
   import DataInsights from '$lib/components/DataInsights.svelte';
   import MiniNetworkGraph from '$lib/components/MiniNetworkGraph.svelte';
+  import NetworkGraph from '$lib/NetworkGraph.svelte';
   import { detectEntityAnomalies } from '$lib/anomaly-detection';
+  import TopOwners from '$lib/widgets/TopOwners.svelte';
+  import StatusDistribution from '$lib/widgets/StatusDistribution.svelte';
+  import CountryBreakdown from '$lib/widgets/CountryBreakdown.svelte';
 
   // --- PROPS (from +page.server.js) ---
   let { data } = $props();
@@ -192,6 +203,46 @@
 
   // Tracker diversity (for cross-tracker badge) - defined before OG description that uses it
   const entityTrackers = $derived.by(() => trackerBreakdown.map((t) => t.tracker).filter(Boolean));
+
+  // Kitchen sink data
+  const portfolioAssets = $derived(portfolio?.assets || []);
+  const trackerStats = $derived.by(() => {
+    const stats = new Map();
+    for (const asset of portfolioAssets) {
+      const tracker = asset.tracker || 'Unknown';
+      const current = stats.get(tracker) || { tracker, count: 0, capacity: 0 };
+      current.count += 1;
+      current.capacity += Number(asset.capacityMw || 0);
+      stats.set(tracker, current);
+    }
+    return Array.from(stats.values());
+  });
+  const trackerBarData = $derived.by(() =>
+    trackerStats.map((row) => ({
+      label: row.tracker,
+      value: row.count,
+      color: colorByTracker.get(row.tracker) || colors.grey,
+    }))
+  );
+  const statusBarData = $derived.by(() =>
+    statusBreakdown.map((row) => ({
+      label: row.status,
+      value: row.count,
+      color: assetStatusColors[regroupStatus(row.status)] || colors.grey,
+    }))
+  );
+  const capacityValues = $derived(
+    portfolioAssets.map((asset) => Number(asset.capacityMw || 0)).filter((v) => v)
+  );
+  const capacitySparkline = $derived(
+    [...capacityValues].sort((a, b) => a - b).slice(-48)
+  );
+  const assetTableColumns = [
+    { key: 'name', label: 'Asset', sortable: true, filterable: true },
+    { key: 'tracker', label: 'Tracker', sortable: true, filterable: true },
+    { key: 'status', label: 'Status', sortable: true, filterable: true },
+    { key: 'capacityMw', label: 'Capacity (MW)', sortable: true, filterable: true, type: 'number' },
+  ];
 
   const siteUrl = PUBLIC_SITE_URL ? PUBLIC_SITE_URL.replace(/\/$/, '') : '';
   const ogTitle = $derived(entityName || entityId || 'Entity');
@@ -655,6 +706,75 @@
         </section>
       {/if}
 
+      <!-- Kitchen Sink Modules -->
+      <section class="kitchen-sink">
+        <h2>Kitchen Sink Modules</h2>
+        <p class="section-subtitle">Full modular showcase for future reuse.</p>
+        <div class="module-grid">
+          <div class="module-card wide">
+            <CommandPalette embedded={true} placeholder="Search assets, entities, or IDs..." />
+          </div>
+          <div class="module-card">
+            <OwnershipFlower
+              ownerId={entityId}
+              portfolio={portfolio}
+              size="medium"
+              showLabels={false}
+              title="Entity Portfolio Flower"
+            />
+          </div>
+          <div class="module-card">
+            <MiniFlower trackers={trackerStats} size={56} />
+          </div>
+          <div class="module-card">
+            <MiniBarChart label="Status Mix" data={statusBarData} />
+          </div>
+          <div class="module-card">
+            <MiniBarChart label="Tracker Mix" data={trackerBarData} />
+          </div>
+          <div class="module-card">
+            <MiniHistogram
+              label="Capacity Distribution"
+              data={capacityValues}
+              bins={14}
+              width={240}
+              height={80}
+              unit="MW"
+            />
+          </div>
+          <div class="module-card">
+            <Sparkline
+              label="Capacity Sparkline"
+              data={capacitySparkline}
+              width={220}
+              height={60}
+              showDots={true}
+            />
+          </div>
+          <div class="module-card wide">
+            <DataTable
+              columns={assetTableColumns}
+              data={portfolioAssets}
+              pageSize={12}
+              showExport={false}
+              showColumnToggle={true}
+              showColumnFilters={true}
+            />
+          </div>
+          <div class="module-card">
+            <StatusDistribution />
+          </div>
+          <div class="module-card">
+            <CountryBreakdown />
+          </div>
+          <div class="module-card">
+            <TopOwners />
+          </div>
+          <div class="module-card wide network-card">
+            <NetworkGraph />
+          </div>
+        </div>
+      </section>
     </article>
   {/if}
 </main>
@@ -1092,6 +1212,31 @@
     font-family: system-ui, sans-serif;
   }
 
+  /* Kitchen Sink */
+  .kitchen-sink {
+    margin: 50px 0;
+    padding-top: 20px;
+    border-top: 1px solid #ddd;
+  }
+  .module-grid {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 16px;
+  }
+  .module-card {
+    grid-column: span 4;
+    padding: 16px;
+    border: 1px solid #ddd;
+    background: #fff;
+  }
+  .module-card.wide {
+    grid-column: span 12;
+  }
+  .module-card.network-card {
+    padding: 0;
+    overflow: hidden;
+  }
+
   /* Responsive */
   @media (max-width: 768px) {
     .entity-header {
@@ -1111,6 +1256,12 @@
     }
     .asset-list {
       grid-template-columns: 1fr;
+    }
+    .module-grid {
+      grid-template-columns: 1fr;
+    }
+    .module-card {
+      grid-column: span 1;
     }
   }
 </style>

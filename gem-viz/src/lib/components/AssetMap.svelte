@@ -10,7 +10,7 @@
   // Bindable prop so parent can hide section when no location found
   let { hasLocation = $bindable(true) } = $props();
 
-  let mapContainer;
+  let mapContainer = $state(null);
   let map;
   let loading = $state(true);
   let error = $state(null);

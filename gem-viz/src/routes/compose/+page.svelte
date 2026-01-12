@@ -1330,12 +1330,6 @@
     border: 1px solid #ddd;
   }
 
-  .selected-countries {
-    margin-top: 6px;
-    font-size: 11px;
-    color: #666;
-  }
-
   .selected-values {
     margin-top: 6px;
     font-size: 11px;

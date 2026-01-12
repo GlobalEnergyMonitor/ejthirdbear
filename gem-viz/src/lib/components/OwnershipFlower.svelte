@@ -39,7 +39,7 @@
     large: { width: 400, height: 400, labelSize: 12, baseRadius: 40, maxRadius: 140 },
   };
 
-  let svgEl;
+  let svgEl = $state(null);
   let loading = $state(!prebakedPortfolio);
   /** @type {string | null} */
   let error = $state(null);
@@ -234,15 +234,19 @@
         <div class="subtitle">Tracker mix</div>
       </div>
     {/if}
-    <svg
-      bind:this={svgEl}
-      aria-label="Ownership flower showing tracker distribution"
-      class:clickable={Boolean(resolvedOwnerId)}
-      onclick={resolvedOwnerId ? handleFlowerClick : undefined}
-      role={resolvedOwnerId ? 'button' : 'img'}
-      tabindex={resolvedOwnerId ? 0 : undefined}
-      onkeydown={(e) => resolvedOwnerId && e.key === 'Enter' && handleFlowerClick()}
-    ></svg>
+    {#if resolvedOwnerId}
+      <button
+        type="button"
+        class="flower-button"
+        aria-label="View ownership details"
+        onclick={handleFlowerClick}
+      >
+        <svg bind:this={svgEl} aria-hidden="true"></svg>
+      </button>
+    {:else}
+      <svg bind:this={svgEl} role="img" aria-label="Ownership flower showing tracker distribution"
+      ></svg>
+    {/if}
   {/if}
 </div>
 
@@ -294,12 +298,18 @@
     text-decoration-color: currentColor;
   }
 
-  svg.clickable {
+  .flower-button {
+    border: none;
+    padding: 0;
+    background: none;
     cursor: pointer;
+  }
+
+  .flower-button svg {
     transition: transform 0.15s ease;
   }
 
-  svg.clickable:hover {
+  .flower-button:hover svg {
     transform: scale(1.02);
   }
 
