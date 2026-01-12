@@ -11,6 +11,34 @@ Interactive visualization platform for Global Energy Monitor data, powered by Mo
 - **Top Rankings**: Owners, projects, countries, and status breakdowns
 - **Cross-Tabulation Tables**: Tracker types vs status analysis
 
+## Routes (SvelteKit, file-based)
+
+SvelteKit maps files under `src/routes` directly to URLs. Each folder is a path segment, and the files inside that folder define what renders and how data is loaded.
+
+- `+page.svelte` - The UI for that route.
+- `+page.js` / `+page.ts` - Optional data loader for the route (runs at build time for this static site).
+- `+layout.svelte` - Shared layout for all nested routes.
+- `[param]` folders - Dynamic route segments (e.g., `[id]` becomes a URL parameter).
+
+Examples from this project:
+
+- `/` → `src/routes/+page.svelte`
+- `/asset` → `src/routes/asset/+page.svelte`
+- `/asset/[id]` → `src/routes/asset/[id]/+page.svelte`
+- `/asset/search` → `src/routes/asset/search/+page.svelte`
+- `/entity/[id]` → `src/routes/entity/[id]/+page.svelte`
+- `/explore` → `src/routes/explore/+page.svelte` (with data loading in `+page.ts`)
+
+How the `+` files fit together:
+
+- The `+` prefix is a SvelteKit convention that marks route-specific files (not arbitrary components).
+- `+page.svelte` is the visual component. Think of it as the template for that URL.
+- `+page.js`/`+page.ts` is the data hook. It can export a `load` function that fetches/prepares data for the page.
+- When both exist, SvelteKit runs `load` first and passes the returned data into the `+page.svelte` component as `data`.
+- Some routes only need a `+page.svelte` file. Others need a loader too, which is why you see both side-by-side.
+
+If you are not familiar with SvelteKit, the key idea is: "the folder name is the URL, and `+page` files define what users see and what data is prepared for that page."
+
 ## Development
 
 ```bash
