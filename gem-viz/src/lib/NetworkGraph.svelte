@@ -29,7 +29,7 @@
   let loadingPhase = $state('Initializing...');
   let fps = $state(0);
   let focusLevel = $state('balanced');
-  let flowerIconSize = $state(64);
+  let flowerIconSize = $state(40);
 
   // Configuration - user adjustable
   let config = $state({
@@ -45,6 +45,8 @@
     layoutScale: 10, // Visual spacing multiplier
     highlightHops: 1, // Number of hops to highlight on hover
     useFlowerNodes: true,
+    fisheye: true, // Logarithmic size scaling based on distance from camera
+    fisheyeStrength: 2.5, // How pronounced the fisheye effect is (1-3)
   });
 
   // Auto-rotation state
@@ -57,6 +59,13 @@
   let rotationVelocity = 0;
   let hoverFrame;
   let hoverTimeout;
+
+  // WASD flying controls
+  let flyingEnabled = $state(false);
+  let keysPressed = $state(new Set());
+  let flyingFrame;
+  const FLY_SPEED = 12; // Units per frame
+  const FLY_VERTICAL_SPEED = 8; // Units per frame for Q/E
 
   // Graph data
   let nodes = [];
@@ -514,6 +523,27 @@
     // Node size scaling
     const nodeScale = Math.pow(2, -currentZoom * 0.25);
 
+    // Fisheye effect: calculate distance-based scale factors
+    const cameraTarget = currentViewState?.target || [0, 0, 0];
+    const fisheyeScale = config.layoutScale || 1;
+
+    // Pre-compute fisheye multipliers for all nodes
+    const getFisheyeMultiplier = (d) => {
+      if (!config.fisheye) return 1;
+      const pos = getPos(d);
+      const dx = pos[0] - cameraTarget[0];
+      const dy = pos[1] - cameraTarget[1];
+      const dz = pos[2] - cameraTarget[2];
+      const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      // INVERSE fisheye: farther = larger, closer = smaller
+      // This helps you see what's ahead while flying - distant nodes grow to attract attention
+      // Nearby nodes shrink to get out of the way
+      const normalizedDist = distance / (fisheyeScale * 40);
+      // Logarithmic growth: starts small, grows with distance, plateaus
+      const multiplier = 0.4 + config.fisheyeStrength * Math.log(1 + normalizedDist) * 0.5;
+      return Math.max(0.3, Math.min(4, multiplier)); // Clamp between 0.3x and 4x
+    };
+
     const useFlowers = config.useFlowerNodes;
     const flowerNodes = useFlowers ? nodes.filter((n) => n.id?.startsWith('E')) : [];
     const circleNodes = useFlowers ? nodes.filter((n) => !n.id?.startsWith('E')) : nodes;
@@ -573,11 +603,12 @@
             },
             sizeUnits: 'pixels',
             getSize: (d) => {
-              const baseSize = Math.max(6, Math.log2(d.connections + 1) * 3.5);
-              return baseSize * nodeScale;
+              const baseSize = Math.max(4, Math.log2(d.connections + 1) * 2.5);
+              const fisheye = getFisheyeMultiplier(d);
+              return baseSize * nodeScale * fisheye;
             },
-            sizeMinPixels: 6,
-            sizeMaxPixels: 32,
+            sizeMinPixels: 3,
+            sizeMaxPixels: 40,
             billboard: true,
             pickable: true,
             // Disable depth test so icons always render on top of edges
@@ -595,7 +626,13 @@
               return [255, 255, 255, isVisible ? 255 : 20];
             },
             updateTriggers: {
-              getSize: [nodeScale, flowerIconSize],
+              getSize: [
+                nodeScale,
+                flowerIconSize,
+                config.fisheye,
+                config.fisheyeStrength,
+                cameraTarget,
+              ],
               getIcon: [flowerIconSize],
               getColor: [hoveredNode?.id],
             },
@@ -608,8 +645,9 @@
           getPosition: (d) => getPos(d),
           billboard: true,
           getRadius: (d) => {
-            const baseSize = Math.max(2, Math.log2(d.connections + 1) * 2.8);
-            return baseSize * nodeScale;
+            const baseSize = Math.max(1.5, Math.log2(d.connections + 1) * 2);
+            const fisheye = getFisheyeMultiplier(d);
+            return baseSize * nodeScale * fisheye;
           },
           getFillColor: (d) => {
             const isVisible = !visibleNodeIds || visibleNodeIds.has(d.id);
@@ -634,10 +672,10 @@
             }
             return isVisible ? [255, 255, 255, 200] : [255, 255, 255, 15];
           },
-          lineWidthMinPixels: 1,
-          lineWidthMaxPixels: 2,
-          radiusMinPixels: 2,
-          radiusMaxPixels: 40,
+          lineWidthMinPixels: 0.5,
+          lineWidthMaxPixels: 1.5,
+          radiusMinPixels: 1,
+          radiusMaxPixels: 50,
           pickable: true,
           // Disable depth test so nodes always render on top of edges
           parameters: {
@@ -650,7 +688,7 @@
           autoHighlight: true,
           highlightColor: [255, 220, 0, 255],
           updateTriggers: {
-            getRadius: [nodeScale],
+            getRadius: [nodeScale, config.fisheye, config.fisheyeStrength, cameraTarget],
             getFillColor: [hoveredNode?.id],
             getLineColor: [hoveredNode?.id],
           },
@@ -772,6 +810,121 @@
     if (rotationFrame) {
       cancelAnimationFrame(rotationFrame);
       rotationFrame = null;
+    }
+  }
+
+  // WASD Flying controls
+  function handleKeyDown(e) {
+    if (!flyingEnabled || !config.use3D) return;
+
+    const key = e.key.toLowerCase();
+    if (['w', 'a', 's', 'd', 'q', 'e'].includes(key)) {
+      e.preventDefault();
+      keysPressed.add(key);
+      keysPressed = new Set(keysPressed); // trigger reactivity
+      startFlyingLoop();
+    }
+  }
+
+  function handleKeyUp(e) {
+    const key = e.key.toLowerCase();
+    if (['w', 'a', 's', 'd', 'q', 'e'].includes(key)) {
+      keysPressed.delete(key);
+      keysPressed = new Set(keysPressed); // trigger reactivity
+      if (keysPressed.size === 0) {
+        stopFlyingLoop();
+      }
+    }
+  }
+
+  function startFlyingLoop() {
+    if (flyingFrame) return;
+
+    // Pause auto-rotation while flying
+    if (config.autoRotate) {
+      autoRotatePaused = true;
+      stopAutoRotation();
+    }
+
+    function fly() {
+      if (!flyingEnabled || !config.use3D || !deck || !currentViewState || keysPressed.size === 0) {
+        flyingFrame = null;
+        scheduleAutoRotateResume();
+        return;
+      }
+
+      // Get camera orientation (convert to radians)
+      // OrbitView with orbitAxis='Y' means Y is vertical, X/Z are horizontal plane
+      // rotationOrbit is measured from the -Z axis, rotating toward +X
+      const orbitRad = ((currentViewState.rotationOrbit || 0) * Math.PI) / 180;
+
+      // Forward = direction camera is looking (into the screen)
+      // In OrbitView, camera looks from orbit position toward target
+      const forwardX = Math.sin(orbitRad);
+      const forwardZ = Math.cos(orbitRad);
+
+      // Right = 90 degrees clockwise from forward on X/Z plane
+      const rightX = Math.cos(orbitRad);
+      const rightZ = -Math.sin(orbitRad);
+
+      // Build movement vector (X/Z horizontal, Y vertical)
+      let dx = 0,
+        dy = 0,
+        dz = 0;
+
+      if (keysPressed.has('w')) {
+        dx += forwardX * FLY_SPEED;
+        dz += forwardZ * FLY_SPEED;
+      }
+      if (keysPressed.has('s')) {
+        dx -= forwardX * FLY_SPEED;
+        dz -= forwardZ * FLY_SPEED;
+      }
+      if (keysPressed.has('a')) {
+        dx -= rightX * FLY_SPEED;
+        dz -= rightZ * FLY_SPEED;
+      }
+      if (keysPressed.has('d')) {
+        dx += rightX * FLY_SPEED;
+        dz += rightZ * FLY_SPEED;
+      }
+      if (keysPressed.has('q')) {
+        dy -= FLY_VERTICAL_SPEED;
+      } // Down
+      if (keysPressed.has('e')) {
+        dy += FLY_VERTICAL_SPEED;
+      } // Up
+
+      // Update camera target position
+      const [tx, ty, tz] = currentViewState.target || [0, 0, 0];
+      currentViewState = {
+        ...currentViewState,
+        target: [tx + dx, ty + dy, tz + dz],
+      };
+
+      deck.setProps({
+        initialViewState: currentViewState,
+      });
+
+      flyingFrame = requestAnimationFrame(fly);
+    }
+
+    flyingFrame = requestAnimationFrame(fly);
+  }
+
+  function stopFlyingLoop() {
+    if (flyingFrame) {
+      cancelAnimationFrame(flyingFrame);
+      flyingFrame = null;
+    }
+  }
+
+  function toggleFlying() {
+    // Note: flyingEnabled is already toggled by bind:checked before this runs
+    if (!flyingEnabled) {
+      keysPressed.clear();
+      keysPressed = new Set(keysPressed);
+      stopFlyingLoop();
     }
   }
 
@@ -898,16 +1051,27 @@
     if (config.use3D && config.autoRotate) {
       startAutoRotation();
     }
+
+    // Add keyboard listeners for flying controls
+    if (typeof window !== 'undefined') {
+      window.addEventListener('keydown', handleKeyDown);
+      window.addEventListener('keyup', handleKeyUp);
+    }
   });
 
   onDestroy(() => {
     if (animationFrame) cancelAnimationFrame(animationFrame);
     if (rotationFrame) cancelAnimationFrame(rotationFrame);
+    if (flyingFrame) cancelAnimationFrame(flyingFrame);
     if (autoRotateResumeTimeout) clearTimeout(autoRotateResumeTimeout);
     if (hoverFrame) cancelAnimationFrame(hoverFrame);
     if (hoverTimeout) clearTimeout(hoverTimeout);
     if (simulation) simulation.stop();
     if (deck) deck.finalize();
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    }
   });
 </script>
 
@@ -944,6 +1108,14 @@
         <label class="toggle" title="Slowly rotate the network for a cinematic view.">
           <input type="checkbox" bind:checked={config.autoRotate} onchange={toggleAutoRotate} />
           <span>Auto-Rotate</span>
+        </label>
+
+        <label
+          class="toggle"
+          title="Enable WASD+QE flying controls to navigate through the network."
+        >
+          <input type="checkbox" bind:checked={flyingEnabled} onchange={toggleFlying} />
+          <span>Flying Mode</span>
         </label>
       {/if}
 
@@ -1051,6 +1223,25 @@
           <span>Flowers</span>
         </label>
 
+        <label class="toggle" title="Nodes closer to camera appear larger (fisheye lens effect).">
+          <input type="checkbox" bind:checked={config.fisheye} oninput={updateLayers} />
+          <span>Fisheye</span>
+        </label>
+
+        {#if config.fisheye}
+          <label title="Strength of the inverse fisheye - distant nodes grow larger.">
+            <span>Depth Scale</span>
+            <input
+              type="range"
+              min="1"
+              max="5"
+              step="0.5"
+              bind:value={config.fisheyeStrength}
+              oninput={updateLayers}
+            />
+          </label>
+        {/if}
+
         <label title="Number of connection hops to highlight when hovering a node.">
           <span>Hover Hops</span>
           <select bind:value={config.highlightHops} onchange={updateLayers}>
@@ -1103,9 +1294,11 @@
     <p>
       Click node to view • Drag to pan • Scroll to zoom{config.use3D
         ? ' • Shift+drag to rotate' + (config.autoRotate ? ' • Auto-rotation pauses on drag' : '')
-        : ''}
+        : ''}{flyingEnabled ? ' • WASD fly • Q/E up/down' : ''}
     </p>
-    <p class="engine">d3-force-3d + deck.gl {config.use3D ? '(3D)' : '(2D)'}</p>
+    <p class="engine">
+      d3-force-3d + deck.gl {config.use3D ? '(3D)' : '(2D)'}{flyingEnabled ? ' + Flying' : ''}
+    </p>
   </div>
 
   <div bind:this={container} class="deck-container" class:clickable={hoveredNode}></div>

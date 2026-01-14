@@ -44,6 +44,15 @@ export function entityLink(id: string): string {
 }
 
 /**
+ * Generate factsheet page link
+ */
+export function factsheetLink(tracker: string): string {
+  // Convert tracker name to URL slug
+  const slug = tracker.toLowerCase().replace(/\s+/g, '-');
+  return link(`factsheet/${slug}`);
+}
+
+/**
  * Get the base path for static assets (parquet files, geojson, etc.)
  * Uses base path which works in both dev and production
  */

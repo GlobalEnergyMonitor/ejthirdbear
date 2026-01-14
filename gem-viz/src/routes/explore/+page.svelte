@@ -4,7 +4,7 @@
    * Interactive dashboard with live DuckDB queries against parquet data
    */
 
-  import { link } from '$lib/links';
+  import { link, factsheetLink } from '$lib/links';
   import TopOwners from '$lib/widgets/TopOwners.svelte';
   import CountryBreakdown from '$lib/widgets/CountryBreakdown.svelte';
   import StatusDistribution from '$lib/widgets/StatusDistribution.svelte';
@@ -92,6 +92,15 @@
       <div class="widget-cell wide">
         <CountryBreakdown tracker={selectedTracker} limit={20} title="Assets by Country" />
       </div>
+    </div>
+  </section>
+
+  <section class="factsheet-cta">
+    <h3>Dataset Documentation</h3>
+    <p>Explore field definitions, data distributions, and sample records for each tracker.</p>
+    <div class="cta-links">
+      <a href={factsheetLink('Coal Mine')} class="factsheet-link">Coal Mine Factsheet</a>
+      <a href={link('cards')} class="factsheet-link secondary">Project Cards</a>
     </div>
   </section>
 
@@ -191,6 +200,50 @@
     .widget-cell.wide {
       grid-column: span 1;
     }
+  }
+
+  .factsheet-cta {
+    background: #f2f2eb;
+    padding: 20px;
+    border-radius: 0 14px 14px 14px;
+    margin-bottom: 32px;
+  }
+  .factsheet-cta h3 {
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #004a63;
+    margin: 0 0 8px 0;
+  }
+  .factsheet-cta p {
+    font-size: 13px;
+    color: #666;
+    margin: 0 0 12px 0;
+  }
+  .cta-links {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .factsheet-link {
+    display: inline-block;
+    padding: 8px 16px;
+    background: #016b83;
+    color: #fff;
+    text-decoration: none;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 500;
+    transition: background 0.15s;
+  }
+  .factsheet-link:hover {
+    background: #004a63;
+  }
+  .factsheet-link.secondary {
+    background: #004a63;
+  }
+  .factsheet-link.secondary:hover {
+    background: #002430;
   }
 
   .page-footer {

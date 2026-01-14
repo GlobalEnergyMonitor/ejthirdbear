@@ -23,7 +23,7 @@
   import { assetLink, entityLink, assetPath } from '$lib/links';
 
   // Formatting
-  import { formatCount, formatCapacity } from '$lib/format';
+  import { formatCount, formatCapacity, formatCapacityBraille } from '$lib/format';
   import { colors, colorByTracker, regroupStatus } from '$lib/ownership-theme';
 
   // Data fetching - dynamic import to avoid SSR issues
@@ -174,27 +174,7 @@
     selectedStatus = selectedStatus === status ? null : status;
   }
 
-  const BRAILLE_DOTS = [1, 2, 4, 8, 16, 32, 64, 128];
-  const BRAILLE_BASE = 0x2800;
-  const DOTS_PER_CELL = 8;
   const DOT_MW = 10;
-  const MAX_BRAILLE_CELLS = 24;
-
-  function capacityBraille(mw) {
-    const dots = Math.max(0, Math.floor((Number(mw) || 0) / DOT_MW));
-    if (!dots) return '';
-    const cells = Math.min(MAX_BRAILLE_CELLS, Math.ceil(dots / DOTS_PER_CELL));
-    let out = '';
-    for (let i = 0; i < cells; i++) {
-      const remaining = dots - i * DOTS_PER_CELL;
-      const count = Math.max(0, Math.min(DOTS_PER_CELL, remaining));
-      let mask = 0;
-      for (let d = 0; d < count; d++) mask |= BRAILLE_DOTS[d];
-      out += String.fromCharCode(BRAILLE_BASE + mask);
-    }
-    if (dots > cells * DOTS_PER_CELL) out += '+';
-    return out;
-  }
 
   // Stats helpers
   const totalAssets = $derived(stats?.total_assets ?? portfolio?.assets?.length ?? 0);
@@ -234,9 +214,7 @@
   const capacityValues = $derived(
     portfolioAssets.map((asset) => Number(asset.capacityMw || 0)).filter((v) => v)
   );
-  const capacitySparkline = $derived(
-    [...capacityValues].sort((a, b) => a - b).slice(-48)
-  );
+  const capacitySparkline = $derived([...capacityValues].sort((a, b) => a - b).slice(-48));
   const assetTableColumns = [
     { key: 'name', label: 'Asset', sortable: true, filterable: true },
     { key: 'tracker', label: 'Tracker', sortable: true, filterable: true },
@@ -695,7 +673,7 @@
                         title="{Math.floor(asset.capacityMw / 10)} dots (10 MW each)"
                         aria-label={formatCapacity(asset.capacityMw)}
                       >
-                        {capacityBraille(asset.capacityMw)}
+                        {formatCapacityBraille(asset.capacityMw, { dotMw: DOT_MW })}
                       </span>
                     </span>
                   {/if}
@@ -717,7 +695,7 @@
           <div class="module-card">
             <OwnershipFlower
               ownerId={entityId}
-              portfolio={portfolio}
+              {portfolio}
               size="medium"
               showLabels={false}
               title="Entity Portfolio Flower"

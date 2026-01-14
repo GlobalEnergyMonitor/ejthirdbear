@@ -57,6 +57,28 @@ export function formatCapacity(mw) {
 }
 
 /**
+ * Render a compact braille dot chart for capacity.
+ */
+export function formatCapacityBraille(mw, { dotMw = 10, maxCells = 24 } = {}) {
+  const dots = Math.max(0, Math.floor((Number(mw) || 0) / dotMw));
+  if (!dots) return '';
+  const BRAILLE_DOTS = [1, 2, 4, 8, 16, 32, 64, 128];
+  const BRAILLE_BASE = 0x2800;
+  const DOTS_PER_CELL = 8;
+  const cells = Math.min(maxCells, Math.ceil(dots / DOTS_PER_CELL));
+  let out = '';
+  for (let i = 0; i < cells; i++) {
+    const remaining = dots - i * DOTS_PER_CELL;
+    const count = Math.max(0, Math.min(DOTS_PER_CELL, remaining));
+    let mask = 0;
+    for (let d = 0; d < count; d++) mask |= BRAILLE_DOTS[d];
+    out += String.fromCharCode(BRAILLE_BASE + mask);
+  }
+  if (dots > cells * DOTS_PER_CELL) out += '+';
+  return out;
+}
+
+/**
  * Format capacity compactly for small spaces
  * - < 1000: "123"
  * - >= 1000: "1.2k"

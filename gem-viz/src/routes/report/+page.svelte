@@ -11,6 +11,7 @@
   import { widgetQuery } from '$lib/widgets/widget-utils';
   import { link, assetLink, entityLink } from '$lib/links';
   import TrackerIcon from '$lib/components/TrackerIcon.svelte';
+  import { formatCapacityBraille } from '$lib/format';
 
   // State
   let loading = $state(true);
@@ -29,6 +30,7 @@
   let queryTime = $state(0);
   let shareUrl = $state('');
   let copied = $state(false);
+  const DOT_MW = 10;
 
   // Derived cart data
   const cartItems = $derived($investigationCart);
@@ -557,7 +559,18 @@
           <span class="stat-label">Assets</span>
         </div>
         <div class="stat-item">
-          <span class="stat-value">{summary.totalCapacity.toLocaleString()}</span>
+          <span class="stat-value">
+            {summary.totalCapacity.toLocaleString()}
+            {#if summary.totalCapacity}
+              <span
+                class="braille-chart"
+                title="{Math.floor(summary.totalCapacity / DOT_MW)} dots (10 MW each)"
+                aria-hidden="true"
+              >
+                {formatCapacityBraille(summary.totalCapacity, { dotMw: DOT_MW })}
+              </span>
+            {/if}
+          </span>
           <span class="stat-label">MW Capacity</span>
         </div>
         <div class="stat-item">
@@ -649,9 +662,18 @@
                   <span class="stat-label">Assets</span>
                 </div>
                 <div class="portfolio-stat">
-                  <span class="stat-num"
-                    >{Math.round(entity.total_capacity_mw || 0).toLocaleString()}</span
-                  >
+                  <span class="stat-num">
+                    {Math.round(entity.total_capacity_mw || 0).toLocaleString()}
+                    {#if entity.total_capacity_mw}
+                      <span
+                        class="braille-chart"
+                        title="{Math.floor(entity.total_capacity_mw / DOT_MW)} dots (10 MW each)"
+                        aria-hidden="true"
+                      >
+                        {formatCapacityBraille(entity.total_capacity_mw, { dotMw: DOT_MW })}
+                      </span>
+                    {/if}
+                  </span>
                   <span class="stat-label">MW</span>
                 </div>
                 <div class="portfolio-stat">
@@ -722,7 +744,18 @@
                   {asset.tracker || '-'}
                 </td>
                 <td>{asset.country || '-'}</td>
-                <td class="numeric">{asset.capacity_mw?.toLocaleString() || '-'} MW</td>
+                <td class="numeric">
+                  {asset.capacity_mw?.toLocaleString() || '-'} MW
+                  {#if asset.capacity_mw}
+                    <span
+                      class="braille-chart"
+                      title="{Math.floor(asset.capacity_mw / DOT_MW)} dots (10 MW each)"
+                      aria-hidden="true"
+                    >
+                      {formatCapacityBraille(asset.capacity_mw, { dotMw: DOT_MW })}
+                    </span>
+                  {/if}
+                </td>
                 <td class="co-owners-cell">
                   <span class="co-owner-count">{asset.co_owner_count}</span>
                   <span class="co-owner-names">
@@ -780,7 +813,18 @@
                 </td>
                 <td>{owner.hq_country || '-'}</td>
                 <td class="numeric">{owner.asset_count}</td>
-                <td class="numeric">{owner.total_capacity_mw?.toLocaleString() || '-'} MW</td>
+                <td class="numeric">
+                  {owner.total_capacity_mw?.toLocaleString() || '-'} MW
+                  {#if owner.total_capacity_mw}
+                    <span
+                      class="braille-chart"
+                      title="{Math.floor(owner.total_capacity_mw / DOT_MW)} dots (10 MW each)"
+                      aria-hidden="true"
+                    >
+                      {formatCapacityBraille(owner.total_capacity_mw, { dotMw: DOT_MW })}
+                    </span>
+                  {/if}
+                </td>
                 <td class="numeric">{owner.avg_share_pct?.toFixed(1) || '-'}%</td>
                 <td class="truncate">{owner.projects || '-'}</td>
               </tr>
@@ -816,7 +860,18 @@
               <tr>
                 <td class="country-name">{row.country}</td>
                 <td class="numeric">{row.asset_count?.toLocaleString()}</td>
-                <td class="numeric">{row.total_capacity?.toLocaleString() || '-'}</td>
+                <td class="numeric">
+                  {row.total_capacity?.toLocaleString() || '-'}
+                  {#if row.total_capacity}
+                    <span
+                      class="braille-chart"
+                      title="{Math.floor(row.total_capacity / DOT_MW)} dots (10 MW each)"
+                      aria-hidden="true"
+                    >
+                      {formatCapacityBraille(row.total_capacity, { dotMw: DOT_MW })}
+                    </span>
+                  {/if}
+                </td>
                 <td class="numeric">{row.entity_count}</td>
                 <td class="tracker-cell">
                   {#if row.trackers}
@@ -951,6 +1006,16 @@
     font-size: 24px;
     font-weight: bold;
     color: #000;
+  }
+  .braille-chart {
+    margin-left: 6px;
+    font-family:
+      ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
+      monospace;
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: #444;
+    white-space: nowrap;
   }
   .stat-label {
     display: block;

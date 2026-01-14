@@ -80,11 +80,13 @@
   const shareUrl = $derived(buildShareUrl(filters));
   const activeFilterCount = $derived(countActiveFilters(filters));
   const hasFilters = $derived(hasActiveFilters(filters));
-  const filteredOwners = $derived(
-    ownerSearch.length < 2
-      ? owners.slice(0, 50)
-      : owners.filter((o) => o.toLowerCase().includes(ownerSearch.toLowerCase())).slice(0, 100)
-  );
+  const filteredOwners = $derived(() => {
+    if (ownerSearch.length < 2) return owners.slice(0, 50);
+    const needle = ownerSearch.toLowerCase();
+    return owners
+      .filter((o) => o.value.toLowerCase().includes(needle))
+      .slice(0, 100);
+  });
 
   const ownershipColumnNames = $derived.by(() => {
     const columnSet = new Set(ownershipColumns);
@@ -425,18 +427,24 @@
         `),
       ]);
 
-      countries = (countryResult.data || []).map((r) => r.value).filter(Boolean);
-      ownerCountries = (ownerCountryResult.data || []).map((r) => r.value).filter(Boolean);
-      owners = (ownerResult.data || []).map((r) => r.value).filter(Boolean);
+      countries = (countryResult.data || [])
+        .map((r) => ({ value: r.value, count: r.cnt }))
+        .filter((r) => r.value);
+      ownerCountries = (ownerCountryResult.data || [])
+        .map((r) => ({ value: r.value, count: r.cnt }))
+        .filter((r) => r.value);
+      owners = (ownerResult.data || [])
+        .map((r) => ({ value: r.value, count: r.cnt }))
+        .filter((r) => r.value);
       trackerOptions = (trackerResult.data || []).map((r) => ({ value: r.value, count: r.cnt }));
       statusOptions = (statusResult.data || []).map((r) => ({ value: r.value, count: r.cnt }));
       schema = schemaResult.data || [];
       ownershipColumns = (schemaResult.data || []).map((r) => r.column_name).filter(Boolean);
 
       // Store static lists for reference
-      _allCountries = [...countries];
-      _allOwnerCountries = [...ownerCountries];
-      _allOwners = [...owners];
+      _allCountries = countries.map((c) => c.value);
+      _allOwnerCountries = ownerCountries.map((c) => c.value);
+      _allOwners = owners.map((o) => o.value);
 
       console.log('[Compose] Loaded reference data:', {
         countries: countries.length,
@@ -530,7 +538,8 @@
       console.log('[Compose] Updating parametric counts...');
 
       // Run parametric count queries in parallel (all need locations join for country filtering)
-      const [trackerResult, statusResult, countryResult, ownerCountryResult] = await Promise.all([
+      const [trackerResult, statusResult, countryResult, ownerCountryResult, ownerResult] =
+        await Promise.all([
         // Trackers - exclude tracker filter from count
         widgetQuery(`
           SELECT o."Tracker" as value, COUNT(*) as cnt
@@ -569,6 +578,17 @@
           GROUP BY o."Owner Headquarters Country"
           ORDER BY cnt DESC
         `),
+        // Owners - exclude owner filter from count
+        widgetQuery(`
+          SELECT o."Owner" as value, COUNT(*) as cnt
+          FROM ownership o
+          LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
+          WHERE ${buildSqlWhereExcluding(filters, 'owners', 'o')}
+            AND o."Owner" IS NOT NULL AND o."Owner" != ''
+          GROUP BY o."Owner"
+          ORDER BY cnt DESC
+          LIMIT 1000
+        `),
       ]);
 
       // Check for query errors
@@ -580,17 +600,27 @@
         console.warn('[Compose] Country count query failed:', countryResult.error);
       if (!ownerCountryResult.success)
         console.warn('[Compose] Owner country count query failed:', ownerCountryResult.error);
+      if (!ownerResult.success)
+        console.warn('[Compose] Owner count query failed:', ownerResult.error);
 
       trackerOptions = (trackerResult.data || []).map((r) => ({ value: r.value, count: r.cnt }));
       statusOptions = (statusResult.data || []).map((r) => ({ value: r.value, count: r.cnt }));
-      countries = (countryResult.data || []).map((r) => r.value).filter(Boolean);
-      ownerCountries = (ownerCountryResult.data || []).map((r) => r.value).filter(Boolean);
+      countries = (countryResult.data || [])
+        .map((r) => ({ value: r.value, count: r.cnt }))
+        .filter((r) => r.value);
+      ownerCountries = (ownerCountryResult.data || [])
+        .map((r) => ({ value: r.value, count: r.cnt }))
+        .filter((r) => r.value);
+      owners = (ownerResult.data || [])
+        .map((r) => ({ value: r.value, count: r.cnt }))
+        .filter((r) => r.value);
 
       console.log('[Compose] Parametric counts updated:', {
         trackers: trackerOptions.length,
         statuses: statusOptions.length,
         countries: countries.length,
         ownerCountries: ownerCountries.length,
+        owners: owners.length,
       });
     } catch (err) {
       console.error('[Compose] Failed to update parametric counts:', err);
@@ -807,7 +837,7 @@
               >
                 <TrackerIcon tracker={opt.value} size={12} />
                 {opt.value}
-                <span class="chip-count">{formatCompact(opt.count)}</span>
+                <span class="chip-count">({formatCompact(opt.count)})</span>
               </button>
             {/each}
           </div>
@@ -825,7 +855,7 @@
               >
                 <StatusIcon status={opt.value} size={10} />
                 {opt.value}
-                <span class="chip-count">{formatCompact(opt.count)}</span>
+                <span class="chip-count">({formatCompact(opt.count)})</span>
               </button>
             {/each}
           </div>
@@ -844,8 +874,8 @@
             }}
           >
             {#each countries as country}
-              <option value={country} selected={filters.countries.includes(country)}>
-                {country}
+              <option value={country.value} selected={filters.countries.includes(country.value)}>
+                {country.value} ({formatCompact(country.count)})
               </option>
             {/each}
           </select>
@@ -870,8 +900,11 @@
             }}
           >
             {#each ownerCountries as country}
-              <option value={country} selected={filters.ownerCountries.includes(country)}>
-                {country}
+              <option
+                value={country.value}
+                selected={filters.ownerCountries.includes(country.value)}
+              >
+                {country.value} ({formatCompact(country.count)})
               </option>
             {/each}
           </select>
@@ -902,8 +935,8 @@
             }}
           >
             {#each filteredOwners as owner}
-              <option value={owner} selected={filters.owners.includes(owner)}>
-                {owner}
+              <option value={owner.value} selected={filters.owners.includes(owner.value)}>
+                {owner.value} ({formatCompact(owner.count)})
               </option>
             {/each}
           </select>

@@ -12,8 +12,8 @@
   import { base } from '$app/paths';
   import { PUBLIC_SITE_URL } from '$env/static/public';
   import { assetLink, entityLink } from '$lib/links';
-  import { formatCapacity } from '$lib/format';
-  import { colors, colorByStatus } from '$lib/ownership-theme';
+  import { formatCapacity, formatCapacityBraille } from '$lib/format';
+  import { colors, colorByStatus, colorByTracker } from '$lib/ownership-theme';
   import { getTables } from '$lib/component-data/schema';
   import {
     parseOwnershipPaths,
@@ -29,12 +29,22 @@
   import OwnershipHierarchy from '$lib/components/OwnershipHierarchy.svelte';
   import AssetScreener from '$lib/components/AssetScreener.svelte';
   import RelationshipNetwork from '$lib/components/RelationshipNetwork.svelte';
+  import OwnershipFlower from '$lib/components/OwnershipFlower.svelte';
+  import MiniFlower from '$lib/components/MiniFlower.svelte';
+  import MiniHistogram from '$lib/components/MiniHistogram.svelte';
+  import MiniBarChart from '$lib/components/MiniBarChart.svelte';
+  import Sparkline from '$lib/components/Sparkline.svelte';
+  import DataTable from '$lib/components/DataTable.svelte';
+  import CommandPalette from '$lib/components/CommandPalette.svelte';
   import StatusIcon from '$lib/components/StatusIcon.svelte';
   import TrackerIcon from '$lib/components/TrackerIcon.svelte';
   import AddToCartButton from '$lib/components/AddToCartButton.svelte';
   import UltimateParentChain from '$lib/components/UltimateParentChain.svelte';
   import DataInsights from '$lib/components/DataInsights.svelte';
   import { detectAssetAnomalies } from '$lib/anomaly-detection';
+  import TopOwners from '$lib/widgets/TopOwners.svelte';
+  import StatusDistribution from '$lib/widgets/StatusDistribution.svelte';
+  import CountryBreakdown from '$lib/widgets/CountryBreakdown.svelte';
 
   // --- PROPS (from +page.server.js) ---
   let { data } = $props();
@@ -111,6 +121,13 @@
     const path = assetId ? assetLink(assetId) : `${base}/asset/`;
     return siteUrl ? `${siteUrl}${path}` : path;
   });
+  const capacityValue = $derived.by(() => {
+    const raw = asset?.[capacityCol];
+    if (raw == null || raw === '') return null;
+    const num = Number(raw);
+    return Number.isFinite(num) ? num : null;
+  });
+  const DOT_MW = 10;
 
   // Columns to show in "All Properties" section
   const hiddenCols = $derived(
@@ -130,6 +147,57 @@
     ].filter(Boolean)
   );
   const otherCols = $derived(columns.filter((c) => !hiddenCols.includes(c)));
+
+  // --- KITCHEN SINK DATA ---
+  const ownerPortfolioAssets = $derived(data?.ownerExplorerData?.assets || []);
+  const ownerTrackerStats = $derived.by(() => {
+    const stats = new Map();
+    for (const entry of ownerPortfolioAssets) {
+      const tracker = entry.tracker || 'Unknown';
+      const current = stats.get(tracker) || { tracker, count: 0, capacity: 0 };
+      current.count += 1;
+      current.capacity += Number(entry.capacityMw || 0);
+      stats.set(tracker, current);
+    }
+    return Array.from(stats.values());
+  });
+  const ownerStatusStats = $derived.by(() => {
+    const stats = new Map();
+    for (const entry of ownerPortfolioAssets) {
+      const status = entry.status || 'Unknown';
+      stats.set(status, (stats.get(status) || 0) + 1);
+    }
+    return Array.from(stats, ([label, value]) => ({ label, value }));
+  });
+  const ownerTrackerBars = $derived.by(() =>
+    ownerTrackerStats.map((row) => ({
+      label: row.tracker,
+      value: row.count,
+      color: colorByTracker.get(row.tracker) || colors.grey,
+    }))
+  );
+  const ownershipShares = $derived.by(() => {
+    if (!ownershipPctCol) return [];
+    return owners
+      .map((owner) => Number(owner[ownershipPctCol]))
+      .filter((value) => Number.isFinite(value));
+  });
+  const ownerCapacityValues = $derived(
+    ownerPortfolioAssets.map((assetEntry) => Number(assetEntry.capacityMw || 0)).filter((v) => v)
+  );
+  const ownerTableColumns = [
+    { key: 'Parent', label: 'Parent', sortable: true, filterable: true },
+    { key: 'Owner', label: 'Owner', sortable: true, filterable: true },
+    { key: 'Status', label: 'Status', sortable: true, filterable: true },
+    { key: 'Share', label: 'Share', sortable: true, filterable: true, type: 'number' },
+    { key: 'Immediate Project Owner', label: 'Immediate Owner', sortable: true, filterable: true },
+    {
+      key: 'Parent Headquarters Country',
+      label: 'HQ Country',
+      sortable: true,
+      filterable: true,
+    },
+  ];
 
   // --- DATA FETCHING (client-side for dev mode) ---
   onMount(async () => {
@@ -261,6 +329,24 @@
           <span class="label">Owners</span>
           <span class="value">{owners.length} record{owners.length !== 1 ? 's' : ''}</span>
         </div>
+
+        {#if capacityValue != null}
+          <div class="meta-item">
+            <span class="label">Capacity</span>
+            <span class="value capacity-value">
+              {formatCapacity(capacityValue)}
+              {#if capacityValue > 0}
+                <span
+                  class="braille-chart"
+                  title="{Math.floor(capacityValue / DOT_MW)} dots (10 MW each)"
+                  aria-hidden="true"
+                >
+                  {formatCapacityBraille(capacityValue, { dotMw: DOT_MW })}
+                </span>
+              {/if}
+            </span>
+          </div>
+        {/if}
 
         {#if totalOwnership > 0}
           <div class="meta-item">
@@ -412,6 +498,82 @@
         </section>
       {/if}
 
+      <!-- Kitchen Sink Modules -->
+      <section class="kitchen-sink">
+        <h2>Kitchen Sink Modules</h2>
+        <p class="section-subtitle">Full modular showcase for future reuse.</p>
+        <div class="module-grid">
+          <div class="module-card wide">
+            <CommandPalette embedded={true} placeholder="Search assets, entities, or IDs..." />
+          </div>
+          <div class="module-card">
+            <OwnershipFlower
+              ownerId={data?.ownerExplorerData?.spotlightOwner?.id}
+              portfolio={data?.ownerExplorerData}
+              size="small"
+              showLabels={false}
+              title="Owner Portfolio Flower"
+            />
+          </div>
+          <div class="module-card">
+            <MiniFlower trackers={ownerTrackerStats} size={48} />
+          </div>
+          <div class="module-card">
+            <MiniBarChart
+              label="Owner Status Mix"
+              data={ownerStatusStats}
+              colorMap={Object.fromEntries(
+                ownerStatusStats.map((row) => [
+                  row.label,
+                  colorByStatus.get(row.label?.toLowerCase?.()) || colors.grey,
+                ])
+              )}
+            />
+          </div>
+          <div class="module-card">
+            <MiniBarChart label="Owner Tracker Mix" data={ownerTrackerBars} />
+          </div>
+          <div class="module-card">
+            <MiniHistogram
+              label="Owner Capacity Distribution"
+              data={ownerCapacityValues}
+              bins={12}
+              width={240}
+              height={80}
+              unit="MW"
+            />
+          </div>
+          <div class="module-card">
+            <Sparkline
+              label="Ownership Share Sparkline"
+              data={ownershipShares}
+              width={220}
+              height={60}
+              showDots={true}
+            />
+          </div>
+          <div class="module-card wide">
+            <DataTable
+              columns={ownerTableColumns}
+              data={owners}
+              pageSize={8}
+              showExport={false}
+              showColumnToggle={true}
+              showColumnFilters={true}
+            />
+          </div>
+          <div class="module-card">
+            <StatusDistribution />
+          </div>
+          <div class="module-card">
+            <CountryBreakdown />
+          </div>
+          <div class="module-card">
+            <TopOwners />
+          </div>
+        </div>
+      </section>
+
       <!-- Raw JSON -->
       <section class="json-dump">
         <h2>Raw Data</h2>
@@ -500,6 +662,20 @@
     padding: 12px 16px;
     background: #fafafa;
     border-left: 3px solid #333;
+  }
+  .capacity-value {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .braille-chart {
+    font-family:
+      ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
+      monospace;
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: #444;
+    white-space: nowrap;
   }
   .section-subtitle {
     font-size: 12px;
@@ -687,6 +863,27 @@
     max-height: 600px;
   }
 
+  /* Kitchen Sink */
+  .kitchen-sink {
+    margin: 50px 0;
+    padding-top: 20px;
+    border-top: 1px solid #ddd;
+  }
+  .module-grid {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 16px;
+  }
+  .module-card {
+    grid-column: span 4;
+    padding: 16px;
+    border: 1px solid #ddd;
+    background: #fff;
+  }
+  .module-card.wide {
+    grid-column: span 12;
+  }
+
   /* Responsive */
   @media (max-width: 768px) {
     .meta-grid {
@@ -695,6 +892,12 @@
     .property {
       grid-template-columns: 1fr;
       gap: 5px;
+    }
+    .module-grid {
+      grid-template-columns: 1fr;
+    }
+    .module-card {
+      grid-column: span 1;
     }
   }
 </style>
