@@ -9,11 +9,9 @@
  */
 
 // API base URL - configured via environment variable or hardcoded default
-// Using dynamic import for env to support both server and client contexts
 const API_BASE =
   import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL ||
   import.meta.env.PUBLIC_OWNERSHIP_API_URL ||
-  (typeof process !== 'undefined' ? process.env.PUBLIC_OWNERSHIP_API_BASE_URL : '') ||
   'https://gem-ownership-api.fly.dev'; // Fallback to production API
 
 // Default timeout for API requests (30 seconds)
