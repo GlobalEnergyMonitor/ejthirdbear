@@ -538,48 +538,9 @@
       console.log('[Compose] Updating parametric counts...');
 
       // Run parametric count queries in parallel (all need locations join for country filtering)
-      const [trackerResult, statusResult, countryResult, ownerCountryResult, ownerResult] =
-        await Promise.all([
-        // Trackers - exclude tracker filter from count
-        widgetQuery(`
-          SELECT o."Tracker" as value, COUNT(*) as cnt
-          FROM ownership o
-          LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
-          WHERE ${buildSqlWhereExcluding(filters, 'trackers', 'o')}
-          GROUP BY o."Tracker"
-          ORDER BY cnt DESC
-        `),
-        // Statuses - exclude status filter from count
-        widgetQuery(`
-          SELECT o."Status" as value, COUNT(*) as cnt
-          FROM ownership o
-          LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
-          WHERE ${buildSqlWhereExcluding(filters, 'statuses', 'o')}
-          GROUP BY o."Status"
-          ORDER BY cnt DESC
-        `),
-        // Countries - exclude country filter from count
-        widgetQuery(`
-          SELECT l."Country.Area" as value, COUNT(*) as cnt
-          FROM ownership o
-          LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
-          WHERE ${buildSqlWhereExcluding(filters, 'countries', 'o')}
-            AND l."Country.Area" IS NOT NULL AND l."Country.Area" != ''
-          GROUP BY l."Country.Area"
-          ORDER BY cnt DESC
-        `),
-        // Owner countries - exclude owner country filter from count
-        widgetQuery(`
-          SELECT o."Owner Headquarters Country" as value, COUNT(*) as cnt
-          FROM ownership o
-          LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
-          WHERE ${buildSqlWhereExcluding(filters, 'ownerCountries', 'o')}
-            AND o."Owner Headquarters Country" IS NOT NULL AND o."Owner Headquarters Country" != ''
-          GROUP BY o."Owner Headquarters Country"
-          ORDER BY cnt DESC
-        `),
-        // Owners - exclude owner filter from count
-        widgetQuery(`
+      const shouldUpdateOwners = ownerSearch.length >= 2 || filters.owners.length > 0;
+      const ownerCountPromise = shouldUpdateOwners
+        ? widgetQuery(`
           SELECT o."Owner" as value, COUNT(*) as cnt
           FROM ownership o
           LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
@@ -588,8 +549,51 @@
           GROUP BY o."Owner"
           ORDER BY cnt DESC
           LIMIT 1000
+        `)
+        : Promise.resolve(null);
+
+      const [trackerResult, statusResult, countryResult, ownerCountryResult, ownerResult] =
+        await Promise.all([
+          // Trackers - exclude tracker filter from count
+          widgetQuery(`
+          SELECT o."Tracker" as value, COUNT(*) as cnt
+          FROM ownership o
+          LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
+          WHERE ${buildSqlWhereExcluding(filters, 'trackers', 'o')}
+          GROUP BY o."Tracker"
+          ORDER BY cnt DESC
         `),
-      ]);
+          // Statuses - exclude status filter from count
+          widgetQuery(`
+          SELECT o."Status" as value, COUNT(*) as cnt
+          FROM ownership o
+          LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
+          WHERE ${buildSqlWhereExcluding(filters, 'statuses', 'o')}
+          GROUP BY o."Status"
+          ORDER BY cnt DESC
+        `),
+          // Countries - exclude country filter from count
+          widgetQuery(`
+          SELECT l."Country.Area" as value, COUNT(*) as cnt
+          FROM ownership o
+          LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
+          WHERE ${buildSqlWhereExcluding(filters, 'countries', 'o')}
+            AND l."Country.Area" IS NOT NULL AND l."Country.Area" != ''
+          GROUP BY l."Country.Area"
+          ORDER BY cnt DESC
+        `),
+          // Owner countries - exclude owner country filter from count
+          widgetQuery(`
+          SELECT o."Owner Headquarters Country" as value, COUNT(*) as cnt
+          FROM ownership o
+          LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
+          WHERE ${buildSqlWhereExcluding(filters, 'ownerCountries', 'o')}
+            AND o."Owner Headquarters Country" IS NOT NULL AND o."Owner Headquarters Country" != ''
+          GROUP BY o."Owner Headquarters Country"
+          ORDER BY cnt DESC
+        `),
+          ownerCountPromise,
+        ]);
 
       // Check for query errors
       if (!trackerResult.success)
@@ -600,7 +604,7 @@
         console.warn('[Compose] Country count query failed:', countryResult.error);
       if (!ownerCountryResult.success)
         console.warn('[Compose] Owner country count query failed:', ownerCountryResult.error);
-      if (!ownerResult.success)
+      if (ownerResult && !ownerResult.success)
         console.warn('[Compose] Owner count query failed:', ownerResult.error);
 
       trackerOptions = (trackerResult.data || []).map((r) => ({ value: r.value, count: r.cnt }));
@@ -611,16 +615,18 @@
       ownerCountries = (ownerCountryResult.data || [])
         .map((r) => ({ value: r.value, count: r.cnt }))
         .filter((r) => r.value);
-      owners = (ownerResult.data || [])
-        .map((r) => ({ value: r.value, count: r.cnt }))
-        .filter((r) => r.value);
+      if (ownerResult && ownerResult.success) {
+        owners = (ownerResult.data || [])
+          .map((r) => ({ value: r.value, count: r.cnt }))
+          .filter((r) => r.value);
+      }
 
       console.log('[Compose] Parametric counts updated:', {
         trackers: trackerOptions.length,
         statuses: statusOptions.length,
         countries: countries.length,
         ownerCountries: ownerCountries.length,
-        owners: owners.length,
+        owners: ownerResult && ownerResult.success ? owners.length : 'skipped',
       });
     } catch (err) {
       console.error('[Compose] Failed to update parametric counts:', err);
@@ -796,7 +802,7 @@
       syncFiltersToUrl();
       loadResults();
       updateParametricCounts();
-    }, 150);
+    }, 600);
 
     // Cleanup function to prevent memory leaks
     return () => clearTimeout(timeout);
