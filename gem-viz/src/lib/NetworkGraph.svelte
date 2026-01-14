@@ -3,7 +3,7 @@
   import { assetPath, assetLink, entityLink } from '$lib/links';
   import { goto } from '$app/navigation';
   import { Deck } from '@deck.gl/core';
-  import { ScatterplotLayer, PathLayer, IconLayer } from '@deck.gl/layers';
+  import { ScatterplotLayer, LineLayer } from '@deck.gl/layers';
   // Use d3-force-3d for better performance (even in 2D mode)
   import {
     forceSimulation,
@@ -28,53 +28,29 @@
   let currentZoom = $state(0);
   let loadingPhase = $state('Initializing...');
   let fps = $state(0);
-  let focusLevel = $state('balanced');
-  let flowerIconSize = $state(40);
 
   // Configuration - user adjustable
   let config = $state({
     maxEdges: 50000,
-    minConnections: 3,
+    minConnections: 2,
     edgeOpacity: 0.4,
     sampleMode: 'top',
     simulationSpeed: 'fast',
     warmupTicks: 100, // Synchronous warmup ticks before animation
-    use3D: true, // Use 3D layout (z-axis)
+    use3D: false, // Use 3D layout (z-axis)
     autoRotate: true, // Auto-rotate in 3D mode
     rotationSpeed: 0.15, // Degrees per frame (~9°/sec at 60fps)
-    layoutScale: 10, // Visual spacing multiplier
-    highlightHops: 1, // Number of hops to highlight on hover
-    useFlowerNodes: true,
-    fisheye: true, // Logarithmic size scaling based on distance from camera
-    fisheyeStrength: 2.5, // How pronounced the fisheye effect is (1-3)
   });
 
   // Auto-rotation state
   let rotationFrame;
   let currentViewState = null; // Track view state for camera rotation
-  let orbitView;
-  let orthoView;
-  let autoRotateResumeTimeout;
-  let autoRotatePaused = $state(false);
-  let rotationVelocity = 0;
-  let hoverFrame;
-  let hoverTimeout;
-
-  // WASD flying controls
-  let flyingEnabled = $state(false);
-  let keysPressed = $state(new Set());
-  let flyingFrame;
-  const FLY_SPEED = 12; // Units per frame
-  const FLY_VERTICAL_SPEED = 8; // Units per frame for Q/E
 
   // Graph data
   let nodes = [];
   let links = [];
   let nodeMap = new Map();
   let allEdgesCount = 0;
-
-  // Adjacency list for hop traversal
-  let adjacencyMap = new Map();
 
   // Simulation
   let simulation;
@@ -107,26 +83,6 @@
       warmupTicks: 180,
       animTicks: 150,
     },
-  };
-
-  const FOCUS_PRESETS = {
-    major: { minConnections: 10, maxEdges: 25000, sampleMode: 'top' },
-    balanced: { minConnections: 3, maxEdges: 50000, sampleMode: 'top' },
-    expansive: { minConnections: 1, maxEdges: 100000, sampleMode: 'random' },
-  };
-
-  const DEFAULT_VIEW_STATE_3D = {
-    target: /** @type {[number, number, number]} */ ([0, 0, 0]),
-    rotationX: 30,
-    rotationOrbit: -30,
-    zoom: -2,
-    minZoom: -4,
-    maxZoom: 3,
-  };
-
-  const DEFAULT_VIEW_STATE_2D = {
-    target: /** @type {[number, number, number]} */ ([0, 0, 0]),
-    zoom: -2.3,
   };
 
   async function loadData() {
@@ -251,39 +207,35 @@
       links = [];
 
       for (const edge of edgesResult.data) {
-        const sourceId = String(edge.source_id || '').trim();
-        const targetId = String(edge.target_id || '').trim();
-        if (!sourceId || !targetId) continue;
-
-        if (!nodeMap.has(sourceId)) {
-          nodeMap.set(sourceId, {
-            id: sourceId,
-            name: edge.source_name || sourceId,
+        if (!nodeMap.has(edge.source_id)) {
+          nodeMap.set(edge.source_id, {
+            id: edge.source_id,
+            name: edge.source_name || edge.source_id,
             connections: 0,
             inDegree: 0,
             outDegree: 0,
           });
         }
-        const sourceNode = nodeMap.get(sourceId);
+        const sourceNode = nodeMap.get(edge.source_id);
         sourceNode.connections++;
         sourceNode.outDegree++;
 
-        if (!nodeMap.has(targetId)) {
-          nodeMap.set(targetId, {
-            id: targetId,
-            name: edge.target_name || targetId,
+        if (!nodeMap.has(edge.target_id)) {
+          nodeMap.set(edge.target_id, {
+            id: edge.target_id,
+            name: edge.target_name || edge.target_id,
             connections: 0,
             inDegree: 0,
             outDegree: 0,
           });
         }
-        const targetNode = nodeMap.get(targetId);
+        const targetNode = nodeMap.get(edge.target_id);
         targetNode.connections++;
         targetNode.inDegree++;
 
         links.push({
-          source: sourceId,
-          target: targetId,
+          source: edge.source_id,
+          target: edge.target_id,
           share: edge.share || 0,
         });
       }
@@ -297,17 +249,6 @@
 
       nodes = filteredNodes;
       links = filteredLinks;
-
-      // Build adjacency map for hop traversal
-      adjacencyMap.clear();
-      for (const link of links) {
-        const srcId = link.source;
-        const tgtId = link.target;
-        if (!adjacencyMap.has(srcId)) adjacencyMap.set(srcId, new Set());
-        if (!adjacencyMap.has(tgtId)) adjacencyMap.set(tgtId, new Set());
-        adjacencyMap.get(srcId).add(tgtId);
-        adjacencyMap.get(tgtId).add(srcId);
-      }
 
       stats = {
         nodes: nodes.length,
@@ -436,44 +377,12 @@
     });
   }
 
-  // Get all node IDs within N hops of a starting node
-  function getNodesWithinHops(startId, maxHops = 3) {
-    const visited = new Set([startId]);
-    let frontier = [startId];
-
-    for (let hop = 0; hop < maxHops && frontier.length > 0; hop++) {
-      const nextFrontier = [];
-      for (const nodeId of frontier) {
-        const neighbors = adjacencyMap.get(nodeId);
-        if (neighbors) {
-          for (const neighborId of neighbors) {
-            if (!visited.has(neighborId)) {
-              visited.add(neighborId);
-              nextFrontier.push(neighborId);
-            }
-          }
-        }
-      }
-      frontier = nextFrontier;
-    }
-
-    return visited;
-  }
-
   function updateLayers() {
     if (!deck) return;
 
     // Simple position getter - explicitly typed for deck.gl
     /** @type {(d: any) => [number, number, number]} */
-    const getPos = (d) => {
-      const scale = config.layoutScale || 1;
-      return [(d.x || 0) * scale, (d.y || 0) * scale, (config.use3D ? d.z || 0 : 0) * scale];
-    };
-
-    // Compute visible nodes based on hover (N hops from hovered node)
-    const visibleNodeIds = hoveredNode
-      ? getNodesWithinHops(hoveredNode.id, config.highlightHops)
-      : null; // null means show all
+    const getPos = (d) => [d.x || 0, d.y || 0, config.use3D ? d.z || 0 : 0];
 
     // Build line data from resolved links
     const lineData = [];
@@ -481,37 +390,7 @@
       const source = typeof link.source === 'object' ? link.source : nodeMap.get(link.source);
       const target = typeof link.target === 'object' ? link.target : nodeMap.get(link.target);
       if (source && target && source.x != null && target.x != null) {
-        // Skip edges not connected to visible nodes when filtering
-        if (visibleNodeIds && !visibleNodeIds.has(source.id) && !visibleNodeIds.has(target.id)) {
-          continue;
-        }
-
-        const sourcePos = getPos(source);
-        const targetPos = getPos(target);
-        const dx = targetPos[0] - sourcePos[0];
-        const dy = targetPos[1] - sourcePos[1];
-        const distance = Math.hypot(dx, dy) || 1;
-        const bend = Math.min(60, distance * 0.12);
-        const normX = -dy / distance;
-        const normY = dx / distance;
-        const midZ = (sourcePos[2] + targetPos[2]) / 2;
-        const mid = [
-          (sourcePos[0] + targetPos[0]) / 2 + normX * bend,
-          (sourcePos[1] + targetPos[1]) / 2 + normY * bend,
-          config.use3D ? midZ + bend * 0.2 : 0,
-        ];
-
-        // Check if this edge connects two visible nodes (fully visible) or just one (dimmed)
-        const fullyVisible =
-          !visibleNodeIds || (visibleNodeIds.has(source.id) && visibleNodeIds.has(target.id));
-
-        lineData.push({
-          path: [sourcePos, mid, targetPos],
-          share: link.share || 0,
-          sourceId: source.id,
-          targetId: target.id,
-          fullyVisible,
-        });
+        lineData.push({ source, target, share: link.share });
       }
     }
 
@@ -523,272 +402,89 @@
     // Node size scaling
     const nodeScale = Math.pow(2, -currentZoom * 0.25);
 
-    // Fisheye effect: calculate distance-based scale factors
-    const cameraTarget = currentViewState?.target || [0, 0, 0];
-    const fisheyeScale = config.layoutScale || 1;
-
-    // Pre-compute fisheye multipliers for all nodes
-    const getFisheyeMultiplier = (d) => {
-      if (!config.fisheye) return 1;
-      const pos = getPos(d);
-      const dx = pos[0] - cameraTarget[0];
-      const dy = pos[1] - cameraTarget[1];
-      const dz = pos[2] - cameraTarget[2];
-      const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-      // INVERSE fisheye: farther = larger, closer = smaller
-      // This helps you see what's ahead while flying - distant nodes grow to attract attention
-      // Nearby nodes shrink to get out of the way
-      const normalizedDist = distance / (fisheyeScale * 40);
-      // Logarithmic growth: starts small, grows with distance, plateaus
-      const multiplier = 0.4 + config.fisheyeStrength * Math.log(1 + normalizedDist) * 0.5;
-      return Math.max(0.3, Math.min(4, multiplier)); // Clamp between 0.3x and 4x
-    };
-
-    const useFlowers = config.useFlowerNodes;
-    const flowerNodes = useFlowers ? nodes.filter((n) => n.id?.startsWith('E')) : [];
-    const circleNodes = useFlowers ? nodes.filter((n) => !n.id?.startsWith('E')) : nodes;
-
     deck.setProps({
       layers: [
-        // Edges - rendered behind nodes with depth test enabled
+        // Edges - hidden at very low zoom for perf
         currentZoom > -3.5 &&
-          new PathLayer({
+          new LineLayer({
             id: 'edges',
             data: lineData,
-            getPath: (d) => d.path,
+            getSourcePosition: (d) => getPos(d.source),
+            getTargetPosition: (d) => getPos(d.target),
             getColor: (d) => {
-              const t = Math.min(1, Math.max(0, d.share / 100));
-              // Gray edges, darker with higher ownership share
-              const gray = Math.round(160 - t * 80); // 160 -> 80
-              // Dim edges that aren't fully within the visible subgraph
-              const visibilityMult = d.fullyVisible ? 1 : 0.15;
-              const alpha = Math.round((80 + t * 100) * edgeOpacity * visibilityMult);
-              return [gray, gray, gray, alpha];
+              const shareAlpha = Math.min(255, Math.max(15, (d.share || 8) * 2.2));
+              return [70, 70, 70, Math.round(shareAlpha * edgeOpacity)];
             },
-            // Width scaled by ownership share: 0.1 to 4px
-            getWidth: (d) => {
-              const share = Math.max(0, Math.min(100, d.share || 0));
-              return 0.1 + (share / 100) * 3.9;
-            },
-            widthUnits: 'pixels',
-            widthMinPixels: 0.1,
-            widthMaxPixels: 4,
-            opacity: edgeOpacity,
+            getWidth: 1,
+            widthMinPixels: 0.5,
+            widthMaxPixels: 2,
             pickable: false,
-            parameters: {
-              depthTest: true, // Edges respect depth
-            },
             updateTriggers: {
-              getColor: [edgeOpacity, hoveredNode?.id],
-              getWidth: [edgeOpacity],
+              getColor: [edgeOpacity],
             },
           }),
 
-        useFlowers &&
-          new IconLayer({
-            id: 'flower-nodes',
-            data: flowerNodes,
-            autoPacking: true,
-            getPosition: (d) => getPos(d),
-            getIcon: (d) => {
-              const filename = d?.id ? `${d.id}.svg` : 'default.svg';
-              return {
-                url: assetPath(`flowers/${filename}`),
-                width: flowerIconSize,
-                height: flowerIconSize,
-                anchorX: flowerIconSize / 2,
-                anchorY: flowerIconSize / 2,
-                mask: false,
-              };
-            },
-            sizeUnits: 'pixels',
-            getSize: (d) => {
-              const baseSize = Math.max(4, Math.log2(d.connections + 1) * 2.5);
-              const fisheye = getFisheyeMultiplier(d);
-              return baseSize * nodeScale * fisheye;
-            },
-            sizeMinPixels: 3,
-            sizeMaxPixels: 40,
-            billboard: true,
-            pickable: true,
-            // Disable depth test so icons always render on top of edges
-            parameters: {
-              depthTest: false,
-            },
-            onHover: ({ object }) => {
-              handleHover(object);
-            },
-            onClick: ({ object }) => handleNodeClick(object),
-            autoHighlight: true,
-            highlightColor: [255, 220, 0, 120],
-            getColor: (d) => {
-              const isVisible = !visibleNodeIds || visibleNodeIds.has(d.id);
-              return [255, 255, 255, isVisible ? 255 : 20];
-            },
-            updateTriggers: {
-              getSize: [
-                nodeScale,
-                flowerIconSize,
-                config.fisheye,
-                config.fisheyeStrength,
-                cameraTarget,
-              ],
-              getIcon: [flowerIconSize],
-              getColor: [hoveredNode?.id],
-            },
-          }),
-
-        // Nodes - rendered on top with depth test disabled
+        // Nodes
         new ScatterplotLayer({
           id: 'nodes',
-          data: circleNodes,
+          data: nodes,
           getPosition: (d) => getPos(d),
-          billboard: true,
           getRadius: (d) => {
-            const baseSize = Math.max(1.5, Math.log2(d.connections + 1) * 2);
-            const fisheye = getFisheyeMultiplier(d);
-            return baseSize * nodeScale * fisheye;
+            const baseSize = Math.max(2, Math.log2(d.connections + 1) * 2.8);
+            return baseSize * nodeScale;
           },
           getFillColor: (d) => {
-            const isVisible = !visibleNodeIds || visibleNodeIds.has(d.id);
-            if (config.useFlowerNodes) {
-              const alpha = isVisible ? 160 : 16;
-              return [130, 130, 130, alpha];
-            }
             // Purple -> Orange -> Red gradient by connection count
             const t = Math.min(1, d.connections / 80);
             const r = Math.round(90 + t * 165);
             const g = Math.round(50 + t * 50 - t * t * 80);
             const b = Math.round(240 - t * 200);
-            const alpha = isVisible ? 255 : 20;
-            return [r, g, b, alpha];
+            return [r, g, b, 215];
           },
-          // Stroke/outline to make nodes pop
-          stroked: true,
-          getLineColor: (d) => {
-            const isVisible = !visibleNodeIds || visibleNodeIds.has(d.id);
-            if (config.useFlowerNodes) {
-              return isVisible ? [255, 255, 255, 120] : [255, 255, 255, 10];
-            }
-            return isVisible ? [255, 255, 255, 200] : [255, 255, 255, 15];
-          },
-          lineWidthMinPixels: 0.5,
-          lineWidthMaxPixels: 1.5,
-          radiusMinPixels: 1,
-          radiusMaxPixels: 50,
+          radiusMinPixels: 1.5,
+          radiusMaxPixels: 35,
           pickable: true,
-          // Disable depth test so nodes always render on top of edges
-          parameters: {
-            depthTest: false,
-          },
           onHover: ({ object }) => {
-            handleHover(object);
+            hoveredNode = object;
           },
-          onClick: ({ object }) => handleNodeClick(object),
+          onClick: ({ object }) => {
+            if (object) {
+              // Assets start with G, entities with E
+              const isAsset = object.id.startsWith('G');
+              goto(isAsset ? assetLink(object.id) : entityLink(object.id));
+            }
+          },
           autoHighlight: true,
           highlightColor: [255, 220, 0, 255],
           updateTriggers: {
-            getRadius: [nodeScale, config.fisheye, config.fisheyeStrength, cameraTarget],
-            getFillColor: [hoveredNode?.id],
-            getLineColor: [hoveredNode?.id],
+            getRadius: [nodeScale],
           },
         }),
       ].filter(Boolean),
     });
   }
 
-  function handleHover(object) {
-    if (hoverTimeout) {
-      clearTimeout(hoverTimeout);
-      hoverTimeout = null;
-    }
-
-    if (object?.id === hoveredNode?.id) return;
-
-    if (object) {
-      hoveredNode = object;
-      scheduleHoverUpdate();
-    } else {
-      hoverTimeout = setTimeout(() => {
-        hoveredNode = null;
-        scheduleHoverUpdate();
-      }, 80);
-    }
-  }
-
-  function scheduleHoverUpdate() {
-    if (hoverFrame) return;
-    hoverFrame = requestAnimationFrame(() => {
-      hoverFrame = null;
-      updateLayers();
-    });
-  }
-
-  function handleNodeClick(object) {
-    const nodeId = typeof object?.id === 'string' ? object.id : null;
-    if (!nodeId) return;
-    const isAsset = nodeId.startsWith('G');
-    goto(isAsset ? assetLink(nodeId) : entityLink(nodeId));
-  }
-
-  function scheduleAutoRotateResume() {
-    if (autoRotateResumeTimeout) clearTimeout(autoRotateResumeTimeout);
-    if (!config.autoRotate) return;
-    autoRotateResumeTimeout = setTimeout(() => {
-      if (!hoveredNode) {
-        autoRotatePaused = false;
-        startAutoRotation();
-      }
-    }, 4500);
-  }
-
-  function handleViewStateChange({ viewState, interactionState }) {
+  function handleViewStateChange({ viewState }) {
     currentZoom = viewState.zoom;
     currentViewState = { ...viewState };
-    const isInteracting =
-      interactionState?.isDragging ||
-      interactionState?.isPanning ||
-      interactionState?.isRotating ||
-      interactionState?.isZooming;
-
-    if (config.use3D && config.autoRotate && isInteracting) {
-      autoRotatePaused = true;
-      rotationVelocity = 0;
-      stopAutoRotation();
-      scheduleAutoRotateResume();
-    }
     updateLayers();
   }
 
   function startAutoRotation() {
     if (rotationFrame) cancelAnimationFrame(rotationFrame);
-    if (!config.use3D || !config.autoRotate || autoRotatePaused || !deck) return;
+    if (!config.use3D || !config.autoRotate || !deck) return;
 
     console.log('[NetworkGraph] Starting camera auto-rotation');
-    const startTime = performance.now();
 
     function rotate() {
-      if (
-        !config.autoRotate ||
-        !config.use3D ||
-        !deck ||
-        !currentViewState ||
-        autoRotatePaused ||
-        hoveredNode
-      ) {
+      if (!config.autoRotate || !config.use3D || !deck || !currentViewState) {
         console.log('[NetworkGraph] Stopping auto-rotation');
         rotationFrame = null;
         return;
       }
 
-      // Ease rotation velocity for smoother start/stop with gentle drift
-      const t = (performance.now() - startTime) / 1000;
-      const wave = 0.85 + 0.15 * Math.sin(t * 0.6);
-      const targetSpeed = config.rotationSpeed * wave;
-      rotationVelocity = rotationVelocity + (targetSpeed - rotationVelocity) * 0.05;
-
       // Increment orbit rotation
-      const newOrbit = ((currentViewState.rotationOrbit || 0) + rotationVelocity) % 360;
+      const newOrbit = ((currentViewState.rotationOrbit || 0) + config.rotationSpeed) % 360;
 
       currentViewState = {
         ...currentViewState,
@@ -813,171 +509,18 @@
     }
   }
 
-  // WASD Flying controls
-  function handleKeyDown(e) {
-    if (!flyingEnabled || !config.use3D) return;
-
-    const key = e.key.toLowerCase();
-    if (['w', 'a', 's', 'd', 'q', 'e'].includes(key)) {
-      e.preventDefault();
-      keysPressed.add(key);
-      keysPressed = new Set(keysPressed); // trigger reactivity
-      startFlyingLoop();
-    }
-  }
-
-  function handleKeyUp(e) {
-    const key = e.key.toLowerCase();
-    if (['w', 'a', 's', 'd', 'q', 'e'].includes(key)) {
-      keysPressed.delete(key);
-      keysPressed = new Set(keysPressed); // trigger reactivity
-      if (keysPressed.size === 0) {
-        stopFlyingLoop();
-      }
-    }
-  }
-
-  function startFlyingLoop() {
-    if (flyingFrame) return;
-
-    // Pause auto-rotation while flying
-    if (config.autoRotate) {
-      autoRotatePaused = true;
-      stopAutoRotation();
-    }
-
-    function fly() {
-      if (!flyingEnabled || !config.use3D || !deck || !currentViewState || keysPressed.size === 0) {
-        flyingFrame = null;
-        scheduleAutoRotateResume();
-        return;
-      }
-
-      // Get camera orientation (convert to radians)
-      // OrbitView with orbitAxis='Y' means Y is vertical, X/Z are horizontal plane
-      // rotationOrbit is measured from the -Z axis, rotating toward +X
-      const orbitRad = ((currentViewState.rotationOrbit || 0) * Math.PI) / 180;
-
-      // Forward = direction camera is looking (into the screen)
-      // In OrbitView, camera looks from orbit position toward target
-      const forwardX = Math.sin(orbitRad);
-      const forwardZ = Math.cos(orbitRad);
-
-      // Right = 90 degrees clockwise from forward on X/Z plane
-      const rightX = Math.cos(orbitRad);
-      const rightZ = -Math.sin(orbitRad);
-
-      // Build movement vector (X/Z horizontal, Y vertical)
-      let dx = 0,
-        dy = 0,
-        dz = 0;
-
-      if (keysPressed.has('w')) {
-        dx += forwardX * FLY_SPEED;
-        dz += forwardZ * FLY_SPEED;
-      }
-      if (keysPressed.has('s')) {
-        dx -= forwardX * FLY_SPEED;
-        dz -= forwardZ * FLY_SPEED;
-      }
-      if (keysPressed.has('a')) {
-        dx -= rightX * FLY_SPEED;
-        dz -= rightZ * FLY_SPEED;
-      }
-      if (keysPressed.has('d')) {
-        dx += rightX * FLY_SPEED;
-        dz += rightZ * FLY_SPEED;
-      }
-      if (keysPressed.has('q')) {
-        dy -= FLY_VERTICAL_SPEED;
-      } // Down
-      if (keysPressed.has('e')) {
-        dy += FLY_VERTICAL_SPEED;
-      } // Up
-
-      // Update camera target position
-      const [tx, ty, tz] = currentViewState.target || [0, 0, 0];
-      currentViewState = {
-        ...currentViewState,
-        target: [tx + dx, ty + dy, tz + dz],
-      };
-
-      deck.setProps({
-        initialViewState: currentViewState,
-      });
-
-      flyingFrame = requestAnimationFrame(fly);
-    }
-
-    flyingFrame = requestAnimationFrame(fly);
-  }
-
-  function stopFlyingLoop() {
-    if (flyingFrame) {
-      cancelAnimationFrame(flyingFrame);
-      flyingFrame = null;
-    }
-  }
-
-  function toggleFlying() {
-    // Note: flyingEnabled is already toggled by bind:checked before this runs
-    if (!flyingEnabled) {
-      keysPressed.clear();
-      keysPressed = new Set(keysPressed);
-      stopFlyingLoop();
-    }
-  }
-
   function toggleAutoRotate() {
     if (config.autoRotate) {
-      autoRotatePaused = false;
-      rotationVelocity = 0;
       startAutoRotation();
     } else {
-      autoRotatePaused = false;
       stopAutoRotation();
     }
-  }
-
-  $effect(() => {
-    if (!config.use3D || !config.autoRotate) return;
-    if (hoveredNode) {
-      autoRotatePaused = true;
-      rotationVelocity = 0;
-      stopAutoRotation();
-      scheduleAutoRotateResume();
-    }
-  });
-
-  function applyFocusPreset() {
-    const preset = FOCUS_PRESETS[focusLevel];
-    if (!preset) return;
-    config.minConnections = preset.minConnections;
-    config.maxEdges = preset.maxEdges;
-    config.sampleMode = preset.sampleMode;
-    reloadWithConfig();
-  }
-
-  function markCustom() {
-    focusLevel = 'custom';
-  }
-
-  function applyViewMode() {
-    if (!deck) return;
-    const nextViewState = config.use3D ? DEFAULT_VIEW_STATE_3D : DEFAULT_VIEW_STATE_2D;
-    currentViewState = { ...nextViewState };
-    currentZoom = nextViewState.zoom ?? currentZoom;
-    deck.setProps({
-      views: config.use3D ? orbitView : orthoView,
-      initialViewState: currentViewState,
-    });
   }
 
   async function reloadWithConfig() {
     if (animationFrame) cancelAnimationFrame(animationFrame);
     if (rotationFrame) cancelAnimationFrame(rotationFrame);
     if (simulation) simulation.stop();
-    applyViewMode();
     await loadData();
     // Start auto-rotation after data loads (if 3D mode)
     if (config.use3D && config.autoRotate) {
@@ -988,43 +531,41 @@
   onMount(async () => {
     const { OrthographicView, OrbitView } = await import('@deck.gl/core');
 
-    orbitView = new OrbitView({
-      orbitAxis: 'Y',
-      controller: {
-        dragMode: 'pan', // normal drag = pan
-        dragPan: true, // enable panning
-        dragRotate: true, // enable rotation (shift+drag when dragMode='pan')
-        scrollZoom: { speed: 0.08, smooth: true },
-        touchZoom: true,
-        touchRotate: true, // two-finger rotate on touch devices
-        doubleClickZoom: false,
-        keyboard: true,
-        inertia: 120, // smooth momentum after drag
-      },
-    });
-    orthoView = new OrthographicView({
-      flipY: false,
-      controller: {
-        dragPan: true,
-        scrollZoom: { speed: 0.1, smooth: true },
-        touchZoom: true,
-        doubleClickZoom: false,
-        keyboard: true,
-        inertia: 100,
-      },
-    });
+    const view = config.use3D
+      ? new OrbitView({
+          orbitAxis: 'Y',
+          controller: {
+            dragMode: 'pan', // normal drag = pan
+            dragPan: true, // enable panning
+            dragRotate: true, // enable rotation (shift+drag when dragMode='pan')
+            scrollZoom: true,
+            touchZoom: true,
+            touchRotate: true, // two-finger rotate on touch devices
+            keyboard: true,
+            inertia: 150, // smooth momentum after drag
+          },
+        })
+      : new OrthographicView({ flipY: false, controller: true });
 
-    const initialViewState = config.use3D ? DEFAULT_VIEW_STATE_3D : DEFAULT_VIEW_STATE_2D;
+    const initialViewState = config.use3D
+      ? {
+          target: /** @type {[number, number, number]} */ ([0, 0, 0]),
+          rotationX: 30,
+          rotationOrbit: -30,
+          zoom: -1,
+          minZoom: -3,
+          maxZoom: 3,
+        }
+      : { target: /** @type {[number, number, number]} */ ([0, 0, 0]), zoom: -1.5 };
 
     // Initialize current view state for auto-rotation
     currentViewState = { ...initialViewState };
 
     deck = new Deck({
       parent: container,
-      views: config.use3D ? orbitView : orthoView,
+      views: view,
       initialViewState,
       onViewStateChange: handleViewStateChange,
-      onClick: ({ object }) => handleNodeClick(object),
       layers: [],
       getTooltip: ({ object }) => {
         if (!object) return null;
@@ -1051,27 +592,13 @@
     if (config.use3D && config.autoRotate) {
       startAutoRotation();
     }
-
-    // Add keyboard listeners for flying controls
-    if (typeof window !== 'undefined') {
-      window.addEventListener('keydown', handleKeyDown);
-      window.addEventListener('keyup', handleKeyUp);
-    }
   });
 
   onDestroy(() => {
     if (animationFrame) cancelAnimationFrame(animationFrame);
     if (rotationFrame) cancelAnimationFrame(rotationFrame);
-    if (flyingFrame) cancelAnimationFrame(flyingFrame);
-    if (autoRotateResumeTimeout) clearTimeout(autoRotateResumeTimeout);
-    if (hoverFrame) cancelAnimationFrame(hoverFrame);
-    if (hoverTimeout) clearTimeout(hoverTimeout);
     if (simulation) simulation.stop();
     if (deck) deck.finalize();
-    if (typeof window !== 'undefined') {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-    }
   });
 </script>
 
@@ -1098,10 +625,68 @@
   {/if}
 
   <div class="controls">
-    <div class="control-group primary">
-      <label class="toggle emphasis" title="Enable 3D view with depth. Shift+drag to orbit.">
+    <div class="control-group">
+      <label title="Maximum ownership relationships to load. Higher = more complete but slower.">
+        <span>Max Edges</span>
+        <select bind:value={config.maxEdges} onchange={reloadWithConfig}>
+          <option value={10000}>10K</option>
+          <option value={25000}>25K</option>
+          <option value={50000}>50K</option>
+          <option value={100000}>100K</option>
+          <option value={200000}>200K</option>
+        </select>
+      </label>
+
+      <label
+        title="How to select edges: Top Connected prioritizes major players, Random samples uniformly, Sequential takes first N."
+      >
+        <span>Sample</span>
+        <select bind:value={config.sampleMode} onchange={reloadWithConfig}>
+          <option value="top">Top Connected</option>
+          <option value="random">Random</option>
+          <option value="all">Sequential</option>
+        </select>
+      </label>
+
+      <label
+        title="Only show entities with at least this many connections. Higher = less clutter, major players only."
+      >
+        <span>Min Connections</span>
+        <select bind:value={config.minConnections} onchange={reloadWithConfig}>
+          <option value={1}>1+</option>
+          <option value={2}>2+</option>
+          <option value={3}>3+</option>
+          <option value={5}>5+</option>
+          <option value={10}>10+</option>
+        </select>
+      </label>
+
+      <label
+        title="Force simulation speed. Fast renders quickly, Precise takes longer but produces cleaner layouts."
+      >
+        <span>Speed</span>
+        <select bind:value={config.simulationSpeed} onchange={reloadWithConfig}>
+          <option value="fast">Fast</option>
+          <option value="medium">Medium</option>
+          <option value="slow">Precise</option>
+        </select>
+      </label>
+
+      <label title="Visibility of connection lines between nodes.">
+        <span>Edge Opacity</span>
+        <input
+          type="range"
+          min="0.1"
+          max="1"
+          step="0.1"
+          bind:value={config.edgeOpacity}
+          oninput={updateLayers}
+        />
+      </label>
+
+      <label class="toggle" title="Enable 3D view with depth. Use shift+drag to rotate the view.">
         <input type="checkbox" bind:checked={config.use3D} onchange={reloadWithConfig} />
-        <span>3D Exploration</span>
+        <span>3D Mode</span>
       </label>
 
       {#if config.use3D}
@@ -1110,181 +695,19 @@
           <span>Auto-Rotate</span>
         </label>
 
-        <label
-          class="toggle"
-          title="Enable WASD+QE flying controls to navigate through the network."
-        >
-          <input type="checkbox" bind:checked={flyingEnabled} onchange={toggleFlying} />
-          <span>Flying Mode</span>
+        <label title="Rotation speed in degrees per frame.">
+          <span>Rotation</span>
+          <input type="range" min="0.02" max="0.5" step="0.02" bind:value={config.rotationSpeed} />
         </label>
       {/if}
-
-      <label title="Controls density and clutter.">
-        <span>Focus</span>
-        <select bind:value={focusLevel} onchange={applyFocusPreset}>
-          <option value="major">Major Players</option>
-          <option value="balanced">Balanced</option>
-          <option value="expansive">Expansive</option>
-          <option value="custom">Custom</option>
-        </select>
-      </label>
     </div>
-
-    <details class="advanced">
-      <summary>Tuning</summary>
-      <div class="control-group">
-        <label title="Maximum ownership relationships to load. Higher = more complete but slower.">
-          <span>Max Edges</span>
-          <select
-            bind:value={config.maxEdges}
-            onchange={() => {
-              markCustom();
-              reloadWithConfig();
-            }}
-          >
-            <option value={10000}>10K</option>
-            <option value={25000}>25K</option>
-            <option value={50000}>50K</option>
-            <option value={100000}>100K</option>
-            <option value={200000}>200K</option>
-          </select>
-        </label>
-
-        <label
-          title="How to select edges: Top Connected prioritizes major players, Random samples uniformly, Sequential takes first N."
-        >
-          <span>Sample</span>
-          <select
-            bind:value={config.sampleMode}
-            onchange={() => {
-              markCustom();
-              reloadWithConfig();
-            }}
-          >
-            <option value="top">Top Connected</option>
-            <option value="random">Random</option>
-            <option value="all">Sequential</option>
-          </select>
-        </label>
-
-        <label
-          title="Only show entities with at least this many connections. Higher = less clutter, major players only."
-        >
-          <span>Min Connections</span>
-          <select
-            bind:value={config.minConnections}
-            onchange={() => {
-              markCustom();
-              reloadWithConfig();
-            }}
-          >
-            <option value={1}>1+</option>
-            <option value={2}>2+</option>
-            <option value={3}>3+</option>
-            <option value={5}>5+</option>
-            <option value={10}>10+</option>
-          </select>
-        </label>
-
-        <label
-          title="Force simulation speed. Fast renders quickly, Precise takes longer but produces cleaner layouts."
-        >
-          <span>Speed</span>
-          <select
-            bind:value={config.simulationSpeed}
-            onchange={() => {
-              markCustom();
-              reloadWithConfig();
-            }}
-          >
-            <option value="fast">Fast</option>
-            <option value="medium">Medium</option>
-            <option value="slow">Precise</option>
-          </select>
-        </label>
-
-        <label title="Visibility of connection lines between nodes.">
-          <span>Edge Opacity</span>
-          <input
-            type="range"
-            min="0.1"
-            max="1"
-            step="0.1"
-            bind:value={config.edgeOpacity}
-            oninput={() => {
-              markCustom();
-              updateLayers();
-            }}
-          />
-        </label>
-
-        <label class="toggle" title="Use data-driven flower icons for entity nodes (if prebaked).">
-          <input type="checkbox" bind:checked={config.useFlowerNodes} oninput={updateLayers} />
-          <span>Flowers</span>
-        </label>
-
-        <label class="toggle" title="Nodes closer to camera appear larger (fisheye lens effect).">
-          <input type="checkbox" bind:checked={config.fisheye} oninput={updateLayers} />
-          <span>Fisheye</span>
-        </label>
-
-        {#if config.fisheye}
-          <label title="Strength of the inverse fisheye - distant nodes grow larger.">
-            <span>Depth Scale</span>
-            <input
-              type="range"
-              min="1"
-              max="5"
-              step="0.5"
-              bind:value={config.fisheyeStrength}
-              oninput={updateLayers}
-            />
-          </label>
-        {/if}
-
-        <label title="Number of connection hops to highlight when hovering a node.">
-          <span>Hover Hops</span>
-          <select bind:value={config.highlightHops} onchange={updateLayers}>
-            <option value={1}>1 hop</option>
-            <option value={2}>2 hops</option>
-            <option value={3}>3 hops</option>
-            <option value={5}>5 hops</option>
-          </select>
-        </label>
-
-        <label title="Spread nodes farther apart without re-running the simulation.">
-          <span>Spacing</span>
-          <input
-            type="range"
-            min="1"
-            max="15"
-            step="1"
-            bind:value={config.layoutScale}
-            oninput={updateLayers}
-          />
-        </label>
-
-        {#if config.use3D}
-          <label title="Rotation speed in degrees per frame.">
-            <span>Rotation</span>
-            <input
-              type="range"
-              min="0.02"
-              max="0.5"
-              step="0.02"
-              bind:value={config.rotationSpeed}
-            />
-          </label>
-        {/if}
-      </div>
-    </details>
   </div>
 
   <div class="stats">
     <span class="primary">{stats.nodes.toLocaleString()} nodes</span>
     <span class="primary">{stats.edges.toLocaleString()} edges</span>
     <span class="secondary">/ {stats.totalEdges.toLocaleString()} total</span>
-    <span class="mode">{config.use3D ? '3D view' : '2D view'}</span>
+    <span class="zoom">z:{currentZoom.toFixed(1)}</span>
     {#if hoveredNode}
       <span class="hovered">{hoveredNode.name} ({hoveredNode.connections})</span>
     {/if}
@@ -1293,12 +716,10 @@
   <div class="help">
     <p>
       Click node to view • Drag to pan • Scroll to zoom{config.use3D
-        ? ' • Shift+drag to rotate' + (config.autoRotate ? ' • Auto-rotation pauses on drag' : '')
-        : ''}{flyingEnabled ? ' • WASD fly • Q/E up/down' : ''}
+        ? ' • Shift+drag to rotate' + (config.autoRotate ? ' • Auto-rotating' : '')
+        : ''}
     </p>
-    <p class="engine">
-      d3-force-3d + deck.gl {config.use3D ? '(3D)' : '(2D)'}{flyingEnabled ? ' + Flying' : ''}
-    </p>
+    <p class="engine">d3-force-3d + deck.gl {config.use3D ? '(3D)' : '(2D)'}</p>
   </div>
 
   <div bind:this={container} class="deck-container" class:clickable={hoveredNode}></div>
@@ -1308,12 +729,9 @@
   .network-container {
     flex: 1;
     position: relative;
-    border: 1px solid #111;
-    background: radial-gradient(circle at 20% 10%, #f7f7f7 0%, #ffffff 45%, #f3f3f3 100%);
+    border: 1px solid var(--color-black);
+    background: transparent;
     min-height: 600px;
-    box-shadow:
-      inset 0 0 0 1px #fff,
-      0 10px 30px rgba(0, 0, 0, 0.04);
   }
 
   .deck-container {
@@ -1336,10 +754,9 @@
     transform: translate(-50%, -50%);
     text-align: center;
     z-index: 10;
-    background: #fff;
+    background: var(--color-white);
     padding: 20px 40px;
-    border: 1px solid #111;
-    box-shadow: 0 12px 26px rgba(0, 0, 0, 0.08);
+    border: 1px solid var(--color-black);
   }
 
   .loading p,
@@ -1357,25 +774,25 @@
   .progress-bar {
     width: 200px;
     height: 4px;
-    background: #eee;
-    border: 1px solid #111;
+    background: var(--color-gray-100);
+    border: 1px solid var(--color-black);
   }
 
   .progress {
     height: 100%;
-    background: #000;
+    background: var(--color-black);
     transition: width 0.1s;
   }
 
   .progress-text {
     font-size: 10px;
-    color: #666;
+    color: var(--color-text-secondary);
     margin-top: 5px;
   }
 
   .progress-text .fps {
     margin-left: 10px;
-    color: #999;
+    color: var(--color-text-tertiary);
   }
 
   .controls {
@@ -1383,18 +800,16 @@
     top: 10px;
     right: 10px;
     z-index: 10;
-    background: rgba(255, 255, 255, 0.95);
-    border: 1px solid #111;
+    background: var(--color-white);
+    border: 1px solid var(--color-black);
     padding: 10px;
     font-size: 10px;
-    min-width: 190px;
-    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.06);
   }
 
   .control-group {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
   }
 
   .control-group label {
@@ -1404,105 +819,38 @@
   }
 
   .control-group label span {
-    min-width: 72px;
+    min-width: 80px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #666;
+    color: var(--color-text-secondary);
   }
 
   .control-group select,
   .control-group input[type='range'] {
     font-family: inherit;
     font-size: 10px;
-    padding: 3px 6px;
-    border: 1px solid #c2c2c2;
-    border-radius: 4px;
-    background: #fff;
-    color: #111;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
-    transition:
-      border-color 120ms ease,
-      box-shadow 120ms ease;
-  }
-
-  .control-group select:focus,
-  .control-group input[type='range']:focus {
-    outline: none;
-    border-color: #111;
-    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+    padding: 2px 4px;
+    border: 1px solid var(--color-text-tertiary);
+    background: var(--color-white);
   }
 
   .control-group input[type='range'] {
-    width: 74px;
+    width: 60px;
   }
 
   .control-group .toggle {
     flex-direction: row-reverse;
     justify-content: flex-end;
     gap: 6px;
-  }
-
-  .control-group.primary .toggle {
-    margin-top: 0;
-    padding-top: 0;
-    border-top: 0;
+    padding-top: 4px;
+    border-top: 1px solid var(--color-gray-100);
+    margin-top: 4px;
   }
 
   .control-group .toggle input[type='checkbox'] {
     width: 14px;
     height: 14px;
-    accent-color: #000;
-  }
-
-  .control-group.primary .toggle.emphasis span {
-    font-weight: 700;
-    color: #000;
-    font-size: 11px;
-  }
-
-  .controls .advanced {
-    margin-top: 8px;
-    border-top: 1px solid #eee;
-    padding-top: 6px;
-  }
-
-  .controls .advanced summary {
-    cursor: pointer;
-    text-transform: uppercase;
-    letter-spacing: 0.6px;
-    color: #666;
-    font-size: 9px;
-    list-style: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .controls .advanced summary::before {
-    content: '+';
-    display: inline-flex;
-    width: 12px;
-    height: 12px;
-    border: 1px solid #bbb;
-    align-items: center;
-    justify-content: center;
-    font-size: 10px;
-    color: #666;
-  }
-
-  .controls .advanced[open] summary {
-    color: #000;
-  }
-
-  .controls .advanced[open] summary::before {
-    content: '-';
-    border-color: #111;
-    color: #111;
-  }
-
-  .controls .advanced .control-group {
-    margin-top: 8px;
-    gap: 5px;
+    accent-color: var(--color-black);
   }
 
   .stats {
@@ -1516,31 +864,30 @@
     display: flex;
     gap: 10px;
     flex-wrap: wrap;
-    background: rgba(255, 255, 255, 0.95);
+    background: var(--color-white);
     padding: 8px 12px;
-    border: 1px solid #111;
+    border: 1px solid var(--color-black);
     max-width: 50%;
-    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.06);
   }
 
   .stats .primary {
-    color: #000;
+    color: var(--color-black);
     font-weight: bold;
   }
 
   .stats .secondary {
-    color: #999;
+    color: var(--color-text-tertiary);
     font-size: 9px;
   }
 
-  .stats .mode {
-    color: #666;
-    font-weight: bold;
-    font-size: 9px;
+  .stats .zoom {
+    color: var(--color-text-secondary);
+    font-family: monospace;
+    font-size: 10px;
   }
 
   .stats .hovered {
-    color: #666;
+    color: var(--color-text-secondary);
     font-style: italic;
     text-transform: none;
     font-size: 10px;
@@ -1551,12 +898,11 @@
     bottom: 10px;
     left: 10px;
     z-index: 10;
-    background: rgba(255, 255, 255, 0.92);
+    background: rgba(255, 255, 255, 0.9);
     padding: 6px 10px;
-    border: 1px solid #ccc;
+    border: 1px solid var(--color-gray-300);
     font-size: 9px;
-    color: #666;
-    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.05);
+    color: var(--color-text-secondary);
   }
 
   .help p {
@@ -1564,7 +910,7 @@
   }
 
   .help .engine {
-    color: #aaa;
+    color: var(--color-gray-400);
     font-size: 8px;
     margin-top: 3px;
   }

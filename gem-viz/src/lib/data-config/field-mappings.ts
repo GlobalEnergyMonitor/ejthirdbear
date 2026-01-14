@@ -48,8 +48,12 @@ export interface CapacityData {
 
 /**
  * Get asset ID using tracker-specific rules
+ * @see getAssetId in id-helpers.ts for column-based extraction
  */
-export function getAssetId(trackerName: string, record: Record<string, unknown>): string | null {
+export function getAssetIdByTracker(
+  trackerName: string,
+  record: Record<string, unknown>
+): string | null {
   const config = getTrackerConfig(trackerName);
   if (!config) return null;
 

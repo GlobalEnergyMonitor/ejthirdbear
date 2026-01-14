@@ -1,4 +1,4 @@
-<script lang="ts">
+<script>
   /**
    * StatusDistribution Widget
    * Donut chart showing operating vs proposed vs retired vs cancelled
@@ -7,28 +7,19 @@
   import { onMount } from 'svelte';
   import { widgetQuery } from './widget-utils';
   import { regroupStatus, colors } from '$lib/ownership-theme';
-  import { formatCount } from '$lib/format';
-  import LoadingWrapper from '$lib/components/LoadingWrapper.svelte';
-
-  interface StatusRow {
-    status: string;
-    count: number;
-  }
 
   // Props
-  let { tracker = null as string | null, title = 'Status Distribution' } = $props();
+  let { tracker = null, title = 'Status Distribution' } = $props();
 
   // State
   let loading = $state(true);
-  let error = $state<string | null>(null);
-  let data = $state<StatusRow[]>([]);
+  let error = $state(null);
+  let results = $state([]);
   let queryTime = $state(0);
-
-  // Derived values
-  const total = $derived(data.reduce((sum, r) => sum + r.count, 0));
+  let total = $state(0);
 
   // Status colors
-  const statusColors: Record<string, string> = {
+  const statusColors = {
     operating: '#4A57A8',
     proposed: colors.yellow,
     retired: colors.midnightPurple,
@@ -39,43 +30,40 @@
   async function loadData() {
     loading = true;
     error = null;
-    const startTime = Date.now();
 
     const trackerFilter = tracker ? `WHERE "Tracker" = '${tracker}'` : '';
 
-    try {
-      const result = await widgetQuery<{ status: string; count: number }>(`
-        SELECT
-          "Status" as status,
-          COUNT(DISTINCT "GEM unit ID") as count
-        FROM ownership
-        ${trackerFilter}
-        GROUP BY "Status"
-        ORDER BY count DESC
-      `);
+    const sql = `
+      SELECT
+        "Status" as status,
+        COUNT(DISTINCT "GEM unit ID") as count
+      FROM ownership
+      ${trackerFilter}
+      GROUP BY "Status"
+      ORDER BY count DESC
+    `;
 
-      if (!result.success) {
-        throw new Error(result.error || 'Query failed');
-      }
+    const result = await widgetQuery(sql);
 
+    if (result.success) {
       // Regroup statuses
-      const grouped: Record<string, number> = {};
+      const grouped = {};
       for (const row of result.data || []) {
         const group = regroupStatus(String(row.status));
         grouped[group] = (grouped[group] || 0) + Number(row.count);
       }
 
-      data = Object.entries(grouped)
+      results = Object.entries(grouped)
         .map(([status, count]) => ({ status, count }))
         .sort((a, b) => b.count - a.count);
 
-      queryTime = Date.now() - startTime;
-    } catch (err) {
-      error = err instanceof Error ? err.message : String(err);
-      queryTime = Date.now() - startTime;
-    } finally {
-      loading = false;
+      total = results.reduce((sum, r) => sum + r.count, 0);
+      queryTime = result.executionTime || 0;
+    } else {
+      error = result.error;
     }
+
+    loading = false;
   }
 
   onMount(() => {
@@ -88,17 +76,16 @@
   });
 
   // Calculate arc paths for donut
-  function getArcs(items: StatusRow[], totalCount: number) {
-    const arcs: Array<{ path: string; color: string; status: string; count: number; pct: number }> =
-      [];
+  function getArcs(data, total) {
+    const arcs = [];
     let startAngle = -Math.PI / 2;
     const cx = 60,
       cy = 60,
       r = 50,
       innerR = 30;
 
-    for (const item of items) {
-      const angle = (item.count / totalCount) * 2 * Math.PI;
+    for (const item of data) {
+      const angle = (item.count / total) * 2 * Math.PI;
       const endAngle = startAngle + angle;
 
       const x1 = cx + r * Math.cos(startAngle);
@@ -117,7 +104,7 @@
         color: statusColors[item.status] || statusColors.unknown,
         status: item.status,
         count: item.count,
-        pct: Math.round((item.count / totalCount) * 100),
+        pct: Math.round((item.count / total) * 100),
       });
 
       startAngle = endAngle;
@@ -126,7 +113,7 @@
     return arcs;
   }
 
-  const arcs = $derived(total > 0 ? getArcs(data, total) : []);
+  const arcs = $derived(total > 0 ? getArcs(results, total) : []);
 </script>
 
 <div class="widget status-distribution">
@@ -135,7 +122,13 @@
     <span class="query-time">{queryTime}ms</span>
   </header>
 
-  <LoadingWrapper {loading} {error} empty={data.length === 0} loadingMessage="Loading status...">
+  {#if loading}
+    <div class="loading">Loading status...</div>
+  {:else if error}
+    <div class="error">{error}</div>
+  {:else if results.length === 0}
+    <div class="empty">No data available</div>
+  {:else}
     <div class="chart-container">
       <svg viewBox="0 0 120 120" class="donut">
         {#each arcs as arc}
@@ -144,7 +137,7 @@
           </path>
         {/each}
         <text x="60" y="60" text-anchor="middle" dominant-baseline="middle" class="total">
-          {formatCount(total)}
+          {total.toLocaleString()}
         </text>
       </svg>
 
@@ -158,13 +151,13 @@
         {/each}
       </div>
     </div>
-  </LoadingWrapper>
+  {/if}
 </div>
 
 <style>
   .widget {
-    background: #fff;
-    border: 1px solid #ddd;
+    background: var(--color-white);
+    border: 1px solid var(--color-border);
     padding: 16px;
   }
   header {
@@ -172,7 +165,7 @@
     justify-content: space-between;
     align-items: baseline;
     margin-bottom: 12px;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--color-gray-100);
     padding-bottom: 8px;
   }
   h3 {
@@ -183,8 +176,20 @@
   }
   .query-time {
     font-size: 10px;
-    color: #999;
+    color: var(--color-text-tertiary);
     font-family: monospace;
+  }
+
+  .loading,
+  .error,
+  .empty {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    padding: 20px 0;
+    text-align: center;
+  }
+  .error {
+    color: var(--color-error);
   }
 
   .chart-container {
@@ -200,7 +205,7 @@
   .total {
     font-size: 14px;
     font-weight: bold;
-    fill: #333;
+    fill: var(--color-gray-700);
   }
 
   .legend {
@@ -223,10 +228,10 @@
   .label {
     flex: 1;
     text-transform: capitalize;
-    color: #333;
+    color: var(--color-gray-700);
   }
   .pct {
     font-family: monospace;
-    color: #666;
+    color: var(--color-text-secondary);
   }
 </style>

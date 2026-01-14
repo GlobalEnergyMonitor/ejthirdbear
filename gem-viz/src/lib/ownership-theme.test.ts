@@ -14,18 +14,28 @@ import {
   adjustColLightness,
   fossilTrackers,
   prospectiveStatuses,
-  idFields,
-  capacityFields,
 } from './ownership-theme';
+import { idFields, capacityFields } from './ownership-data';
 
 describe('colors', () => {
-  it('has expected color keys defined', () => {
-    // Just verify the color palette has expected keys - don't test specific hex values
+  it('has core UI colors', () => {
+    expect(colors.black).toBe('#1a1a1a');
+    expect(colors.white).toBe('#fefefe');
+    expect(colors.bgPrimary).toBe('#fefefe');
+    expect(colors.textPrimary).toBe('#1a1a1a');
+  });
+
+  it('has gray scale', () => {
+    expect(colors.gray50).toBe('#fafaf9');
+    expect(colors.gray500).toBe('#78716c');
+    expect(colors.gray900).toBe('#1c1917');
+  });
+
+  it('has legacy color aliases (mapped to grays)', () => {
+    // Legacy names exist for backward compatibility
     expect(colors.navy).toBeDefined();
     expect(colors.mint).toBeDefined();
-    expect(colors.orange).toBeDefined();
-    expect(colors.deepRed).toBeDefined();
-    expect(colors.grey).toBeDefined();
+    expect(colors.grey).toBe('#BECCCF');
   });
 });
 
@@ -36,13 +46,13 @@ describe('regroupStatus', () => {
     expect(regroupStatus('operating pre-retirement')).toBe('operating');
   });
 
-  it('groups proposed/construction statuses', () => {
-    expect(regroupStatus('proposed')).toBe('proposed');
-    expect(regroupStatus('announced')).toBe('proposed');
-    expect(regroupStatus('pre-permit')).toBe('proposed');
-    expect(regroupStatus('permitted')).toBe('proposed');
-    expect(regroupStatus('pre-construction')).toBe('proposed');
-    expect(regroupStatus('construction')).toBe('proposed');
+  it('groups prospective statuses', () => {
+    expect(regroupStatus('proposed')).toBe('prospective');
+    expect(regroupStatus('announced')).toBe('prospective');
+    expect(regroupStatus('pre-permit')).toBe('prospective');
+    expect(regroupStatus('permitted')).toBe('prospective');
+    expect(regroupStatus('pre-construction')).toBe('prospective');
+    expect(regroupStatus('construction')).toBe('prospective');
   });
 
   it('groups retired statuses', () => {
@@ -67,12 +77,15 @@ describe('regroupStatus', () => {
 });
 
 describe('colorByTracker', () => {
-  it('has colors for all major trackers', () => {
-    // Test that mappings exist, not specific color values
-    expect(colorByTracker.get('Coal Plant')).toBeDefined();
-    expect(colorByTracker.get('Gas Plant')).toBeDefined();
-    expect(colorByTracker.get('Coal Mine')).toBeDefined();
-    expect(colorByTracker.get('Steel Plant')).toBeDefined();
+  it('has colors for all fossil trackers', () => {
+    expect(colorByTracker.get('Coal Plant')).toBe('#7F142A');
+    expect(colorByTracker.get('Gas Plant')).toBe('#A0AAE5');
+    expect(colorByTracker.get('Coal Mine')).toBe('#4A0D19');
+  });
+
+  it('has colors for industrial trackers', () => {
+    expect(colorByTracker.get('Steel Plant')).toBe('#004F61');
+    expect(colorByTracker.get('Iron Ore Mine')).toBe('#DC153D');
   });
 
   it('returns undefined for unknown trackers', () => {
@@ -81,13 +94,21 @@ describe('colorByTracker', () => {
 });
 
 describe('colorByStatus', () => {
-  it('has colors for all status groups', () => {
-    // Test that mappings exist, not specific color values
-    expect(colorByStatus.get('operating')).toBeDefined();
-    expect(colorByStatus.get('proposed')).toBeDefined();
-    expect(colorByStatus.get('construction')).toBeDefined();
-    expect(colorByStatus.get('retired')).toBeDefined();
-    expect(colorByStatus.get('cancelled')).toBeDefined();
+  it('maps operating to correct color', () => {
+    expect(colorByStatus.get('operating')).toBe('#4A57A8');
+  });
+
+  it('maps prospective statuses to gradient colors', () => {
+    expect(colorByStatus.get('proposed')).toBe('#FDE68A');
+    expect(colorByStatus.get('construction')).toBe('#D97706');
+  });
+
+  it('maps retired to dark color', () => {
+    expect(colorByStatus.get('retired')).toBe('#1F2937');
+  });
+
+  it('maps cancelled to light gray', () => {
+    expect(colorByStatus.get('cancelled')).toBe('#D1D5DB');
   });
 });
 

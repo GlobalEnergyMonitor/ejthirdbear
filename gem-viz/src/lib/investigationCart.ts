@@ -1,15 +1,28 @@
 /**
- * Investigation Cart Store
+ * @module investigationCart
+ * @description Research collection for assets and entities.
  *
- * Extends the export list pattern to support both assets (G-prefix) and entities (E-prefix).
- * Used by investigative reporters to collect items and generate co-ownership reports.
+ * Extends the export list pattern to support both:
+ * - Assets (G-prefix, e.g., G100000109409)
+ * - Entities (E-prefix, e.g., E100001000348)
  *
- * Storage: Uses 'gem-export-list' key for backward compatibility with existing data.
- * Auto-migrates old asset-only entries by detecting type from ID prefix.
+ * Used by investigative reporters to collect items for co-ownership analysis.
+ *
+ * @example
+ * import { investigationCart, isInCart } from '$lib/investigationCart';
+ *
+ * // Add items
+ * investigationCart.add({ id: 'G123', name: 'Plant', type: 'asset' });
+ * investigationCart.add({ id: 'E456', name: 'Company', type: 'entity' });
+ *
+ * // Query
+ * const assetIds = investigationCart.getAssetIds();
+ * const counts = investigationCart.countByType();
  */
 
 import { writable, get } from 'svelte/store';
 import { browser } from '$app/environment';
+import { MAX_DISPLAY_NAME_LENGTH, STORAGE_KEY_EXPORT_LIST } from './constants';
 
 // Types
 export type CartItemType = 'asset' | 'entity';
@@ -35,7 +48,7 @@ export interface CartCounts {
 }
 
 // Constants
-const STORAGE_KEY = 'gem-export-list'; // Keep same key for backward compatibility
+const STORAGE_KEY = STORAGE_KEY_EXPORT_LIST; // Uses shared constant for consistency
 
 // Validation helpers
 function isValidAssetId(id: string): boolean {
@@ -54,10 +67,11 @@ function detectType(id: string): CartItemType {
   return id.startsWith('G') ? 'asset' : 'entity';
 }
 
-function sanitizeName(name: unknown): string {
+/** Sanitize name for display - removes HTML-unsafe chars, with fallback */
+function sanitizeDisplayName(name: unknown): string {
   if (typeof name !== 'string') return 'Unknown';
   // Remove potentially dangerous characters, keep alphanumeric and common punctuation
-  return name.replace(/[<>]/g, '').trim().slice(0, 200) || 'Unknown';
+  return name.replace(/[<>]/g, '').trim().slice(0, MAX_DISPLAY_NAME_LENGTH) || 'Unknown';
 }
 
 // Load from localStorage with validation and migration
@@ -91,7 +105,7 @@ function loadFromStorage(): CartItem[] {
 
         return {
           id,
-          name: sanitizeName(item.name),
+          name: sanitizeDisplayName(item.name),
           type,
           tracker: typeof item.tracker === 'string' ? item.tracker : undefined,
           addedAt: typeof item.addedAt === 'number' ? item.addedAt : Date.now(),
@@ -177,7 +191,7 @@ function createInvestigationCartStore() {
           ...list,
           {
             id: item.id,
-            name: sanitizeName(item.name),
+            name: sanitizeDisplayName(item.name),
             type: expectedType, // Use detected type for consistency
             tracker: item.tracker,
             metadata: item.metadata,
@@ -209,7 +223,7 @@ function createInvestigationCartStore() {
             addedCount++;
             return {
               id: item.id,
-              name: sanitizeName(item.name),
+              name: sanitizeDisplayName(item.name),
               type: detectType(item.id),
               tracker: item.tracker,
               metadata: item.metadata,

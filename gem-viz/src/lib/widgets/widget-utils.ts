@@ -1,7 +1,6 @@
 /**
  * Widget Utilities
  * Shared utilities for exploration widgets that query parquet files
- * Includes BM25 full-text search via DuckDB FTS extension
  */
 
 import { initDuckDB, loadParquetFromPath, type QueryResult } from '$lib/duckdb-utils';
@@ -14,7 +13,6 @@ export const PARQUET_FILES = {
 };
 
 let initialized = false;
-let ftsInitialized = false;
 let initPromise: Promise<void> | null = null;
 
 /**
@@ -27,86 +25,23 @@ export async function initWidgetDB(): Promise<void> {
   initPromise = (async () => {
     await initDuckDB();
 
-    // Load parquet files by fetching and registering them
+    // Load parquet file by fetching and registering it
     // (DuckDB WASM can't query URL paths directly - needs file registration)
-    const ownershipResult = await loadParquetFromPath(PARQUET_FILES.ownership, 'ownership');
-    if (!ownershipResult.success) {
-      throw new Error(`Failed to load ownership parquet: ${ownershipResult.error}`);
+    const result = await loadParquetFromPath(PARQUET_FILES.ownership, 'ownership');
+    if (!result.success) {
+      throw new Error(`Failed to load ownership parquet: ${result.error}`);
     }
 
-    const locationsResult = await loadParquetFromPath(PARQUET_FILES.locations, 'locations');
-    if (!locationsResult.success) {
-      console.warn(`Failed to load locations parquet: ${locationsResult.error}`);
-      // Continue anyway - locations is optional for country data
+    const locResult = await loadParquetFromPath(PARQUET_FILES.locations, 'locations');
+    if (!locResult.success) {
+      throw new Error(`Failed to load locations parquet: ${locResult.error}`);
     }
 
     initialized = true;
-    console.log('Widget DB initialized with ownership and locations tables');
-
-    // Initialize FTS index in background (non-blocking)
-    initFTSIndex().catch((err) => console.warn('FTS index creation failed:', err));
+    console.log('Widget DB initialized with ownership + locations tables');
   })();
 
   return initPromise;
-}
-
-/**
- * Initialize Full-Text Search index for BM25 queries
- * Creates index on Project and Owner columns
- */
-async function initFTSIndex(): Promise<void> {
-  if (ftsInitialized) return;
-
-  try {
-    const { conn } = await initDuckDB();
-
-    // Install and load FTS extension
-    await conn.query(`INSTALL fts`);
-    await conn.query(`LOAD fts`);
-
-    // Create FTS index on ownership table
-    // Index Project (asset name) and Owner (entity name) for search
-    await conn.query(`
-      PRAGMA create_fts_index(
-        'ownership',
-        'GEM unit ID',
-        'Project',
-        'Owner',
-        stemmer = 'english',
-        stopwords = 'english',
-        lower = 1,
-        strip_accents = 1,
-        overwrite = 1
-      )
-    `);
-
-    ftsInitialized = true;
-    console.log('FTS index created for BM25 search');
-  } catch (error) {
-    console.error('Failed to create FTS index:', error);
-    throw error;
-  }
-}
-
-/**
- * Check if FTS index is ready
- */
-export function isFTSReady(): boolean {
-  return ftsInitialized;
-}
-
-/**
- * Wait for FTS index to be ready (with timeout)
- */
-export async function waitForFTS(timeoutMs = 5000): Promise<boolean> {
-  if (ftsInitialized) return true;
-
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    if (ftsInitialized) return true;
-    await new Promise((r) => setTimeout(r, 100));
-  }
-  return ftsInitialized;
 }
 
 /**

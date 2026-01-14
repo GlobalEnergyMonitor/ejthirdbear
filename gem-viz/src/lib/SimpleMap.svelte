@@ -387,7 +387,7 @@
     width: 100%;
     height: 80vh;
     min-height: 600px;
-    border: 1px solid #ddd;
+    border: 1px solid var(--color-border);
     overflow: visible;
   }
 
@@ -411,17 +411,17 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(255, 255, 255, 0.95);
+    background: color-mix(in srgb, var(--color-white) 95%, transparent);
     font-size: 14px;
     z-index: 10;
   }
 
   .overlay.loading {
-    color: #666;
+    color: var(--color-text-secondary);
   }
 
   .overlay.error {
-    color: #d32f2f;
+    color: var(--color-error);
     font-weight: 500;
   }
 
@@ -430,8 +430,8 @@
     top: 10px;
     left: 50%;
     transform: translateX(-50%);
-    background: #333;
-    color: white;
+    background: var(--color-gray-700);
+    color: var(--color-white);
     padding: 8px 16px;
     border-radius: 4px;
     z-index: 20;
@@ -440,13 +440,13 @@
     gap: 12px;
     font-size: 12px;
     font-weight: bold;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 2px 6px color-mix(in srgb, var(--color-black) 30%, transparent);
   }
 
   .view-assets-btn {
-    background: rgba(255, 255, 255, 0.9);
-    border: 1px solid rgba(255, 255, 255, 1);
-    color: #333;
+    background: color-mix(in srgb, var(--color-white) 90%, transparent);
+    border: 1px solid var(--color-white);
+    color: var(--color-gray-700);
     padding: 4px 12px;
     border-radius: 3px;
     cursor: pointer;
@@ -458,14 +458,14 @@
   }
 
   .view-assets-btn:hover {
-    background: white;
-    color: #1976d2;
+    background: var(--color-white);
+    color: var(--color-asset-text, #1565c0);
   }
 
   .clear-filter-btn {
-    background: rgba(255, 255, 255, 0.2);
-    border: 1px solid rgba(255, 255, 255, 0.5);
-    color: white;
+    background: color-mix(in srgb, var(--color-white) 20%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-white) 50%, transparent);
+    color: var(--color-white);
     padding: 4px 8px;
     border-radius: 3px;
     cursor: pointer;
@@ -475,7 +475,7 @@
   }
 
   .clear-filter-btn:hover {
-    background: rgba(255, 255, 255, 0.3);
+    background: color-mix(in srgb, var(--color-white) 30%, transparent);
   }
 
   .map-instructions {
@@ -483,8 +483,8 @@
     bottom: 10px;
     left: 50%;
     transform: translateX(-50%);
-    background: rgba(0, 0, 0, 0.7);
-    color: white;
+    background: color-mix(in srgb, var(--color-black) 70%, transparent);
+    color: var(--color-white);
     padding: 6px 12px;
     border-radius: 3px;
     font-size: 10px;
@@ -496,8 +496,8 @@
     position: absolute;
     top: 10px;
     left: 10px;
-    background: rgba(255, 255, 255, 0.95);
-    border: 1px solid #ddd;
+    background: color-mix(in srgb, var(--color-white) 95%, transparent);
+    border: 1px solid var(--color-border);
     border-radius: 4px;
     padding: 8px 12px;
     z-index: 20;
@@ -517,12 +517,12 @@
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    border: 1px solid rgba(255, 255, 255, 0.8);
-    box-shadow: 0 0 2px rgba(0, 0, 0, 0.3);
+    border: 1px solid color-mix(in srgb, var(--color-white) 80%, transparent);
+    box-shadow: 0 0 2px color-mix(in srgb, var(--color-black) 30%, transparent);
   }
 
   .legend-label {
-    color: #333;
+    color: var(--color-gray-700);
     font-weight: 500;
   }
 </style>

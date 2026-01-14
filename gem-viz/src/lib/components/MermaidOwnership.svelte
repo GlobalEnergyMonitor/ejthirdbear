@@ -6,6 +6,7 @@
    */
   import { onMount, tick } from 'svelte';
   import { goto } from '$app/navigation';
+  import DOMPurify from 'isomorphic-dompurify';
   import { assetLink, entityLink } from '$lib/links';
   import { colors } from '$lib/ownership-theme';
 
@@ -14,14 +15,19 @@
     nodeMap = new Map(),
     assetId = '',
     assetName = '',
+    zoom = 0.6,
     direction = 'TD',
   } = $props();
+
+  const MIN_HEIGHT = 380;
 
   let mermaidSvg = $state('');
   let loading = $state(true);
   let error = $state(null);
   let containerEl;
   let containerWidth = $state(0);
+
+  const diagramHeight = $derived(Math.max(MIN_HEIGHT, containerWidth * 0.4));
 
   function generateMermaidSyntax() {
     if (!edges.length) return '';
@@ -40,13 +46,11 @@
     const lines = uniqueEdges.map((e, i) => {
       const sourceName = fullNodeMap.get(e.source)?.Name || e.source;
       const targetName = fullNodeMap.get(e.target)?.Name || e.target;
-      // Special names like "small shareholder(s)" can appear multiple times,
-      // so append edge index to make Mermaid node IDs unique
       const specialNames = ['small shareholder(s)', 'natural person(s)'];
       const sourceId = specialNames.includes(sourceName.toLowerCase())
         ? `${e.source}_${i}`
-        : e.source; // Already sanitized by ownership-parser
-      const targetId = e.target; // Already sanitized by ownership-parser
+        : e.source.replace(/[^a-zA-Z0-9]/g, '_');
+      const targetId = e.target.replace(/[^a-zA-Z0-9]/g, '_');
       const pctLabel = e.value ? `|${e.value.toFixed(1)}%|` : '';
       return `  ${sourceId}["${sanitize(sourceName)}"] -->${pctLabel} ${targetId}["${sanitize(targetName)}"]`;
     });
@@ -85,7 +89,8 @@
       }
 
       const { svg } = await mermaid.render('mermaid-ownership', syntax);
-      mermaidSvg = svg;
+      // Sanitize SVG to prevent XSS from malicious entity/asset names
+      mermaidSvg = DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } });
 
       // After svelte updates the DOM, attach click handlers to nodes
       await tick();
@@ -98,27 +103,27 @@
     }
   }
 
-  // Build a reverse lookup map from Mermaid node IDs to original entity IDs
+  // Build a reverse lookup map from sanitized IDs to original IDs
   function buildIdLookup() {
     const lookup = new Map();
+    const sanitize = (id) => id.replace(/[^a-zA-Z0-9]/g, '_');
 
     // Add all edges' source and target IDs
     edges.forEach((e, i) => {
       const sourceName = nodeMap.get(e.source)?.Name || e.source;
       const specialNames = ['small shareholder(s)', 'natural person(s)'];
-      // Match the same ID generation logic as generateMermaidSyntax
       const sourceId = specialNames.includes(sourceName.toLowerCase())
         ? `${e.source}_${i}`
-        : e.source; // Already sanitized
-      const targetId = e.target; // Already sanitized
+        : sanitize(e.source);
+      const targetId = sanitize(e.target);
 
       lookup.set(sourceId, e.source);
       lookup.set(targetId, e.target);
     });
 
-    // Add asset ID (already sanitized)
+    // Add asset ID
     if (assetId) {
-      lookup.set(assetId, assetId);
+      lookup.set(sanitize(assetId), assetId);
     }
 
     return lookup;
@@ -189,6 +194,8 @@
     renderMermaid();
     return cleanup;
   });
+
+  let transform = $derived(`scale(${zoom})`);
 </script>
 
 <div class="mermaid-ownership" bind:this={containerEl}>
@@ -203,8 +210,14 @@
       </details>
     </div>
   {:else if mermaidSvg}
+    <div class="controls">
+      <label
+        >Zoom: <input type="range" min="0.2" max="2" step="0.1" bind:value={zoom} />
+        <span>{(zoom * 100).toFixed(0)}%</span></label
+      >
+    </div>
     <div class="diagram-container">
-      <div class="diagram">
+      <div class="diagram" style="transform: {transform}; transform-origin: top left;">
         {@html mermaidSvg}
       </div>
     </div>
@@ -219,6 +232,26 @@
     background: transparent;
     min-height: 240px;
     width: 100%;
+  }
+  .controls {
+    padding: 10px;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-white);
+    font-size: 11px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+  .controls label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--color-text-secondary);
+  }
+  .controls input[type='range'] {
+    width: 100px;
   }
   .diagram-container {
     padding: 20px;
@@ -239,11 +272,11 @@
   }
   .diagram :global(.node rect),
   .diagram :global(.node polygon) {
-    fill: var(--navy, #333) !important;
-    stroke: var(--navy, #333) !important;
+    fill: var(--navy, var(--color-gray-700)) !important;
+    stroke: var(--navy, var(--color-gray-700)) !important;
   }
   .diagram :global(.edgeLabel) {
-    background-color: #fff !important;
+    background-color: var(--color-white) !important;
     font-size: 10px !important;
   }
   .status {
@@ -254,7 +287,7 @@
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #666;
+    color: var(--color-text-secondary);
   }
   .status.error {
     color: red;

@@ -1,42 +1,33 @@
-<script lang="ts">
+<script>
   /**
    * ConnectionFinder Widget
    * Find connections between entities - shared assets, co-ownership
-   *
-   * REFACTORED: Uses createAsyncState() composable for state management
    */
 
   import { onMount } from 'svelte';
-  import { createAsyncState } from '$lib/composables.svelte';
   import { widgetQuery } from './widget-utils';
-  import { entityLink } from '$lib/links';
+  import { assetLink, entityLink } from '$lib/links';
   import AddToCartButton from '$lib/components/AddToCartButton.svelte';
-  import LoadingWrapper from '$lib/components/LoadingWrapper.svelte';
   import { investigationCart } from '$lib/investigationCart';
 
-  interface Connection {
-    entity_name: string;
-    entity_id: string;
-    shared_assets: number;
-    sample_projects: string;
-    samples: string[];
-  }
-
   // Props
-  let {
-    entityId = null as string | null,
-    entityName = '',
-    title = 'Connected Entities',
-  } = $props();
+  let { entityId = null, entityName = '', title = 'Connected Entities' } = $props();
 
-  // State - using composable instead of 4 separate $state() calls
-  const state = createAsyncState<Connection[]>([]);
+  // State
+  let loading = $state(true);
+  let error = $state(null);
+  let connections = $state([]);
+  let queryTime = $state(0);
 
   async function loadConnections() {
     if (!entityId && !entityName) {
-      state.setData([]);
+      connections = [];
+      loading = false;
       return;
     }
+
+    loading = true;
+    error = null;
 
     // Find other entities that co-own assets with this entity
     const whereClause = entityId
@@ -67,17 +58,19 @@
       SELECT * FROM co_owners
     `;
 
-    await state.run(async () => {
-      const result = await widgetQuery<Omit<Connection, 'samples'>>(sql);
-      if (!result.success) {
-        throw new Error(result.error || 'Query failed');
-      }
-      // Transform results to include parsed samples
-      return (result.data || []).map((row) => ({
+    const result = await widgetQuery(sql);
+
+    if (result.success) {
+      connections = (result.data || []).map((row) => ({
         ...row,
         samples: row.sample_projects ? String(row.sample_projects).split(',').slice(0, 3) : [],
       }));
-    });
+      queryTime = result.executionTime || 0;
+    } else {
+      error = result.error;
+    }
+
+    loading = false;
   }
 
   onMount(() => {
@@ -90,34 +83,32 @@
     loadConnections();
   });
 
-  // Convenience accessor for template
-  const connections = $derived(state.data || []);
-
   // Add all co-owners to investigation cart
   function addAllToCart() {
     const items = connections.map((conn) => ({
       id: conn.entity_id,
       name: conn.entity_name,
-      type: 'entity' as const,
+      type: /** @type {'entity'} */ ('entity'),
       metadata: { assetCount: conn.shared_assets },
     }));
-    investigationCart.addMany(items);
+    const added = investigationCart.addMany(items);
+    // Could show a toast here
   }
 </script>
 
 <div class="widget connection-finder">
   <header>
     <h3>{title}</h3>
-    <span class="query-time">{state.queryTime}ms</span>
+    <span class="query-time">{queryTime}ms</span>
   </header>
 
-  <LoadingWrapper
-    loading={state.loading}
-    error={state.error}
-    empty={connections.length === 0}
-    loadingMessage="Finding connections..."
-    emptyMessage="No co-owners found"
-  >
+  {#if loading}
+    <div class="loading">Finding connections...</div>
+  {:else if error}
+    <div class="error">{error}</div>
+  {:else if connections.length === 0}
+    <div class="empty">No co-owners found</div>
+  {:else}
     <div class="intro-row">
       <p class="intro">Entities that co-own assets with {entityName || entityId}:</p>
       <button class="btn btn-outline btn-sm" onclick={addAllToCart}>
@@ -150,13 +141,13 @@
         </li>
       {/each}
     </ul>
-  </LoadingWrapper>
+  {/if}
 </div>
 
 <style>
   .widget {
-    background: #fff;
-    border: 1px solid #ddd;
+    background: var(--color-white);
+    border: 1px solid var(--color-border);
     padding: 16px;
   }
   header {
@@ -164,7 +155,7 @@
     justify-content: space-between;
     align-items: baseline;
     margin-bottom: 12px;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--color-gray-100);
     padding-bottom: 8px;
   }
   h3 {
@@ -175,8 +166,20 @@
   }
   .query-time {
     font-size: 10px;
-    color: #999;
+    color: var(--color-text-tertiary);
     font-family: monospace;
+  }
+
+  .loading,
+  .error,
+  .empty {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    padding: 20px 0;
+    text-align: center;
+  }
+  .error {
+    color: var(--color-error);
   }
 
   .intro-row {
@@ -187,7 +190,7 @@
   }
   .intro {
     font-size: 12px;
-    color: #666;
+    color: var(--color-text-secondary);
     margin: 0;
   }
 
@@ -201,7 +204,7 @@
     flex-direction: column;
     gap: 4px;
     padding: 10px 0;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid var(--color-gray-100);
   }
   .connections li:last-child {
     border-bottom: none;
@@ -216,7 +219,7 @@
     align-items: center;
     gap: 6px;
     text-decoration: none;
-    color: #333;
+    color: var(--color-gray-700);
     flex: 1;
   }
   .entity:hover .name {
@@ -228,7 +231,7 @@
     justify-content: center;
     width: 16px;
     height: 16px;
-    background: #333;
+    background: var(--color-gray-700);
     color: white;
     border-radius: 50%;
     font-size: 9px;
@@ -240,13 +243,13 @@
   }
   .shared {
     font-size: 11px;
-    color: #333;
+    color: var(--color-gray-700);
     font-weight: 600;
   }
   .samples {
     width: 100%;
     font-size: 11px;
-    color: #999;
+    color: var(--color-text-tertiary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

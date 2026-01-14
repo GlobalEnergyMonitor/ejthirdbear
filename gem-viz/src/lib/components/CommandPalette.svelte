@@ -1,1939 +1,1266 @@
 <script>
   /**
-   * CommandPalette - Global search with Cmd+K
+   * Command Palette (CMD+K)
    *
-   * A spotlight-style search across assets and entities.
-   * Opens with Cmd+K (or Ctrl+K on Windows).
-   *
-   * Features:
-   * - BM25-inspired ranking with importance boosting
-   * - Multi-term AND search
-   * - Fuzzy matching with Levenshtein distance
-   * - Status-based boosting (operating > proposed > cancelled)
-   * - Match highlighting
-   * - Recent searches with localStorage
-   * - Quick tracker filters
+   * Universal search and command interface.
+   * Inspired by Linear, Slack, VS Code command palettes.
    */
-  import { onMount, onDestroy, tick } from 'svelte';
+
+  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import { browser } from '$app/environment';
-  import { assetLink, entityLink } from '$lib/links';
-  import { colorByStatus } from '$lib/ownership-theme';
-  import TrackerIcon from './TrackerIcon.svelte';
-  import MiniFlower from './MiniFlower.svelte';
-  import { staggerIn, modalIn, modalOut, timing, shouldAnimate } from '$lib/animations';
-  import { animate } from 'animejs';
-  import { widgetQuery, initWidgetDB } from '$lib/widgets/widget-utils';
+  import { page } from '$app/stores';
+  import { link, assetLink, entityLink } from '$lib/links';
+  import { investigationCart } from '$lib/investigationCart';
+  import { listAssets, listEntities } from '$lib/ownership-api';
 
-  // ---------------------------------------------------------------------------
-  // Props
-  // ---------------------------------------------------------------------------
-  let {
-    embedded = false,
-    placeholder = 'Search assets, entities, or IDs...',
-    limit: _limit = 10, // Reserved for future use
-  } = $props();
-
-  // ---------------------------------------------------------------------------
   // State
-  // ---------------------------------------------------------------------------
   let open = $state(false);
+  let showHelp = $state(false);
   let query = $state('');
-  let results = $state({ assets: [], entities: [] });
-  let loading = $state(false);
   let selectedIndex = $state(0);
-  let searchTime = $state(0);
+  let loading = $state(false);
   let inputEl = $state(null);
-  let debounceTimer;
+  let toast = $state('');
+
+  // Search results
+  let assetResults = $state([]);
+  let entityResults = $state([]);
+
+  // Recent searches (persisted)
   let recentSearches = $state([]);
-  let activeFilter = $state(null); // null, 'coal', 'gas', 'oil', 'steel'
-  let searchMode = $state('all'); // 'all', 'assets', 'entities'
-  let filterCounts = $state({ coal: 0, gas: 0, oil: 0, steel: 0, bio: 0 });
-  let useGW = $state(false); // Units toggle: false = MW, true = GW
-  let hoveredItem = $state(null);
-  let hoverPreview = $state(null);
-  let hoverTimeout = null;
-  let paletteEl = $state(null);
-  let resultsEl = $state(null);
-  let backdropEl = $state(null);
 
-  // ---------------------------------------------------------------------------
-  // Derived
-  // ---------------------------------------------------------------------------
-  const allResults = $derived([
-    ...(searchMode !== 'entities' ? results.assets.map((r) => ({ ...r, type: 'asset' })) : []),
-    ...(searchMode !== 'assets' ? results.entities.map((r) => ({ ...r, type: 'entity' })) : []),
-  ]);
-  const hasResults = $derived(allResults.length > 0);
-  const totalCount = $derived(results.assets.length + results.entities.length);
-  const showingRecent = $derived(query.length < 2 && recentSearches.length > 0 && !activeFilter);
+  // Track key sequences (e.g., g + h)
+  let waitingForSecondKey = false;
 
-  // ---------------------------------------------------------------------------
-  // BM25 Search Configuration
-  // ---------------------------------------------------------------------------
-  const SEARCH_CONFIG = {
-    // Match type weights (text relevance)
-    exactMatch: 100, // Exact match on name
-    prefixMatch: 60, // Starts with query
-    wordBoundary: 40, // Match at word boundary
-    containsMatch: 20, // Contains query anywhere
-    idMatch: 30, // Match on ID field
-    fuzzyMatch: 15, // Fuzzy/Levenshtein match
-    countryMatch: 25, // Match on country
-    trackerMatch: 20, // Match on tracker name
-
-    // Importance boost weights (log-scaled)
-    capacityWeight: 15, // Per log10(MW) for assets
-    assetCountWeight: 20, // Per log10(assets) for entities
-    trackerBonus: 10, // Bonus per additional tracker (multi-sector)
-
-    // Status boost (operating assets are more relevant)
-    statusBoost: {
-      operating: 20,
-      construction: 15,
-      'pre-permit': 10,
-      permitted: 10,
-      announced: 5,
-      shelved: -5,
-      cancelled: -10,
-      retired: -5,
-      mothballed: 0,
+  // Commands - static actions
+  const commands = [
+    // Navigation
+    {
+      id: 'home',
+      label: 'Go to Home',
+      shortcut: 'g h',
+      action: () => goto(link('index')),
+      section: 'Navigation',
     },
+    {
+      id: 'explore',
+      label: 'Go to Explore',
+      shortcut: 'g e',
+      action: () => goto(link('explore')),
+      section: 'Navigation',
+    },
+    {
+      id: 'report',
+      label: 'Go to Report',
+      shortcut: 'g r',
+      action: () => goto(link('report')),
+      section: 'Navigation',
+    },
+    {
+      id: 'export',
+      label: 'Go to Export',
+      shortcut: 'g x',
+      action: () => goto(link('export')),
+      section: 'Navigation',
+    },
+    {
+      id: 'about',
+      label: 'Go to About',
+      shortcut: 'g a',
+      action: () => goto(link('about')),
+      section: 'Navigation',
+    },
+    {
+      id: 'map-search',
+      label: 'Search by Map',
+      shortcut: 'g m',
+      action: () => goto('/asset/search'),
+      section: 'Navigation',
+    },
+    {
+      id: 'back',
+      label: 'Go Back',
+      shortcut: 'b',
+      action: () => history.back(),
+      section: 'Navigation',
+    },
+    // Actions
+    {
+      id: 'add-cart',
+      label: 'Add to Cart',
+      shortcut: 'a',
+      action: () => addCurrentToCart(),
+      section: 'Actions',
+    },
+    {
+      id: 'copy-id',
+      label: 'Copy ID to Clipboard',
+      shortcut: 'c',
+      action: () => copyCurrentId(),
+      section: 'Actions',
+    },
+    {
+      id: 'copy-url',
+      label: 'Copy Page URL',
+      shortcut: 'u',
+      action: () => copyUrl(),
+      section: 'Actions',
+    },
+    {
+      id: 'clear-cart',
+      label: 'Clear Investigation Cart',
+      action: () => {
+        investigationCart.clear();
+        close();
+      },
+      section: 'Actions',
+    },
+    {
+      id: 'print',
+      label: 'Print Current Page',
+      shortcut: '⌘ p',
+      action: () => window.print(),
+      section: 'Actions',
+    },
+    // Help
+    {
+      id: 'shortcuts',
+      label: 'Show All Shortcuts',
+      shortcut: '?',
+      action: () => toggleHelp(),
+      section: 'Help',
+    },
+  ];
 
-    // Multi-term bonus (rewards matching multiple search terms)
-    multiTermBonus: 30,
-  };
+  // All results combined for keyboard navigation
+  const allResults = $derived.by(() => {
+    const results = [];
 
-  // Tracker filter mappings
-  const TRACKER_FILTERS = {
-    coal: ['Global Coal Plant Tracker', 'Global Coal Mine Tracker'],
-    gas: ['Global Gas Plant Tracker', 'Global Gas Infrastructure Tracker'],
-    oil: ['Global Oil and Gas Extraction Tracker', 'Global Oil Infrastructure Tracker'],
-    steel: ['Global Steel Plant Tracker', 'Global Iron Mine Tracker'],
-    bio: ['Global Bioenergy Power Tracker'],
-  };
+    // Recent searches first (if no query)
+    if (!query && recentSearches.length > 0) {
+      results.push({ type: 'section', label: 'Recent' });
+      recentSearches.slice(0, 3).forEach((r) => results.push({ ...r, type: 'recent' }));
+    }
 
-  // ---------------------------------------------------------------------------
-  // Search
-  // ---------------------------------------------------------------------------
-  async function search(q, filter = null) {
-    console.log('[CommandPalette] search() called with q:', q, 'filter:', filter);
-    if ((!q || q.length < 2) && !filter) {
-      console.log('[CommandPalette] Query too short, returning early');
-      results = { assets: [], entities: [] };
+    // Commands (filtered by query)
+    const filteredCommands = query
+      ? commands.filter((c) => c.label.toLowerCase().includes(query.toLowerCase()))
+      : commands;
+
+    if (filteredCommands.length > 0) {
+      results.push({ type: 'section', label: 'Commands' });
+      filteredCommands.forEach((c) => results.push({ ...c, type: 'command' }));
+    }
+
+    // Entities
+    if (entityResults.length > 0) {
+      results.push({ type: 'section', label: 'Entities' });
+      entityResults.forEach((e) =>
+        results.push({
+          type: 'entity',
+          id: e['Entity ID'],
+          label: e.Name || e['Entity ID'],
+          sublabel: e['Headquarters Country'],
+          action: () => navigateTo('entity', e['Entity ID'], e.Name),
+        })
+      );
+    }
+
+    // Assets
+    if (assetResults.length > 0) {
+      results.push({ type: 'section', label: 'Assets' });
+      assetResults.forEach((a) =>
+        results.push({
+          type: 'asset',
+          id: a.gem_unit_id,
+          label: a.facility_name || a.gem_unit_id,
+          sublabel: [a.facility_type, a.country].filter(Boolean).join(' · '),
+          action: () => navigateTo('asset', a.gem_unit_id, a.facility_name),
+        })
+      );
+    }
+
+    return results;
+  });
+
+  // Selectable items (exclude section headers)
+  const selectableResults = $derived(allResults.filter((r) => r.type !== 'section'));
+
+  // Clamp selectedIndex when results change to prevent out-of-bounds access
+  $effect(() => {
+    const maxIndex = selectableResults.length - 1;
+    if (selectedIndex > maxIndex) {
+      selectedIndex = Math.max(0, maxIndex);
+    }
+  });
+
+  // Debounced search
+  let searchTimeout;
+  async function search(q) {
+    if (!q || q.length < 2) {
+      assetResults = [];
+      entityResults = [];
       return;
     }
 
     loading = true;
-    console.log('[CommandPalette] Starting search...');
-    const startTime = Date.now();
+    clearTimeout(searchTimeout);
 
-    try {
-      // Use local DuckDB with parquet file (table: ownership)
-      const cfg = SEARCH_CONFIG;
+    searchTimeout = setTimeout(async () => {
+      try {
+        const [assets, entities] = await Promise.all([
+          listAssets({ q, limit: 5 }).catch(() => ({ results: [] })),
+          listEntities({ q, limit: 5 }).catch(() => ({ results: [] })),
+        ]);
 
-      // Escape search query for SQL
-      const searchQuery = (q || '').trim().replace(/'/g, "''");
-
-      // Build tracker filter clause
-      let trackerFilter = '';
-      if (filter && TRACKER_FILTERS[filter]) {
-        const trackers = TRACKER_FILTERS[filter].map((t) => `'${t}'`).join(',');
-        trackerFilter = `AND "Tracker" IN (${trackers})`;
+        assetResults = assets.results || [];
+        entityResults = entities.results || [];
+      } catch (err) {
+        console.error('[CommandPalette] Search error:', err);
+      } finally {
+        loading = false;
       }
-
-      // Status boost SQL
-      const statusBoostSql = Object.entries(cfg.statusBoost)
-        .map(([status, boost]) => `WHEN LOWER(status) LIKE '%${status}%' THEN ${boost}`)
-        .join('\n            ');
-
-      // Asset search: LIKE for filtering, BM25 for ranking when available
-      const assetResult = await widgetQuery(`
-        WITH base AS (
-          SELECT DISTINCT
-            "GEM unit ID" as id,
-            "Project" as name,
-            "Tracker" as tracker,
-            "Status" as status,
-            "Owner Headquarters Country" as country,
-            CAST("Capacity (MW)" AS DOUBLE) as capacity
-          FROM ownership
-          WHERE LOWER("Project") LIKE LOWER('%${searchQuery}%') ${trackerFilter}
-        ),
-        scored AS (
-          SELECT *,
-            -- Text relevance scoring
-            CASE
-              WHEN LOWER(name) = LOWER('${searchQuery}') THEN ${cfg.exactMatch}
-              WHEN LOWER(name) LIKE LOWER('${searchQuery}%') THEN ${cfg.prefixMatch}
-              WHEN LOWER(name) LIKE LOWER('% ${searchQuery}%') THEN ${cfg.wordBoundary}
-              ELSE ${cfg.containsMatch}
-            END as text_score,
-            -- Status boost
-            CASE
-              ${statusBoostSql}
-              ELSE 0
-            END as status_score,
-            -- Importance boost: log-scaled capacity
-            COALESCE(LOG10(GREATEST(capacity, 1)) * ${cfg.capacityWeight}, 0) as importance_score
-          FROM base
-        )
-        SELECT id, name, tracker, status, country, capacity,
-               text_score, status_score, importance_score,
-               (text_score + status_score + importance_score) as final_score
-        FROM scored
-        ORDER BY final_score DESC, capacity DESC NULLS LAST
-        LIMIT 10
-      `);
-
-      // Entity search: LIKE for filtering + tracker breakdown for MiniFlower
-      const entityResult = await widgetQuery(`
-        WITH matching_entities AS (
-          SELECT DISTINCT "Owner GEM Entity ID" as entity_id
-          FROM ownership
-          WHERE LOWER("Owner") LIKE LOWER('%${searchQuery}%')
-            AND "Owner" IS NOT NULL
-        ),
-        tracker_stats AS (
-          SELECT
-            "Owner GEM Entity ID" as entity_id,
-            "Tracker" as tracker,
-            COUNT(DISTINCT "GEM unit ID") as count,
-            SUM(CAST("Capacity (MW)" AS DOUBLE)) as capacity
-          FROM ownership
-          WHERE "Owner GEM Entity ID" IN (SELECT entity_id FROM matching_entities) ${trackerFilter}
-          GROUP BY "Owner GEM Entity ID", "Tracker"
-        ),
-        entity_stats AS (
-          SELECT
-            "Owner GEM Entity ID" as id,
-            "Owner" as name,
-            COUNT(DISTINCT "GEM unit ID") as asset_count,
-            SUM(CAST("Capacity (MW)" AS DOUBLE)) as total_capacity,
-            COUNT(DISTINCT "Tracker") as tracker_count,
-            COUNT(DISTINCT "Owner Headquarters Country") as country_count
-          FROM ownership
-          WHERE LOWER("Owner") LIKE LOWER('%${searchQuery}%')
-            AND "Owner" IS NOT NULL ${trackerFilter}
-          GROUP BY "Owner GEM Entity ID", "Owner"
-        ),
-        entity_with_trackers AS (
-          SELECT
-            e.*,
-            LIST(STRUCT_PACK(
-              tracker := t.tracker,
-              count := t.count,
-              capacity := t.capacity
-            )) as tracker_breakdown
-          FROM entity_stats e
-          LEFT JOIN tracker_stats t ON e.id = t.entity_id
-          GROUP BY e.id, e.name, e.asset_count, e.total_capacity, e.tracker_count, e.country_count
-        ),
-        scored AS (
-          SELECT *,
-            -- Text relevance scoring
-            CASE
-              WHEN LOWER(name) = LOWER('${searchQuery}') THEN ${cfg.exactMatch}
-              WHEN LOWER(name) LIKE LOWER('${searchQuery}%') THEN ${cfg.prefixMatch}
-              WHEN LOWER(name) LIKE LOWER('% ${searchQuery}%') THEN ${cfg.wordBoundary}
-              ELSE ${cfg.containsMatch}
-            END as text_score,
-            -- Importance: log-scaled asset count + tracker diversity bonus
-            (LOG10(GREATEST(asset_count, 1)) * ${cfg.assetCountWeight}) +
-            (GREATEST(tracker_count - 1, 0) * ${cfg.trackerBonus}) as importance_score,
-            -- Geographic diversity bonus
-            CASE WHEN country_count > 5 THEN 15 WHEN country_count > 2 THEN 8 ELSE 0 END as geo_bonus
-          FROM entity_with_trackers
-        )
-        SELECT id, name, asset_count, total_capacity, tracker_count, country_count,
-               tracker_breakdown,
-               text_score, importance_score, geo_bonus,
-               (text_score + importance_score + geo_bonus) as final_score
-        FROM scored
-        ORDER BY final_score DESC, asset_count DESC
-        LIMIT 8
-      `);
-
-      console.log('[CommandPalette] Asset query result:', assetResult);
-      console.log('[CommandPalette] Entity query result:', entityResult);
-
-      results = {
-        assets: assetResult.data || [],
-        entities: entityResult.data || [],
-      };
-      console.log('[CommandPalette] Final results:', results);
-      searchTime = Date.now() - startTime;
-      selectedIndex = 0;
-
-      // Animate new results appearing
-      animateResults();
-
-      // Save to recent searches (if meaningful query)
-      if (q && q.length >= 2 && (results.assets.length > 0 || results.entities.length > 0)) {
-        saveRecentSearch(q);
-      }
-
-      // Fetch parametric counts for filter chips (non-blocking)
-      fetchFilterCounts(q);
-    } catch (err) {
-      console.error('[CommandPalette] Search error:', err);
-      console.error('[CommandPalette] Error details:', JSON.stringify(err, null, 2));
-      results = { assets: [], entities: [] };
-    } finally {
-      loading = false;
-    }
+    }, 200);
   }
 
-  // ---------------------------------------------------------------------------
-  // Parametric Filter Counts
-  // ---------------------------------------------------------------------------
-  async function fetchFilterCounts(q) {
-    const terms = (q || '')
-      .toLowerCase()
-      .split(/\s+/)
-      .filter((t) => t.length >= 2);
+  // Navigate to result
+  function navigateTo(type, id, name) {
+    // Add to recent searches
+    addToRecent({ type, id, label: name || id });
 
-    // Build WHERE clause for current search terms
-    // Note: parquet has "Owner" not "Parent"
-    let termWhere = '1=1';
-    if (terms.length > 0) {
-      termWhere = terms
-        .map((term) => {
-          const escaped = term.replace(/'/g, "''");
-          return `(LOWER("Project") LIKE '%${escaped}%' OR LOWER("Owner") LIKE '%${escaped}%' OR LOWER("GEM unit ID") LIKE '%${escaped}%')`;
-        })
-        .join(' AND ');
+    // Navigate
+    if (type === 'asset') {
+      goto(assetLink(id));
+    } else if (type === 'entity') {
+      goto(entityLink(id));
     }
 
-    try {
-      const countResult = await widgetQuery(`
-        SELECT
-          SUM(CASE WHEN "Tracker" IN ('Global Coal Plant Tracker', 'Global Coal Mine Tracker') THEN 1 ELSE 0 END) as coal,
-          SUM(CASE WHEN "Tracker" IN ('Global Gas Plant Tracker', 'Global Gas Infrastructure Tracker') THEN 1 ELSE 0 END) as gas,
-          SUM(CASE WHEN "Tracker" IN ('Global Oil and Gas Extraction Tracker', 'Global Oil Infrastructure Tracker') THEN 1 ELSE 0 END) as oil,
-          SUM(CASE WHEN "Tracker" IN ('Global Steel Plant Tracker', 'Global Iron Mine Tracker') THEN 1 ELSE 0 END) as steel,
-          SUM(CASE WHEN "Tracker" = 'Global Bioenergy Power Tracker' THEN 1 ELSE 0 END) as bio
-        FROM ownership
-        WHERE ${termWhere}
-      `);
-
-      if (countResult.data && countResult.data[0]) {
-        filterCounts = {
-          coal: Number(countResult.data[0].coal) || 0,
-          gas: Number(countResult.data[0].gas) || 0,
-          oil: Number(countResult.data[0].oil) || 0,
-          steel: Number(countResult.data[0].steel) || 0,
-          bio: Number(countResult.data[0].bio) || 0,
-        };
-      }
-    } catch (err) {
-      console.error('[CommandPalette] Count query error:', err);
-    }
+    close();
   }
 
-  // ---------------------------------------------------------------------------
-  // Hover Previews
-  // ---------------------------------------------------------------------------
-  async function fetchHoverPreview(item) {
-    if (!item) return null;
-
-    try {
-      if (item.type === 'asset') {
-        // Fetch owner info for asset
-        // Note: parquet has "Owner" not "Parent", "Share" not "Share (%)"
-        const ownerResult = await widgetQuery(`
-          SELECT DISTINCT
-            "Owner" as owner_name,
-            "Owner GEM Entity ID" as owner_id,
-            "Share" as share_pct
-          FROM ownership
-          WHERE "GEM unit ID" = '${item.id}'
-          ORDER BY "Share" DESC NULLS LAST
-          LIMIT 5
-        `);
-
-        return {
-          type: 'asset',
-          owners: ownerResult.data || [],
-          item,
-        };
-      } else {
-        // Fetch top assets for entity
-        // Note: parquet has "Owner Headquarters Country" not "Country"
-        const assetsResult = await widgetQuery(`
-          SELECT
-            "GEM unit ID" as id,
-            "Project" as name,
-            "Tracker" as tracker,
-            "Status" as status,
-            CAST("Capacity (MW)" AS DOUBLE) as capacity,
-            "Owner Headquarters Country" as country
-          FROM ownership
-          WHERE "Owner GEM Entity ID" = '${item.id}'
-          ORDER BY capacity DESC NULLS LAST
-          LIMIT 5
-        `);
-
-        // Get countries list
-        const countriesResult = await widgetQuery(`
-          SELECT DISTINCT "Owner Headquarters Country" as country
-          FROM ownership
-          WHERE "Owner GEM Entity ID" = '${item.id}'
-          ORDER BY country
-          LIMIT 10
-        `);
-
-        return {
-          type: 'entity',
-          topAssets: assetsResult.data || [],
-          countries: countriesResult.data?.map((r) => r.country).filter(Boolean) || [],
-          item,
-        };
-      }
-    } catch (err) {
-      console.error('[CommandPalette] Hover preview error:', err);
-      return null;
-    }
+  // Add to recent searches
+  function addToRecent(item) {
+    const filtered = recentSearches.filter((r) => r.id !== item.id);
+    recentSearches = [item, ...filtered].slice(0, 10);
+    saveRecent();
   }
 
-  function handleItemHover(item, index) {
-    selectedIndex = index;
-    hoveredItem = item;
-
-    // Debounce the preview fetch
-    clearTimeout(hoverTimeout);
-    hoverTimeout = setTimeout(async () => {
-      if (hoveredItem === item) {
-        hoverPreview = await fetchHoverPreview(item);
-      }
-    }, 300);
-  }
-
-  function handleItemLeave() {
-    clearTimeout(hoverTimeout);
-    // Don't clear hoverPreview immediately - let it persist briefly
-  }
-
-  // ---------------------------------------------------------------------------
-  // Similar Items
-  // ---------------------------------------------------------------------------
-  async function findSimilar(item) {
-    if (!item) return;
-
-    // Build a search based on item properties
-    if (item.type === 'asset') {
-      // Search for same tracker + country
-      activeFilter = item.tracker?.includes('Coal')
-        ? 'coal'
-        : item.tracker?.includes('Gas')
-          ? 'gas'
-          : item.tracker?.includes('Oil')
-            ? 'oil'
-            : item.tracker?.includes('Steel') || item.tracker?.includes('Iron')
-              ? 'steel'
-              : item.tracker?.includes('Bio')
-                ? 'bio'
-                : null;
-      query = item.country || '';
-      search(query, activeFilter);
-    } else {
-      // For entities, search by name pattern
-      const nameWords = (item.name || '').split(/\s+/).slice(0, 2).join(' ');
-      query = nameWords;
-      search(query, activeFilter);
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Recent Searches
-  // ---------------------------------------------------------------------------
-  function loadRecentSearches() {
-    if (!browser) return;
-    try {
-      const stored = localStorage.getItem('gem-recent-searches');
-      recentSearches = stored ? JSON.parse(stored) : [];
-    } catch {
-      recentSearches = [];
-    }
-  }
-
-  function saveRecentSearch(q) {
-    if (!browser || !q) return;
-    const normalized = q.trim().toLowerCase();
-    // Remove duplicates and add to front
-    recentSearches = [normalized, ...recentSearches.filter((s) => s !== normalized)].slice(0, 5);
+  // Persist recent searches
+  function saveRecent() {
     try {
       localStorage.setItem('gem-recent-searches', JSON.stringify(recentSearches));
-    } catch {
-      // localStorage full or unavailable
+    } catch { /* localStorage may be unavailable */ }
+  }
+
+  function loadRecent() {
+    try {
+      const stored = localStorage.getItem('gem-recent-searches');
+      if (stored) {
+        recentSearches = JSON.parse(stored);
+      }
+    } catch { /* localStorage may be unavailable */ }
+  }
+
+  // Execute selected action (with bounds checking)
+  function executeSelected() {
+    // Clamp index to valid range before accessing
+    const maxIndex = selectableResults.length - 1;
+    if (maxIndex < 0) return; // No results to execute
+
+    const safeIndex = Math.min(Math.max(0, selectedIndex), maxIndex);
+    const item = selectableResults[safeIndex];
+    if (item?.action) {
+      item.action();
     }
   }
 
-  function clearRecentSearches() {
-    recentSearches = [];
-    if (browser) {
-      localStorage.removeItem('gem-recent-searches');
-    }
-  }
+  // Keyboard handler
+  function handleKeydown(e) {
+    if (!open) return;
 
-  function useRecentSearch(q) {
-    query = q;
-    search(q, activeFilter);
-  }
-
-  // ---------------------------------------------------------------------------
-  // Filters
-  // ---------------------------------------------------------------------------
-  function toggleFilter(filter) {
-    if (activeFilter === filter) {
-      activeFilter = null;
-    } else {
-      activeFilter = filter;
-    }
-    search(query, activeFilter);
-  }
-
-  function cycleSearchMode() {
-    if (searchMode === 'all') searchMode = 'assets';
-    else if (searchMode === 'assets') searchMode = 'entities';
-    else searchMode = 'all';
-  }
-
-  // ---------------------------------------------------------------------------
-  // Match Highlighting
-  // ---------------------------------------------------------------------------
-  function highlightMatch(text, q) {
-    if (!text || !q) return text;
-    const terms = q
-      .toLowerCase()
-      .split(/\s+/)
-      .filter((t) => t.length >= 2);
-    if (terms.length === 0) return text;
-
-    let result = text;
-    for (const term of terms) {
-      const regex = new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-      result = result.replace(regex, '<mark>$1</mark>');
-    }
-    return result;
-  }
-
-  function handleInput() {
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => {
-      search(query, activeFilter);
-    }, 150);
-  }
-
-  // ---------------------------------------------------------------------------
-  // Navigation
-  // ---------------------------------------------------------------------------
-  function navigate(item) {
-    if (!item) return;
-    const url = item.type === 'entity' ? entityLink(item.id) : assetLink(item.id);
-    close();
-    goto(url);
-  }
-
-  function handleKeydown(event) {
-    switch (event.key) {
+    switch (e.key) {
       case 'ArrowDown':
-        event.preventDefault();
-        selectedIndex = Math.min(selectedIndex + 1, allResults.length - 1);
+        e.preventDefault();
+        selectedIndex = Math.min(selectedIndex + 1, selectableResults.length - 1);
         break;
-
       case 'ArrowUp':
-        event.preventDefault();
+        e.preventDefault();
         selectedIndex = Math.max(selectedIndex - 1, 0);
         break;
-
       case 'Enter':
-        event.preventDefault();
-        if (allResults[selectedIndex]) {
-          navigate(allResults[selectedIndex]);
-        }
+        e.preventDefault();
+        executeSelected();
         break;
-
       case 'Escape':
-        event.preventDefault();
+        e.preventDefault();
         close();
         break;
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Open/Close
-  // ---------------------------------------------------------------------------
-  async function openPalette() {
+  // Global keyboard handler for opening
+  function handleGlobalKeydown(e) {
+    // CMD+K or Ctrl+K to open
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      e.preventDefault();
+      toggle();
+      return;
+    }
+
+    // / to open (when not in input)
+    if (e.key === '/' && !isInputFocused()) {
+      e.preventDefault();
+      openPalette();
+      return;
+    }
+
+    // Shortcut sequences (g + key)
+    if (!open && e.key === 'g' && !isInputFocused()) {
+      waitingForSecondKey = true;
+      setTimeout(() => {
+        waitingForSecondKey = false;
+      }, 500);
+      return;
+    }
+
+    if (waitingForSecondKey && !isInputFocused()) {
+      const shortcutMap = {
+        h: () => goto(link('index')),
+        e: () => goto(link('explore')),
+        r: () => goto(link('report')),
+        x: () => goto(link('export')),
+        a: () => goto(link('about')),
+        m: () => goto('/asset/search'),
+      };
+
+      if (shortcutMap[e.key]) {
+        e.preventDefault();
+        shortcutMap[e.key]();
+      }
+      waitingForSecondKey = false;
+    }
+
+    // Direct shortcuts (single key, no modifier)
+    if (!isInputFocused() && !open) {
+      switch (e.key) {
+        case 'a': // Add to cart
+          e.preventDefault();
+          addCurrentToCart();
+          return;
+
+        case 'c': // Copy ID
+          e.preventDefault();
+          copyCurrentId();
+          return;
+
+        case 'u': // Copy URL
+          e.preventDefault();
+          copyUrl();
+          return;
+
+        case 'b': // Back
+          e.preventDefault();
+          history.back();
+          return;
+
+        case 'j': // Next section
+          e.preventDefault();
+          scrollToSection('next');
+          return;
+
+        case 'k': // Previous section
+          e.preventDefault();
+          scrollToSection('prev');
+          return;
+
+        case '?': // Help
+          e.preventDefault();
+          showHelp = !showHelp;
+          return;
+
+        case 'o': // Open first owner (on asset page)
+          e.preventDefault();
+          openFirstOwner();
+          return;
+
+        case 't': // Scroll to top
+          e.preventDefault();
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          showToast('Top');
+          return;
+
+        case 's': // Jump to summary section
+          e.preventDefault();
+          scrollToElement('.summary, .portfolio-summary, h2');
+          return;
+
+        case 'e': // Toggle expand/collapse all details
+          e.preventDefault();
+          toggleAllDetails();
+          return;
+
+        case 'n': // Next asset in list (on asset pages)
+          e.preventDefault();
+          navigateRelated('next');
+          return;
+
+        case 'p': // Previous asset in list
+          e.preventDefault();
+          navigateRelated('prev');
+          return;
+
+        case 'f': // Focus search in current context
+          e.preventDefault();
+          focusLocalSearch();
+          return;
+
+        case '1':
+        case '2':
+        case '3':
+        case '4':
+        case '5':
+        case '6':
+        case '7':
+        case '8':
+        case '9':
+          e.preventDefault();
+          jumpToSection(parseInt(e.key));
+          return;
+
+        case 'Escape':
+          if (showHelp) {
+            showHelp = false;
+          }
+          return;
+      }
+    }
+  }
+
+  // Navigate to first owner on asset page
+  function openFirstOwner() {
+    const ownerLink = document.querySelector('.owner-link, .entity-link');
+    if (ownerLink) {
+      ownerLink.click();
+    } else {
+      showToast('No owner link found');
+    }
+  }
+
+  // Get current page info from URL
+  function getCurrentPageInfo() {
+    const path = $page.url.pathname;
+    const assetMatch = path.match(/\/asset\/([^/]+)/);
+    const entityMatch = path.match(/\/entity\/([^/]+)/);
+
+    if (assetMatch) {
+      return { type: 'asset', id: assetMatch[1] };
+    } else if (entityMatch) {
+      return { type: 'entity', id: entityMatch[1] };
+    }
+    return null;
+  }
+
+  // Add current page item to cart
+  function addCurrentToCart() {
+    const info = getCurrentPageInfo();
+    if (!info) {
+      showToast('Not on an asset or entity page');
+      return;
+    }
+
+    // Get name from page title or fall back to ID
+    const pageTitle = document.querySelector('h1')?.textContent || info.id;
+
+    investigationCart.add({
+      id: info.id,
+      name: pageTitle,
+      type: info.type,
+    });
+
+    showToast(`Added ${info.type} to cart`);
+    close();
+  }
+
+  // Copy current page ID to clipboard
+  async function copyCurrentId() {
+    const info = getCurrentPageInfo();
+    if (!info) {
+      showToast('Not on an asset or entity page');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(info.id);
+      showToast(`Copied: ${info.id}`);
+    } catch (err) {
+      showToast('Failed to copy');
+    }
+    close();
+  }
+
+  // Copy current URL to clipboard
+  async function copyUrl() {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      showToast('URL copied');
+    } catch (err) {
+      showToast('Failed to copy');
+    }
+    close();
+  }
+
+  // Toggle help modal
+  function toggleHelp() {
+    close();
+    showHelp = !showHelp;
+  }
+
+  // Show toast notification
+  function showToast(message) {
+    toast = message;
+    setTimeout(() => {
+      toast = '';
+    }, 2000);
+  }
+
+  // Scroll to section by index
+  function scrollToSection(direction) {
+    const sections = document.querySelectorAll('section, .viz-section, .breakdown-section, h2, h3');
+    if (sections.length === 0) return;
+
+    let targetSection = null;
+
+    if (direction === 'next') {
+      for (const section of sections) {
+        const rect = section.getBoundingClientRect();
+        if (rect.top > 100) {
+          targetSection = section;
+          break;
+        }
+      }
+    } else {
+      const sectionsArray = Array.from(sections).reverse();
+      for (const section of sectionsArray) {
+        const rect = section.getBoundingClientRect();
+        if (rect.top < -10) {
+          targetSection = section;
+          break;
+        }
+      }
+    }
+
+    if (targetSection) {
+      targetSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  // Scroll to an element by selector
+  function scrollToElement(selector) {
+    const el = document.querySelector(selector);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      showToast('Section not found');
+    }
+  }
+
+  // Jump to nth section (1-9)
+  function jumpToSection(n) {
+    const sections = document.querySelectorAll('section, .viz-section, h2');
+    const target = sections[n - 1];
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      showToast(`Section ${n}`);
+    } else {
+      showToast(`No section ${n}`);
+    }
+  }
+
+  // Toggle all details/disclosure elements
+  function toggleAllDetails() {
+    const details = document.querySelectorAll('details');
+    if (details.length === 0) {
+      showToast('No expandable sections');
+      return;
+    }
+
+    // Check if most are open or closed
+    const openCount = Array.from(details).filter((d) => d.open).length;
+    const shouldOpen = openCount < details.length / 2;
+
+    details.forEach((d) => {
+      d.open = shouldOpen;
+    });
+    showToast(shouldOpen ? 'Expanded all' : 'Collapsed all');
+  }
+
+  // Navigate to related assets (next/prev in a list)
+  function navigateRelated(direction) {
+    // Look for asset links in siblings or nearby lists
+    const assetLinks = document.querySelectorAll('a[href*="/asset/"]');
+    const currentPath = window.location.pathname;
+
+    // Find current position
+    const linksArray = Array.from(assetLinks);
+    const currentIndex = linksArray.findIndex((a) => a.getAttribute('href') === currentPath);
+
+    if (currentIndex === -1 && linksArray.length > 0) {
+      // We're on an asset page, try to find it in a list
+      // For now just go to first/last
+      if (direction === 'next' && linksArray[0]) {
+        goto(linksArray[0].getAttribute('href'));
+      } else {
+        showToast('No related assets found');
+      }
+      return;
+    }
+
+    const nextIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1;
+    if (nextIndex >= 0 && nextIndex < linksArray.length) {
+      goto(linksArray[nextIndex].getAttribute('href'));
+    } else {
+      showToast(direction === 'next' ? 'Last asset' : 'First asset');
+    }
+  }
+
+  // Focus local search input if present
+  function focusLocalSearch() {
+    const searchInput = document.querySelector(
+      '.filter-input, .search-input, input[type="search"], input[placeholder*="Search"], input[placeholder*="Filter"]'
+    );
+    if (searchInput) {
+      searchInput.focus();
+      searchInput.select();
+    } else {
+      // Fall back to opening command palette
+      openPalette();
+    }
+  }
+
+  function isInputFocused() {
+    const active = document.activeElement;
+    return (
+      active?.tagName === 'INPUT' || active?.tagName === 'TEXTAREA' || active?.isContentEditable
+    );
+  }
+
+  function toggle() {
+    if (open) {
+      close();
+    } else {
+      openPalette();
+    }
+  }
+
+  function openPalette() {
     open = true;
     query = '';
-    results = { assets: [], entities: [] };
     selectedIndex = 0;
-    // Wait for DOM update, then animate
-    await tick();
-    // Animate backdrop fade in
-    if (backdropEl) {
-      animate(backdropEl, {
-        opacity: [0, 1],
-        duration: timing.standard,
-        ease: 'out(2)',
-      });
-    }
-    // Animate palette modal in
-    if (paletteEl) {
-      modalIn(paletteEl, { duration: timing.moderate });
-    }
-    // Focus input after animation starts
-    setTimeout(() => inputEl?.focus(), 30);
+    assetResults = [];
+    entityResults = [];
+    // Focus input after render
+    setTimeout(() => inputEl?.focus(), 10);
   }
 
   function close() {
-    if (paletteEl) {
-      // Animate backdrop fade out
-      if (backdropEl) {
-        animate(backdropEl, {
-          opacity: [1, 0],
-          duration: timing.quick,
-          ease: 'in(2)',
-        });
-      }
-      modalOut(paletteEl, { duration: timing.quick });
-      setTimeout(() => {
-        open = false;
-        query = '';
-      }, timing.quick);
-    } else {
-      open = false;
-      query = '';
-    }
+    open = false;
+    query = '';
   }
 
-  // Animate search results when they appear
-  async function animateResults() {
-    if (!shouldAnimate()) return;
-    await tick();
-    if (resultsEl) {
-      const items = resultsEl.querySelectorAll('.result-item-wrapper');
-      if (items.length > 0) {
-        staggerIn(Array.from(items), {
-          staggerDelay: timing.staggerFast,
-          duration: timing.standard,
-          distance: timing.distanceStandard,
-        });
-      }
-    }
-  }
+  // Watch query changes
+  $effect(() => {
+    search(query);
+    selectedIndex = 0;
+  });
 
-  function handleGlobalKeydown(event) {
-    // Cmd+K or Ctrl+K (case-insensitive)
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
-      event.preventDefault();
-      if (open) {
-        close();
-      } else {
-        openPalette();
-      }
-    }
-  }
-
-  function handleBackdropClick(event) {
-    if (event.target === event.currentTarget) {
-      close();
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Lifecycle
-  // ---------------------------------------------------------------------------
   onMount(() => {
-    if (browser) {
-      // Only add global Cmd+K listener in modal mode
-      if (!embedded) {
-        window.addEventListener('keydown', handleGlobalKeydown);
-      }
-      loadRecentSearches();
-      // Initialize widget DB and pre-fetch total counts for filter chips
-      initWidgetDB()
-        .then(() => {
-          fetchFilterCounts('');
-        })
-        .catch((err) => {
-          console.error('[CommandPalette] Failed to init widget DB:', err);
-        });
-    }
-  });
-
-  onDestroy(() => {
-    if (browser && !embedded) {
+    loadRecent();
+    window.addEventListener('keydown', handleGlobalKeydown);
+    return () => {
       window.removeEventListener('keydown', handleGlobalKeydown);
-    }
-    clearTimeout(debounceTimer);
+    };
   });
-
-  // ---------------------------------------------------------------------------
-  // Formatters & Micro-Visualizations
-  // ---------------------------------------------------------------------------
-
-  // Helper to safely convert BigInt to Number for comparisons and display
-  function num(val) {
-    if (val === null || val === undefined) return 0;
-    return typeof val === 'bigint' ? Number(val) : Number(val) || 0;
-  }
-
-  // Country name to ISO code mapping (common ones)
-  const countryToCode = {
-    'united states': 'US',
-    usa: 'US',
-    us: 'US',
-    china: 'CN',
-    india: 'IN',
-    russia: 'RU',
-    japan: 'JP',
-    germany: 'DE',
-    'united kingdom': 'GB',
-    uk: 'GB',
-    france: 'FR',
-    italy: 'IT',
-    spain: 'ES',
-    canada: 'CA',
-    australia: 'AU',
-    brazil: 'BR',
-    mexico: 'MX',
-    'south korea': 'KR',
-    indonesia: 'ID',
-    turkey: 'TR',
-    'saudi arabia': 'SA',
-    poland: 'PL',
-    netherlands: 'NL',
-    belgium: 'BE',
-    sweden: 'SE',
-    switzerland: 'CH',
-    austria: 'AT',
-    norway: 'NO',
-    denmark: 'DK',
-    finland: 'FI',
-    ireland: 'IE',
-    portugal: 'PT',
-    greece: 'GR',
-    'czech republic': 'CZ',
-    czechia: 'CZ',
-    romania: 'RO',
-    hungary: 'HU',
-    ukraine: 'UA',
-    'south africa': 'ZA',
-    egypt: 'EG',
-    nigeria: 'NG',
-    kenya: 'KE',
-    morocco: 'MA',
-    argentina: 'AR',
-    chile: 'CL',
-    colombia: 'CO',
-    peru: 'PE',
-    venezuela: 'VE',
-    vietnam: 'VN',
-    thailand: 'TH',
-    malaysia: 'MY',
-    singapore: 'SG',
-    philippines: 'PH',
-    pakistan: 'PK',
-    bangladesh: 'BD',
-    iran: 'IR',
-    iraq: 'IQ',
-    israel: 'IL',
-    uae: 'AE',
-    'united arab emirates': 'AE',
-    qatar: 'QA',
-    kuwait: 'KW',
-    'new zealand': 'NZ',
-    taiwan: 'TW',
-    'hong kong': 'HK',
-  };
-
-  // Convert country name to flag emoji
-  function countryFlag(country) {
-    if (!country) return '';
-    const code = countryToCode[country.toLowerCase()] || '';
-    if (!code) return '';
-    // Convert ISO code to regional indicator symbols
-    return String.fromCodePoint(...[...code].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
-  }
-
-  function formatCapacity(mw) {
-    if (!mw) return null;
-    // Convert BigInt to Number if needed
-    const val = typeof mw === 'bigint' ? Number(mw) : Number(mw);
-    if (useGW) {
-      // Always show in GW when toggle is on
-      if (val >= 100) return `${(val / 1000).toFixed(2)}`;
-      return `${(val / 1000).toFixed(3)}`;
-    }
-    // Auto-scale when toggle is off
-    if (val >= 1000) return `${(val / 1000).toFixed(1)}GW`;
-    return `${Math.round(val)}MW`;
-  }
-
-  function getCapacityUnit() {
-    return useGW ? 'GW' : '';
-  }
-
-  // Capacity bar width (0-100%) - log scale for better visual distribution
-  function capacityBarWidth(mw, maxMw = 10000) {
-    if (!mw || mw <= 0) return 0;
-    // Convert BigInt to Number if needed
-    const val = typeof mw === 'bigint' ? Number(mw) : Number(mw);
-    // Log scale: 1MW = 0%, 10000MW = 100%
-    const logScale = Math.log10(val) / Math.log10(maxMw);
-    return Math.min(Math.max(logScale * 100, 5), 100);
-  }
-
-  // Get status color from theme (uses colorByStatus from ownership-theme)
-  function getStatusColor(status) {
-    if (!status) return '#999';
-    const key = status.toLowerCase();
-    return colorByStatus.get(key) || '#999';
-  }
-
-  // Geographic spread description
-  function geoSpreadLabel(count) {
-    const n = num(count);
-    if (n >= 20) return 'Global';
-    if (n >= 10) return 'Multi-regional';
-    if (n >= 5) return 'Regional';
-    if (n >= 2) return 'Multi-country';
-    return 'Single country';
-  }
-
-  // Format tracker for compact display
-  function getTrackerShort(tracker) {
-    if (!tracker) return '?';
-    // Extract key word from "Global X Tracker" pattern
-    const match = tracker.match(/Global\s+(.+?)\s+(Plant|Mine|Infrastructure|Tracker)/i);
-    if (match) {
-      const key = match[1].toUpperCase();
-      if (key === 'COAL' && tracker.includes('Mine')) return 'MINE';
-      if (key === 'IRON ORE') return 'IRON';
-      if (key === 'OIL AND GAS EXTRACTION') return 'O&G';
-      if (key === 'OIL') return 'OIL';
-      if (key === 'GAS' && tracker.includes('Infrastructure')) return 'GAS-I';
-      return key.slice(0, 5);
-    }
-    return tracker.slice(0, 4).toUpperCase();
-  }
 </script>
 
-{#if open || embedded}
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
+{#if open}
+  <!-- Backdrop -->
   <div
-    class="command-palette-wrapper"
-    class:embedded
-    bind:this={backdropEl}
-    onclick={embedded ? undefined : handleBackdropClick}
-    onkeydown={embedded ? undefined : handleKeydown}
+    class="palette-backdrop"
+    onclick={close}
+    onkeydown={(e) => e.key === 'Escape' && close()}
+    role="button"
+    tabindex="-1"
+    aria-label="Close palette"
+  ></div>
+
+  <!-- Palette -->
+  <div
+    class="palette"
+    onkeydown={handleKeydown}
+    role="dialog"
+    aria-label="Command palette"
+    tabindex="-1"
   >
-    <div class="command-palette" class:embedded bind:this={paletteEl}>
-      <!-- Search Input -->
-      <div class="search-box">
-        <svg
-          class="search-icon"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-        >
-          <circle cx="11" cy="11" r="8" />
-          <path d="m21 21-4.35-4.35" />
-        </svg>
-        <input
-          bind:this={inputEl}
-          bind:value={query}
-          oninput={handleInput}
-          type="text"
-          {placeholder}
-          spellcheck="false"
-          autocomplete="off"
-        />
-        {#if loading}
-          <span class="loading-indicator">...</span>
-        {:else if query.length >= 2}
-          <span class="result-count">{totalCount} results</span>
-        {/if}
-        {#if !embedded}<kbd class="escape-hint">esc</kbd>{/if}
-      </div>
-
-      <!-- Quick Filters with Parametric Counts -->
-      <div class="quick-filters">
-        <button
-          class="filter-chip"
-          class:active={activeFilter === 'coal'}
-          onclick={() => toggleFilter('coal')}
-          >Coal {#if filterCounts.coal > 0}<span class="chip-count"
-              >{filterCounts.coal.toLocaleString()}</span
-            >{/if}</button
-        >
-        <button
-          class="filter-chip"
-          class:active={activeFilter === 'gas'}
-          onclick={() => toggleFilter('gas')}
-          >Gas {#if filterCounts.gas > 0}<span class="chip-count"
-              >{filterCounts.gas.toLocaleString()}</span
-            >{/if}</button
-        >
-        <button
-          class="filter-chip"
-          class:active={activeFilter === 'oil'}
-          onclick={() => toggleFilter('oil')}
-          >Oil {#if filterCounts.oil > 0}<span class="chip-count"
-              >{filterCounts.oil.toLocaleString()}</span
-            >{/if}</button
-        >
-        <button
-          class="filter-chip"
-          class:active={activeFilter === 'steel'}
-          onclick={() => toggleFilter('steel')}
-          >Steel {#if filterCounts.steel > 0}<span class="chip-count"
-              >{filterCounts.steel.toLocaleString()}</span
-            >{/if}</button
-        >
-        <button
-          class="filter-chip"
-          class:active={activeFilter === 'bio'}
-          onclick={() => toggleFilter('bio')}
-          >Bio {#if filterCounts.bio > 0}<span class="chip-count"
-              >{filterCounts.bio.toLocaleString()}</span
-            >{/if}</button
-        >
-        <span class="filter-divider"></span>
-        <button
-          class="filter-chip"
-          class:active={searchMode === 'assets'}
-          onclick={() => (searchMode = searchMode === 'assets' ? 'all' : 'assets')}
-          title="Show only assets">Assets</button
-        >
-        <button
-          class="filter-chip"
-          class:active={searchMode === 'entities'}
-          onclick={() => (searchMode = searchMode === 'entities' ? 'all' : 'entities')}
-          title="Show only entities">Entities</button
-        >
-        <span class="filter-divider"></span>
-        <button
-          class="units-toggle"
-          class:active={useGW}
-          onclick={() => (useGW = !useGW)}
-          title="Toggle capacity units">{useGW ? 'GW' : 'MW'}</button
-        >
-        <button
-          class="mode-toggle hidden"
-          onclick={cycleSearchMode}
-          title="Toggle between all, assets only, or entities only"
-          >{searchMode === 'all' ? 'All' : searchMode === 'assets' ? 'Assets' : 'Entities'}</button
-        >
-      </div>
-
-      <!-- Results -->
-      {#if query.length >= 2 || activeFilter}
-        <div class="results" bind:this={resultsEl}>
-          {#if hasResults}
-            <!-- Assets -->
-            {#if results.assets.length > 0 && searchMode !== 'entities'}
-              <div class="result-group">
-                <div class="group-header">
-                  Assets
-                  <span class="group-count">{results.assets.length}</span>
-                </div>
-                {#each results.assets as item, i}
-                  {@const globalIndex = i}
-                  {@const itemWithType = { ...item, type: 'asset' }}
-                  <div
-                    class="result-item-wrapper"
-                    onmouseenter={() => handleItemHover(itemWithType, globalIndex)}
-                    onmouseleave={handleItemLeave}
-                  >
-                    <!-- svelte-ignore a11y_click_events_have_key_events -->
-                    <!-- svelte-ignore a11y_no_static_element_interactions -->
-                    <div
-                      class="result-item"
-                      class:selected={selectedIndex === globalIndex}
-                      onclick={() => navigate(itemWithType)}
-                    >
-                      <!-- Capacity bar background -->
-                      <div
-                        class="capacity-bar-bg"
-                        style:width="{capacityBarWidth(item.capacity)}%"
-                        style:background={getStatusColor(item.status)}
-                      ></div>
-
-                      <div class="result-main">
-                        <div class="result-icon">
-                          <TrackerIcon tracker={item.tracker} size={20} />
-                        </div>
-                        <div class="result-content">
-                          <div class="result-name">
-                            {@html highlightMatch(item.name || item.id, query)}
-                          </div>
-                          <div class="result-meta">
-                            <span class="tracker-badge" title={item.tracker}
-                              >{getTrackerShort(item.tracker)}</span
-                            >
-                            <span
-                              class="status-dot"
-                              style:background={getStatusColor(item.status)}
-                              title={item.status}
-                            ></span>
-                            <span class="result-id">{item.id}</span>
-                            {#if item.country}
-                              <span class="result-country"
-                                >{countryFlag(item.country)} {item.country}</span
-                              >
-                            {/if}
-                          </div>
-                        </div>
-                      </div>
-                      <div class="result-aside">
-                        {#if item.capacity}
-                          <div class="capacity-display">
-                            <span class="capacity-value"
-                              >{formatCapacity(item.capacity)}{getCapacityUnit()}</span
-                            >
-                          </div>
-                        {/if}
-                        <button
-                          class="similar-btn"
-                          onclick={(e) => {
-                            e.stopPropagation();
-                            findSimilar(itemWithType);
-                          }}
-                          title="Find similar">≈</button
-                        >
-                      </div>
-                    </div>
-
-                    <!-- Hover Preview for Asset -->
-                    {#if hoverPreview?.item?.id === item.id && hoverPreview?.type === 'asset'}
-                      <div class="hover-preview">
-                        <div class="preview-header">Ownership</div>
-                        {#if hoverPreview.owners.length > 0}
-                          <ul class="preview-list">
-                            {#each hoverPreview.owners as owner}
-                              <li>
-                                <span class="owner-name">{owner.owner_name}</span>
-                                {#if owner.share_pct}
-                                  <span class="owner-share">{owner.share_pct}%</span>
-                                {/if}
-                              </li>
-                            {/each}
-                          </ul>
-                        {:else}
-                          <p class="preview-empty">No ownership data</p>
-                        {/if}
-                      </div>
-                    {/if}
-                  </div>
-                {/each}
-              </div>
-            {/if}
-
-            <!-- Entities -->
-            {#if results.entities.length > 0 && searchMode !== 'assets'}
-              <div class="result-group">
-                <div class="group-header">
-                  Entities
-                  <span class="group-count">{results.entities.length}</span>
-                </div>
-                {#each results.entities as item, i}
-                  {@const globalIndex = searchMode === 'entities' ? i : results.assets.length + i}
-                  {@const itemWithType = { ...item, type: 'entity' }}
-                  <div
-                    class="result-item-wrapper"
-                    onmouseenter={() => handleItemHover(itemWithType, globalIndex)}
-                    onmouseleave={handleItemLeave}
-                  >
-                    <!-- svelte-ignore a11y_click_events_have_key_events -->
-                    <!-- svelte-ignore a11y_no_static_element_interactions -->
-                    <div
-                      class="result-item entity-item"
-                      class:selected={selectedIndex === globalIndex}
-                      onclick={() => navigate(itemWithType)}
-                    >
-                      <div class="result-main">
-                        <!-- MiniFlower for tracker distribution -->
-                        <div class="result-icon">
-                          {#if item.tracker_breakdown && item.tracker_breakdown.length > 0}
-                            <MiniFlower trackers={Array.from(item.tracker_breakdown)} size={28} />
-                          {:else}
-                            <div class="entity-icon-fallback">E</div>
-                          {/if}
-                        </div>
-                        <div class="result-content">
-                          <div class="result-name">
-                            {@html highlightMatch(item.name || item.id, query)}
-                          </div>
-                          <div class="result-meta">
-                            <span class="result-id">{item.id}</span>
-                            <span class="asset-count-badge" title="{num(item.asset_count)} assets">
-                              <svg width="10" height="10" viewBox="0 0 10 10"
-                                ><circle cx="5" cy="5" r="3" fill="currentColor" /></svg
-                              >
-                              {num(item.asset_count)}
-                            </span>
-                            {#if num(item.tracker_count) > 1}
-                              <span
-                                class="cross-ref-badge"
-                                title="Cross-sector: appears in {num(item.tracker_count)} trackers"
-                              >
-                                {num(item.tracker_count)} trackers
-                              </span>
-                            {/if}
-                            {#if num(item.country_count) > 1}
-                              <span class="geo-badge" title="{num(item.country_count)} countries">
-                                {geoSpreadLabel(num(item.country_count))}
-                              </span>
-                            {/if}
-                          </div>
-                        </div>
-                      </div>
-                      <div class="result-aside">
-                        {#if item.total_capacity}
-                          <div class="capacity-display">
-                            <span class="capacity-value"
-                              >{formatCapacity(item.total_capacity)}{getCapacityUnit()}</span
-                            >
-                            <span class="capacity-label">total</span>
-                          </div>
-                        {/if}
-                        <button
-                          class="similar-btn"
-                          onclick={(e) => {
-                            e.stopPropagation();
-                            findSimilar(itemWithType);
-                          }}
-                          title="Find similar">≈</button
-                        >
-                      </div>
-                    </div>
-
-                    <!-- Hover Preview for Entity -->
-                    {#if hoverPreview?.item?.id === item.id && hoverPreview?.type === 'entity'}
-                      <div class="hover-preview entity-preview">
-                        <div class="preview-section">
-                          <div class="preview-header">Top Assets</div>
-                          {#if hoverPreview.topAssets.length > 0}
-                            <ul class="preview-list">
-                              {#each hoverPreview.topAssets as asset}
-                                <li class="preview-asset">
-                                  <span class="asset-name">{asset.name}</span>
-                                  <span class="asset-details">
-                                    {asset.country} · {formatCapacity(asset.capacity)}
-                                  </span>
-                                </li>
-                              {/each}
-                            </ul>
-                          {:else}
-                            <p class="preview-empty">No assets</p>
-                          {/if}
-                        </div>
-                        {#if hoverPreview.countries.length > 0}
-                          <div class="preview-section">
-                            <div class="preview-header">Countries</div>
-                            <p class="preview-countries">{hoverPreview.countries.join(', ')}</p>
-                          </div>
-                        {/if}
-                      </div>
-                    {/if}
-                  </div>
-                {/each}
-              </div>
-            {/if}
-          {:else if !loading}
-            <div class="no-results">
-              <p>No results for "{query}"</p>
-              <p class="no-results-hint">Try a project name, company name, or GEM ID</p>
-            </div>
-          {/if}
-        </div>
-
-        <!-- Footer -->
-        <div class="palette-footer">
-          <div class="footer-hints">
-            <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
-            <span><kbd>↵</kbd> open</span>
-            <span><kbd>esc</kbd> close</span>
-          </div>
-          {#if searchTime > 0}
-            <span class="search-time">{searchTime}ms</span>
-          {/if}
-        </div>
-      {:else}
-        <!-- Empty state with recent searches -->
-        <div class="empty-state">
-          {#if showingRecent}
-            <div class="recent-searches">
-              <div class="recent-header">
-                <span>Recent searches</span>
-                <button class="clear-recent" onclick={clearRecentSearches}>Clear</button>
-              </div>
-              {#each recentSearches as recent}
-                <button class="recent-item" onclick={() => useRecentSearch(recent)}>
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
-                    <path d="M12 8v4l3 3" />
-                    <circle cx="12" cy="12" r="10" />
-                  </svg>
-                  {recent}
-                </button>
-              {/each}
-            </div>
-          {:else}
-            <p>Type to search across all assets and entities</p>
-          {/if}
-          <div class="quick-actions">
-            <button
-              onclick={() => {
-                close();
-                goto('/explore');
-              }}
-            >
-              Explore data
-            </button>
-            <button
-              onclick={() => {
-                close();
-                goto('/compose');
-              }}
-            >
-              Build filters
-            </button>
-            <button
-              onclick={() => {
-                close();
-                goto('/conglomerates');
-              }}
-            >
-              View rankings
-            </button>
-          </div>
-        </div>
+    <div class="palette-header">
+      <input
+        bind:this={inputEl}
+        bind:value={query}
+        type="text"
+        class="palette-input"
+        placeholder="Search assets, entities, or type a command..."
+        spellcheck="false"
+        autocomplete="off"
+      />
+      {#if loading}
+        <span class="loading-indicator">...</span>
       {/if}
+    </div>
+
+    <div class="palette-results">
+      {#if allResults.length === 0 && query}
+        <div class="no-results">No results for "{query}"</div>
+      {:else}
+        {#each allResults as item, i}
+          {#if item.type === 'section'}
+            <div class="result-section">{item.label}</div>
+          {:else}
+            {@const selectableIndex = selectableResults.indexOf(item)}
+            <button
+              class="result-item"
+              class:selected={selectableIndex === selectedIndex}
+              onclick={() => item.action?.()}
+              onmouseenter={() => {
+                selectedIndex = selectableIndex;
+              }}
+            >
+              <span
+                class="result-icon"
+                class:entity={item.type === 'entity'}
+                class:asset={item.type === 'asset'}
+                class:recent={item.type === 'recent'}
+              >
+                {#if item.type === 'entity' || (item.type === 'recent' && item.id?.startsWith?.('E'))}E
+                {:else if item.type === 'asset' || (item.type === 'recent' && item.id?.startsWith?.('G'))}G
+                {:else if item.type === 'command'}⌘
+                {:else}↩
+                {/if}
+              </span>
+              <span class="result-content">
+                <span class="result-label">{item.label}</span>
+                {#if item.sublabel}
+                  <span class="result-sublabel">{item.sublabel}</span>
+                {/if}
+              </span>
+              {#if item.shortcut}
+                <span class="result-shortcut">{item.shortcut}</span>
+              {/if}
+            </button>
+          {/if}
+        {/each}
+      {/if}
+    </div>
+
+    <div class="palette-footer">
+      <span class="hint"><kbd>↑↓</kbd> navigate</span>
+      <span class="hint"><kbd>↵</kbd> select</span>
+      <span class="hint"><kbd>esc</kbd> close</span>
+    </div>
+  </div>
+{/if}
+
+<!-- Subtle hint (when closed) - only visible on hover near corner -->
+<button class="palette-trigger" onclick={openPalette} title="Command palette (⌘K)">
+  <span class="trigger-label">⌘K</span>
+</button>
+
+<!-- Toast notification -->
+{#if toast}
+  <div class="toast">{toast}</div>
+{/if}
+
+<!-- Help modal -->
+{#if showHelp}
+  <div
+    class="help-backdrop"
+    onclick={() => (showHelp = false)}
+    onkeydown={(e) => e.key === 'Escape' && (showHelp = false)}
+    role="button"
+    tabindex="-1"
+    aria-label="Close help"
+  ></div>
+  <div class="help-modal">
+    <div class="help-header">
+      <h2>Keyboard Shortcuts</h2>
+      <button class="help-close" onclick={() => (showHelp = false)}>×</button>
+    </div>
+
+    <div class="help-content">
+      <div class="shortcut-group">
+        <h3>Navigation</h3>
+        <div class="shortcut-row"><kbd>⌘</kbd><kbd>K</kbd> <span>Command palette</span></div>
+        <div class="shortcut-row"><kbd>/</kbd> <span>Quick search</span></div>
+        <div class="shortcut-row"><kbd>g</kbd><kbd>h</kbd> <span>Go home</span></div>
+        <div class="shortcut-row"><kbd>g</kbd><kbd>e</kbd> <span>Go to explore</span></div>
+        <div class="shortcut-row"><kbd>g</kbd><kbd>r</kbd> <span>Go to report</span></div>
+        <div class="shortcut-row"><kbd>g</kbd><kbd>x</kbd> <span>Go to export</span></div>
+        <div class="shortcut-row"><kbd>g</kbd><kbd>m</kbd> <span>Map search</span></div>
+        <div class="shortcut-row"><kbd>g</kbd><kbd>a</kbd> <span>Go to about</span></div>
+        <div class="shortcut-row"><kbd>b</kbd> <span>Go back</span></div>
+      </div>
+
+      <div class="shortcut-group">
+        <h3>Page Navigation</h3>
+        <div class="shortcut-row"><kbd>j</kbd> <span>Next section</span></div>
+        <div class="shortcut-row"><kbd>k</kbd> <span>Previous section</span></div>
+        <div class="shortcut-row"><kbd>1</kbd>-<kbd>9</kbd> <span>Jump to section #</span></div>
+        <div class="shortcut-row"><kbd>t</kbd> <span>Scroll to top</span></div>
+        <div class="shortcut-row"><kbd>s</kbd> <span>Jump to summary</span></div>
+        <div class="shortcut-row"><kbd>f</kbd> <span>Focus filter/search</span></div>
+      </div>
+
+      <div class="shortcut-group">
+        <h3>Asset/Entity</h3>
+        <div class="shortcut-row"><kbd>o</kbd> <span>Open first owner</span></div>
+        <div class="shortcut-row"><kbd>n</kbd> <span>Next asset</span></div>
+        <div class="shortcut-row"><kbd>p</kbd> <span>Previous asset</span></div>
+        <div class="shortcut-row"><kbd>e</kbd> <span>Expand/collapse all</span></div>
+      </div>
+
+      <div class="shortcut-group">
+        <h3>Actions</h3>
+        <div class="shortcut-row"><kbd>a</kbd> <span>Add to cart</span></div>
+        <div class="shortcut-row"><kbd>c</kbd> <span>Copy ID</span></div>
+        <div class="shortcut-row"><kbd>u</kbd> <span>Copy URL</span></div>
+        <div class="shortcut-row"><kbd>⌘</kbd><kbd>P</kbd> <span>Print</span></div>
+      </div>
+
+      <div class="shortcut-group">
+        <h3>Palette</h3>
+        <div class="shortcut-row"><kbd>↑</kbd><kbd>↓</kbd> <span>Navigate results</span></div>
+        <div class="shortcut-row"><kbd>↵</kbd> <span>Select result</span></div>
+        <div class="shortcut-row"><kbd>Esc</kbd> <span>Close</span></div>
+      </div>
+    </div>
+
+    <div class="help-footer">
+      Press <kbd>?</kbd> to toggle this help
     </div>
   </div>
 {/if}
 
 <style>
-  .command-palette-wrapper {
+  /* Backdrop */
+  .palette-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.4);
+    background: color-mix(in srgb, var(--color-white) 90%, transparent);
+    z-index: 9998;
     backdrop-filter: blur(2px);
+  }
+
+  /* Palette */
+  .palette {
+    position: fixed;
+    top: 18%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90%;
+    max-width: 520px;
+    max-height: 65vh;
+    background: var(--color-white);
+    border: 1px solid var(--color-black);
     z-index: 9999;
     display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    padding-top: 15vh;
-  }
-
-  /* Embedded mode - inline display, no modal overlay */
-  .command-palette-wrapper.embedded {
-    position: static;
-    background: none;
-    backdrop-filter: none;
-    z-index: auto;
-    padding-top: 0;
-    display: block;
-  }
-
-  .command-palette {
-    width: 100%;
-    max-width: 600px;
-    background: white;
-    box-shadow: 0 16px 70px rgba(0, 0, 0, 0.2);
+    flex-direction: column;
     overflow: hidden;
+    font-family: Georgia, serif;
   }
 
-  /* Embedded mode - inline display */
-  .command-palette.embedded {
-    max-width: none;
-    box-shadow: none;
-    border: 1px solid #ddd;
-  }
-
-  .command-palette.embedded .palette-footer {
-    display: none;
-  }
-
-  /* Search Box */
-  .search-box {
+  /* Header/Input */
+  .palette-header {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 16px 20px;
-    border-bottom: 1px solid #e0e0e0;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--color-gray-100);
   }
 
-  .search-icon {
-    width: 20px;
-    height: 20px;
-    color: #999;
-    flex-shrink: 0;
-  }
-
-  .search-box input {
+  .palette-input {
     flex: 1;
     border: none;
     outline: none;
-    font-size: 16px;
-    font-family: inherit;
+    font-size: 15px;
+    font-family: Georgia, serif;
     background: transparent;
   }
 
-  .search-box input::placeholder {
-    color: #999;
+  .palette-input::placeholder {
+    color: var(--color-gray-400);
+    font-style: italic;
   }
 
   .loading-indicator {
-    font-size: 14px;
-    color: #999;
-    animation: pulse 1s infinite;
-  }
-
-  @keyframes pulse {
-    0%,
-    100% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0.4;
-    }
-  }
-
-  .result-count {
-    font-size: 11px;
-    color: #666;
-  }
-
-  .escape-hint {
-    font-size: 10px;
-    padding: 3px 6px;
-    background: #f0f0f0;
-    border: 1px solid #ddd;
-    color: #666;
-    font-family: system-ui, sans-serif;
+    color: var(--color-gray-400);
+    font-size: 12px;
   }
 
   /* Results */
-  .results {
-    max-height: 400px;
+  .palette-results {
+    flex: 1;
     overflow-y: auto;
+    padding: 6px;
   }
 
-  .result-group {
-    padding: 8px 0;
+  .no-results {
+    padding: 16px;
+    text-align: center;
+    color: var(--color-text-tertiary);
+    font-size: 12px;
+    font-style: italic;
   }
 
-  .group-header {
-    padding: 8px 20px 6px;
-    font-size: 10px;
-    font-weight: 600;
+  .result-section {
+    padding: 8px 10px 4px;
+    font-size: 9px;
+    font-weight: normal;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: #999;
+    letter-spacing: 1px;
+    color: var(--color-text-tertiary);
   }
 
   .result-item {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 10px;
     width: 100%;
-    padding: 10px 20px;
-    background: none;
+    padding: 8px 10px;
     border: none;
+    background: transparent;
     text-align: left;
     cursor: pointer;
-    transition: background 0.1s;
+    border-radius: 2px;
+    font-family: Georgia, serif;
+    font-size: 13px;
   }
 
   .result-item:hover,
   .result-item.selected {
-    background: #f5f5f5;
+    background: var(--color-gray-50);
   }
 
   .result-item.selected {
-    background: #000;
-    color: white;
-  }
-
-  .result-item.selected .result-meta,
-  .result-item.selected .result-id,
-  .result-item.selected .result-country {
-    color: rgba(255, 255, 255, 0.7);
-  }
-
-  .result-main {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    min-width: 0;
+    background: var(--color-gray-100);
   }
 
   .result-icon {
-    flex-shrink: 0;
-    width: 32px;
-    height: 32px;
     display: flex;
     align-items: center;
     justify-content: center;
+    width: 20px;
+    height: 20px;
+    background: var(--color-gray-100);
+    border-radius: 2px;
+    font-size: 10px;
+    font-weight: normal;
+    font-family: monospace;
+    color: var(--color-text-secondary);
+    flex-shrink: 0;
+  }
+
+  .result-icon.entity {
+    background: var(--color-entity-bg, #e8d5f0);
+    color: var(--color-entity-text, #7b1fa2);
+  }
+
+  .result-icon.asset {
+    background: var(--color-asset-bg, #d5e5f5);
+    color: var(--color-asset-text, #1565c0);
   }
 
   .result-content {
+    flex: 1;
     min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
   }
 
-  .result-name {
-    font-size: 14px;
-    font-weight: 500;
+  .result-label {
+    font-weight: normal;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--color-gray-700);
+  }
+
+  .result-sublabel {
+    font-size: 11px;
+    color: var(--color-text-tertiary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  .result-meta {
-    display: flex;
-    gap: 8px;
-    font-size: 11px;
-    color: #666;
-    margin-top: 2px;
-  }
-
-  .result-id {
-    font-family: monospace;
+  .result-shortcut {
     font-size: 10px;
-  }
-
-  .result-aside {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-shrink: 0;
-  }
-
-  /* Empty / No Results */
-  .empty-state,
-  .no-results {
-    padding: 32px 20px;
-    text-align: center;
-    color: #666;
-  }
-
-  .empty-state p,
-  .no-results p {
-    margin: 0;
-    font-size: 13px;
-  }
-
-  .no-results-hint {
-    margin-top: 8px !important;
-    font-size: 12px !important;
-    color: #999;
-  }
-
-  .quick-actions {
-    display: flex;
-    gap: 8px;
-    justify-content: center;
-    margin-top: 16px;
-  }
-
-  .quick-actions button {
-    padding: 8px 16px;
-    font-size: 12px;
-    background: #f5f5f5;
-    border: 1px solid #ddd;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-
-  .quick-actions button:hover {
-    background: #000;
-    color: white;
-    border-color: #000;
+    color: var(--color-gray-400);
+    font-family: monospace;
+    padding: 1px 4px;
+    background: var(--color-gray-100);
+    border: 1px solid var(--color-border);
+    border-radius: 2px;
   }
 
   /* Footer */
   .palette-footer {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 10px 20px;
-    background: #fafafa;
-    border-top: 1px solid #e0e0e0;
-    font-size: 11px;
-    color: #666;
+    gap: 12px;
+    padding: 8px 12px;
+    border-top: 1px solid var(--color-gray-100);
   }
 
-  .footer-hints {
+  .hint {
+    font-size: 10px;
+    color: var(--color-gray-400);
+  }
+
+  .hint kbd {
+    display: inline-block;
+    padding: 1px 4px;
+    font-family: monospace;
+    font-size: 9px;
+    background: var(--color-gray-50);
+    border: 1px solid var(--color-gray-200);
+    border-radius: 2px;
+    margin-right: 3px;
+  }
+
+  /* Subtle floating trigger - nearly invisible until needed */
+  .palette-trigger {
+    position: fixed;
+    bottom: 12px;
+    right: 12px;
+    padding: 4px 8px;
+    background: transparent;
+    color: var(--color-gray-300);
+    border: 1px solid transparent;
+    border-radius: 3px;
+    cursor: pointer;
+    font-family: monospace;
+    font-size: 10px;
+    opacity: 0;
+    transition:
+      opacity 0.3s,
+      color 0.2s,
+      border-color 0.2s;
+    z-index: 100;
+  }
+
+  /* Show on hover near the corner area */
+  .palette-trigger:hover,
+  .palette-trigger:focus {
+    opacity: 1;
+    color: var(--color-text-secondary);
+    border-color: var(--color-border);
+  }
+
+  /* Also show when user hovers near bottom-right of page */
+  @media (hover: hover) {
+    .palette-trigger {
+      opacity: 0.3;
+    }
+  }
+
+  .trigger-label {
+    font-weight: 500;
+    letter-spacing: 0.5px;
+  }
+
+  @media (max-width: 600px) {
+    .palette {
+      top: 10%;
+      width: 95%;
+      max-height: 80vh;
+    }
+
+    .palette-trigger {
+      bottom: 10px;
+      right: 10px;
+      padding: 6px 10px;
+    }
+  }
+
+  @media print {
+    .palette-trigger {
+      display: none;
+    }
+  }
+
+  /* Toast notification - minimal and unobtrusive */
+  .toast {
+    position: fixed;
+    bottom: 40px;
+    right: 12px;
+    padding: 5px 10px;
+    background: color-mix(in srgb, var(--color-black) 70%, transparent);
+    color: color-mix(in srgb, var(--color-white) 90%, transparent);
+    font-size: 11px;
+    font-family: monospace;
+    border-radius: 3px;
+    z-index: 10000;
+    animation:
+      toastIn 0.15s ease-out,
+      toastOut 0.15s ease-in 1.7s forwards;
+    pointer-events: none;
+  }
+
+  @keyframes toastIn {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes toastOut {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+
+  /* Help modal - refined and minimal */
+  .help-backdrop {
+    position: fixed;
+    inset: 0;
+    background: color-mix(in srgb, var(--color-white) 85%, transparent);
+    z-index: 9998;
+    backdrop-filter: blur(2px);
+  }
+
+  .help-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90%;
+    max-width: 480px;
+    max-height: 75vh;
+    background: var(--color-white);
+    border: 1px solid var(--color-black);
+    z-index: 9999;
     display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    font-family: Georgia, serif;
+  }
+
+  .help-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--color-gray-100);
+  }
+
+  .help-header h2 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: normal;
+    font-style: italic;
+    color: var(--color-gray-700);
+  }
+
+  .help-close {
+    background: none;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    color: var(--color-text-tertiary);
+    line-height: 1;
+    padding: 0;
+  }
+
+  .help-close:hover {
+    color: var(--color-black);
+  }
+
+  .help-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 16px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
     gap: 16px;
   }
 
-  .footer-hints kbd {
+  .shortcut-group h3 {
+    margin: 0 0 6px 0;
     font-size: 9px;
-    padding: 2px 5px;
-    background: white;
-    border: 1px solid #ddd;
-    margin-right: 4px;
-    font-family: system-ui, sans-serif;
+    font-weight: normal;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--color-text-tertiary);
   }
 
-  .search-time {
-    font-family: monospace;
-    color: #999;
-  }
-
-  /* Scrollbar */
-  .results::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  .results::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .results::-webkit-scrollbar-thumb {
-    background: #ddd;
-  }
-
-  .results::-webkit-scrollbar-thumb:hover {
-    background: #ccc;
-  }
-
-  /* Quick Filters */
-  .quick-filters {
+  .shortcut-row {
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 8px 20px;
-    border-bottom: 1px solid #e0e0e0;
-    background: #fafafa;
-  }
-
-  .filter-chip {
-    padding: 4px 10px;
+    padding: 2px 0;
     font-size: 11px;
-    background: white;
-    border: 1px solid #ddd;
-    cursor: pointer;
-    transition: all 0.15s;
   }
 
-  .filter-chip:hover {
-    border-color: #999;
-  }
-
-  .filter-chip.active {
-    background: #000;
-    color: white;
-    border-color: #000;
-  }
-
-  .filter-divider {
-    width: 1px;
-    height: 16px;
-    background: #ddd;
-    margin: 0 4px;
-  }
-
-  .mode-toggle {
-    padding: 4px 10px;
-    font-size: 10px;
-    background: transparent;
-    border: 1px solid #ccc;
-    cursor: pointer;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-
-  .mode-toggle:hover {
-    background: #f0f0f0;
-  }
-
-  /* Group header with count */
-  .group-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .group-count {
-    font-size: 9px;
-    background: #e0e0e0;
-    padding: 1px 5px;
-    border-radius: 2px;
-  }
-
-  /* Result item with capacity bar */
-  .result-item {
-    position: relative;
-    overflow: hidden;
-    cursor: pointer;
-  }
-
-  .capacity-bar-bg {
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    opacity: 0.12;
-    pointer-events: none;
-    transition: width 0.2s ease;
-  }
-
-  .result-item.selected .capacity-bar-bg {
-    opacity: 0.25;
-  }
-
-  /* Tracker badge */
-  .tracker-badge {
-    font-size: 9px;
-    font-weight: 600;
+  .shortcut-row kbd {
+    display: inline-block;
+    min-width: 16px;
     padding: 1px 4px;
-    background: #f0f0f0;
-    letter-spacing: 0.02em;
-  }
-
-  .result-item.selected .tracker-badge {
-    background: rgba(255, 255, 255, 0.2);
-  }
-
-  /* Status dot */
-  .status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-
-  /* Capacity display */
-  .capacity-display {
-    text-align: right;
-  }
-
-  .capacity-value {
     font-family: monospace;
-    font-size: 12px;
-    font-weight: 600;
-  }
-
-  .capacity-label {
-    font-size: 9px;
-    color: #999;
-    display: block;
-  }
-
-  .result-item.selected .capacity-label {
-    color: rgba(255, 255, 255, 0.5);
-  }
-
-  /* Entity-specific styles */
-  .entity-icon-fallback {
-    width: 24px;
-    height: 24px;
-    background: #000;
-    color: white;
-    font-size: 12px;
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .result-item.selected .entity-icon-fallback {
-    background: white;
-    color: black;
-  }
-
-  .asset-count-badge {
-    display: flex;
-    align-items: center;
-    gap: 3px;
     font-size: 10px;
+    text-align: center;
+    background: var(--color-gray-50);
+    border: 1px solid var(--color-gray-200);
+    border-radius: 2px;
+    color: var(--color-gray-600);
   }
 
-  .asset-count-badge svg {
-    opacity: 0.5;
+  .shortcut-row span {
+    color: var(--color-text-secondary);
+    font-family: Georgia, serif;
   }
 
-  .geo-badge {
-    font-size: 9px;
-    color: #666;
+  .help-footer {
+    padding: 8px 16px;
+    border-top: 1px solid var(--color-gray-100);
+    font-size: 10px;
+    color: var(--color-text-tertiary);
+    text-align: center;
     font-style: italic;
   }
 
-  .result-item.selected .geo-badge {
-    color: rgba(255, 255, 255, 0.6);
-  }
-
-  /* Match highlighting */
-  :global(.result-name mark) {
-    background: #fff59d;
-    color: inherit;
-    padding: 0 1px;
-  }
-
-  .result-item.selected :global(.result-name mark) {
-    background: rgba(255, 255, 255, 0.3);
-  }
-
-  /* Recent searches */
-  .recent-searches {
-    text-align: left;
-    margin-bottom: 16px;
-  }
-
-  .recent-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #999;
-    margin-bottom: 8px;
-  }
-
-  .clear-recent {
-    background: none;
-    border: none;
-    font-size: 10px;
-    color: #999;
-    cursor: pointer;
-    padding: 2px 6px;
-  }
-
-  .clear-recent:hover {
-    color: #333;
-  }
-
-  .recent-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-    padding: 8px 12px;
-    background: #f5f5f5;
-    border: none;
-    font-size: 13px;
-    cursor: pointer;
-    text-align: left;
-    margin-bottom: 4px;
-    transition: background 0.1s;
-  }
-
-  .recent-item:hover {
-    background: #e0e0e0;
-  }
-
-  .recent-item svg {
-    opacity: 0.5;
-  }
-
-  /* Parametric count badges */
-  .chip-count {
-    font-size: 9px;
-    background: rgba(0, 0, 0, 0.1);
+  .help-footer kbd {
+    display: inline-block;
     padding: 1px 4px;
-    margin-left: 4px;
+    font-family: monospace;
+    font-size: 10px;
+    background: var(--color-gray-50);
+    border: 1px solid var(--color-gray-200);
     border-radius: 2px;
+    margin: 0 2px;
+    font-style: normal;
   }
 
-  .filter-chip.active .chip-count {
-    background: rgba(255, 255, 255, 0.2);
-  }
+  @media (max-width: 500px) {
+    .help-content {
+      grid-template-columns: 1fr;
+    }
 
-  /* Units toggle */
-  .units-toggle {
-    padding: 4px 8px;
-    font-size: 10px;
-    font-weight: 600;
-    background: transparent;
-    border: 1px solid #ccc;
-    cursor: pointer;
-    font-family: monospace;
-  }
-
-  .units-toggle:hover {
-    background: #f0f0f0;
-  }
-
-  .units-toggle.active {
-    background: #000;
-    color: white;
-    border-color: #000;
-  }
-
-  /* Result item wrapper for hover preview positioning */
-  .result-item-wrapper {
-    position: relative;
-  }
-
-  /* Similar button */
-  .similar-btn {
-    width: 24px;
-    height: 24px;
-    padding: 0;
-    background: transparent;
-    border: 1px solid transparent;
-    font-size: 14px;
-    cursor: pointer;
-    opacity: 0;
-    transition:
-      opacity 0.15s,
-      background 0.15s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .result-item:hover .similar-btn,
-  .result-item.selected .similar-btn {
-    opacity: 0.5;
-  }
-
-  .similar-btn:hover {
-    opacity: 1 !important;
-    background: rgba(0, 0, 0, 0.1);
-    border-color: #ccc;
-  }
-
-  .result-item.selected .similar-btn:hover {
-    background: rgba(255, 255, 255, 0.2);
-    border-color: rgba(255, 255, 255, 0.3);
-  }
-
-  /* Cross-reference badge */
-  .cross-ref-badge {
-    font-size: 9px;
-    padding: 1px 5px;
-    background: #f0f0f0;
-    color: #666;
-    font-weight: 600;
-  }
-
-  .result-item.selected .cross-ref-badge {
-    background: rgba(255, 255, 255, 0.25);
-    color: #fff;
-  }
-
-  /* Hide old mode toggle */
-  .mode-toggle.hidden {
-    display: none;
-  }
-
-  /* Hover preview panel */
-  .hover-preview {
-    position: absolute;
-    left: 100%;
-    top: 0;
-    width: 280px;
-    background: white;
-    border: 1px solid #ddd;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-    z-index: 100;
-    margin-left: 8px;
-    font-size: 12px;
-  }
-
-  .preview-header {
-    padding: 8px 12px 4px;
-    font-size: 9px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #999;
-    border-bottom: 1px solid #eee;
-  }
-
-  .preview-section {
-    border-bottom: 1px solid #eee;
-  }
-
-  .preview-section:last-child {
-    border-bottom: none;
-  }
-
-  .preview-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-  }
-
-  .preview-list li {
-    padding: 6px 12px;
-    border-bottom: 1px solid #f5f5f5;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .preview-list li:last-child {
-    border-bottom: none;
-  }
-
-  .owner-name,
-  .asset-name {
-    font-weight: 500;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    flex: 1;
-  }
-
-  .owner-share {
-    font-family: monospace;
-    font-size: 11px;
-    color: #666;
-  }
-
-  .preview-asset {
-    flex-direction: column;
-    align-items: flex-start !important;
-  }
-
-  .asset-details {
-    font-size: 10px;
-    color: #999;
-  }
-
-  .preview-empty {
-    padding: 12px;
-    color: #999;
-    font-style: italic;
-    margin: 0;
-  }
-
-  .preview-countries {
-    padding: 8px 12px;
-    margin: 0;
-    font-size: 11px;
-    color: #666;
-    line-height: 1.4;
-  }
-
-  /* Entity preview styling */
-  .entity-preview {
-    max-height: 300px;
-    overflow-y: auto;
-  }
-
-  /* Hide preview on smaller screens or when palette would overflow */
-  @media (max-width: 900px) {
-    .hover-preview {
-      display: none;
+    .help-modal {
+      max-height: 85vh;
     }
   }
 </style>

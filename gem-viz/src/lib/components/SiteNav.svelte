@@ -4,7 +4,7 @@
    * Used in +layout.svelte for consistent navigation across all pages
    */
 
-  import { page } from '$app/stores';
+  import { page, navigating } from '$app/stores';
   import { link } from '$lib/links';
   import { investigationCart } from '$lib/investigationCart';
 
@@ -13,6 +13,9 @@
 
   // Current path for active state
   const currentPath = $derived($page.url.pathname);
+
+  // Loading state
+  const isNavigating = $derived(!!$navigating);
 
   // Check if link is active
   function isActive(path) {
@@ -26,7 +29,6 @@
   const navLinks = [
     { path: 'index', label: 'Home' },
     { path: 'explore', label: 'Explore' },
-    { path: 'presets', label: 'Presets' },
     { path: 'network', label: 'Network' },
     { path: 'report', label: 'Investigation', showBadge: true },
     { path: 'asset', label: 'Assets' },
@@ -35,6 +37,9 @@
 </script>
 
 <nav class="site-nav">
+  {#if isNavigating}
+    <div class="loading-bar"></div>
+  {/if}
   <div class="nav-brand">
     <a href={link('index')}>GEM Viz</a>
   </div>
@@ -60,11 +65,36 @@
     justify-content: space-between;
     align-items: center;
     padding: 12px 40px;
-    border-bottom: 1px solid #000;
-    background: #fff;
+    border-bottom: 1px solid var(--color-black);
+    background: var(--color-white);
     position: sticky;
     top: 0;
     z-index: 100;
+  }
+
+  /* Subtle loading bar */
+  .loading-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 1px;
+    background: var(--color-black);
+    animation: loading 1s ease-in-out infinite;
+  }
+
+  @keyframes loading {
+    0% {
+      width: 0;
+      left: 0;
+    }
+    50% {
+      width: 40%;
+      left: 30%;
+    }
+    100% {
+      width: 0;
+      left: 100%;
+    }
   }
 
   .nav-brand a {
@@ -72,7 +102,7 @@
     font-weight: bold;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #000;
+    color: var(--color-black);
     text-decoration: none;
   }
 
@@ -89,68 +119,40 @@
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #000;
+    color: var(--color-text-secondary);
     text-decoration: none;
     padding: 4px 0;
-    position: relative;
+    border-bottom: 1px solid transparent;
     display: inline-flex;
     align-items: center;
     gap: 4px;
+    transition:
+      color 0.15s,
+      border-color 0.15s;
   }
 
-  /* Animated underline */
-  .nav-links a::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    height: 2px;
-    background: #999;
-    transform: scaleX(0);
-    transform-origin: left;
-    transition: transform 120ms ease-out;
-  }
-
-  .nav-links a:hover::after {
-    transform: scaleX(1);
-  }
-
-  .nav-links a.active::after {
-    background: #000;
-    transform: scaleX(1);
+  .nav-links a:hover {
+    color: var(--color-black);
+    border-bottom-color: var(--color-border);
   }
 
   .nav-links a.active {
-    font-weight: 600;
+    color: var(--color-black);
+    border-bottom-color: var(--color-black);
   }
 
   .badge {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 16px;
-    height: 16px;
-    padding: 0 4px;
-    background: #000;
-    color: white;
+    min-width: 14px;
+    height: 14px;
+    padding: 0 3px;
+    background: var(--color-black);
+    color: var(--color-white);
     font-size: 9px;
-    font-weight: bold;
-    animation: badge-pop 300ms ease-out;
-  }
-
-  @keyframes badge-pop {
-    0% {
-      transform: scale(0.6);
-      opacity: 0;
-    }
-    50% {
-      transform: scale(1.15);
-    }
-    100% {
-      transform: scale(1);
-      opacity: 1;
-    }
+    font-weight: normal;
+    font-variant-numeric: tabular-nums;
   }
 
   @media (max-width: 768px) {
@@ -169,6 +171,17 @@
 
     .nav-links a {
       font-size: 10px;
+    }
+  }
+
+  @media print {
+    .site-nav {
+      position: relative;
+      border-bottom: none;
+    }
+
+    .nav-links {
+      display: none;
     }
   }
 

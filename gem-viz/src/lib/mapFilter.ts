@@ -1,3 +1,24 @@
+/**
+ * @module mapFilter
+ * @description Spatial filtering for map visualizations.
+ *
+ * Supports two filter modes:
+ * - **Bounds**: Rectangular region (north/south/east/west)
+ * - **Polygon**: Arbitrary polygon (coordinate array)
+ *
+ * @example
+ * import { mapFilter, setMapFilter, clearMapFilter, isPolygonFilter } from '$lib/mapFilter';
+ *
+ * // Set a bounds filter
+ * setMapFilter({ north: 40, south: 35, east: -70, west: -80 });
+ *
+ * // Reactive access
+ * $mapFilter // MapFilter | null
+ *
+ * // Type guards
+ * if (isPolygonFilter($mapFilter)) { ... }
+ */
+
 import { writable } from 'svelte/store';
 
 export interface MapBounds {

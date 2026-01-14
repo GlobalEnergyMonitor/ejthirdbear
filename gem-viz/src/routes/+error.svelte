@@ -78,7 +78,7 @@
     align-items: center;
     justify-content: center;
     padding: 40px 20px;
-    background: #fafafa;
+    background: var(--color-gray-50);
   }
 
   .error-container {
@@ -90,7 +90,7 @@
     font-size: 120px;
     font-weight: bold;
     line-height: 1;
-    color: #000;
+    color: var(--color-black);
     margin-bottom: 10px;
     font-family: system-ui, sans-serif;
   }
@@ -101,31 +101,31 @@
     text-transform: uppercase;
     letter-spacing: 1px;
     margin: 0 0 15px 0;
-    color: #000;
+    color: var(--color-black);
   }
 
   .error-message {
     font-size: 14px;
-    color: #666;
+    color: var(--color-text-secondary);
     margin: 0 0 30px 0;
     padding: 15px;
-    background: #fff;
-    border: 1px solid #ddd;
+    background: var(--color-white);
+    border: 1px solid var(--color-border);
   }
 
   .suggestions {
     text-align: left;
     margin-bottom: 30px;
     padding: 20px;
-    background: #fff;
-    border: 1px solid #ddd;
+    background: var(--color-white);
+    border: 1px solid var(--color-border);
   }
 
   .suggestions-title {
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #999;
+    color: var(--color-text-tertiary);
     margin: 0 0 10px 0;
     font-weight: bold;
   }
@@ -137,7 +137,7 @@
 
   .suggestions li {
     font-size: 13px;
-    color: #333;
+    color: var(--color-gray-700);
     margin-bottom: 6px;
   }
 
@@ -153,13 +153,13 @@
   }
 
   .footer-note {
-    border-top: 1px solid #ddd;
+    border-top: 1px solid var(--color-border);
     padding-top: 20px;
   }
 
   .footer-note p {
     font-size: 11px;
-    color: #999;
+    color: var(--color-text-tertiary);
     margin: 0 0 10px 0;
   }
 
@@ -169,7 +169,7 @@
   }
 
   .id-hint code {
-    background: #f0f0f0;
+    background: var(--color-gray-100);
     padding: 2px 6px;
     font-family: 'Monaco', 'Courier New', monospace;
     font-size: 10px;

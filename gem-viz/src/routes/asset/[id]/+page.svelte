@@ -9,197 +9,57 @@
   import { get } from 'svelte/store';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
-  import { base } from '$app/paths';
-  import { PUBLIC_SITE_URL } from '$env/static/public';
-  import { assetLink, entityLink } from '$lib/links';
-  import { formatCapacity, formatCapacityBraille } from '$lib/format';
-  import { colors, colorByStatus, colorByTracker } from '$lib/ownership-theme';
-  import { getTables } from '$lib/component-data/schema';
-  import {
-    parseOwnershipPaths,
-    extractOwnershipChainWithIds,
-  } from '$lib/component-data/ownership-parser';
-  import { SCHEMA_SQL, ASSET_SQL, escapeValue } from '$lib/component-data/sql-helpers';
-  import { findIdColumn, findUnitIdColumn, extractAssetName } from '$lib/component-data/id-helpers';
+  import { entityLink } from '$lib/links';
+  import { colors, colorByStatus } from '$lib/ownership-theme';
+  import { getAsset, getOwnershipGraph } from '$lib/ownership-api';
 
   // Components
   import AssetMap from '$lib/components/AssetMap.svelte';
   import OwnershipPie from '$lib/components/OwnershipPie.svelte';
   import MermaidOwnership from '$lib/components/MermaidOwnership.svelte';
-  import OwnershipHierarchy from '$lib/components/OwnershipHierarchy.svelte';
-  import AssetScreener from '$lib/components/AssetScreener.svelte';
   import RelationshipNetwork from '$lib/components/RelationshipNetwork.svelte';
-  import OwnershipFlower from '$lib/components/OwnershipFlower.svelte';
-  import MiniFlower from '$lib/components/MiniFlower.svelte';
-  import MiniHistogram from '$lib/components/MiniHistogram.svelte';
-  import MiniBarChart from '$lib/components/MiniBarChart.svelte';
-  import Sparkline from '$lib/components/Sparkline.svelte';
-  import DataTable from '$lib/components/DataTable.svelte';
-  import CommandPalette from '$lib/components/CommandPalette.svelte';
   import StatusIcon from '$lib/components/StatusIcon.svelte';
-  import TrackerIcon from '$lib/components/TrackerIcon.svelte';
   import AddToCartButton from '$lib/components/AddToCartButton.svelte';
-  import UltimateParentChain from '$lib/components/UltimateParentChain.svelte';
-  import DataInsights from '$lib/components/DataInsights.svelte';
-  import { detectAssetAnomalies } from '$lib/anomaly-detection';
-  import TopOwners from '$lib/widgets/TopOwners.svelte';
-  import StatusDistribution from '$lib/widgets/StatusDistribution.svelte';
-  import CountryBreakdown from '$lib/widgets/CountryBreakdown.svelte';
+  import Citation from '$lib/components/Citation.svelte';
+  import ExternalLinks from '$lib/components/ExternalLinks.svelte';
 
   // --- PROPS (from +page.server.js) ---
   let { data } = $props();
 
   // --- STATE ---
-  let loading = $state(!data?.owners?.length);
+  let loading = $state(!data?.asset);
   let error = $state(null);
   let mapHasLocation = $state(true);
 
-  let assetId = $state(data?.assetId || '');
-  let assetName = $state(data?.assetName || '');
-  let owners = $state(data?.owners || []);
-  let asset = $state(data?.asset || {});
-  let tableName = $state(data?.tableName || '');
-  let columns = $state(data?.columns || []);
+  let asset = $state(data?.asset || null);
+  let graph = $state(data?.graph || null);
 
-  // --- COLUMN FINDERS (find columns by name pattern) ---
-  const findCol = (pattern) => columns.find((c) => pattern.test(c.toLowerCase()));
-
-  const statusCol = $derived(findCol(/^status$/));
-  const countryCol = $derived(findCol(/^country$/));
-  const trackerCol = $derived(findCol(/^tracker$/));
-  const latCol = $derived(findCol(/^lat(itude)?$/));
-  const lonCol = $derived(findCol(/^lon(gitude)?$/));
-  const ownerCol = $derived(findCol(/^(owner|parent)$/));
-  const ownershipPctCol = $derived(findCol(/share/));
-  const ownerEntityIdCol = $derived(findCol(/owner gem entity id/));
-  const capacityCol = $derived(findCol(/capacity/));
+  const assetId = $derived(asset?.id || '');
+  const assetName = $derived(asset?.name || assetId);
 
   // --- DATA TRANSFORMS ---
-
-  // Parse ownership paths into graph structure
-  const ownershipGraph = $derived.by(() => {
-    const parsed = parseOwnershipPaths(owners, assetId, assetName);
-    return { ...parsed, nodeMap: new Map(parsed.nodes.map((n) => [n.id, n])) };
-  });
-
-  // Extract ownership chain (ultimate parent → asset)
-  const ownershipChain = $derived(extractOwnershipChainWithIds(owners));
-
-  // Detect data anomalies
-  const anomalies = $derived(detectAssetAnomalies({ owners, asset, ownershipChain }));
-
-  // Status color for header styling
-  const statusColor = $derived(colorByStatus.get(asset[statusCol]?.toLowerCase?.()) || colors.grey);
-
-  // Total ownership percentage
-  const totalOwnership = $derived(
-    owners.reduce((sum, o) => sum + (Number(o[ownershipPctCol]) || 0), 0)
-  );
-
-  const siteUrl = PUBLIC_SITE_URL ? PUBLIC_SITE_URL.replace(/\/$/, '') : '';
-  const ogTitle = $derived(assetName || assetId || 'Asset');
-  const ogDescription = $derived.by(() => {
-    const tracker = asset[trackerCol];
-    const status = asset[statusCol];
-    const country = asset[countryCol];
-    const capacity = asset[capacityCol];
-    const parts = [];
-    if (tracker) parts.push(`Tracker: ${tracker}`);
-    if (status) parts.push(`Status: ${status}`);
-    if (country) parts.push(`Country: ${country}`);
-    if (owners.length) parts.push(`Owners: ${owners.length}`);
-    if (capacity != null && !isNaN(Number(capacity))) {
-      parts.push(`Capacity: ${formatCapacity(Number(capacity))}`);
-    }
-    return parts.length ? parts.join(' | ') : 'GEM asset profile';
-  });
-  const ogPath = $derived(
-    assetId ? `${base}/og/asset/${assetId}.svg` : `${base}/og/asset/default.svg`
-  );
-  const ogImage = $derived(siteUrl ? `${siteUrl}${ogPath}` : ogPath);
-  const ogUrl = $derived.by(() => {
-    const path = assetId ? assetLink(assetId) : `${base}/asset/`;
-    return siteUrl ? `${siteUrl}${path}` : path;
-  });
-  const capacityValue = $derived.by(() => {
-    const raw = asset?.[capacityCol];
-    if (raw == null || raw === '') return null;
-    const num = Number(raw);
-    return Number.isFinite(num) ? num : null;
-  });
-  const DOT_MW = 10;
-
-  // Columns to show in "All Properties" section
-  const hiddenCols = $derived(
-    [
-      'Status',
-      'Country',
-      'Tracker',
-      'Latitude',
-      'Longitude',
-      'Parent',
-      'Ownership Path',
-      'Owner',
-      ownershipPctCol,
-      ownerEntityIdCol,
-      'Immediate Project Owner',
-      'Immediate Project Owner GEM Entity ID',
-    ].filter(Boolean)
-  );
-  const otherCols = $derived(columns.filter((c) => !hiddenCols.includes(c)));
-
-  // --- KITCHEN SINK DATA ---
-  const ownerPortfolioAssets = $derived(data?.ownerExplorerData?.assets || []);
-  const ownerTrackerStats = $derived.by(() => {
-    const stats = new Map();
-    for (const entry of ownerPortfolioAssets) {
-      const tracker = entry.tracker || 'Unknown';
-      const current = stats.get(tracker) || { tracker, count: 0, capacity: 0 };
-      current.count += 1;
-      current.capacity += Number(entry.capacityMw || 0);
-      stats.set(tracker, current);
-    }
-    return Array.from(stats.values());
-  });
-  const ownerStatusStats = $derived.by(() => {
-    const stats = new Map();
-    for (const entry of ownerPortfolioAssets) {
-      const status = entry.status || 'Unknown';
-      stats.set(status, (stats.get(status) || 0) + 1);
-    }
-    return Array.from(stats, ([label, value]) => ({ label, value }));
-  });
-  const ownerTrackerBars = $derived.by(() =>
-    ownerTrackerStats.map((row) => ({
-      label: row.tracker,
-      value: row.count,
-      color: colorByTracker.get(row.tracker) || colors.grey,
+  const graphEdges = $derived(graph?.edges || []);
+  const graphNodes = $derived(graph?.nodes || []);
+  const nodeMap = $derived(new Map(graphNodes.map((n) => [n.id, n])));
+  const ownerEdges = $derived(graphEdges.filter((e) => e.target === assetId));
+  const ownerRows = $derived(
+    ownerEdges.map((edge) => ({
+      edge,
+      owner: nodeMap.get(edge.source),
     }))
   );
-  const ownershipShares = $derived.by(() => {
-    if (!ownershipPctCol) return [];
-    return owners
-      .map((owner) => Number(owner[ownershipPctCol]))
-      .filter((value) => Number.isFinite(value));
-  });
-  const ownerCapacityValues = $derived(
-    ownerPortfolioAssets.map((assetEntry) => Number(assetEntry.capacityMw || 0)).filter((v) => v)
-  );
-  const ownerTableColumns = [
-    { key: 'Parent', label: 'Parent', sortable: true, filterable: true },
-    { key: 'Owner', label: 'Owner', sortable: true, filterable: true },
-    { key: 'Status', label: 'Status', sortable: true, filterable: true },
-    { key: 'Share', label: 'Share', sortable: true, filterable: true, type: 'number' },
-    { key: 'Immediate Project Owner', label: 'Immediate Owner', sortable: true, filterable: true },
-    {
-      key: 'Parent Headquarters Country',
-      label: 'HQ Country',
-      sortable: true,
-      filterable: true,
-    },
-  ];
 
-  // --- DATA FETCHING (client-side for dev mode) ---
+  const statusColor = $derived(colorByStatus.get(asset?.status?.toLowerCase?.()) || colors.grey);
+
+  const totalOwnership = $derived(
+    ownerEdges.reduce((sum, edge) => sum + (Number(edge.value) || 0), 0)
+  );
+
+  const detailEntries = $derived(
+    Object.entries(asset?.raw || {}).filter(([, value]) => value != null && value !== '')
+  );
+
+  // --- DATA FETCHING (client-side fallback) ---
   onMount(async () => {
     const paramsId = get(page)?.params?.id;
 
@@ -210,36 +70,23 @@
     }
 
     // Skip fetch if we have server data
-    if (data?.owners?.length) {
+    if (data?.asset && data?.graph) {
       loading = false;
       return;
     }
 
-    // Dev mode: fetch from MotherDuck
     try {
       loading = true;
       if (!paramsId) throw new Error('Missing asset ID');
-      assetId = paramsId;
 
-      const md = await import('$lib/motherduck-wasm');
-      const { assetTable } = await getTables();
-      tableName = assetTable;
+      const [assetData, graphData] = await Promise.all([
+        getAsset(paramsId),
+        getOwnershipGraph({ root: paramsId, direction: 'up', max_depth: 12 }),
+      ]);
 
-      const [schemaName, rawTable] = assetTable.split('.');
-      const schemaResult = await md.default.query(SCHEMA_SQL(schemaName, rawTable));
-      columns = schemaResult.data?.map((c) => c.column_name) ?? [];
-
-      const idColumn = findUnitIdColumn(columns) || findIdColumn(columns) || columns[0];
-      const dataResult = await md.default.query(
-        ASSET_SQL(assetTable, idColumn, escapeValue(assetId))
-      );
-
-      if (!dataResult.success || !dataResult.data?.length)
-        throw new Error(`Asset ${assetId} not found`);
-
-      owners = dataResult.data;
-      asset = dataResult.data[0] || {};
-      assetName = extractAssetName(asset, assetId);
+      asset = assetData;
+      graph = graphData;
+      // assetId and assetName are $derived from asset, so they update automatically
     } catch (err) {
       error = err?.message || 'Failed to load asset';
     } finally {
@@ -254,26 +101,11 @@
 
 <svelte:head>
   <title>{assetName || assetId} — GEM Viz</title>
-  <meta property="og:type" content="website" />
-  <meta property="og:title" content={ogTitle} />
-  <meta property="og:description" content={ogDescription} />
-  <meta property="og:url" content={ogUrl} />
-  <meta property="og:image" content={ogImage} />
-  <meta property="og:image:width" content="1200" />
-  <meta property="og:image:height" content="630" />
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content={ogTitle} />
-  <meta name="twitter:description" content={ogDescription} />
-  <meta name="twitter:image" content={ogImage} />
 </svelte:head>
 
 <main>
-  <header>
-    <span class="table-name">{tableName}</span>
-  </header>
-
   {#if loading}
-    <p class="loading">Fetching asset from MotherDuck…</p>
+    <p class="loading">Fetching asset from Ownership API…</p>
   {:else if error}
     <p class="loading error">{error}</p>
   {:else}
@@ -286,67 +118,42 @@
           id={assetId}
           name={assetName || assetId}
           type="asset"
-          tracker={asset[trackerCol]}
-          metadata={{ country: asset[countryCol], status: asset[statusCol] }}
+          tracker={asset?.facilityType}
+          metadata={{ country: asset?.country, status: asset?.status }}
+        />
+        <ExternalLinks
+          type="asset"
+          name={assetName}
+          country={asset?.country}
+          lat={asset?.latitude}
+          lon={asset?.longitude}
         />
       </div>
 
-      <!-- Ultimate Parent Chain -->
-      {#if ownershipChain.length > 1}
-        <div class="ownership-chain-wrapper">
-          <UltimateParentChain
-            chain={ownershipChain}
-            {assetId}
-            {assetName}
-            showPercentages={true}
-          />
-        </div>
-      {/if}
-
       <!-- Meta Grid -->
       <div class="meta-grid">
-        {#if asset[statusCol]}
+        {#if asset?.status}
           <div class="meta-item">
             <span class="label">Status</span>
             <span class="value status-badge" style="--status-color: {statusColor}">
               <span class="status-dot"></span>
-              {asset[statusCol]}
-              <StatusIcon status={asset[statusCol]} size={12} />
+              {asset.status}
+              <StatusIcon status={asset.status} size={12} />
             </span>
           </div>
         {/if}
 
-        {#if asset[trackerCol]}
+        {#if asset?.facilityType}
           <div class="meta-item">
-            <span class="label">Tracker</span>
-            <span class="value">
-              <TrackerIcon tracker={asset[trackerCol]} size={14} showLabel variant="pill" />
-            </span>
+            <span class="label">Facility Type</span>
+            <span class="value">{asset.facilityType}</span>
           </div>
         {/if}
 
         <div class="meta-item">
           <span class="label">Owners</span>
-          <span class="value">{owners.length} record{owners.length !== 1 ? 's' : ''}</span>
+          <span class="value">{ownerEdges.length} record{ownerEdges.length !== 1 ? 's' : ''}</span>
         </div>
-
-        {#if capacityValue != null}
-          <div class="meta-item">
-            <span class="label">Capacity</span>
-            <span class="value capacity-value">
-              {formatCapacity(capacityValue)}
-              {#if capacityValue > 0}
-                <span
-                  class="braille-chart"
-                  title="{Math.floor(capacityValue / DOT_MW)} dots (10 MW each)"
-                  aria-hidden="true"
-                >
-                  {formatCapacityBraille(capacityValue, { dotMw: DOT_MW })}
-                </span>
-              {/if}
-            </span>
-          </div>
-        {/if}
 
         {#if totalOwnership > 0}
           <div class="meta-item">
@@ -362,71 +169,57 @@
           </div>
         {/if}
 
-        {#if asset[countryCol]}
+        {#if asset?.country}
           <div class="meta-item">
             <span class="label">Country</span>
-            <span class="value">{asset[countryCol]}</span>
+            <span class="value">{asset.country}</span>
           </div>
         {/if}
 
-        {#if asset[latCol] && asset[lonCol]}
+        {#if asset?.latitude && asset?.longitude}
           <div class="meta-item">
             <span class="label">Coordinates</span>
-            <span class="value">{asset[latCol]}, {asset[lonCol]}</span>
+            <span class="value">{asset.latitude}, {asset.longitude}</span>
           </div>
         {/if}
       </div>
 
-      <!-- Data Insights (automatic anomaly detection) -->
-      {#if anomalies.length > 0}
-        <DataInsights {anomalies} />
-      {/if}
-
       <!-- Owners Table -->
       <section class="owners-section">
-        <h2>Ownership ({owners.length})</h2>
+        <h2>Ownership ({ownerRows.length})</h2>
         <div class="owners-table-wrapper">
           <table class="owners-table">
             <thead>
               <tr>
-                <th>Owner (Parent)</th>
+                <th>Owner</th>
                 <th>Share</th>
-                <th>Ownership Path</th>
-                <th>Country</th>
+                <th>Depth</th>
+                <th>Type</th>
               </tr>
             </thead>
             <tbody>
-              {#each owners as owner}
+              {#each ownerRows as row}
                 <tr>
                   <td class="owner-name">
-                    <StatusIcon status={owner['Status']} size={10} />
-                    {#if owner[ownerEntityIdCol]}
-                      <a href={entityLink(owner[ownerEntityIdCol])} class="owner-link">
-                        {owner['Parent'] || owner[ownerCol] || '—'}
-                        <span class="owner-id">{owner[ownerEntityIdCol]}</span>
-                      </a>
-                    {:else}
-                      {owner['Parent'] || owner[ownerCol] || '—'}
-                    {/if}
+                    <a href={entityLink(row.edge.source)} class="owner-link">
+                      {row.owner?.Name || row.edge.source}
+                      <span class="owner-id">{row.edge.source}</span>
+                    </a>
                   </td>
                   <td class="owner-share">
-                    {#if owner[ownershipPctCol]}
+                    {#if row.edge.value != null}
                       <span class="share-value">
                         <OwnershipPie
-                          percentage={Number(owner[ownershipPctCol])}
+                          percentage={Number(row.edge.value)}
                           size={18}
                           fillColor={colors.navy}
                         />
-                        {Number(owner[ownershipPctCol]).toFixed(1)}%
+                        {Number(row.edge.value).toFixed(1)}%
                       </span>
                     {:else}—{/if}
                   </td>
-                  <td class="ownership-path">{owner['Ownership Path'] || '—'}</td>
-                  <td
-                    >{owner['Parent Headquarters Country'] ||
-                      owner['Parent Registration Country'] ||
-                      '—'}</td
-                  >
+                  <td>{row.edge.depth ?? '—'}</td>
+                  <td>{row.edge.type || '—'}</td>
                 </tr>
               {/each}
             </tbody>
@@ -435,41 +228,22 @@
       </section>
 
       <!-- Ownership Visualizations (only if we have edges) -->
-      {#if ownershipGraph.edges.length > 0}
+      {#if graphEdges.length > 0}
         <section class="viz-section">
           <h2>Ownership Structure</h2>
-          <p class="section-subtitle">Interactive flowchart showing ownership paths</p>
           <MermaidOwnership
-            edges={ownershipGraph.edges}
-            nodeMap={ownershipGraph.nodeMap}
+            edges={graphEdges}
+            {nodeMap}
             {assetId}
             {assetName}
+            zoom={0.7}
             direction="TD"
           />
         </section>
 
         <section class="viz-section">
-          <h2>Ownership Network</h2>
-          <p class="section-subtitle">Force-directed graph of entity relationships</p>
-          <OwnershipHierarchy
-            {assetId}
-            {assetName}
-            edges={ownershipGraph.edges}
-            nodes={ownershipGraph.nodes}
-            width={800}
-            height={350}
-          />
-        </section>
-
-        <section class="viz-section">
-          <h2>Owner Portfolio</h2>
-          <AssetScreener prebakedPortfolio={data?.ownerExplorerData} />
-        </section>
-
-        <section class="viz-section">
           <h2>Related Assets</h2>
-          <p class="section-subtitle">Same-owner assets and co-located units</p>
-          <RelationshipNetwork prebakedData={data?.relationshipData} />
+          <RelationshipNetwork />
         </section>
       {/if}
 
@@ -481,118 +255,45 @@
         </section>
       {/if}
 
-      <!-- All Properties -->
-      {#if otherCols.length > 0}
+      <!-- Additional Details -->
+      {#if detailEntries.length > 0}
         <section class="properties">
-          <h2>All Properties</h2>
+          <h2>Additional Details</h2>
           <dl>
-            {#each otherCols as col}
-              {#if asset[col] != null && asset[col] !== ''}
-                <div class="property">
-                  <dt>{col}</dt>
-                  <dd>{asset[col]}</dd>
-                </div>
-              {/if}
+            {#each detailEntries as entry}
+              <div class="property">
+                <dt>{entry[0]}</dt>
+                <dd>{entry[1]}</dd>
+              </div>
             {/each}
           </dl>
         </section>
       {/if}
 
-      <!-- Kitchen Sink Modules -->
-      <section class="kitchen-sink">
-        <h2>Kitchen Sink Modules</h2>
-        <p class="section-subtitle">Full modular showcase for future reuse.</p>
-        <div class="module-grid">
-          <div class="module-card wide">
-            <CommandPalette embedded={true} placeholder="Search assets, entities, or IDs..." />
-          </div>
-          <div class="module-card">
-            <OwnershipFlower
-              ownerId={data?.ownerExplorerData?.spotlightOwner?.id}
-              portfolio={data?.ownerExplorerData}
-              size="small"
-              showLabels={false}
-              title="Owner Portfolio Flower"
-            />
-          </div>
-          <div class="module-card">
-            <MiniFlower trackers={ownerTrackerStats} size={48} />
-          </div>
-          <div class="module-card">
-            <MiniBarChart
-              label="Owner Status Mix"
-              data={ownerStatusStats}
-              colorMap={Object.fromEntries(
-                ownerStatusStats.map((row) => [
-                  row.label,
-                  colorByStatus.get(row.label?.toLowerCase?.()) || colors.grey,
-                ])
-              )}
-            />
-          </div>
-          <div class="module-card">
-            <MiniBarChart label="Owner Tracker Mix" data={ownerTrackerBars} />
-          </div>
-          <div class="module-card">
-            <MiniHistogram
-              label="Owner Capacity Distribution"
-              data={ownerCapacityValues}
-              bins={12}
-              width={240}
-              height={80}
-              unit="MW"
-            />
-          </div>
-          <div class="module-card">
-            <Sparkline
-              label="Ownership Share Sparkline"
-              data={ownershipShares}
-              width={220}
-              height={60}
-              showDots={true}
-            />
-          </div>
-          <div class="module-card wide">
-            <DataTable
-              columns={ownerTableColumns}
-              data={owners}
-              pageSize={8}
-              showExport={false}
-              showColumnToggle={true}
-              showColumnFilters={true}
-            />
-          </div>
-          <div class="module-card">
-            <StatusDistribution />
-          </div>
-          <div class="module-card">
-            <CountryBreakdown />
-          </div>
-          <div class="module-card">
-            <TopOwners />
-          </div>
-        </div>
-      </section>
-
-      <!-- Raw JSON -->
+      <!-- Source Data -->
       <section class="json-dump">
-        <h2>Raw Data</h2>
+        <h2>Source Data</h2>
         <details>
           <summary
-            >{owners.length} records ({JSON.stringify({ assetId, owners }).length.toLocaleString()} bytes)</summary
+            >{ownerRows.length} records ({JSON.stringify({
+              assetId,
+              ownerRows,
+            }).length.toLocaleString()} bytes)</summary
           >
           <pre class="json-blob">{JSON.stringify(
               {
-                meta: { assetId, assetName, tableName },
+                meta: { assetId, assetName },
                 asset,
-                owners,
-                ownershipGraph: { nodes: ownershipGraph.nodes, edges: ownershipGraph.edges },
+                graph,
               },
               null,
               2
             )}</pre>
         </details>
       </section>
+
+      <!-- Citation -->
+      <Citation variant="footer" trackers={asset?.facilityType ? [asset.facilityType] : []} />
     </article>
   {/if}
 </main>
@@ -607,28 +308,14 @@
     width: 100%;
     padding: 40px;
   }
-  header {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    border-bottom: 1px solid #000;
-    padding-bottom: 15px;
-    margin-bottom: 30px;
-  }
-  .table-name {
-    font-size: 10px;
-    color: #999;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
 
   /* Loading/Error */
   .loading {
     padding: 30px 0;
-    color: #555;
+    color: var(--color-gray-600);
   }
   .loading.error {
-    color: #b10000;
+    color: var(--color-error);
   }
 
   /* Typography */
@@ -645,43 +332,17 @@
     font-size: 18px;
     font-weight: normal;
     margin: 40px 0 20px 0;
-    border-bottom: 1px solid #ddd;
+    border-bottom: 1px solid var(--color-border);
     padding-bottom: 10px;
   }
   .asset-id {
     font-size: 12px;
-    color: #666;
+    color: var(--color-text-secondary);
     font-family: monospace;
     margin-bottom: 12px;
   }
   .page-actions {
     margin-bottom: 20px;
-  }
-  .ownership-chain-wrapper {
-    margin: 16px 0 24px 0;
-    padding: 12px 16px;
-    background: #fafafa;
-    border-left: 3px solid #333;
-  }
-  .capacity-value {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .braille-chart {
-    font-family:
-      ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
-      monospace;
-    font-size: 11px;
-    letter-spacing: 1px;
-    color: #444;
-    white-space: nowrap;
-  }
-  .section-subtitle {
-    font-size: 12px;
-    color: #666;
-    margin: -10px 0 15px 0;
-    font-family: system-ui, sans-serif;
   }
 
   /* Meta Grid */
@@ -691,7 +352,7 @@
     gap: 20px;
     padding: 20px 0;
     margin-bottom: 40px;
-    border-bottom: 1px solid #ddd;
+    border-bottom: 1px solid var(--color-border);
   }
   .meta-item {
     display: flex;
@@ -702,12 +363,12 @@
     font-size: 9px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #999;
+    color: var(--color-text-tertiary);
     font-weight: bold;
   }
   .value {
     font-size: 14px;
-    color: #000;
+    color: var(--color-black);
   }
   .status-badge {
     display: flex;
@@ -743,24 +404,24 @@
   .owners-table td {
     padding: 12px 15px;
     text-align: left;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--color-gray-100);
   }
   .owners-table th {
     font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #666;
+    color: var(--color-text-secondary);
     font-weight: bold;
-    border-bottom: 1px solid #000;
+    border-bottom: 1px solid var(--color-black);
   }
   .owners-table tbody tr:hover {
-    background: #fafafa;
+    background: var(--color-gray-50);
   }
   .owner-name {
     font-weight: 500;
   }
   .owner-link {
-    color: #000;
+    color: var(--color-black);
     text-decoration: underline;
   }
   .owner-link:hover {
@@ -769,7 +430,7 @@
   .owner-id {
     display: block;
     font-size: 10px;
-    color: #999;
+    color: var(--color-text-tertiary);
     font-family: monospace;
     margin-top: 2px;
   }
@@ -780,11 +441,6 @@
     display: flex;
     align-items: center;
     gap: 6px;
-  }
-  .ownership-path {
-    font-size: 12px;
-    color: #666;
-    max-width: 300px;
   }
 
   /* Viz Sections */
@@ -805,7 +461,7 @@
     grid-template-columns: 250px 1fr;
     gap: 20px;
     padding: 12px 0;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid var(--color-gray-100);
   }
   .property:last-child {
     border-bottom: none;
@@ -813,13 +469,13 @@
   dt {
     font-size: 11px;
     font-weight: bold;
-    color: #666;
+    color: var(--color-text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.3px;
   }
   dd {
     font-size: 13px;
-    color: #000;
+    color: var(--color-black);
     margin: 0;
   }
 
@@ -827,7 +483,7 @@
   .json-dump {
     margin-top: 60px;
     padding-top: 40px;
-    border-top: 2px solid #000;
+    border-top: 2px solid var(--color-black);
   }
   .json-dump h2 {
     font-family: monospace;
@@ -836,8 +492,8 @@
     letter-spacing: 1px;
   }
   .json-dump details {
-    background: #f8f8f8;
-    border: 1px solid #ddd;
+    background: var(--color-gray-50);
+    border: 1px solid var(--color-border);
     border-radius: 4px;
   }
   .json-dump summary {
@@ -845,11 +501,11 @@
     cursor: pointer;
     font-family: monospace;
     font-size: 12px;
-    color: #444;
-    background: #f0f0f0;
+    color: var(--color-gray-600);
+    background: var(--color-gray-100);
   }
   .json-dump summary:hover {
-    background: #e8e8e8;
+    background: var(--color-gray-200);
   }
   .json-blob {
     margin: 0;
@@ -858,30 +514,9 @@
     font-size: 11px;
     line-height: 1.5;
     overflow: auto;
-    background: #1e1e1e;
-    color: #d4d4d4;
+    background: var(--color-code-bg, #1e1e1e);
+    color: var(--color-code-text, #d4d4d4);
     max-height: 600px;
-  }
-
-  /* Kitchen Sink */
-  .kitchen-sink {
-    margin: 50px 0;
-    padding-top: 20px;
-    border-top: 1px solid #ddd;
-  }
-  .module-grid {
-    display: grid;
-    grid-template-columns: repeat(12, minmax(0, 1fr));
-    gap: 16px;
-  }
-  .module-card {
-    grid-column: span 4;
-    padding: 16px;
-    border: 1px solid #ddd;
-    background: #fff;
-  }
-  .module-card.wide {
-    grid-column: span 12;
   }
 
   /* Responsive */
@@ -892,12 +527,6 @@
     .property {
       grid-template-columns: 1fr;
       gap: 5px;
-    }
-    .module-grid {
-      grid-template-columns: 1fr;
-    }
-    .module-card {
-      grid-column: span 1;
     }
   }
 </style>

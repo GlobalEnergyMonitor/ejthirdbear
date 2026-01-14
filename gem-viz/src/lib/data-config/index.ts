@@ -45,7 +45,7 @@ export {
 
 // Export field mapping utilities
 export {
-  getAssetId,
+  getAssetIdByTracker,
   getAssetName,
   getOperatingStatus,
   getLocation,

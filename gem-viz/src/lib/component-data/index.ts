@@ -11,7 +11,7 @@ export * from './types';
 // ID helpers (centralized ID resolution - use these!)
 export * from './id-helpers';
 
-// Shared utilities (explicit exports to avoid OwnershipEdge conflict with types.ts)
+// Shared utilities
 export {
   parseSegment,
   sanitizeId,
@@ -21,18 +21,10 @@ export {
   type OwnershipNode,
   type ParsedOwnershipGraph,
 } from './ownership-parser';
-export * from './sql-helpers';
-export {
-  getMotherDuck,
-  getPageId,
-  getPageType,
-  requirePageId,
-  createHydration,
-} from './use-hydration.svelte';
+export { getPageId, getPageType, requirePageId, createHydration } from './use-hydration.svelte';
 
-// Schema functions (MotherDuck-based)
+// Schema functions (Ownership API-based)
 export {
-  getTables,
   fetchAssetBasics,
   fetchCoordinatesByLocation,
   fetchSameOwnerAssets,
@@ -43,13 +35,5 @@ export {
   DATA_CONTRACT,
 } from './schema';
 
-// Observable-ported functions (preferred)
-export {
-  getAssetOwners,
-  getSpotlightOwnerData,
-  getTopOwners,
-  formatForMermaid,
-  summarizeAssets,
-  idFields,
-  capacityFields,
-} from '$lib/ownership-data';
+// Observable-ported functions (available for components that need ownership data)
+export { getAssetOwners, getSpotlightOwnerData } from '$lib/ownership-data';

@@ -1,6 +1,27 @@
+/**
+ * @module exportList
+ * @description Manages assets selected for bulk export operations.
+ *
+ * Persists to localStorage with automatic validation and deduplication.
+ *
+ * @example
+ * import { exportList, isInExportList } from '$lib/exportList';
+ *
+ * // Add/remove assets
+ * exportList.add({ id: 'G123', name: 'Plant Name', tracker: 'Coal Plant' });
+ * exportList.remove('G123');
+ *
+ * // Reactive access
+ * $exportList // ExportAsset[]
+ *
+ * // Check membership
+ * if (isInExportList('G123')) { ... }
+ */
+
 import { writable, get } from 'svelte/store';
 import { browser } from '$app/environment';
 import { isValidSlug, sanitizeName } from './slug';
+import { STORAGE_KEY_EXPORT_LIST } from './constants';
 
 export interface ExportAsset {
   id: string;
@@ -9,7 +30,7 @@ export interface ExportAsset {
   addedAt: number;
 }
 
-const STORAGE_KEY = 'gem-export-list';
+const STORAGE_KEY = STORAGE_KEY_EXPORT_LIST;
 
 // Load from localStorage with validation
 function loadFromStorage(): ExportAsset[] {

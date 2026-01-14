@@ -7,7 +7,7 @@
    * Petal length -> total capacity for that tracker (scaled)
    * Petal color -> tracker color palette
    *
-   * Can receive data via props (for static builds) or fetch from MotherDuck (dev mode).
+   * Can receive data via props (for static builds) or fetch from Ownership API (dev mode).
    */
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
@@ -16,11 +16,7 @@
   import { entityLink } from '$lib/links';
   import * as d3 from 'd3';
   import { colorByTracker, colors } from '$lib/ownership-theme';
-  // Dynamic import to avoid SSR issues - schema.ts imports WASM client
-  /** @type {typeof import('$lib/component-data/schema').fetchAssetBasics} */
-  let fetchAssetBasics;
-  /** @type {typeof import('$lib/component-data/schema').fetchOwnerPortfolio} */
-  let fetchOwnerPortfolio;
+  import { fetchAssetBasics, fetchOwnerPortfolio } from '$lib/component-data/schema';
 
   /** @type {{ ownerId?: string | null, portfolio?: any, size?: 'small' | 'medium' | 'large', showLabels?: boolean, showTitle?: boolean, title?: string }} */
   let {
@@ -39,7 +35,7 @@
     large: { width: 400, height: 400, labelSize: 12, baseRadius: 40, maxRadius: 140 },
   };
 
-  let svgEl = $state(null);
+  let svgEl;
   let loading = $state(!prebakedPortfolio);
   /** @type {string | null} */
   let error = $state(null);
@@ -171,12 +167,7 @@
       return;
     }
 
-    // Otherwise fetch from MotherDuck (dev mode)
-    // Dynamic import to avoid SSR bundling of WASM client
-    const schema = await import('$lib/component-data/schema');
-    fetchAssetBasics = schema.fetchAssetBasics;
-    fetchOwnerPortfolio = schema.fetchOwnerPortfolio;
-
+    // Otherwise fetch from Ownership API (dev mode)
     try {
       loading = true;
       error = null;
@@ -234,19 +225,15 @@
         <div class="subtitle">Tracker mix</div>
       </div>
     {/if}
-    {#if resolvedOwnerId}
-      <button
-        type="button"
-        class="flower-button"
-        aria-label="View ownership details"
-        onclick={handleFlowerClick}
-      >
-        <svg bind:this={svgEl} aria-hidden="true"></svg>
-      </button>
-    {:else}
-      <svg bind:this={svgEl} role="img" aria-label="Ownership flower showing tracker distribution"
-      ></svg>
-    {/if}
+    <svg
+      bind:this={svgEl}
+      aria-label="Ownership flower showing tracker distribution"
+      class:clickable={Boolean(resolvedOwnerId)}
+      onclick={resolvedOwnerId ? handleFlowerClick : undefined}
+      role={resolvedOwnerId ? 'button' : 'img'}
+      tabindex={resolvedOwnerId ? 0 : undefined}
+      onkeydown={(e) => resolvedOwnerId && e.key === 'Enter' && handleFlowerClick()}
+    ></svg>
   {/if}
 </div>
 
@@ -298,48 +285,30 @@
     text-decoration-color: currentColor;
   }
 
-  .flower-button {
-    border: none;
-    padding: 0;
-    background: none;
+  svg.clickable {
     cursor: pointer;
-  }
-
-  .flower-button svg {
     transition: transform 0.15s ease;
   }
 
-  .flower-button:hover svg {
+  svg.clickable:hover {
     transform: scale(1.02);
-  }
-
-  /* Petal hover effects - applied via D3 */
-  :global(.ownership-flower .petal) {
-    transition:
-      fill-opacity 0.15s,
-      transform 0.15s;
-    transform-origin: center;
-  }
-  :global(.ownership-flower .petal:hover) {
-    fill-opacity: 1;
-    transform: scale(1.05);
   }
 
   .subtitle {
     font-size: 11px;
-    color: #888;
+    color: var(--color-gray-500);
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
 
   .loading-msg {
     font-size: 11px;
-    color: #888;
+    color: var(--color-gray-500);
     margin: 0;
   }
 
   .error {
-    color: #b10000;
+    color: var(--color-error);
     margin: 0;
     font-size: 11px;
   }

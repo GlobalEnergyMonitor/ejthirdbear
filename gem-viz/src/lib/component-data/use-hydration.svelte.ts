@@ -4,7 +4,6 @@
  * Provides reactive loading/error state and page ID resolution.
  * Uses Svelte 5 runes for reactivity.
  */
-import { browser } from '$app/environment';
 import { get } from 'svelte/store';
 import { page } from '$app/stores';
 
@@ -96,16 +95,4 @@ export function requirePageId(context: string = 'component'): string {
   const id = getPageId();
   if (!id) throw new Error(`Missing ID in URL params for ${context}`);
   return id;
-}
-
-/**
- * Dynamic import for MotherDuck to avoid SSR Worker error
- */
-export async function getMotherDuck() {
-  // Prevent WASM import during SSR - only works in browser
-  if (!browser) {
-    throw new Error('MotherDuck WASM client is only available in the browser');
-  }
-  const mod = await import('$lib/motherduck-wasm');
-  return mod.default;
 }

@@ -286,4 +286,7 @@ async function generateGeoJSON() {
   }
 }
 
-generateGeoJSON();
+generateGeoJSON().catch((err) => {
+  console.error('Unhandled error in generateGeoJSON:', err);
+  process.exit(1);
+});

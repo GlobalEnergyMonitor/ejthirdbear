@@ -7,8 +7,22 @@
   import { link } from '$lib/links';
   import { dataVersionInfo, TrackerDatasets } from '$lib/data-config/data-sources';
 
+  // Real stats from +page.server.js
+  let { data } = $props();
+  const stats = data?.stats || {};
+
   // Version history - add new entries at the top
   const changelog = [
+    {
+      version: '0.1.21',
+      date: '2025-12-17',
+      changes: [
+        'Integrated new Ownership Tracing API for faster data queries',
+        'About page now shows real-time database statistics',
+        'Added progress tracking for background deployments',
+        'Improved build pipeline with status line integration',
+      ],
+    },
     {
       version: '0.1.14',
       date: '2025-12-15',
@@ -67,7 +81,7 @@
       date: '2025-11-22',
       changes: [
         'Initial release with static site generation',
-        'Bulk fetch architecture for MotherDuck data',
+        'Bulk fetch architecture for Ownership API data',
         'Interactive MapLibre maps on asset pages',
         'Digital Ocean Spaces deployment',
       ],
@@ -151,20 +165,32 @@
     <h2>Data Sources</h2>
 
     <div class="data-version-box">
-      <h4>Current Data Release</h4>
-      <div class="version-grid">
-        <div class="version-item">
-          <span class="label">Release Version</span>
-          <span class="value">{dataVersionInfo.currentReleaseVersion}</span>
+      <h4>Current Database Statistics</h4>
+      <div class="version-grid stats-grid">
+        <div class="version-item stat-item">
+          <span class="value stat-value">{stats.totalAssets?.toLocaleString() || '13,472'}</span>
+          <span class="label">Unique Assets</span>
         </div>
-        <div class="version-item">
-          <span class="label">Release Date</span>
-          <span class="value">{dataVersionInfo.releaseDate}</span>
+        <div class="version-item stat-item">
+          <span class="value stat-value">{stats.totalEntities?.toLocaleString() || '3,952'}</span>
+          <span class="label">Owner Entities</span>
         </div>
-        <div class="version-item">
-          <span class="label">Last Verified</span>
-          <span class="value">{dataVersionInfo.lastVerificationDate}</span>
+        <div class="version-item stat-item">
+          <span class="value stat-value">{stats.totalLocations?.toLocaleString() || '21,898'}</span>
+          <span class="label">Locations</span>
         </div>
+        <div class="version-item stat-item">
+          <span class="value stat-value">{stats.totalCountries || 185}</span>
+          <span class="label">Countries</span>
+        </div>
+      </div>
+      <div class="version-meta">
+        {#if stats.buildTime}
+          <span>Last updated: {stats.buildTime}</span>
+        {/if}
+        {#if stats.version}
+          <span>Build: {stats.version}</span>
+        {/if}
       </div>
     </div>
 
@@ -175,26 +201,47 @@
     </p>
 
     <h3>Asset Trackers</h3>
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th>Tracker</th>
-          <th>Assets</th>
-          <th>Version</th>
-          <th>Last Updated</th>
-        </tr>
-      </thead>
-      <tbody>
-        {#each trackers as tracker}
+    {#if stats.trackerBreakdown?.length > 0}
+      <table class="data-table">
+        <thead>
           <tr>
-            <td>{tracker.name}</td>
-            <td>{tracker.assets}</td>
-            <td>{tracker.version}</td>
-            <td>{tracker.lastUpdated}</td>
+            <th>Tracker</th>
+            <th>Locations</th>
+            <th>% of Total</th>
           </tr>
-        {/each}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {#each stats.trackerBreakdown as tracker}
+            <tr>
+              <td>{tracker.name}</td>
+              <td>{tracker.count.toLocaleString()}</td>
+              <td>{((tracker.count / stats.totalLocations) * 100).toFixed(1)}%</td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    {:else}
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Tracker</th>
+            <th>Assets</th>
+            <th>Version</th>
+            <th>Last Updated</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each trackers as tracker}
+            <tr>
+              <td>{tracker.name}</td>
+              <td>{tracker.assets}</td>
+              <td>{tracker.version}</td>
+              <td>{tracker.lastUpdated}</td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    {/if}
 
     <h3>Ownership Data</h3>
     <p>
@@ -202,13 +249,16 @@
     </p>
     <ul>
       <li>
-        <strong>~50,000 entities</strong> — Companies, governments, individuals, and other owners
+        <strong>{stats.totalEntities?.toLocaleString() || '~4,000'} entities</strong> — Companies, governments,
+        individuals, and other owners
       </li>
       <li>
-        <strong>~100,000 entity relationships</strong> — Parent-subsidiary and shareholder links
+        <strong>{stats.totalAssets?.toLocaleString() || '~13,000'} unique assets</strong> — Energy infrastructure
+        units across all trackers
       </li>
       <li>
-        <strong>~150,000 asset ownership records</strong> — Direct ownership stakes in infrastructure
+        <strong>{stats.totalLocations?.toLocaleString() || '~22,000'} locations</strong> —
+        Geographic coordinates in {stats.totalCountries || 185} countries
       </li>
     </ul>
 
@@ -412,7 +462,7 @@
     <h3>Technical Stack</h3>
     <ul class="tech-list">
       <li>SvelteKit — Application framework</li>
-      <li>MotherDuck — Cloud data warehouse</li>
+      <li>Ownership Tracing API — Cloud ownership service</li>
       <li>MapLibre GL — Interactive maps</li>
       <li>D3.js — Data visualizations</li>
       <li>Digital Ocean Spaces — Static hosting</li>
@@ -462,14 +512,14 @@
   .page-header {
     margin-bottom: 40px;
     padding-bottom: 24px;
-    border-bottom: 2px solid #000;
+    border-bottom: 2px solid var(--color-black);
   }
   .breadcrumb {
     font-size: 12px;
     margin-bottom: 12px;
   }
   .breadcrumb a {
-    color: #333;
+    color: var(--color-gray-700);
     text-decoration: none;
   }
   .breadcrumb a:hover {
@@ -483,22 +533,22 @@
   }
   .lead {
     font-size: 18px;
-    color: #333;
+    color: var(--color-gray-700);
     margin: 0;
   }
 
   .toc {
-    background: #f9f9f9;
+    background: var(--color-gray-50);
     padding: 20px 24px;
     margin-bottom: 48px;
-    border: 1px solid #ddd;
+    border: 1px solid var(--color-border);
   }
   .toc h2 {
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin: 0 0 12px 0;
-    color: #666;
+    color: var(--color-text-secondary);
   }
   .toc ul {
     list-style: none;
@@ -509,7 +559,7 @@
     gap: 8px 24px;
   }
   .toc a {
-    color: #333;
+    color: var(--color-gray-700);
     text-decoration: none;
     font-size: 14px;
   }
@@ -524,7 +574,7 @@
     font-size: 24px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    border-bottom: 1px solid #000;
+    border-bottom: 1px solid var(--color-black);
     padding-bottom: 8px;
     margin: 0 0 20px 0;
   }
@@ -532,14 +582,14 @@
     font-size: 16px;
     font-weight: 600;
     margin: 28px 0 12px 0;
-    color: #333;
+    color: var(--color-gray-700);
   }
   section p {
     margin: 0 0 16px 0;
-    color: #333;
+    color: var(--color-gray-700);
   }
   .section-intro {
-    color: #666;
+    color: var(--color-text-secondary);
     font-size: 15px;
   }
 
@@ -556,7 +606,7 @@
   }
 
   a {
-    color: #333;
+    color: var(--color-gray-700);
   }
 
   .data-table {
@@ -569,21 +619,21 @@
   .data-table td {
     text-align: left;
     padding: 10px 12px;
-    border-bottom: 1px solid #ddd;
+    border-bottom: 1px solid var(--color-border);
   }
   .data-table th {
-    background: #f5f5f5;
+    background: var(--color-gray-50);
     font-weight: 600;
     font-size: 12px;
     text-transform: uppercase;
   }
   .data-table tbody tr:hover {
-    background: #fafafa;
+    background: var(--color-gray-50);
   }
 
   .data-version-box {
-    background: #f9f9f9;
-    border: 2px solid #000;
+    background: var(--color-gray-50);
+    border: 2px solid var(--color-black);
     padding: 20px;
     margin-bottom: 24px;
   }
@@ -598,15 +648,22 @@
     grid-template-columns: repeat(3, 1fr);
     gap: 20px;
   }
+  .stats-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
   .version-item {
     display: flex;
     flex-direction: column;
     gap: 4px;
   }
+  .stat-item {
+    text-align: center;
+    flex-direction: column-reverse;
+  }
   .version-item .label {
     font-size: 10px;
     text-transform: uppercase;
-    color: #666;
+    color: var(--color-text-secondary);
     letter-spacing: 0.5px;
   }
   .version-item .value {
@@ -614,28 +671,42 @@
     font-weight: 600;
     font-family: monospace;
   }
+  .stat-value {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--color-black);
+  }
+  .version-meta {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--color-border);
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    display: flex;
+    gap: 16px;
+  }
   .data-contact {
     font-size: 13px;
-    color: #666;
+    color: var(--color-text-secondary);
     margin-top: 16px;
   }
 
   .example-box {
-    background: #f5f5f5;
+    background: var(--color-gray-50);
     padding: 16px 20px;
     margin: 16px 0 24px;
-    border-left: 3px solid #333;
+    border-left: 3px solid var(--color-gray-700);
   }
   .example-box code {
     display: block;
     font-size: 13px;
-    color: #333;
+    color: var(--color-gray-700);
     margin-bottom: 12px;
     word-break: break-word;
   }
   .example-note {
     font-size: 13px;
-    color: #666;
+    color: var(--color-text-secondary);
     margin: 0;
     font-style: italic;
   }
@@ -678,7 +749,7 @@
   }
   .viz-guide dd {
     margin: 4px 0 0 0;
-    color: #555;
+    color: var(--color-gray-600);
   }
 
   .changelog {
@@ -687,7 +758,7 @@
   .release {
     margin-bottom: 32px;
     padding-bottom: 24px;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--color-gray-100);
   }
   .release:last-child {
     border-bottom: none;
@@ -705,7 +776,7 @@
   }
   .release time {
     font-size: 13px;
-    color: #666;
+    color: var(--color-text-secondary);
   }
   .release ul {
     margin: 0;
@@ -713,7 +784,7 @@
   }
   .release li {
     font-size: 14px;
-    color: #444;
+    color: var(--color-gray-600);
     margin-bottom: 6px;
   }
 
@@ -728,10 +799,10 @@
   .page-footer {
     margin-top: 48px;
     padding-top: 24px;
-    border-top: 1px solid #ddd;
+    border-top: 1px solid var(--color-border);
   }
   .page-footer a {
-    color: #333;
+    color: var(--color-gray-700);
     text-decoration: none;
     font-size: 14px;
   }
@@ -748,6 +819,16 @@
       columns: 1;
     }
     .release header {
+      flex-direction: column;
+      gap: 4px;
+    }
+    .stats-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .stat-value {
+      font-size: 22px;
+    }
+    .version-meta {
       flex-direction: column;
       gap: 4px;
     }

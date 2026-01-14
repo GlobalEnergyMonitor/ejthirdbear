@@ -6,42 +6,30 @@
    * Shows assets of selected asset classes for a spotlight owner,
    * with subsidiary groups, ownership percentages, and mini bar charts.
    *
-   * Accepts prebaked portfolio data, or falls back to client-side fetch
+   * DATA: fetchOwnerPortfolio(entityId) → OwnerPortfolio
    */
-  import { onMount } from 'svelte';
-  import { get } from 'svelte/store';
-  import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { assetLink, entityLink } from '$lib/links';
-  import { formatCount } from '$lib/format';
+  import { fetchOwnerPortfolio } from '$lib/component-data/schema';
+  import { useFetch } from '$lib/component-data/use-fetch.svelte';
   import { colors, colorByTracker, regroupStatus } from '$lib/ownership-theme';
-  import {
-    LAYOUT_PARAMS,
-    SVG_MARGIN,
-    SVG_WIDTH,
-    scaleR,
-    calculateFrequencyTables,
-    arcPath,
-    subsidiaryPath,
-  } from '$lib/component-data/visualization-utils';
-  // Dynamic import to avoid SSR issues - schema.ts imports WASM client
-  /** @type {typeof import('$lib/component-data/schema').fetchAssetBasics} */
-  let fetchAssetBasics;
-  /** @type {typeof import('$lib/component-data/schema').fetchOwnerPortfolio} */
-  let fetchOwnerPortfolio;
 
-  // Props - can accept prebaked portfolio data
+  // Props - entityId is required, component fetches its own data
   let {
+    entityId,
     assetClassName = 'assets',
     sortByOwnershipPct = true,
     includeUnitNames = false,
-    prebakedPortfolio = null,
   } = $props();
 
-  // State for client-side fetched data (fallback when no prebaked data)
-  let fetchedPortfolio = $state(null);
-  let loading = $state(!prebakedPortfolio);
-  let error = $state(null);
+  // ============================================================================
+  // DATA FETCHING - This component fetches: fetchOwnerPortfolio(entityId)
+  // ============================================================================
+  const {
+    data: portfolio,
+    loading,
+    error,
+  } = useFetch(() => fetchOwnerPortfolio(entityId), `portfolio:${entityId}`);
 
   // Helper to convert data to Map (handles Map, Array of tuples, or Object)
   function toMap(data) {
@@ -51,98 +39,44 @@
     return new Map(Object.entries(data));
   }
 
-  // Effective portfolio: prefer prebaked, fallback to fetched
-  // Using $derived ensures SSR renders with prebaked data immediately
-  const effectivePortfolio = $derived(prebakedPortfolio || fetchedPortfolio);
-
-  // Derive all values from effectivePortfolio (works during SSR!)
-  const spotlightOwner = $derived(effectivePortfolio?.spotlightOwner ?? null);
-  const isTruncated = $derived(effectivePortfolio?.truncated === true);
-  const totalAssetCount = $derived(effectivePortfolio?.totalAssetCount ?? 0);
-  const subsidiariesMatched = $derived(toMap(effectivePortfolio?.subsidiariesMatched));
-  const directlyOwned = $derived(effectivePortfolio?.directlyOwned || []);
-  const assets = $derived(effectivePortfolio?.assets || []);
-  const entityMap = $derived(toMap(effectivePortfolio?.entityMap));
-  const matchedEdges = $derived(toMap(effectivePortfolio?.matchedEdges));
-
-  // Fetch portfolio data (fallback if no prebaked data)
-  async function hydratePortfolio() {
-    if (prebakedPortfolio) {
-      loading = false;
-      return;
-    }
-
-    // Dynamic import to avoid SSR bundling of WASM client
-    const schema = await import('$lib/component-data/schema');
-    fetchAssetBasics = schema.fetchAssetBasics;
-    fetchOwnerPortfolio = schema.fetchOwnerPortfolio;
-
-    try {
-      loading = true;
-      error = null;
-
-      const pageData = get(page);
-      const assetId = pageData.params?.id;
-      const pathname = pageData.url?.pathname || '';
-
-      let ownerId = null;
-      if (pathname.includes('/asset/')) {
-        const basics = await fetchAssetBasics(assetId);
-        if (basics?.ownerEntityId) {
-          ownerId = basics.ownerEntityId;
-        } else {
-          throw new Error('Owner entity not found for asset');
-        }
-      } else if (pathname.includes('/entity/')) {
-        ownerId = assetId;
-      }
-
-      if (!ownerId) {
-        throw new Error('No owner ID available');
-      }
-
-      const portfolio = await fetchOwnerPortfolio(ownerId);
-      if (!portfolio) {
-        throw new Error('Failed to load owner portfolio');
-      }
-
-      // Set fetched portfolio - $derived values will update automatically
-      fetchedPortfolio = portfolio;
-    } catch (err) {
-      console.error('[AssetScreener] load error', err);
-      error = err?.message || String(err);
-    } finally {
-      loading = false;
-    }
-  }
-
-  // Fallback: fetch client-side if no prebaked data after mount
-  onMount(() => {
-    if (!prebakedPortfolio) {
-      hydratePortfolio();
-    } else {
-      loading = false;
-    }
-  });
+  // Derive all values from portfolio
+  const spotlightOwner = $derived(portfolio?.spotlightOwner ?? null);
+  const subsidiariesMatched = $derived(toMap(portfolio?.subsidiariesMatched));
+  const directlyOwned = $derived(portfolio?.directlyOwned || []);
+  const assets = $derived(portfolio?.assets || []);
+  const entityMap = $derived(toMap(portfolio?.entityMap));
+  const matchedEdges = $derived(toMap(portfolio?.matchedEdges));
 
   /**
    * @typedef {{ locationID: string, units: any[], y?: number, r?: number }} ProcessedLocation
    * @typedef {{ id: string, assets: any[], isDirect: boolean, locations: ProcessedLocation[], top?: number, height?: number, bottom?: number, summaryData?: any }} ProcessedGroup
    */
 
-  // Use shared layout parameters
-  const params = LAYOUT_PARAMS;
+  // Layout parameters (from Observable notebook)
+  const params = {
+    subsidX: 20,
+    subsidiaryMarkHeight: 19,
+    subsidiaryMinHeight: 90,
+    yPadding: 50,
+    assetsX: 500,
+    assetSpacing: 8,
+    assetMarkHeightSingle: 16,
+    assetMarkHeightCombined: 26,
+  };
+
+  // Scale for combined unit radius
+  function scaleR(n) {
+    if (n <= 2) return 0.5;
+    if (n <= 10) return 0.5 + (n - 2) * (0.5 / 8);
+    if (n <= 20) return 1 + (n - 10) * (0.5 / 10);
+    return 1.5;
+  }
 
   // Build subsidiary groups with layout
   let subsidiaryGroups = $derived.by(() => {
-    // Early return for truncated or empty portfolios
-    if (isTruncated || (subsidiariesMatched.size === 0 && directlyOwned.length === 0)) {
-      return [];
-    }
-
     let groups = Array.from(subsidiariesMatched).map(([id, assetList]) => ({
       id,
-      assets: assetList || [], // Guard against null/undefined
+      assets: assetList,
       isDirect: false,
     }));
 
@@ -163,8 +97,7 @@
     /** @type {ProcessedGroup[]} */
     const processedGroups = groups.map((g) => {
       const locationMap = new Map();
-      const assetsList = Array.isArray(g.assets) ? g.assets : [];
-      assetsList.forEach((asset) => {
+      g.assets.forEach((asset) => {
         const locId = asset.locationID || asset.id;
         if (!locationMap.has(locId)) {
           locationMap.set(locId, []);
@@ -221,17 +154,56 @@
     return processedGroups;
   });
 
-  // SVG dimensions (using shared constants)
+  // Calculate frequency tables for mini bar charts
+  function calculateFrequencyTables(units) {
+    const total = units.length;
+    if (total === 0) return { tracker: [], status: [] };
+
+    // Tracker frequency
+    const trackerMap = new Map();
+    units.forEach((u) => {
+      const t = u.tracker || 'Unknown';
+      trackerMap.set(t, (trackerMap.get(t) || 0) + 1);
+    });
+    const trackerData = Array.from(trackerMap.entries())
+      .map(([tracker, count]) => ({ tracker, count, percentage: count / total, xPercentage: 0 }))
+      .sort((a, b) => b.count - a.count);
+    let xTracker = 0;
+    trackerData.forEach((d) => {
+      d.xPercentage = xTracker;
+      xTracker += d.percentage;
+    });
+
+    // Status frequency (grouped)
+    const statusMap = new Map();
+    units.forEach((u) => {
+      const s = regroupStatus(u.status || u.Status);
+      statusMap.set(s, (statusMap.get(s) || 0) + 1);
+    });
+    const statusOrder = ['proposed', 'operating', 'retired', 'cancelled'];
+    const statusData = Array.from(statusMap.entries())
+      .map(([status, count]) => ({ status, count, percentage: count / total, xPercentage: 0 }))
+      .sort((a, b) => statusOrder.indexOf(a.status) - statusOrder.indexOf(b.status));
+    let xStatus = 0;
+    statusData.forEach((d) => {
+      d.xPercentage = xStatus;
+      xStatus += d.percentage;
+    });
+
+    return { tracker: trackerData, status: statusData };
+  }
+
+  // SVG dimensions
   let svgHeight = $derived(
     subsidiaryGroups.length > 0 ? subsidiaryGroups[subsidiaryGroups.length - 1].bottom : 200
   );
-  const svgWidth = SVG_WIDTH;
-  const margin = SVG_MARGIN;
+  const svgWidth = 900;
+  const margin = { top: 70, right: 10, bottom: 30, left: 40 };
 
   // Color legend
   let colLegend = $derived.by(() => {
     const types = new Set(assets.map((a) => a.tracker).filter(Boolean));
-    const statuses = new Set(assets.map((a) => regroupStatus(a.status || a.Status)));
+    const statuses = new Set(assets.map((a) => regroupStatus(a.status)));
 
     // If multiple tracker types, color by tracker; otherwise by status
     if (types.size > 1) {
@@ -272,6 +244,42 @@
     return statusColorMap[status] || colors.grey;
   }
 
+  // Generate arc path for ownership percentage pie
+  function arcPath(value, radius) {
+    const pct = (value || 100) / 100;
+    const endAngle = 2 * Math.PI * pct;
+    const largeArc = endAngle > Math.PI ? 1 : 0;
+    const x1 = 0;
+    const y1 = -radius;
+    const x2 = radius * Math.sin(endAngle);
+    const y2 = -radius * Math.cos(endAngle);
+    if (pct >= 1) {
+      return `M 0 ${-radius} A ${radius} ${radius} 0 1 1 0 ${radius} A ${radius} ${radius} 0 1 1 0 ${-radius}`;
+    }
+    return `M 0 0 L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2} Z`;
+  }
+
+  // Subsidiary path from header to subsidiary group
+  function subsidiaryPath(group) {
+    const xS = 0;
+    const yS = group.top;
+    const xE = params.subsidX + params.assetsX - params.assetSpacing * 2;
+    const yE = group.bottom;
+    const radius = params.yPadding;
+    const rC = radius * 0.3;
+
+    return `
+      M ${xS} ${yS - radius}
+      C ${xS} ${yS - radius * 0.2}, ${xS + radius * 0.2} ${yS}, ${xS + radius} ${yS}
+      L ${xE} ${yS}
+      L ${xE} ${yE - rC}
+      A ${rC} ${rC} 0 0 1 ${xE - rC} ${yE}
+      L ${xS + rC} ${yE}
+      A ${rC} ${rC} 0 0 1 ${xS} ${yE - rC}
+      Z
+    `;
+  }
+
   // Wrap text into two lines
   function wrapText(text, maxChars = 25) {
     if (!text || text.length <= maxChars) return [text || ''];
@@ -307,13 +315,6 @@
     <div class="loading-state">Loading owner portfolio...</div>
   {:else if error}
     <div class="error-state">{error}</div>
-  {:else if isTruncated}
-    <!-- Truncated portfolio - too large for prebaked display -->
-    <div class="truncated-state">
-      <h3>{spotlightOwner?.Name || 'Unknown Owner'}</h3>
-      <p>This entity owns <strong>{formatCount(totalAssetCount)}</strong> assets.</p>
-      <p>View the full portfolio on the <a href="/entity/{spotlightOwner?.id}/">entity page</a>.</p>
-    </div>
   {:else}
     <!-- Header -->
     <div class="chart-header">
@@ -409,36 +410,24 @@
               {/if}
 
               <!-- Subsidiary name -->
-              {#if group.isDirect}
-                <text
-                  x={params.subsidiaryMarkHeight / 2 + 5}
-                  y={(params.subsidiaryMarkHeight / 2) * 0.7}
-                  fill={colors.navy}
-                  class="subsidiary-name"
-                >
-                  {#each wrapText(entityMap.get(group.id)?.Name || 'Directly owned') as line, i}
-                    <tspan x={params.subsidiaryMarkHeight / 2 + 5} dy={i === 0 ? '0.35em' : '1.2em'}
-                      >{line}</tspan
-                    >
-                  {/each}
-                </text>
-              {:else}
-                <a href={entityLink(group.id)} class="subsidiary-link">
-                  <text
-                    x={params.subsidiaryMarkHeight / 2 + 5}
-                    y={(params.subsidiaryMarkHeight / 2) * 0.7}
-                    fill={colors.navy}
-                    class="subsidiary-name clickable"
+              <text
+                x={params.subsidiaryMarkHeight / 2 + 5}
+                y={(params.subsidiaryMarkHeight / 2) * 0.7}
+                fill={colors.navy}
+                class="subsidiary-name"
+                class:clickable={!group.isDirect}
+                role={group.isDirect ? 'text' : 'button'}
+                tabindex={group.isDirect ? undefined : 0}
+                onclick={() => !group.isDirect && goto(entityLink(group.id))}
+                onkeydown={(e) =>
+                  !group.isDirect && e.key === 'Enter' && goto(entityLink(group.id))}
+              >
+                {#each wrapText(entityMap.get(group.id)?.Name || (group.isDirect ? 'Directly owned' : 'Unknown')) as line, i}
+                  <tspan x={params.subsidiaryMarkHeight / 2 + 5} dy={i === 0 ? '0.35em' : '1.2em'}
+                    >{line}</tspan
                   >
-                    {#each wrapText(entityMap.get(group.id)?.Name || 'Unknown') as line, i}
-                      <tspan
-                        x={params.subsidiaryMarkHeight / 2 + 5}
-                        dy={i === 0 ? '0.35em' : '1.2em'}>{line}</tspan
-                      >
-                    {/each}
-                  </text>
-                </a>
-              {/if}
+                {/each}
+              </text>
 
               <!-- Mini bar charts (only for groups with multiple locations) -->
               {#if group.locations.length > 1}
@@ -725,31 +714,18 @@
 
 <style>
   .loading-state,
-  .error-state,
-  .truncated-state {
+  .error-state {
     padding: 60px 20px;
     text-align: center;
     font-size: 13px;
   }
 
   .loading-state {
-    color: #666;
+    color: var(--color-text-secondary);
   }
 
   .error-state {
-    color: #b10000;
-  }
-
-  .truncated-state {
-    color: #333;
-  }
-  .truncated-state h3 {
-    font-size: 16px;
-    margin-bottom: 12px;
-  }
-  .truncated-state a {
-    color: #000;
-    text-decoration: underline;
+    color: var(--color-error);
   }
 
   .asset-screener {
@@ -871,7 +847,7 @@
     font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.07em;
-    fill: #333;
+    fill: var(--color-gray-700);
   }
 
   .additional-info {
@@ -882,7 +858,7 @@
   .additional-info p {
     margin: 0;
     font-style: italic;
-    color: #333;
+    color: var(--color-gray-700);
     font-weight: 500;
     font-size: 0.95em;
   }
@@ -904,7 +880,7 @@
     gap: 1.5em;
     justify-content: center;
     font-size: 0.9em;
-    color: #333;
+    color: var(--color-gray-700);
   }
 
   .legend-item {
@@ -925,7 +901,7 @@
     justify-content: center;
     margin-top: 0.5em;
     font-size: 0.8em;
-    color: #666;
+    color: var(--color-text-secondary);
   }
 
   .status-icon-item {
@@ -962,13 +938,13 @@
   }
 
   .tooltip .status {
-    color: #666;
+    color: var(--color-text-secondary);
     text-transform: capitalize;
   }
 
   .tooltip .asset-count,
   .tooltip .unit-count {
-    color: #888;
+    color: var(--color-gray-500);
     font-size: 0.9em;
   }
 </style>
