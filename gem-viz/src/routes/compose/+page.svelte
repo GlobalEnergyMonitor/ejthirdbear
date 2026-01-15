@@ -14,13 +14,12 @@
   import { browser } from '$app/environment';
 
   import { assetLink, link } from '$lib/links';
-  import { formatCount, formatCompact } from '$lib/format';
-  import TrackerIcon from '$lib/components/TrackerIcon.svelte';
-  import StatusIcon from '$lib/components/StatusIcon.svelte';
+  import { formatCount } from '$lib/format';
   import MiniHistogram from '$lib/components/MiniHistogram.svelte';
   import Sparkline from '$lib/components/Sparkline.svelte';
   import MiniBarChart from '$lib/components/MiniBarChart.svelte';
   import DataTable from '$lib/components/DataTable.svelte';
+  import FacetedFilter from '$lib/components/FacetedFilter.svelte';
 
   import {
     emptyFilterState,
@@ -71,8 +70,6 @@
   let copied = $state(false);
   let queryTime = $state(0);
 
-  // Owner search
-  let ownerSearch = $state('');
 
   // ---------------------------------------------------------------------------
   // Derived
@@ -80,13 +77,6 @@
   const shareUrl = $derived(buildShareUrl(filters));
   const activeFilterCount = $derived(countActiveFilters(filters));
   const hasFilters = $derived(hasActiveFilters(filters));
-  const filteredOwners = $derived(() => {
-    if (ownerSearch.length < 2) return owners.slice(0, 50);
-    const needle = ownerSearch.toLowerCase();
-    return owners
-      .filter((o) => o.value.toLowerCase().includes(needle))
-      .slice(0, 100);
-  });
 
   const ownershipColumnNames = $derived.by(() => {
     const columnSet = new Set(ownershipColumns);
@@ -538,7 +528,7 @@
       console.log('[Compose] Updating parametric counts...');
 
       // Run parametric count queries in parallel (all need locations join for country filtering)
-      const shouldUpdateOwners = ownerSearch.length >= 2 || filters.owners.length > 0;
+      const shouldUpdateOwners = filters.owners.length > 0;
       const ownerCountPromise = shouldUpdateOwners
         ? widgetQuery(`
           SELECT o."Owner" as value, COUNT(*) as cnt
@@ -650,34 +640,6 @@
   // ---------------------------------------------------------------------------
   // Handlers
   // ---------------------------------------------------------------------------
-  function toggleTracker(tracker) {
-    const idx = filters.trackers.indexOf(tracker);
-    if (idx >= 0) {
-      filters.trackers = filters.trackers.filter((t) => t !== tracker);
-    } else {
-      filters.trackers = [...filters.trackers, tracker];
-    }
-  }
-
-  function toggleStatus(status) {
-    const idx = filters.statuses.indexOf(status);
-    if (idx >= 0) {
-      filters.statuses = filters.statuses.filter((s) => s !== status);
-    } else {
-      filters.statuses = [...filters.statuses, status];
-    }
-  }
-
-  // Reserved for future chip-style country filter
-  function _toggleCountry(country) {
-    const idx = filters.countries.indexOf(country);
-    if (idx >= 0) {
-      filters.countries = filters.countries.filter((c) => c !== country);
-    } else {
-      filters.countries = [...filters.countries, country];
-    }
-  }
-
   function clearFilters() {
     filters = emptyFilterState();
     syncFiltersToUrl();
@@ -831,130 +793,48 @@
       {#if loadingOptions}
         <div class="loading-options">Loading filter options...</div>
       {:else}
-        <!-- Trackers (auto-populated) -->
-        <section class="filter-section">
-          <h3>Tracker Type <span class="count">({trackerOptions.length})</span></h3>
-          <div class="chip-group">
-            {#each trackerOptions as opt}
-              <button
-                class="chip"
-                class:active={filters.trackers.includes(opt.value)}
-                onclick={() => toggleTracker(opt.value)}
-              >
-                <TrackerIcon tracker={opt.value} size={12} />
-                {opt.value}
-                <span class="chip-count">({formatCompact(opt.count)})</span>
-              </button>
-            {/each}
-          </div>
-        </section>
+        <!-- Trackers -->
+        <FacetedFilter
+          options={trackerOptions}
+          bind:selected={filters.trackers}
+          label="Tracker Type"
+          initialVisible={10}
+        />
 
-        <!-- Status (auto-populated) -->
-        <section class="filter-section">
-          <h3>Status <span class="count">({statusOptions.length})</span></h3>
-          <div class="chip-group">
-            {#each statusOptions as opt}
-              <button
-                class="chip"
-                class:active={filters.statuses.includes(opt.value)}
-                onclick={() => toggleStatus(opt.value)}
-              >
-                <StatusIcon status={opt.value} size={10} />
-                {opt.value}
-                <span class="chip-count">({formatCompact(opt.count)})</span>
-              </button>
-            {/each}
-          </div>
-        </section>
+        <!-- Status -->
+        <FacetedFilter
+          options={statusOptions}
+          bind:selected={filters.statuses}
+          label="Status"
+          initialVisible={10}
+        />
 
         <!-- Asset Country -->
-        <section class="filter-section">
-          <h3>Asset Country <span class="count">({countries.length})</span></h3>
-          <select
-            multiple
-            size="6"
-            onchange={(e) => {
-              const target = /** @type {HTMLSelectElement} */ (e.target);
-              const selected = Array.from(target.selectedOptions, (o) => o.value);
-              filters.countries = selected;
-            }}
-          >
-            {#each countries as country}
-              <option value={country.value} selected={filters.countries.includes(country.value)}>
-                {country.value} ({formatCompact(country.count)})
-              </option>
-            {/each}
-          </select>
-          {#if filters.countries.length > 0}
-            <div class="selected-values">
-              {filters.countries.join(', ')}
-              <button class="clear-inline" onclick={() => (filters.countries = [])}>×</button>
-            </div>
-          {/if}
-        </section>
+        <FacetedFilter
+          options={countries}
+          bind:selected={filters.countries}
+          label="Asset Country"
+          initialVisible={5}
+          searchThreshold={10}
+        />
 
         <!-- Owner HQ Country -->
-        <section class="filter-section">
-          <h3>Owner HQ Country <span class="count">({ownerCountries.length})</span></h3>
-          <select
-            multiple
-            size="6"
-            onchange={(e) => {
-              const target = /** @type {HTMLSelectElement} */ (e.target);
-              const selected = Array.from(target.selectedOptions, (o) => o.value);
-              filters.ownerCountries = selected;
-            }}
-          >
-            {#each ownerCountries as country}
-              <option
-                value={country.value}
-                selected={filters.ownerCountries.includes(country.value)}
-              >
-                {country.value} ({formatCompact(country.count)})
-              </option>
-            {/each}
-          </select>
-          {#if filters.ownerCountries.length > 0}
-            <div class="selected-values">
-              {filters.ownerCountries.join(', ')}
-              <button class="clear-inline" onclick={() => (filters.ownerCountries = [])}>×</button>
-            </div>
-          {/if}
-        </section>
+        <FacetedFilter
+          options={ownerCountries}
+          bind:selected={filters.ownerCountries}
+          label="Owner HQ Country"
+          initialVisible={5}
+          searchThreshold={10}
+        />
 
-        <!-- Owner Search -->
-        <section class="filter-section">
-          <h3>Owner <span class="count">({owners.length} available)</span></h3>
-          <input
-            type="text"
-            placeholder="Search owners..."
-            bind:value={ownerSearch}
-            class="owner-search"
-          />
-          <select
-            multiple
-            size="6"
-            onchange={(e) => {
-              const target = /** @type {HTMLSelectElement} */ (e.target);
-              const selected = Array.from(target.selectedOptions, (o) => o.value);
-              filters.owners = [...new Set([...filters.owners, ...selected])];
-            }}
-          >
-            {#each filteredOwners as owner}
-              <option value={owner.value} selected={filters.owners.includes(owner.value)}>
-                {owner.value} ({formatCompact(owner.count)})
-              </option>
-            {/each}
-          </select>
-          {#if filters.owners.length > 0}
-            <div class="selected-values">
-              {filters.owners.slice(0, 3).join(', ')}{filters.owners.length > 3
-                ? ` +${filters.owners.length - 3} more`
-                : ''}
-              <button class="clear-inline" onclick={() => (filters.owners = [])}>×</button>
-            </div>
-          {/if}
-        </section>
+        <!-- Owner -->
+        <FacetedFilter
+          options={owners}
+          bind:selected={filters.owners}
+          label="Owner"
+          initialVisible={5}
+          searchThreshold={10}
+        />
 
         <!-- Capacity Range (only show if tracker has capacity data) -->
         {#if availableColumns.hasCapacity}
@@ -1332,89 +1212,11 @@
     margin: 0 0 8px 0;
   }
 
-  /* Chip Group */
-  .chip-group {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-
-  .chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 8px;
-    font-size: 11px;
-    background: white;
-    border: 1px solid #ddd;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-
-  .chip:hover {
-    border-color: #000;
-  }
-
-  .chip.active {
-    background: #000;
-    color: white;
-    border-color: #000;
-  }
-
-  /* Country Select */
-  .filter-section select {
-    width: 100%;
-    padding: 6px;
-    font-size: 12px;
-    border: 1px solid #ddd;
-  }
-
-  .selected-values {
-    margin-top: 6px;
-    font-size: 11px;
-    color: #666;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .clear-inline {
-    background: none;
-    border: none;
-    color: #999;
-    cursor: pointer;
-    font-size: 14px;
-    padding: 0;
-  }
-
-  .clear-inline:hover {
-    color: #000;
-  }
-
   .loading-options {
     padding: 20px;
     text-align: center;
     color: #666;
     font-size: 12px;
-  }
-
-  .filter-section h3 .count {
-    font-weight: 400;
-    color: #999;
-  }
-
-  .chip-count {
-    font-size: 9px;
-    color: #999;
-    margin-left: 2px;
-  }
-
-  .chip.active .chip-count {
-    color: rgba(255, 255, 255, 0.7);
-  }
-
-  .owner-search {
-    margin-bottom: 6px;
   }
 
   .schema-info {
