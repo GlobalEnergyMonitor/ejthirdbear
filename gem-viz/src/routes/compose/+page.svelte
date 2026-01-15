@@ -7,6 +7,104 @@
    *
    * URL Format:
    *   /compose?trackers=Coal+Plant,Gas+Plant&statuses=operating&capacityMin=100
+   *
+   * ============================================================================
+   * API ENDPOINTS NEEDED TO REPLACE DUCKDB
+   * ============================================================================
+   *
+   * This page currently uses 4 DuckDB query patterns. To migrate to REST API,
+   * we'd need these endpoints (2 new, 1 enhanced):
+   *
+   * ┌─────────────────────────────────────────────────────────────────────────┐
+   * │ 1. GET /assets/facets                                           [NEW]  │
+   * ├─────────────────────────────────────────────────────────────────────────┤
+   * │ Returns facet counts for all filterable dimensions.                    │
+   * │ Supports "parametric search" - counts update based on other filters.   │
+   * │                                                                        │
+   * │ Query params (all optional, for parametric counts):                    │
+   * │   ?tracker=Coal+Plant&status=operating&country=China&...               │
+   * │                                                                        │
+   * │ Response:                                                              │
+   * │ {                                                                      │
+   * │   "trackers": [{"value": "Coal Plant", "count": 15234}, ...],          │
+   * │   "statuses": [{"value": "operating", "count": 8432}, ...],            │
+   * │   "countries": [{"value": "China", "count": 6120}, ...],               │
+   * │   "ownerCountries": [{"value": "USA", "count": 3890}, ...],            │
+   * │   "owners": [{"value": "BlackRock", "count": 456}, ...]                │
+   * │ }                                                                      │
+   * │                                                                        │
+   * │ Key behavior: Each facet's counts should EXCLUDE its own filter        │
+   * │ (e.g., tracker counts ignore ?tracker= param) so users see what's      │
+   * │ available if they change that selection.                               │
+   * └─────────────────────────────────────────────────────────────────────────┘
+   *
+   * ┌─────────────────────────────────────────────────────────────────────────┐
+   * │ 2. GET /assets/ranges                                           [NEW]  │
+   * ├─────────────────────────────────────────────────────────────────────────┤
+   * │ Returns min/max/histogram for numeric fields.                          │
+   * │                                                                        │
+   * │ Response:                                                              │
+   * │ {                                                                      │
+   * │   "capacity": {                                                        │
+   * │     "min": 0,                                                          │
+   * │     "max": 9876,                                                       │
+   * │     "histogram": [1234, 5678, 910, ...]  // 20 buckets                 │
+   * │   },                                                                   │
+   * │   "startYear": {                                                       │
+   * │     "min": 1952,                                                       │
+   * │     "max": 2030                                                        │
+   * │   },                                                                   │
+   * │   "share": {                                                           │
+   * │     "min": 0,                                                          │
+   * │     "max": 100                                                         │
+   * │   }                                                                    │
+   * │ }                                                                      │
+   * └─────────────────────────────────────────────────────────────────────────┘
+   *
+   * ┌─────────────────────────────────────────────────────────────────────────┐
+   * │ 3. GET /assets (enhanced)                                   [EXISTING] │
+   * ├─────────────────────────────────────────────────────────────────────────┤
+   * │ Already exists, but needs additional filter params:                    │
+   * │                                                                        │
+   * │ New query params needed:                                               │
+   * │   ?tracker=Coal+Plant,Gas+Plant    // multi-value                      │
+   * │   &status=operating,proposed       // multi-value                      │
+   * │   &country=China,USA               // asset country (from locations)   │
+   * │   &ownerCountry=USA                // owner HQ country                 │
+   * │   &owner=BlackRock,Vanguard        // owner name                       │
+   * │   &capacityMin=100                 // numeric range                    │
+   * │   &capacityMax=5000                                                    │
+   * │   &startYearMin=2020                                                   │
+   * │   &startYearMax=2030                                                   │
+   * │   &shareMin=50                                                         │
+   * │   &shareMax=100                                                        │
+   * │   &search=solar                    // full-text search                 │
+   * │   &limit=500                                                           │
+   * │   &offset=0                                                            │
+   * │                                                                        │
+   * │ Response should include total count for pagination:                    │
+   * │ {                                                                      │
+   * │   "total": 12345,                                                      │
+   * │   "assets": [...]                                                      │
+   * │ }                                                                      │
+   * └─────────────────────────────────────────────────────────────────────────┘
+   *
+   * MIGRATION COMPLEXITY: Medium
+   * - /assets/facets is the main new work (parametric counting logic)
+   * - /assets/ranges is straightforward (just min/max/histogram queries)
+   * - /assets filter params are additive to existing endpoint
+   *
+   * ALTERNATIVE: Single POST endpoint
+   * If query string gets too complex, consider POST /assets/search with body:
+   * {
+   *   "filters": { "tracker": ["Coal Plant"], "status": ["operating"], ... },
+   *   "facets": true,
+   *   "ranges": true,
+   *   "limit": 500
+   * }
+   * Returns results + facets + ranges in one response (fewer round trips).
+   *
+   * ============================================================================
    */
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
