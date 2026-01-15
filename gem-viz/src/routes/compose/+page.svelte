@@ -20,6 +20,7 @@
   import MiniBarChart from '$lib/components/MiniBarChart.svelte';
   import DataTable from '$lib/components/DataTable.svelte';
   import FacetedFilter from '$lib/components/FacetedFilter.svelte';
+  import RangeSlider from '$lib/components/RangeSlider.svelte';
 
   import {
     emptyFilterState,
@@ -43,6 +44,7 @@
   let totalCount = $state(0);
   let loading = $state(false);
   let loadingOptions = $state(true);
+  let loadingCounts = $state(false);
   let error = $state(null);
 
   // Reference data populated from parquet (static lists) - reserved for future use
@@ -69,6 +71,11 @@
   let importError = $state('');
   let copied = $state(false);
   let queryTime = $state(0);
+
+  // Data ranges for numeric filters
+  let capacityRange = $state({ min: 0, max: 10000 });
+  let startYearRange = $state({ min: 1950, max: 2035 });
+  let capacityHistogram = $state([]);
 
 
   // ---------------------------------------------------------------------------
@@ -365,6 +372,9 @@
         trackerResult,
         statusResult,
         schemaResult,
+        capacityRangeResult,
+        startYearRangeResult,
+        capacityHistResult,
       ] = await Promise.all([
         // Asset countries (from locations table)
         widgetQuery(`
@@ -415,6 +425,39 @@
           WHERE table_name = 'ownership'
           ORDER BY ordinal_position
         `),
+        // Capacity range
+        widgetQuery(`
+          SELECT MIN(CAST("Capacity (MW)" AS DOUBLE)) as min_val,
+                 MAX(CAST("Capacity (MW)" AS DOUBLE)) as max_val
+          FROM ownership
+          WHERE "Capacity (MW)" IS NOT NULL AND "Capacity (MW)" != ''
+        `),
+        // Start year range
+        widgetQuery(`
+          SELECT MIN(CAST("Start Year" AS INTEGER)) as min_val,
+                 MAX(CAST("Start Year" AS INTEGER)) as max_val
+          FROM ownership
+          WHERE "Start Year" IS NOT NULL AND "Start Year" != ''
+            AND CAST("Start Year" AS INTEGER) > 1900
+            AND CAST("Start Year" AS INTEGER) < 2100
+        `),
+        // Capacity histogram (20 buckets)
+        widgetQuery(`
+          WITH capacity_stats AS (
+            SELECT MIN(CAST("Capacity (MW)" AS DOUBLE)) as min_cap,
+                   MAX(CAST("Capacity (MW)" AS DOUBLE)) as max_cap
+            FROM ownership
+            WHERE "Capacity (MW)" IS NOT NULL AND "Capacity (MW)" != ''
+          ),
+          buckets AS (
+            SELECT FLOOR((CAST("Capacity (MW)" AS DOUBLE) - min_cap) / ((max_cap - min_cap) / 20)) as bucket,
+                   COUNT(*) as cnt
+            FROM ownership, capacity_stats
+            WHERE "Capacity (MW)" IS NOT NULL AND "Capacity (MW)" != ''
+            GROUP BY bucket
+          )
+          SELECT bucket, cnt FROM buckets ORDER BY bucket
+        `),
       ]);
 
       countries = (countryResult.data || [])
@@ -431,6 +474,31 @@
       schema = schemaResult.data || [];
       ownershipColumns = (schemaResult.data || []).map((r) => r.column_name).filter(Boolean);
 
+      // Capacity and year ranges
+      if (capacityRangeResult.data?.[0]) {
+        const cap = capacityRangeResult.data[0];
+        capacityRange = {
+          min: Math.floor(Number(cap.min_val) || 0),
+          max: Math.ceil(Number(cap.max_val) || 10000),
+        };
+      }
+      if (startYearRangeResult.data?.[0]) {
+        const yr = startYearRangeResult.data[0];
+        startYearRange = {
+          min: Number(yr.min_val) || 1950,
+          max: Number(yr.max_val) || 2035,
+        };
+      }
+      if (capacityHistResult.data) {
+        // Fill in any missing buckets with 0
+        const bucketData = new Array(20).fill(0);
+        for (const row of capacityHistResult.data) {
+          const idx = Math.min(19, Math.max(0, Number(row.bucket) || 0));
+          bucketData[idx] = Number(row.cnt) || 0;
+        }
+        capacityHistogram = bucketData;
+      }
+
       // Store static lists for reference
       _allCountries = countries.map((c) => c.value);
       _allOwnerCountries = ownerCountries.map((c) => c.value);
@@ -443,6 +511,8 @@
         trackers: trackerOptions.length,
         statuses: statusOptions.length,
         schema: schema.length,
+        capacityRange,
+        startYearRange,
       });
 
       // Load tracker-specific column availability in background
@@ -511,6 +581,7 @@
   // Update parametric counts based on current filter selection
   async function updateParametricCounts() {
     if (!browser) return;
+    loadingCounts = true;
 
     try {
       const { widgetQuery } = await import('$lib/widgets/widget-utils');
@@ -528,19 +599,7 @@
       console.log('[Compose] Updating parametric counts...');
 
       // Run parametric count queries in parallel (all need locations join for country filtering)
-      const shouldUpdateOwners = filters.owners.length > 0;
-      const ownerCountPromise = shouldUpdateOwners
-        ? widgetQuery(`
-          SELECT o."Owner" as value, COUNT(*) as cnt
-          FROM ownership o
-          LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
-          WHERE ${buildSqlWhereExcluding(filters, 'owners', 'o')}
-            AND o."Owner" IS NOT NULL AND o."Owner" != ''
-          GROUP BY o."Owner"
-          ORDER BY cnt DESC
-          LIMIT 1000
-        `)
-        : Promise.resolve(null);
+      // Always update ALL facet counts when any filter is active
 
       const [trackerResult, statusResult, countryResult, ownerCountryResult, ownerResult] =
         await Promise.all([
@@ -582,7 +641,17 @@
           GROUP BY o."Owner Headquarters Country"
           ORDER BY cnt DESC
         `),
-          ownerCountPromise,
+          // Owners - always update when any filter is active
+          widgetQuery(`
+          SELECT o."Owner" as value, COUNT(*) as cnt
+          FROM ownership o
+          LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
+          WHERE ${buildSqlWhereExcluding(filters, 'owners', 'o')}
+            AND o."Owner" IS NOT NULL AND o."Owner" != ''
+          GROUP BY o."Owner"
+          ORDER BY cnt DESC
+          LIMIT 1000
+        `),
         ]);
 
       // Check for query errors
@@ -594,7 +663,7 @@
         console.warn('[Compose] Country count query failed:', countryResult.error);
       if (!ownerCountryResult.success)
         console.warn('[Compose] Owner country count query failed:', ownerCountryResult.error);
-      if (ownerResult && !ownerResult.success)
+      if (!ownerResult.success)
         console.warn('[Compose] Owner count query failed:', ownerResult.error);
 
       trackerOptions = (trackerResult.data || []).map((r) => ({ value: r.value, count: r.cnt }));
@@ -605,7 +674,7 @@
       ownerCountries = (ownerCountryResult.data || [])
         .map((r) => ({ value: r.value, count: r.cnt }))
         .filter((r) => r.value);
-      if (ownerResult && ownerResult.success) {
+      if (ownerResult.success) {
         owners = (ownerResult.data || [])
           .map((r) => ({ value: r.value, count: r.cnt }))
           .filter((r) => r.value);
@@ -616,10 +685,12 @@
         statuses: statusOptions.length,
         countries: countries.length,
         ownerCountries: ownerCountries.length,
-        owners: ownerResult && ownerResult.success ? owners.length : 'skipped',
+        owners: ownerResult.success ? owners.length : 'failed',
       });
     } catch (err) {
       console.error('[Compose] Failed to update parametric counts:', err);
+    } finally {
+      loadingCounts = false;
     }
   }
 
@@ -799,6 +870,7 @@
           bind:selected={filters.trackers}
           label="Tracker Type"
           initialVisible={10}
+          loading={loadingCounts}
         />
 
         <!-- Status -->
@@ -807,6 +879,7 @@
           bind:selected={filters.statuses}
           label="Status"
           initialVisible={10}
+          loading={loadingCounts}
         />
 
         <!-- Asset Country -->
@@ -816,6 +889,7 @@
           label="Asset Country"
           initialVisible={5}
           searchThreshold={10}
+          loading={loadingCounts}
         />
 
         <!-- Owner HQ Country -->
@@ -825,6 +899,7 @@
           label="Owner HQ Country"
           initialVisible={5}
           searchThreshold={10}
+          loading={loadingCounts}
         />
 
         <!-- Owner -->
@@ -834,66 +909,46 @@
           label="Owner"
           initialVisible={5}
           searchThreshold={10}
+          loading={loadingCounts}
         />
 
         <!-- Capacity Range (only show if tracker has capacity data) -->
         {#if availableColumns.hasCapacity}
-          <section class="filter-section">
-            <h3>Capacity (MW)</h3>
-            <div class="range-inputs">
-              <input type="number" placeholder="Min" bind:value={filters.capacityMin} min="0" />
-              <span>to</span>
-              <input type="number" placeholder="Max" bind:value={filters.capacityMax} min="0" />
-            </div>
-          </section>
+          <RangeSlider
+            label="Capacity"
+            bind:min={filters.capacityMin}
+            bind:max={filters.capacityMax}
+            dataMin={capacityRange.min}
+            dataMax={capacityRange.max}
+            step={10}
+            unit=" MW"
+            histogram={capacityHistogram}
+          />
         {/if}
 
         <!-- Share Range (only show if tracker has share data) -->
         {#if availableColumns.hasShare}
-          <section class="filter-section">
-            <h3>Ownership Share (%)</h3>
-            <div class="range-inputs">
-              <input
-                type="number"
-                placeholder="Min"
-                bind:value={filters.shareMin}
-                min="0"
-                max="100"
-              />
-              <span>to</span>
-              <input
-                type="number"
-                placeholder="Max"
-                bind:value={filters.shareMax}
-                min="0"
-                max="100"
-              />
-            </div>
-          </section>
+          <RangeSlider
+            label="Ownership Share"
+            bind:min={filters.shareMin}
+            bind:max={filters.shareMax}
+            dataMin={0}
+            dataMax={100}
+            step={1}
+            unit="%"
+          />
         {/if}
 
         <!-- Start Year Range (only show if tracker has start year data) -->
         {#if availableColumns.hasStartYear}
-          <section class="filter-section">
-            <h3>Start Year</h3>
-            <div class="range-inputs">
-              <input
-                type="number"
-                placeholder="From"
-                bind:value={filters.startYearMin}
-                min="1900"
-                max="2100"
-              />
-              <span>to</span>
-              <input
-                type="number"
-                placeholder="To"
-                bind:value={filters.startYearMax}
-                min="1900"
-                max="2100"
-              />
-            </div>
-          </section>
+          <RangeSlider
+            label="Start Year"
+            bind:min={filters.startYearMin}
+            bind:max={filters.startYearMax}
+            dataMin={startYearRange.min}
+            dataMax={startYearRange.max}
+            step={1}
+          />
         {/if}
 
         <!-- Search -->
@@ -1257,26 +1312,6 @@
     color: #999;
     font-size: 10px;
     margin-left: 8px;
-  }
-
-  /* Range Inputs */
-  .range-inputs {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .range-inputs input {
-    flex: 1;
-    padding: 6px 8px;
-    font-size: 12px;
-    border: 1px solid #ddd;
-    width: 80px;
-  }
-
-  .range-inputs span {
-    color: #666;
-    font-size: 12px;
   }
 
   /* Search */

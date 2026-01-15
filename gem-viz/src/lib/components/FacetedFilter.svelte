@@ -19,8 +19,7 @@
    *   label: string,
    *   initialVisible?: number,
    *   searchThreshold?: number,
-   *   showIcons?: boolean,
-   *   iconComponent?: any,
+   *   loading?: boolean,
    * }}
    */
   let {
@@ -29,6 +28,7 @@
     label = '',
     initialVisible = 5,
     searchThreshold = 10,
+    loading = false,
   } = $props();
 
   // Internal state
@@ -93,11 +93,14 @@
   }
 </script>
 
-<div class="facet">
+<div class="facet" class:loading>
   <div class="facet-header">
     <span class="facet-label">
       {label}
       <span class="facet-total">({options.length})</span>
+      {#if loading}
+        <span class="facet-loading">...</span>
+      {/if}
     </span>
     {#if hasSelected}
       <button class="facet-clear" onclick={clearAll}>Clear</button>
@@ -146,6 +149,22 @@
 <style>
   .facet {
     margin-bottom: 20px;
+    transition: opacity 0.15s;
+  }
+
+  .facet.loading {
+    opacity: 0.7;
+  }
+
+  .facet-loading {
+    color: #999;
+    font-weight: 400;
+    animation: pulse 1s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
   }
 
   .facet-header {
