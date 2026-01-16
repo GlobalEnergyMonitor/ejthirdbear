@@ -3,6 +3,7 @@
    * MANIFEST / ADMIN INDEX
    * Shows all data sources, schemas, and sample rows
    */
+  import { link } from '$lib/links';
 
   /** @type {{ data: import('./$types').PageData }} */
   let { data } = $props();
@@ -219,7 +220,7 @@
 
   <footer>
     <p>GEM Viz Data Manifest — Generated at build time</p>
-    <p><a href="/">Back to Homepage</a></p>
+    <p><a href={link('index')}>Back to Homepage</a></p>
   </footer>
 </main>
 

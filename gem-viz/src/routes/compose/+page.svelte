@@ -10,6 +10,7 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { browser } from '$app/environment';
+  import { base } from '$app/paths';
 
   import { assetLink, link } from '$lib/links';
   import { formatCount } from '$lib/format';
@@ -304,7 +305,7 @@
   function syncFiltersToUrl() {
     if (!browser) return;
     const encoded = encodeFilters(filters);
-    const newUrl = encoded ? `/compose?${encoded}` : '/compose';
+    const newUrl = encoded ? `${base}/compose?${encoded}` : `${base}/compose`;
     // Use replaceState to avoid polluting history
     goto(newUrl, { replaceState: true, keepFocus: true });
   }

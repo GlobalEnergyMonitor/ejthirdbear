@@ -87,7 +87,7 @@
       id: 'map-search',
       label: 'Search by Map',
       shortcut: 'g m',
-      action: () => goto('/asset/search'),
+      action: () => goto(link('asset/search')),
       section: 'Navigation',
     },
     {
@@ -359,7 +359,7 @@
         r: () => goto(link('report')),
         x: () => goto(link('export')),
         a: () => goto(link('about')),
-        m: () => goto('/asset/search'),
+        m: () => goto(link('asset/search')),
       };
 
       if (shortcutMap[e.key]) {

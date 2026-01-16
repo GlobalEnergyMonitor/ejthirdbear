@@ -1,10 +1,10 @@
 {
-  "version": "e606dc5",
-  "commit": "e606dc5",
-  "message": "docs: document API endpoints needed to replace DuckDB in compose",
+  "version": "52cf3fb",
+  "commit": "52cf3fb",
+  "message": "chore(release): bump version to 0.1.23",
   "author": "EJ Fox",
-  "timestamp": "2026-01-16T01:22:13.045Z",
-  "deployed": "2026-01-16T01:22:13.045Z",
-  "buildTime": "1/15/2026, 8:22:13 PM",
-  "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.1.22"
+  "timestamp": "2026-01-16T03:11:52.515Z",
+  "deployed": "2026-01-16T03:11:52.515Z",
+  "buildTime": "1/15/2026, 10:11:52 PM",
+  "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.1.23"
 }
