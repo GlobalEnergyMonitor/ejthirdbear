@@ -3,7 +3,7 @@
  * (AssetScreener, OwnershipFlower, etc.)
  */
 
-import { regroupStatus } from '$lib/ownership-theme';
+import { regroupStatus } from '$lib/design-tokens';
 
 // ============================================================================
 // LAYOUT CONSTANTS

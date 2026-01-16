@@ -103,10 +103,12 @@ export function formatCount(n) {
 
 /**
  * Format large numbers compactly
- * Always uses SI prefix
+ * Uses SI prefix with 3 sig figs for large numbers to distinguish 112k from 115k
  */
 export function formatCompact(n) {
   if (n == null || isNaN(n)) return '—';
+  // Use 3 sig figs for numbers >= 10k to avoid rounding 112k and 115k both to 110k
+  if (Math.abs(n) >= 10000) return formatSIPrecise(n);
   return formatSI(n);
 }
 
@@ -140,4 +142,79 @@ export function formatRange(min, max, formatter = formatComma) {
   if (max == null) return `≥ ${formatter(min)}`;
   if (min === max) return formatter(min);
   return `${formatter(min)} – ${formatter(max)}`;
+}
+
+// ---------------------------------------------------------------------------
+// String Utilities
+// ---------------------------------------------------------------------------
+
+/**
+ * Shorten a string with ellipsis
+ */
+export function shorten(str, maxLength) {
+  if (!str) return '';
+  if (str.length <= maxLength) return str;
+  return str.slice(0, maxLength) + '\u2026';
+}
+
+// ---------------------------------------------------------------------------
+// Value + Unit Formatting
+// ---------------------------------------------------------------------------
+
+/**
+ * Format a value with a custom unit suffix
+ * Use this for non-MW capacities (e.g., mines with Mtpa, ttpa)
+ */
+export function formatValueWithUnit(value, unit = 'MW') {
+  if (value == null || isNaN(value)) return '—';
+  return `${value.toLocaleString()} ${unit}`;
+}
+
+/**
+ * Format millions of tonnes CO2
+ */
+export function formatMtCO2(value) {
+  if (value == null || isNaN(value)) return '—';
+  return `${d3Format('.2f')(value)} MtCO\u2082`;
+}
+
+// ---------------------------------------------------------------------------
+// Percentile Utilities
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a memoized sorted array for percentile calculations
+ * Call once per dataset, then use the returned function for lookups
+ */
+export function createPercentileLookup(values) {
+  const sorted = values.filter((d) => d != null).sort((a, b) => a - b);
+  const len = sorted.length;
+
+  return (value) => {
+    if (len === 0) return 0;
+
+    // Binary search for efficiency on large arrays
+    let lo = 0;
+    let hi = len;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if (sorted[mid] < value) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+
+    if (lo === len) return 100;
+    return Math.round((lo / len) * 100);
+  };
+}
+
+/**
+ * Calculate percentile rank of a value within a dataset
+ * For single lookups - use createPercentileLookup for multiple lookups on same data
+ */
+export function percentileRank(value, values) {
+  const lookup = createPercentileLookup(values);
+  return lookup(value);
 }

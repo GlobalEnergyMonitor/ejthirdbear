@@ -131,7 +131,7 @@ export interface PaginatedResponse<T> {
 
 class OwnershipAPIError extends Error {
   constructor(
-    public status: number,
+    public _status: number,
     message: string
   ) {
     super(message);

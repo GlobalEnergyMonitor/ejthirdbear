@@ -106,8 +106,8 @@ export { link, assetLink, entityLink, assetPath } from './links';
 // =============================================================================
 
 // For direct submodule access, import from:
-//   '$lib/analysis'      - Statistical analysis (HHI, Gini, outliers)
-//   '$lib/stores'        - Data loaders, page context
-//   '$lib/utils'         - SQL helpers
-//   '$lib/data-config'   - Tracker/field configurations
+//   '$lib/analysis'       - Statistical analysis (HHI, Gini, outliers)
+//   '$lib/utils'          - SQL helpers
+//   '$lib/data-config'    - Tracker/field configurations
 //   '$lib/component-data' - Component data fetching
+//   '$lib/format'         - Number/string formatting utilities

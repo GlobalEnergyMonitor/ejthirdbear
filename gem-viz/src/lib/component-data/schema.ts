@@ -81,7 +81,7 @@ export async function fetchCoordinatesByLocation(_locationId: string): Promise<{
  */
 export async function fetchSameOwnerAssets(
   ownerEntityId: string,
-  excludeAssetId: string
+  _excludeAssetId: string
 ): Promise<{ success: boolean; data: AssetBasics[] }> {
   try {
     console.warn(`[fetchSameOwnerAssets] API does not expose assets for entity ${ownerEntityId}`);

@@ -16,12 +16,12 @@ export {
   clearQueryCache,
 } from './queries';
 
-// Re-export stats utils for convenience
+// Re-export formatting utils for convenience
 export {
   createPercentileLookup,
   percentileRank,
   formatPercent,
   formatMtCO2,
-  formatCapacity,
+  formatValueWithUnit,
   shorten,
-} from '$lib/stats-utils';
+} from '$lib/format';

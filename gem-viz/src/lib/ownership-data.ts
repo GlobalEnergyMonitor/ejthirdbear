@@ -10,8 +10,6 @@ import {
   getOwnershipGraph,
   getEntityGraphDown,
   listEntities,
-  type UnifiedGraphResponse,
-  type OwnershipGraphResponse,
   type GraphNode,
   type GraphEdge,
 } from '$lib/ownership-api';
@@ -108,14 +106,14 @@ export async function getAssetOwners(gemAssetId: string): Promise<AssetOwnersDat
     }
 
     // Convert API graph to our legacy edge format
-    const edges: OwnershipEdge[] = graphData.edges.map((edge: GraphEdge, index: number) => {
+    const edges: OwnershipEdge[] = graphData.edges.map((edge: GraphEdge) => {
       // Determine if this is a leaf edge (connects directly to the asset)
       const isLeafEdge = edge.target === gemAssetId;
 
       return {
         source: edge.source,
         target: edge.target,
-        value: edge.ownership_pct || null,
+        value: edge.value || null,
         type: isLeafEdge ? 'leafEdge' : 'intermediateEdge',
         refUrl: null, // API doesn't provide source URLs yet
         imputedShare: false, // API doesn't provide imputed flag yet
@@ -192,7 +190,7 @@ export async function getSpotlightOwnerData(
 ): Promise<SpotlightOwnerData | null> {
   try {
     // Fetch the ownership graph going DOWN from this entity
-    const graphData: OwnershipGraphResponse = await getEntityGraphDown(entityId);
+    const graphData = await getEntityGraphDown(entityId);
 
     if (!graphData || !graphData.nodes || graphData.nodes.length === 0) {
       console.warn(`No ownership data found for entity ${entityId}`);
@@ -200,7 +198,7 @@ export async function getSpotlightOwnerData(
     }
 
     // Use the root name from the API if entity name not provided
-    const effectiveEntityName = entityName || graphData.root?.Name || entityId;
+    const effectiveEntityName = entityName || graphData.rootEntityName || entityId;
 
     // Build entity map from all entity nodes
     const entityMap = new Map<string, { id: string; Name: string }>();
@@ -223,7 +221,7 @@ export async function getSpotlightOwnerData(
     for (const edge of graphData.edges) {
       if (edge.source === entityId) {
         directSubsidiaryIds.add(edge.target);
-        matchedEdges.set(edge.target, { value: edge.ownership_pct || null });
+        matchedEdges.set(edge.target, { value: edge.value || null });
       }
     }
 
@@ -310,8 +308,8 @@ export async function getTopOwners(limit: number = 20): Promise<any[]> {
 
     // Transform to match the old format
     return response.results.map((entity) => ({
-      id: entity['Entity ID'],
-      name: entity.Name,
+      id: entity.id,
+      name: entity.name,
       // Note: asset_count and ownership_count not available from this endpoint
       // These would need to be fetched separately or added to the API
       asset_count: 0,
