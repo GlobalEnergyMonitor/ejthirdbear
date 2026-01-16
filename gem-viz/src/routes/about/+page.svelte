@@ -7,8 +7,21 @@
   import { link } from '$lib/links';
   import { dataVersionInfo, TrackerDatasets } from '$lib/data-config/data-sources';
 
+  /**
+   * @typedef {Object} PageStats
+   * @property {number} [totalLocations]
+   * @property {number} [totalCountries]
+   * @property {number} [totalAssets]
+   * @property {number} [totalEntities]
+   * @property {Array<{name: string, count: number}>} [trackerBreakdown]
+   * @property {string} [buildTime]
+   * @property {string} [version]
+   */
+
   // Real stats from +page.server.js
+  /** @type {{ data?: { stats?: PageStats } }} */
   let { data } = $props();
+  /** @type {PageStats} */
   const stats = data?.stats || {};
 
   // Version history - add new entries at the top

@@ -61,7 +61,7 @@ export async function load() {
     stats.trackerBreakdown = Object.entries(trackerCounts)
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => b.count - a.count);
-  } catch (e) {
+  } catch {
     // GeoJSON stats are optional during prerender - silently continue with defaults
   }
 
@@ -85,7 +85,7 @@ export async function load() {
       stats.version = version.version;
       stats.buildTime = version.buildTime;
     }
-  } catch (e) {
+  } catch {
     // Version info is optional - silently continue with defaults
   }
 
@@ -102,7 +102,7 @@ export async function load() {
         stats.totalEntities = count;
       }
     }
-  } catch (e) {
+  } catch {
     // Use default
   }
 
@@ -119,7 +119,7 @@ export async function load() {
         stats.totalAssets = count;
       }
     }
-  } catch (e) {
+  } catch {
     // Use default
   }
 

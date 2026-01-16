@@ -10,7 +10,7 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import { entityLink } from '$lib/links';
-  import { colors, colorByStatus } from '$lib/ownership-theme';
+  import { colors, colorByStatus } from '$lib/design-tokens';
   import { getAsset, getOwnershipGraph } from '$lib/ownership-api';
 
   // Components
@@ -23,7 +23,52 @@
   import Citation from '$lib/components/Citation.svelte';
   import ExternalLinks from '$lib/components/ExternalLinks.svelte';
 
+  /**
+   * @typedef {Object} AssetData
+   * @property {string} id
+   * @property {string} [name]
+   * @property {string} [status]
+   * @property {string} [tracker]
+   * @property {string} [facilityType]
+   * @property {string} [country]
+   * @property {number} [lat]
+   * @property {number} [lng]
+   * @property {number} [latitude]
+   * @property {number} [longitude]
+   * @property {Record<string, unknown>} [raw]
+   */
+
+  /**
+   * @typedef {Object} GraphNode
+   * @property {string} id
+   * @property {string} [name]
+   * @property {string} [Name]
+   * @property {string} [type]
+   */
+
+  /**
+   * @typedef {Object} GraphEdge
+   * @property {string} source
+   * @property {string} target
+   * @property {number} [value]
+   * @property {string} [type]
+   * @property {number} [depth]
+   */
+
+  /**
+   * @typedef {Object} GraphData
+   * @property {GraphNode[]} nodes
+   * @property {GraphEdge[]} edges
+   */
+
+  /**
+   * @typedef {Object} PageData
+   * @property {AssetData} [asset]
+   * @property {GraphData} [graph]
+   */
+
   // --- PROPS (from +page.server.js) ---
+  /** @type {{ data?: PageData }} */
   let { data } = $props();
 
   // --- STATE ---

@@ -717,7 +717,7 @@
 
       if (onProgress && (i + 1) % chunkSize === 0) {
         onProgress({ done: i + 1, total });
-         
+
         await new Promise((resolve) => requestAnimationFrame(resolve));
       }
     }

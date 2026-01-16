@@ -18,7 +18,41 @@
   import UltimateOwners from '$lib/components/UltimateOwners.svelte';
   import ExternalLinks from '$lib/components/ExternalLinks.svelte';
 
+  /**
+   * @typedef {Object} EntityData
+   * @property {string} [id]
+   * @property {string} [name]
+   * @property {string} [type]
+   * @property {string} [headquartersCountry]
+   * @property {Record<string, unknown>} [raw]
+   */
+
+  /**
+   * @typedef {Object} OwnerRecord
+   * @property {string} ownerEntityId
+   * @property {string} [ownerName]
+   * @property {number} [ownershipPct]
+   */
+
+  /**
+   * @typedef {Object} OwnedRecord
+   * @property {string} entityId
+   * @property {string} [entityName]
+   * @property {string} [type]
+   * @property {number} [ownershipPct]
+   */
+
+  /**
+   * @typedef {Object} PageData
+   * @property {string} [entityId]
+   * @property {string} [entityName]
+   * @property {EntityData} [entity]
+   * @property {OwnerRecord[]} [owners]
+   * @property {OwnedRecord[]} [owned]
+   */
+
   // --- PROPS (from +page.server.js) ---
+  /** @type {{ data?: PageData }} */
   let { data } = $props();
 
   // --- STATE ---
@@ -27,8 +61,11 @@
   let error = $state(null);
   let entityId = $state(data?.entityId || '');
   let entityName = $state(data?.entityName || '');
+  /** @type {EntityData | null} */
   let entity = $state(data?.entity || null);
+  /** @type {OwnerRecord[]} */
   let owners = $state(data?.owners || []);
+  /** @type {OwnedRecord[]} */
   let owned = $state(data?.owned || []);
 
   // --- HELPERS ---
