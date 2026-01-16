@@ -16,6 +16,9 @@
    *   stickyHeader?: boolean,
    *   striped?: boolean,
    *   onRowClick?: ((row: Record<string, any>, index?: number) => void) | null,
+   *   onRowHover?: ((row: Record<string, any>, event: MouseEvent) => void) | null,
+   *   onRowLeave?: (() => void) | null,
+   *   highlightRow?: ((row: Record<string, any>) => boolean) | null,
    *   selectedRows?: Array<Record<string, any>>
    * }}
    */
@@ -31,6 +34,9 @@
     stickyHeader = true,
     striped = true,
     onRowClick = null,
+    onRowHover = null,
+    onRowLeave = null,
+    highlightRow = null,
     selectedRows = $bindable([]),
   } = $props();
 
@@ -40,10 +46,27 @@
   let sortColumn = $state(null);
   let sortDirection = $state('asc');
   let currentPage = $state(1);
-  let visibleColumns = $state(columns.map((c) => c.key));
+  let visibleColumns = $state([]);
   let showColumnMenu = $state(false);
   let activeFilters = $state([]);
   let filterLogic = $state('AND'); // AND or OR
+  let lastColumnKeys = $state('');
+
+  // Sync visibleColumns when columns prop changes
+  $effect(() => {
+    const columnKeys = columns.map((c) => c.key);
+    const keysString = columnKeys.join(',');
+
+    // Only update if columns actually changed
+    if (keysString !== lastColumnKeys) {
+      lastColumnKeys = keysString;
+      // Keep existing visible state, add new columns
+      const existingSet = new Set(visibleColumns);
+      const validExisting = visibleColumns.filter((k) => columnKeys.includes(k));
+      const newKeys = columnKeys.filter((k) => !existingSet.has(k));
+      visibleColumns = [...validExisting, ...newKeys];
+    }
+  });
 
   // Animation state
   /** @type {HTMLElement | null} */
@@ -427,41 +450,27 @@
   <div class="table-wrapper" class:sticky-header={stickyHeader}>
     <table>
       <thead>
-        <!-- Column filter row -->
-        {#if showColumnFilters}
-          <tr class="filter-row">
-            <th class="checkbox-col">
-              <input
-                type="checkbox"
-                checked={selectedRows.length === paginatedData.length && paginatedData.length > 0}
-                onchange={toggleSelectAll}
-              />
-            </th>
-            {#each displayColumns as col}
-              <th style={col.width ? `width: ${col.width}` : ''}>
-                {#if col.filterable !== false}
-                  <input
-                    type="text"
-                    placeholder="Filter..."
-                    value={columnFilters[col.key] || ''}
-                    oninput={(e) =>
-                      (columnFilters[col.key] = /** @type {HTMLInputElement} */ (e.target).value)}
-                  />
-                {/if}
-              </th>
-            {/each}
-          </tr>
-        {/if}
-
-        <!-- Header row -->
+        <!-- Header row (with sort handlers) -->
         <tr>
-          <th class="checkbox-col"></th>
+          <th class="checkbox-col">
+            <input
+              type="checkbox"
+              checked={selectedRows.length === paginatedData.length && paginatedData.length > 0}
+              onchange={toggleSelectAll}
+            />
+          </th>
           {#each displayColumns as col}
             <th
               class:sortable={col.sortable}
               class:sorted={sortColumn === col.key}
               style={col.width ? `width: ${col.width}` : ''}
               onclick={() => handleSort(col.key)}
+              role="columnheader"
+              aria-sort={sortColumn === col.key
+                ? sortDirection === 'asc'
+                  ? 'ascending'
+                  : 'descending'
+                : 'none'}
             >
               <span class="header-content">
                 {col.label}
@@ -478,14 +487,37 @@
             </th>
           {/each}
         </tr>
+
+        <!-- Column filter row -->
+        {#if showColumnFilters}
+          <tr class="filter-row">
+            <th class="checkbox-col"></th>
+            {#each displayColumns as col}
+              <th style={col.width ? `width: ${col.width}` : ''}>
+                {#if col.filterable !== false}
+                  <input
+                    type="text"
+                    placeholder="Filter..."
+                    value={columnFilters[col.key] || ''}
+                    oninput={(e) =>
+                      (columnFilters[col.key] = /** @type {HTMLInputElement} */ (e.target).value)}
+                  />
+                {/if}
+              </th>
+            {/each}
+          </tr>
+        {/if}
       </thead>
       <tbody bind:this={tbodyEl}>
         {#each paginatedData as row, i}
           <tr
             class:striped={striped && i % 2 === 1}
             class:selected={selectedRows.includes(row)}
+            class:highlighted={highlightRow?.(row)}
             class:clickable={onRowClick}
             onclick={() => handleRowClick(row, i)}
+            onmouseenter={(e) => onRowHover?.(row, e)}
+            onmouseleave={() => onRowLeave?.()}
           >
             <td class="checkbox-col" onclick={(e) => e.stopPropagation()}>
               <input
@@ -565,30 +597,29 @@
 <style>
   .data-table-container {
     background: var(--color-white);
-    border: 1px solid var(--color-black);
+    border: none;
     font-family: 'IBM Plex Mono', 'Fira Code', monospace;
     border-radius: 0;
     overflow: hidden;
-    box-shadow: 0 12px 30px color-mix(in srgb, var(--color-black) 8%, transparent);
   }
 
-  /* Toolbar */
+  /* Toolbar - compact */
   .toolbar {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 14px 18px;
+    padding: 6px 8px;
     border-bottom: 1px solid var(--color-gray-200);
     background: transparent;
     flex-wrap: wrap;
-    gap: 12px;
+    gap: 6px;
   }
 
   .toolbar-left,
   .toolbar-right {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 6px;
     flex-wrap: wrap;
   }
 
@@ -599,10 +630,10 @@
   }
 
   .search-box input {
-    padding: 9px 34px 9px 12px;
-    border: 1px solid var(--color-black);
-    font-size: 12px;
-    width: 260px;
+    padding: 5px 28px 5px 8px;
+    border: 1px solid var(--color-gray-300);
+    font-size: 11px;
+    width: 180px;
     font-family: inherit;
     border-radius: 0;
     background: var(--color-white);
@@ -727,10 +758,8 @@
   /* Table wrapper */
   .table-wrapper {
     overflow-x: auto;
-    max-height: 70vh;
+    max-height: calc(100vh - 200px);
     overflow-y: auto;
-    border-top: 1px solid var(--color-gray-200);
-    border-bottom: 1px solid var(--color-gray-200);
   }
 
   .table-wrapper.sticky-header thead {
@@ -743,42 +772,41 @@
   table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 12px;
+    font-size: 11px;
   }
 
   thead {
-    background: transparent;
+    background: var(--color-gray-100);
     color: var(--color-black);
   }
 
   thead tr.filter-row {
     background: var(--color-white);
-    border-bottom: 1px solid var(--color-gray-200);
   }
 
   thead tr.filter-row th {
-    padding: 6px 8px;
+    padding: 2px 4px;
   }
 
   thead tr.filter-row input {
     width: 100%;
-    padding: 4px 6px;
-    border: 1px solid var(--color-gray-300);
-    font-size: 11px;
+    padding: 2px 4px;
+    border: 1px solid var(--color-gray-200);
+    font-size: 10px;
     font-family: inherit;
     background: var(--color-white);
     border-radius: 0;
   }
 
   th {
-    padding: 10px 12px;
+    padding: 4px 6px;
     text-align: left;
-    font-weight: 700;
-    font-size: 11px;
+    font-weight: 600;
+    font-size: 10px;
     text-transform: uppercase;
-    letter-spacing: 0.4px;
+    letter-spacing: 0.3px;
     white-space: nowrap;
-    border-right: 1px solid var(--color-gray-200);
+    border-bottom: 1px solid var(--color-gray-300);
   }
 
   th.sortable {
@@ -818,33 +846,31 @@
   }
 
   .checkbox-col {
-    width: 36px;
+    width: 24px;
     text-align: center;
   }
 
   td {
-    padding: 10px 12px;
+    padding: 3px 6px;
     border-bottom: 1px solid var(--color-gray-100);
     vertical-align: middle;
+    line-height: 1.3;
   }
 
   tbody tr {
-    transition:
-      background 80ms ease,
-      box-shadow 80ms ease;
+    transition: background 50ms ease;
   }
 
   tbody tr:hover {
-    background: rgba(0, 0, 0, 0.02);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    background: rgba(0, 0, 0, 0.03);
   }
 
   tbody tr.striped {
-    background: rgba(0, 0, 0, 0.015);
+    background: rgba(0, 0, 0, 0.02);
   }
 
   tbody tr.striped:hover {
-    background: rgba(0, 0, 0, 0.04);
+    background: rgba(0, 0, 0, 0.05);
   }
 
   tbody tr.selected {
@@ -853,6 +879,19 @@
 
   tbody tr.selected:hover {
     background: var(--color-selection-hover, #d2e1ff);
+  }
+
+  tbody tr.highlighted {
+    background: linear-gradient(90deg, rgba(255, 215, 0, 0.15) 0%, rgba(255, 215, 0, 0.05) 100%);
+    border-left: 3px solid #d4a700;
+  }
+
+  tbody tr.highlighted:hover {
+    background: linear-gradient(90deg, rgba(255, 215, 0, 0.25) 0%, rgba(255, 215, 0, 0.1) 100%);
+  }
+
+  tbody tr.highlighted td:first-child {
+    padding-left: 3px;
   }
 
   tbody tr.clickable {
@@ -879,34 +918,34 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 12px 16px;
+    padding: 4px 8px;
     border-top: 1px solid var(--color-gray-200);
-    background: transparent;
+    background: var(--color-gray-50);
     flex-wrap: wrap;
-    gap: 12px;
+    gap: 8px;
   }
 
   .pagination-info {
-    font-size: 11px;
+    font-size: 10px;
     color: var(--color-text-secondary);
   }
 
   .pagination-controls {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 4px;
   }
 
   .page-info {
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 600;
-    margin: 0 8px;
+    margin: 0 4px;
   }
 
   .page-size {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 4px;
     font-size: 11px;
     color: var(--color-text-secondary);
   }
