@@ -229,18 +229,25 @@ describe('extractUnitIdFromComposite', () => {
 });
 
 describe('assetPath', () => {
-  it('generates asset path from GEM Unit ID', () => {
-    expect(assetPath('G100000109409')).toBe('/asset/G100000109409');
+  it('generates asset path from GEM Unit ID with base path', () => {
+    const path = assetPath('G100000109409');
+    // Should contain the asset route and ID
+    expect(path).toContain('/asset/G100000109409');
   });
 
   it('extracts unit ID from composite and generates path', () => {
-    expect(assetPath('E100000000834_G100000109409')).toBe('/asset/G100000109409');
+    const path = assetPath('E100000000834_G100000109409');
+    // Should extract G-prefixed ID from composite
+    expect(path).toContain('/asset/G100000109409');
+    expect(path).not.toContain('E100000000834');
   });
 });
 
 describe('entityPath', () => {
-  it('generates entity path', () => {
-    expect(entityPath('E100001000348')).toBe('/entity/E100001000348');
+  it('generates entity path with base path', () => {
+    const path = entityPath('E100001000348');
+    // Should contain the entity route and ID
+    expect(path).toContain('/entity/E100001000348');
   });
 });
 
