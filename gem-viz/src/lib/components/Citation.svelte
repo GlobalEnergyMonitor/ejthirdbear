@@ -6,7 +6,12 @@
    * Provides copy-to-clipboard citation in multiple formats.
    */
 
-  /** @type {'footer' | 'compact' | 'full'} */
+  /**
+   * @type {{
+   *   variant?: 'footer' | 'compact' | 'full',
+   *   trackers?: string[],
+   * }}
+   */
   let { variant = 'footer', trackers = [] } = $props();
 
   // Build citation date (use build time or current date)

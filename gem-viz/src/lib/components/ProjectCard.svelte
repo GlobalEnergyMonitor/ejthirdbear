@@ -16,7 +16,7 @@
     getStatusGroup,
     isMineAsset,
     formatMtCO2,
-    formatCapacity,
+    formatValueWithUnit,
     type Asset,
     type PercentileData,
   } from '$lib/factsheet';
@@ -110,7 +110,7 @@
         {#if asset.capacity}
           <div class="detail">
             <span class="detail-label">{isMine ? 'Production capacity' : 'Capacity'}</span>
-            <span>{formatCapacity(asset.capacity, asset.capacityUnit)}</span>
+            <span>{formatValueWithUnit(asset.capacity, asset.capacityUnit)}</span>
           </div>
         {/if}
 
@@ -172,13 +172,13 @@
           {#if asset.capacity}
             <div class="detail">
               <span class="detail-label">{isMine ? 'Capacity' : 'Capacity'}</span>
-              <span>{formatCapacity(asset.capacity, asset.capacityUnit)}</span>
+              <span>{formatValueWithUnit(asset.capacity, asset.capacityUnit)}</span>
             </div>
           {/if}
           {#if asset.production}
             <div class="detail">
               <span class="detail-label">Production</span>
-              <span>{formatCapacity(asset.production, asset.productionUnit)}</span>
+              <span>{formatValueWithUnit(asset.production, asset.productionUnit)}</span>
             </div>
           {/if}
           {#if asset.capacityFactor}

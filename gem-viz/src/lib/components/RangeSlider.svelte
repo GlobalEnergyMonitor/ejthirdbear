@@ -175,26 +175,26 @@
 
 <style>
   .range-slider {
-    margin-bottom: 20px;
+    margin-bottom: 12px;
   }
 
   .range-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 8px;
+    margin-bottom: 4px;
   }
 
   .range-label {
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: #666;
+    letter-spacing: 0.4px;
+    color: #555;
   }
 
   .range-clear {
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 400;
     color: #0066c0;
     background: none;
@@ -212,8 +212,8 @@
     display: flex;
     align-items: flex-end;
     gap: 1px;
-    height: 24px;
-    margin-bottom: 4px;
+    height: 20px;
+    margin-bottom: 2px;
   }
 
   .histogram-bar {
@@ -230,8 +230,8 @@
   /* Slider */
   .slider-container {
     position: relative;
-    height: 20px;
-    margin-bottom: 8px;
+    height: 18px;
+    margin-bottom: 6px;
   }
 
   .slider-track {
@@ -293,20 +293,20 @@
   .value-inputs {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
   }
 
   .value-input {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 2px;
     flex: 1;
   }
 
   .value-input input {
     width: 100%;
-    padding: 6px 8px;
-    font-size: 12px;
+    padding: 4px 6px;
+    font-size: 11px;
     border: 1px solid #ddd;
     text-align: center;
   }
@@ -317,13 +317,13 @@
   }
 
   .unit {
-    font-size: 11px;
+    font-size: 10px;
     color: #666;
     flex-shrink: 0;
   }
 
   .separator {
-    font-size: 11px;
+    font-size: 10px;
     color: #666;
   }
 
@@ -331,8 +331,8 @@
   .range-labels {
     display: flex;
     justify-content: space-between;
-    font-size: 10px;
+    font-size: 9px;
     color: #999;
-    margin-top: 4px;
+    margin-top: 2px;
   }
 </style>

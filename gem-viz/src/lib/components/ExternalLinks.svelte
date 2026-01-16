@@ -6,7 +6,15 @@
    * Links to Wikipedia, Wikidata, OpenCorporates, and GEM Wiki.
    */
 
-  /** @type {'entity' | 'asset'} */
+  /**
+   * @type {{
+   *   type?: 'entity' | 'asset',
+   *   name?: string,
+   *   country?: string,
+   *   lat?: number | null,
+   *   lon?: number | null,
+   * }}
+   */
   let { type = 'entity', name = '', country = '', lat = null, lon = null } = $props();
 
   // Encode name for URL search parameters

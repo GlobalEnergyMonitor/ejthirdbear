@@ -13,8 +13,21 @@
   import { investigationCart } from '$lib/investigationCart';
   import { listAssets, listEntities } from '$lib/ownership-api';
 
+  /**
+   * @type {{
+   *   embedded?: boolean,
+   *   placeholder?: string,
+   *   limit?: number,
+   * }}
+   */
+  let {
+    embedded = false,
+    placeholder = 'Search assets, entities, or type a command...',
+    limit = 5,
+  } = $props();
+
   // State
-  let open = $state(false);
+  let open = $state(embedded);
   let showHelp = $state(false);
   let query = $state('');
   let selectedIndex = $state(0);
@@ -132,8 +145,20 @@
     },
   ];
 
+  /**
+   * @typedef {Object} ResultItem
+   * @property {string} type
+   * @property {string} label
+   * @property {string} [id]
+   * @property {string} [sublabel]
+   * @property {string} [shortcut]
+   * @property {string} [section]
+   * @property {() => void} [action]
+   */
+
   // All results combined for keyboard navigation
   const allResults = $derived.by(() => {
+    /** @type {ResultItem[]} */
     const results = [];
 
     // Recent searches first (if no query)
@@ -209,8 +234,8 @@
     searchTimeout = setTimeout(async () => {
       try {
         const [assets, entities] = await Promise.all([
-          listAssets({ q, limit: 5 }).catch(() => ({ results: [] })),
-          listEntities({ q, limit: 5 }).catch(() => ({ results: [] })),
+          listAssets({ q, limit }).catch(() => ({ results: [] })),
+          listEntities({ q, limit }).catch(() => ({ results: [] })),
         ]);
 
         assetResults = assets.results || [];
@@ -249,7 +274,9 @@
   function saveRecent() {
     try {
       localStorage.setItem('gem-recent-searches', JSON.stringify(recentSearches));
-    } catch { /* localStorage may be unavailable */ }
+    } catch {
+      /* localStorage may be unavailable */
+    }
   }
 
   function loadRecent() {
@@ -258,7 +285,9 @@
       if (stored) {
         recentSearches = JSON.parse(stored);
       }
-    } catch { /* localStorage may be unavailable */ }
+    } catch {
+      /* localStorage may be unavailable */
+    }
   }
 
   // Execute selected action (with bounds checking)
@@ -438,7 +467,9 @@
 
   // Navigate to first owner on asset page
   function openFirstOwner() {
-    const ownerLink = document.querySelector('.owner-link, .entity-link');
+    const ownerLink = /** @type {HTMLElement | null} */ (
+      document.querySelector('.owner-link, .entity-link')
+    );
     if (ownerLink) {
       ownerLink.click();
     } else {
@@ -474,7 +505,7 @@
     investigationCart.add({
       id: info.id,
       name: pageTitle,
-      type: info.type,
+      type: /** @type {'asset' | 'entity'} */ (info.type),
     });
 
     showToast(`Added ${info.type} to cart`);
@@ -492,7 +523,7 @@
     try {
       await navigator.clipboard.writeText(info.id);
       showToast(`Copied: ${info.id}`);
-    } catch (err) {
+    } catch {
       showToast('Failed to copy');
     }
     close();
@@ -503,7 +534,7 @@
     try {
       await navigator.clipboard.writeText(window.location.href);
       showToast('URL copied');
-    } catch (err) {
+    } catch {
       showToast('Failed to copy');
     }
     close();
@@ -625,8 +656,10 @@
 
   // Focus local search input if present
   function focusLocalSearch() {
-    const searchInput = document.querySelector(
-      '.filter-input, .search-input, input[type="search"], input[placeholder*="Search"], input[placeholder*="Filter"]'
+    const searchInput = /** @type {HTMLInputElement | null} */ (
+      document.querySelector(
+        '.filter-input, .search-input, input[type="search"], input[placeholder*="Search"], input[placeholder*="Filter"]'
+      )
     );
     if (searchInput) {
       searchInput.focus();
@@ -638,7 +671,7 @@
   }
 
   function isInputFocused() {
-    const active = document.activeElement;
+    const active = /** @type {HTMLElement | null} */ (document.activeElement);
     return (
       active?.tagName === 'INPUT' || active?.tagName === 'TEXTAREA' || active?.isContentEditable
     );
@@ -683,21 +716,24 @@
 </script>
 
 {#if open}
-  <!-- Backdrop -->
-  <div
-    class="palette-backdrop"
-    onclick={close}
-    onkeydown={(e) => e.key === 'Escape' && close()}
-    role="button"
-    tabindex="-1"
-    aria-label="Close palette"
-  ></div>
+  <!-- Backdrop (only for non-embedded mode) -->
+  {#if !embedded}
+    <div
+      class="palette-backdrop"
+      onclick={close}
+      onkeydown={(e) => e.key === 'Escape' && close()}
+      role="button"
+      tabindex="-1"
+      aria-label="Close palette"
+    ></div>
+  {/if}
 
   <!-- Palette -->
   <div
     class="palette"
+    class:embedded
     onkeydown={handleKeydown}
-    role="dialog"
+    role={embedded ? 'search' : 'dialog'}
     aria-label="Command palette"
     tabindex="-1"
   >
@@ -707,7 +743,7 @@
         bind:value={query}
         type="text"
         class="palette-input"
-        placeholder="Search assets, entities, or type a command..."
+        {placeholder}
         spellcheck="false"
         autocomplete="off"
       />
@@ -720,7 +756,7 @@
       {#if allResults.length === 0 && query}
         <div class="no-results">No results for "{query}"</div>
       {:else}
-        {#each allResults as item, i}
+        {#each allResults as item}
           {#if item.type === 'section'}
             <div class="result-section">{item.label}</div>
           {:else}
@@ -874,6 +910,17 @@
     flex-direction: column;
     overflow: hidden;
     font-family: Georgia, serif;
+  }
+
+  .palette.embedded {
+    position: relative;
+    top: auto;
+    left: auto;
+    transform: none;
+    width: 100%;
+    max-width: none;
+    max-height: 400px;
+    z-index: 1;
   }
 
   /* Header/Input */

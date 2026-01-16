@@ -12,7 +12,7 @@
   import { assetLink, entityLink } from '$lib/links';
   import { fetchOwnerPortfolio } from '$lib/component-data/schema';
   import { useFetch } from '$lib/component-data/use-fetch.svelte';
-  import { colors, colorByTracker, regroupStatus } from '$lib/ownership-theme';
+  import { colors, colorByTracker, regroupStatus } from '$lib/design-tokens';
 
   // Props - entityId is required, component fetches its own data
   let {
