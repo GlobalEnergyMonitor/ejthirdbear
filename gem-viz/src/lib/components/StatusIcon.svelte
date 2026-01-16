@@ -7,7 +7,7 @@
    * - retired: dark purple X
    * - operating: no icon (clean look)
    */
-  import { regroupStatus, colors } from '$lib/ownership-theme';
+  import { regroupStatus, colors } from '$lib/design-tokens';
 
   let { status = '', size = 10 } = $props();
 

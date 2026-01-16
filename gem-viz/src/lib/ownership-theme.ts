@@ -1,10 +1,12 @@
 /**
+ * @deprecated Import from '$lib/design-tokens' instead.
+ *
  * GEM Ownership Tools - Theme & Colors
  *
  * THIS FILE RE-EXPORTS FROM THE SINGLE SOURCE OF TRUTH: design-tokens.ts
- * Kept for backward compatibility with existing imports.
+ * KEPT ONLY FOR BACKWARDS COMPATIBILITY - DO NOT ADD NEW IMPORTS FROM THIS FILE.
  *
- * For new code, import directly from '$lib/design-tokens'.
+ * All internal code should import directly from '$lib/design-tokens'.
  */
 
 export {

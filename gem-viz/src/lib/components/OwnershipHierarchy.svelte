@@ -6,7 +6,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
   import { assetLink, entityLink } from '$lib/links';
-  import { colors } from '$lib/ownership-theme';
+  import { colors } from '$lib/design-tokens';
 
   let {
     assetId = '',

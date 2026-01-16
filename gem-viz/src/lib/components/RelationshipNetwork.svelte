@@ -1,5 +1,6 @@
 <script>
   import { assetLink } from '$lib/links';
+  import { formatCapacity } from '$lib/format';
   import { page } from '$app/stores';
   import { get } from 'svelte/store';
   import { onMount } from 'svelte';
@@ -14,6 +15,14 @@
   // Accept pre-baked data from parent to skip client-side fetch
   let { prebakedData = null } = $props();
 
+  /**
+   * @typedef {Object} CurrentAsset
+   * @property {string} [ownerName]
+   * @property {string} [ownerEntityId]
+   * @property {string} [locationId]
+   * @property {number} [capacityMw]
+   */
+
   let loading = $state(true);
   /** @type {string | null} */
   let error = $state(null);
@@ -21,6 +30,7 @@
   let sameOwnerAssets = $state([]);
   let coLocatedAssets = $state([]);
   let ownerStats = $state(null);
+  /** @type {CurrentAsset} */
   let currentAsset = $state({});
 
   onMount(async () => {
@@ -70,12 +80,6 @@
     error = sameOwnerRes.success && coLocatedRes.success ? null : 'Failed to load relationships';
     loading = false;
   });
-
-  // Format capacity with commas
-  function formatCapacity(mw) {
-    if (!mw) return 'N/A';
-    return `${Math.round(mw).toLocaleString()} MW`;
-  }
 
   // Status color coding
   function statusClass(status) {

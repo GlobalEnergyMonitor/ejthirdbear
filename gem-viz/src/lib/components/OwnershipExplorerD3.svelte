@@ -10,12 +10,12 @@
   import {
     colors,
     colorByTracker,
-    statusColors,
+    statusColorsMap,
     statusColorsProspective,
     prospectiveStatuses,
     colMaps,
     regroupStatus,
-  } from '$lib/ownership-theme';
+  } from '$lib/design-tokens';
   import { fetchAssetBasics, fetchOwnerPortfolio } from '$lib/component-data/schema';
 
   // Accept owner entity ID and pre-baked data from parent to skip client-side fetch
@@ -323,7 +323,8 @@
         .map(([k, v]) => [v, { descript: k }]);
     }
     const allProspective = Array.from(statuses).every((s) => prospectiveStatuses.includes(s));
-    const source = allProspective ? statusColorsProspective : statusColors;
+    const source = allProspective ? statusColorsProspective : statusColorsMap;
+    // @ts-ignore - Map iterator type variance issue with readonly tuples
     return Array.from(source).map(([col, { descript }]) => [col, { descript }]);
   }
 

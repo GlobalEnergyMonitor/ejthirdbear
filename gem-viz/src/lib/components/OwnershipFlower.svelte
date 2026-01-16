@@ -15,7 +15,7 @@
   import { goto } from '$app/navigation';
   import { entityLink } from '$lib/links';
   import * as d3 from 'd3';
-  import { colorByTracker, colors } from '$lib/ownership-theme';
+  import { colorByTracker, colors } from '$lib/design-tokens';
   import { fetchAssetBasics, fetchOwnerPortfolio } from '$lib/component-data/schema';
 
   /** @type {{ ownerId?: string | null, portfolio?: any, size?: 'small' | 'medium' | 'large', showLabels?: boolean, showTitle?: boolean, title?: string }} */

@@ -11,7 +11,7 @@
    *   { tracker: 'Gas Plant', count: 3, capacity: 1500 }
    * ]} size={24} />
    */
-  import { colorByTracker, colors } from '$lib/ownership-theme';
+  import { colorByTracker, colors } from '$lib/design-tokens';
 
   let {
     /** @type {{ tracker: string, count: number, capacity: number }[]} */

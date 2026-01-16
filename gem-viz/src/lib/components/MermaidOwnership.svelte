@@ -8,7 +8,7 @@
   import { goto } from '$app/navigation';
   import DOMPurify from 'isomorphic-dompurify';
   import { assetLink, entityLink } from '$lib/links';
-  import { colors } from '$lib/ownership-theme';
+  import { colors } from '$lib/design-tokens';
 
   let {
     edges = [],
@@ -27,7 +27,7 @@
   let containerEl;
   let containerWidth = $state(0);
 
-  const diagramHeight = $derived(Math.max(MIN_HEIGHT, containerWidth * 0.4));
+  const _diagramHeight = $derived(Math.max(MIN_HEIGHT, containerWidth * 0.4));
 
   function generateMermaidSyntax() {
     if (!edges.length) return '';

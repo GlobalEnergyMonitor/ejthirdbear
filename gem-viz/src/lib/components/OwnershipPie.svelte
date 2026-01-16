@@ -1,5 +1,5 @@
 <script>
-  import { colors } from '$lib/ownership-theme';
+  import { colors } from '$lib/design-tokens';
 
   // Props
   let {

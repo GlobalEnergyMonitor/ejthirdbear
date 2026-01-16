@@ -7,7 +7,7 @@
    *   <TrackerIcon tracker="Coal Plant" />
    *   <TrackerIcon tracker="Gas Pipeline" size={16} showLabel />
    */
-  import { colorByTracker, colors } from '$lib/ownership-theme';
+  import { colorByTracker, colors } from '$lib/design-tokens';
 
   /** @type {{ tracker: string, size?: number, showLabel?: boolean, variant?: 'dot' | 'pill' }} */
   let { tracker = 'Unknown', size = 12, showLabel = false, variant = 'dot' } = $props();
