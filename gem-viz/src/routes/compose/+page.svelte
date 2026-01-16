@@ -1,110 +1,10 @@
 <script>
   /**
    * FILTER COMPOSER PAGE
-   *
    * Build custom filtered views of the GEM ownership data.
    * Filters are encoded in the URL for easy sharing.
    *
-   * URL Format:
-   *   /compose?trackers=Coal+Plant,Gas+Plant&statuses=operating&capacityMin=100
-   *
-   * ============================================================================
-   * API ENDPOINTS NEEDED TO REPLACE DUCKDB
-   * ============================================================================
-   *
-   * This page currently uses 4 DuckDB query patterns. To migrate to REST API,
-   * we'd need these endpoints (2 new, 1 enhanced):
-   *
-   * ┌─────────────────────────────────────────────────────────────────────────┐
-   * │ 1. GET /assets/facets                                           [NEW]  │
-   * ├─────────────────────────────────────────────────────────────────────────┤
-   * │ Returns facet counts for all filterable dimensions.                    │
-   * │ Supports "parametric search" - counts update based on other filters.   │
-   * │                                                                        │
-   * │ Query params (all optional, for parametric counts):                    │
-   * │   ?tracker=Coal+Plant&status=operating&country=China&...               │
-   * │                                                                        │
-   * │ Response:                                                              │
-   * │ {                                                                      │
-   * │   "trackers": [{"value": "Coal Plant", "count": 15234}, ...],          │
-   * │   "statuses": [{"value": "operating", "count": 8432}, ...],            │
-   * │   "countries": [{"value": "China", "count": 6120}, ...],               │
-   * │   "ownerCountries": [{"value": "USA", "count": 3890}, ...],            │
-   * │   "owners": [{"value": "BlackRock", "count": 456}, ...]                │
-   * │ }                                                                      │
-   * │                                                                        │
-   * │ Key behavior: Each facet's counts should EXCLUDE its own filter        │
-   * │ (e.g., tracker counts ignore ?tracker= param) so users see what's      │
-   * │ available if they change that selection.                               │
-   * └─────────────────────────────────────────────────────────────────────────┘
-   *
-   * ┌─────────────────────────────────────────────────────────────────────────┐
-   * │ 2. GET /assets/ranges                                           [NEW]  │
-   * ├─────────────────────────────────────────────────────────────────────────┤
-   * │ Returns min/max/histogram for numeric fields.                          │
-   * │                                                                        │
-   * │ Response:                                                              │
-   * │ {                                                                      │
-   * │   "capacity": {                                                        │
-   * │     "min": 0,                                                          │
-   * │     "max": 9876,                                                       │
-   * │     "histogram": [1234, 5678, 910, ...]  // 20 buckets                 │
-   * │   },                                                                   │
-   * │   "startYear": {                                                       │
-   * │     "min": 1952,                                                       │
-   * │     "max": 2030                                                        │
-   * │   },                                                                   │
-   * │   "share": {                                                           │
-   * │     "min": 0,                                                          │
-   * │     "max": 100                                                         │
-   * │   }                                                                    │
-   * │ }                                                                      │
-   * └─────────────────────────────────────────────────────────────────────────┘
-   *
-   * ┌─────────────────────────────────────────────────────────────────────────┐
-   * │ 3. GET /assets (enhanced)                                   [EXISTING] │
-   * ├─────────────────────────────────────────────────────────────────────────┤
-   * │ Already exists, but needs additional filter params:                    │
-   * │                                                                        │
-   * │ New query params needed:                                               │
-   * │   ?tracker=Coal+Plant,Gas+Plant    // multi-value                      │
-   * │   &status=operating,proposed       // multi-value                      │
-   * │   &country=China,USA               // asset country (from locations)   │
-   * │   &ownerCountry=USA                // owner HQ country                 │
-   * │   &owner=BlackRock,Vanguard        // owner name                       │
-   * │   &capacityMin=100                 // numeric range                    │
-   * │   &capacityMax=5000                                                    │
-   * │   &startYearMin=2020                                                   │
-   * │   &startYearMax=2030                                                   │
-   * │   &shareMin=50                                                         │
-   * │   &shareMax=100                                                        │
-   * │   &search=solar                    // full-text search                 │
-   * │   &limit=500                                                           │
-   * │   &offset=0                                                            │
-   * │                                                                        │
-   * │ Response should include total count for pagination:                    │
-   * │ {                                                                      │
-   * │   "total": 12345,                                                      │
-   * │   "assets": [...]                                                      │
-   * │ }                                                                      │
-   * └─────────────────────────────────────────────────────────────────────────┘
-   *
-   * MIGRATION COMPLEXITY: Medium
-   * - /assets/facets is the main new work (parametric counting logic)
-   * - /assets/ranges is straightforward (just min/max/histogram queries)
-   * - /assets filter params are additive to existing endpoint
-   *
-   * ALTERNATIVE: Single POST endpoint
-   * If query string gets too complex, consider POST /assets/search with body:
-   * {
-   *   "filters": { "tracker": ["Coal Plant"], "status": ["operating"], ... },
-   *   "facets": true,
-   *   "ranges": true,
-   *   "limit": 500
-   * }
-   * Returns results + facets + ranges in one response (fewer round trips).
-   *
-   * ============================================================================
+   * See: docs/compose-api-spec.md for API migration notes
    */
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
@@ -119,6 +19,8 @@
   import DataTable from '$lib/components/DataTable.svelte';
   import FacetedFilter from '$lib/components/FacetedFilter.svelte';
   import RangeSlider from '$lib/components/RangeSlider.svelte';
+  import FilterBreadcrumbs from '$lib/components/FilterBreadcrumbs.svelte';
+  import ProjectCard from '$lib/components/ProjectCard.svelte';
 
   import {
     emptyFilterState,
@@ -126,13 +28,26 @@
     encodeFilters,
     buildShareUrl,
     hasActiveFilters,
-    countActiveFilters,
     buildSqlWhere,
     getPresets,
     savePreset,
     deletePreset,
   } from '$lib/filter-state';
+  import { investigationCart } from '$lib/investigationCart';
   import { buildExportPreset, importPreset } from '$lib/presets';
+  import {
+    fetchOwnershipColumns,
+    fetchCountries,
+    fetchOwnerCountries,
+    fetchOwners,
+    fetchTrackers,
+    fetchStatuses,
+    fetchCapacityRange,
+    fetchStartYearRange,
+    fetchCapacityHistogram,
+    fetchResults,
+    fetchTrackerColumnInfo,
+  } from '$lib/compose-queries';
 
   // ---------------------------------------------------------------------------
   // State
@@ -144,19 +59,29 @@
   let loadingOptions = $state(true);
   let loadingCounts = $state(false);
   let error = $state(null);
+  let initialLoadComplete = $state(false);
 
-  // Reference data populated from parquet (static lists) - reserved for future use
-  let _allCountries = $state([]);
-  let _allOwnerCountries = $state([]);
-  let _allOwners = $state([]);
+  // Pagination
+  let currentPage = $state(1);
+  const pageSize = 50;
+  const totalPages = $derived(Math.ceil(totalCount / pageSize));
 
-  // Parametric counts (update based on current filters)
+  // Asset preview panel
+  let selectedAsset = $state(null);
+
+  // Base reference data (all possible options - never filtered)
+  let baseCountries = $state([]);
+  let baseOwnerCountries = $state([]);
+  let baseOwners = $state([]);
+  let baseTrackers = $state([]);
+  let baseStatuses = $state([]);
+
+  // Parametric counts (update based on current filters - merged with base)
   let countries = $state([]);
   let ownerCountries = $state([]);
   let owners = $state([]);
   let trackerOptions = $state([]);
   let statusOptions = $state([]);
-  let schema = $state([]);
   let ownershipColumns = $state([]);
 
   // Tracker-specific column availability
@@ -175,13 +100,14 @@
   let startYearRange = $state({ min: 1950, max: 2035 });
   let capacityHistogram = $state([]);
 
-
   // ---------------------------------------------------------------------------
   // Derived
   // ---------------------------------------------------------------------------
   const shareUrl = $derived(buildShareUrl(filters));
-  const activeFilterCount = $derived(countActiveFilters(filters));
   const hasFilters = $derived(hasActiveFilters(filters));
+
+  // Investigation cart - track which assets are in the user's investigation
+  const cartAssetIds = $derived(new Set($investigationCart.map((item) => item.id)));
 
   const ownershipColumnNames = $derived.by(() => {
     const columnSet = new Set(ownershipColumns);
@@ -244,31 +170,55 @@
     return { hasCapacity, hasShare, hasStartYear };
   });
 
+  /**
+   * @typedef {Object} TableColumn
+   * @property {string} key
+   * @property {string} label
+   * @property {boolean} [sortable]
+   * @property {boolean} [filterable]
+   * @property {'string' | 'number' | 'date'} [type]
+   * @property {string} [width]
+   */
+
   const tableColumns = $derived.by(() => {
-    const baseColumns = [
+    // All possible columns
+    /** @type {TableColumn[]} */
+    const allColumns = [
       { key: 'name', label: 'Asset', sortable: true, filterable: true },
       { key: 'asset_id', label: 'Asset ID', sortable: true, filterable: true },
       { key: 'tracker', label: 'Tracker', sortable: true, filterable: true },
       { key: 'status', label: 'Status', sortable: true, filterable: true },
       { key: 'country', label: 'Country', sortable: true, filterable: true },
+      ...(availableColumns.hasCapacity
+        ? [
+            {
+              key: 'capacity_mw',
+              label: 'Capacity (MW)',
+              sortable: true,
+              filterable: true,
+              type: /** @type {const} */ ('number'),
+            },
+          ]
+        : []),
+      { key: 'owner', label: 'Owner', sortable: true, filterable: true },
+      { key: 'owner_id', label: 'Owner ID', sortable: true, filterable: true },
     ];
 
-    if (availableColumns.hasCapacity) {
-      baseColumns.push({
-        key: 'capacity_mw',
-        label: 'Capacity (MW)',
-        sortable: true,
-        filterable: true,
-        type: 'number',
-      });
-    }
+    // Find which columns have active filters
+    const activeFilterColumns = new Set();
+    if (filters.trackers?.length) activeFilterColumns.add('tracker');
+    if (filters.statuses?.length) activeFilterColumns.add('status');
+    if (filters.countries?.length) activeFilterColumns.add('country');
+    if (filters.owners?.length) activeFilterColumns.add('owner');
 
-    baseColumns.push(
-      { key: 'owner', label: 'Owner', sortable: true, filterable: true },
-      { key: 'owner_id', label: 'Owner ID', sortable: true, filterable: true }
+    // Reorder: name first, then filtered columns, then the rest
+    const nameCol = allColumns.find((c) => c.key === 'name');
+    const filteredCols = allColumns.filter(
+      (c) => c.key !== 'name' && activeFilterColumns.has(c.key)
     );
+    const otherCols = allColumns.filter((c) => c.key !== 'name' && !activeFilterColumns.has(c.key));
 
-    return baseColumns;
+    return [nameCol, ...filteredCols, ...otherCols];
   });
 
   const tableRows = $derived(
@@ -362,88 +312,26 @@
   // ---------------------------------------------------------------------------
   // Data Loading
   // ---------------------------------------------------------------------------
-  async function ensureOwnershipColumns() {
-    if (!browser || ownershipColumns.length > 0) return;
-
-    try {
-      const { widgetQuery, initWidgetDB } = await import('$lib/widgets/widget-utils');
-      await initWidgetDB();
-
-      const schemaResult = await widgetQuery(`
-        SELECT column_name
-        FROM information_schema.columns
-        WHERE table_name = 'ownership'
-        ORDER BY ordinal_position
-      `);
-
-      ownershipColumns = (schemaResult.data || []).map((r) => r.column_name).filter(Boolean);
-    } catch (err) {
-      console.error('[Compose] Failed to load ownership column list:', err);
-    }
-  }
-
-  async function loadResults() {
+  async function loadResults(resetPage = true) {
     if (!browser) return;
+
+    // Reset to page 1 when filters change
+    if (resetPage) {
+      currentPage = 1;
+    }
 
     loading = true;
     error = null;
     const startTime = Date.now();
+    const offset = (currentPage - 1) * pageSize;
 
     try {
-      const { widgetQuery, initWidgetDB } = await import('$lib/widgets/widget-utils');
-      await initWidgetDB();
-
-      await ensureOwnershipColumns();
       const whereClause = buildSqlWhere(filters, 'o', ownershipColumnNames);
-      console.log('[Compose] Running query with WHERE:', whereClause);
+      const data = await fetchResults(whereClause, ownershipColumnNames, pageSize, offset);
 
-      // Get total count (join with locations for country filtering)
-      const countResult = await widgetQuery(`
-        SELECT COUNT(*) as cnt
-        FROM ownership o
-        LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
-        WHERE ${whereClause}
-      `);
-
-      if (!countResult.success) {
-        throw new Error(countResult.error || 'Count query failed');
-      }
-      totalCount = Number(countResult.data?.[0]?.cnt || 0);
-      console.log('[Compose] Total count:', totalCount);
-
-      // Get paginated results (join with locations for country)
-      const capacitySelect = ownershipColumnNames.capacity
-        ? `CAST(o."${ownershipColumnNames.capacity}" AS DOUBLE) as capacity_mw`
-        : 'NULL::DOUBLE as capacity_mw';
-      const startYearSelect = ownershipColumnNames.startYear
-        ? `CAST(o."${ownershipColumnNames.startYear}" AS INTEGER) as start_year`
-        : 'NULL::INTEGER as start_year';
-
-      const dataResult = await widgetQuery(`
-        SELECT DISTINCT
-          o."GEM unit ID" as asset_id,
-          o."Project" as name,
-          o."Tracker" as tracker,
-          o."Status" as status,
-          l."Country.Area" as country,
-          ${capacitySelect},
-          ${startYearSelect},
-          o."Owner" as owner,
-          o."Owner GEM Entity ID" as owner_id
-        FROM ownership o
-        LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
-        WHERE ${whereClause}
-        ORDER BY capacity_mw DESC NULLS LAST
-        LIMIT 500
-      `);
-
-      if (!dataResult.success) {
-        throw new Error(dataResult.error || 'Data query failed');
-      }
-
-      results = dataResult.data || [];
+      results = data.results;
+      totalCount = data.totalCount;
       queryTime = Date.now() - startTime;
-      console.log('[Compose] Loaded', results.length, 'results in', queryTime, 'ms');
     } catch (err) {
       console.error('[Compose] Query error:', err);
       error = err.message;
@@ -454,166 +342,60 @@
     }
   }
 
+  function goToPage(page) {
+    if (page < 1 || page > totalPages || page === currentPage) return;
+    currentPage = page;
+    loadResults(false); // Don't reset page since we're setting it explicitly
+  }
+
   async function loadReferenceData() {
     if (!browser) return;
     loadingOptions = true;
 
     try {
-      const { widgetQuery, initWidgetDB } = await import('$lib/widgets/widget-utils');
-      await initWidgetDB();
-
-      // Load all reference data in parallel
+      // Load all reference data in parallel using extracted functions
       const [
-        countryResult,
-        ownerCountryResult,
-        ownerResult,
-        trackerResult,
-        statusResult,
-        schemaResult,
-        capacityRangeResult,
-        startYearRangeResult,
-        capacityHistResult,
+        cols,
+        countryData,
+        ownerCountryData,
+        ownerData,
+        trackerData,
+        statusData,
+        capRange,
+        yearRange,
+        capHist,
       ] = await Promise.all([
-        // Asset countries (from locations table)
-        widgetQuery(`
-          SELECT l."Country.Area" as value, COUNT(*) as cnt
-          FROM ownership o
-          LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
-          WHERE l."Country.Area" IS NOT NULL AND l."Country.Area" != ''
-          GROUP BY l."Country.Area"
-          ORDER BY cnt DESC
-        `),
-        // Owner HQ countries
-        widgetQuery(`
-          SELECT DISTINCT "Owner Headquarters Country" as value, COUNT(*) as cnt
-          FROM ownership
-          WHERE "Owner Headquarters Country" IS NOT NULL AND "Owner Headquarters Country" != ''
-          GROUP BY "Owner Headquarters Country"
-          ORDER BY cnt DESC
-        `),
-        // Owners (top 1000 by asset count)
-        widgetQuery(`
-          SELECT DISTINCT "Owner" as value, COUNT(*) as cnt
-          FROM ownership
-          WHERE "Owner" IS NOT NULL AND "Owner" != ''
-          GROUP BY "Owner"
-          ORDER BY cnt DESC
-          LIMIT 1000
-        `),
-        // Trackers
-        widgetQuery(`
-          SELECT DISTINCT "Tracker" as value, COUNT(*) as cnt
-          FROM ownership
-          WHERE "Tracker" IS NOT NULL
-          GROUP BY "Tracker"
-          ORDER BY cnt DESC
-        `),
-        // Statuses
-        widgetQuery(`
-          SELECT DISTINCT "Status" as value, COUNT(*) as cnt
-          FROM ownership
-          WHERE "Status" IS NOT NULL
-          GROUP BY "Status"
-          ORDER BY cnt DESC
-        `),
-        // Schema
-        widgetQuery(`
-          SELECT column_name, data_type
-          FROM information_schema.columns
-          WHERE table_name = 'ownership'
-          ORDER BY ordinal_position
-        `),
-        // Capacity range
-        widgetQuery(`
-          SELECT MIN(CAST("Capacity (MW)" AS DOUBLE)) as min_val,
-                 MAX(CAST("Capacity (MW)" AS DOUBLE)) as max_val
-          FROM ownership
-          WHERE "Capacity (MW)" IS NOT NULL AND "Capacity (MW)" != ''
-        `),
-        // Start year range
-        widgetQuery(`
-          SELECT MIN(CAST("Start Year" AS INTEGER)) as min_val,
-                 MAX(CAST("Start Year" AS INTEGER)) as max_val
-          FROM ownership
-          WHERE "Start Year" IS NOT NULL AND "Start Year" != ''
-            AND CAST("Start Year" AS INTEGER) > 1900
-            AND CAST("Start Year" AS INTEGER) < 2100
-        `),
-        // Capacity histogram (20 buckets)
-        widgetQuery(`
-          WITH capacity_stats AS (
-            SELECT MIN(CAST("Capacity (MW)" AS DOUBLE)) as min_cap,
-                   MAX(CAST("Capacity (MW)" AS DOUBLE)) as max_cap
-            FROM ownership
-            WHERE "Capacity (MW)" IS NOT NULL AND "Capacity (MW)" != ''
-          ),
-          buckets AS (
-            SELECT FLOOR((CAST("Capacity (MW)" AS DOUBLE) - min_cap) / ((max_cap - min_cap) / 20)) as bucket,
-                   COUNT(*) as cnt
-            FROM ownership, capacity_stats
-            WHERE "Capacity (MW)" IS NOT NULL AND "Capacity (MW)" != ''
-            GROUP BY bucket
-          )
-          SELECT bucket, cnt FROM buckets ORDER BY bucket
-        `),
+        fetchOwnershipColumns(),
+        fetchCountries(),
+        fetchOwnerCountries(),
+        fetchOwners(),
+        fetchTrackers(),
+        fetchStatuses(),
+        fetchCapacityRange(),
+        fetchStartYearRange(),
+        fetchCapacityHistogram(),
       ]);
 
-      countries = (countryResult.data || [])
-        .map((r) => ({ value: r.value, count: r.cnt }))
-        .filter((r) => r.value);
-      ownerCountries = (ownerCountryResult.data || [])
-        .map((r) => ({ value: r.value, count: r.cnt }))
-        .filter((r) => r.value);
-      owners = (ownerResult.data || [])
-        .map((r) => ({ value: r.value, count: r.cnt }))
-        .filter((r) => r.value);
-      trackerOptions = (trackerResult.data || []).map((r) => ({ value: r.value, count: r.cnt }));
-      statusOptions = (statusResult.data || []).map((r) => ({ value: r.value, count: r.cnt }));
-      schema = schemaResult.data || [];
-      ownershipColumns = (schemaResult.data || []).map((r) => r.column_name).filter(Boolean);
+      ownershipColumns = cols;
 
-      // Capacity and year ranges
-      if (capacityRangeResult.data?.[0]) {
-        const cap = capacityRangeResult.data[0];
-        capacityRange = {
-          min: Math.floor(Number(cap.min_val) || 0),
-          max: Math.ceil(Number(cap.max_val) || 10000),
-        };
-      }
-      if (startYearRangeResult.data?.[0]) {
-        const yr = startYearRangeResult.data[0];
-        startYearRange = {
-          min: Number(yr.min_val) || 1950,
-          max: Number(yr.max_val) || 2035,
-        };
-      }
-      if (capacityHistResult.data) {
-        // Fill in any missing buckets with 0
-        const bucketData = new Array(20).fill(0);
-        for (const row of capacityHistResult.data) {
-          const idx = Math.min(19, Math.max(0, Number(row.bucket) || 0));
-          bucketData[idx] = Number(row.cnt) || 0;
-        }
-        capacityHistogram = bucketData;
-      }
+      // Store base options (all possible values)
+      baseCountries = countryData;
+      baseOwnerCountries = ownerCountryData;
+      baseOwners = ownerData;
+      baseTrackers = trackerData;
+      baseStatuses = statusData;
 
-      // Store static lists for reference
-      _allCountries = countries.map((c) => c.value);
-      _allOwnerCountries = ownerCountries.map((c) => c.value);
-      _allOwners = owners.map((o) => o.value);
+      // Initialize display options with base data
+      countries = countryData;
+      ownerCountries = ownerCountryData;
+      owners = ownerData;
+      trackerOptions = trackerData;
+      statusOptions = statusData;
 
-      console.log('[Compose] Loaded reference data:', {
-        countries: countries.length,
-        ownerCountries: ownerCountries.length,
-        owners: owners.length,
-        trackers: trackerOptions.length,
-        statuses: statusOptions.length,
-        schema: schema.length,
-        capacityRange,
-        startYearRange,
-      });
+      capacityRange = capRange;
+      startYearRange = yearRange;
+      capacityHistogram = capHist;
 
-      // Load tracker-specific column availability in background
       loadTrackerColumns();
     } catch (err) {
       console.error('[Compose] Failed to load reference data:', err);
@@ -622,55 +404,11 @@
     }
   }
 
-  // Load tracker-specific column availability (which columns have data per tracker)
   async function loadTrackerColumns() {
     if (!browser) return;
-
     try {
-      const { widgetQuery } = await import('$lib/widgets/widget-utils');
-      await ensureOwnershipColumns();
-      const columnNames = ownershipColumnNames;
-
-      // Get all unique trackers
       const trackers = trackerOptions.map((t) => t.value).filter(Boolean);
-
-      // Query column availability for each tracker
-      const columnInfo = {};
-
-      for (const tracker of trackers) {
-        const escapedTracker = tracker.replace(/'/g, "''");
-        const capacitySelect = columnNames.capacity
-          ? `COUNT(CASE WHEN o."${columnNames.capacity}" IS NOT NULL AND o."${columnNames.capacity}" != '' THEN 1 END) as has_capacity`
-          : '0 as has_capacity';
-        const startYearSelect = columnNames.startYear
-          ? `COUNT(CASE WHEN o."${columnNames.startYear}" IS NOT NULL AND o."${columnNames.startYear}" != '' THEN 1 END) as has_start_year`
-          : '0 as has_start_year';
-        const shareSelect = columnNames.share
-          ? `COUNT(CASE WHEN o."${columnNames.share}" IS NOT NULL THEN 1 END) as has_share`
-          : '0 as has_share';
-
-        // Check which columns have non-null data for this tracker
-        const result = await widgetQuery(`
-          SELECT
-            ${capacitySelect},
-            ${startYearSelect},
-            ${shareSelect}
-          FROM ownership o
-          WHERE o."Tracker" = '${escapedTracker}'
-        `);
-
-        if (result.success && result.data?.[0]) {
-          const row = result.data[0];
-          columnInfo[tracker] = {
-            hasCapacity: Number(row.has_capacity) > 0,
-            hasStartYear: Number(row.has_start_year) > 0,
-            hasShare: Number(row.has_share) > 0,
-          };
-        }
-      }
-
-      trackerColumns = columnInfo;
-      console.log('[Compose] Loaded tracker column info:', trackerColumns);
+      trackerColumns = await fetchTrackerColumnInfo(trackers, ownershipColumnNames);
     } catch (err) {
       console.error('[Compose] Failed to load tracker columns:', err);
     }
@@ -690,14 +428,21 @@
 
       // If no filters, use the original counts
       if (!hasActiveFilter) {
-        console.log('[Compose] No active filters, skipping parametric count update');
         return;
       }
 
-      console.log('[Compose] Updating parametric counts...');
-
       // Run parametric count queries in parallel (all need locations join for country filtering)
       // Always update ALL facet counts when any filter is active
+
+      // Deduplicated locations subquery - locations table has duplicate GEM.location.ID values
+      // which causes JOIN multiplication. Use this subquery to get one row per location ID.
+      const LOCATIONS_DEDUP = `(
+        SELECT * FROM locations
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY "GEM.location.ID" ORDER BY "GEM.location.ID") = 1
+      )`;
+
+      const statusWhereClause = buildSqlWhereExcluding(filters, 'statuses', 'o');
+      const trackerWhereClause = buildSqlWhereExcluding(filters, 'trackers', 'o');
 
       const [trackerResult, statusResult, countryResult, ownerCountryResult, ownerResult] =
         await Promise.all([
@@ -705,8 +450,8 @@
           widgetQuery(`
           SELECT o."Tracker" as value, COUNT(*) as cnt
           FROM ownership o
-          LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
-          WHERE ${buildSqlWhereExcluding(filters, 'trackers', 'o')}
+          LEFT JOIN ${LOCATIONS_DEDUP} l ON o."GEM location ID" = l."GEM.location.ID"
+          WHERE ${trackerWhereClause}
           GROUP BY o."Tracker"
           ORDER BY cnt DESC
         `),
@@ -714,8 +459,8 @@
           widgetQuery(`
           SELECT o."Status" as value, COUNT(*) as cnt
           FROM ownership o
-          LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
-          WHERE ${buildSqlWhereExcluding(filters, 'statuses', 'o')}
+          LEFT JOIN ${LOCATIONS_DEDUP} l ON o."GEM location ID" = l."GEM.location.ID"
+          WHERE ${statusWhereClause}
           GROUP BY o."Status"
           ORDER BY cnt DESC
         `),
@@ -723,7 +468,7 @@
           widgetQuery(`
           SELECT l."Country.Area" as value, COUNT(*) as cnt
           FROM ownership o
-          LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
+          LEFT JOIN ${LOCATIONS_DEDUP} l ON o."GEM location ID" = l."GEM.location.ID"
           WHERE ${buildSqlWhereExcluding(filters, 'countries', 'o')}
             AND l."Country.Area" IS NOT NULL AND l."Country.Area" != ''
           GROUP BY l."Country.Area"
@@ -733,7 +478,7 @@
           widgetQuery(`
           SELECT o."Owner Headquarters Country" as value, COUNT(*) as cnt
           FROM ownership o
-          LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
+          LEFT JOIN ${LOCATIONS_DEDUP} l ON o."GEM location ID" = l."GEM.location.ID"
           WHERE ${buildSqlWhereExcluding(filters, 'ownerCountries', 'o')}
             AND o."Owner Headquarters Country" IS NOT NULL AND o."Owner Headquarters Country" != ''
           GROUP BY o."Owner Headquarters Country"
@@ -743,7 +488,7 @@
           widgetQuery(`
           SELECT o."Owner" as value, COUNT(*) as cnt
           FROM ownership o
-          LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
+          LEFT JOIN ${LOCATIONS_DEDUP} l ON o."GEM location ID" = l."GEM.location.ID"
           WHERE ${buildSqlWhereExcluding(filters, 'owners', 'o')}
             AND o."Owner" IS NOT NULL AND o."Owner" != ''
           GROUP BY o."Owner"
@@ -764,32 +509,32 @@
       if (!ownerResult.success)
         console.warn('[Compose] Owner count query failed:', ownerResult.error);
 
-      trackerOptions = (trackerResult.data || []).map((r) => ({ value: r.value, count: r.cnt }));
-      statusOptions = (statusResult.data || []).map((r) => ({ value: r.value, count: r.cnt }));
-      countries = (countryResult.data || [])
-        .map((r) => ({ value: r.value, count: r.cnt }))
-        .filter((r) => r.value);
-      ownerCountries = (ownerCountryResult.data || [])
-        .map((r) => ({ value: r.value, count: r.cnt }))
-        .filter((r) => r.value);
+      // Merge parametric counts into base options (keeps all options, updates counts)
+      trackerOptions = mergeParametricCounts(baseTrackers, trackerResult.data || []);
+      statusOptions = mergeParametricCounts(baseStatuses, statusResult.data || []);
+      countries = mergeParametricCounts(baseCountries, countryResult.data || []);
+      ownerCountries = mergeParametricCounts(baseOwnerCountries, ownerCountryResult.data || []);
       if (ownerResult.success) {
-        owners = (ownerResult.data || [])
-          .map((r) => ({ value: r.value, count: r.cnt }))
-          .filter((r) => r.value);
+        owners = mergeParametricCounts(baseOwners, ownerResult.data || []);
       }
-
-      console.log('[Compose] Parametric counts updated:', {
-        trackers: trackerOptions.length,
-        statuses: statusOptions.length,
-        countries: countries.length,
-        ownerCountries: ownerCountries.length,
-        owners: ownerResult.success ? owners.length : 'failed',
-      });
     } catch (err) {
       console.error('[Compose] Failed to update parametric counts:', err);
     } finally {
       loadingCounts = false;
     }
+  }
+
+  // Merge parametric counts into base options
+  // Keeps all base options, updates counts from parametric results, sets 0 for missing
+  function mergeParametricCounts(baseOptions, parametricResults) {
+    const countMap = new Map();
+    for (const r of parametricResults) {
+      countMap.set(r.value, r.cnt);
+    }
+    return baseOptions.map((opt) => ({
+      value: opt.value,
+      count: countMap.get(opt.value) ?? 0,
+    }));
   }
 
   // Build WHERE clause excluding a specific filter (for parametric counts)
@@ -813,8 +558,42 @@
     filters = emptyFilterState();
     syncFiltersToUrl();
     loadResults();
-    // Reload original counts
-    loadReferenceData();
+    // Reset to base counts (no need to refetch)
+    trackerOptions = baseTrackers;
+    statusOptions = baseStatuses;
+    countries = baseCountries;
+    ownerCountries = baseOwnerCountries;
+    owners = baseOwners;
+  }
+
+  function removeFilter(key, value) {
+    // Handle array filters (remove single value or entire array)
+    if (key === 'trackers') {
+      filters.trackers = value ? filters.trackers.filter((v) => v !== value) : [];
+    } else if (key === 'statuses') {
+      filters.statuses = value ? filters.statuses.filter((v) => v !== value) : [];
+    } else if (key === 'countries') {
+      filters.countries = value ? filters.countries.filter((v) => v !== value) : [];
+    } else if (key === 'ownerCountries') {
+      filters.ownerCountries = value ? filters.ownerCountries.filter((v) => v !== value) : [];
+    } else if (key === 'owners') {
+      filters.owners = value ? filters.owners.filter((v) => v !== value) : [];
+    }
+    // Handle range filters (clear both min and max)
+    else if (key === 'capacity') {
+      filters.capacityMin = null;
+      filters.capacityMax = null;
+    } else if (key === 'share') {
+      filters.shareMin = null;
+      filters.shareMax = null;
+    } else if (key === 'startYear') {
+      filters.startYearMin = null;
+      filters.startYearMax = null;
+    }
+    // Handle search
+    else if (key === 'search') {
+      filters.search = '';
+    }
   }
 
   function applyFilters() {
@@ -890,13 +669,43 @@
 
   function handleRowClick(row) {
     if (!row?.asset_id) return;
+    // Navigate on click
     goto(assetLink(row.asset_id));
+  }
+
+  // Tooltip state
+  let tooltipPos = $state({ x: 0, y: 0 });
+
+  function handleRowHover(row, event) {
+    if (!row?.asset_id) {
+      selectedAsset = null;
+      return;
+    }
+    tooltipPos = { x: event.clientX, y: event.clientY };
+    selectedAsset = {
+      id: row.asset_id,
+      name: row.name || row.asset_id,
+      status: row.status,
+      tracker: row.tracker,
+      country: row.country,
+      capacity: row.capacity_mw,
+      owner: row.owner,
+      startYear: row.start_year,
+    };
+  }
+
+  function handleRowLeave() {
+    selectedAsset = null;
+  }
+
+  function isRowInCart(row) {
+    return row?.asset_id && cartAssetIds.has(row.asset_id);
   }
 
   // ---------------------------------------------------------------------------
   // Lifecycle
   // ---------------------------------------------------------------------------
-  onMount(() => {
+  onMount(async () => {
     // Parse filters from URL
     const urlFilters = decodeFilters($page.url.searchParams);
     filters = urlFilters;
@@ -904,9 +713,20 @@
     // Load presets
     presets = getPresets();
 
-    // Load reference data and results
-    loadReferenceData();
+    // Load reference data first (needed for column names)
+    await loadReferenceData();
+
+    // Load results
     loadResults();
+
+    // Update parametric counts if we have URL filters
+    // (Must happen AFTER loadReferenceData so ownershipColumnNames is populated)
+    if (hasActiveFilters(urlFilters)) {
+      await updateParametricCounts();
+    }
+
+    // Mark initial load as complete - $effect will now handle subsequent changes
+    initialLoadComplete = true;
   });
 
   // Watch for filter changes and update results + counts in real-time.
@@ -927,6 +747,11 @@
       startYearMax: filters.startYearMax,
       search: filters.search,
     });
+
+    // Skip effect during initial load (onMount handles that)
+    if (!initialLoadComplete) {
+      return;
+    }
 
     // Debounce the update
     const timeout = setTimeout(() => {
@@ -962,6 +787,10 @@
       {#if loadingOptions}
         <div class="loading-options">Loading filter options...</div>
       {:else}
+        <div class="filter-logic-hint">
+          Filters combine with <strong>AND</strong> · Multiple selections use <strong>OR</strong>
+        </div>
+
         <!-- Trackers -->
         <FacetedFilter
           options={trackerOptions}
@@ -994,7 +823,7 @@
         <FacetedFilter
           options={ownerCountries}
           bind:selected={filters.ownerCountries}
-          label="Owner HQ Country"
+          label="Owner Home Country"
           initialVisible={5}
           searchThreshold={10}
           loading={loadingCounts}
@@ -1024,19 +853,6 @@
           />
         {/if}
 
-        <!-- Share Range (only show if tracker has share data) -->
-        {#if availableColumns.hasShare}
-          <RangeSlider
-            label="Ownership Share"
-            bind:min={filters.shareMin}
-            bind:max={filters.shareMax}
-            dataMin={0}
-            dataMax={100}
-            step={1}
-            unit="%"
-          />
-        {/if}
-
         <!-- Start Year Range (only show if tracker has start year data) -->
         {#if availableColumns.hasStartYear}
           <RangeSlider
@@ -1054,42 +870,7 @@
           <h3>Text Search</h3>
           <input type="text" placeholder="Project or Owner name..." bind:value={filters.search} />
         </section>
-
-        <!-- Logic -->
-        <section class="filter-section">
-          <h3>Filter Logic</h3>
-          <div class="logic-toggle">
-            <button class:active={filters.logic === 'AND'} onclick={() => (filters.logic = 'AND')}>
-              AND (all match)
-            </button>
-            <button class:active={filters.logic === 'OR'} onclick={() => (filters.logic = 'OR')}>
-              OR (any match)
-            </button>
-          </div>
-        </section>
-
-        <!-- Schema Info -->
-        {#if schema.length > 0}
-          <details class="schema-info">
-            <summary>Available Columns ({schema.length})</summary>
-            <ul>
-              {#each schema as col}
-                <li><code>{col.column_name}</code> <span class="type">{col.data_type}</span></li>
-              {/each}
-            </ul>
-          </details>
-        {/if}
       {/if}
-
-      <!-- Apply Button -->
-      <div class="apply-section">
-        <button class="apply-btn" onclick={applyFilters}>
-          Refresh Results
-          {#if activeFilterCount > 0}
-            <span class="filter-count">{activeFilterCount}</span>
-          {/if}
-        </button>
-      </div>
 
       <!-- Share & Presets -->
       <div class="share-section">
@@ -1160,105 +941,217 @@
         </div>
       </div>
 
+      {#if hasFilters}
+        <FilterBreadcrumbs {filters} onRemove={removeFilter} />
+      {/if}
+
       {#if error}
         <div class="error-message">{error}</div>
       {/if}
 
-      {#if !loading && results.length > 0}
-        <!-- Visualization Dashboard (compact) -->
-        <div class="viz-dashboard">
-          <div class="viz-row">
-            <!-- Status Distribution -->
-            <div class="viz-card">
+      <!-- Visualization Dashboard (compact) - always visible with skeleton states -->
+      <div class="viz-dashboard" class:loading>
+        <div class="viz-row">
+          <!-- Status Distribution -->
+          <div class="viz-card">
+            {#if loading || !initialLoadComplete || results.length === 0}
+              <div class="skeleton-chart">
+                <div class="skeleton-label"></div>
+                <div class="skeleton-bars">
+                  <div class="skeleton-bar" style="width: 80%"></div>
+                  <div class="skeleton-bar" style="width: 60%"></div>
+                  <div class="skeleton-bar" style="width: 40%"></div>
+                </div>
+              </div>
+            {:else}
               <MiniBarChart
                 data={statusDistribution}
                 label="Status"
                 maxItems={4}
-                width={100}
+                width={120}
                 barHeight={10}
                 gap={2}
                 colorMap={statusColors}
                 compact
               />
-            </div>
+            {/if}
+          </div>
 
-            <!-- Tracker Distribution -->
-            <div class="viz-card">
+          <!-- Tracker Distribution -->
+          <div class="viz-card">
+            {#if loading || !initialLoadComplete || results.length === 0}
+              <div class="skeleton-chart">
+                <div class="skeleton-label"></div>
+                <div class="skeleton-bars">
+                  <div class="skeleton-bar" style="width: 90%"></div>
+                  <div class="skeleton-bar" style="width: 50%"></div>
+                  <div class="skeleton-bar" style="width: 30%"></div>
+                </div>
+              </div>
+            {:else}
               <MiniBarChart
                 data={trackerDistribution}
                 label="Tracker"
                 maxItems={4}
-                width={100}
+                width={120}
                 barHeight={10}
                 gap={2}
                 compact
               />
-            </div>
+            {/if}
+          </div>
 
-            <!-- Country Distribution -->
-            <div class="viz-card">
+          <!-- Country Distribution -->
+          <div class="viz-card">
+            {#if loading || !initialLoadComplete || results.length === 0}
+              <div class="skeleton-chart">
+                <div class="skeleton-label"></div>
+                <div class="skeleton-bars">
+                  <div class="skeleton-bar" style="width: 70%"></div>
+                  <div class="skeleton-bar" style="width: 55%"></div>
+                  <div class="skeleton-bar" style="width: 45%"></div>
+                </div>
+              </div>
+            {:else}
               <MiniBarChart
                 data={countryDistribution}
                 label="Countries"
                 maxItems={4}
-                width={100}
+                width={120}
                 barHeight={10}
                 gap={2}
                 compact
               />
-            </div>
-
-            <!-- Capacity Histogram -->
-            {#if capacityData.length > 0}
-              <div class="viz-card">
-                <MiniHistogram
-                  data={capacityData}
-                  label="Capacity"
-                  unit="MW"
-                  bins={8}
-                  width={100}
-                  height={36}
-                  showAxis={false}
-                  compact
-                />
-              </div>
             {/if}
+          </div>
 
-            <!-- Start Year Sparkline -->
-            {#if startYearData.length > 1}
-              <div class="viz-card">
-                <Sparkline
-                  data={startYearData}
-                  label="Start Year"
-                  width={100}
-                  height={32}
-                  compact
-                />
+          <!-- Capacity Histogram -->
+          <div class="viz-card">
+            {#if loading || !initialLoadComplete || results.length === 0}
+              <div class="skeleton-chart">
+                <div class="skeleton-label"></div>
+                <div class="skeleton-histogram">
+                  <div class="skeleton-hist-bar" style="height: 40%"></div>
+                  <div class="skeleton-hist-bar" style="height: 70%"></div>
+                  <div class="skeleton-hist-bar" style="height: 100%"></div>
+                  <div class="skeleton-hist-bar" style="height: 80%"></div>
+                  <div class="skeleton-hist-bar" style="height: 50%"></div>
+                  <div class="skeleton-hist-bar" style="height: 30%"></div>
+                </div>
               </div>
+            {:else if capacityData.length > 0}
+              <MiniHistogram
+                data={capacityData}
+                label="Capacity"
+                unit="MW"
+                bins={8}
+                width={120}
+                height={36}
+                showAxis={false}
+                compact
+              />
+            {/if}
+          </div>
+
+          <!-- Start Year Sparkline -->
+          <div class="viz-card">
+            {#if loading || !initialLoadComplete || results.length === 0}
+              <div class="skeleton-chart">
+                <div class="skeleton-label"></div>
+                <div class="skeleton-sparkline"></div>
+              </div>
+            {:else if startYearData.length > 1}
+              <Sparkline data={startYearData} label="Start Year" width={120} height={32} compact />
             {/if}
           </div>
         </div>
+      </div>
 
+      <!-- Table with skeleton loading state -->
+      {#if loading || !initialLoadComplete}
+        <div class="skeleton-table">
+          <div class="skeleton-table-header">
+            <div class="skeleton-th"></div>
+            <div class="skeleton-th"></div>
+            <div class="skeleton-th"></div>
+            <div class="skeleton-th"></div>
+            <div class="skeleton-th"></div>
+          </div>
+          {#each Array(8) as _, i}
+            <div class="skeleton-table-row" style="animation-delay: {i * 0.05}s">
+              <div class="skeleton-td"></div>
+              <div class="skeleton-td"></div>
+              <div class="skeleton-td"></div>
+              <div class="skeleton-td"></div>
+              <div class="skeleton-td"></div>
+            </div>
+          {/each}
+        </div>
+      {:else if results.length > 0}
         <DataTable
           columns={tableColumns}
           data={tableRows}
-          pageSize={50}
+          {pageSize}
           showGlobalSearch={true}
           showColumnFilters={true}
-          showPagination={true}
+          showPagination={false}
           showExport={true}
           showColumnToggle={true}
           stickyHeader={true}
           striped={true}
           onRowClick={handleRowClick}
+          onRowHover={handleRowHover}
+          onRowLeave={handleRowLeave}
+          highlightRow={isRowInCart}
         />
 
-        {#if results.length >= 500}
-          <p class="limit-notice">
-            Showing first 500 results. Refine your filters to see more specific data.
-          </p>
-        {/if}
-      {:else if !loading}
+        <!-- Server-side pagination -->
+        <div class="pagination">
+          <div class="pagination-info">
+            Showing {((currentPage - 1) * pageSize + 1).toLocaleString()}–{Math.min(
+              currentPage * pageSize,
+              totalCount
+            ).toLocaleString()} of {totalCount.toLocaleString()} results
+          </div>
+          <div class="pagination-controls">
+            <button
+              class="page-btn"
+              disabled={currentPage === 1 || loading}
+              onclick={() => goToPage(1)}
+              title="First page"
+            >
+              ««
+            </button>
+            <button
+              class="page-btn"
+              disabled={currentPage === 1 || loading}
+              onclick={() => goToPage(currentPage - 1)}
+              title="Previous page"
+            >
+              «
+            </button>
+            <span class="page-indicator">
+              Page {currentPage} of {totalPages.toLocaleString()}
+            </span>
+            <button
+              class="page-btn"
+              disabled={currentPage >= totalPages || loading}
+              onclick={() => goToPage(currentPage + 1)}
+              title="Next page"
+            >
+              »
+            </button>
+            <button
+              class="page-btn"
+              disabled={currentPage >= totalPages || loading}
+              onclick={() => goToPage(totalPages)}
+              title="Last page"
+            >
+              »»
+            </button>
+          </div>
+        </div>
+      {:else}
         <div class="no-results">
           {#if hasFilters}
             <p>No assets match your filters.</p>
@@ -1270,22 +1163,59 @@
       {/if}
     </section>
   </div>
+
+  <!-- Asset Tooltip -->
+  {#if selectedAsset}
+    <div
+      class="asset-tooltip"
+      style="left: {Math.min(tooltipPos.x + 12, window.innerWidth - 340)}px; top: {Math.min(
+        tooltipPos.y - 10,
+        window.innerHeight - 200
+      )}px;"
+    >
+      {#if cartAssetIds.has(selectedAsset.id)}
+        <div class="tooltip-header">
+          <span class="in-cart-badge" title="In your investigation">In Cart</span>
+        </div>
+      {/if}
+      <ProjectCard
+        asset={{
+          id: selectedAsset.id,
+          name: selectedAsset.name,
+          status: selectedAsset.status,
+          country: selectedAsset.country,
+          capacity: selectedAsset.capacity,
+          owner: selectedAsset.owner,
+          startYear: selectedAsset.startYear,
+          tracker: selectedAsset.tracker,
+        }}
+        variant="compact"
+        open={true}
+        showLink={false}
+      />
+    </div>
+  {/if}
 </main>
 
 <style>
   main {
     width: 100%;
-    padding: 40px;
+    padding: 0;
     min-height: 100vh;
+    display: flex;
+    flex-direction: column;
   }
 
   header {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    border-bottom: 1px solid #000;
-    padding-bottom: 15px;
-    margin-bottom: 30px;
+    border-bottom: 1px solid #e0e0e0;
+    padding: 8px 16px;
+    background: #fff;
+    position: sticky;
+    top: 0;
+    z-index: 100;
   }
 
   .page-type {
@@ -1295,11 +1225,12 @@
     letter-spacing: 0.5px;
   }
 
-  /* Layout */
+  /* Layout - App-style with fixed sidebar */
   .composer-layout {
     display: grid;
-    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); /* 40% filters, 60% results */
-    gap: 32px;
+    grid-template-columns: 280px 1fr;
+    flex: 1;
+    min-height: 0;
   }
 
   @media (max-width: 900px) {
@@ -1307,9 +1238,9 @@
       grid-template-columns: 1fr;
     }
 
-    /* On mobile, show results first, then filters */
     .filter-panel {
       order: 2;
+      max-height: 50vh;
     }
 
     .results-panel {
@@ -1317,180 +1248,99 @@
     }
   }
 
-  /* Filter Panel */
+  /* Filter Panel - Fixed sidebar */
   .filter-panel {
-    background: #fafafa;
-    padding: 20px;
-    height: fit-content;
+    background: #f8f8f8;
+    padding: 8px 10px;
+    height: calc(100vh - 45px);
+    overflow-y: auto;
+    border-right: 1px solid #e0e0e0;
     position: sticky;
-    top: 20px;
+    top: 45px;
   }
 
   .panel-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
-    padding-bottom: 10px;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
     border-bottom: 1px solid #ddd;
   }
 
   .panel-header h2 {
     margin: 0;
-    font-size: 14px;
+    font-size: 11px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
 
   .clear-btn {
-    font-size: 11px;
-    color: #666;
+    font-size: 10px;
+    color: #444;
     background: none;
     border: none;
     cursor: pointer;
+  }
+
+  .clear-btn:hover {
     text-decoration: underline;
   }
 
+  .filter-logic-hint {
+    font-size: 9px;
+    color: #888;
+    padding: 8px 0 12px 0;
+    border-bottom: 1px solid #eee;
+    margin-bottom: 12px;
+  }
+
+  .filter-logic-hint strong {
+    color: #555;
+    font-weight: 600;
+  }
+
   .filter-section {
-    margin-bottom: 20px;
+    margin-bottom: 10px;
   }
 
   .filter-section h3 {
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: #666;
-    margin: 0 0 8px 0;
+    letter-spacing: 0.4px;
+    color: #555;
+    margin: 0 0 4px 0;
   }
 
   .loading-options {
-    padding: 20px;
+    padding: 16px;
     text-align: center;
     color: #666;
-    font-size: 12px;
-  }
-
-  .schema-info {
-    margin-top: 20px;
-    padding-top: 20px;
-    border-top: 1px solid #ddd;
-  }
-
-  .schema-info summary {
     font-size: 11px;
-    color: #666;
-    cursor: pointer;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  .schema-info ul {
-    margin: 10px 0 0 0;
-    padding: 0;
-    list-style: none;
-    max-height: 200px;
-    overflow-y: auto;
-  }
-
-  .schema-info li {
-    font-size: 11px;
-    padding: 2px 0;
-    border-bottom: 1px solid #f0f0f0;
-  }
-
-  .schema-info code {
-    font-family: monospace;
-    background: #f5f5f5;
-    padding: 1px 4px;
-  }
-
-  .schema-info .type {
-    color: #999;
-    font-size: 10px;
-    margin-left: 8px;
   }
 
   /* Search */
   .filter-section input[type='text'] {
     width: 100%;
-    padding: 8px;
-    font-size: 12px;
-    border: 1px solid #ddd;
-  }
-
-  /* Logic Toggle */
-  .logic-toggle {
-    display: flex;
-    gap: 0;
-  }
-
-  .logic-toggle button {
-    flex: 1;
-    padding: 6px 10px;
+    padding: 6px;
     font-size: 11px;
-    background: white;
     border: 1px solid #ddd;
-    cursor: pointer;
-  }
-
-  .logic-toggle button:first-child {
-    border-right: none;
-  }
-
-  .logic-toggle button.active {
-    background: #000;
-    color: white;
-    border-color: #000;
-  }
-
-  /* Apply Section */
-  .apply-section {
-    margin-top: 20px;
-    padding-top: 20px;
-    border-top: 1px solid #ddd;
-  }
-
-  .apply-btn {
-    width: 100%;
-    padding: 12px;
-    font-size: 13px;
-    font-weight: 600;
-    background: #000;
-    color: white;
-    border: none;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-  }
-
-  .apply-btn:hover {
-    background: #333;
-  }
-
-  .filter-count {
-    background: white;
-    color: #000;
-    padding: 2px 6px;
-    font-size: 11px;
-    font-weight: 600;
   }
 
   /* Share Section */
   .share-section {
     display: flex;
-    gap: 8px;
-    margin-top: 12px;
+    gap: 6px;
+    margin-top: 10px;
   }
 
   .share-btn,
   .preset-btn {
     flex: 1;
-    padding: 8px;
-    font-size: 11px;
+    padding: 6px;
+    font-size: 10px;
     background: white;
     border: 1px solid #ddd;
     cursor: pointer;
@@ -1503,15 +1353,15 @@
 
   /* Presets Panel */
   .presets-panel {
-    margin-top: 12px;
-    padding: 12px;
+    margin-top: 10px;
+    padding: 10px;
     background: white;
     border: 1px solid #ddd;
   }
 
   .presets-panel h4 {
-    margin: 0 0 10px 0;
-    font-size: 11px;
+    margin: 0 0 8px 0;
+    font-size: 10px;
     font-weight: 600;
     text-transform: uppercase;
   }
@@ -1531,15 +1381,15 @@
   .preset-list li {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 6px 0;
+    gap: 4px;
+    padding: 4px 0;
     border-bottom: 1px solid #eee;
   }
 
   .preset-name {
     background: none;
     border: none;
-    font-size: 12px;
+    font-size: 11px;
     cursor: pointer;
     text-align: left;
     flex: 1;
@@ -1552,8 +1402,8 @@
   }
 
   .preset-export {
-    font-size: 11px;
-    padding: 4px 6px;
+    font-size: 10px;
+    padding: 3px 5px;
     border: 1px solid #ddd;
     background: #f7f7f7;
     cursor: pointer;
@@ -1577,19 +1427,19 @@
 
   .save-preset {
     display: flex;
-    gap: 6px;
+    gap: 4px;
   }
 
   .save-preset input {
     flex: 1;
-    padding: 6px;
-    font-size: 11px;
+    padding: 5px;
+    font-size: 10px;
     border: 1px solid #ddd;
   }
 
   .save-preset button {
-    padding: 6px 12px;
-    font-size: 11px;
+    padding: 5px 10px;
+    font-size: 10px;
     background: #000;
     color: white;
     border: none;
@@ -1599,17 +1449,17 @@
   .preset-io {
     display: flex;
     align-items: center;
-    gap: 10px;
-    margin-top: 10px;
+    gap: 8px;
+    margin-top: 8px;
   }
 
   .import-btn {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    font-size: 12px;
+    gap: 4px;
+    font-size: 10px;
     border: 1px solid #ddd;
-    padding: 6px 10px;
+    padding: 5px 8px;
     cursor: pointer;
     background: #fff;
   }
@@ -1619,15 +1469,15 @@
   }
 
   .preset-link {
-    font-size: 12px;
+    font-size: 10px;
     color: #111;
     text-decoration: underline;
   }
 
   .import-error {
-    margin-top: 6px;
+    margin-top: 4px;
     color: #b00020;
-    font-size: 12px;
+    font-size: 11px;
   }
 
   /* Results Panel */
@@ -1635,27 +1485,29 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 6px;
+    padding: 8px 10px;
+    overflow-y: auto;
+    height: calc(100vh - 45px);
   }
 
   .results-header {
     display: flex;
     justify-content: space-between;
-    align-items: baseline;
+    align-items: center;
     margin-bottom: 0;
   }
 
   .results-header h1 {
     margin: 0;
-    font-size: 24px;
-    font-weight: normal;
-    font-family: Georgia, serif;
+    font-size: 14px;
+    font-weight: 600;
   }
 
   .results-meta {
     display: flex;
-    gap: 12px;
-    font-size: 12px;
+    gap: 6px;
+    font-size: 10px;
     color: #666;
   }
 
@@ -1668,33 +1520,74 @@
   }
 
   .error-message {
-    padding: 20px;
+    padding: 8px;
     background: #fee;
     color: #b10000;
-    margin-bottom: 20px;
+    font-size: 11px;
   }
 
-  .limit-notice {
-    text-align: center;
+  /* Pagination */
+  .pagination {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 8px;
+    border-top: 1px solid #eee;
+    background: #fafafa;
     font-size: 11px;
+  }
+
+  .pagination-info {
     color: #666;
-    margin-top: 12px;
+  }
+
+  .pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .page-btn {
+    padding: 4px 8px;
+    font-size: 11px;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  .page-btn:hover:not(:disabled) {
+    background: #f0f0f0;
+    border-color: #999;
+  }
+
+  .page-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .page-indicator {
+    padding: 0 8px;
+    color: #333;
+    font-variant-numeric: tabular-nums;
   }
 
   /* No Results */
   .no-results {
     text-align: center;
-    padding: 60px 20px;
+    padding: 40px 20px;
     color: #666;
   }
 
   .no-results p {
-    margin: 0 0 16px 0;
+    margin: 0 0 12px 0;
+    font-size: 12px;
   }
 
   .no-results button {
-    padding: 8px 16px;
-    font-size: 12px;
+    padding: 6px 12px;
+    font-size: 11px;
     background: #000;
     color: white;
     border: none;
@@ -1703,24 +1596,178 @@
 
   /* Visualization Dashboard - Compact */
   .viz-dashboard {
-    margin-bottom: 12px;
-    padding: 8px;
-    background: #f8f8f8;
+    margin-bottom: 6px;
+    padding: 4px;
+    background: #fafafa;
     border: 1px solid #eee;
+    transition: opacity 0.2s ease;
+  }
+
+  .viz-dashboard.loading {
+    opacity: 0.7;
   }
 
   .viz-row {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-    align-items: flex-end;
+    gap: 4px;
+    align-items: stretch;
   }
 
   .viz-card {
-    flex: 0 0 auto;
+    flex: 1 1 140px;
+    min-width: 140px;
+    max-width: 180px;
     padding: 6px 8px;
     background: white;
     border: 1px solid #eee;
+    transition: opacity 0.15s ease;
+  }
+
+  /* Skeleton loading styles */
+  .skeleton-chart {
+    min-height: 50px;
+  }
+
+  .skeleton-label {
+    width: 50px;
+    height: 8px;
+    background: #e0e0e0;
+    border-radius: 2px;
+    margin-bottom: 8px;
+    animation: skeleton-pulse 1.2s ease-in-out infinite;
+  }
+
+  .skeleton-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .skeleton-bar {
+    height: 10px;
+    background: #e8e8e8;
+    border-radius: 1px;
+    animation: skeleton-pulse 1.2s ease-in-out infinite;
+  }
+
+  .skeleton-bar:nth-child(2) {
+    animation-delay: 0.1s;
+  }
+  .skeleton-bar:nth-child(3) {
+    animation-delay: 0.2s;
+  }
+
+  .skeleton-histogram {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 36px;
+  }
+
+  .skeleton-hist-bar {
+    flex: 1;
+    background: #e8e8e8;
+    border-radius: 1px 1px 0 0;
+    animation: skeleton-pulse 1.2s ease-in-out infinite;
+  }
+
+  .skeleton-hist-bar:nth-child(2) {
+    animation-delay: 0.05s;
+  }
+  .skeleton-hist-bar:nth-child(3) {
+    animation-delay: 0.1s;
+  }
+  .skeleton-hist-bar:nth-child(4) {
+    animation-delay: 0.15s;
+  }
+  .skeleton-hist-bar:nth-child(5) {
+    animation-delay: 0.2s;
+  }
+  .skeleton-hist-bar:nth-child(6) {
+    animation-delay: 0.25s;
+  }
+
+  .skeleton-sparkline {
+    height: 32px;
+    background: linear-gradient(90deg, #e8e8e8 0%, #f0f0f0 50%, #e8e8e8 100%);
+    background-size: 200% 100%;
+    border-radius: 2px;
+    animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  }
+
+  @keyframes skeleton-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+
+  @keyframes skeleton-shimmer {
+    0% {
+      background-position: 200% 0;
+    }
+    100% {
+      background-position: -200% 0;
+    }
+  }
+
+  /* Skeleton Table */
+  .skeleton-table {
+    border: 1px solid #e0e0e0;
+    background: white;
+  }
+
+  .skeleton-table-header {
+    display: flex;
+    gap: 1px;
+    background: #f5f5f5;
+    border-bottom: 1px solid #e0e0e0;
+    padding: 8px 12px;
+  }
+
+  .skeleton-th {
+    flex: 1;
+    height: 12px;
+    background: #ddd;
+    border-radius: 2px;
+    animation: skeleton-pulse 1.2s ease-in-out infinite;
+  }
+
+  .skeleton-th:nth-child(1) {
+    flex: 2;
+  }
+  .skeleton-th:nth-child(2) {
+    flex: 1.5;
+  }
+
+  .skeleton-table-row {
+    display: flex;
+    gap: 1px;
+    padding: 10px 12px;
+    border-bottom: 1px solid #f0f0f0;
+    animation: skeleton-pulse 1.2s ease-in-out infinite;
+  }
+
+  .skeleton-table-row:nth-child(even) {
+    background: #fafafa;
+  }
+
+  .skeleton-td {
+    flex: 1;
+    height: 10px;
+    background: #e8e8e8;
+    border-radius: 2px;
+  }
+
+  .skeleton-td:nth-child(1) {
+    flex: 2;
+  }
+  .skeleton-td:nth-child(2) {
+    flex: 1.5;
   }
 
   @media (max-width: 768px) {
@@ -1729,36 +1776,118 @@
     }
 
     .viz-card {
+      max-width: none;
       width: 100%;
     }
   }
 
-  /* DataTable compact overrides */
+  /* DataTable compact overrides - even tighter */
+  .results-panel :global(.data-table-container) {
+    border: 1px solid #e0e0e0;
+  }
+
   .results-panel :global(.data-table) {
     font-size: 11px;
+    table-layout: fixed;
   }
 
   .results-panel :global(.data-table th),
   .results-panel :global(.data-table td) {
-    padding: 4px 8px;
+    padding: 4px 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+    line-height: 1.3;
   }
 
   .results-panel :global(.data-table th) {
-    font-size: 10px;
+    font-size: 9px;
+  }
+
+  .results-panel :global(.data-table td:first-child) {
+    max-width: 280px;
+    font-weight: 500;
+  }
+
+  .results-panel :global(.data-table tr) {
+    height: 28px;
   }
 
   .results-panel :global(.data-table-controls) {
-    padding: 8px;
-    gap: 8px;
+    padding: 4px 6px;
+    gap: 4px;
   }
 
   .results-panel :global(.data-table-controls input) {
-    padding: 6px 10px;
-    font-size: 11px;
+    padding: 4px 6px;
+    font-size: 10px;
   }
 
   .results-panel :global(.data-table-controls button) {
-    padding: 4px 10px;
-    font-size: 10px;
+    padding: 3px 8px;
+    font-size: 9px;
+  }
+
+  /* Asset Tooltip */
+  .asset-tooltip {
+    position: fixed;
+    z-index: 1000;
+    max-width: 320px;
+    pointer-events: none;
+    animation: tooltipFadeIn 0.15s ease-out;
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-radius: 12px;
+    padding: 4px;
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.12),
+      0 2px 8px rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+  }
+
+  .asset-tooltip :global(.project-card) {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+  }
+
+  .asset-tooltip :global(.project-card summary) {
+    background: transparent;
+  }
+
+  .asset-tooltip :global(.details-section) {
+    background: transparent;
+  }
+
+  @keyframes tooltipFadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .tooltip-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px 4px;
+    gap: 8px;
+  }
+
+  .in-cart-badge {
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    padding: 3px 6px;
+    background: linear-gradient(90deg, #d4a700 0%, #f5d442 100%);
+    color: #000;
+    border-radius: 3px;
   }
 </style>
