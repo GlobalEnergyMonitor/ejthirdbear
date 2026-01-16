@@ -11,7 +11,7 @@ export async function entries() {
     const startTime = Date.now();
 
     const allIds = new Set();
-    const pageSize = 1000;
+    const pageSize = 500; // API limit is 500
     let offset = 0;
     let pageCount = 0;
     let hasMore = true;
