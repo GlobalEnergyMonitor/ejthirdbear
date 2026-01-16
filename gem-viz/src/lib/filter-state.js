@@ -26,6 +26,8 @@
  * const filters = decodeFilters(window.location.search);
  */
 
+import { base } from '$app/paths';
+
 /**
  * @typedef {Object} FilterState
  * @property {string[]} trackers - Selected tracker types
@@ -198,13 +200,14 @@ export function decodeFilters(searchParams) {
 /**
  * Build a shareable URL with filters
  * @param {FilterState} filters
- * @param {string} baseUrl - Base URL (default: current page)
+ * @param {string} baseUrl - Base URL (default: compose page with base path)
  * @returns {string} Full URL with filter params
  */
 export function buildShareUrl(filters, baseUrl = '') {
+  const defaultUrl = `${base}/compose`;
   const encoded = encodeFilters(filters);
-  if (!encoded) return baseUrl || '/compose';
-  return `${baseUrl || '/compose'}?${encoded}`;
+  if (!encoded) return baseUrl || defaultUrl;
+  return `${baseUrl || defaultUrl}?${encoded}`;
 }
 
 /**
