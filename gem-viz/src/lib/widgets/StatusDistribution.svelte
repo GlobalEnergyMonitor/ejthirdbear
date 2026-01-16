@@ -6,7 +6,7 @@
 
   import { onMount } from 'svelte';
   import { widgetQuery } from './widget-utils';
-  import { regroupStatus, colors } from '$lib/ownership-theme';
+  import { regroupStatus, colors } from '$lib/design-tokens';
 
   // Props
   let { tracker = null, title = 'Status Distribution' } = $props();

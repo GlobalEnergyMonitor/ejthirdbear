@@ -22,7 +22,7 @@
   let results = $state([]);
   let queryTime = $state(0);
 
-  const metricLabel = $derived(metric === 'capacity' ? 'Capacity (MW)' : 'Assets');
+  const _metricLabel = $derived(metric === 'capacity' ? 'Capacity (MW)' : 'Assets');
 
   async function loadData() {
     loading = true;

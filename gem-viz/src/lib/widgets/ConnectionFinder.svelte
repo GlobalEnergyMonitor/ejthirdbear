@@ -6,7 +6,7 @@
 
   import { onMount } from 'svelte';
   import { widgetQuery } from './widget-utils';
-  import { assetLink, entityLink } from '$lib/links';
+  import { entityLink } from '$lib/links';
   import AddToCartButton from '$lib/components/AddToCartButton.svelte';
   import { investigationCart } from '$lib/investigationCart';
 
@@ -91,8 +91,7 @@
       type: /** @type {'entity'} */ ('entity'),
       metadata: { assetCount: conn.shared_assets },
     }));
-    const added = investigationCart.addMany(items);
-    // Could show a toast here
+    investigationCart.addMany(items);
   }
 </script>
 
