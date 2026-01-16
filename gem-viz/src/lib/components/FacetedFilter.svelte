@@ -3,7 +3,7 @@
    * FacetedFilter - Shopping-style faceted filter component
    *
    * A checkbox list that feels like Amazon/Home Depot filters:
-   * - Selected items float to top
+   * - Selected items float to top with smooth FLIP animations
    * - Live-updating counts
    * - "See more/less" expansion
    * - Search within facet
@@ -11,6 +11,8 @@
    */
 
   import { formatCompact } from '$lib/format';
+  import { flip } from 'svelte/animate';
+  import { fade } from 'svelte/transition';
 
   /**
    * @type {{
@@ -72,6 +74,20 @@
   const hasSelected = $derived(selected.length > 0);
   const showSearch = $derived(expanded && options.length > searchThreshold);
 
+  // Max count for proportion bars
+  const maxCount = $derived(Math.max(...options.map((o) => o.count || 0), 1));
+
+  // Split visible options into those with results and those without
+  const optionsWithResults = $derived(
+    visibleOptions.filter((o) => (o.count || 0) > 0 || selected.includes(o.value))
+  );
+  const optionsWithoutResults = $derived(
+    visibleOptions.filter((o) => (o.count || 0) === 0 && !selected.includes(o.value))
+  );
+  const showNoResultsDivider = $derived(
+    optionsWithoutResults.length > 0 && optionsWithResults.length > 0
+  );
+
   function toggle(value) {
     const idx = selected.indexOf(value);
     if (idx >= 0) {
@@ -97,7 +113,13 @@
   <div class="facet-header">
     <span class="facet-label">
       {label}
-      <span class="facet-total">({options.length})</span>
+      {#if selected.length > 1}
+        <span class="facet-logic">{selected.length} <span class="logic-badge">OR</span></span>
+      {:else if selected.length === 1}
+        <span class="facet-logic">1 selected</span>
+      {:else}
+        <span class="facet-total">({options.length})</span>
+      {/if}
       {#if loading}
         <span class="facet-loading">...</span>
       {/if}
@@ -117,20 +139,43 @@
   {/if}
 
   <div class="facet-options" class:expanded>
-    {#each visibleOptions as option (option.value)}
+    <!-- Options with results -->
+    {#each optionsWithResults as option (option.value)}
       {@const isSelected = selected.includes(option.value)}
-      {@const isZeroCount = option.count === 0}
-      <label class="facet-option" class:selected={isSelected} class:zero-count={isZeroCount}>
-        <input
-          type="checkbox"
-          checked={isSelected}
-          disabled={isZeroCount && !isSelected}
-          onchange={() => toggle(option.value)}
-        />
+      {@const proportion = ((option.count || 0) / maxCount) * 100}
+      <label
+        class="facet-option"
+        class:selected={isSelected}
+        style="--bar-width: {proportion}%"
+        animate:flip={{ duration: 200, easing: (t) => t * (2 - t) }}
+        in:fade={{ duration: 150 }}
+      >
+        <span class="facet-bar"></span>
+        <input type="checkbox" checked={isSelected} onchange={() => toggle(option.value)} />
         <span class="facet-option-label">{option.value}</span>
         {#if option.count !== undefined}
           <span class="facet-count">({formatCompact(option.count)})</span>
         {/if}
+      </label>
+    {/each}
+
+    <!-- Divider for zero-count options -->
+    {#if showNoResultsDivider}
+      <div class="no-results-divider">No results match:</div>
+    {/if}
+
+    <!-- Options without results -->
+    {#each optionsWithoutResults as option (option.value)}
+      <label
+        class="facet-option zero-count"
+        style="--bar-width: 0%"
+        animate:flip={{ duration: 200, easing: (t) => t * (2 - t) }}
+        in:fade={{ duration: 150 }}
+      >
+        <span class="facet-bar"></span>
+        <input type="checkbox" checked={false} disabled onchange={() => toggle(option.value)} />
+        <span class="facet-option-label">{option.value}</span>
+        <span class="facet-count">(0)</span>
       </label>
     {/each}
   </div>
@@ -148,12 +193,12 @@
 
 <style>
   .facet {
-    margin-bottom: 20px;
+    margin-bottom: 12px;
     transition: opacity 0.15s;
   }
 
   .facet.loading {
-    opacity: 0.7;
+    opacity: 0.6;
   }
 
   .facet-loading {
@@ -163,23 +208,28 @@
   }
 
   @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.4;
+    }
   }
 
   .facet-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 8px;
+    margin-bottom: 4px;
   }
 
   .facet-label {
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: #666;
+    letter-spacing: 0.4px;
+    color: #555;
   }
 
   .facet-total {
@@ -187,10 +237,29 @@
     color: #999;
   }
 
-  .facet-clear {
-    font-size: 11px;
+  .facet-logic {
     font-weight: 400;
-    color: #0066c0;
+    color: #444;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  .logic-badge {
+    display: inline-block;
+    font-size: 8px;
+    font-weight: 600;
+    padding: 1px 4px;
+    background: #e0e0e0;
+    border-radius: 2px;
+    color: #555;
+    vertical-align: middle;
+    margin-left: 2px;
+  }
+
+  .facet-clear {
+    font-size: 10px;
+    font-weight: 400;
+    color: #444;
     background: none;
     border: none;
     cursor: pointer;
@@ -217,27 +286,57 @@
   .facet-options {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 0;
   }
 
   .facet-options.expanded {
-    max-height: 240px;
+    max-height: 300px;
     overflow-y: auto;
+    border: 1px solid #e5e5e5;
+    border-radius: 4px;
+    padding: 4px 0;
+    margin-top: 4px;
   }
 
   .facet-option {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 4px 2px;
+    gap: 8px;
+    padding: 6px 10px;
     font-size: 12px;
     cursor: pointer;
+    border-radius: 0;
+    transition:
+      background 0.1s,
+      opacity 0.2s;
+    position: relative;
+    overflow: hidden;
+    min-height: 28px;
+  }
+
+  /* Proportion bar - subtle background fill (monochrome) */
+  .facet-bar {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: var(--bar-width, 0%);
+    background: linear-gradient(90deg, rgba(0, 0, 0, 0.06) 0%, rgba(0, 0, 0, 0.02) 100%);
+    transition: width 0.3s ease-out;
+    pointer-events: none;
     border-radius: 2px;
-    transition: background 0.1s;
+  }
+
+  .facet-option.selected .facet-bar {
+    background: linear-gradient(90deg, rgba(0, 0, 0, 0.12) 0%, rgba(0, 0, 0, 0.04) 100%);
   }
 
   .facet-option:hover {
     background: #f5f5f5;
+  }
+
+  .facet-option:hover .facet-bar {
+    background: linear-gradient(90deg, rgba(0, 0, 0, 0.08) 0%, rgba(0, 0, 0, 0.03) 100%);
   }
 
   .facet-option.selected {
@@ -245,7 +344,7 @@
   }
 
   .facet-option.zero-count {
-    opacity: 0.4;
+    opacity: 0.5;
     cursor: default;
   }
 
@@ -253,16 +352,34 @@
     background: transparent;
   }
 
+  .no-results-divider {
+    font-size: 9px;
+    color: #999;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    padding: 8px 10px 4px 10px;
+    border-top: 1px solid #eee;
+    margin-top: 4px;
+    background: #fafafa;
+  }
+
   .facet-option input[type='checkbox'] {
+    position: relative;
     width: 14px;
     height: 14px;
+    min-width: 14px;
     margin: 0;
     cursor: pointer;
     accent-color: #000;
+    border: 1px solid #999;
+    border-radius: 2px;
+    appearance: auto;
+    flex-shrink: 0;
   }
 
   .facet-option.zero-count input[type='checkbox'] {
     cursor: default;
+    opacity: 0.5;
   }
 
   .facet-option-label {
@@ -270,12 +387,21 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    line-height: 1.3;
   }
 
   .facet-count {
-    color: #888;
+    color: #666;
     font-size: 11px;
     flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+    min-width: 40px;
+    text-align: right;
+  }
+
+  /* Subtle highlight when count changes (applied via loading state) */
+  .facet.loading .facet-count {
+    color: #bbb;
   }
 
   .facet-toggle {
@@ -284,7 +410,7 @@
     gap: 4px;
     padding: 8px 2px;
     font-size: 11px;
-    color: #0066c0;
+    color: #444;
     background: none;
     border: none;
     cursor: pointer;
