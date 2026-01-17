@@ -22,6 +22,7 @@
   import RangeSlider from '$lib/components/RangeSlider.svelte';
   import FilterBreadcrumbs from '$lib/components/FilterBreadcrumbs.svelte';
   import ProjectCard from '$lib/components/ProjectCard.svelte';
+  import { statusColorsGranular } from '$lib/design-tokens';
 
   import {
     emptyFilterState,
@@ -33,6 +34,7 @@
     getPresets,
     savePreset,
     deletePreset,
+    saveAssetClass,
   } from '$lib/filter-state';
   import { investigationCart } from '$lib/investigationCart';
   import { buildExportPreset, importPreset } from '$lib/presets';
@@ -70,6 +72,11 @@
   // Asset preview panel
   let selectedAsset = $state(null);
 
+  // Row selection for bulk cart actions
+  let selectedRows = $state([]);
+  let allMatchingSelected = $state(false); // Gmail-style "select all X matching"
+  let allMatchingIds = $state([]); // IDs of all matching assets (when selecting all)
+
   // Base reference data (all possible options - never filtered)
   let baseCountries = $state([]);
   let baseOwnerCountries = $state([]);
@@ -95,6 +102,12 @@
   let importError = $state('');
   let copied = $state(false);
   let queryTime = $state(0);
+
+  // Asset class save modal
+  let showSaveAssetClass = $state(false);
+  let newClassName = $state('');
+  let newClassDescription = $state('');
+  let assetClassSaved = $state(false);
 
   // Data ranges for numeric filters
   let capacityRange = $state({ min: 0, max: 10000 });
@@ -289,15 +302,7 @@
   });
 
   // Status color map
-  const statusColors = {
-    operating: '#22c55e',
-    proposed: '#3b82f6',
-    construction: '#f59e0b',
-    retired: '#6b7280',
-    cancelled: '#ef4444',
-    shelved: '#8b5cf6',
-    mothballed: '#64748b',
-  };
+  const statusColors = statusColorsGranular;
 
   // ---------------------------------------------------------------------------
   // URL Sync
@@ -334,7 +339,6 @@
       totalCount = data.totalCount;
       queryTime = Date.now() - startTime;
     } catch (err) {
-      console.error('[Compose] Query error:', err);
       error = err.message;
       results = [];
       totalCount = 0;
@@ -398,8 +402,8 @@
       capacityHistogram = capHist;
 
       loadTrackerColumns();
-    } catch (err) {
-      console.error('[Compose] Failed to load reference data:', err);
+    } catch {
+      // Silently handle reference data load failure - UI will show empty options
     } finally {
       loadingOptions = false;
     }
@@ -410,8 +414,8 @@
     try {
       const trackers = trackerOptions.map((t) => t.value).filter(Boolean);
       trackerColumns = await fetchTrackerColumnInfo(trackers, ownershipColumnNames);
-    } catch (err) {
-      console.error('[Compose] Failed to load tracker columns:', err);
+    } catch {
+      // Silently handle - column info is optional
     }
   }
 
@@ -498,19 +502,8 @@
         `),
         ]);
 
-      // Check for query errors
-      if (!trackerResult.success)
-        console.warn('[Compose] Tracker count query failed:', trackerResult.error);
-      if (!statusResult.success)
-        console.warn('[Compose] Status count query failed:', statusResult.error);
-      if (!countryResult.success)
-        console.warn('[Compose] Country count query failed:', countryResult.error);
-      if (!ownerCountryResult.success)
-        console.warn('[Compose] Owner country count query failed:', ownerCountryResult.error);
-      if (!ownerResult.success)
-        console.warn('[Compose] Owner count query failed:', ownerResult.error);
-
       // Merge parametric counts into base options (keeps all options, updates counts)
+      // Query failures are handled gracefully - missing data shows as 0 counts
       trackerOptions = mergeParametricCounts(baseTrackers, trackerResult.data || []);
       statusOptions = mergeParametricCounts(baseStatuses, statusResult.data || []);
       countries = mergeParametricCounts(baseCountries, countryResult.data || []);
@@ -518,8 +511,8 @@
       if (ownerResult.success) {
         owners = mergeParametricCounts(baseOwners, ownerResult.data || []);
       }
-    } catch (err) {
-      console.error('[Compose] Failed to update parametric counts:', err);
+    } catch {
+      // Silently handle - counts will remain unchanged
     } finally {
       loadingCounts = false;
     }
@@ -610,9 +603,8 @@
       await navigator.clipboard.writeText(fullUrl);
       copied = true;
       setTimeout(() => (copied = false), 2000);
-    } catch (err) {
-      console.error('[Compose] Failed to copy to clipboard:', err);
-      // Fallback: show URL in prompt
+    } catch {
+      // Fallback: show URL in prompt if clipboard fails
       window.prompt('Copy this URL:', window.location.origin + shareUrl);
     }
   }
@@ -623,6 +615,23 @@
     presets = getPresets();
     newPresetName = '';
     showPresets = false;
+  }
+
+  function handleSaveAssetClass() {
+    if (!newClassName.trim()) return;
+    saveAssetClass(
+      newClassName.trim(),
+      newClassDescription.trim(),
+      { ...filters },
+      [] // tags - could add UI for this later
+    );
+    assetClassSaved = true;
+    setTimeout(() => {
+      showSaveAssetClass = false;
+      newClassName = '';
+      newClassDescription = '';
+      assetClassSaved = false;
+    }, 1500);
   }
 
   function handleLoadPreset(preset) {
@@ -660,9 +669,8 @@
       const data = JSON.parse(text);
       importPreset(data);
       presets = getPresets();
-    } catch (err) {
+    } catch {
       importError = 'Failed to import preset JSON.';
-      console.error('[Compose] Failed to import preset:', err);
     } finally {
       target.value = '';
     }
@@ -703,6 +711,238 @@
     return row?.asset_id && cartAssetIds.has(row.asset_id);
   }
 
+  // Add selected rows to investigation cart
+  function addSelectedToCart() {
+    if (selectedRows.length === 0) return;
+    for (const row of selectedRows) {
+      if (row.asset_id && !cartAssetIds.has(row.asset_id)) {
+        investigationCart.add({
+          id: row.asset_id,
+          name: row.name || row.asset_id,
+          type: 'asset',
+        });
+      }
+    }
+    selectedRows = [];
+  }
+
+  // Remove selected rows from investigation cart
+  function removeSelectedFromCart() {
+    if (selectedRows.length === 0) return;
+    for (const row of selectedRows) {
+      if (row.asset_id && cartAssetIds.has(row.asset_id)) {
+        investigationCart.remove(row.asset_id);
+      }
+    }
+    selectedRows = [];
+  }
+
+  // Add all results on current page to cart
+  function addPageToCart() {
+    for (const row of results) {
+      if (row.asset_id && !cartAssetIds.has(row.asset_id)) {
+        investigationCart.add({
+          id: row.asset_id,
+          name: row.name || row.asset_id,
+          type: 'asset',
+        });
+      }
+    }
+  }
+
+  // Remove all results on current page from cart
+  function removePageFromCart() {
+    for (const row of results) {
+      if (row.asset_id && cartAssetIds.has(row.asset_id)) {
+        investigationCart.remove(row.asset_id);
+      }
+    }
+  }
+
+  // Count how many selected/page items are in cart
+  const selectedInCart = $derived(
+    selectedRows.filter((r) => r.asset_id && cartAssetIds.has(r.asset_id)).length
+  );
+  const selectedNotInCart = $derived(selectedRows.length - selectedInCart);
+  const pageInCart = $derived(
+    results.filter((r) => r.asset_id && cartAssetIds.has(r.asset_id)).length
+  );
+
+  // Check if all rows on page are selected (to show "select all matching" option)
+  const allPageSelected = $derived(results.length > 0 && selectedRows.length === results.length);
+
+  // Fetch all matching asset IDs for "select all matching" feature
+  async function fetchAllMatchingIds() {
+    const { widgetQuery } = await import('$lib/widgets/widget-utils');
+    const whereClause = buildSqlWhere(filters, 'o', ownershipColumnNames);
+
+    // Deduplicated locations subquery
+    const LOCATIONS_DEDUP = `(
+      SELECT * FROM locations
+      QUALIFY ROW_NUMBER() OVER (PARTITION BY "GEM.location.ID" ORDER BY "GEM.location.ID") = 1
+    )`;
+
+    const result = await widgetQuery(`
+      SELECT DISTINCT o."GEM unit ID" as asset_id, o."Project" as name
+      FROM ownership o
+      LEFT JOIN ${LOCATIONS_DEDUP} l ON o."GEM location ID" = l."GEM.location.ID"
+      WHERE ${whereClause}
+      LIMIT 10000
+    `);
+
+    if (result.success && result.data) {
+      return result.data;
+    }
+    return [];
+  }
+
+  // Select all matching (Gmail-style)
+  async function selectAllMatching() {
+    loading = true;
+    const allMatching = await fetchAllMatchingIds();
+    allMatchingIds = allMatching;
+    allMatchingSelected = true;
+    loading = false;
+  }
+
+  // Clear "select all matching" mode
+  function clearAllMatchingSelection() {
+    allMatchingSelected = false;
+    allMatchingIds = [];
+    selectedRows = [];
+  }
+
+  // Add all matching to cart
+  async function addAllMatchingToCart() {
+    if (!allMatchingSelected || allMatchingIds.length === 0) return;
+    for (const item of allMatchingIds) {
+      if (item.asset_id && !cartAssetIds.has(item.asset_id)) {
+        investigationCart.add({
+          id: item.asset_id,
+          name: item.name || item.asset_id,
+          type: 'asset',
+        });
+      }
+    }
+    clearAllMatchingSelection();
+  }
+
+  // Remove all matching from cart
+  async function removeAllMatchingFromCart() {
+    if (!allMatchingSelected || allMatchingIds.length === 0) return;
+    for (const item of allMatchingIds) {
+      if (item.asset_id && cartAssetIds.has(item.asset_id)) {
+        investigationCart.remove(item.asset_id);
+      }
+    }
+    clearAllMatchingSelection();
+  }
+
+  // Count matching items in cart (when all matching selected)
+  const allMatchingInCart = $derived(
+    allMatchingSelected
+      ? allMatchingIds.filter((r) => r.asset_id && cartAssetIds.has(r.asset_id)).length
+      : 0
+  );
+  const allMatchingNotInCart = $derived(
+    allMatchingSelected ? allMatchingIds.length - allMatchingInCart : 0
+  );
+
+  // ---------------------------------------------------------------------------
+  // Export Functions (fetch ALL matching, not just current page)
+  // ---------------------------------------------------------------------------
+  let exporting = $state(false);
+
+  async function fetchAllForExport() {
+    const { widgetQuery } = await import('$lib/widgets/widget-utils');
+    const whereClause = buildSqlWhere(filters, 'o', ownershipColumnNames);
+
+    const LOCATIONS_DEDUP = `(
+      SELECT * FROM locations
+      QUALIFY ROW_NUMBER() OVER (PARTITION BY "GEM.location.ID" ORDER BY "GEM.location.ID") = 1
+    )`;
+
+    const result = await widgetQuery(`
+      SELECT DISTINCT
+        o."GEM unit ID" as asset_id,
+        o."Project" as name,
+        o."Tracker" as tracker,
+        o."Status" as status,
+        l."Country.Area" as country,
+        TRY_CAST(o."Capacity (MW)" AS DOUBLE) as capacity_mw,
+        o."Owner" as owner,
+        o."Owner GEM Entity ID" as owner_id
+      FROM ownership o
+      LEFT JOIN ${LOCATIONS_DEDUP} l ON o."GEM location ID" = l."GEM.location.ID"
+      WHERE ${whereClause}
+      ORDER BY o."Project"
+      LIMIT 50000
+    `);
+
+    return result.success ? result.data : [];
+  }
+
+  async function exportCSV() {
+    exporting = true;
+    try {
+      const data = await fetchAllForExport();
+      if (data.length === 0) return;
+
+      const headers = [
+        'asset_id',
+        'name',
+        'tracker',
+        'status',
+        'country',
+        'capacity_mw',
+        'owner',
+        'owner_id',
+      ];
+      const csvRows = [headers.join(',')];
+
+      for (const row of data) {
+        const values = headers.map((h) => {
+          const val = row[h];
+          if (val == null) return '';
+          const str = String(val);
+          return str.includes(',') || str.includes('"') || str.includes('\n')
+            ? `"${str.replace(/"/g, '""')}"`
+            : str;
+        });
+        csvRows.push(values.join(','));
+      }
+
+      downloadFile(csvRows.join('\n'), `gem-export-${Date.now()}.csv`, 'text/csv');
+    } finally {
+      exporting = false;
+    }
+  }
+
+  async function exportJSON() {
+    exporting = true;
+    try {
+      const data = await fetchAllForExport();
+      if (data.length === 0) return;
+      downloadFile(
+        JSON.stringify(data, null, 2),
+        `gem-export-${Date.now()}.json`,
+        'application/json'
+      );
+    } finally {
+      exporting = false;
+    }
+  }
+
+  function downloadFile(content, filename, type) {
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   // ---------------------------------------------------------------------------
   // Lifecycle
   // ---------------------------------------------------------------------------
@@ -734,12 +974,18 @@
   // Using a debounce to avoid too many queries.
   $effect(() => {
     // Track filter changes by serializing filter state (triggers effect on any change)
+    // IMPORTANT: Include both OR and AND filter arrays for proper reactivity
     const _filterKey = JSON.stringify({
       trackers: filters.trackers,
+      trackersAnd: filters.trackersAnd,
       statuses: filters.statuses,
+      statusesAnd: filters.statusesAnd,
       countries: filters.countries,
+      countriesAnd: filters.countriesAnd,
       ownerCountries: filters.ownerCountries,
+      ownerCountriesAnd: filters.ownerCountriesAnd,
       owners: filters.owners,
+      ownersAnd: filters.ownersAnd,
       capacityMin: filters.capacityMin,
       capacityMax: filters.capacityMax,
       shareMin: filters.shareMin,
@@ -785,17 +1031,25 @@
         {/if}
       </div>
 
+      <a href="{base}/asset-classes" class="asset-classes-link">
+        Browse pre-defined asset classes →
+      </a>
+
       {#if loadingOptions}
         <div class="loading-options">Loading filter options...</div>
       {:else}
         <div class="filter-logic-hint">
-          Filters combine with <strong>AND</strong> · Multiple selections use <strong>OR</strong>
+          Within each filter: <strong>any</strong> match
+          <span class="hint-example">(Coal OR Gas)</span><br />
+          Across filters: <strong>all</strong> must match
+          <span class="hint-example">(Coal plants IN China)</span>
         </div>
 
         <!-- Trackers -->
         <FacetedFilter
           options={trackerOptions}
           bind:selected={filters.trackers}
+          bind:selectedAnd={filters.trackersAnd}
           label="Tracker Type"
           initialVisible={10}
           loading={loadingCounts}
@@ -805,6 +1059,7 @@
         <FacetedFilter
           options={statusOptions}
           bind:selected={filters.statuses}
+          bind:selectedAnd={filters.statusesAnd}
           label="Status"
           initialVisible={10}
           loading={loadingCounts}
@@ -814,6 +1069,7 @@
         <FacetedFilter
           options={countries}
           bind:selected={filters.countries}
+          bind:selectedAnd={filters.countriesAnd}
           label="Asset Country"
           initialVisible={5}
           searchThreshold={10}
@@ -824,6 +1080,7 @@
         <FacetedFilter
           options={ownerCountries}
           bind:selected={filters.ownerCountries}
+          bind:selectedAnd={filters.ownerCountriesAnd}
           label="Owner Home Country"
           initialVisible={5}
           searchThreshold={10}
@@ -834,6 +1091,7 @@
         <FacetedFilter
           options={owners}
           bind:selected={filters.owners}
+          bind:selectedAnd={filters.ownersAnd}
           label="Owner"
           initialVisible={5}
           searchThreshold={10}
@@ -881,7 +1139,36 @@
         <button class="preset-btn" onclick={() => (showPresets = !showPresets)}>
           {showPresets ? 'Hide Presets' : 'Presets'}
         </button>
+        {#if hasFilters}
+          <button class="save-class-btn" onclick={() => (showSaveAssetClass = !showSaveAssetClass)}>
+            Save as Asset Class
+          </button>
+        {/if}
       </div>
+
+      {#if showSaveAssetClass}
+        <div class="save-class-panel">
+          {#if assetClassSaved}
+            <p class="save-success">
+              Saved! View in <a href="{base}/asset-classes">Asset Classes</a>
+            </p>
+          {:else}
+            <input
+              type="text"
+              placeholder="Class name (e.g., South Asian Coal)"
+              bind:value={newClassName}
+            />
+            <input
+              type="text"
+              placeholder="Description (optional)"
+              bind:value={newClassDescription}
+            />
+            <button onclick={handleSaveAssetClass} disabled={!newClassName.trim()}>
+              Save Asset Class
+            </button>
+          {/if}
+        </div>
+      {/if}
 
       {#if showPresets}
         <div class="presets-panel">
@@ -932,6 +1219,49 @@
     <section class="results-panel">
       <div class="results-header">
         <h1>Filtered Assets</h1>
+        <div class="results-actions">
+          {#if allMatchingSelected}
+            <!-- All matching selected mode -->
+            <span class="selection-count">{allMatchingIds.length.toLocaleString()} selected</span>
+            {#if allMatchingNotInCart > 0}
+              <button class="cart-btn add" onclick={addAllMatchingToCart}>
+                Add all to investigation
+              </button>
+            {/if}
+            {#if allMatchingInCart > 0}
+              <button class="cart-btn remove" onclick={removeAllMatchingFromCart}>
+                Remove {allMatchingInCart.toLocaleString()} from investigation
+              </button>
+            {/if}
+            <button class="cart-btn text" onclick={clearAllMatchingSelection}> Cancel </button>
+          {:else if selectedRows.length > 0}
+            <span class="selection-count">{selectedRows.length} selected</span>
+            {#if selectedNotInCart > 0}
+              <button class="cart-btn add" onclick={addSelectedToCart}>
+                Add to investigation
+              </button>
+            {/if}
+            {#if selectedInCart > 0}
+              <button class="cart-btn remove" onclick={removeSelectedFromCart}>
+                Remove from investigation
+              </button>
+            {/if}
+          {:else if results.length > 0 && !loading}
+            <span class="selection-hint">Select rows or:</span>
+            <button
+              class="cart-btn secondary"
+              onclick={addPageToCart}
+              disabled={pageInCart === results.length}
+            >
+              Add this page ({results.length - pageInCart} new)
+            </button>
+            {#if pageInCart > 0}
+              <button class="cart-btn text remove" onclick={removePageFromCart}>
+                Remove {pageInCart} in investigation
+              </button>
+            {/if}
+          {/if}
+        </div>
         <div class="results-meta">
           {#if loading}
             <span class="loading-text">Loading...</span>
@@ -939,6 +1269,15 @@
             <span class="result-count">{formatCount(totalCount)} results</span>
             <span class="query-time">{queryTime}ms</span>
           {/if}
+        </div>
+        <div class="export-actions">
+          <span class="export-label">Export all {formatCount(totalCount)}:</span>
+          <button class="export-btn" onclick={exportCSV} disabled={exporting || totalCount === 0}>
+            {exporting ? 'Exporting...' : 'CSV'}
+          </button>
+          <button class="export-btn" onclick={exportJSON} disabled={exporting || totalCount === 0}>
+            JSON
+          </button>
         </div>
       </div>
 
@@ -1089,6 +1428,23 @@
           {/each}
         </div>
       {:else if results.length > 0}
+        <!-- Gmail-style "select all matching" banner -->
+        {#if allPageSelected && !allMatchingSelected && totalCount > results.length}
+          <div class="select-all-banner">
+            All {results.length} assets on this page selected.
+            <button onclick={selectAllMatching}>
+              Select all {totalCount.toLocaleString()} that match your filters?
+            </button>
+          </div>
+        {/if}
+        {#if allMatchingSelected}
+          <div class="select-all-banner selected">
+            <strong>{allMatchingIds.length.toLocaleString()} assets</strong> matching your filters
+            are selected.
+            <button onclick={clearAllMatchingSelection}>Clear</button>
+          </div>
+        {/if}
+
         <DataTable
           columns={tableColumns}
           data={tableRows}
@@ -1096,8 +1452,10 @@
           showGlobalSearch={true}
           showColumnFilters={true}
           showPagination={false}
-          showExport={true}
+          showExport={false}
           showColumnToggle={true}
+          showSelection={true}
+          bind:selectedRows
           stickyHeader={true}
           striped={true}
           onRowClick={handleRowClick}
@@ -1211,9 +1569,7 @@
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    border-bottom: 1px solid #e0e0e0;
     padding: 8px 16px;
-    background: #fff;
     position: sticky;
     top: 0;
     z-index: 100;
@@ -1234,28 +1590,28 @@
     min-height: 0;
   }
 
-  @media (max-width: 900px) {
+  @media (max-width: 768px) {
     .composer-layout {
       grid-template-columns: 1fr;
     }
 
     .filter-panel {
-      order: 2;
-      max-height: 50vh;
+      order: 1;
+      max-height: none;
+      border-right: none;
+      border-bottom: 1px solid #e0e0e0;
     }
 
     .results-panel {
-      order: 1;
+      order: 2;
     }
   }
 
   /* Filter Panel - Fixed sidebar */
   .filter-panel {
-    background: #f8f8f8;
     padding: 8px 10px;
     height: calc(100vh - 45px);
     overflow-y: auto;
-    border-right: 1px solid #e0e0e0;
     position: sticky;
     top: 45px;
   }
@@ -1266,7 +1622,6 @@
     align-items: center;
     margin-bottom: 8px;
     padding-bottom: 6px;
-    border-bottom: 1px solid #ddd;
   }
 
   .panel-header h2 {
@@ -1289,16 +1644,40 @@
     text-decoration: underline;
   }
 
-  .filter-logic-hint {
-    font-size: 9px;
-    color: #888;
-    padding: 8px 0 12px 0;
-    border-bottom: 1px solid #eee;
+  .asset-classes-link {
+    display: block;
+    font-size: 11px;
+    color: var(--color-gray-600);
+    text-decoration: none;
+    padding: 8px 10px;
     margin-bottom: 12px;
+    background: var(--color-gray-50);
+    border: 1px dashed var(--color-border);
+  }
+
+  .asset-classes-link:hover {
+    background: var(--color-gray-100);
+    border-style: solid;
+  }
+
+  .filter-logic-hint {
+    font-size: 10px;
+    color: #666;
+    padding: 8px 10px;
+    margin-bottom: 12px;
+    background: #f8f8f8;
+    border: 1px solid #e5e5e5;
+    border-radius: 4px;
+    line-height: 1.5;
+  }
+
+  .hint-example {
+    color: #999;
+    font-style: italic;
   }
 
   .filter-logic-hint strong {
-    color: #555;
+    color: #333;
     font-weight: 600;
   }
 
@@ -1342,22 +1721,78 @@
     flex: 1;
     padding: 6px;
     font-size: 10px;
-    background: white;
-    border: 1px solid #ddd;
+    background: transparent;
+    border: 1px solid transparent;
     cursor: pointer;
   }
 
   .share-btn:hover,
   .preset-btn:hover {
-    border-color: #000;
+    text-decoration: underline;
+  }
+
+  .save-class-btn {
+    flex: 1;
+    padding: 6px;
+    font-size: 10px;
+    background: var(--color-black);
+    color: white;
+    border: none;
+    cursor: pointer;
+  }
+
+  .save-class-btn:hover {
+    opacity: 0.85;
+  }
+
+  /* Save Asset Class Panel */
+  .save-class-panel {
+    margin-top: 10px;
+    padding: 12px;
+    background: var(--color-gray-50);
+    border: 1px solid var(--color-border);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .save-class-panel input {
+    padding: 8px;
+    font-size: 12px;
+    border: 1px solid var(--color-border);
+  }
+
+  .save-class-panel button {
+    padding: 8px 12px;
+    font-size: 11px;
+    background: var(--color-black);
+    color: white;
+    border: none;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .save-class-panel button:disabled {
+    background: var(--color-gray-300);
+    cursor: not-allowed;
+  }
+
+  .save-success {
+    font-size: 12px;
+    color: #28a745;
+    margin: 0;
+  }
+
+  .save-success a {
+    color: inherit;
+    font-weight: 600;
   }
 
   /* Presets Panel */
   .presets-panel {
     margin-top: 10px;
     padding: 10px;
-    background: white;
-    border: 1px solid #ddd;
   }
 
   .presets-panel h4 {
@@ -1384,7 +1819,6 @@
     align-items: center;
     gap: 4px;
     padding: 4px 0;
-    border-bottom: 1px solid #eee;
   }
 
   .preset-name {
@@ -1405,13 +1839,13 @@
   .preset-export {
     font-size: 10px;
     padding: 3px 5px;
-    border: 1px solid #ddd;
-    background: #f7f7f7;
+    border: 1px solid transparent;
+    background: transparent;
     cursor: pointer;
   }
 
   .preset-export:hover {
-    background: #efefef;
+    text-decoration: underline;
   }
 
   .preset-delete {
@@ -1459,10 +1893,10 @@
     align-items: center;
     gap: 4px;
     font-size: 10px;
-    border: 1px solid #ddd;
+    border: 1px solid transparent;
     padding: 5px 8px;
     cursor: pointer;
-    background: #fff;
+    background: transparent;
   }
 
   .import-btn input {
@@ -1505,6 +1939,153 @@
     font-weight: 600;
   }
 
+  .results-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .selection-count {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-black);
+    background: #e3f2fd;
+    padding: 4px 8px;
+    border-radius: 3px;
+  }
+
+  .selection-hint {
+    font-size: 10px;
+    color: var(--color-text-secondary);
+  }
+
+  .cart-btn {
+    padding: 5px 12px;
+    font-size: 11px;
+    font-weight: 500;
+    background: transparent;
+    color: var(--color-black);
+    border: 1px solid var(--color-gray-300);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .cart-btn:hover:not(:disabled) {
+    border-color: var(--color-black);
+  }
+
+  .cart-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .cart-btn.add {
+    background: var(--color-black);
+    color: var(--color-white);
+    border-color: var(--color-black);
+  }
+
+  .cart-btn.add:hover {
+    background: var(--color-gray-800);
+  }
+
+  .cart-btn.secondary {
+    background: transparent;
+    color: var(--color-black);
+  }
+
+  .cart-btn.secondary:hover:not(:disabled) {
+    background: var(--color-gray-100);
+  }
+
+  .cart-btn.text {
+    background: transparent;
+    border-color: transparent;
+    padding: 5px 8px;
+  }
+
+  .cart-btn.text:hover {
+    text-decoration: underline;
+    border-color: transparent;
+  }
+
+  .cart-btn.remove {
+    color: #b00020;
+    border-color: #b00020;
+    background: transparent;
+  }
+
+  .cart-btn.remove:hover {
+    background: rgba(176, 0, 32, 0.08);
+  }
+
+  .cart-btn.text.remove {
+    border-color: transparent;
+  }
+
+  /* Gmail-style select all banner */
+  .select-all-banner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #fffde7;
+    border: 1px solid #fff59d;
+    font-size: 11px;
+    color: #5d4037;
+  }
+
+  .select-all-banner.selected {
+    background: #e3f2fd;
+    border-color: #90caf9;
+    color: #1565c0;
+  }
+
+  .select-all-banner button {
+    background: none;
+    border: none;
+    color: #1976d2;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: underline;
+    padding: 0;
+  }
+
+  .select-all-banner button:hover {
+    color: #0d47a1;
+  }
+
+  .export-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .export-label {
+    font-size: 10px;
+    color: var(--color-text-secondary);
+  }
+
+  .export-btn {
+    padding: 4px 8px;
+    font-size: 10px;
+    background: transparent;
+    border: 1px solid var(--color-gray-300);
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .export-btn:hover:not(:disabled) {
+    background: var(--color-gray-100);
+  }
+
+  .export-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
   .results-meta {
     display: flex;
     gap: 6px;
@@ -1522,7 +2103,6 @@
 
   .error-message {
     padding: 8px;
-    background: #fee;
     color: #b10000;
     font-size: 11px;
   }
@@ -1533,8 +2113,6 @@
     justify-content: space-between;
     align-items: center;
     padding: 12px 8px;
-    border-top: 1px solid #eee;
-    background: #fafafa;
     font-size: 11px;
   }
 
@@ -1551,16 +2129,15 @@
   .page-btn {
     padding: 4px 8px;
     font-size: 11px;
-    background: white;
-    border: 1px solid #ddd;
+    background: transparent;
+    border: 1px solid transparent;
     border-radius: 3px;
     cursor: pointer;
     font-family: inherit;
   }
 
   .page-btn:hover:not(:disabled) {
-    background: #f0f0f0;
-    border-color: #999;
+    text-decoration: underline;
   }
 
   .page-btn:disabled {
@@ -1599,8 +2176,6 @@
   .viz-dashboard {
     margin-bottom: 6px;
     padding: 4px;
-    background: #fafafa;
-    border: 1px solid #eee;
     transition: opacity 0.2s ease;
   }
 
@@ -1620,8 +2195,6 @@
     min-width: 140px;
     max-width: 180px;
     padding: 6px 8px;
-    background: white;
-    border: 1px solid #eee;
     transition: opacity 0.15s ease;
   }
 
@@ -1717,16 +2290,9 @@
   }
 
   /* Skeleton Table */
-  .skeleton-table {
-    border: 1px solid #e0e0e0;
-    background: white;
-  }
-
   .skeleton-table-header {
     display: flex;
     gap: 1px;
-    background: #f5f5f5;
-    border-bottom: 1px solid #e0e0e0;
     padding: 8px 12px;
   }
 
@@ -1749,12 +2315,11 @@
     display: flex;
     gap: 1px;
     padding: 10px 12px;
-    border-bottom: 1px solid #f0f0f0;
     animation: skeleton-pulse 1.2s ease-in-out infinite;
   }
 
   .skeleton-table-row:nth-child(even) {
-    background: #fafafa;
+    background: transparent;
   }
 
   .skeleton-td {
@@ -1784,7 +2349,7 @@
 
   /* DataTable compact overrides - even tighter */
   .results-panel :global(.data-table-container) {
-    border: 1px solid #e0e0e0;
+    border: 0;
   }
 
   .results-panel :global(.data-table) {

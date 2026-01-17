@@ -5,6 +5,7 @@
 
 import { initDuckDB, loadParquetFromPath, type QueryResult } from '$lib/duckdb-utils';
 import { base } from '$app/paths';
+import { browser } from '$app/environment';
 
 // Parquet file paths
 export const PARQUET_FILES = {
@@ -19,6 +20,8 @@ let initPromise: Promise<void> | null = null;
  * Initialize DuckDB and register parquet files
  */
 export async function initWidgetDB(): Promise<void> {
+  // Skip initialization on server (SSR) - DuckDB requires browser APIs
+  if (!browser) return;
   if (initialized) return;
   if (initPromise) return initPromise;
 
@@ -50,6 +53,11 @@ export async function initWidgetDB(): Promise<void> {
 export async function widgetQuery<T = Record<string, unknown>>(
   sql: string
 ): Promise<QueryResult<T>> {
+  // Return empty result on server (SSR)
+  if (!browser) {
+    return { data: [], success: true, executionTime: 0, rowCount: 0 };
+  }
+
   const startTime = Date.now();
 
   try {
