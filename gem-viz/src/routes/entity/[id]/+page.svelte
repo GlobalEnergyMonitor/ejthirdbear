@@ -25,7 +25,7 @@
 
   let entityId = $state(data?.entityId || '');
   let entityName = $state(data?.entityName || '');
-  let entity = $state(data?.entity || null);
+  let _entity = $state(data?.entity || null); // Available from server if needed
   let portfolio = $state(null); // Fetched client-side from DuckDB
   let stats = $state(null); // Fetched client-side from DuckDB
 
@@ -136,7 +136,7 @@
         </div>
         {#if portfolio}
           <div class="header-flower">
-            <OwnershipFlower portfolio={portfolio} size="medium" showTitle={false} />
+            <OwnershipFlower {portfolio} size="medium" showTitle={false} />
           </div>
         {/if}
       </div>
@@ -238,7 +238,10 @@
 
       <section class="asset-screener-section">
         <h2>Asset Screener (Observable)</h2>
-        <p class="section-subtitle">Full portfolio breakdown with subsidiary paths, mini bar charts, and status icons — ported from GEM's Observable notebook</p>
+        <p class="section-subtitle">
+          Full portfolio breakdown with subsidiary paths, mini bar charts, and status icons — ported
+          from GEM's Observable notebook
+        </p>
         <AssetScreener {entityId} />
       </section>
     </article>

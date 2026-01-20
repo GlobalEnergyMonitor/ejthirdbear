@@ -13,13 +13,14 @@
   import { onMount } from 'svelte';
   import LoadingWrapper from '$lib/components/LoadingWrapper.svelte';
   import ScreenerStepNav from '$lib/components/ScreenerStepNav.svelte';
-  import { colorByTracker, colorByStatus } from '$lib/design-tokens';
+  import MiniFlower from '$lib/components/MiniFlower.svelte';
+  import OwnershipFlower from '$lib/components/OwnershipFlower.svelte';
+  import { colorByStatus } from '$lib/design-tokens';
   import { formatCompact } from '$lib/format';
 
   // DuckDB utilities
   let loadParquetFromPath;
   let query;
-  let duckdbReady = $state(false);
 
   // Get params from URL
   const classesParam = $derived($page.url.searchParams.get('classes') || '');
@@ -50,7 +51,9 @@
     try {
       const parsed = JSON.parse(decodeURIComponent(ownersParam));
       if (Array.isArray(parsed)) return parsed;
-    } catch {}
+    } catch {
+      // JSON parse failed, fall back to comma-separated
+    }
     return ownersParam.split(',').filter((id) => id.trim());
   });
 
@@ -70,7 +73,18 @@
   let countryBreakdown = $state({});
 
   // Status display order
-  const statusOrder = ['operating', 'construction', 'pre-construction', 'permitted', 'announced', 'proposed', 'mothballed', 'retired', 'cancelled', 'shelved'];
+  const statusOrder = [
+    'operating',
+    'construction',
+    'pre-construction',
+    'permitted',
+    'announced',
+    'proposed',
+    'mothballed',
+    'retired',
+    'cancelled',
+    'shelved',
+  ];
 
   // Load data on mount using DuckDB
   onMount(async () => {
@@ -88,7 +102,6 @@
 
       const ownershipPath = assetPath('all_trackers_ownership@1.parquet');
       await loadParquetFromPath(ownershipPath, 'ownership');
-      duckdbReady = true;
 
       // Build tracker filter clause
       const tracker = trackerFilter();
@@ -158,7 +171,7 @@
           const ownerCountryBreakdown = {};
           let ownerCapacity = 0;
 
-          const assets = result.data.map(row => {
+          const assets = result.data.map((row) => {
             const status = (row.Status || 'unknown').toLowerCase();
             ownerStatusBreakdown[status] = (ownerStatusBreakdown[status] || 0) + 1;
 
@@ -194,7 +207,6 @@
             trackerBreakdown: ownerTrackerBreakdown,
             countryBreakdown: ownerCountryBreakdown,
           });
-
         } catch (err) {
           console.error(`Failed to load data for ${id}:`, err);
           unmatched.push({ id, name: id, reason: err?.message || 'Query failed' });
@@ -213,7 +225,7 @@
       const aggTracker = {};
       const aggCountry = {};
 
-      matched.forEach(owner => {
+      matched.forEach((owner) => {
         aggCapacity += owner.capacity;
         aggAssets += owner.matchedAssets;
 
@@ -235,7 +247,6 @@
       statusBreakdown = aggStatus;
       trackerBreakdown = aggTracker;
       countryBreakdown = aggCountry;
-
     } catch (err) {
       console.error('Results page error:', err);
       error = err?.message || 'Failed to load results';
@@ -269,11 +280,6 @@
     return colorByStatus.get(status) || '#888';
   }
 
-  // Get tracker color
-  function getTrackerColor(tracker) {
-    return colorByTracker.get(tracker) || '#888';
-  }
-
   // Calculate percentage
   function pct(value, total) {
     if (!total) return 0;
@@ -293,7 +299,7 @@
   }
 
   function continueToVisualize() {
-    const ownerIdList = matchedResults.map(o => o.id).join(',');
+    const ownerIdList = matchedResults.map((o) => o.id).join(',');
     goto(
       link(
         `screener/visualize?classes=${encodeURIComponent(classesParam)}&owners=${encodeURIComponent(ownerIdList)}`
@@ -338,19 +344,37 @@
       <!-- Aggregate Stats Panel -->
       {#if matchedResults.length > 0}
         <section class="stats-panel">
-          <div class="stat-group">
-            <div class="stat-large">
-              <span class="stat-value">{matchedResults.length}</span>
-              <span class="stat-label">{matchedResults.length === 1 ? 'Owner' : 'Owners'}</span>
+          <div class="stats-with-flower">
+            <div class="stat-group">
+              <div class="stat-large">
+                <span class="stat-value">{matchedResults.length}</span>
+                <span class="stat-label">{matchedResults.length === 1 ? 'Owner' : 'Owners'}</span>
+              </div>
+              <div class="stat-large">
+                <span class="stat-value">{formatCompact(totalAssets)}</span>
+                <span class="stat-label">Assets</span>
+              </div>
+              <div class="stat-large">
+                <span class="stat-value">{formatCapacity(totalCapacity)}</span>
+                <span class="stat-label">Total Capacity</span>
+              </div>
             </div>
-            <div class="stat-large">
-              <span class="stat-value">{formatCompact(totalAssets)}</span>
-              <span class="stat-label">Assets</span>
-            </div>
-            <div class="stat-large">
-              <span class="stat-value">{formatCapacity(totalCapacity)}</span>
-              <span class="stat-label">Total Capacity</span>
-            </div>
+
+            <!-- Aggregate flower showing tracker distribution -->
+            {#if Object.keys(trackerBreakdown).length > 0}
+              <div class="aggregate-flower">
+                <OwnershipFlower
+                  portfolio={{
+                    assets: Object.entries(trackerBreakdown).flatMap(([tracker, count]) =>
+                      Array(count).fill({ tracker })
+                    ),
+                  }}
+                  size="large"
+                  showLabels={false}
+                  showTitle={false}
+                />
+              </div>
+            {/if}
           </div>
 
           <!-- Status breakdown bar -->
@@ -361,8 +385,13 @@
                 {#if statusBreakdown[status]}
                   <div
                     class="bar-segment"
-                    style="width: {pct(statusBreakdown[status], totalAssets)}%; background: {getStatusColor(status)}"
-                    title="{status}: {statusBreakdown[status]} ({Math.round(pct(statusBreakdown[status], totalAssets))}%)"
+                    style="width: {pct(
+                      statusBreakdown[status],
+                      totalAssets
+                    )}%; background: {getStatusColor(status)}"
+                    title="{status}: {statusBreakdown[status]} ({Math.round(
+                      pct(statusBreakdown[status], totalAssets)
+                    )}%)"
                   ></div>
                 {/if}
               {/each}
@@ -397,7 +426,8 @@
       {#if unmatchedOwners.length > 0}
         <aside class="unmatched-notice">
           <p class="unmatched-text">
-            {unmatchedOwners.length} {unmatchedOwners.length === 1 ? 'owner' : 'owners'} could not be matched.
+            {unmatchedOwners.length}
+            {unmatchedOwners.length === 1 ? 'owner' : 'owners'} could not be matched.
             <button class="toggle-details" onclick={() => (showUnmatchedList = !showUnmatchedList)}>
               {showUnmatchedList ? 'Hide' : 'Details'}
             </button>
@@ -420,6 +450,17 @@
               <div class="result-row" class:expanded={expandedRows.has(row.id)}>
                 <button class="row-main" onclick={() => toggleRow(row.id)}>
                   <div class="row-rank">{i + 1}</div>
+
+                  <!-- Mini flower showing tracker distribution -->
+                  <div class="row-flower">
+                    <MiniFlower
+                      trackers={Object.entries(row.trackerBreakdown).map(([tracker, count]) => ({
+                        tracker,
+                        count,
+                      }))}
+                      size={36}
+                    />
+                  </div>
 
                   <div class="row-info">
                     <div class="row-name">{row.name}</div>
@@ -445,7 +486,9 @@
                       {#if row.statusBreakdown[status]}
                         <div
                           class="mini-segment"
-                          style="flex: {row.statusBreakdown[status]}; background: {getStatusColor(status)}"
+                          style="flex: {row.statusBreakdown[status]}; background: {getStatusColor(
+                            status
+                          )}"
                           title="{status}: {row.statusBreakdown[status]}"
                         ></div>
                       {/if}
@@ -471,7 +514,8 @@
                     <div class="owner-breakdown">
                       {#each topN(row.statusBreakdown, 6) as [status, count]}
                         <span class="owner-stat">
-                          <span class="owner-dot" style="background: {getStatusColor(status)}"></span>
+                          <span class="owner-dot" style="background: {getStatusColor(status)}"
+                          ></span>
                           {status}: {count}
                         </span>
                       {/each}
@@ -481,7 +525,10 @@
                     <div class="asset-list">
                       {#each row.assets.slice(0, 10) as asset}
                         <a href={link(`asset/${asset.gem_id || asset.id}`)} class="asset-item">
-                          <span class="asset-status" style="background: {getStatusColor(asset.status?.toLowerCase())}"></span>
+                          <span
+                            class="asset-status"
+                            style="background: {getStatusColor(asset.status?.toLowerCase())}"
+                          ></span>
                           <span class="asset-name">{asset.name || asset.gem_id || 'Unknown'}</span>
                           <span class="asset-meta">
                             {#if asset.country}{asset.country}{/if}
@@ -515,9 +562,7 @@
 
     <!-- Navigation -->
     <nav class="nav-buttons">
-      <button class="back-btn" onclick={goBack}>
-        ← Back to Owner Selection
-      </button>
+      <button class="back-btn" onclick={goBack}> ← Back to Owner Selection </button>
     </nav>
   </div>
 </main>
@@ -570,10 +615,21 @@
     margin-bottom: 32px;
   }
 
+  .stats-with-flower {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 24px;
+    margin-bottom: 24px;
+  }
+
+  .aggregate-flower {
+    flex-shrink: 0;
+  }
+
   .stat-group {
     display: flex;
     gap: 48px;
-    margin-bottom: 24px;
   }
 
   .stat-large {
@@ -738,7 +794,7 @@
 
   .row-main {
     display: grid;
-    grid-template-columns: 40px 1fr 180px 120px 40px;
+    grid-template-columns: 40px 44px 1fr 180px 120px 40px;
     align-items: center;
     gap: 16px;
     width: 100%;
@@ -749,6 +805,12 @@
     text-align: left;
     font-family: inherit;
     transition: background 0.1s;
+  }
+
+  .row-flower {
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .row-main:hover {
@@ -950,7 +1012,9 @@
     color: white;
     border: none;
     cursor: pointer;
-    transition: background 0.15s, transform 0.1s;
+    transition:
+      background 0.15s,
+      transform 0.1s;
     letter-spacing: 0.02em;
   }
 
@@ -990,7 +1054,7 @@
     }
 
     .row-main {
-      grid-template-columns: 32px 1fr 40px;
+      grid-template-columns: 32px 40px 1fr 40px;
       gap: 12px;
       padding: 14px 16px;
     }
@@ -998,6 +1062,10 @@
     .row-stats,
     .row-status-bar {
       display: none;
+    }
+
+    .row-flower {
+      display: flex;
     }
 
     .row-details {
