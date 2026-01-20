@@ -20,13 +20,13 @@ const SAMPLE_ENTITY_IDS = [
   'E100001000348',
 ];
 
-// Interesting asset IDs to spot-check (from Observable notebooks)
+// Interesting asset IDs to spot-check (verified in current dataset)
 // Note: Current dataset only has G-prefix (coal plants). P (steel) and M (mines) are different trackers.
 const SAMPLE_ASSETS = [
-  { id: 'G100000109409', name: 'Sines Power Station' },
-  { id: 'G100001057899', name: 'Baghlan Power Station' },
-  { id: 'G100000106660', name: 'Maranhão São Luís Coal' },
-  { id: 'G100000107258', name: 'Nanshan Aluminum Donghai' },
+  { id: 'G100000109409', name: 'Sines power station Unit 1' },
+  { id: 'G100000102961', name: 'Gavin Power Plant Unit 2' },
+  { id: 'G100000106660', name: 'Maranhão São Luís power station' },
+  { id: 'G100000107258', name: 'Nanshan Aluminum Donghai power station Phase II Unit 3' },
   // These are from other trackers (not in current coal dataset):
   // { id: 'P100000120066', name: 'CAP Acero Huachipato Steel' },
   // { id: 'M4499', name: 'PKN Coal Mines' },

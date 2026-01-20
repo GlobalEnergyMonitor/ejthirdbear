@@ -12,6 +12,8 @@
   import { entityLink } from '$lib/links';
   import { colors, colorByStatus } from '$lib/design-tokens';
   import { getAsset, getOwnershipGraph } from '$lib/ownership-api';
+  import { widgetQuery } from '$lib/widgets/widget-utils';
+  import { logApiFallback } from '$lib/api-fallback-log';
 
   // Components
   import AssetMap from '$lib/components/AssetMap.svelte';
@@ -21,7 +23,6 @@
   import StatusIcon from '$lib/components/StatusIcon.svelte';
   import AddToCartButton from '$lib/components/AddToCartButton.svelte';
   import Citation from '$lib/components/Citation.svelte';
-  import ExternalLinks from '$lib/components/ExternalLinks.svelte';
 
   /**
    * @typedef {Object} AssetData
@@ -35,6 +36,7 @@
    * @property {number} [lng]
    * @property {number} [latitude]
    * @property {number} [longitude]
+   * @property {number} [capacity]
    * @property {Record<string, unknown>} [raw]
    */
 
@@ -65,6 +67,9 @@
    * @typedef {Object} PageData
    * @property {AssetData} [asset]
    * @property {GraphData} [graph]
+   * @property {string} [assetId]
+   * @property {boolean} [fromAPI]
+   * @property {string} [apiError]
    */
 
   // --- PROPS (from +page.server.js) ---
@@ -104,9 +109,104 @@
     Object.entries(asset?.raw || {}).filter(([, value]) => value != null && value !== '')
   );
 
+  // --- DUCKDB FALLBACK ---
+  /**
+   * Load asset data from local DuckDB/parquet when API fails
+   * @param {string} assetId
+   * @returns {Promise<{asset: AssetData, graph: GraphData}>}
+   */
+  async function loadFromDuckDB(assetId) {
+    // Query local parquet data for this asset
+    const assetSql = `
+      SELECT DISTINCT
+        "GEM unit ID" as id,
+        "Project" as name,
+        "Tracker" as tracker,
+        "Status" as status,
+        "Capacity (MW)" as capacity,
+        "Owner" as owner
+      FROM ownership
+      WHERE "GEM unit ID" = '${assetId}'
+      LIMIT 1
+    `;
+
+    const ownersSql = `
+      SELECT
+        "Owner" as ownerName,
+        "Owner GEM Entity ID" as ownerEntityId,
+        "Share" as share,
+        "Ownership Path" as ownershipPath
+      FROM ownership
+      WHERE "GEM unit ID" = '${assetId}'
+        AND "Owner" IS NOT NULL
+    `;
+
+    const locationSql = `
+      SELECT
+        l."Latitude" as latitude,
+        l."Longitude" as longitude,
+        l."Country.Area" as country
+      FROM ownership o
+      LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
+      WHERE o."GEM unit ID" = '${assetId}'
+        AND l."Latitude" IS NOT NULL
+      LIMIT 1
+    `;
+
+    const [assetResult, ownersResult, locationResult] = await Promise.all([
+      widgetQuery(assetSql),
+      widgetQuery(ownersSql),
+      widgetQuery(locationSql),
+    ]);
+
+    if (!assetResult.success || !assetResult.data?.length) {
+      throw new Error(`Asset '${assetId}' not found in local data`);
+    }
+
+    const assetRow = assetResult.data[0];
+    const location = locationResult.data?.[0] || {};
+    const owners = ownersResult.data || [];
+
+    // Build asset object
+    /** @type {AssetData} */
+    const assetData = {
+      id: String(assetRow.id || ''),
+      name: String(assetRow.name || ''),
+      facilityType: String(assetRow.tracker || ''),
+      status: String(assetRow.status || ''),
+      capacity: assetRow.capacity != null ? Number(assetRow.capacity) : undefined,
+      country: location.country ? String(location.country) : undefined,
+      latitude: location.latitude != null ? Number(location.latitude) : undefined,
+      longitude: location.longitude != null ? Number(location.longitude) : undefined,
+      raw: assetRow,
+    };
+
+    // Build simple graph with owners
+    /** @type {GraphNode[]} */
+    const nodes = [
+      { id: String(assetId), Name: String(assetRow.name || ''), type: 'asset' },
+      ...owners.map((o) => ({
+        id: String(o.ownerEntityId || `owner-${o.ownerName}`),
+        Name: String(o.ownerName || ''),
+        type: 'entity',
+      })),
+    ];
+
+    /** @type {GraphEdge[]} */
+    const edges = owners.map((o) => ({
+      source: String(o.ownerEntityId || `owner-${o.ownerName}`),
+      target: String(assetId),
+      value: Number(o.share) || 0,
+    }));
+
+    /** @type {{ asset: AssetData, graph: GraphData }} */
+    const result = { asset: assetData, graph: { nodes, edges } };
+    return result;
+  }
+
   // --- DATA FETCHING (client-side fallback) ---
   onMount(async () => {
-    const paramsId = get(page)?.params?.id;
+    const paramsId = get(page)?.params?.id || data?.assetId;
 
     // Redirect E-prefix IDs to entity page
     if (paramsId?.match(/^E\d+$/)) {
@@ -124,14 +224,52 @@
       loading = true;
       if (!paramsId) throw new Error('Missing asset ID');
 
-      const [assetData, graphData] = await Promise.all([
-        getAsset(paramsId),
-        getOwnershipGraph({ root: paramsId, direction: 'up', max_depth: 12 }),
-      ]);
+      // Try API first
+      try {
+        const [assetData, graphData] = await Promise.all([
+          getAsset(paramsId),
+          getOwnershipGraph({ root: paramsId, direction: 'up', max_depth: 12 }),
+        ]);
 
-      asset = assetData;
-      graph = graphData;
-      // assetId and assetName are $derived from asset, so they update automatically
+        asset = assetData;
+        graph = graphData;
+        console.log(`[API] Loaded asset ${paramsId} from API`);
+      } catch (apiError) {
+        // API failed - try DuckDB fallback
+        let fallbackSuccess = false;
+        let assetName = '';
+
+        try {
+          const duckdbData = await loadFromDuckDB(paramsId);
+          asset = duckdbData.asset;
+          graph = duckdbData.graph;
+          assetName = duckdbData.asset?.name || '';
+          fallbackSuccess = true;
+          console.log(`[DuckDB] Loaded asset ${paramsId} from local parquet`);
+        } catch (duckdbError) {
+          // Both failed
+          console.error(`[FALLBACK FAILED] Asset ${paramsId} not found in API or DuckDB`);
+
+          // Log the complete failure
+          logApiFallback({
+            assetId: paramsId,
+            apiError: apiError?.message || 'API returned 404',
+            fallbackSource: 'none',
+            fallbackSuccess: false,
+          });
+
+          throw duckdbError;
+        }
+
+        // Log successful fallback for API team reporting
+        logApiFallback({
+          assetId: paramsId,
+          assetName,
+          apiError: apiError?.message || 'API returned 404 (ID format mismatch)',
+          fallbackSource: 'duckdb',
+          fallbackSuccess,
+        });
+      }
     } catch (err) {
       error = err?.message || 'Failed to load asset';
     } finally {
@@ -165,13 +303,6 @@
           type="asset"
           tracker={asset?.facilityType}
           metadata={{ country: asset?.country, status: asset?.status }}
-        />
-        <ExternalLinks
-          type="asset"
-          name={assetName}
-          country={asset?.country}
-          lat={asset?.latitude}
-          lon={asset?.longitude}
         />
       </div>
 

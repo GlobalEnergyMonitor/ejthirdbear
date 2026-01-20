@@ -1,48 +1,54 @@
 <script>
   /**
-   * ASSET-CLASS SCREENER
-   * Evaluate companies' ownership stakes in classes of fossil fuel assets.
-   * Single-page layout with quick-add cards and custom query builder.
+   * ASSET CLASS SCREENER - Step 1: Select Asset Class
+   * Presets fill the query form. User can customize. One asset class at a time.
    */
 
   import { link } from '$lib/links';
   import { goto } from '$app/navigation';
+  import { allAssetClasses } from '$lib/data-config/asset-classes';
+  import ScreenerStepNav from '$lib/components/ScreenerStepNav.svelte';
 
-  // Selected asset classes
-  let selectedClasses = $state([]);
-  let showSelectedPanel = $state(false);
+  // Track which preset is active (for highlighting)
+  let activePresetId = $state(null);
 
-  // Quick add asset class cards
+  /**
+   * @typedef {Object} QuickAddClass
+   * @property {string} id
+   * @property {string} name
+   * @property {string} description
+   * @property {string} tracker
+   * @property {{field: string, operator: string, value?: string|number}} filters
+   * @property {string} [subLabel]
+   */
+
+  /**
+   * Transform asset class definitions into quick-add card format.
+   * Uses the canonical definitions from asset-classes.ts plus some additional
+   * status-specific variants for common use cases.
+   * @type {QuickAddClass[]}
+   */
   const quickAddClasses = [
-    {
-      id: 'captive-coal',
-      name: 'Captive Coal',
-      description: 'Coal plants/units whose power goes to a specific private user.',
-      tracker: 'Coal Plant',
-      filters: { field: 'Captive', operator: 'not_empty' },
-    },
-    {
-      id: 'deep-water-oil',
-      name: 'Deep Water Oil',
-      description: 'Offshore oil-extraction in water depths of at least 200m.',
-      tracker: 'Oil & NGL Pipeline',
-      filters: { field: 'Water Depth (m)', operator: '>=', value: 200 },
-    },
-    {
-      id: 'coal-steel-bf',
-      name: 'Coal Base Steel',
-      description: 'Blast furnace steel plants.',
-      tracker: 'Steel Plant',
-      filters: { field: 'Main production equipment', operator: 'contains', value: 'BF' },
-    },
-    {
-      id: 'coal-steel-operating',
-      name: 'Coal Base Steel',
-      description: 'Operating blast furnace steel plants.',
-      tracker: 'Steel Plant',
-      filters: { field: 'Status', operator: '=', value: 'operating' },
-      subLabel: 'operating',
-    },
+    // Canonical asset classes from asset-classes.ts
+    ...allAssetClasses.map((ac) => ({
+      id: ac.name.toLowerCase().replace(/\s+/g, '-'),
+      name: ac.name,
+      description: ac.description,
+      tracker: ac.applicableTrackers[0], // Primary tracker
+      filters: {
+        // Convert matcher logic to filter representation
+        field: ac.relevantFields.identifyingFields[0],
+        operator: ac.name.includes('Coal-Based')
+          ? 'contains'
+          : ac.name.includes('Captive')
+            ? 'not_empty'
+            : ac.name.includes('Deep')
+              ? '>='
+              : 'not_empty',
+        value: ac.name.includes('Coal-Based') ? 'BF' : ac.name.includes('Deep') ? 200 : undefined,
+      },
+    })),
+    // Additional status variants for common queries
     {
       id: 'retiring-coal',
       name: 'Retiring Coal',
@@ -70,28 +76,26 @@
   let showGeoFilter = $state(false);
   let showStatusFilter = $state(false);
 
-  // Tracker options
+  // Tracker options (from parquet data)
   const trackerOptions = [
-    'Coal Plant',
-    'Gas Plant',
-    'Coal Mine',
-    'Steel Plant',
-    'Iron Mine',
-    'Oil & NGL Pipeline',
-    'Gas Pipeline',
     'Bioenergy Power',
+    'Coal Mine',
+    'Coal Plant',
+    'Gas Pipeline',
+    'Gas Plant',
+    'Iron Mine',
+    'Steel Plant',
   ];
 
-  // Field options per tracker (simplified - real implementation would fetch from schema)
+  // Field options per tracker (based on actual parquet schema)
   const fieldsByTracker = {
-    'Coal Plant': ['Capacity (MW)', 'Status', 'Captive', 'Start Year', 'Country'],
-    'Gas Plant': ['Capacity (MW)', 'Status', 'Start Year', 'Country'],
-    'Coal Mine': ['Capacity (Mtpa)', 'Status', 'Mine Type', 'Country'],
-    'Steel Plant': ['Main production equipment', 'Status', 'Capacity (ttpa)', 'Country'],
-    'Iron Mine': ['Capacity (Mt)', 'Status', 'Country'],
-    'Oil & NGL Pipeline': ['Water Depth (m)', 'Status', 'Capacity', 'Country'],
-    'Gas Pipeline': ['Status', 'Capacity (Bcm/y)', 'Country'],
-    'Bioenergy Power': ['Capacity (MW)', 'Status', 'Feedstock', 'Country'],
+    'Coal Plant': ['Capacity (MW)', 'Status', 'Owner Headquarters Country'],
+    'Gas Plant': ['Capacity (MW)', 'Status', 'Owner Headquarters Country'],
+    'Coal Mine': ['Capacity (Mtpa)', 'Status', 'Owner Headquarters Country'],
+    'Steel Plant': ['Nominal crude steel capacity (ttpa)', 'Status', 'Owner Headquarters Country'],
+    'Iron Mine': ['Nominal iron capacity (ttpa)', 'Status', 'Owner Headquarters Country'],
+    'Gas Pipeline': ['CapacityBcm/y', 'Status', 'Owner Headquarters Country'],
+    'Bioenergy Power': ['Capacity (MW)', 'Status', 'Owner Headquarters Country'],
   };
 
   // Operators by field type
@@ -110,17 +114,57 @@
     { value: 'not_empty', label: 'has a value' },
   ];
 
+  // Status values (from parquet - normalized to lowercase)
   const statusOptions = [
-    'operating',
-    'construction',
-    'permitted',
-    'pre-permit',
     'announced',
-    'retired',
     'cancelled',
-    'shelved',
+    'construction',
+    'idle',
     'mothballed',
+    'operating',
+    'permitted',
+    'pre-construction',
+    'pre-permit',
+    'proposed',
+    'retired',
+    'shelved',
   ];
+
+  // Countries (from parquet)
+  const countryOptions = [
+    'Afghanistan', 'Albania', 'Algeria', 'Angola', 'Argentina', 'Armenia', 'Australia', 'Austria',
+    'Azerbaijan', 'Bahamas', 'Bahrain', 'Bangladesh', 'Barbados', 'Belarus', 'Belgium', 'Bermuda',
+    'Bhutan', 'Bolivia', 'Bosnia and Herzegovina', 'Botswana', 'Brazil', 'Brunei', 'Bulgaria',
+    'Cambodia', 'Cameroon', 'Canada', 'Cayman Islands', 'Chile', 'China', 'Colombia', 'Congo',
+    'Costa Rica', 'Croatia', 'Cuba', 'Cyprus', 'Czech Republic', 'Denmark', 'Dominican Republic',
+    'Ecuador', 'Egypt', 'El Salvador', 'Estonia', 'Ethiopia', 'Finland', 'France', 'Gabon',
+    'Georgia', 'Germany', 'Ghana', 'Greece', 'Guatemala', 'Guinea', 'Honduras', 'Hong Kong',
+    'Hungary', 'Iceland', 'India', 'Indonesia', 'Iran', 'Iraq', 'Ireland', 'Israel', 'Italy',
+    'Ivory Coast', 'Jamaica', 'Japan', 'Jordan', 'Kazakhstan', 'Kenya', 'Kuwait', 'Kyrgyzstan',
+    'Laos', 'Latvia', 'Lebanon', 'Liberia', 'Libya', 'Lithuania', 'Luxembourg', 'Macau',
+    'Madagascar', 'Malawi', 'Malaysia', 'Mali', 'Malta', 'Mauritius', 'Mexico', 'Moldova',
+    'Mongolia', 'Montenegro', 'Morocco', 'Mozambique', 'Myanmar', 'Namibia', 'Nepal',
+    'Netherlands', 'New Zealand', 'Nicaragua', 'Niger', 'Nigeria', 'North Korea', 'North Macedonia',
+    'Norway', 'Oman', 'Pakistan', 'Panama', 'Papua New Guinea', 'Paraguay', 'Peru', 'Philippines',
+    'Poland', 'Portugal', 'Puerto Rico', 'Qatar', 'Romania', 'Russia', 'Saudi Arabia', 'Senegal',
+    'Serbia', 'Sierra Leone', 'Singapore', 'Slovakia', 'Slovenia', 'South Africa', 'South Korea',
+    'Spain', 'Sri Lanka', 'Sudan', 'Sweden', 'Switzerland', 'Syria', 'Taiwan', 'Tajikistan',
+    'Tanzania', 'Thailand', 'Timor-Leste', 'Trinidad and Tobago', 'Tunisia', 'Turkmenistan',
+    'Türkiye', 'Uganda', 'Ukraine', 'United Arab Emirates', 'United Kingdom', 'United States',
+    'Uruguay', 'Uzbekistan', 'Venezuela', 'Vietnam', 'Yemen', 'Zambia', 'Zimbabwe',
+  ];
+
+  // Check if field has enum values
+  function isEnumField(field) {
+    return field === 'Status' || field === 'Owner Headquarters Country';
+  }
+
+  // Get enum options for a field
+  function getEnumOptions(field) {
+    if (field === 'Status') return statusOptions;
+    if (field === 'Owner Headquarters Country') return countryOptions;
+    return [];
+  }
 
   // Determine if field is numeric
   function isNumericField(field) {
@@ -142,46 +186,25 @@
   // Get available fields for selected tracker
   const availableFields = $derived(customTracker ? fieldsByTracker[customTracker] || [] : []);
 
-  // Toggle quick-add class
-  function toggleQuickClass(classItem) {
-    const exists = selectedClasses.find((c) => c.id === classItem.id);
-    if (exists) {
-      selectedClasses = selectedClasses.filter((c) => c.id !== classItem.id);
-    } else {
-      selectedClasses = [...selectedClasses, classItem];
-    }
+  // Apply preset to fill the form
+  function applyPreset(preset) {
+    activePresetId = preset.id;
+    customTracker = preset.tracker || '';
+
+    // Need to wait for availableFields to update, then set field
+    // Use setTimeout to let reactive update happen
+    setTimeout(() => {
+      customField = preset.filters?.field || '';
+      setTimeout(() => {
+        customOperator = preset.filters?.operator || '';
+        customValue = preset.filters?.value ?? '';
+      }, 0);
+    }, 0);
   }
 
-  // Add custom class
-  function addCustomClass() {
-    if (!customTracker || !customField || !customOperator) return;
-
-    const customClass = {
-      id: `custom-${Date.now()}`,
-      name: `${customTracker}`,
-      description: `${customField} ${customOperator} ${customValue || '(any)'}`,
-      tracker: customTracker,
-      filters: {
-        field: customField,
-        operator: customOperator,
-        value: customValue,
-      },
-      isCustom: true,
-    };
-
-    // Add geo/status filters if present
-    if (customGeoFilter) {
-      customClass.filters.geography = customGeoFilter;
-      customClass.description += ` in ${customGeoFilter}`;
-    }
-    if (customStatusFilter) {
-      customClass.filters.status = customStatusFilter;
-      customClass.description += ` (${customStatusFilter})`;
-    }
-
-    selectedClasses = [...selectedClasses, customClass];
-
-    // Reset form
+  // Clear the form
+  function clearForm() {
+    activePresetId = null;
     customTracker = '';
     customField = '';
     customOperator = '';
@@ -192,106 +215,82 @@
     showStatusFilter = false;
   }
 
-  // Remove selected class
-  function removeClass(classItem) {
-    selectedClasses = selectedClasses.filter((c) => c.id !== classItem.id);
-  }
+  // Check if form has enough to continue (just tracker is enough)
+  const canContinue = $derived(customTracker !== '');
 
-  // Continue to owners step
+  // Build current configuration description
+  const currentConfigDescription = $derived(() => {
+    if (!customTracker) return '';
+    let desc = customTracker;
+    if (customField && customOperator) {
+      const opLabel = [...numericOperators, ...textOperators].find(o => o.value === customOperator)?.label || customOperator;
+      desc += ` where ${customField} ${opLabel}`;
+      if (customValue && customOperator !== 'not_empty') desc += ` ${customValue}`;
+    }
+    if (customGeoFilter) desc += ` in ${customGeoFilter}`;
+    if (customStatusFilter) desc += ` (${customStatusFilter})`;
+    return desc;
+  });
+
+  // Continue to owners step with current form values
   function continueToOwners() {
-    // Pass full class data as JSON for the owners page to display
-    const classData = selectedClasses.map((c) => ({
-      id: c.id,
-      name: c.name,
-      description: c.description,
-      tracker: c.tracker,
-      filters: c.filters,
-    }));
-    // Build URL without trailing slash to preserve query params
+    const classData = [{
+      id: activePresetId || `custom-${Date.now()}`,
+      name: customTracker,
+      description: currentConfigDescription(),
+      tracker: customTracker,
+      filters: {
+        field: customField || undefined,
+        operator: customOperator || undefined,
+        value: customValue || undefined,
+        geography: customGeoFilter || undefined,
+        status: customStatusFilter || undefined,
+      },
+    }];
     const basePath = link('screener/owners').replace(/\/$/, '');
     goto(`${basePath}?classes=${encodeURIComponent(JSON.stringify(classData))}`);
   }
 
-  // Check if class is selected
-  function isSelected(classItem) {
-    return selectedClasses.some((c) => c.id === classItem.id);
+  // Check if preset is active
+  function isActivePreset(preset) {
+    return activePresetId === preset.id;
   }
 </script>
 
 <svelte:head>
-  <title>Asset-Class Screener — GEM Viz</title>
+  <title>Asset Class Screener — GEM Viz</title>
 </svelte:head>
 
 <main>
   <div class="screener-layout">
     <!-- Step indicator -->
-    <nav class="step-nav">
-      <div class="step active">
-        <span class="step-num">1</span>
-        <span class="step-label">Asset Classes</span>
-      </div>
-      <div class="step-line"></div>
-      <div class="step">
-        <span class="step-num">2</span>
-        <span class="step-label">Find Owners</span>
-      </div>
-      <div class="step-line"></div>
-      <div class="step">
-        <span class="step-num">3</span>
-        <span class="step-label">Results</span>
-      </div>
-      <div class="step-line"></div>
-      <div class="step">
-        <span class="step-num">4</span>
-        <span class="step-label">Visualize</span>
-      </div>
-    </nav>
+    <ScreenerStepNav currentStep={1} />
 
     <!-- Header -->
     <header class="screener-header">
       <div class="header-content">
-        <h1>Asset-Class Screener</h1>
+        <h1>Asset Class Screener</h1>
         <p class="subtitle">
-          Evaluate companies' ownership stakes in classes of fossil fuel assets. Start by selecting
-          asset-classes below, or building your own query.
+          Choose a preset or build a custom query. Customize the filters below, then continue.
         </p>
       </div>
 
-      <!-- Selected classes panel -->
-      <div class="selected-panel" class:expanded={showSelectedPanel}>
-        <button class="selected-toggle" onclick={() => (showSelectedPanel = !showSelectedPanel)}>
-          <span class="toggle-icon">{showSelectedPanel ? '▼' : '▶'}</span>
-          View selected asset-classes
-        </button>
-        <div class="selected-count">
-          {#if selectedClasses.length === 0}
-            None selected yet
-          {:else}
-            {selectedClasses.length} selected
-          {/if}
+      <!-- Current selection summary -->
+      {#if customTracker}
+        <div class="current-config">
+          <div class="config-label">Current selection</div>
+          <div class="config-value">{currentConfigDescription()}</div>
+          <button class="clear-btn" onclick={clearForm}>Clear</button>
         </div>
-
-        {#if showSelectedPanel && selectedClasses.length > 0}
-          <div class="selected-list">
-            {#each selectedClasses as classItem}
-              <div class="selected-item">
-                <span class="selected-name">{classItem.name}</span>
-                <span class="selected-desc">{classItem.description}</span>
-                <button class="remove-btn" onclick={() => removeClass(classItem)}>×</button>
-              </div>
-            {/each}
-          </div>
-        {/if}
-      </div>
+      {/if}
     </header>
 
-    <!-- Quick add section -->
+    <!-- Presets section -->
     <section class="quick-add">
       <h2>
-        Quick add classes of assets
+        Presets
         <span class="refine-hint">
-          Refine by <strong>geography</strong> or <strong>status</strong> (operating, proposed, etc)
-          after making selections
+          Click to load settings, then customize below
         </span>
       </h2>
 
@@ -299,8 +298,8 @@
         {#each quickAddClasses as card}
           <button
             class="quick-card"
-            class:selected={isSelected(card)}
-            onclick={() => toggleQuickClass(card)}
+            class:active={isActivePreset(card)}
+            onclick={() => applyPreset(card)}
           >
             <div class="card-header">
               <span class="card-name">{card.name}</span>
@@ -309,8 +308,8 @@
               {/if}
             </div>
             <p class="card-description">{card.description}</p>
-            {#if isSelected(card)}
-              <div class="card-check">✓</div>
+            {#if isActivePreset(card)}
+              <div class="card-active-indicator">●</div>
             {/if}
           </button>
         {/each}
@@ -319,12 +318,12 @@
 
     <!-- Custom query builder -->
     <section class="query-builder">
-      <h2>Build your own asset-class query</h2>
+      <h2>Create Custom Asset Class</h2>
 
       <div class="builder-form">
         <div class="form-row main-row">
           <label class="form-field">
-            <span class="field-label">Asset Type:</span>
+            <span class="field-label">Asset type <span class="required">*</span></span>
             <select
               bind:value={customTracker}
               onchange={() => {
@@ -332,7 +331,7 @@
                 customOperator = '';
               }}
             >
-              <option value="">[tracker dropdown]</option>
+              <option value="">Select...</option>
               {#each trackerOptions as tracker}
                 <option value={tracker}>{tracker}</option>
               {/each}
@@ -341,9 +340,9 @@
 
           {#if customTracker}
             <label class="form-field">
-              <span class="field-label">With</span>
+              <span class="field-label">Field <span class="required">*</span></span>
               <select bind:value={customField} onchange={() => (customOperator = '')}>
-                <option value="">[field dropdown]</option>
+                <option value="">Select...</option>
                 {#each availableFields as field}
                   <option value={field}>{field}</option>
                 {/each}
@@ -352,8 +351,9 @@
 
             {#if customField}
               <label class="form-field operator-field">
+                <span class="field-label">Condition <span class="required">*</span></span>
                 <select bind:value={customOperator}>
-                  <option value="">...</option>
+                  <option value="">Select...</option>
                   {#each currentOperators as op}
                     <option value={op.value}>{op.label}</option>
                   {/each}
@@ -362,80 +362,93 @@
 
               {#if customOperator && customOperator !== 'not_empty'}
                 <label class="form-field value-field">
-                  <input
-                    type={isNumericField(customField) ? 'number' : 'text'}
-                    bind:value={customValue}
-                    placeholder="value"
-                  />
+                  <span class="field-label">Value <span class="required">*</span></span>
+                  {#if isEnumField(customField)}
+                    <select bind:value={customValue}>
+                      <option value="">Select...</option>
+                      {#each getEnumOptions(customField) as opt}
+                        <option value={opt}>{opt}</option>
+                      {/each}
+                    </select>
+                  {:else}
+                    <input
+                      type={isNumericField(customField) ? 'number' : 'text'}
+                      bind:value={customValue}
+                      placeholder="Enter value"
+                    />
+                  {/if}
                 </label>
               {/if}
             {/if}
           {/if}
         </div>
 
-        {#if customTracker}
-          <div class="builder-note">
-            Note: Pick a tracker to see fields available for querying. Pick a field to see filtering
-            options (operator choices &lt;, &gt;, = for numeric field, or =, is one of a list, or
-            contains for character fields)
+        {#if customTracker && !customField}
+          <div class="builder-hint">
+            Select a field to define your filter criteria. Numeric fields support comparison
+            operators, while text fields support exact match or contains.
           </div>
         {/if}
 
-        <!-- Additional filters -->
-        <div class="additional-filters">
-          {#if !showGeoFilter}
-            <button class="add-filter-btn" onclick={() => (showGeoFilter = true)}>
-              + Filter by geography
-            </button>
-          {:else}
-            <label class="form-field inline-field">
-              <span class="field-label">Geography:</span>
-              <input
-                type="text"
-                bind:value={customGeoFilter}
-                placeholder="e.g., China, India, Southeast Asia"
-              />
-              <button
-                class="remove-filter"
-                onclick={() => {
-                  showGeoFilter = false;
-                  customGeoFilter = '';
-                }}>×</button
-              >
-            </label>
-          {/if}
+        <!-- Optional filters - each on own line -->
+        <div class="optional-filters">
+          <div class="optional-label">Optional filters</div>
 
-          {#if !showStatusFilter}
-            <button class="add-filter-btn" onclick={() => (showStatusFilter = true)}>
-              + Filter by status
-            </button>
-          {:else}
-            <label class="form-field inline-field">
-              <span class="field-label">Status:</span>
-              <select bind:value={customStatusFilter}>
-                <option value="">Any status</option>
-                {#each statusOptions as status}
-                  <option value={status}>{status}</option>
-                {/each}
-              </select>
-              <button
-                class="remove-filter"
-                onclick={() => {
-                  showStatusFilter = false;
-                  customStatusFilter = '';
-                }}>×</button
-              >
-            </label>
-          {/if}
+          <!-- Country filter row -->
+          <div class="filter-row">
+            {#if !showGeoFilter}
+              <button class="add-filter-btn" onclick={() => (showGeoFilter = true)}>
+                + Add country filter
+              </button>
+            {:else}
+              <label class="form-field">
+                <span class="field-label">Country <span class="optional">(optional)</span></span>
+                <div class="filter-input-row">
+                  <select bind:value={customGeoFilter}>
+                    <option value="">All countries</option>
+                    {#each countryOptions as country}
+                      <option value={country}>{country}</option>
+                    {/each}
+                  </select>
+                  <button
+                    class="remove-filter"
+                    onclick={() => {
+                      showGeoFilter = false;
+                      customGeoFilter = '';
+                    }}>×</button>
+                </div>
+              </label>
+            {/if}
+          </div>
+
+          <!-- Status filter row -->
+          <div class="filter-row">
+            {#if !showStatusFilter}
+              <button class="add-filter-btn" onclick={() => (showStatusFilter = true)}>
+                + Add status filter
+              </button>
+            {:else}
+              <label class="form-field">
+                <span class="field-label">Status <span class="optional">(optional)</span></span>
+                <div class="filter-input-row">
+                  <select bind:value={customStatusFilter}>
+                    <option value="">All statuses</option>
+                    {#each statusOptions as status}
+                      <option value={status}>{status}</option>
+                    {/each}
+                  </select>
+                  <button
+                    class="remove-filter"
+                    onclick={() => {
+                      showStatusFilter = false;
+                      customStatusFilter = '';
+                    }}>×</button>
+                </div>
+              </label>
+            {/if}
+          </div>
         </div>
 
-        <button
-          class="add-class-btn"
-          onclick={addCustomClass}
-          disabled={!customTracker || !customField || !customOperator}
-        >
-          Add asset class
-        </button>
       </div>
     </section>
 
@@ -444,86 +457,37 @@
       <button
         class="continue-btn"
         onclick={continueToOwners}
-        disabled={selectedClasses.length === 0}
+        disabled={!canContinue}
       >
-        Continue to Owners
+        Continue to Owner Analysis
       </button>
+      {#if !canContinue}
+        <p class="continue-hint">Select a preset or choose an asset type above</p>
+      {/if}
     </div>
   </div>
 </main>
 
 <style>
+  /* Tufte-inspired information design */
   main {
     min-height: 100vh;
-    background: #f8f9fa;
+    background: #fff;
   }
 
   .screener-layout {
-    max-width: 1100px;
+    max-width: 960px;
     margin: 0 auto;
-    padding: 40px 24px;
+    padding: 48px 32px 80px;
   }
 
-  /* Step navigation */
-  .step-nav {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0;
-    margin-bottom: 32px;
-    padding-bottom: 24px;
-    border-bottom: 1px solid #e0e0e0;
-  }
-
-  .step {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 16px;
-    opacity: 0.4;
-  }
-
-  .step.active {
-    opacity: 1;
-  }
-
-  .step-num {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    border: 2px solid #1a5f7a;
-    border-radius: 50%;
-    font-size: 13px;
-    font-weight: 600;
-    color: #1a5f7a;
-  }
-
-  .step.active .step-num {
-    background: #1a5f7a;
-    color: white;
-  }
-
-  .step-label {
-    font-size: 13px;
-    font-weight: 500;
-    color: #333;
-  }
-
-  .step-line {
-    width: 40px;
-    height: 2px;
-    background: #ddd;
-  }
-
-  /* Header */
+  /* Header - typography hierarchy */
   .screener-header {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    gap: 24px;
-    margin-bottom: 32px;
+    gap: 48px;
+    margin-bottom: 48px;
   }
 
   .header-content {
@@ -531,231 +495,276 @@
   }
 
   h1 {
-    font-size: 32px;
-    font-weight: 600;
-    margin: 0 0 8px 0;
-    color: #1a1a2e;
+    font-size: 28px;
+    font-weight: 400;
+    margin: 0 0 12px 0;
+    color: #111;
+    letter-spacing: -0.01em;
   }
 
   .subtitle {
-    font-size: 15px;
+    font-size: 14px;
     color: #666;
     margin: 0;
-    line-height: 1.5;
+    line-height: 1.6;
+    max-width: 480px;
   }
 
-  /* Selected panel */
-  .selected-panel {
-    background: #e8f4f8;
-    border: 1px solid #b8d4e3;
-    border-radius: 8px;
-    padding: 12px 16px;
-    min-width: 260px;
-  }
-
-  .selected-toggle {
+  /* Current config summary */
+  .current-config {
     display: flex;
-    align-items: center;
-    gap: 8px;
+    align-items: baseline;
+    gap: 12px;
+    padding: 12px 16px;
+    background: #f8fafb;
+    border-left: 2px solid #1a5f7a;
+  }
+
+  .config-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #888;
+  }
+
+  .config-value {
+    font-size: 14px;
+    color: #333;
+    flex: 1;
+  }
+
+  .clear-btn {
+    font-size: 11px;
+    color: #888;
     background: none;
     border: none;
-    font-size: 14px;
-    font-weight: 600;
-    color: #1a5f7a;
     cursor: pointer;
-    padding: 0;
+    text-decoration: underline;
   }
 
-  .toggle-icon {
-    font-size: 10px;
-  }
-
-  .selected-count {
-    font-size: 13px;
-    color: #1a5f7a;
-    margin-top: 4px;
-    opacity: 0.8;
+  .clear-btn:hover {
+    color: #333;
   }
 
   .selected-list {
-    margin-top: 12px;
+    margin-top: 16px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 12px;
   }
 
   .selected-item {
     display: flex;
-    align-items: center;
+    align-items: baseline;
     gap: 8px;
-    padding: 8px;
-    background: white;
-    border-radius: 4px;
-    font-size: 12px;
+    font-size: 13px;
+    line-height: 1.4;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #eee;
+  }
+
+  .selected-item:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
   }
 
   .selected-name {
-    font-weight: 600;
+    font-weight: 500;
+    color: #111;
   }
 
   .selected-desc {
     flex: 1;
-    color: #666;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    color: #888;
+    font-size: 12px;
   }
 
   .remove-btn {
     background: none;
     border: none;
-    font-size: 18px;
-    color: #999;
+    font-size: 14px;
+    color: #ccc;
     cursor: pointer;
-    padding: 0 4px;
+    padding: 0;
     line-height: 1;
   }
 
   .remove-btn:hover {
-    color: #c00;
+    color: #999;
   }
 
-  /* Sections */
+  /* Sections - whitespace instead of boxes */
   section {
-    background: white;
-    border: 1px solid #e0e0e0;
-    border-radius: 8px;
-    padding: 24px;
-    margin-bottom: 24px;
+    margin-bottom: 48px;
+    padding: 0;
   }
 
   section h2 {
-    font-size: 18px;
-    font-weight: 600;
-    margin: 0 0 16px 0;
-    color: #1a1a2e;
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin: 0 0 20px 0;
+    color: #666;
     display: flex;
     align-items: baseline;
-    gap: 12px;
+    gap: 16px;
     flex-wrap: wrap;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #e5e5e5;
   }
 
   .refine-hint {
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 400;
-    color: #666;
+    text-transform: none;
+    letter-spacing: 0;
+    color: #888;
   }
 
   .refine-hint strong {
-    color: #1a5f7a;
+    color: #555;
+    font-weight: 500;
   }
 
-  /* Quick add cards */
+  /* Quick add cards - minimal, typography-driven */
   .quick-cards {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
+    gap: 24px 32px;
   }
 
   .quick-card {
     position: relative;
-    padding: 16px;
-    background: white;
-    border: 2px solid #e0e0e0;
-    border-radius: 6px;
+    padding: 0;
+    background: transparent;
+    border: none;
     text-align: left;
     cursor: pointer;
-    transition: all 0.15s;
   }
 
-  .quick-card:hover {
-    border-color: #1a5f7a;
+  .quick-card:hover .card-name {
+    color: #111;
   }
 
-  .quick-card.selected {
-    border-color: #1a5f7a;
+  /* Active preset state */
+  .quick-card.active {
     background: #f0f7fa;
+    border-left: 2px solid #1a5f7a;
+    margin-left: -2px;
+  }
+
+  .quick-card.active .card-name {
+    color: #1a5f7a;
+  }
+
+  .card-active-indicator {
+    position: absolute;
+    top: 4px;
+    right: 8px;
+    font-size: 8px;
+    color: #1a5f7a;
   }
 
   .card-header {
     display: flex;
     align-items: baseline;
     gap: 8px;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
   }
 
   .card-name {
-    font-size: 15px;
-    font-weight: 600;
-    color: #1a5f7a;
+    font-size: 14px;
+    font-weight: 500;
+    color: #555;
+    transition: color 0.1s;
   }
 
   .card-sublabel {
-    font-size: 12px;
-    color: #888;
+    font-size: 11px;
+    color: #aaa;
+    font-style: italic;
   }
 
   .card-description {
-    font-size: 13px;
-    color: #555;
+    font-size: 12px;
+    color: #888;
     margin: 0;
-    line-height: 1.4;
+    line-height: 1.5;
   }
 
   .card-check {
     position: absolute;
-    top: 8px;
-    right: 8px;
-    width: 20px;
-    height: 20px;
-    background: #1a5f7a;
-    color: white;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    top: 0;
+    right: 0;
     font-size: 12px;
+    color: #1a5f7a;
   }
 
-  /* Query builder */
+  /* Query builder - clean form design */
   .builder-form {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 20px;
   }
 
   .form-row {
     display: flex;
     align-items: flex-end;
-    gap: 12px;
+    gap: 16px;
     flex-wrap: wrap;
   }
 
   .form-field {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
   }
 
   .field-label {
-    font-size: 13px;
-    color: #555;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #888;
+    font-weight: 500;
+  }
+
+  .required {
+    color: #c00;
+  }
+
+  .optional {
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+    color: #aaa;
   }
 
   .form-field select,
   .form-field input {
-    padding: 8px 12px;
-    font-size: 14px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    background: white;
+    padding: 8px 10px;
+    font-size: 13px;
+    border: none;
+    border-bottom: 1px solid #ddd;
+    border-radius: 0;
+    background: transparent;
     min-width: 160px;
+    color: #333;
   }
 
   .form-field select:focus,
   .form-field input:focus {
     outline: none;
-    border-color: #1a5f7a;
+    border-bottom-color: #333;
+  }
+
+  .form-field select {
+    -webkit-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='4' viewBox='0 0 8 4'%3E%3Cpath fill='%23999' d='M0 0l4 4 4-4z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 4px center;
+    padding-right: 20px;
   }
 
   .operator-field select {
@@ -766,109 +775,141 @@
     min-width: 100px;
   }
 
-  .builder-note {
+  .builder-hint {
     font-size: 12px;
-    color: #c44;
-    font-style: italic;
-    line-height: 1.4;
+    color: #888;
+    line-height: 1.6;
+    padding-left: 12px;
+    border-left: 1px solid #ddd;
+    margin-left: 4px;
   }
 
-  .additional-filters {
+  .optional-filters {
     display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
+    flex-direction: column;
+    gap: 16px;
+    padding-top: 20px;
+    border-top: 1px solid #eee;
+    margin-top: 8px;
+  }
+
+  .optional-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #aaa;
+    margin-bottom: -8px;
+  }
+
+  .filter-row {
+    display: flex;
+    align-items: flex-end;
+  }
+
+  .filter-input-row {
+    display: flex;
     align-items: center;
+    gap: 8px;
   }
 
   .add-filter-btn {
-    padding: 6px 12px;
-    font-size: 13px;
-    background: #f5f5f5;
-    border: 1px dashed #ccc;
-    border-radius: 4px;
+    padding: 0;
+    font-size: 12px;
+    background: none;
+    border: none;
     cursor: pointer;
-    color: #555;
+    color: #888;
+    text-decoration: underline;
+    text-underline-offset: 2px;
   }
 
   .add-filter-btn:hover {
-    background: #eee;
-    border-color: #999;
+    color: #333;
   }
 
   .inline-field {
     flex-direction: row;
     align-items: center;
-    background: #f9f9f9;
-    padding: 8px 12px;
-    border-radius: 4px;
+    gap: 8px;
   }
 
   .inline-field select,
   .inline-field input {
-    min-width: 180px;
+    min-width: 160px;
   }
 
   .remove-filter {
     background: none;
     border: none;
-    font-size: 18px;
-    color: #999;
+    font-size: 14px;
+    color: #ccc;
     cursor: pointer;
-    padding: 0 4px;
-    margin-left: 8px;
+    padding: 0;
+    margin-left: 4px;
   }
 
   .remove-filter:hover {
-    color: #c00;
+    color: #999;
   }
 
   .add-class-btn {
     align-self: flex-start;
-    padding: 10px 20px;
-    font-size: 14px;
-    font-weight: 500;
-    background: #1a5f7a;
-    color: white;
+    padding: 0;
+    font-size: 13px;
+    font-weight: 400;
+    background: none;
+    color: #333;
     border: none;
-    border-radius: 4px;
     cursor: pointer;
-    transition: background 0.15s;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    margin-top: 8px;
   }
 
   .add-class-btn:hover:not(:disabled) {
-    background: #145266;
+    color: #000;
   }
 
   .add-class-btn:disabled {
-    background: #ccc;
+    color: #ccc;
     cursor: not-allowed;
+    text-decoration: none;
   }
 
-  /* Continue section */
+  /* Continue section - prominent but simple */
   .continue-section {
     display: flex;
-    justify-content: center;
-    padding: 24px 0;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding-top: 32px;
+    border-top: 1px solid #e5e5e5;
+  }
+
+  .continue-hint {
+    font-size: 12px;
+    color: #999;
+    margin: 0;
   }
 
   .continue-btn {
-    padding: 14px 32px;
-    font-size: 16px;
-    font-weight: 600;
-    background: #1a5f7a;
-    color: white;
+    padding: 12px 24px;
+    font-size: 14px;
+    font-weight: 500;
+    background: #333;
+    color: #fff;
     border: none;
-    border-radius: 6px;
     cursor: pointer;
-    transition: background 0.15s;
+    letter-spacing: 0.02em;
   }
 
   .continue-btn:hover:not(:disabled) {
-    background: #145266;
+    background: #111;
   }
 
   .continue-btn:disabled {
-    background: #ccc;
+    background: #e5e5e5;
+    color: #999;
     cursor: not-allowed;
   }
 
@@ -880,8 +921,13 @@
   }
 
   @media (max-width: 640px) {
+    .screener-layout {
+      padding: 32px 20px 60px;
+    }
+
     .screener-header {
       flex-direction: column;
+      gap: 32px;
     }
 
     .selected-panel {
@@ -890,6 +936,11 @@
 
     .quick-cards {
       grid-template-columns: 1fr;
+      gap: 16px;
+    }
+
+    .quick-card.selected::before {
+      left: -8px;
     }
 
     .form-row {

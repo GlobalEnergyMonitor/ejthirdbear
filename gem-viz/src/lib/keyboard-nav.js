@@ -9,7 +9,7 @@
  *   g h       - Go home
  *   g e       - Go to explore
  *   g c       - Go to compose (filters)
- *   g x       - Go to export
+ *   g x       - Go to report export
  *   g r       - Go to conglomerates (rankings)
  *   Escape    - Close modals, clear focus
  *   ?         - Show keyboard shortcuts
@@ -30,7 +30,7 @@ const routes = {
   h: '/',
   e: '/explore',
   c: '/compose',
-  x: '/export',
+  x: '/report#export',
   r: '/conglomerates',
 };
 

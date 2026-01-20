@@ -8,6 +8,7 @@
    * - "See more/less" expansion
    * - Search within facet
    * - Zero-count items dimmed
+   * - Shift+click for AND filtering (vs default OR)
    */
 
   import { formatCompact } from '$lib/format';
@@ -18,6 +19,7 @@
    * @type {{
    *   options: Array<{value: string, count?: number}>,
    *   selected?: string[],
+   *   selectedAnd?: string[],
    *   label: string,
    *   initialVisible?: number,
    *   searchThreshold?: number,
@@ -27,6 +29,7 @@
   let {
     options = [],
     selected = $bindable([]),
+    selectedAnd = $bindable([]),
     label = '',
     initialVisible = 5,
     searchThreshold = 10,
@@ -37,10 +40,11 @@
   let expanded = $state(false);
   let search = $state('');
 
+  // Selected items as a set for quick lookups
+  const selectedSet = $derived(new Set(selected));
+
   // Sort options: selected first, then by count
   const sortedOptions = $derived.by(() => {
-    const selectedSet = new Set(selected);
-
     // Filter by search if expanded and searching
     let filtered = options;
     if (expanded && search.length >= 1) {
@@ -63,7 +67,6 @@
       return sortedOptions;
     }
     // When collapsed, show selected items + top items up to initialVisible
-    const selectedSet = new Set(selected);
     const selectedItems = sortedOptions.filter((o) => selectedSet.has(o.value));
     const unselectedItems = sortedOptions.filter((o) => !selectedSet.has(o.value));
     const slotsForUnselected = Math.max(0, initialVisible - selectedItems.length);
@@ -71,7 +74,6 @@
   });
 
   const hiddenCount = $derived(sortedOptions.length - visibleOptions.length);
-  const hasSelected = $derived(selected.length > 0);
   const showSearch = $derived(expanded && options.length > searchThreshold);
 
   // Max count for proportion bars
@@ -79,18 +81,22 @@
 
   // Split visible options into those with results and those without
   const optionsWithResults = $derived(
-    visibleOptions.filter((o) => (o.count || 0) > 0 || selected.includes(o.value))
+    visibleOptions.filter((o) => (o.count || 0) > 0 || selectedSet.has(o.value))
   );
   const optionsWithoutResults = $derived(
-    visibleOptions.filter((o) => (o.count || 0) === 0 && !selected.includes(o.value))
+    visibleOptions.filter((o) => (o.count || 0) === 0 && !selectedSet.has(o.value))
   );
   const showNoResultsDivider = $derived(
     optionsWithoutResults.length > 0 && optionsWithResults.length > 0
   );
 
+  /**
+   * Toggle selection - simple on/off
+   * @param {string} value
+   */
   function toggle(value) {
-    const idx = selected.indexOf(value);
-    if (idx >= 0) {
+    const isSelected = selected.includes(value);
+    if (isSelected) {
       selected = selected.filter((v) => v !== value);
     } else {
       selected = [...selected, value];
@@ -113,10 +119,8 @@
   <div class="facet-header">
     <span class="facet-label">
       {label}
-      {#if selected.length > 1}
-        <span class="facet-logic">{selected.length} <span class="logic-badge">OR</span></span>
-      {:else if selected.length === 1}
-        <span class="facet-logic">1 selected</span>
+      {#if selected.length > 0}
+        <span class="facet-logic">{selected.length} selected</span>
       {:else}
         <span class="facet-total">({options.length})</span>
       {/if}
@@ -124,7 +128,7 @@
         <span class="facet-loading">...</span>
       {/if}
     </span>
-    {#if hasSelected}
+    {#if selected.length > 0}
       <button class="facet-clear" onclick={clearAll}>Clear</button>
     {/if}
   </div>
@@ -141,7 +145,7 @@
   <div class="facet-options" class:expanded>
     <!-- Options with results -->
     {#each optionsWithResults as option (option.value)}
-      {@const isSelected = selected.includes(option.value)}
+      {@const isSelected = selectedSet.has(option.value)}
       {@const proportion = ((option.count || 0) / maxCount) * 100}
       <label
         class="facet-option"
@@ -149,9 +153,13 @@
         style="--bar-width: {proportion}%"
         animate:flip={{ duration: 200, easing: (t) => t * (2 - t) }}
         in:fade={{ duration: 150 }}
+        onclick={(e) => {
+          e.preventDefault();
+          toggle(option.value);
+        }}
       >
         <span class="facet-bar"></span>
-        <input type="checkbox" checked={isSelected} onchange={() => toggle(option.value)} />
+        <input type="checkbox" checked={isSelected} tabindex="-1" />
         <span class="facet-option-label">{option.value}</span>
         {#if option.count !== undefined}
           <span class="facet-count">({formatCompact(option.count)})</span>
@@ -239,21 +247,11 @@
 
   .facet-logic {
     font-weight: 400;
-    color: #444;
+    color: #666;
     text-transform: none;
     letter-spacing: 0;
-  }
-
-  .logic-badge {
-    display: inline-block;
-    font-size: 8px;
-    font-weight: 600;
-    padding: 1px 4px;
-    background: #e0e0e0;
-    border-radius: 2px;
-    color: #555;
-    vertical-align: middle;
-    margin-left: 2px;
+    font-size: 9px;
+    margin-left: 4px;
   }
 
   .facet-clear {
@@ -312,6 +310,8 @@
     position: relative;
     overflow: hidden;
     min-height: 28px;
+    user-select: none;
+    -webkit-user-select: none;
   }
 
   /* Proportion bar - subtle background fill (monochrome) */
@@ -369,7 +369,7 @@
     height: 14px;
     min-width: 14px;
     margin: 0;
-    cursor: pointer;
+    pointer-events: none; /* Let clicks go through to label handler */
     accent-color: #000;
     border: 1px solid #999;
     border-radius: 2px;

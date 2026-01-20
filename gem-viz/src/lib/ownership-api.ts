@@ -17,6 +17,54 @@ const API_BASE =
 // Default timeout for API requests (30 seconds)
 const API_TIMEOUT_MS = 30_000;
 
+// Cache for G-prefix to compound ID mappings
+const gPrefixToCompoundCache = new Map<string, string>();
+
+/**
+ * Resolve a coal plant G-prefix ID to compound L_G format required by the API.
+ *
+ * Coal plants: API needs "L100000104107_G100000102961", app uses "G100000102961"
+ * Coal mines: Work fine with simple M-prefix IDs like "M7043"
+ *
+ * @param assetId - The asset ID (G-prefix coal plant, or M-prefix coal mine)
+ * @returns The compound ID if G-prefix, or original ID if M-prefix/other
+ */
+export async function resolveAssetId(assetId: string): Promise<string> {
+  // Only process G-prefix IDs that aren't already compound
+  if (!assetId.startsWith('G') || assetId.includes('_')) {
+    return assetId;
+  }
+
+  // Check cache first
+  if (gPrefixToCompoundCache.has(assetId)) {
+    return gPrefixToCompoundCache.get(assetId)!;
+  }
+
+  // Try to resolve via DuckDB lookup
+  try {
+    // Dynamic import to avoid circular dependencies and only load when needed
+    const { widgetQuery } = await import('./widgets/widget-utils');
+    const result = await widgetQuery<{ locationId: string }>(`
+      SELECT DISTINCT "GEM location ID" as locationId
+      FROM ownership
+      WHERE "GEM unit ID" = '${assetId}'
+      LIMIT 1
+    `);
+
+    if (result.success && result.data?.[0]?.locationId) {
+      const compoundId = `${result.data[0].locationId}_${assetId}`;
+      gPrefixToCompoundCache.set(assetId, compoundId);
+      console.log(`[ID Resolver] Mapped ${assetId} → ${compoundId}`);
+      return compoundId;
+    }
+  } catch (err) {
+    console.warn(`[ID Resolver] Failed to resolve ${assetId}:`, err);
+  }
+
+  // Return original if we can't resolve
+  return assetId;
+}
+
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -252,14 +300,15 @@ function normalizeAsset(raw: RawAsset): AssetSummary {
     'GEM Unit ID',
     'GEM unit ID',
     'gem_unit_id',
+    'asset_id',
     'id',
   ]);
   const id = String(idRaw || '').trim();
   const name = String(
     pickKey(raw, ['Facility Name', 'Project', 'Unit Name', 'asset_name', 'name']) || id
   ).trim();
-  const facilityType = pickKey(raw, ['Facility Type', 'Tracker', 'facility_type']);
-  const status = pickKey(raw, ['Status', 'status']);
+  const facilityType = pickKey(raw, ['Facility Type', 'Tracker', 'facility_type', 'asset_type']);
+  const status = pickKey(raw, ['Status', 'status', 'operating_status']);
   const capacity = toNumber(pickKey(raw, ['Capacity', 'Capacity (MW)', 'capacity']));
   const capacityUnit = pickKey(raw, ['Capacity Unit', 'capacity_unit']);
   const country = pickKey(raw, ['Country Area', 'Country', 'country']);
@@ -516,9 +565,11 @@ export async function listAssets(params?: {
 
 /**
  * Get full asset details
+ * Note: G-prefix IDs are automatically resolved to compound L_G format
  */
 export async function getAsset(assetId: string): Promise<AssetSummary> {
-  const raw = await fetchAPI<RawAsset>(`/assets/${encodeURIComponent(assetId)}`);
+  const resolvedId = await resolveAssetId(assetId);
+  const raw = await fetchAPI<RawAsset>(`/assets/${encodeURIComponent(resolvedId)}`);
   return normalizeAsset(raw);
 }
 
@@ -528,14 +579,16 @@ export async function getAsset(assetId: string): Promise<AssetSummary> {
 
 /**
  * Universal ownership graph - works with both entities and assets
+ * Note: G-prefix IDs are automatically resolved to compound L_G format
  */
 export async function getOwnershipGraph(params: {
   root: string;
   direction?: 'up' | 'down';
   max_depth?: number;
 }): Promise<OwnershipGraphResponse> {
+  const resolvedRoot = await resolveAssetId(params.root);
   const searchParams = new URLSearchParams();
-  searchParams.set('root', params.root);
+  searchParams.set('root', resolvedRoot);
   if (params.direction) searchParams.set('direction', params.direction);
   if (params.max_depth) searchParams.set('max_depth', String(params.max_depth));
 

@@ -1,6 +1,6 @@
 <script>
   import { goto } from '$app/navigation';
-  import { link, assetLink, entityLink, assetPath } from '$lib/links';
+  import { assetLink, entityLink, assetPath } from '$lib/links';
   import { initDuckDB, loadParquetFromPath, query } from '$lib/duckdb-utils';
   import { investigationCart } from '$lib/investigationCart';
   import { buildIdList } from '$lib/utils/sql';
@@ -47,7 +47,8 @@
     return Number.isFinite(num) ? num.toLocaleString() : String(n ?? '');
   }
 
-  function formatBytes(bytes) {
+  // Utility functions kept for potential future use
+  function _formatBytes(bytes) {
     const b = Number(bytes);
     if (!Number.isFinite(b)) return '';
     const units = ['B', 'KB', 'MB', 'GB'];
@@ -60,7 +61,7 @@
     return `${value.toFixed(unitIdx === 0 ? 0 : 1)} ${units[unitIdx]}`;
   }
 
-  function hashStringFNV1a(input) {
+  function _hashStringFNV1a(input) {
     let hash = 0x811c9dc5;
     for (let i = 0; i < input.length; i += 1) {
       hash ^= input.charCodeAt(i);
@@ -203,543 +204,263 @@
     };
   }
 
+  async function runPreflight({ assetIds, entityIds }) {
+    const [ownershipSchema, locationsSchema, combined, assets, entities] = await Promise.all([
+      describeTable('ownership'),
+      describeTable('locations'),
+      getPreflightStats({ assetIds, entityIds }),
+      assetIds.length ? getPreflightStats({ assetIds }) : Promise.resolve(null),
+      entityIds.length ? getPreflightStats({ entityIds }) : Promise.resolve(null),
+    ]);
+
+    return {
+      generatedAt: nowIso(),
+      ownershipSchema,
+      locationsSchema,
+      combined,
+      assets,
+      entities,
+    };
+  }
+
   async function runAnalysis() {
+    if (!totalCount) return;
     analysisLoading = true;
     analysisError = null;
-
     try {
       await ensureDB();
-      const startedAt = Date.now();
-
-      const [ownershipSchema, locationsSchema] = await Promise.all([
-        describeTable('ownership'),
-        describeTable('locations'),
-      ]);
-
       const assetIds = assetItems.map((a) => a.id);
       const entityIds = entityItems.map((e) => e.id);
-
-      const [assets, entities, combined] = await Promise.all([
-        assetIds.length > 0 ? getPreflightStats({ assetIds }) : null,
-        entityIds.length > 0 ? getPreflightStats({ entityIds }) : null,
-        totalCount > 0 ? getPreflightStats({ assetIds, entityIds }) : null,
-      ]);
-
-      analysis = {
-        generatedAt: nowIso(),
-        elapsedMs: Date.now() - startedAt,
-        ownershipSchema,
-        locationsSchema,
-        assets,
-        entities,
-        combined,
-      };
-    } catch (e) {
-      analysisError = e instanceof Error ? e.message : String(e);
+      analysis = await runPreflight({ assetIds, entityIds });
+    } catch (err) {
+      analysisError = err.message;
     } finally {
       analysisLoading = false;
     }
   }
 
-  function scheduleAnalysis() {
+  function queueAnalysis() {
     if (analysisDebounceTimer) clearTimeout(analysisDebounceTimer);
     analysisDebounceTimer = setTimeout(() => {
-      if (totalCount > 0) runAnalysis();
-    }, 350);
+      runAnalysis();
+      analysisDebounceTimer = null;
+    }, 300);
   }
 
   $effect(() => {
-    void totalCount;
-    void assetCount;
-    void entityCount;
-    scheduleAnalysis();
+    if (totalCount === 0) {
+      analysis = null;
+      analysisError = null;
+      return;
+    }
+    queueAnalysis();
   });
 
-  function normalizeSeries(values) {
+  function sparklinePoints(values) {
     const nums = values.map((v) => Number(v) || 0);
     const max = Math.max(...nums, 1);
-    return nums.map((n) => n / max);
-  }
-
-  function sparklinePoints(values, width = 80, height = 18, pad = 2) {
-    const series = normalizeSeries(values);
-    const usableW = width - pad * 2;
-    const usableH = height - pad * 2;
-    if (series.length === 1) {
-      const x = pad + usableW / 2;
-      const y = pad + usableH - series[0] * usableH;
+    const normalized = nums.map((n) => n / max);
+    return normalized.map((v, i) => {
+      const x = (i / Math.max(1, normalized.length - 1)) * 80;
+      const y = 18 - v * 18;
       return `${x},${y}`;
-    }
-    return series
-      .map((v, i) => {
-        const x = pad + (i / (series.length - 1)) * usableW;
-        const y = pad + usableH - v * usableH;
-        return `${x},${y}`;
-      })
-      .join(' ');
+    });
   }
 
-  function downloadTextFile(contents, filename, mimeType = 'text/plain;charset=utf-8') {
-    const blob = new Blob([contents], { type: mimeType });
+  function buildExportManifest(kind, selection, result, sql) {
+    return {
+      kind,
+      selection,
+      result,
+      sql,
+      app: {
+        version: appVersion,
+        buildTime,
+        buildHash,
+      },
+    };
+  }
+
+  async function downloadFile(data, filename, mimeType) {
+    const blob = new Blob([data], { type: mimeType });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    return blob.size;
-  }
-
-  // Export assets CSV
-  async function exportAssetsCSV() {
-    const ids = assetItems.map((a) => a.id);
-    if (ids.length === 0) {
-      alert('No assets in cart');
-      return;
-    }
-
-    exporting = true;
-    resetExportUI();
-    exportProgress = 'Initializing database...';
-    error = null;
-
-    try {
-      const startedAt = Date.now();
-      addLog('Starting export', { type: 'assets', assetCount: ids.length });
-      await ensureDB();
-      addLog('DuckDB ready', { elapsedMs: Date.now() - startedAt });
-
-      exportProgress = `Querying data for ${ids.length} assets...`;
-      const idList = buildIdList(ids);
-
-      const sql = `
-        SELECT
-          o.*,
-          COALESCE(l."Country.Area", 'Unknown') as "Asset Country",
-          l."Latitude",
-          l."Longitude"
-        FROM ownership o
-        LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
-        WHERE o."GEM unit ID" IN (${idList})
-        ORDER BY o."GEM unit ID", o."Owner"
-      `;
-
-      addLog('Executing query', {
-        hash: hashStringFNV1a(sql),
-        sqlPreview: sql.trim().slice(0, 260),
-      });
-      const result = await query(sql);
-      if (!result.success) throw new Error(result.error || 'Query failed');
-
-      const data = result.data || [];
-      if (data.length === 0) {
-        throw new Error('No data found for selected assets.');
-      }
-
-      exportProgress = `Converting ${data.length} rows to CSV...`;
-      addLog('Converting to CSV', { rows: data.length });
-      const { csv, columns } = await convertToCSVAsync(data, {
-        onProgress: ({ done, total }) => {
-          const pct = Math.round((done / total) * 100);
-          exportProgress = `Converting to CSV… ${pct}% (${formatNumber(done)}/${formatNumber(total)})`;
-        },
-      });
-      const date = new Date().toISOString().replace(/[:.]/g, '-');
-      const filenameBase = `gem-assets-${ids.length}-${date}`;
-      const filename = `${filenameBase}.csv`;
-      const fileSize = downloadCSV(csv, filename);
-
-      const manifest = {
-        kind: 'assets',
-        generatedAt: nowIso(),
-        app: { version: appVersion, buildHash, buildTime },
-        selection: { assetIds: ids, entityIds: [] },
-        sql: { main: sql.trim(), hash: hashStringFNV1a(sql) },
-        columns,
-        result: { rowCount: data.length, file: { name: filename, bytes: fileSize } },
-        analysis: analysis?.assets || null,
-        environment: {
-          locale: navigator.language,
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          userAgent: navigator.userAgent,
-        },
-        timings: { totalMs: Date.now() - startedAt },
-      };
-
-      const manifestBytes = downloadTextFile(
-        JSON.stringify(manifest, null, 2),
-        `${filenameBase}.manifest.json`,
-        'application/json;charset=utf-8'
-      );
-      downloadTextFile(
-        [
-          'GEM Viz Export Manifest',
-          `- Generated: ${manifest.generatedAt}`,
-          `- Kind: ${manifest.kind}`,
-          `- App: v${manifest.app.version} (${manifest.app.buildHash} @ ${manifest.app.buildTime})`,
-          `- Assets requested: ${manifest.selection.assetIds.length}`,
-          `- Ownership rows exported: ${manifest.result.rowCount}`,
-          `- CSV: ${manifest.result.file.name} (${formatBytes(manifest.result.file.bytes)})`,
-          `- Manifest: ${filenameBase}.manifest.json (${formatBytes(manifestBytes)})`,
-          '',
-          'Notes:',
-          '- This CSV is one row per ownership record (asset-owner relationship), not one row per asset.',
-          '- "Asset Country"/coordinates come from `asset_locations.parquet` joined on `GEM location ID`.',
-        ].join('\n'),
-        `${filenameBase}.README.txt`,
-        'text/plain;charset=utf-8'
-      );
-
-      lastExportManifest = manifest;
-      addLog('Downloads created', { csvBytes: fileSize, manifestBytes });
-
-      exportProgress = `Exported ${data.length} rows for ${ids.length} assets`;
-    } catch (err) {
-      error = err.message;
-      exportProgress = '';
-    } finally {
-      exporting = false;
-    }
-  }
-
-  // Export entities CSV - includes their portfolio (owned assets)
-  async function exportEntitiesCSV() {
-    const ids = entityItems.map((e) => e.id);
-    if (ids.length === 0) {
-      alert('No entities in cart');
-      return;
-    }
-
-    exporting = true;
-    resetExportUI();
-    exportProgress = 'Initializing database...';
-    error = null;
-
-    try {
-      const startedAt = Date.now();
-      addLog('Starting export', { type: 'entities', entityCount: ids.length });
-      await ensureDB();
-      addLog('DuckDB ready', { elapsedMs: Date.now() - startedAt });
-
-      exportProgress = `Querying portfolio for ${ids.length} entities...`;
-      const idList = buildIdList(ids);
-
-      // Query all assets owned by these entities
-      const sql = `
-        SELECT
-          'Entity Portfolio' as "Record Type",
-          o."Owner GEM Entity ID" as "Entity ID",
-          o."Owner" as "Entity Name",
-          o."Owner Registration Country" as "Entity Registration Country",
-          o."Owner Headquarters Country" as "Entity HQ Country",
-          o."GEM unit ID" as "Asset ID",
-          o."Project" as "Asset Name",
-          o."Tracker" as "Asset Type",
-          o."Status" as "Asset Status",
-          COALESCE(l."Country.Area", 'Unknown') as "Asset Country",
-          CAST(o."Capacity (MW)" AS DOUBLE) as "Capacity MW",
-          CAST(o."Share" AS DOUBLE) as "Ownership Share %",
-          o."Ownership Path" as "Ownership Path"
-        FROM ownership o
-        LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
-        WHERE o."Owner GEM Entity ID" IN (${idList})
-        ORDER BY o."Owner", o."Project"
-      `;
-
-      addLog('Executing query', {
-        hash: hashStringFNV1a(sql),
-        sqlPreview: sql.trim().slice(0, 260),
-      });
-      const result = await query(sql);
-      if (!result.success) throw new Error(result.error || 'Query failed');
-
-      const data = result.data || [];
-      if (data.length === 0) {
-        throw new Error('No portfolio data found for selected entities.');
-      }
-
-      exportProgress = `Converting ${data.length} rows to CSV...`;
-      addLog('Converting to CSV', { rows: data.length });
-      const { csv, columns } = await convertToCSVAsync(data, {
-        onProgress: ({ done, total }) => {
-          const pct = Math.round((done / total) * 100);
-          exportProgress = `Converting to CSV… ${pct}% (${formatNumber(done)}/${formatNumber(total)})`;
-        },
-      });
-      const date = new Date().toISOString().replace(/[:.]/g, '-');
-      const filenameBase = `gem-entities-${ids.length}-portfolio-${date}`;
-      const filename = `${filenameBase}.csv`;
-      const fileSize = downloadCSV(csv, filename);
-
-      const manifest = {
-        kind: 'entities',
-        generatedAt: nowIso(),
-        app: { version: appVersion, buildHash, buildTime },
-        selection: { assetIds: [], entityIds: ids },
-        sql: { main: sql.trim(), hash: hashStringFNV1a(sql) },
-        columns,
-        result: { rowCount: data.length, file: { name: filename, bytes: fileSize } },
-        analysis: analysis?.entities || null,
-        environment: {
-          locale: navigator.language,
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          userAgent: navigator.userAgent,
-        },
-        timings: { totalMs: Date.now() - startedAt },
-      };
-
-      const manifestBytes = downloadTextFile(
-        JSON.stringify(manifest, null, 2),
-        `${filenameBase}.manifest.json`,
-        'application/json;charset=utf-8'
-      );
-      downloadTextFile(
-        [
-          'GEM Viz Export Manifest',
-          `- Generated: ${manifest.generatedAt}`,
-          `- Kind: ${manifest.kind}`,
-          `- App: v${manifest.app.version} (${manifest.app.buildHash} @ ${manifest.app.buildTime})`,
-          `- Entities requested: ${manifest.selection.entityIds.length}`,
-          `- Ownership rows exported: ${manifest.result.rowCount}`,
-          `- CSV: ${manifest.result.file.name} (${formatBytes(manifest.result.file.bytes)})`,
-          `- Manifest: ${filenameBase}.manifest.json (${formatBytes(manifestBytes)})`,
-          '',
-          'Notes:',
-          '- This CSV is one row per owned asset record (entity portfolio), not one row per entity.',
-          '- "Asset Country" comes from `asset_locations.parquet` joined on `GEM location ID`.',
-        ].join('\n'),
-        `${filenameBase}.README.txt`,
-        'text/plain;charset=utf-8'
-      );
-
-      lastExportManifest = manifest;
-      addLog('Downloads created', { csvBytes: fileSize, manifestBytes });
-
-      exportProgress = `Exported ${data.length} ownership records for ${ids.length} entities`;
-    } catch (err) {
-      error = err.message;
-      exportProgress = '';
-    } finally {
-      exporting = false;
-    }
-  }
-
-  // Export everything (combined)
-  async function exportAllCSV() {
-    if (totalCount === 0) {
-      alert('No items in cart');
-      return;
-    }
-
-    exporting = true;
-    resetExportUI();
-    exportProgress = 'Initializing database...';
-    error = null;
-
-    try {
-      const startedAt = Date.now();
-      addLog('Starting export', { type: 'all', totalCount, assetCount, entityCount });
-      await ensureDB();
-      addLog('DuckDB ready', { elapsedMs: Date.now() - startedAt });
-
-      const assetIds = assetItems.map((a) => a.id);
-      const entityIds = entityItems.map((e) => e.id);
-      const allData = [];
-      const querySummaries = [];
-
-      // Query assets
-      if (assetIds.length > 0) {
-        exportProgress = `Querying ${assetIds.length} assets...`;
-        const assetIdList = buildIdList(assetIds);
-        const assetSql = `
-          SELECT
-            'Asset' as "Record Type",
-            o."GEM unit ID" as "ID",
-            o."Project" as "Name",
-            o."Tracker" as "Type",
-            o."Status",
-            COALESCE(l."Country.Area", 'Unknown') as "Country",
-            CAST(o."Capacity (MW)" AS DOUBLE) as "Capacity MW",
-            o."Owner" as "Owner Name",
-            o."Owner GEM Entity ID" as "Owner ID",
-            CAST(o."Share" AS DOUBLE) as "Ownership %",
-            l."Latitude",
-            l."Longitude"
-          FROM ownership o
-          LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
-          WHERE o."GEM unit ID" IN (${assetIdList})
-        `;
-        addLog('Executing asset query', {
-          hash: hashStringFNV1a(assetSql),
-          sqlPreview: assetSql.trim().slice(0, 240),
-        });
-        const assetResult = await query(assetSql);
-        if (assetResult.success && assetResult.data) {
-          allData.push(...assetResult.data);
-          querySummaries.push({
-            kind: 'assets',
-            hash: hashStringFNV1a(assetSql),
-            rows: assetResult.data.length,
-            sql: assetSql.trim(),
-          });
-        }
-      }
-
-      // Query entity portfolios
-      if (entityIds.length > 0) {
-        exportProgress = `Querying ${entityIds.length} entity portfolios...`;
-        const entityIdList = buildIdList(entityIds);
-        const entitySql = `
-          SELECT
-            'Entity Portfolio' as "Record Type",
-            o."Owner GEM Entity ID" as "ID",
-            o."Owner" as "Name",
-            o."Tracker" as "Type",
-            o."Status",
-            COALESCE(l."Country.Area", 'Unknown') as "Country",
-            CAST(o."Capacity (MW)" AS DOUBLE) as "Capacity MW",
-            o."Project" as "Owned Asset",
-            o."GEM unit ID" as "Owned Asset ID",
-            CAST(o."Share" AS DOUBLE) as "Ownership %",
-            NULL as "Latitude",
-            NULL as "Longitude"
-          FROM ownership o
-          LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
-          WHERE o."Owner GEM Entity ID" IN (${entityIdList})
-        `;
-        addLog('Executing entity query', {
-          hash: hashStringFNV1a(entitySql),
-          sqlPreview: entitySql.trim().slice(0, 240),
-        });
-        const entityResult = await query(entitySql);
-        if (entityResult.success && entityResult.data) {
-          allData.push(...entityResult.data);
-          querySummaries.push({
-            kind: 'entities',
-            hash: hashStringFNV1a(entitySql),
-            rows: entityResult.data.length,
-            sql: entitySql.trim(),
-          });
-        }
-      }
-
-      if (allData.length === 0) {
-        throw new Error('No data found for selected items.');
-      }
-
-      exportProgress = `Converting ${allData.length} rows to CSV...`;
-      addLog('Converting to CSV', { rows: allData.length });
-      const { csv, columns } = await convertToCSVAsync(allData, {
-        onProgress: ({ done, total }) => {
-          const pct = Math.round((done / total) * 100);
-          exportProgress = `Converting to CSV… ${pct}% (${formatNumber(done)}/${formatNumber(total)})`;
-        },
-      });
-      const date = new Date().toISOString().replace(/[:.]/g, '-');
-      const filenameBase = `gem-export-${totalCount}-items-${date}`;
-      const filename = `${filenameBase}.csv`;
-      const fileSize = downloadCSV(csv, filename);
-
-      const manifest = {
-        kind: 'all',
-        generatedAt: nowIso(),
-        app: { version: appVersion, buildHash, buildTime },
-        selection: { assetIds, entityIds },
-        sql: {
-          parts: querySummaries.map((q) => ({ kind: q.kind, hash: q.hash, sql: q.sql })),
-        },
-        columns,
-        result: { rowCount: allData.length, file: { name: filename, bytes: fileSize } },
-        analysis: analysis?.combined || null,
-        environment: {
-          locale: navigator.language,
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          userAgent: navigator.userAgent,
-        },
-        timings: { totalMs: Date.now() - startedAt },
-      };
-
-      const manifestBytes = downloadTextFile(
-        JSON.stringify(manifest, null, 2),
-        `${filenameBase}.manifest.json`,
-        'application/json;charset=utf-8'
-      );
-      downloadTextFile(
-        [
-          'GEM Viz Export Manifest',
-          `- Generated: ${manifest.generatedAt}`,
-          `- Kind: ${manifest.kind}`,
-          `- App: v${manifest.app.version} (${manifest.app.buildHash} @ ${manifest.app.buildTime})`,
-          `- Cart items: ${totalCount} (${assetCount} assets, ${entityCount} entities)`,
-          `- Rows exported: ${manifest.result.rowCount}`,
-          `- CSV: ${manifest.result.file.name} (${formatBytes(manifest.result.file.bytes)})`,
-          `- Manifest: ${filenameBase}.manifest.json (${formatBytes(manifestBytes)})`,
-          '',
-          'Notes:',
-          '- Combined exports contain multiple record types; use the "Record Type" column to split.',
-          '- "Country" in exports comes from `asset_locations.parquet` joined on `GEM location ID`.',
-        ].join('\n'),
-        `${filenameBase}.README.txt`,
-        'text/plain;charset=utf-8'
-      );
-
-      lastExportManifest = manifest;
-      addLog('Downloads created', { csvBytes: fileSize, manifestBytes });
-
-      exportProgress = `Exported ${allData.length} rows`;
-    } catch (err) {
-      error = err.message;
-      exportProgress = '';
-    } finally {
-      exporting = false;
-    }
   }
 
   function escapeCSVVal(val) {
-    if (val === null || val === undefined) return '';
-    if (typeof val === 'object') val = JSON.stringify(val);
-    const str = String(val);
-    const needsQuoting = /[",\n\r]/.test(str);
-    if (needsQuoting) return `"${str.replace(/"/g, '""')}"`;
-    return str;
+    if (val == null) return '';
+    const s = String(val);
+    if (/\n|\r|"|,/.test(s)) {
+      return `"${s.replace(/"/g, '""')}"`;
+    }
+    return s;
   }
 
-  async function convertToCSVAsync(data, { onProgress = null, chunkSize = 2500 } = {}) {
-    if (data.length === 0) return { csv: '', columns: [] };
+  async function exportQuery(sql, filenameBase, _selection) {
+    await ensureDB();
+    const startTime = Date.now();
+    exportProgress = `Running SQL...`;
+    addLog('SQL query started');
 
-    const columns = [...new Set(data.flatMap((row) => Object.keys(row)))].sort();
-    const lines = new Array(data.length + 1);
-    lines[0] = columns.map((col) => escapeCSVVal(col)).join(',');
-
-    const total = data.length;
-    for (let i = 0; i < total; i += 1) {
-      lines[i + 1] = columns.map((col) => escapeCSVVal(data[i][col])).join(',');
-
-      if (onProgress && (i + 1) % chunkSize === 0) {
-        onProgress({ done: i + 1, total });
-
-        await new Promise((resolve) => requestAnimationFrame(resolve));
-      }
+    const res = await query(sql);
+    if (!res.success) {
+      throw new Error(res.error || 'Query failed');
     }
 
-    if (onProgress) onProgress({ done: total, total });
-    return { csv: lines.join('\r\n'), columns };
+    exportProgress = `Formatting CSV...`;
+    const rows = res.data || [];
+    if (!rows.length) {
+      exportProgress = '';
+      addLog('No rows returned');
+      return {
+        file: { name: `${filenameBase}.csv` },
+        rowCount: 0,
+        bytes: 0,
+        seconds: ((Date.now() - startTime) / 1000).toFixed(1),
+      };
+    }
+
+    const columns = Object.keys(rows[0]);
+    const lines = [];
+    lines.push(columns.map((col) => escapeCSVVal(col)).join(','));
+    for (let i = 0; i < rows.length; i += 1) {
+      lines.push(columns.map((col) => escapeCSVVal(rows[i][col])).join(','));
+    }
+
+    const csv = lines.join('\n');
+    await downloadFile(csv, `${filenameBase}.csv`, 'text/csv;charset=utf-8');
+
+    const elapsed = (Date.now() - startTime) / 1000;
+    const bytes = new Blob([csv]).size;
+    addLog('CSV download complete', { rows: rows.length, bytes });
+
+    exportProgress = `Exported ${rows.length.toLocaleString()} rows`;
+
+    return {
+      file: { name: `${filenameBase}.csv` },
+      rowCount: rows.length,
+      bytes,
+      seconds: elapsed.toFixed(1),
+    };
   }
 
-  // Trigger browser download
-  function downloadCSV(csv, filename) {
-    const BOM = '\uFEFF';
-    const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-    return blob.size;
+  function buildAssetQuery(assetIds) {
+    return `
+      SELECT
+        o.*, l."Latitude", l."Longitude", l."Country.Area" as "Country"
+      FROM ownership o
+      LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
+      WHERE o."GEM unit ID" IN (${buildIdList(assetIds)})
+    `;
   }
 
-  function handleRowClick(row) {
+  function buildEntityQuery(entityIds) {
+    return `
+      SELECT
+        o.*, l."Latitude", l."Longitude", l."Country.Area" as "Country"
+      FROM ownership o
+      LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
+      WHERE o."Owner GEM Entity ID" IN (${buildIdList(entityIds)})
+    `;
+  }
+
+  async function exportAssetsCSV() {
+    if (!assetItems.length) return;
+    resetExportUI();
+    exporting = true;
+    try {
+      const assetIds = assetItems.map((a) => a.id);
+      const sql = buildAssetQuery(assetIds);
+      const selection = { assets: assetIds, entities: [] };
+      const result = await exportQuery(sql, 'gem-assets-export', selection);
+      lastExportManifest = buildExportManifest('assets', selection, result, { sql });
+      addLog('Manifest created');
+      await downloadFile(
+        JSON.stringify(lastExportManifest, null, 2),
+        'gem-assets-export-manifest.json',
+        'application/json;charset=utf-8'
+      );
+      addLog('Manifest downloaded');
+    } catch (err) {
+      error = err.message;
+      addLog('Export error', err.message);
+    } finally {
+      exporting = false;
+    }
+  }
+
+  async function exportEntitiesCSV() {
+    if (!entityItems.length) return;
+    resetExportUI();
+    exporting = true;
+    try {
+      const entityIds = entityItems.map((e) => e.id);
+      const sql = buildEntityQuery(entityIds);
+      const selection = { assets: [], entities: entityIds };
+      const result = await exportQuery(sql, 'gem-entities-export', selection);
+      lastExportManifest = buildExportManifest('entities', selection, result, { sql });
+      addLog('Manifest created');
+      await downloadFile(
+        JSON.stringify(lastExportManifest, null, 2),
+        'gem-entities-export-manifest.json',
+        'application/json;charset=utf-8'
+      );
+      addLog('Manifest downloaded');
+    } catch (err) {
+      error = err.message;
+      addLog('Export error', err.message);
+    } finally {
+      exporting = false;
+    }
+  }
+
+  async function exportAllCSV() {
+    if (!totalCount) return;
+    resetExportUI();
+    exporting = true;
+    try {
+      const assetIds = assetItems.map((a) => a.id);
+      const entityIds = entityItems.map((e) => e.id);
+      const whereClause = [
+        assetIds.length ? `o."GEM unit ID" IN (${buildIdList(assetIds)})` : null,
+        entityIds.length ? `o."Owner GEM Entity ID" IN (${buildIdList(entityIds)})` : null,
+      ]
+        .filter(Boolean)
+        .join(' OR ');
+
+      const sql = `
+        SELECT
+          o.*, l."Latitude", l."Longitude", l."Country.Area" as "Country"
+        FROM ownership o
+        LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
+        WHERE ${whereClause}
+      `;
+
+      const selection = { assets: assetIds, entities: entityIds };
+      const result = await exportQuery(sql, 'gem-export', selection);
+      lastExportManifest = buildExportManifest('combined', selection, result, { sql });
+      addLog('Manifest created');
+      await downloadFile(
+        JSON.stringify(lastExportManifest, null, 2),
+        'gem-export-manifest.json',
+        'application/json;charset=utf-8'
+      );
+      addLog('Manifest downloaded');
+    } catch (err) {
+      error = err.message;
+      addLog('Export error', err.message);
+    } finally {
+      exporting = false;
+    }
+  }
+
+  async function handleRowClick(row) {
     if (row.type === 'entity') {
       goto(entityLink(row.id));
     } else {
@@ -748,14 +469,9 @@
   }
 </script>
 
-<svelte:head>
-  <title>Export ({totalCount}) — GEM Viz</title>
-</svelte:head>
-
-<main>
-  <header>
-    <a href={link('index')} class="back-link">Back to Map</a>
-    <span class="title">Export List</span>
+<section class="export-panel">
+  <header class="export-header">
+    <h2>Export</h2>
     <span class="count">
       {totalCount} items
       {#if assetCount > 0 && entityCount > 0}
@@ -770,12 +486,8 @@
 
   {#if totalCount === 0}
     <div class="empty-state">
-      <h2>No items in export list</h2>
+      <h3>No items in export list</h3>
       <p>Add assets or entities to your cart from the map, search, or detail pages.</p>
-      <div class="empty-actions">
-        <a href={link('index')} class="btn">Go to Map</a>
-        <a href={link('explore')} class="btn">Explore Data</a>
-      </div>
     </div>
   {:else}
     <div class="export-actions">
@@ -804,7 +516,7 @@
 
     <section class="analysis-panel">
       <div class="analysis-header">
-        <h2>Export Preflight</h2>
+        <h3>Export Preflight</h3>
         <div class="analysis-meta">
           {#if analysisLoading}
             <span class="muted">Analyzing…</span>
@@ -976,7 +688,7 @@
 
     {#if exportLog.length > 0}
       <section class="log-panel">
-        <h2>Export Log</h2>
+        <h3>Export Log</h3>
         <div class="log-rows">
           {#each exportLog as row}
             <div class="log-row">
@@ -993,7 +705,7 @@
 
     {#if lastExportManifest}
       <section class="manifest-panel">
-        <h2>Last Export</h2>
+        <h3>Last Export</h3>
         <div class="manifest-grid">
           <div class="manifest-item">
             <div class="manifest-k">Kind</div>
@@ -1034,7 +746,7 @@
     <!-- Assets Section -->
     {#if assetCount > 0}
       <section class="item-section">
-        <h2>Assets ({assetCount})</h2>
+        <h3>Assets ({assetCount})</h3>
         <div class="item-grid">
           {#each assetItems as item}
             <div
@@ -1072,7 +784,7 @@
     <!-- Entities Section -->
     {#if entityCount > 0}
       <section class="item-section">
-        <h2>Entities ({entityCount})</h2>
+        <h3>Entities ({entityCount})</h3>
         <div class="item-grid">
           {#each entityItems as item}
             <div
@@ -1111,42 +823,29 @@
       </button>
     </div>
   {/if}
-</main>
+</section>
 
 <style>
-  main {
+  .export-panel {
     width: 100%;
     margin: 0 auto;
-    padding: 20px 40px;
+    padding: 20px 0 10px;
   }
 
-  header {
-    border-bottom: 1px solid var(--color-black);
-    padding-bottom: 15px;
-    margin-bottom: 20px;
+  .export-header {
     display: flex;
-    gap: 20px;
+    gap: 16px;
     align-items: baseline;
     flex-wrap: wrap;
+    margin-bottom: 12px;
   }
 
-  .back-link {
-    color: var(--color-black);
-    text-decoration: underline;
-    font-size: 11px;
+  .export-header h2 {
+    font-size: 14px;
+    font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-  }
-
-  .back-link:hover {
-    text-decoration: none;
-  }
-
-  .title {
-    font-size: 13px;
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    margin: 0;
   }
 
   .count {
@@ -1157,13 +856,13 @@
 
   .empty-state {
     text-align: center;
-    padding: 60px 20px;
+    padding: 40px 20px;
     color: var(--color-text-secondary);
   }
 
-  .empty-state h2 {
-    font-size: 18px;
-    font-weight: normal;
+  .empty-state h3 {
+    font-size: 16px;
+    font-weight: 500;
     margin-bottom: 10px;
   }
 
@@ -1171,19 +870,11 @@
     margin-bottom: 20px;
   }
 
-  .empty-actions {
-    display: flex;
-    gap: 12px;
-    justify-content: center;
-  }
-
   .export-actions {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 16px;
-    background: var(--color-gray-50);
-    border: 1px solid var(--color-border);
+    padding: 12px 0;
     margin-bottom: 20px;
     flex-wrap: wrap;
   }
@@ -1208,9 +899,7 @@
   .analysis-panel,
   .log-panel,
   .manifest-panel {
-    border: 1px solid var(--color-border);
-    background: var(--color-white);
-    padding: 16px;
+    padding: 16px 0;
     margin-bottom: 20px;
   }
 
@@ -1219,16 +908,15 @@
     justify-content: space-between;
     align-items: baseline;
     gap: 10px;
-    border-bottom: 1px solid var(--color-gray-100);
     padding-bottom: 10px;
     margin-bottom: 12px;
   }
 
-  .analysis-header h2,
-  .log-panel h2,
-  .manifest-panel h2 {
+  .analysis-header h3,
+  .log-panel h3,
+  .manifest-panel h3 {
     margin: 0;
-    font-size: 14px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
@@ -1247,9 +935,7 @@
   }
 
   .stat-card {
-    border: 1px solid var(--color-gray-100);
-    background: var(--color-gray-50);
-    padding: 12px;
+    padding: 12px 0;
   }
 
   .stat-title {
@@ -1279,9 +965,7 @@
   }
 
   .spark-card {
-    border: 1px solid var(--color-gray-100);
-    padding: 12px;
-    background: var(--color-white);
+    padding: 12px 0;
   }
 
   .spark-header {
@@ -1330,7 +1014,6 @@
   }
 
   .details {
-    border-top: 1px dashed var(--color-gray-100);
     padding-top: 10px;
     margin-top: 10px;
   }
@@ -1365,8 +1048,6 @@
       ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
     font-size: 10px;
     white-space: pre-wrap;
-    border: 1px solid var(--color-gray-100);
-    background: var(--color-gray-50);
     padding: 10px;
     color: var(--color-gray-700);
     max-height: 260px;
@@ -1383,9 +1064,7 @@
     grid-template-columns: 90px 1fr;
     gap: 10px;
     font-size: 11px;
-    border: 1px solid var(--color-gray-100);
-    background: var(--color-gray-50);
-    padding: 8px 10px;
+    padding: 8px 0;
   }
 
   .log-time {
@@ -1409,9 +1088,7 @@
   }
 
   .manifest-item {
-    border: 1px solid var(--color-gray-100);
-    background: var(--color-gray-50);
-    padding: 10px;
+    padding: 10px 0;
   }
 
   .manifest-k {
@@ -1434,18 +1111,14 @@
   }
 
   .error-banner {
-    padding: 12px 16px;
-    background: var(--color-error-bg, #ffebee);
-    border: 1px solid var(--color-error-border, #ef9a9a);
+    padding: 12px 0;
     color: var(--color-error-text, #c62828);
     margin-bottom: 20px;
     font-size: 12px;
   }
 
   .info-box {
-    padding: 12px 16px;
-    background: var(--color-gray-50);
-    border: 1px solid var(--color-border);
+    padding: 12px 0;
     margin-bottom: 20px;
     font-size: 12px;
     line-height: 1.5;
@@ -1470,13 +1143,12 @@
     margin-bottom: 32px;
   }
 
-  .item-section h2 {
-    font-size: 14px;
+  .item-section h3 {
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin: 0 0 12px 0;
     padding-bottom: 8px;
-    border-bottom: 1px solid var(--color-border);
   }
 
   .item-grid {
@@ -1487,24 +1159,23 @@
 
   .item-card {
     position: relative;
-    padding: 12px 32px 12px 12px;
-    background: var(--color-white);
-    border: 1px solid var(--color-border);
+    padding: 12px 32px 12px 0;
     cursor: pointer;
     transition: all 0.15s;
   }
 
   .item-card:hover {
-    border-color: var(--color-black);
-    background: var(--color-gray-50);
+    text-decoration: underline;
   }
 
   .item-card.asset {
     border-left: 3px solid var(--color-gray-700);
+    padding-left: 12px;
   }
 
   .item-card.entity {
     border-left: 3px solid var(--color-entity-text, #7b1fa2);
+    padding-left: 12px;
   }
 
   .item-header {
@@ -1547,12 +1218,10 @@
     justify-content: center;
     width: 18px;
     height: 18px;
-    background: var(--color-entity-text, #7b1fa2);
-    color: white;
-    border-radius: 50%;
     font-size: 10px;
     font-weight: bold;
     flex-shrink: 0;
+    color: var(--color-text-secondary);
   }
 
   .remove-btn {
@@ -1575,8 +1244,8 @@
   }
 
   @media (max-width: 768px) {
-    main {
-      padding: 15px;
+    .export-panel {
+      padding: 15px 0;
     }
     .item-grid {
       grid-template-columns: 1fr;

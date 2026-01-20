@@ -113,47 +113,47 @@
      These need to be visually distinguishable in charts.
      ========================================================================== */
 
-  /* --- Tracker Colors (GEM Brand) --- */
-  --color-tracker-coal-plant: #7f142a; /* Deep red */
-  --color-tracker-coal-mine: #4a0d19; /* Darker red */
-  --color-tracker-gas-plant: #a0aae5; /* Lavender */
-  --color-tracker-gas-pipeline: #7b86c9; /* Purple */
-  --color-tracker-oil-pipeline: #061f5f; /* Midnight blue */
-  --color-tracker-iron-ore: #dc153d; /* Bright red */
-  --color-tracker-steel: #004f61; /* Teal */
-  --color-tracker-cement: #becccf; /* Warm gray */
-  --color-tracker-bioenergy: #51bf7e; /* Green */
+  /* --- Tracker Colors (Warm Grayscale) --- */
+  --color-tracker-coal-plant: #1c1917;
+  --color-tracker-coal-mine: #292524;
+  --color-tracker-gas-plant: #3f3a37;
+  --color-tracker-gas-pipeline: #4a4440;
+  --color-tracker-oil-pipeline: #57534e;
+  --color-tracker-iron-ore: #78716c;
+  --color-tracker-steel: #8f8883;
+  --color-tracker-cement: #a8a29e;
+  --color-tracker-bioenergy: #6b645f;
 
   /* --- Tracker Colors (Renewable) --- */
-  --color-tracker-nuclear: #6b7280; /* Gray */
-  --color-tracker-hydro: #0369a1; /* Blue */
-  --color-tracker-wind: #06b6d4; /* Cyan */
-  --color-tracker-geothermal: #dc2626; /* Red */
-  --color-tracker-solar: #eab308; /* Yellow */
+  --color-tracker-nuclear: #b9b3af;
+  --color-tracker-hydro: #c9c4c0;
+  --color-tracker-wind: #d6d3d1;
+  --color-tracker-geothermal: #e1dfdd;
+  --color-tracker-solar: #ecebe8;
 
   /* --- Status Colors --- */
-  --color-status-operating: #4a57a8; /* Blue - active */
-  --color-status-prospective: #9ca3af; /* Gray - planned */
-  --color-status-retired: #1f2937; /* Dark - closed */
-  --color-status-cancelled: #d1d5db; /* Light gray - cancelled */
-  --color-status-unknown: #e5e7eb; /* Very light - unknown */
+  --color-status-operating: #3f3a37;
+  --color-status-prospective: #a8a29e;
+  --color-status-retired: #1c1917;
+  --color-status-cancelled: #d6d3d1;
+  --color-status-unknown: #ecebe8;
 
   /* --- Status Colors (Granular Prospective) --- */
-  --color-status-proposed: #fde68a; /* Light yellow */
-  --color-status-announced: #fcd34d; /* Yellow */
-  --color-status-permitted: #f59e0b; /* Amber */
-  --color-status-construction: #d97706; /* Dark amber */
+  --color-status-proposed: #d6d3d1;
+  --color-status-announced: #d6d3d1;
+  --color-status-permitted: #c9c4c0;
+  --color-status-construction: #a8a29e;
 
   /* --- Map Colors --- */
-  --color-map-coal: #1a1a1a;
-  --color-map-coal-mine: #4a4a4a;
-  --color-map-gas: #e67e22;
-  --color-map-steel: #8e44ad;
-  --color-map-iron: #c0392b;
-  --color-map-bioenergy: #27ae60;
-  --color-map-default: #666666;
-  --color-map-selected: #333333;
-  --color-map-unselected: #999999;
+  --color-map-coal: #1c1917;
+  --color-map-coal-mine: #292524;
+  --color-map-gas: #3f3a37;
+  --color-map-steel: #8f8883;
+  --color-map-iron: #78716c;
+  --color-map-bioenergy: #6b645f;
+  --color-map-default: #78716c;
+  --color-map-selected: #1c1917;
+  --color-map-unselected: #c9c4c0;
 
   /* --- Ownership Hierarchy --- */
   --color-owner-direct: #1a1a1a;

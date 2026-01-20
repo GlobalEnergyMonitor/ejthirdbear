@@ -16,8 +16,6 @@ import {
   extractAssetName,
   isCompositeId,
   extractUnitIdFromComposite,
-  assetPath,
-  entityPath,
   // Sanitized graph IDs
   sanitizeId,
   getIdType,
@@ -225,29 +223,6 @@ describe('extractUnitIdFromComposite', () => {
 
   it('returns original ID if not composite', () => {
     expect(extractUnitIdFromComposite('G100000109409')).toBe('G100000109409');
-  });
-});
-
-describe('assetPath', () => {
-  it('generates asset path from GEM Unit ID with base path', () => {
-    const path = assetPath('G100000109409');
-    // Should contain the asset route and ID
-    expect(path).toContain('/asset/G100000109409');
-  });
-
-  it('extracts unit ID from composite and generates path', () => {
-    const path = assetPath('E100000000834_G100000109409');
-    // Should extract G-prefixed ID from composite
-    expect(path).toContain('/asset/G100000109409');
-    expect(path).not.toContain('E100000000834');
-  });
-});
-
-describe('entityPath', () => {
-  it('generates entity path with base path', () => {
-    const path = entityPath('E100001000348');
-    // Should contain the entity route and ID
-    expect(path).toContain('/entity/E100001000348');
   });
 });
 

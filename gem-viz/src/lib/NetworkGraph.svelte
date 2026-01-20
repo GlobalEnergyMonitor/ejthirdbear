@@ -4,6 +4,7 @@
   import { goto } from '$app/navigation';
   import { Deck } from '@deck.gl/core';
   import { ScatterplotLayer, LineLayer } from '@deck.gl/layers';
+  import { colors, hexToRgb } from '$lib/design-tokens';
   // Use d3-force-3d for better performance (even in 2D mode)
   import {
     forceSimulation,
@@ -37,9 +38,12 @@
     sampleMode: 'top',
     simulationSpeed: 'fast',
     warmupTicks: 100, // Synchronous warmup ticks before animation
-    use3D: false, // Use 3D layout (z-axis)
-    autoRotate: true, // Auto-rotate in 3D mode
+    use3D: true, // Use 3D layout (z-axis)
+    autoRotate: false, // Auto-rotate in 3D mode
     rotationSpeed: 0.15, // Degrees per frame (~9°/sec at 60fps)
+    linkDistance: 'long',
+    repulsion: 'high',
+    gravity: 'low',
   });
 
   // Auto-rotation state
@@ -57,32 +61,66 @@
   let animationFrame;
   let lastFrameTime = 0;
 
+  function toRgbArray(hex, alpha = 255) {
+    const rgb = hexToRgb(hex);
+    if (!rgb) return [0, 0, 0, alpha];
+    return [rgb.r, rgb.g, rgb.b, alpha];
+  }
+
+  function mixHex(hexA, hexB, t) {
+    const a = hexToRgb(hexA);
+    const b = hexToRgb(hexB);
+    if (!a || !b) return [0, 0, 0, 255];
+    const clamped = Math.max(0, Math.min(1, t));
+    return [
+      Math.round(a.r + (b.r - a.r) * clamped),
+      Math.round(a.g + (b.g - a.g) * clamped),
+      Math.round(a.b + (b.b - a.b) * clamped),
+      255,
+    ];
+  }
+
   // Presets optimized for d3-force-3d
   const SIMULATION_PRESETS = {
     fast: {
       alphaDecay: 0.06,
       velocityDecay: 0.5,
-      chargeStrength: -12,
-      linkDistance: 25,
+      chargeStrength: -18,
+      linkDistance: 40,
+      linkStrength: 0.4,
+      centerStrength: 0.6,
+      axisStrength: 0.01,
       warmupTicks: 80,
       animTicks: 60,
     },
     medium: {
       alphaDecay: 0.04,
       velocityDecay: 0.4,
-      chargeStrength: -20,
-      linkDistance: 35,
+      chargeStrength: -30,
+      linkDistance: 55,
+      linkStrength: 0.35,
+      centerStrength: 0.5,
+      axisStrength: 0.008,
       warmupTicks: 120,
       animTicks: 100,
     },
     slow: {
       alphaDecay: 0.02,
       velocityDecay: 0.3,
-      chargeStrength: -35,
-      linkDistance: 45,
+      chargeStrength: -45,
+      linkDistance: 70,
+      linkStrength: 0.3,
+      centerStrength: 0.4,
+      axisStrength: 0.006,
       warmupTicks: 180,
       animTicks: 150,
     },
+  };
+
+  const LAYOUT_TUNING = {
+    linkDistance: { short: 0.9, medium: 1.1, long: 1.5 },
+    repulsion: { low: 0.9, medium: 1.1, high: 1.6 },
+    gravity: { low: 0.35, medium: 0.9, high: 1.3 },
   };
 
   async function loadData() {
@@ -274,10 +312,17 @@
       console.log('Starting d3-force-3d simulation...');
 
       const preset = SIMULATION_PRESETS[config.simulationSpeed];
+      const tunedPreset = {
+        ...preset,
+        linkDistance: preset.linkDistance * LAYOUT_TUNING.linkDistance[config.linkDistance],
+        chargeStrength: preset.chargeStrength * LAYOUT_TUNING.repulsion[config.repulsion],
+        centerStrength: preset.centerStrength * LAYOUT_TUNING.gravity[config.gravity],
+        axisStrength: preset.axisStrength * LAYOUT_TUNING.gravity[config.gravity],
+      };
       const numDimensions = config.use3D ? 3 : 2;
 
       // Initialize positions - radial layout based on connectivity
-      const scale = Math.sqrt(nodes.length) * 2.5;
+      const scale = Math.sqrt(nodes.length) * 3.5 * LAYOUT_TUNING.linkDistance[config.linkDistance];
       const maxConn = Math.max(...nodes.map((n) => n.connections), 1);
 
       for (const node of nodes) {
@@ -297,25 +342,87 @@
           'link',
           forceLink(links)
             .id((d) => d.id)
-            .distance(preset.linkDistance)
+            .distance(tunedPreset.linkDistance)
             .strength((d) => {
               const srcConn = nodeMap.get(d.source.id || d.source)?.connections || 1;
               const tgtConn = nodeMap.get(d.target.id || d.target)?.connections || 1;
-              return 1 / Math.min(srcConn, tgtConn);
+              return Math.min(tunedPreset.linkStrength, 1 / Math.min(srcConn, tgtConn));
             })
         )
         .force(
           'charge',
           forceManyBody()
-            .strength((d) => preset.chargeStrength * Math.sqrt(d.connections || 1))
+            .strength((d) => tunedPreset.chargeStrength * Math.sqrt(d.connections || 1))
             .theta(0.9)
             .distanceMax(180)
         )
-        .force('center', forceCenter(0, 0))
-        .force('x', forceX(0).strength(0.015))
-        .force('y', forceY(0).strength(0.015))
-        .alphaDecay(preset.alphaDecay)
-        .velocityDecay(preset.velocityDecay);
+        .force('center', forceCenter(0, 0).strength(tunedPreset.centerStrength))
+        .force('x', forceX(0).strength(tunedPreset.axisStrength))
+        .force('y', forceY(0).strength(tunedPreset.axisStrength))
+        .alphaDecay(tunedPreset.alphaDecay)
+        .velocityDecay(tunedPreset.velocityDecay);
+
+      function stretchLayoutToCanvas(padding = 0.98) {
+        if (!container) return;
+        const width = container.clientWidth || 1;
+        const height = container.clientHeight || 1;
+        const xs = [];
+        const ys = [];
+        let minX = Infinity;
+        let maxX = -Infinity;
+        let minY = Infinity;
+        let maxY = -Infinity;
+        let minZ = Infinity;
+        let maxZ = -Infinity;
+
+        for (const node of nodes) {
+          if (node.x == null || node.y == null) continue;
+          xs.push(node.x);
+          ys.push(node.y);
+          minX = Math.min(minX, node.x);
+          maxX = Math.max(maxX, node.x);
+          minY = Math.min(minY, node.y);
+          maxY = Math.max(maxY, node.y);
+          if (config.use3D && node.z != null) {
+            minZ = Math.min(minZ, node.z);
+            maxZ = Math.max(maxZ, node.z);
+          }
+        }
+
+        const percentile = (arr, p) => {
+          if (arr.length === 0) return 0;
+          const sorted = [...arr].sort((a, b) => a - b);
+          const idx = Math.min(sorted.length - 1, Math.max(0, Math.floor(p * sorted.length)));
+          return sorted[idx];
+        };
+
+        if (xs.length > 30) {
+          minX = percentile(xs, 0.02);
+          maxX = percentile(xs, 0.98);
+          minY = percentile(ys, 0.02);
+          maxY = percentile(ys, 0.98);
+        }
+
+        const spanX = Math.max(1, maxX - minX);
+        const spanY = Math.max(1, maxY - minY);
+        const targetX = width * padding;
+        const targetY = height * padding;
+        const scaleFactor = Math.min(targetX / spanX, targetY / spanY) * 1.25;
+        const centerX = (minX + maxX) / 2;
+        const centerY = (minY + maxY) / 2;
+        const centerZ = config.use3D ? (minZ + maxZ) / 2 : 0;
+        const zSpan = Math.max(1, maxZ - minZ);
+        const zScale = config.use3D ? scaleFactor * Math.min(1, spanY / zSpan) : 1;
+
+        for (const node of nodes) {
+          if (node.x == null || node.y == null) continue;
+          node.x = (node.x - centerX) * scaleFactor;
+          node.y = (node.y - centerY) * scaleFactor;
+          if (config.use3D && node.z != null) {
+            node.z = (node.z - centerZ) * zScale;
+          }
+        }
+      }
 
       // WARMUP: Run ticks synchronously for fast initial layout
       loadingPhase = `Warmup: computing initial layout...`;
@@ -334,6 +441,8 @@
       const warmupTime = performance.now() - warmupStart;
       console.log(`Warmup complete in ${warmupTime.toFixed(0)}ms`);
 
+      stretchLayoutToCanvas();
+
       // Show initial state
       updateLayers();
       simulationProgress = 50;
@@ -348,6 +457,7 @@
           console.log(`Animation complete after ${tickCount} ticks`);
           simulationProgress = 100;
           loadingPhase = 'Complete';
+          stretchLayoutToCanvas();
           updateLayers();
           resolve();
           return;
@@ -398,6 +508,7 @@
     const baseOpacity = config.edgeOpacity;
     const zoomFactor = Math.max(0.1, Math.min(1, (currentZoom + 2) / 4));
     const edgeOpacity = currentZoom < -1 ? baseOpacity * 0.25 : baseOpacity * zoomFactor;
+    const edgeBase = toRgbArray(colors.gray500, 255);
 
     // Node size scaling
     const nodeScale = Math.pow(2, -currentZoom * 0.25);
@@ -413,7 +524,7 @@
             getTargetPosition: (d) => getPos(d.target),
             getColor: (d) => {
               const shareAlpha = Math.min(255, Math.max(15, (d.share || 8) * 2.2));
-              return [70, 70, 70, Math.round(shareAlpha * edgeOpacity)];
+              return [edgeBase[0], edgeBase[1], edgeBase[2], Math.round(shareAlpha * edgeOpacity)];
             },
             getWidth: 1,
             widthMinPixels: 0.5,
@@ -434,11 +545,9 @@
             return baseSize * nodeScale;
           },
           getFillColor: (d) => {
-            // Purple -> Orange -> Red gradient by connection count
+            // Warm grayscale ramp by connection count
             const t = Math.min(1, d.connections / 80);
-            const r = Math.round(90 + t * 165);
-            const g = Math.round(50 + t * 50 - t * t * 80);
-            const b = Math.round(240 - t * 200);
+            const [r, g, b] = mixHex(colors.gray300, colors.gray900, t);
             return [r, g, b, 215];
           },
           radiusMinPixels: 1.5,
@@ -455,7 +564,7 @@
             }
           },
           autoHighlight: true,
-          highlightColor: [255, 220, 0, 255],
+          highlightColor: toRgbArray(colors.gray100, 255),
           updateTriggers: {
             getRadius: [nodeScale],
           },
@@ -537,7 +646,7 @@
           controller: {
             dragMode: 'pan', // normal drag = pan
             dragPan: true, // enable panning
-            dragRotate: true, // enable rotation (shift+drag when dragMode='pan')
+            dragRotate: true, // keep rotation enabled
             scrollZoom: true,
             touchZoom: true,
             touchRotate: true, // two-finger rotate on touch devices
@@ -572,14 +681,14 @@
         return {
           html: `<div style="padding: 8px; font-family: monospace; font-size: 11px; max-width: 280px;">
             <strong>${object.name}</strong><br/>
-            <span style="color: #888;">${object.id}</span><br/>
-            <span style="color: #5a5;">↑${object.inDegree}</span>
-            <span style="color: #a55;">↓${object.outDegree}</span>
+            <span style="color: ${colors.gray500};">${object.id}</span><br/>
+            <span style="color: ${colors.gray600};">↑${object.inDegree}</span>
+            <span style="color: ${colors.gray600};">↓${object.outDegree}</span>
             = ${object.connections} total
           </div>`,
           style: {
-            backgroundColor: '#fff',
-            border: '1px solid #000',
+            backgroundColor: colors.white,
+            border: `1px solid ${colors.black}`,
             borderRadius: '0',
           },
         };
@@ -626,80 +735,114 @@
 
   <div class="controls">
     <div class="control-group">
-      <label title="Maximum ownership relationships to load. Higher = more complete but slower.">
-        <span>Max Edges</span>
-        <select bind:value={config.maxEdges} onchange={reloadWithConfig}>
-          <option value={10000}>10K</option>
-          <option value={25000}>25K</option>
-          <option value={50000}>50K</option>
-          <option value={100000}>100K</option>
-          <option value={200000}>200K</option>
-        </select>
-      </label>
-
-      <label
-        title="How to select edges: Top Connected prioritizes major players, Random samples uniformly, Sequential takes first N."
-      >
-        <span>Sample</span>
-        <select bind:value={config.sampleMode} onchange={reloadWithConfig}>
-          <option value="top">Top Connected</option>
-          <option value="random">Random</option>
-          <option value="all">Sequential</option>
-        </select>
-      </label>
-
-      <label
-        title="Only show entities with at least this many connections. Higher = less clutter, major players only."
-      >
-        <span>Min Connections</span>
-        <select bind:value={config.minConnections} onchange={reloadWithConfig}>
-          <option value={1}>1+</option>
-          <option value={2}>2+</option>
-          <option value={3}>3+</option>
-          <option value={5}>5+</option>
-          <option value={10}>10+</option>
-        </select>
-      </label>
-
-      <label
-        title="Force simulation speed. Fast renders quickly, Precise takes longer but produces cleaner layouts."
-      >
-        <span>Speed</span>
-        <select bind:value={config.simulationSpeed} onchange={reloadWithConfig}>
-          <option value="fast">Fast</option>
-          <option value="medium">Medium</option>
-          <option value="slow">Precise</option>
-        </select>
-      </label>
-
-      <label title="Visibility of connection lines between nodes.">
-        <span>Edge Opacity</span>
-        <input
-          type="range"
-          min="0.1"
-          max="1"
-          step="0.1"
-          bind:value={config.edgeOpacity}
-          oninput={updateLayers}
-        />
-      </label>
-
-      <label class="toggle" title="Enable 3D view with depth. Use shift+drag to rotate the view.">
-        <input type="checkbox" bind:checked={config.use3D} onchange={reloadWithConfig} />
-        <span>3D Mode</span>
-      </label>
-
-      {#if config.use3D}
-        <label class="toggle" title="Slowly rotate the network for a cinematic view.">
-          <input type="checkbox" bind:checked={config.autoRotate} onchange={toggleAutoRotate} />
-          <span>Auto-Rotate</span>
+      <div class="control-section">
+        <div class="section-title">Data</div>
+        <label
+          title="How to select edges: Top Connected prioritizes major players, Random samples uniformly."
+        >
+          <span>Sample</span>
+          <select bind:value={config.sampleMode} onchange={reloadWithConfig}>
+            <option value="top">Top Connected</option>
+            <option value="random">Random</option>
+          </select>
         </label>
 
-        <label title="Rotation speed in degrees per frame.">
-          <span>Rotation</span>
-          <input type="range" min="0.02" max="0.5" step="0.02" bind:value={config.rotationSpeed} />
+        <label title="Maximum ownership relationships to load. Higher = more complete but slower.">
+          <span>Max Edges</span>
+          <select bind:value={config.maxEdges} onchange={reloadWithConfig}>
+            <option value={25000}>25K</option>
+            <option value={50000}>50K</option>
+            <option value={100000}>100K</option>
+          </select>
         </label>
-      {/if}
+
+        <label
+          title="Only show entities with at least this many connections. Higher = less clutter."
+        >
+          <span>Min Links</span>
+          <select bind:value={config.minConnections} onchange={reloadWithConfig}>
+            <option value={2}>2+</option>
+            <option value={5}>5+</option>
+            <option value={10}>10+</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="control-section">
+        <div class="section-title">Layout</div>
+        <label title="Force simulation speed. Fast renders quickly, Precise takes longer.">
+          <span>Speed</span>
+          <select bind:value={config.simulationSpeed} onchange={reloadWithConfig}>
+            <option value="fast">Fast</option>
+            <option value="slow">Precise</option>
+          </select>
+        </label>
+
+        <label title="Average distance between connected nodes.">
+          <span>Link Distance</span>
+          <select bind:value={config.linkDistance} onchange={reloadWithConfig}>
+            <option value="short">Short</option>
+            <option value="medium">Medium</option>
+            <option value="long">Long</option>
+          </select>
+        </label>
+
+        <label title="Repulsive force between nodes. Higher spreads the network.">
+          <span>Repulsion</span>
+          <select bind:value={config.repulsion} onchange={reloadWithConfig}>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+          </select>
+        </label>
+
+        <label title="Gravity pulling nodes toward the center. Lower = more spread.">
+          <span>Gravity</span>
+          <select bind:value={config.gravity} onchange={reloadWithConfig}>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+          </select>
+        </label>
+
+        <label title="Visibility of connection lines between nodes.">
+          <span>Edge Opacity</span>
+          <input
+            type="range"
+            min="0.1"
+            max="1"
+            step="0.1"
+            bind:value={config.edgeOpacity}
+            oninput={updateLayers}
+          />
+        </label>
+      </div>
+
+      <div class="control-section">
+        <div class="section-title">View</div>
+        <label title="Enable 3D view with depth.">
+          <span>3D Mode</span>
+          <input type="checkbox" bind:checked={config.use3D} onchange={reloadWithConfig} />
+        </label>
+
+        {#if config.use3D}
+          <label class="toggle" title="Slowly rotate the network for a cinematic view.">
+            <input type="checkbox" bind:checked={config.autoRotate} onchange={toggleAutoRotate} />
+            <span>Auto-Rotate</span>
+          </label>
+
+          <label title="Rotation speed in degrees per frame.">
+            <span>Rotation</span>
+            <input
+              type="range"
+              min="0.02"
+              max="0.5"
+              step="0.02"
+              bind:value={config.rotationSpeed}
+            />
+          </label>
+        {/if}
+      </div>
     </div>
   </div>
 
@@ -715,8 +858,11 @@
 
   <div class="help">
     <p>
-      Click node to view • Drag to pan • Scroll to zoom{config.use3D
-        ? ' • Shift+drag to rotate' + (config.autoRotate ? ' • Auto-rotating' : '')
+      Click node to view •
+      {config.use3D ? 'Drag to pan • Shift+drag to rotate' : 'Drag to pan'} • Scroll to zoom{config.use3D
+        ? config.autoRotate
+          ? ' • Auto-rotating'
+          : ''
         : ''}
     </p>
     <p class="engine">d3-force-3d + deck.gl {config.use3D ? '(3D)' : '(2D)'}</p>
@@ -731,7 +877,7 @@
     position: relative;
     border: 1px solid var(--color-black);
     background: transparent;
-    min-height: 600px;
+    min-height: 80vh;
   }
 
   .deck-container {
@@ -768,7 +914,7 @@
   }
 
   .error {
-    color: red;
+    color: var(--color-text-secondary);
   }
 
   .progress-bar {
@@ -802,24 +948,27 @@
     z-index: 10;
     background: var(--color-white);
     border: 1px solid var(--color-black);
-    padding: 10px;
-    font-size: 10px;
+    padding: 14px;
+    font-size: 11px;
+    width: 260px;
+    color-scheme: light;
   }
 
   .control-group {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 12px;
   }
 
   .control-group label {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
+    justify-content: space-between;
   }
 
   .control-group label span {
-    min-width: 80px;
+    min-width: 96px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: var(--color-text-secondary);
@@ -828,19 +977,21 @@
   .control-group select,
   .control-group input[type='range'] {
     font-family: inherit;
-    font-size: 10px;
-    padding: 2px 4px;
+    font-size: 11px;
+    padding: 3px 6px;
     border: 1px solid var(--color-text-tertiary);
     background: var(--color-white);
+    width: 130px;
+    color: var(--color-text-primary);
   }
 
   .control-group input[type='range'] {
-    width: 60px;
+    width: 130px;
   }
 
   .control-group .toggle {
-    flex-direction: row-reverse;
-    justify-content: flex-end;
+    flex-direction: row;
+    justify-content: space-between;
     gap: 6px;
     padding-top: 4px;
     border-top: 1px solid var(--color-gray-100);
@@ -851,6 +1002,25 @@
     width: 14px;
     height: 14px;
     accent-color: var(--color-black);
+  }
+
+  .control-group .control-section {
+    display: grid;
+    gap: 10px;
+    border-top: 1px solid var(--color-gray-100);
+    padding-top: 10px;
+  }
+
+  .control-group .control-section:first-child {
+    border-top: 0;
+    padding-top: 0;
+  }
+
+  .control-group .section-title {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--color-text-tertiary);
   }
 
   .stats {

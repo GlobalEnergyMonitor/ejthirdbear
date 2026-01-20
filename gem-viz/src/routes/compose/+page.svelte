@@ -1031,9 +1031,7 @@
         {/if}
       </div>
 
-      <a href="{base}/asset-classes" class="asset-classes-link">
-        Browse pre-defined asset classes →
-      </a>
+      <a href="{base}/coal-tracker" class="asset-classes-link"> Browse Coal Tracker queries → </a>
 
       {#if loadingOptions}
         <div class="loading-options">Loading filter options...</div>
@@ -1150,7 +1148,7 @@
         <div class="save-class-panel">
           {#if assetClassSaved}
             <p class="save-success">
-              Saved! View in <a href="{base}/asset-classes">Asset Classes</a>
+              Saved! View in <a href="{base}/coal-tracker">Coal Tracker</a>
             </p>
           {:else}
             <input

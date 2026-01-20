@@ -13,6 +13,7 @@
    *   showPagination?: boolean,
    *   showExport?: boolean,
    *   showColumnToggle?: boolean,
+   *   showSelection?: boolean,
    *   stickyHeader?: boolean,
    *   striped?: boolean,
    *   onRowClick?: ((row: Record<string, any>, index?: number) => void) | null,
@@ -31,6 +32,7 @@
     showPagination = true,
     showExport = true,
     showColumnToggle = true,
+    showSelection = false,
     stickyHeader = true,
     striped = true,
     onRowClick = null,
@@ -239,15 +241,6 @@
     }
   }
 
-  function addFilter(column, operator, value) {
-    if (!value.trim()) return;
-    activeFilters = [...activeFilters, { id: Date.now(), column, operator, value }];
-  }
-
-  function removeFilter(id) {
-    activeFilters = activeFilters.filter((f) => f.id !== id);
-  }
-
   function clearAllFilters() {
     globalSearch = '';
     columnFilters = {};
@@ -297,8 +290,20 @@
     }
   }
 
+  // Get a unique key for a row (handles Svelte 5 proxy identity issues)
+  function getRowKey(row) {
+    return row.asset_id || row.id || row.entity_id || JSON.stringify(row);
+  }
+
+  // Check if a row is in the selected array
+  function isRowSelected(row) {
+    const key = getRowKey(row);
+    return selectedRows.some((r) => getRowKey(r) === key);
+  }
+
   function toggleRowSelection(row) {
-    const idx = selectedRows.findIndex((r) => r === row);
+    const key = getRowKey(row);
+    const idx = selectedRows.findIndex((r) => getRowKey(r) === key);
     if (idx >= 0) {
       selectedRows = selectedRows.filter((_, i) => i !== idx);
     } else {
@@ -307,17 +312,19 @@
   }
 
   function toggleSelectAll() {
-    if (selectedRows.length === paginatedData.length) {
-      selectedRows = [];
+    // Check if all current page rows are selected
+    const allSelected = paginatedData.every((row) => isRowSelected(row));
+    if (allSelected) {
+      // Remove all current page rows from selection
+      const pageKeys = new Set(paginatedData.map(getRowKey));
+      selectedRows = selectedRows.filter((r) => !pageKeys.has(getRowKey(r)));
     } else {
-      selectedRows = [...paginatedData];
+      // Add all current page rows that aren't already selected
+      const existingKeys = new Set(selectedRows.map(getRowKey));
+      const newRows = paginatedData.filter((r) => !existingKeys.has(getRowKey(r)));
+      selectedRows = [...selectedRows, ...newRows];
     }
   }
-
-  // Quick filter presets
-  let newFilterColumn = $state('');
-  let newFilterOperator = $state('contains');
-  let newFilterValue = $state('');
 </script>
 
 <div class="data-table-container">
@@ -372,93 +379,21 @@
     </div>
   </div>
 
-  <!-- Advanced Filter Builder -->
-  <div class="filter-builder">
-    <div class="filter-row">
-      <select bind:value={newFilterColumn}>
-        <option value="">Add filter...</option>
-        {#each columns as col}
-          <option value={col.key}>{col.label}</option>
-        {/each}
-      </select>
-
-      {#if newFilterColumn}
-        <select bind:value={newFilterOperator}>
-          <option value="contains">contains</option>
-          <option value="equals">equals</option>
-          <option value="starts">starts with</option>
-          <option value="ends">ends with</option>
-          <option value="gt">&gt;</option>
-          <option value="lt">&lt;</option>
-          <option value="gte">&gt;=</option>
-          <option value="lte">&lt;=</option>
-        </select>
-
-        <input
-          type="text"
-          placeholder="Value..."
-          bind:value={newFilterValue}
-          onkeydown={(e) => {
-            if (e.key === 'Enter' && newFilterValue) {
-              addFilter(newFilterColumn, newFilterOperator, newFilterValue);
-              newFilterColumn = '';
-              newFilterValue = '';
-            }
-          }}
-        />
-
-        <button
-          class="btn btn-small"
-          onclick={() => {
-            addFilter(newFilterColumn, newFilterOperator, newFilterValue);
-            newFilterColumn = '';
-            newFilterValue = '';
-          }}>+</button
-        >
-      {/if}
-
-      {#if activeFilters.length > 0}
-        <div class="logic-toggle">
-          <button
-            class="btn btn-small"
-            class:active={filterLogic === 'AND'}
-            onclick={() => (filterLogic = 'AND')}>AND</button
-          >
-          <button
-            class="btn btn-small"
-            class:active={filterLogic === 'OR'}
-            onclick={() => (filterLogic = 'OR')}>OR</button
-          >
-        </div>
-      {/if}
-    </div>
-
-    {#if activeFilters.length > 0}
-      <div class="filter-chips">
-        {#each activeFilters as filter}
-          <span class="chip">
-            <strong>{columns.find((c) => c.key === filter.column)?.label}</strong>
-            {filter.operator} "{filter.value}"
-            <button class="chip-remove" onclick={() => removeFilter(filter.id)}>×</button>
-          </span>
-        {/each}
-      </div>
-    {/if}
-  </div>
-
   <!-- Table -->
   <div class="table-wrapper" class:sticky-header={stickyHeader}>
     <table>
       <thead>
         <!-- Header row (with sort handlers) -->
         <tr>
-          <th class="checkbox-col">
-            <input
-              type="checkbox"
-              checked={selectedRows.length === paginatedData.length && paginatedData.length > 0}
-              onchange={toggleSelectAll}
-            />
-          </th>
+          {#if showSelection}
+            <th class="checkbox-col">
+              <input
+                type="checkbox"
+                checked={paginatedData.length > 0 && paginatedData.every((r) => isRowSelected(r))}
+                onchange={toggleSelectAll}
+              />
+            </th>
+          {/if}
           {#each displayColumns as col}
             <th
               class:sortable={col.sortable}
@@ -491,7 +426,9 @@
         <!-- Column filter row -->
         {#if showColumnFilters}
           <tr class="filter-row">
-            <th class="checkbox-col"></th>
+            {#if showSelection}
+              <th class="checkbox-col"></th>
+            {/if}
             {#each displayColumns as col}
               <th style={col.width ? `width: ${col.width}` : ''}>
                 {#if col.filterable !== false}
@@ -512,20 +449,22 @@
         {#each paginatedData as row, i}
           <tr
             class:striped={striped && i % 2 === 1}
-            class:selected={selectedRows.includes(row)}
+            class:selected={isRowSelected(row)}
             class:highlighted={highlightRow?.(row)}
             class:clickable={onRowClick}
             onclick={() => handleRowClick(row, i)}
             onmouseenter={(e) => onRowHover?.(row, e)}
             onmouseleave={() => onRowLeave?.()}
           >
-            <td class="checkbox-col" onclick={(e) => e.stopPropagation()}>
-              <input
-                type="checkbox"
-                checked={selectedRows.includes(row)}
-                onchange={() => toggleRowSelection(row)}
-              />
-            </td>
+            {#if showSelection}
+              <td class="checkbox-col" onclick={(e) => e.stopPropagation()}>
+                <input
+                  type="checkbox"
+                  checked={isRowSelected(row)}
+                  onchange={() => toggleRowSelection(row)}
+                />
+              </td>
+            {/if}
             {#each displayColumns as col}
               <td>
                 {#if row[col.key] != null}
@@ -542,7 +481,9 @@
           </tr>
         {:else}
           <tr>
-            <td colspan={displayColumns.length + 1} class="empty-state"> No data found </td>
+            <td colspan={displayColumns.length + (showSelection ? 1 : 0)} class="empty-state">
+              No data found
+            </td>
           </tr>
         {/each}
       </tbody>
@@ -685,61 +626,6 @@
 
   .column-menu label:hover {
     background: transparent;
-  }
-
-  /* Filter builder */
-  .filter-builder {
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--color-gray-200);
-    background: var(--color-white);
-  }
-
-  .filter-builder .filter-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-
-  .filter-builder select,
-  .filter-builder input[type='text'] {
-    padding: 7px 10px;
-    border: 1px solid var(--color-gray-300);
-    font-size: 11px;
-    font-family: inherit;
-    border-radius: 0;
-  }
-
-  .filter-builder select {
-    min-width: 120px;
-  }
-
-  .logic-toggle {
-    display: flex;
-    gap: 4px;
-    margin-left: 12px;
-  }
-
-  .filter-chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 10px;
-  }
-
-  .chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 5px 9px;
-    background: transparent;
-    border: 1px solid var(--color-gray-300);
-    font-size: 11px;
-    border-radius: 0;
-  }
-
-  .chip strong {
-    color: var(--color-black);
   }
 
   .chip-remove {

@@ -30,11 +30,16 @@ import { base } from '$app/paths';
 
 /**
  * @typedef {Object} FilterState
- * @property {string[]} trackers - Selected tracker types
- * @property {string[]} statuses - Selected statuses
- * @property {string[]} countries - Selected countries (asset location)
- * @property {string[]} ownerCountries - Selected owner headquarters countries
- * @property {string[]} owners - Selected owner names
+ * @property {string[]} trackers - Selected tracker types (OR)
+ * @property {string[]} trackersAnd - Selected tracker types (AND)
+ * @property {string[]} statuses - Selected statuses (OR)
+ * @property {string[]} statusesAnd - Selected statuses (AND)
+ * @property {string[]} countries - Selected countries (OR)
+ * @property {string[]} countriesAnd - Selected countries (AND)
+ * @property {string[]} ownerCountries - Selected owner headquarters countries (OR)
+ * @property {string[]} ownerCountriesAnd - Selected owner headquarters countries (AND)
+ * @property {string[]} owners - Selected owner names (OR)
+ * @property {string[]} ownersAnd - Selected owner names (AND) - requires all owners
  * @property {number|null} capacityMin - Minimum capacity (MW)
  * @property {number|null} capacityMax - Maximum capacity (MW)
  * @property {number|null} shareMin - Minimum ownership share (%)
@@ -52,10 +57,15 @@ import { base } from '$app/paths';
 export function emptyFilterState() {
   return {
     trackers: [],
+    trackersAnd: [],
     statuses: [],
+    statusesAnd: [],
     countries: [],
+    countriesAnd: [],
     ownerCountries: [],
+    ownerCountriesAnd: [],
     owners: [],
+    ownersAnd: [],
     capacityMin: null,
     capacityMax: null,
     shareMin: null,
@@ -81,17 +91,32 @@ export function encodeFilters(filters) {
   if (filters.trackers?.length) {
     params.set('trackers', encodeArray(filters.trackers));
   }
+  if (filters.trackersAnd?.length) {
+    params.set('trackersAnd', encodeArray(filters.trackersAnd));
+  }
   if (filters.statuses?.length) {
     params.set('statuses', encodeArray(filters.statuses));
+  }
+  if (filters.statusesAnd?.length) {
+    params.set('statusesAnd', encodeArray(filters.statusesAnd));
   }
   if (filters.countries?.length) {
     params.set('countries', encodeArray(filters.countries));
   }
+  if (filters.countriesAnd?.length) {
+    params.set('countriesAnd', encodeArray(filters.countriesAnd));
+  }
   if (filters.ownerCountries?.length) {
     params.set('ownerCountries', encodeArray(filters.ownerCountries));
   }
+  if (filters.ownerCountriesAnd?.length) {
+    params.set('ownerCountriesAnd', encodeArray(filters.ownerCountriesAnd));
+  }
   if (filters.owners?.length) {
     params.set('owners', encodeArray(filters.owners));
+  }
+  if (filters.ownersAnd?.length) {
+    params.set('ownersAnd', encodeArray(filters.ownersAnd));
   }
   if (filters.capacityMin != null) {
     params.set('capacityMin', String(filters.capacityMin));
@@ -149,25 +174,45 @@ export function decodeFilters(searchParams) {
   if (trackers) {
     filters.trackers = decodeArray(trackers);
   }
+  const trackersAnd = params.get('trackersAnd');
+  if (trackersAnd) {
+    filters.trackersAnd = decodeArray(trackersAnd);
+  }
 
   const statuses = params.get('statuses');
   if (statuses) {
     filters.statuses = decodeArray(statuses);
+  }
+  const statusesAnd = params.get('statusesAnd');
+  if (statusesAnd) {
+    filters.statusesAnd = decodeArray(statusesAnd);
   }
 
   const countries = params.get('countries');
   if (countries) {
     filters.countries = decodeArray(countries);
   }
+  const countriesAnd = params.get('countriesAnd');
+  if (countriesAnd) {
+    filters.countriesAnd = decodeArray(countriesAnd);
+  }
 
   const ownerCountries = params.get('ownerCountries');
   if (ownerCountries) {
     filters.ownerCountries = decodeArray(ownerCountries);
   }
+  const ownerCountriesAnd = params.get('ownerCountriesAnd');
+  if (ownerCountriesAnd) {
+    filters.ownerCountriesAnd = decodeArray(ownerCountriesAnd);
+  }
 
   const owners = params.get('owners');
   if (owners) {
     filters.owners = decodeArray(owners);
+  }
+  const ownersAnd = params.get('ownersAnd');
+  if (ownersAnd) {
+    filters.ownersAnd = decodeArray(ownersAnd);
   }
 
   // Helper to parse numbers safely (returns null if invalid/NaN)
@@ -218,10 +263,15 @@ export function buildShareUrl(filters, baseUrl = '') {
 export function hasActiveFilters(filters) {
   return (
     filters.trackers?.length > 0 ||
+    filters.trackersAnd?.length > 0 ||
     filters.statuses?.length > 0 ||
+    filters.statusesAnd?.length > 0 ||
     filters.countries?.length > 0 ||
+    filters.countriesAnd?.length > 0 ||
     filters.ownerCountries?.length > 0 ||
+    filters.ownerCountriesAnd?.length > 0 ||
     filters.owners?.length > 0 ||
+    filters.ownersAnd?.length > 0 ||
     filters.capacityMin != null ||
     filters.capacityMax != null ||
     filters.shareMin != null ||
@@ -239,11 +289,11 @@ export function hasActiveFilters(filters) {
  */
 export function countActiveFilters(filters) {
   let count = 0;
-  if (filters.trackers?.length > 0) count++;
-  if (filters.statuses?.length > 0) count++;
-  if (filters.countries?.length > 0) count++;
-  if (filters.ownerCountries?.length > 0) count++;
-  if (filters.owners?.length > 0) count++;
+  if (filters.trackers?.length > 0 || filters.trackersAnd?.length > 0) count++;
+  if (filters.statuses?.length > 0 || filters.statusesAnd?.length > 0) count++;
+  if (filters.countries?.length > 0 || filters.countriesAnd?.length > 0) count++;
+  if (filters.ownerCountries?.length > 0 || filters.ownerCountriesAnd?.length > 0) count++;
+  if (filters.owners?.length > 0 || filters.ownersAnd?.length > 0) count++;
   if (filters.capacityMin != null || filters.capacityMax != null) count++;
   if (filters.shareMin != null || filters.shareMax != null) count++;
   if (filters.startYearMin != null || filters.startYearMax != null) count++;
@@ -272,36 +322,64 @@ export function buildSqlWhere(filters, tableAlias = '', columnNames = {}) {
     ...columnNames,
   };
 
-  if (filters.trackers?.length && columns.tracker) {
-    const escaped = filters.trackers.map((t) => `'${t.replace(/'/g, "''")}'`);
+  // For single-value fields (tracker, status, country), combine OR and AND selections
+  // into a single IN clause since AND doesn't make sense (asset can't have multiple values)
+  // Only owners support true AND logic (asset can have multiple owners)
+
+  // Trackers - combine OR and AND into single IN clause
+  const allTrackers = [...(filters.trackers || []), ...(filters.trackersAnd || [])];
+  if (allTrackers.length && columns.tracker) {
+    const escaped = allTrackers.map((t) => `'${t.replace(/'/g, "''")}'`);
     conditions.push(`${prefix}"${columns.tracker}" IN (${escaped.join(', ')})`);
   }
 
-  if (filters.statuses?.length && columns.status) {
-    const escaped = filters.statuses.map((s) => `'${s.replace(/'/g, "''")}'`);
+  // Statuses - combine OR and AND into single IN clause
+  const allStatuses = [...(filters.statuses || []), ...(filters.statusesAnd || [])];
+  if (allStatuses.length && columns.status) {
+    const escaped = allStatuses.map((s) => `'${s.replace(/'/g, "''")}'`);
     conditions.push(
       `LOWER(${prefix}"${columns.status}") IN (${escaped.map((s) => s.toLowerCase()).join(', ')})`
     );
   }
 
-  if (filters.countries?.length) {
-    const escaped = filters.countries.map((c) => `'${c.replace(/'/g, "''")}'`);
+  // Countries - combine OR and AND into single IN clause
+  const allCountries = [...(filters.countries || []), ...(filters.countriesAnd || [])];
+  if (allCountries.length) {
+    const escaped = allCountries.map((c) => `'${c.replace(/'/g, "''")}'`);
     if (columns.country) {
       conditions.push(`${prefix}"${columns.country}" IN (${escaped.join(', ')})`);
     } else {
-      // Country comes from locations table (l), not ownership (o)
       conditions.push(`l."Country.Area" IN (${escaped.join(', ')})`);
     }
   }
 
-  if (filters.ownerCountries?.length && columns.ownerCountry) {
-    const escaped = filters.ownerCountries.map((c) => `'${c.replace(/'/g, "''")}'`);
+  // Owner countries - combine OR and AND into single IN clause
+  const allOwnerCountries = [
+    ...(filters.ownerCountries || []),
+    ...(filters.ownerCountriesAnd || []),
+  ];
+  if (allOwnerCountries.length && columns.ownerCountry) {
+    const escaped = allOwnerCountries.map((c) => `'${c.replace(/'/g, "''")}'`);
     conditions.push(`${prefix}"${columns.ownerCountry}" IN (${escaped.join(', ')})`);
   }
 
+  // Owners - OR filter (standard IN clause)
   if (filters.owners?.length && columns.owner) {
     const escaped = filters.owners.map((o) => `'${o.replace(/'/g, "''")}'`);
     conditions.push(`${prefix}"${columns.owner}" IN (${escaped.join(', ')})`);
+  }
+
+  // Owners AND filter - assets must have ALL specified owners
+  // Uses subquery with GROUP BY/HAVING to find assets with all required owners
+  if (filters.ownersAnd?.length && columns.owner) {
+    const escaped = filters.ownersAnd.map((o) => `'${o.replace(/'/g, "''")}'`);
+    const ownerCount = filters.ownersAnd.length;
+    conditions.push(`${prefix}"GEM unit ID" IN (
+      SELECT "GEM unit ID" FROM ownership
+      WHERE "${columns.owner}" IN (${escaped.join(', ')})
+      GROUP BY "GEM unit ID"
+      HAVING COUNT(DISTINCT "${columns.owner}") = ${ownerCount}
+    )`);
   }
 
   if (filters.capacityMin != null && columns.capacity) {
@@ -431,4 +509,74 @@ export function deletePreset(id) {
  */
 export function clearPresets() {
   localStorage.removeItem(PRESETS_KEY);
+}
+
+// ============================================================================
+// ASSET CLASSES
+// User-created asset classes stored in localStorage
+// ============================================================================
+
+const ASSET_CLASSES_KEY = 'gem-viz-asset-classes';
+
+/**
+ * @typedef {Object} AssetClass
+ * @property {string} id
+ * @property {string} name
+ * @property {string} description
+ * @property {FilterState} filters
+ * @property {string[]} tags
+ * @property {number} createdAt
+ */
+
+/**
+ * Get all user-created asset classes
+ * @returns {AssetClass[]}
+ */
+export function getAssetClasses() {
+  if (typeof localStorage === 'undefined') return [];
+  try {
+    const json = localStorage.getItem(ASSET_CLASSES_KEY);
+    return json ? JSON.parse(json) : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Save a new asset class
+ * @param {string} name
+ * @param {string} description
+ * @param {FilterState} filters
+ * @param {string[]} tags
+ * @returns {AssetClass}
+ */
+export function saveAssetClass(name, description, filters, tags = []) {
+  const classes = getAssetClasses();
+  const assetClass = {
+    id: `class-${Date.now()}`,
+    name,
+    description,
+    filters,
+    tags,
+    createdAt: Date.now(),
+  };
+  classes.push(assetClass);
+  localStorage.setItem(ASSET_CLASSES_KEY, JSON.stringify(classes));
+  return assetClass;
+}
+
+/**
+ * Delete an asset class
+ * @param {string} id
+ */
+export function deleteAssetClass(id) {
+  const classes = getAssetClasses().filter((c) => c.id !== id);
+  localStorage.setItem(ASSET_CLASSES_KEY, JSON.stringify(classes));
+}
+
+/**
+ * Clear all user asset classes
+ */
+export function clearAssetClasses() {
+  localStorage.removeItem(ASSET_CLASSES_KEY);
 }

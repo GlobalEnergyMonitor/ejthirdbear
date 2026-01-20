@@ -2,23 +2,24 @@
   /**
    * StatusIcon - Inline SVG status indicator from Observable notebook
    * Shows different icons based on grouped status:
-   * - proposed: yellow circle
-   * - cancelled: grey X
-   * - retired: dark purple X
+   * - prospective: light circle
+   * - cancelled: light X
+   * - retired: dark X
    * - operating: no icon (clean look)
    */
-  import { regroupStatus, colors } from '$lib/design-tokens';
+  import { regroupStatus, getAggregatedStatusColor } from '$lib/design-tokens';
 
   let { status = '', size = 10 } = $props();
 
   const groupedStatus = $derived(regroupStatus(status));
   const r = size / 2;
+  const statusColor = $derived(getAggregatedStatusColor(status));
   const strokeWidth = Math.max(1.25, size * 0.125);
 </script>
 
-{#if groupedStatus === 'proposed'}
+{#if groupedStatus === 'prospective' || groupedStatus === 'proposed'}
   <svg width={size} height={size} viewBox="0 0 {size} {size}" class="status-icon proposed">
-    <circle cx={r} cy={r} r={r * 0.7} fill={colors.yellow} />
+    <circle cx={r} cy={r} r={r * 0.7} fill={statusColor} />
   </svg>
 {:else if groupedStatus === 'cancelled'}
   <svg width={size} height={size} viewBox="0 0 {size} {size}" class="status-icon cancelled">
@@ -27,7 +28,7 @@
       y1={r * 0.3}
       x2={size - r * 0.3}
       y2={size - r * 0.3}
-      stroke={colors.grey}
+      stroke={statusColor}
       stroke-width={strokeWidth}
       stroke-linecap="round"
     />
@@ -36,7 +37,7 @@
       y1={r * 0.3}
       x2={r * 0.3}
       y2={size - r * 0.3}
-      stroke={colors.grey}
+      stroke={statusColor}
       stroke-width={strokeWidth}
       stroke-linecap="round"
     />
@@ -48,7 +49,7 @@
       y1={r * 0.3}
       x2={size - r * 0.3}
       y2={size - r * 0.3}
-      stroke={colors.midnightPurple}
+      stroke={statusColor}
       stroke-width={strokeWidth}
       stroke-linecap="round"
     />
@@ -57,7 +58,7 @@
       y1={r * 0.3}
       x2={r * 0.3}
       y2={size - r * 0.3}
-      stroke={colors.midnightPurple}
+      stroke={statusColor}
       stroke-width={strokeWidth}
       stroke-linecap="round"
     />

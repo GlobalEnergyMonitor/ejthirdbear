@@ -7,11 +7,8 @@ export const prerender = process.env.NODE_ENV !== 'development';
 // This function tells SvelteKit which asset IDs to prerender at build time
 export async function entries() {
   try {
-    console.log('ASSET FETCH: Loading all assets from Ownership API...');
-    const startTime = Date.now();
-
     const allIds = new Set();
-    const pageSize = 500; // API limit is 500
+    const pageSize = 500;
     let offset = 0;
     let pageCount = 0;
     let hasMore = true;
@@ -25,19 +22,12 @@ export async function entries() {
       pageCount += 1;
       offset += pageSize;
       hasMore = response.results.length === pageSize;
-
-      console.log(`  [OK] Fetched ${allIds.size} assets so far...`);
     }
 
-    const fetchTime = ((Date.now() - startTime) / 1000).toFixed(2);
-    console.log(`  [OK] Fetched ${allIds.size} asset IDs in ${fetchTime}s`);
-
     return Array.from(allIds).map((id) => ({ id }));
-  } catch (err) {
-    console.error('\n❌ ASSET ENTRIES FAILED: Ownership API is not reachable!');
-    console.error(`   Error: ${err.message || err}`);
-    console.error("   Is your collaborator's machine running with ngrok?\n");
-    process.exit(1);
+  } catch {
+    // API not reachable - return empty for dev mode
+    return [];
   }
 }
 
@@ -58,7 +48,14 @@ export async function load({ params }) {
       fromAPI: true,
     };
   } catch (err) {
-    console.error(`Failed to fetch asset ${assetId}:`, err);
-    throw error(500, `Failed to fetch asset from API: ${err.message}`);
+    // Return empty data and let client-side try DuckDB fallback
+    // This allows the page to render and attempt local data loading
+    return {
+      asset: null,
+      graph: null,
+      fromAPI: false,
+      apiError: err._status === 404 ? 'not_found' : 'api_error',
+      assetId, // Pass ID so client can try DuckDB
+    };
   }
 }

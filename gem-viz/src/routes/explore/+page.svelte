@@ -8,7 +8,6 @@
   import TopOwners from '$lib/widgets/TopOwners.svelte';
   import CountryBreakdown from '$lib/widgets/CountryBreakdown.svelte';
   import StatusDistribution from '$lib/widgets/StatusDistribution.svelte';
-  import CommandPalette from '$lib/components/CommandPalette.svelte';
 
   // Filter state
   let selectedTracker = $state(null);
@@ -38,11 +37,6 @@
       Interactive queries against GEM ownership data. All queries run client-side using DuckDB WASM.
     </p>
   </header>
-
-  <!-- Search -->
-  <section class="search-section">
-    <CommandPalette embedded={true} placeholder="Search for assets or owners..." limit={8} />
-  </section>
 
   <!-- Tracker Filter -->
   <section class="filter-bar">
@@ -146,10 +140,6 @@
     margin: 0;
   }
 
-  .search-section {
-    margin-bottom: 24px;
-  }
-
   .filter-bar {
     display: flex;
     align-items: center;
@@ -172,17 +162,16 @@
     padding: 6px 12px;
     font-size: 12px;
     border: none;
-    background: var(--color-white);
+    background: transparent;
     cursor: pointer;
     transition: all 0.15s;
   }
   .chip:hover {
-    border-color: var(--color-text-tertiary);
+    text-decoration: underline;
   }
   .chip.active {
-    background: var(--color-black);
-    color: var(--color-white);
-    border-color: var(--color-black);
+    color: var(--color-black);
+    text-decoration: underline;
   }
 
   .dashboard {
@@ -203,16 +192,14 @@
   }
 
   .factsheet-cta {
-    background: #f2f2eb;
     padding: 20px;
-    border-radius: 0 14px 14px 14px;
     margin-bottom: 32px;
   }
   .factsheet-cta h3 {
     font-size: 14px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #004a63;
+    color: var(--color-black);
     margin: 0 0 8px 0;
   }
   .factsheet-cta p {
@@ -228,26 +215,25 @@
   .factsheet-link {
     display: inline-block;
     padding: 8px 16px;
-    background: #016b83;
-    color: #fff;
+    background: transparent;
+    color: var(--color-black);
     text-decoration: none;
-    border-radius: 4px;
     font-size: 13px;
     font-weight: 500;
     transition: background 0.15s;
+    text-decoration: underline;
   }
   .factsheet-link:hover {
-    background: #004a63;
+    text-decoration-thickness: 2px;
   }
   .factsheet-link.secondary {
-    background: #004a63;
+    background: transparent;
   }
   .factsheet-link.secondary:hover {
-    background: #002430;
+    text-decoration-thickness: 2px;
   }
 
   .page-footer {
-    border-top: 1px solid var(--color-border);
     padding-top: 20px;
     font-size: 12px;
     color: var(--color-text-secondary);

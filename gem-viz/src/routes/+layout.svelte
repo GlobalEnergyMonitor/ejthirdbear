@@ -1,6 +1,7 @@
 <script>
   import '../app.css';
   import SiteNav from '$lib/components/SiteNav.svelte';
+  import SiteFooter from '$lib/components/SiteFooter.svelte';
   import CommandPalette from '$lib/components/CommandPalette.svelte';
   import { link } from '$lib/links';
 
@@ -22,14 +23,11 @@
     <slot />
   </main>
   <CommandPalette />
+  <SiteFooter />
 
-  <footer>
-    <div class="footer-content">
-      <a href={link('about')} class="version" title="View methodology and changelog"
-        >v{appVersion}</a
-      >
-      <span class="build-info" title={buildTime}>build: {buildHash}</span>
-    </div>
+  <footer class="build-footer">
+    <a href={link('about')} class="version" title="View methodology and changelog">v{appVersion}</a>
+    <span class="build-info" title={buildTime}>build: {buildHash}</span>
   </footer>
 </div>
 
@@ -40,21 +38,14 @@
     flex-direction: column;
   }
 
-  footer {
-    margin-top: auto;
-    padding: 30px 40px;
-    font-family: Georgia, serif;
-  }
-
-  .footer-content {
-    width: 100%;
-    margin: 0;
-    padding: 0 40px;
+  .build-footer {
+    padding: 12px 40px;
     display: flex;
     gap: 20px;
     align-items: center;
     font-size: 12px;
     color: var(--color-black);
+    background: #f5f5f5;
   }
 
   .version {

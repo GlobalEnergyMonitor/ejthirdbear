@@ -13,6 +13,7 @@ import {
   type GraphNode,
   type GraphEdge,
 } from '$lib/ownership-api';
+import { fetchAssetMetadata } from '$lib/compose-queries';
 
 // ID field mapping by tracker type (preserved for compatibility)
 const idFields = new Map([
@@ -20,7 +21,7 @@ const idFields = new Map([
   ['Coal Plant', 'GEM unit ID'],
   ['Gas Plant', 'GEM unit ID'],
   ['Coal Mine', 'GEM Mine ID'],
-  ['Iron Ore Mine', 'GEM Asset ID'],
+  ['Iron Mine', 'GEM Asset ID'],
   ['Gas Pipeline', 'ProjectID'],
   ['Oil & NGL Pipeline', 'ProjectID'],
   ['Steel Plant', 'Steel Plant ID'],
@@ -33,7 +34,7 @@ const capacityFields = new Map([
   ['Coal Plant', 'Capacity (MW)'],
   ['Gas Plant', 'Capacity (MW)'],
   ['Coal Mine', 'Capacity (Mtpa)'],
-  ['Iron Ore Mine', 'Production 2023 (ttpa)'],
+  ['Iron Mine', 'Production 2023 (ttpa)'],
   ['Gas Infrastructure', 'CapacityBcm/y'],
   ['Oil Infrastructure', 'CapacityBOEd'],
   ['Steel Plant', 'Nominal crude steel capacity (ttpa)'],
@@ -71,11 +72,19 @@ export interface AssetOwnersData {
   allEntityIds: string[];
 }
 
+export interface SpotlightAsset {
+  id: string;
+  name: string;
+  tracker: string;
+  status: string;
+  country: string;
+}
+
 export interface SpotlightOwnerData {
   spotlightOwner: { id: string; Name: string };
-  subsidiariesMatched: Map<string, any[]>;
-  directlyOwned: any[];
-  assets: any[];
+  subsidiariesMatched: Map<string, SpotlightAsset[]>;
+  directlyOwned: SpotlightAsset[];
+  assets: SpotlightAsset[];
   entityMap: Map<string, { id: string; Name: string }>;
   matchedEdges: Map<string, { value: number | null }>;
   assetClassName: string;
@@ -226,8 +235,12 @@ export async function getSpotlightOwnerData(
     }
 
     // Group assets by their direct owner
-    const subsidiariesMatched = new Map<string, any[]>();
-    const directlyOwned: any[] = [];
+    const subsidiariesMatched = new Map<string, SpotlightAsset[]>();
+    const directlyOwned: SpotlightAsset[] = [];
+
+    // Fetch metadata for all assets from DuckDB to get tracker/status/country
+    const assetIds = assetNodes.map((n) => n.id);
+    const metadataMap = await fetchAssetMetadata(assetIds);
 
     for (const assetNode of assetNodes) {
       // Find the edge that owns this asset
@@ -238,12 +251,14 @@ export async function getSpotlightOwnerData(
         continue;
       }
 
-      const assetData = {
+      // Use enriched metadata from DuckDB if available, otherwise fall back to API data
+      const metadata = metadataMap.get(assetNode.id);
+      const assetData: SpotlightAsset = {
         id: assetNode.id,
-        name: assetNode.Name,
-        tracker: 'Unknown', // API doesn't provide tracker type yet
-        status: 'Unknown', // API doesn't provide status yet
-        country: 'Unknown', // API doesn't provide country yet
+        name: metadata?.name || assetNode.Name,
+        tracker: metadata?.tracker || 'Unknown',
+        status: metadata?.status || 'Unknown',
+        country: metadata?.country || 'Unknown',
       };
 
       if (ownerEdge.source === entityId) {
@@ -302,7 +317,14 @@ export async function getSpotlightOwnerData(
  * @param limit - Maximum number of owners to return (default: 20)
  * @returns Array of owner entities
  */
-export async function getTopOwners(limit: number = 20): Promise<any[]> {
+interface TopOwner {
+  id: string;
+  name: string;
+  asset_count: number;
+  ownership_count: number;
+}
+
+export async function getTopOwners(limit: number = 20): Promise<TopOwner[]> {
   try {
     const response = await listEntities({ limit });
 
@@ -366,20 +388,39 @@ export function formatForMermaid(
 }
 
 /**
+ * Generic asset record for summarization
+ */
+interface SummarizeAsset {
+  id?: string;
+  locationID?: string;
+  tracker?: string;
+  country?: string;
+  status?: string;
+  [key: string]: unknown;
+}
+
+interface AssetStats {
+  assetCount: number;
+  unitCount: number;
+  types: Set<string | undefined>;
+}
+
+/**
  * Summarize assets by various dimensions
  * Ported from Observable summarizeAssets2()
  */
-export function summarizeAssets(assets: any[]) {
-  const uniqueCount = (arr: any[], field: string) => new Set(arr.map((d) => d[field])).size;
+export function summarizeAssets(assets: SummarizeAsset[]) {
+  const uniqueCount = (arr: SummarizeAsset[], field: string) =>
+    new Set(arr.map((d) => d[field])).size;
 
-  const getStats = (v: any[]) => ({
+  const getStats = (v: SummarizeAsset[]): AssetStats => ({
     assetCount: uniqueCount(v, 'locationID') || uniqueCount(v, 'id'),
     unitCount: uniqueCount(v, 'id'),
     types: new Set(v.map((d) => d.tracker)),
   });
 
-  const rollup = (arr: any[], keyFn: (_d: any) => string) => {
-    const map = new Map<string, any[]>();
+  const rollup = (arr: SummarizeAsset[], keyFn: (_d: SummarizeAsset) => string) => {
+    const map = new Map<string, SummarizeAsset[]>();
     arr.forEach((d) => {
       const key = keyFn(d);
       if (!map.has(key)) map.set(key, []);
@@ -390,9 +431,9 @@ export function summarizeAssets(assets: any[]) {
 
   return {
     total: getStats(assets),
-    byCountry: rollup(assets, (d) => d.country),
-    byType: rollup(assets, (d) => d.tracker),
-    byStatus: rollup(assets, (d) => d.status?.toLowerCase()),
+    byCountry: rollup(assets, (d) => d.country || 'Unknown'),
+    byType: rollup(assets, (d) => d.tracker || 'Unknown'),
+    byStatus: rollup(assets, (d) => d.status?.toLowerCase() || 'unknown'),
   };
 }
 

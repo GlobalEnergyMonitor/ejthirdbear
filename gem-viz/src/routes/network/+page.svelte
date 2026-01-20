@@ -30,7 +30,6 @@
   }
 
   header {
-    border-bottom: 1px solid var(--color-black);
     padding-bottom: 15px;
     margin-bottom: 20px;
   }

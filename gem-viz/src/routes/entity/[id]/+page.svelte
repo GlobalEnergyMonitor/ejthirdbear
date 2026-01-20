@@ -16,7 +16,6 @@
   import AddToCartButton from '$lib/components/AddToCartButton.svelte';
   import Citation from '$lib/components/Citation.svelte';
   import UltimateOwners from '$lib/components/UltimateOwners.svelte';
-  import ExternalLinks from '$lib/components/ExternalLinks.svelte';
 
   /**
    * @typedef {Object} EntityData
@@ -107,7 +106,6 @@
       owners = ownersData || [];
       owned = ownedData || [];
     } catch (err) {
-      console.error('Entity load error:', err);
       error = err?.message || 'Failed to load entity';
     } finally {
       loading = false;
@@ -152,7 +150,6 @@
               type="entity"
               metadata={{ directOwners: owners.length, directHoldings: owned.length }}
             />
-            <ExternalLinks type="entity" name={entityName} />
           </div>
         </div>
       </div>

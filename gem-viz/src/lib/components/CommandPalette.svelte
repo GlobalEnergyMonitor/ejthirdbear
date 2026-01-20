@@ -63,6 +63,20 @@
       section: 'Navigation',
     },
     {
+      id: 'compose',
+      label: 'Go to Compose',
+      shortcut: 'g c',
+      action: () => goto(link('compose')),
+      section: 'Navigation',
+    },
+    {
+      id: 'network',
+      label: 'Go to Network',
+      shortcut: 'g n',
+      action: () => goto(link('network')),
+      section: 'Navigation',
+    },
+    {
       id: 'report',
       label: 'Go to Report',
       shortcut: 'g r',
@@ -71,9 +85,15 @@
     },
     {
       id: 'export',
-      label: 'Go to Export',
+      label: 'Go to Report Export',
       shortcut: 'g x',
-      action: () => goto(link('export')),
+      action: () => goto(`${link('report')}#export`),
+      section: 'Navigation',
+    },
+    {
+      id: 'assets',
+      label: 'Go to Assets',
+      action: () => goto(link('asset')),
       section: 'Navigation',
     },
     {
@@ -88,6 +108,30 @@
       label: 'Search by Map',
       shortcut: 'g m',
       action: () => goto(link('asset/search')),
+      section: 'Navigation',
+    },
+    {
+      id: 'cards',
+      label: 'Go to Cards',
+      action: () => goto(link('cards')),
+      section: 'Navigation',
+    },
+    {
+      id: 'factsheets',
+      label: 'Go to Factsheets',
+      action: () => goto(link('factsheet')),
+      section: 'Navigation',
+    },
+    {
+      id: 'presets',
+      label: 'Go to Presets',
+      action: () => goto(link('presets')),
+      section: 'Navigation',
+    },
+    {
+      id: 'manifest',
+      label: 'Go to Data Manifest',
+      action: () => goto(link('manifest')),
       section: 'Navigation',
     },
     {
@@ -161,10 +205,11 @@
     /** @type {ResultItem[]} */
     const results = [];
 
-    // Recent searches first (if no query)
-    if (!query && recentSearches.length > 0) {
+    // Recent searches first (if no query) - show max 2
+    const validRecent = recentSearches.filter((r) => r && r.label && r.label.trim());
+    if (!query && validRecent.length > 0) {
       results.push({ type: 'section', label: 'Recent' });
-      recentSearches.slice(0, 3).forEach((r) => results.push({ ...r, type: 'recent' }));
+      validRecent.slice(0, 2).forEach((r) => results.push({ ...r, type: 'recent' }));
     }
 
     // Commands (filtered by query)
@@ -183,10 +228,10 @@
       entityResults.forEach((e) =>
         results.push({
           type: 'entity',
-          id: e['Entity ID'],
-          label: e.Name || e['Entity ID'],
-          sublabel: e['Headquarters Country'],
-          action: () => navigateTo('entity', e['Entity ID'], e.Name),
+          id: e.id,
+          label: e.name || e.id,
+          sublabel: e.headquartersCountry,
+          action: () => navigateTo('entity', e.id, e.name),
         })
       );
     }
@@ -197,10 +242,10 @@
       assetResults.forEach((a) =>
         results.push({
           type: 'asset',
-          id: a.gem_unit_id,
-          label: a.facility_name || a.gem_unit_id,
-          sublabel: [a.facility_type, a.country].filter(Boolean).join(' · '),
-          action: () => navigateTo('asset', a.gem_unit_id, a.facility_name),
+          id: a.id,
+          label: a.name || a.id,
+          sublabel: [a.facilityType, a.country].filter(Boolean).join(' · '),
+          action: () => navigateTo('asset', a.id, a.name),
         })
       );
     }
@@ -240,8 +285,8 @@
 
         assetResults = assets.results || [];
         entityResults = entities.results || [];
-      } catch (err) {
-        console.error('[CommandPalette] Search error:', err);
+      } catch {
+        // Search failed silently - results will be empty
       } finally {
         loading = false;
       }
@@ -265,6 +310,9 @@
 
   // Add to recent searches
   function addToRecent(item) {
+    // Only add valid items with labels
+    if (!item || !item.label || !item.label.trim() || !item.id) return;
+
     const filtered = recentSearches.filter((r) => r.id !== item.id);
     recentSearches = [item, ...filtered].slice(0, 10);
     saveRecent();
@@ -283,7 +331,13 @@
     try {
       const stored = localStorage.getItem('gem-recent-searches');
       if (stored) {
-        recentSearches = JSON.parse(stored);
+        const parsed = JSON.parse(stored);
+        // Filter out invalid entries (blank labels, missing data)
+        recentSearches = parsed.filter((r) => r && r.label && r.label.trim() && r.id);
+        // If we filtered out items, save the cleaned list
+        if (recentSearches.length !== parsed.length) {
+          saveRecent();
+        }
       }
     } catch {
       /* localStorage may be unavailable */
@@ -300,6 +354,8 @@
     const item = selectableResults[safeIndex];
     if (item?.action) {
       item.action();
+      // Close after executing (navigateTo already calls close, but commands don't)
+      close();
     }
   }
 
@@ -357,7 +413,7 @@
         h: () => goto(link('index')),
         e: () => goto(link('explore')),
         r: () => goto(link('report')),
-        x: () => goto(link('export')),
+        x: () => goto(`${link('report')}#export`),
         a: () => goto(link('about')),
         m: () => goto(link('asset/search')),
       };
@@ -764,7 +820,10 @@
             <button
               class="result-item"
               class:selected={selectableIndex === selectedIndex}
-              onclick={() => item.action?.()}
+              onclick={() => {
+                item.action?.();
+                close();
+              }}
               onmouseenter={() => {
                 selectedIndex = selectableIndex;
               }}
@@ -838,7 +897,7 @@
         <div class="shortcut-row"><kbd>g</kbd><kbd>h</kbd> <span>Go home</span></div>
         <div class="shortcut-row"><kbd>g</kbd><kbd>e</kbd> <span>Go to explore</span></div>
         <div class="shortcut-row"><kbd>g</kbd><kbd>r</kbd> <span>Go to report</span></div>
-        <div class="shortcut-row"><kbd>g</kbd><kbd>x</kbd> <span>Go to export</span></div>
+        <div class="shortcut-row"><kbd>g</kbd><kbd>x</kbd> <span>Go to report export</span></div>
         <div class="shortcut-row"><kbd>g</kbd><kbd>m</kbd> <span>Map search</span></div>
         <div class="shortcut-row"><kbd>g</kbd><kbd>a</kbd> <span>Go to about</span></div>
         <div class="shortcut-row"><kbd>b</kbd> <span>Go back</span></div>

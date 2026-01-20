@@ -65,7 +65,6 @@
 
       assets = results;
     } catch (err) {
-      console.error('Asset list load error:', err);
       error = err?.message || 'Failed to load assets';
     } finally {
       loading = false;

@@ -193,10 +193,10 @@ export async function fetchCapacityRange(): Promise<RangeData> {
   if (!(await ensureDB())) return { min: 0, max: 10000 };
 
   const result = await widgetQuery(`
-    SELECT MIN(CAST("Capacity (MW)" AS DOUBLE)) as min_val,
-           MAX(CAST("Capacity (MW)" AS DOUBLE)) as max_val
+    SELECT MIN(TRY_CAST("Capacity (MW)" AS DOUBLE)) as min_val,
+           MAX(TRY_CAST("Capacity (MW)" AS DOUBLE)) as max_val
     FROM ownership
-    WHERE "Capacity (MW)" IS NOT NULL AND "Capacity (MW)" != ''
+    WHERE TRY_CAST("Capacity (MW)" AS DOUBLE) IS NOT NULL
   `);
 
   const row = (result.data as { min_val: number; max_val: number }[])?.[0];
@@ -209,20 +209,26 @@ export async function fetchCapacityRange(): Promise<RangeData> {
 export async function fetchStartYearRange(): Promise<RangeData> {
   if (!(await ensureDB())) return { min: 1950, max: 2035 };
 
-  const result = await widgetQuery(`
-    SELECT MIN(CAST("Start Year" AS INTEGER)) as min_val,
-           MAX(CAST("Start Year" AS INTEGER)) as max_val
-    FROM ownership
-    WHERE "Start Year" IS NOT NULL AND "Start Year" != ''
-      AND CAST("Start Year" AS INTEGER) > 1900
-      AND CAST("Start Year" AS INTEGER) < 2100
-  `);
+  // Check if "Start Year" column exists (not all trackers have it)
+  try {
+    const result = await widgetQuery(`
+      SELECT MIN(TRY_CAST("Start Year" AS INTEGER)) as min_val,
+             MAX(TRY_CAST("Start Year" AS INTEGER)) as max_val
+      FROM ownership
+      WHERE TRY_CAST("Start Year" AS INTEGER) IS NOT NULL
+        AND TRY_CAST("Start Year" AS INTEGER) > 1900
+        AND TRY_CAST("Start Year" AS INTEGER) < 2100
+    `);
 
-  const row = (result.data as { min_val: number; max_val: number }[])?.[0];
-  return {
-    min: Number(row?.min_val) || 1950,
-    max: Number(row?.max_val) || 2035,
-  };
+    const row = (result.data as { min_val: number; max_val: number }[])?.[0];
+    return {
+      min: Number(row?.min_val) || 1950,
+      max: Number(row?.max_val) || 2035,
+    };
+  } catch {
+    // Column doesn't exist in the current data
+    return { min: 1950, max: 2035 };
+  }
 }
 
 export async function fetchCapacityHistogram(buckets = 20): Promise<number[]> {
@@ -230,19 +236,19 @@ export async function fetchCapacityHistogram(buckets = 20): Promise<number[]> {
 
   const result = await widgetQuery(`
     WITH capacity_stats AS (
-      SELECT MIN(CAST("Capacity (MW)" AS DOUBLE)) as min_cap,
-             MAX(CAST("Capacity (MW)" AS DOUBLE)) as max_cap
+      SELECT MIN(TRY_CAST("Capacity (MW)" AS DOUBLE)) as min_cap,
+             MAX(TRY_CAST("Capacity (MW)" AS DOUBLE)) as max_cap
       FROM ownership
-      WHERE "Capacity (MW)" IS NOT NULL AND "Capacity (MW)" != ''
+      WHERE TRY_CAST("Capacity (MW)" AS DOUBLE) IS NOT NULL
     ),
     buckets AS (
-      SELECT FLOOR((CAST("Capacity (MW)" AS DOUBLE) - min_cap) / ((max_cap - min_cap) / ${buckets})) as bucket,
+      SELECT FLOOR((TRY_CAST("Capacity (MW)" AS DOUBLE) - min_cap) / NULLIF((max_cap - min_cap) / ${buckets}, 0)) as bucket,
              COUNT(*) as cnt
       FROM ownership, capacity_stats
-      WHERE "Capacity (MW)" IS NOT NULL AND "Capacity (MW)" != ''
+      WHERE TRY_CAST("Capacity (MW)" AS DOUBLE) IS NOT NULL
       GROUP BY bucket
     )
-    SELECT bucket, cnt FROM buckets ORDER BY bucket
+    SELECT bucket, cnt FROM buckets WHERE bucket IS NOT NULL ORDER BY bucket
   `);
 
   const bucketData = new Array(buckets).fill(0);
@@ -355,10 +361,10 @@ export async function fetchResults(
   if (!(await ensureDB())) return { results: [], totalCount: 0 };
 
   const capacitySelect = columnNames.capacity
-    ? `CAST(o."${columnNames.capacity}" AS DOUBLE) as capacity_mw`
+    ? `TRY_CAST(o."${columnNames.capacity}" AS DOUBLE) as capacity_mw`
     : 'NULL::DOUBLE as capacity_mw';
   const startYearSelect = columnNames.startYear
-    ? `CAST(o."${columnNames.startYear}" AS INTEGER) as start_year`
+    ? `TRY_CAST(o."${columnNames.startYear}" AS INTEGER) as start_year`
     : 'NULL::INTEGER as start_year';
 
   const [countResult, dataResult] = await Promise.all([
@@ -419,10 +425,10 @@ export async function fetchTrackerColumnInfo(
   for (const tracker of trackers) {
     const escapedTracker = tracker.replace(/'/g, "''");
     const capacitySelect = columnNames.capacity
-      ? `COUNT(CASE WHEN o."${columnNames.capacity}" IS NOT NULL AND o."${columnNames.capacity}" != '' THEN 1 END) as has_capacity`
+      ? `COUNT(CASE WHEN TRY_CAST(o."${columnNames.capacity}" AS DOUBLE) IS NOT NULL THEN 1 END) as has_capacity`
       : '0 as has_capacity';
     const startYearSelect = columnNames.startYear
-      ? `COUNT(CASE WHEN o."${columnNames.startYear}" IS NOT NULL AND o."${columnNames.startYear}" != '' THEN 1 END) as has_start_year`
+      ? `COUNT(CASE WHEN TRY_CAST(o."${columnNames.startYear}" AS INTEGER) IS NOT NULL THEN 1 END) as has_start_year`
       : '0 as has_start_year';
     const shareSelect = columnNames.share
       ? `COUNT(CASE WHEN o."${columnNames.share}" IS NOT NULL THEN 1 END) as has_share`
@@ -449,4 +455,66 @@ export async function fetchTrackerColumnInfo(
   }
 
   return columnInfo;
+}
+
+// ============================================================================
+// Asset Metadata Lookup
+// ============================================================================
+
+export interface AssetMetadata {
+  id: string;
+  name: string;
+  tracker: string | null;
+  status: string | null;
+  country: string | null;
+}
+
+/**
+ * Fetch metadata for a list of asset IDs from DuckDB.
+ * Useful for enriching API data that doesn't include tracker/status/country.
+ *
+ * @param assetIds - Array of GEM unit IDs to look up
+ * @returns Map of asset ID -> metadata
+ */
+export async function fetchAssetMetadata(assetIds: string[]): Promise<Map<string, AssetMetadata>> {
+  const metadataMap = new Map<string, AssetMetadata>();
+
+  if (!assetIds.length || !(await ensureDB())) {
+    return metadataMap;
+  }
+
+  // Escape and format IDs for SQL IN clause
+  const escapedIds = assetIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(', ');
+
+  const result = await widgetQuery(`
+    SELECT DISTINCT
+      o."GEM unit ID" as id,
+      o."Project" as name,
+      o."Tracker" as tracker,
+      o."Status" as status,
+      l."Country.Area" as country
+    FROM ownership o
+    LEFT JOIN ${LOCATIONS_DEDUP} l ON o."GEM location ID" = l."GEM.location.ID"
+    WHERE o."GEM unit ID" IN (${escapedIds})
+  `);
+
+  if (result.success && result.data) {
+    for (const row of result.data as Array<{
+      id: string;
+      name: string;
+      tracker: string | null;
+      status: string | null;
+      country: string | null;
+    }>) {
+      metadataMap.set(row.id, {
+        id: row.id,
+        name: row.name || row.id,
+        tracker: row.tracker || null,
+        status: row.status || null,
+        country: row.country || null,
+      });
+    }
+  }
+
+  return metadataMap;
 }

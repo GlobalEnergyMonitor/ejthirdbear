@@ -99,19 +99,23 @@
     {/if}
   </div>
 
-  <div class="card-stats">
-    <span class="stat">
-      <span class="stat-value">{formatCompact(assetCount)}</span>
-      <span class="stat-label">assets</span>
-    </span>
-    {#if totalCapacity > 0}
-      <span class="stat-divider">·</span>
-      <span class="stat">
-        <span class="stat-value">{formatCapacity(totalCapacity)}</span>
-        <span class="stat-label">capacity</span>
-      </span>
-    {/if}
-  </div>
+  {#if assetCount > 0 || totalCapacity > 0}
+    <div class="card-stats">
+      {#if assetCount > 0}
+        <span class="stat">
+          <span class="stat-value">{formatCompact(assetCount)}</span>
+          <span class="stat-label">assets</span>
+        </span>
+      {/if}
+      {#if totalCapacity > 0}
+        {#if assetCount > 0}<span class="stat-divider">·</span>{/if}
+        <span class="stat">
+          <span class="stat-value">{formatCapacity(totalCapacity)}</span>
+          <span class="stat-label">capacity</span>
+        </span>
+      {/if}
+    </div>
+  {/if}
 
   {#if trackerBreakdown.length > 0}
     <div class="tracker-bar" title={topTrackers}>

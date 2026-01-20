@@ -311,39 +311,7 @@ export function extractUnitIdFromComposite(id: string): string {
 }
 
 // ============================================================================
-// PART 3: URL PATH BUILDERS
-// ============================================================================
-
-import { assetLink, entityLink } from '$lib/links';
-
-/**
- * Build the canonical asset URL path.
- *
- * Always uses bare GEM Unit ID format: /asset/G100000109409
- * Handles composite IDs by extracting the unit ID portion.
- *
- * @deprecated Use `assetLink` from '$lib/links' directly for navigation.
- * This function exists for backwards compatibility.
- */
-export function assetPath(id: string): string {
-  const cleanId = extractUnitIdFromComposite(id);
-  return assetLink(cleanId);
-}
-
-/**
- * Build the canonical entity URL path.
- *
- * Entity pages show an owner's full portfolio of assets.
- *
- * @deprecated Use `entityLink` from '$lib/links' directly for navigation.
- * This function exists for backwards compatibility.
- */
-export function entityPath(id: string): string {
-  return entityLink(id);
-}
-
-// ============================================================================
-// PART 4: TRACKER-SPECIFIC ID HANDLING
+// PART 3: TRACKER-SPECIFIC ID HANDLING
 // ============================================================================
 
 /**

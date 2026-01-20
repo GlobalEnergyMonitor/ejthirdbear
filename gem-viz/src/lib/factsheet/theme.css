@@ -1,37 +1,37 @@
 /**
  * GEM Factsheet Theme
  * Shared CSS variables for factsheet and project card components
- * Based on GEM brand guidelines
+ * Based on GEM grayscale palette
  */
 
 :root {
   /* Primary colors */
-  --gem-navy: #004a63;
-  --gem-mint: #9df7e5;
-  --gem-orange: #fe4f2d;
-  --gem-teal: #016b83;
-  --gem-midnight: #002430;
+  --gem-navy: #3f3a37;
+  --gem-mint: #d6d3d1;
+  --gem-orange: #8f8883;
+  --gem-teal: #57534e;
+  --gem-midnight: #1c1917;
 
   /* Background colors */
-  --gem-warm-white: #f2f2eb;
-  --gem-white: #ffffff;
-  --gem-mint-bg: #9df7e520;
-  --gem-teal-bg: #016b83cc;
+  --gem-warm-white: #f5f5f4;
+  --gem-white: #fefefe;
+  --gem-mint-bg: #d6d3d120;
+  --gem-teal-bg: #57534ecc;
 
   /* Semantic colors */
-  --gem-deep-red: #7f142a;
+  --gem-deep-red: #292524;
 
   /* Status badge colors */
   --status-planned-bg: var(--gem-mint);
   --status-planned-fg: var(--gem-midnight);
   --status-operating-bg: var(--gem-navy);
-  --status-operating-fg: var(--gem-mint);
-  --status-cancelled-bg: #dce3e5;
-  --status-cancelled-fg: var(--gem-navy);
-  --status-retired-bg: #6e8c91;
-  --status-retired-fg: #ffffff;
-  --status-unknown-bg: #dddddd;
-  --status-unknown-fg: #666666;
+  --status-operating-fg: var(--gem-warm-white);
+  --status-cancelled-bg: #e1dfdd;
+  --status-cancelled-fg: var(--gem-teal);
+  --status-retired-bg: var(--gem-midnight);
+  --status-retired-fg: var(--gem-warm-white);
+  --status-unknown-bg: #ecebe8;
+  --status-unknown-fg: #57534e;
 
   /* Typography */
   --gem-font: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
@@ -43,7 +43,7 @@
   --gem-radius-pill: 999px;
 
   /* Shadows */
-  --gem-shadow-card: 0 8px 20px rgba(0, 36, 48, 0.08);
-  --gem-border-light: 1px solid rgba(0, 74, 99, 0.1);
-  --gem-border-dashed: 1px dashed rgba(0, 74, 99, 0.2);
+  --gem-shadow-card: 0 8px 20px rgba(28, 25, 23, 0.08);
+  --gem-border-light: 1px solid rgba(63, 58, 55, 0.1);
+  --gem-border-dashed: 1px dashed rgba(63, 58, 55, 0.2);
 }

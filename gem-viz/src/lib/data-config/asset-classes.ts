@@ -288,19 +288,19 @@ export function buildFieldsForAssetClass(className: string): string[] {
 export const assetClassMetadata = {
   CoalBasedSteel: {
     icon: 'CBS',
-    color: '#7F142A', // Coal color from GEM brand
+    color: '#2f2a27',
     category: 'Energy Intensive Industry',
     concernAreas: ['Coal dependence', 'Air quality impacts', 'Closure risk', 'Capital intensity'],
   },
   CaptiveCoalPlant: {
     icon: 'CCP',
-    color: '#CA4A50',
+    color: '#6b645f',
     category: 'Stranded Assets',
     concernAreas: ['Industry decarbonization', 'Closure timing', 'Stranded costs'],
   },
   DeepWaterInfra: {
     icon: 'DWI',
-    color: '#061F5F',
+    color: '#8f8883',
     category: 'Oil & Gas Infrastructure',
     concernAreas: ['Environmental risk', 'Capital intensity', 'Decommissioning costs'],
   },

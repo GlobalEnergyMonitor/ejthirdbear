@@ -28,7 +28,7 @@
     loading = true;
     error = null;
 
-    const trackerFilter = tracker ? `WHERE "Tracker" = '${tracker}'` : '';
+    const trackerFilter = tracker ? `AND "Tracker" = '${tracker}'` : '';
     const capacityCol = metric === 'capacity' ? 'SUM(COALESCE("Capacity (MW)", 0))' : 'COUNT(*)';
 
     const sql = `
@@ -38,8 +38,8 @@
         ${capacityCol} as value,
         COUNT(DISTINCT "GEM unit ID") as asset_count
       FROM ownership
-      ${trackerFilter}
       WHERE "Owner" IS NOT NULL AND "Owner" != ''
+      ${trackerFilter}
       GROUP BY "Owner", "Owner GEM Entity ID"
       ORDER BY value DESC
       LIMIT ${limit}

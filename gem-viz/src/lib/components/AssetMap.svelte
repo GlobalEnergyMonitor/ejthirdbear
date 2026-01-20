@@ -27,11 +27,6 @@
       return;
     }
 
-    console.debug('[AssetMap] Mount', {
-      assetId,
-      location: typeof window !== 'undefined' ? window.location.href : 'ssr',
-    });
-
     const basics = await fetchAssetBasics(assetId);
 
     if (!basics) {
@@ -68,10 +63,6 @@
           : null;
 
         if (!coords || coords.lat == null || coords.lon == null) {
-          console.warn('[AssetMap] Coordinates not found', {
-            assetId,
-            locationId: basics.locationId,
-          });
           error = 'Location not found in data';
           hasLocation = false;
           loading = false;
@@ -80,19 +71,11 @@
 
         finalLat = Number(coords.lat);
         finalLon = Number(coords.lon);
-        console.debug('[AssetMap] Using coordinates from Ownership API', {
-          lat: finalLat,
-          lon: finalLon,
-        });
       }
 
       if (hasDirectCoords) {
         finalLat = parsedLat;
         finalLon = parsedLon;
-        console.debug('[AssetMap] Using coordinates from asset data', {
-          lat: finalLat,
-          lon: finalLon,
-        });
       }
 
       // Initialize map
@@ -115,7 +98,6 @@
 
       loading = false;
     } catch (err) {
-      console.error('[AssetMap] Error loading asset map:', err);
       error = `${err.name || 'Error'}: ${err.message}`;
       loading = false;
     }

@@ -7,6 +7,7 @@
   import { page, navigating } from '$app/stores';
   import { link } from '$lib/links';
   import { investigationCart } from '$lib/investigationCart';
+  import { browser } from '$app/environment';
 
   // Cart count for badge
   const cartCount = $derived($investigationCart.length);
@@ -25,14 +26,19 @@
     return currentPath.includes(`/${path}`);
   }
 
-  // Navigation links
+  // Trigger command palette
+  function openSearch() {
+    if (!browser) return;
+    // Dispatch CMD+K to trigger CommandPalette
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }));
+  }
+
+  // Navigation links (primary only - others moved to footer)
   const navLinks = [
-    { path: 'index', label: 'Home' },
+    { path: 'index', label: 'Map' },
+    { path: 'asset', label: 'All Assets' },
     { path: 'explore', label: 'Explore' },
-    { path: 'network', label: 'Network' },
-    { path: 'report', label: 'Investigation', showBadge: true },
-    { path: 'asset', label: 'Assets' },
-    { path: 'about', label: 'About' },
+    { path: 'screener', label: 'Asset Screener' },
   ];
 </script>
 
@@ -42,6 +48,19 @@
   {/if}
   <div class="nav-brand">
     <a href={link('index')}>GEM Viz</a>
+    <button class="search-btn" onclick={openSearch} title="Search (⌘K)">
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+      >
+        <circle cx="11" cy="11" r="8" />
+        <path d="m21 21-4.35-4.35" />
+      </svg>
+    </button>
   </div>
   <div class="nav-links">
     {#each navLinks as { path, label, showBadge }}
@@ -66,10 +85,10 @@
     align-items: center;
     padding: 12px 40px;
     border-bottom: 1px solid var(--color-black);
-    background: var(--color-white);
+    background: #ffffff;
     position: sticky;
     top: 0;
-    z-index: 100;
+    z-index: 1000;
   }
 
   /* Subtle loading bar */
@@ -97,6 +116,12 @@
     }
   }
 
+  .nav-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
   .nav-brand a {
     font-size: 14px;
     font-weight: bold;
@@ -108,6 +133,25 @@
 
   .nav-brand a:hover {
     text-decoration: underline;
+  }
+
+  .search-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 1px solid var(--color-border);
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .search-btn:hover {
+    border-color: var(--color-black);
+    color: var(--color-black);
   }
 
   .nav-links {

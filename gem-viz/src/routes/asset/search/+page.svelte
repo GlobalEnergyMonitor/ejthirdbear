@@ -51,15 +51,15 @@
     if (boundsStr) {
       try {
         return { type: 'bounds', ...JSON.parse(boundsStr) };
-      } catch (e) {
-        console.error('Failed to parse bounds:', e);
+      } catch {
+        // Invalid bounds format - ignore
       }
     }
     if (polygonStr) {
       try {
         return { type: 'polygon', coordinates: JSON.parse(polygonStr) };
-      } catch (e) {
-        console.error('Failed to parse polygon:', e);
+      } catch {
+        // Invalid polygon format - ignore
       }
     }
     return null;
@@ -123,7 +123,6 @@
 
       loadingStatus = 'Parsing GeoJSON...';
       const geojson = await response.json();
-      console.log(`Loaded ${geojson.features.length} features from points.geojson`);
 
       loadingStatus = 'Filtering assets...';
 
@@ -170,11 +169,7 @@
 
       queryTime = performance.now() - startTime;
       results = data;
-      console.log(
-        `Found ${filtered.length} assets (showing ${data.length}) in ${queryTime.toFixed(0)}ms`
-      );
     } catch (err) {
-      console.error('Search error:', err);
       error = err.message;
     } finally {
       loading = false;
@@ -204,7 +199,8 @@
     <a href={link('index')} class="back-link">Back to Map</a>
     <span class="title">Spatial Search</span>
     {#if !loading}<span class="count">{results.length.toLocaleString()} assets found</span>{/if}
-    {#if exportCount > 0}<a href={link('export')} class="export-link">Export List ({exportCount})</a
+    {#if exportCount > 0}<a href={`${link('report')}#export`} class="export-link"
+        >Export List ({exportCount})</a
       >{/if}
   </header>
 
@@ -242,7 +238,7 @@
       <button class="btn btn-outline" onclick={addAllToExport}
         >Add All {results.length} to Export</button
       >
-      {#if exportCount > 0}<a href={link('export')} class="btn btn-primary"
+      {#if exportCount > 0}<a href={`${link('report')}#export`} class="btn btn-primary"
           >Go to Export ({exportCount} assets)</a
         >{/if}
     </div>

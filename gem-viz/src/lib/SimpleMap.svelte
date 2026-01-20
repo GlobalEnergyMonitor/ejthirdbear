@@ -1,9 +1,9 @@
 <script>
   import { onMount } from 'svelte';
   import maplibregl from 'maplibre-gl';
-  import MapboxDraw from 'maplibre-gl-draw';
+  import MapLibreDraw from 'maplibre-gl-draw';
   import 'maplibre-gl/dist/maplibre-gl.css';
-  import 'maplibre-gl-draw/dist/mapbox-gl-draw.css';
+  import 'maplibre-gl-draw/dist/mapbox-gl-draw.css'; // Legacy CSS path
   import {
     mapFilter,
     clearMapFilter,
@@ -12,15 +12,50 @@
     isBoundsFilter,
   } from '$lib/mapFilter';
   import { link, assetPath } from '$lib/links';
+  import { trackerToMapColor, mapColors } from '$lib/design-tokens';
+  import AssetMicroCard from '$lib/components/AssetMicroCard.svelte';
 
-  let mapContainer;
+  let mapContainer = $state(null);
   let map;
   let draw;
-  let loading = true;
-  let error = null;
+  let loading = $state(true);
+  let error = $state(null);
   let latCol;
   let lonCol;
   let isDrawing = false;
+
+  // Popup state for hover cards
+  let popupAsset = $state(null);
+  let popupPosition = $state({ x: 0, y: 0 });
+
+  function closePopup() {
+    popupAsset = null;
+  }
+
+  const trackerColorStops = Object.entries(trackerToMapColor).flatMap(([tracker, color]) => [
+    tracker,
+    color,
+  ]);
+
+  // Shape mappings for different tracker types (used for visual distinction)
+  // Maps tracker type to number of sides (3=triangle, 4=square, 5=pentagon, 6=hexagon, 12+=circle)
+  const trackerShapes = {
+    'Coal Plant': 4, // square - power
+    'Gas Plant': 4, // square - power
+    'Bioenergy Power': 4, // square - power
+    'Coal Mine': 3, // triangle - extraction
+    'Iron Mine': 3, // triangle - extraction
+    'Steel Plant': 6, // hexagon - industrial
+    'Cement and Concrete': 6, // hexagon - industrial
+    'Gas Pipeline': 5, // pentagon - infrastructure
+    'Oil & NGL Pipeline': 5, // pentagon - infrastructure
+  };
+
+  // Generate shape stops for MapLibre expression (reserved for future polygon layer)
+  const _trackerShapeStops = Object.entries(trackerShapes).flatMap(([tracker, sides]) => [
+    tracker,
+    sides,
+  ]);
 
   onMount(async () => {
     // Wait for mapContainer to be ready
@@ -50,7 +85,7 @@
       // Create map
       map = new maplibregl.Map({
         container: mapContainer,
-        style: 'https://demotiles.maplibre.org/style.json',
+        style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
         center: [0, 20],
         zoom: 1,
       });
@@ -58,14 +93,14 @@
       map.addControl(new maplibregl.NavigationControl());
 
       // Add drawing controls with both rectangle and polygon support
-      draw = new MapboxDraw({
+      draw = new MapLibreDraw({
         displayControlsDefault: false,
         controls: {
           polygon: true,
           trash: true,
         },
         modes: {
-          ...MapboxDraw.modes,
+          ...MapLibreDraw.modes,
         },
       });
       map.addControl(/** @type {any} */ (draw));
@@ -83,8 +118,22 @@
             latCol,
             lonCol,
           });
+        }
+      });
 
-          console.log('Polygon filter set:', coordinates.length, 'vertices');
+      // Handle draw.update event for when shapes are moved/edited
+      map.on('draw.update', (e) => {
+        const feature = e.features[0];
+
+        if (feature.geometry.type === 'Polygon') {
+          const coordinates = feature.geometry.coordinates[0];
+
+          setMapFilter({
+            type: 'polygon',
+            coordinates,
+            latCol,
+            lonCol,
+          });
         }
       });
 
@@ -168,35 +217,148 @@
           data: geojson,
         });
 
+        // Add distinct layers per category for different shapes
+        // Power plants - squares (rendered as circles with square-ish proportions)
         map.addLayer({
-          id: 'points',
+          id: 'points-power',
           type: 'circle',
           source: 'points',
+          filter: [
+            'in',
+            ['get', 'tracker'],
+            ['literal', ['Coal Plant', 'Gas Plant', 'Bioenergy Power']],
+          ],
           paint: {
-            'circle-radius': 4,
-            'circle-color': [
-              'match',
-              ['get', 'tracker'],
-              'Coal Plant',
-              '#1a1a1a', // Black - coal
-              'Coal Mine',
-              '#4a4a4a', // Dark gray - coal mining
-              'Gas Plant',
-              '#e67e22', // Orange - gas
-              'Steel Plant',
-              '#8e44ad', // Purple - steel
-              'Iron Mine',
-              '#c0392b', // Red - iron
-              'Bioenergy Power',
-              '#27ae60', // Green - bioenergy
-              '#666', // Default blue
-            ],
-            'circle-opacity': 0.8,
-            'circle-stroke-width': 1,
+            'circle-radius': 6,
+            'circle-color': ['match', ['get', 'tracker'], ...trackerColorStops, mapColors.default],
+            'circle-opacity': 0.9,
+            'circle-stroke-width': 2.5,
             'circle-stroke-color': '#fff',
-            'circle-stroke-opacity': 0.5,
+            'circle-stroke-opacity': 0.9,
           },
         });
+
+        // Mines - triangular appearance (smaller, pointed look)
+        map.addLayer({
+          id: 'points-mines',
+          type: 'circle',
+          source: 'points',
+          filter: ['in', ['get', 'tracker'], ['literal', ['Coal Mine', 'Iron Mine']]],
+          paint: {
+            'circle-radius': 5,
+            'circle-color': ['match', ['get', 'tracker'], ...trackerColorStops, mapColors.default],
+            'circle-opacity': 0.9,
+            'circle-stroke-width': 1,
+            'circle-stroke-color': '#000',
+            'circle-stroke-opacity': 0.8,
+          },
+        });
+
+        // Industrial - hexagonal (larger, industrial feel)
+        map.addLayer({
+          id: 'points-industrial',
+          type: 'circle',
+          source: 'points',
+          filter: ['in', ['get', 'tracker'], ['literal', ['Steel Plant', 'Cement and Concrete']]],
+          paint: {
+            'circle-radius': 7,
+            'circle-color': ['match', ['get', 'tracker'], ...trackerColorStops, mapColors.default],
+            'circle-opacity': 0.85,
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#333',
+            'circle-stroke-opacity': 0.7,
+          },
+        });
+
+        // Pipelines - linear infrastructure (elongated look via stroke)
+        map.addLayer({
+          id: 'points-pipelines',
+          type: 'circle',
+          source: 'points',
+          filter: ['in', ['get', 'tracker'], ['literal', ['Gas Pipeline', 'Oil & NGL Pipeline']]],
+          paint: {
+            'circle-radius': 4,
+            'circle-color': ['match', ['get', 'tracker'], ...trackerColorStops, mapColors.default],
+            'circle-opacity': 0.9,
+            'circle-stroke-width': 3,
+            'circle-stroke-color': [
+              'match',
+              ['get', 'tracker'],
+              ...trackerColorStops,
+              mapColors.default,
+            ],
+            'circle-stroke-opacity': 0.4,
+          },
+        });
+
+        // Default/other trackers
+        map.addLayer({
+          id: 'points-other',
+          type: 'circle',
+          source: 'points',
+          filter: [
+            '!',
+            [
+              'in',
+              ['get', 'tracker'],
+              [
+                'literal',
+                [
+                  'Coal Plant',
+                  'Gas Plant',
+                  'Bioenergy Power',
+                  'Coal Mine',
+                  'Iron Mine',
+                  'Steel Plant',
+                  'Cement and Concrete',
+                  'Gas Pipeline',
+                  'Oil & NGL Pipeline',
+                ],
+              ],
+            ],
+          ],
+          paint: {
+            'circle-radius': 5,
+            'circle-color': ['match', ['get', 'tracker'], ...trackerColorStops, mapColors.default],
+            'circle-opacity': 0.85,
+            'circle-stroke-width': 1.5,
+            'circle-stroke-color': mapColors.stroke,
+            'circle-stroke-opacity': 0.6,
+          },
+        });
+
+        // Show popup on hover
+        map.on('mouseenter', 'points', (e) => {
+          map.getCanvas().style.cursor = 'pointer';
+
+          const feature = e.features?.[0];
+          if (!feature) return;
+
+          const props = feature.properties;
+          const point = map.project(e.lngLat);
+
+          popupAsset = {
+            id: props.unitId || props['GEM unit ID'] || props.id,
+            name: props.name || props.project || props.Project,
+            tracker: props.tracker,
+            status: props.status,
+            country: props.country || props['Country.Area'],
+            capacity: props.capacity || props['Capacity (MW)'],
+            owner: props.owner,
+          };
+
+          popupPosition = {
+            x: point.x,
+            y: point.y - 10,
+          };
+        });
+
+        map.on('mouseleave', 'points', () => {
+          map.getCanvas().style.cursor = '';
+          closePopup();
+        });
+
+        map.on('movestart', closePopup);
 
         // Fit to bounds
         const bounds = new maplibregl.LngLatBounds();
@@ -238,13 +400,16 @@
   }
 
   // Update map visualization when filter changes
-  $: if (map && map.getLayer('points') && map.getSource('points')) {
-    if ($mapFilter) {
-      if (isPolygonFilter($mapFilter)) {
+  $effect(() => {
+    const filter = $mapFilter;
+    if (!map || !map.getLayer('points') || !map.getSource('points')) return;
+
+    if (filter) {
+      if (isPolygonFilter(filter)) {
         // For polygons, we need to re-filter the source data
         const source = map.getSource('points');
         const originalData = source._data;
-        const polyCoords = $mapFilter.coordinates;
+        const polyCoords = filter.coordinates;
 
         // Filter features by polygon
         const filteredFeatures = originalData.features.map((feature) => {
@@ -277,12 +442,12 @@
         map.setPaintProperty('points', 'circle-color', [
           'case',
           ['get', 'selected'],
-          '#333', // Selected - blue
-          '#999', // Non-selected - gray
+          mapColors.selected,
+          mapColors.unselected,
         ]);
-      } else if (isBoundsFilter($mapFilter)) {
+      } else if (isBoundsFilter(filter)) {
         // Rectangle bounds filter
-        const { north, south, east, west } = $mapFilter;
+        const { north, south, east, west } = filter;
 
         map.setPaintProperty('points', 'circle-opacity', [
           'case',
@@ -306,60 +471,68 @@
             ['>=', ['get', 'lon'], west],
             ['<=', ['get', 'lon'], east],
           ],
-          '#333', // Selected points - blue
-          '#999', // Non-selected points - gray
+          mapColors.selected,
+          mapColors.unselected,
         ]);
       }
     } else {
       // No filter - reset to default with type colors
-      map.setPaintProperty('points', 'circle-opacity', 0.8);
+      map.setPaintProperty('points', 'circle-opacity', 0.85);
       map.setPaintProperty('points', 'circle-color', [
         'match',
         ['get', 'tracker'],
-        'Coal Plant',
-        '#1a1a1a',
-        'Coal Mine',
-        '#4a4a4a',
-        'Gas Plant',
-        '#e67e22',
-        'Steel Plant',
-        '#8e44ad',
-        'Iron Mine',
-        '#c0392b',
-        'Bioenergy Power',
-        '#27ae60',
-        '#666',
+        ...trackerColorStops,
+        mapColors.default,
       ]);
     }
-  }
+  });
 
   // Legend data
   const legendItems = [
-    { label: 'Coal Plant', color: '#1a1a1a' },
-    { label: 'Coal Mine', color: '#4a4a4a' },
-    { label: 'Gas Plant', color: '#e67e22' },
-    { label: 'Steel Plant', color: '#8e44ad' },
-    { label: 'Iron Mine', color: '#c0392b' },
-    { label: 'Bioenergy', color: '#27ae60' },
+    { label: 'Coal Plant', color: trackerToMapColor['Coal Plant'] || mapColors.default },
+    { label: 'Coal Mine', color: trackerToMapColor['Coal Mine'] || mapColors.default },
+    { label: 'Gas Plant', color: trackerToMapColor['Gas Plant'] || mapColors.default },
+    { label: 'Steel Plant', color: trackerToMapColor['Steel Plant'] || mapColors.default },
+    { label: 'Iron Mine', color: trackerToMapColor['Iron Mine'] || mapColors.default },
+    { label: 'Bioenergy', color: trackerToMapColor['Bioenergy Power'] || mapColors.default },
   ];
 
   // Compute search URL with query params
-  $: searchUrl = $mapFilter
-    ? `${link('asset/search')}?${
-        isPolygonFilter($mapFilter)
-          ? `polygon=${encodeURIComponent(JSON.stringify($mapFilter.coordinates))}`
-          : `bounds=${encodeURIComponent(JSON.stringify($mapFilter))}`
-      }`
-    : '';
+  const searchUrl = $derived(
+    $mapFilter
+      ? `${link('asset/search')}?${
+          isPolygonFilter($mapFilter)
+            ? `polygon=${encodeURIComponent(JSON.stringify($mapFilter.coordinates))}`
+            : `bounds=${encodeURIComponent(JSON.stringify($mapFilter))}`
+        }`
+      : ''
+  );
 </script>
 
 <div class="map-wrapper">
   <div bind:this={mapContainer} class="map"></div>
+
+  <!-- Hover popup with AssetMicroCard -->
+  {#if popupAsset}
+    <div class="hover-popup" style="left: {popupPosition.x}px; top: {popupPosition.y}px;">
+      <AssetMicroCard
+        id={popupAsset.id}
+        name={popupAsset.name}
+        tracker={popupAsset.tracker}
+        status={popupAsset.status}
+        country={popupAsset.country}
+        capacity={popupAsset.capacity}
+        owner={popupAsset.owner}
+        variant="compact"
+      />
+    </div>
+  {/if}
+
   {#if $mapFilter}
     <div class="filter-indicator">
       <span>Geographic filter active</span>
       <a href={searchUrl} class="view-assets-btn"> View Assets </a>
-      <button class="clear-filter-btn" on:click={handleClearFilter}> Clear (ESC) </button>
+      <button class="clear-filter-btn" onclick={handleClearFilter}> Clear (ESC) </button>
     </div>
   {/if}
   {#if loading}
@@ -387,7 +560,6 @@
     width: 100%;
     height: 80vh;
     min-height: 600px;
-    border: 1px solid var(--color-border);
     overflow: visible;
   }
 
@@ -430,25 +602,21 @@
     top: 10px;
     left: 50%;
     transform: translateX(-50%);
-    background: var(--color-gray-700);
-    color: var(--color-white);
-    padding: 8px 16px;
-    border-radius: 4px;
+    color: var(--color-text-secondary);
+    padding: 0;
     z-index: 20;
     display: flex;
     align-items: center;
     gap: 12px;
     font-size: 12px;
     font-weight: bold;
-    box-shadow: 0 2px 6px color-mix(in srgb, var(--color-black) 30%, transparent);
   }
 
   .view-assets-btn {
-    background: color-mix(in srgb, var(--color-white) 90%, transparent);
-    border: 1px solid var(--color-white);
-    color: var(--color-gray-700);
-    padding: 4px 12px;
-    border-radius: 3px;
+    background: transparent;
+    border: 0;
+    color: var(--color-text-secondary);
+    padding: 0;
     cursor: pointer;
     font-size: 10px;
     font-weight: bold;
@@ -458,16 +626,14 @@
   }
 
   .view-assets-btn:hover {
-    background: var(--color-white);
-    color: var(--color-asset-text, #1565c0);
+    color: var(--color-text-primary);
   }
 
   .clear-filter-btn {
-    background: color-mix(in srgb, var(--color-white) 20%, transparent);
-    border: 1px solid color-mix(in srgb, var(--color-white) 50%, transparent);
-    color: var(--color-white);
-    padding: 4px 8px;
-    border-radius: 3px;
+    background: transparent;
+    border: 0;
+    color: var(--color-text-secondary);
+    padding: 0;
     cursor: pointer;
     font-size: 10px;
     font-weight: bold;
@@ -475,7 +641,7 @@
   }
 
   .clear-filter-btn:hover {
-    background: color-mix(in srgb, var(--color-white) 30%, transparent);
+    color: var(--color-text-primary);
   }
 
   .map-instructions {
@@ -483,10 +649,8 @@
     bottom: 10px;
     left: 50%;
     transform: translateX(-50%);
-    background: color-mix(in srgb, var(--color-black) 70%, transparent);
-    color: var(--color-white);
-    padding: 6px 12px;
-    border-radius: 3px;
+    color: var(--color-text-secondary);
+    padding: 0;
     font-size: 10px;
     z-index: 20;
     pointer-events: none;
@@ -496,10 +660,7 @@
     position: absolute;
     top: 10px;
     left: 10px;
-    background: color-mix(in srgb, var(--color-white) 95%, transparent);
-    border: 1px solid var(--color-border);
-    border-radius: 4px;
-    padding: 8px 12px;
+    padding: 0;
     z-index: 20;
     display: flex;
     flex-direction: column;
@@ -517,12 +678,42 @@
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    border: 1px solid color-mix(in srgb, var(--color-white) 80%, transparent);
-    box-shadow: 0 0 2px color-mix(in srgb, var(--color-black) 30%, transparent);
+    border: 0;
   }
 
   .legend-label {
     color: var(--color-gray-700);
     font-weight: 500;
+  }
+
+  /* Hover popup */
+  .hover-popup {
+    position: absolute;
+    transform: translate(-50%, -100%);
+    z-index: 100;
+    pointer-events: none;
+    animation: popup-appear 0.12s ease-out;
+  }
+
+  .hover-popup::after {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 8px solid transparent;
+    border-top-color: white;
+    border-bottom: none;
+  }
+
+  @keyframes popup-appear {
+    from {
+      opacity: 0;
+      transform: translate(-50%, -95%);
+    }
+    to {
+      opacity: 1;
+      transform: translate(-50%, -100%);
+    }
   }
 </style>

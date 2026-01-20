@@ -6,6 +6,7 @@
 
   import { link } from '$lib/links';
   import { dataVersionInfo, TrackerDatasets } from '$lib/data-config/data-sources';
+  import { fallbackLog, downloadFallbackLog, clearFallbackLog } from '$lib/api-fallback-log';
 
   /**
    * @typedef {Object} PageStats
@@ -63,7 +64,7 @@
       date: '2025-12-15',
       changes: [
         'Integrated Observable notebook visualizations (Ownership Flower, Asset Screener)',
-        'Added TrackerIcon and StatusIcon components with GEM brand colors',
+        'Added TrackerIcon and StatusIcon components with a warm grayscale palette',
         'Consolidated and removed 13 zombie/duplicate components',
         'Added RelationshipNetwork visualization to asset pages',
       ],
@@ -139,6 +140,7 @@
       <li><a href="#how-to-use">How to Use</a></li>
       <li><a href="#changelog">Version History</a></li>
       <li><a href="#credits">Credits & Contact</a></li>
+      <li><a href="#dev-tools">Developer Tools</a></li>
     </ul>
   </nav>
 
@@ -377,18 +379,18 @@
 
       <dt>Tracker Icons</dt>
       <dd>
-        Colored dots indicate asset type using GEM brand colors (red = coal, purple = gas, green =
-        bioenergy, etc.)
+        Dots indicate asset type using a warm grayscale ramp (darker = fossil, lighter =
+        renewables).
       </dd>
 
       <dt>Status Icons</dt>
-      <dd>Yellow circle = proposed, X mark = retired/cancelled, no icon = operating</dd>
+      <dd>Light circle = prospective, X mark = retired/cancelled, no icon = operating</dd>
     </dl>
 
     <h3>Exporting Data</h3>
     <p>
-      Use the <a href={link('export')}>Export page</a> to download selected assets as CSV for further
-      analysis. Geographic searches can be added to the export list.
+      Use the <a href={`${link('report')}#export`}>Export section in the report</a> to download selected
+      assets as CSV for further analysis. Geographic searches can be added to the export list.
     </p>
   </section>
 
@@ -501,6 +503,94 @@
         >Creative Commons Attribution 4.0</a
       >. Please cite Global Energy Monitor when using this data.
     </p>
+  </section>
+
+  <!-- Developer Tools -->
+  <section id="dev-tools">
+    <h2>Developer Tools</h2>
+    <p class="section-intro">
+      Diagnostic tools for developers and support. These help track issues for the API team.
+    </p>
+
+    <h3>API Fallback Log</h3>
+    <p>
+      When the Ownership API fails to find a coal plant, the app falls back to local DuckDB queries.
+      This log tracks those fallbacks to help identify API issues.
+    </p>
+    <p class="known-issue">
+      <strong>Known Issue:</strong> Coal plant API uses compound IDs (L{'{'}location{'}'}_G{'{'}unit{'}'})
+      but this app queries with just G{'{'}unit{'}'} prefix IDs. Coal mines (M-prefix) work fine.
+    </p>
+
+    <div class="fallback-log-box">
+      <div class="log-header">
+        <h4>Session Fallback Events ({$fallbackLog.length})</h4>
+        <div class="log-actions">
+          <button onclick={downloadFallbackLog} disabled={$fallbackLog.length === 0}>
+            Download Report
+          </button>
+          <button onclick={clearFallbackLog} disabled={$fallbackLog.length === 0} class="secondary">
+            Clear Log
+          </button>
+        </div>
+      </div>
+
+      {#if $fallbackLog.length === 0}
+        <p class="empty-log">
+          No fallback events logged this session. Browse asset pages to generate data.
+        </p>
+      {:else}
+        <div class="log-summary">
+          <div class="summary-stat">
+            <span class="stat-num">{$fallbackLog.filter((e) => e.fallbackSuccess).length}</span>
+            <span class="stat-label">Successful Fallbacks</span>
+          </div>
+          <div class="summary-stat">
+            <span class="stat-num">{$fallbackLog.filter((e) => !e.fallbackSuccess).length}</span>
+            <span class="stat-label">Failed Fallbacks</span>
+          </div>
+          <div class="summary-stat">
+            <span class="stat-num">{[...new Set($fallbackLog.map((e) => e.assetId))].length}</span>
+            <span class="stat-label">Unique Assets</span>
+          </div>
+        </div>
+
+        <table class="fallback-table">
+          <thead>
+            <tr>
+              <th>Asset ID</th>
+              <th>Error</th>
+              <th>Fallback</th>
+              <th>Success</th>
+              <th>Time</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each $fallbackLog.slice(-10).reverse() as event}
+              <tr>
+                <td>
+                  <a href={link(`asset/${event.assetId}`)}>{event.assetId}</a>
+                  {#if event.assetName}
+                    <span class="asset-name">{event.assetName}</span>
+                  {/if}
+                </td>
+                <td class="error-cell">{event.apiError}</td>
+                <td>{event.fallbackSource}</td>
+                <td class={event.fallbackSuccess ? 'success' : 'failure'}>
+                  {event.fallbackSuccess ? 'Yes' : 'No'}
+                </td>
+                <td class="time-cell">{new Date(event.timestamp).toLocaleTimeString()}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+        {#if $fallbackLog.length > 10}
+          <p class="log-note">
+            Showing last 10 of {$fallbackLog.length} events. Download full report for complete data.
+          </p>
+        {/if}
+      {/if}
+    </div>
   </section>
 
   <footer class="page-footer">
@@ -741,16 +831,16 @@
     flex-shrink: 0;
   }
   .status-dot.proposed {
-    background: #ffe366;
+    background: var(--color-status-prospective);
   }
   .status-dot.operating {
-    background: #4a57a8;
+    background: var(--color-status-operating);
   }
   .status-dot.retired {
-    background: #061f5f;
+    background: var(--color-status-retired);
   }
   .status-dot.cancelled {
-    background: #becccf;
+    background: var(--color-status-cancelled);
   }
 
   .viz-guide {
@@ -823,6 +913,163 @@
     text-decoration: underline;
   }
 
+  /* Developer Tools Section */
+  .known-issue {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    padding: 12px 16px;
+    border-radius: 4px;
+    font-size: 14px;
+    margin: 16px 0;
+  }
+
+  .fallback-log-box {
+    background: var(--color-gray-50);
+    border: 1px solid var(--color-border);
+    padding: 20px;
+    margin-top: 16px;
+  }
+
+  .log-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .log-header h4 {
+    margin: 0;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .log-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .log-actions button {
+    padding: 8px 16px;
+    font-size: 13px;
+    background: var(--color-black);
+    color: white;
+    border: none;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .log-actions button:hover:not(:disabled) {
+    opacity: 0.85;
+  }
+
+  .log-actions button:disabled {
+    background: var(--color-gray-300);
+    cursor: not-allowed;
+  }
+
+  .log-actions button.secondary {
+    background: white;
+    color: var(--color-gray-700);
+    border: 1px solid var(--color-border);
+  }
+
+  .log-actions button.secondary:hover:not(:disabled) {
+    background: var(--color-gray-100);
+  }
+
+  .empty-log {
+    color: var(--color-text-secondary);
+    font-size: 14px;
+    font-style: italic;
+    margin: 0;
+  }
+
+  .log-summary {
+    display: flex;
+    gap: 24px;
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .summary-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .summary-stat .stat-num {
+    font-size: 24px;
+    font-weight: 700;
+    font-family: monospace;
+  }
+
+  .summary-stat .stat-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+    letter-spacing: 0.5px;
+  }
+
+  .fallback-table {
+    width: 100%;
+    font-size: 13px;
+    border-collapse: collapse;
+  }
+
+  .fallback-table th,
+  .fallback-table td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .fallback-table th {
+    background: var(--color-gray-100);
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+
+  .fallback-table .asset-name {
+    display: block;
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .fallback-table .error-cell {
+    color: #dc3545;
+    font-family: monospace;
+  }
+
+  .fallback-table .time-cell {
+    font-family: monospace;
+    color: var(--color-text-secondary);
+  }
+
+  .fallback-table .success {
+    color: #28a745;
+  }
+
+  .fallback-table .failure {
+    color: #dc3545;
+  }
+
+  .log-note {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    margin: 12px 0 0 0;
+    font-style: italic;
+  }
+
   @media (max-width: 600px) {
     .toc ul {
       flex-direction: column;
@@ -844,6 +1091,13 @@
     .version-meta {
       flex-direction: column;
       gap: 4px;
+    }
+    .log-header {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    .log-summary {
+      flex-wrap: wrap;
     }
   }
 </style>

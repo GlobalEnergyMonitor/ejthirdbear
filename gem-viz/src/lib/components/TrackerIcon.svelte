@@ -1,7 +1,7 @@
 <script>
   /**
    * TrackerIcon - Inline colored indicator for tracker type
-   * Shows a colored dot/shape representing the tracker type using GEM brand colors.
+   * Shows a dot/shape representing the tracker type using a warm grayscale palette.
    *
    * Usage:
    *   <TrackerIcon tracker="Coal Plant" />
@@ -19,7 +19,7 @@
     'Coal Plant': 'Coal',
     'Gas Plant': 'Gas',
     'Coal Mine': 'Mine',
-    'Iron Ore Mine': 'Iron',
+    'Iron Mine': 'Iron',
     'Steel Plant': 'Steel',
     'Gas Pipeline': 'Pipeline',
     'Bioenergy Power': 'Bio',

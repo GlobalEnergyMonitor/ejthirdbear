@@ -8,7 +8,6 @@
   import { assetLink, entityLink } from '$lib/links';
   import SimpleMap from '$lib/SimpleMap.svelte';
   import TrackerIcon from '$lib/components/TrackerIcon.svelte';
-  import CommandPalette from '$lib/components/CommandPalette.svelte';
 
   // --- DATA ---
   // Featured entity
@@ -34,11 +33,6 @@
 </svelte:head>
 
 <main>
-  <!-- Quick Search -->
-  <section class="search-section">
-    <CommandPalette embedded={true} placeholder="Search for assets or owners..." limit={6} />
-  </section>
-
   <!-- Featured Assets -->
   <section class="asset-links">
     <p>Featured assets</p>
@@ -78,11 +72,6 @@
     padding: 20px 40px;
   }
 
-  /* Search Section */
-  .search-section {
-    margin-bottom: 30px;
-  }
-
   /* Featured Sections */
   .asset-links {
     display: flex;
@@ -118,16 +107,9 @@
     gap: 6px;
   }
   .entity-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 16px;
-    height: 16px;
-    background: var(--color-black);
-    color: var(--color-white);
-    border-radius: 50%;
-    font-size: 9px;
-    font-weight: bold;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
     flex-shrink: 0;
   }
 </style>

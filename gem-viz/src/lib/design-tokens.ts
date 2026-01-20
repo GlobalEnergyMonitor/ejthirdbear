@@ -77,7 +77,7 @@ export const colors = {
   blue: '#78716c',
   purple: '#a8a29e',
   midnightPurple: '#1a1a1a',
-  grey: '#BECCCF',
+  grey: '#c9c4c0',
   red: '#44403c',
 } as const;
 
@@ -86,23 +86,26 @@ export const colors = {
 // =============================================================================
 
 export const trackerColors: Record<string, string> = {
-  // Fossil fuels (GEM brand colors)
-  'Coal Plant': '#7F142A',
-  'Coal Mine': '#4A0D19',
-  'Gas Plant': '#A0AAE5',
-  'Gas Pipeline': '#7B86C9',
-  'Oil & NGL Pipeline': '#061F5F',
-  'Iron Ore Mine': '#DC153D',
-  'Steel Plant': '#004F61',
-  'Cement and Concrete': '#BECCCF',
-  'Bioenergy Power': '#51BF7E',
+  // Fossil fuels (warm grayscale range)
+  'Coal Plant': '#1c1917',
+  'Coal Mine': '#292524',
+  'Gas Plant': '#3f3a37',
+  'Gas Pipeline': '#4a4440',
+  'Oil & NGL Pipeline': '#57534e',
+  'Bioenergy Power': '#6b645f',
 
-  // Renewables
-  Nuclear: '#6B7280',
-  Hydropower: '#0369A1',
-  Wind: '#06B6D4',
-  Geothermal: '#DC2626',
-  Solar: '#EAB308',
+  // Industrial
+  'Iron Mine': '#78716c',
+  'Iron Ore Mine': '#78716c',
+  'Steel Plant': '#8f8883',
+  'Cement and Concrete': '#a8a29e',
+
+  // Renewables (lighter warm grayscale)
+  Nuclear: '#b9b3af',
+  Hydropower: '#c9c4c0',
+  Wind: '#d6d3d1',
+  Geothermal: '#e1dfdd',
+  Solar: '#ecebe8',
 };
 
 // As Map for iteration
@@ -110,11 +113,11 @@ export const trackerColorMap = new Map(Object.entries(trackerColors));
 
 // Renewable-only subset
 export const renewableTrackerColors: Record<string, string> = {
-  Nuclear: '#6B7280',
-  Hydropower: '#0369A1',
-  Wind: '#06B6D4',
-  Geothermal: '#DC2626',
-  Solar: '#EAB308',
+  Nuclear: '#b9b3af',
+  Hydropower: '#c9c4c0',
+  Wind: '#d6d3d1',
+  Geothermal: '#e1dfdd',
+  Solar: '#ecebe8',
 };
 
 export const renewableTrackerColorMap = new Map(Object.entries(renewableTrackerColors));
@@ -125,38 +128,38 @@ export const renewableTrackerColorMap = new Map(Object.entries(renewableTrackerC
 
 // Aggregated status colors
 export const statusColors: Record<string, string> = {
-  operating: '#4A57A8',
-  prospective: '#9CA3AF',
-  retired: '#1F2937',
-  cancelled: '#D1D5DB',
-  unknown: '#E5E7EB',
+  operating: '#3f3a37',
+  prospective: '#a8a29e',
+  retired: '#1c1917',
+  cancelled: '#d6d3d1',
+  unknown: '#ecebe8',
 };
 
 // Granular status colors
 export const statusColorsGranular: Record<string, string> = {
   // Operating
-  operating: '#4A57A8',
-  'operating pre-retirement': '#4A57A8',
+  operating: '#3f3a37',
+  'operating pre-retirement': '#3f3a37',
 
   // Prospective (gradient from light to dark)
-  proposed: '#FDE68A',
-  announced: '#FCD34D',
-  'pre-permit': '#F59E0B',
-  permitted: '#F59E0B',
-  'pre-construction': '#D97706',
-  construction: '#D97706',
+  proposed: '#d6d3d1',
+  announced: '#d6d3d1',
+  'pre-permit': '#c9c4c0',
+  permitted: '#c9c4c0',
+  'pre-construction': '#b9b3af',
+  construction: '#a8a29e',
 
   // Retired
-  retired: '#1F2937',
-  mothballed: '#1F2937',
-  idle: '#1F2937',
-  'mothballed pre-retirement': '#1F2937',
+  retired: '#1c1917',
+  mothballed: '#1c1917',
+  idle: '#1c1917',
+  'mothballed pre-retirement': '#1c1917',
 
   // Cancelled
-  cancelled: '#D1D5DB',
-  shelved: '#D1D5DB',
-  'cancelled - inferred 4 y': '#D1D5DB',
-  'shelved - inferred 2 y': '#D1D5DB',
+  cancelled: '#d6d3d1',
+  shelved: '#d6d3d1',
+  'cancelled - inferred 4 y': '#d6d3d1',
+  'shelved - inferred 2 y': '#d6d3d1',
 };
 
 // Status groupings
@@ -181,21 +184,21 @@ export const statusGroups = {
 
 // Status color legend (for viz legends)
 export const statusColorLegend = [
-  { color: '#4A57A8', label: 'Operating', statuses: statusGroups.operating },
-  { color: '#9CA3AF', label: 'Prospective', statuses: statusGroups.prospective },
-  { color: '#1F2937', label: 'Retired', statuses: statusGroups.retired },
-  { color: '#D1D5DB', label: 'Cancelled', statuses: statusGroups.cancelled },
+  { color: '#3f3a37', label: 'Operating', statuses: statusGroups.operating },
+  { color: '#a8a29e', label: 'Prospective', statuses: statusGroups.prospective },
+  { color: '#1c1917', label: 'Retired', statuses: statusGroups.retired },
+  { color: '#d6d3d1', label: 'Cancelled', statuses: statusGroups.cancelled },
 ];
 
 // Prospective-only legend (more granular)
 export const prospectiveColorLegend = [
-  { color: '#FDE68A', label: 'Proposed/Announced', statuses: ['proposed', 'announced'] },
+  { color: '#d6d3d1', label: 'Proposed/Announced', statuses: ['proposed', 'announced'] },
   {
-    color: '#F59E0B',
+    color: '#c9c4c0',
     label: 'Pre-construction',
     statuses: ['pre-permit', 'permitted', 'pre-construction'],
   },
-  { color: '#D97706', label: 'Construction', statuses: ['construction'] },
+  { color: '#a8a29e', label: 'Construction', statuses: ['construction'] },
 ];
 
 // =============================================================================
@@ -203,16 +206,16 @@ export const prospectiveColorLegend = [
 // =============================================================================
 
 export const mapColors = {
-  coal: '#1a1a1a',
-  coalMine: '#4a4a4a',
-  gas: '#e67e22',
-  steel: '#8e44ad',
-  iron: '#c0392b',
-  bioenergy: '#27ae60',
-  default: '#666666',
-  selected: '#333333',
-  unselected: '#999999',
-  stroke: '#ffffff',
+  coal: '#1c1917',
+  coalMine: '#292524',
+  gas: '#3f3a37',
+  steel: '#8f8883',
+  iron: '#78716c',
+  bioenergy: '#6b645f',
+  default: '#78716c',
+  selected: '#1c1917',
+  unselected: '#c9c4c0',
+  stroke: '#1c1917',
 } as const;
 
 export const trackerToMapColor: Record<string, string> = {
@@ -220,6 +223,7 @@ export const trackerToMapColor: Record<string, string> = {
   'Coal Mine': mapColors.coalMine,
   'Gas Plant': mapColors.gas,
   'Steel Plant': mapColors.steel,
+  'Iron Mine': mapColors.iron,
   'Iron Ore Mine': mapColors.iron,
   'Bioenergy Power': mapColors.bioenergy,
 };
@@ -476,12 +480,12 @@ export const colorByStatus = new Map(Object.entries(statusColorsGranular));
 
 // Prospective status colors as Map (legacy format)
 export const statusColorsProspective = new Map([
-  ['#FDE68A', { descript: 'proposed/announced', statuses: ['proposed', 'announced'] }],
+  ['#d6d3d1', { descript: 'proposed/announced', statuses: ['proposed', 'announced'] }],
   [
-    '#F59E0B',
+    '#c9c4c0',
     { descript: 'pre-construction', statuses: ['pre-permit', 'permitted', 'pre-construction'] },
   ],
-  ['#D97706', { descript: 'construction', statuses: ['construction'] }],
+  ['#a8a29e', { descript: 'construction', statuses: ['construction'] }],
 ]);
 
 export const colorByStatusProspective = new Map(
@@ -492,10 +496,10 @@ export const colorByStatusProspective = new Map(
 
 // Aggregated status colors as Map (legacy format)
 export const statusColorsMap = new Map([
-  ['#4A57A8', { descript: 'operating', statuses: statusGroups.operating }],
-  ['#9CA3AF', { descript: 'prospective', statuses: statusGroups.prospective }],
-  ['#1F2937', { descript: 'retired/mothballed/idle', statuses: statusGroups.retired }],
-  ['#D1D5DB', { descript: 'cancelled/shelved', statuses: statusGroups.cancelled }],
+  ['#3f3a37', { descript: 'operating', statuses: statusGroups.operating }],
+  ['#a8a29e', { descript: 'prospective', statuses: statusGroups.prospective }],
+  ['#1c1917', { descript: 'retired/mothballed/idle', statuses: statusGroups.retired }],
+  ['#d6d3d1', { descript: 'cancelled/shelved', statuses: statusGroups.cancelled }],
 ]);
 
 // =============================================================================
