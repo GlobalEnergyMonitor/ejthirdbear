@@ -15,7 +15,9 @@
   import ScreenerStepNav from '$lib/components/ScreenerStepNav.svelte';
   import MiniFlower from '$lib/components/MiniFlower.svelte';
   import OwnershipFlower from '$lib/components/OwnershipFlower.svelte';
-  import { colorByStatus } from '$lib/design-tokens';
+  import StatusIcon from '$lib/components/StatusIcon.svelte';
+  import TrackerIcon from '$lib/components/TrackerIcon.svelte';
+  import { colorByStatus, colorByTracker, regroupStatus } from '$lib/design-tokens';
   import { formatCompact } from '$lib/format';
 
   // DuckDB utilities
@@ -280,6 +282,72 @@
     return colorByStatus.get(status) || '#888';
   }
 
+  // Get tracker color
+  function getTrackerColor(tracker) {
+    return colorByTracker.get(tracker) || '#888';
+  }
+
+  // Compute donut chart arcs for status
+  function getStatusArcs(breakdown, total) {
+    const arcs = [];
+    let startAngle = -Math.PI / 2;
+    const cx = 50,
+      cy = 50,
+      r = 45,
+      innerR = 28;
+
+    // Group into operating/proposed/retired/cancelled
+    const grouped = {};
+    for (const [status, count] of Object.entries(breakdown)) {
+      const group = regroupStatus(status);
+      grouped[group] = (grouped[group] || 0) + count;
+    }
+
+    const statusColors = {
+      operating: colorByStatus.get('operating') || '#4A57A8',
+      proposed: colorByStatus.get('proposed') || '#E5A835',
+      retired: colorByStatus.get('retired') || '#6B5B95',
+      cancelled: colorByStatus.get('cancelled') || '#888',
+      unknown: '#ddd',
+    };
+
+    const sortedStatuses = ['operating', 'proposed', 'retired', 'cancelled'].filter(
+      (s) => grouped[s] > 0
+    );
+
+    for (const status of sortedStatuses) {
+      const count = grouped[status];
+      const angle = (count / total) * 2 * Math.PI;
+      const endAngle = startAngle + angle;
+
+      const x1 = cx + r * Math.cos(startAngle);
+      const y1 = cy + r * Math.sin(startAngle);
+      const x2 = cx + r * Math.cos(endAngle);
+      const y2 = cy + r * Math.sin(endAngle);
+      const x3 = cx + innerR * Math.cos(endAngle);
+      const y3 = cy + innerR * Math.sin(endAngle);
+      const x4 = cx + innerR * Math.cos(startAngle);
+      const y4 = cy + innerR * Math.sin(startAngle);
+
+      const largeArc = angle > Math.PI ? 1 : 0;
+
+      arcs.push({
+        path: `M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} L ${x3} ${y3} A ${innerR} ${innerR} 0 ${largeArc} 0 ${x4} ${y4} Z`,
+        color: statusColors[status] || '#ddd',
+        status,
+        count,
+        pct: Math.round((count / total) * 100),
+      });
+
+      startAngle = endAngle;
+    }
+
+    return arcs;
+  }
+
+  // Derived donut arcs
+  const statusArcs = $derived(totalAssets > 0 ? getStatusArcs(statusBreakdown, totalAssets) : []);
+
   // Calculate percentage
   function pct(value, total) {
     if (!total) return 0;
@@ -344,7 +412,8 @@
       <!-- Aggregate Stats Panel -->
       {#if matchedResults.length > 0}
         <section class="stats-panel">
-          <div class="stats-with-flower">
+          <div class="stats-hero">
+            <!-- Big numbers -->
             <div class="stat-group">
               <div class="stat-large">
                 <span class="stat-value">{matchedResults.length}</span>
@@ -359,6 +428,37 @@
                 <span class="stat-label">Total Capacity</span>
               </div>
             </div>
+
+            <!-- Status donut chart -->
+            {#if statusArcs.length > 0}
+              <div class="status-donut">
+                <svg viewBox="0 0 100 100" class="donut-svg">
+                  {#each statusArcs as arc}
+                    <path d={arc.path} fill={arc.color}>
+                      <title>{arc.status}: {arc.count.toLocaleString()} ({arc.pct}%)</title>
+                    </path>
+                  {/each}
+                  <text
+                    x="50"
+                    y="50"
+                    text-anchor="middle"
+                    dominant-baseline="middle"
+                    class="donut-total"
+                  >
+                    {formatCompact(totalAssets)}
+                  </text>
+                </svg>
+                <div class="donut-legend">
+                  {#each statusArcs as arc}
+                    <div class="donut-legend-item">
+                      <StatusIcon status={arc.status} size={10} />
+                      <span class="donut-label">{arc.status}</span>
+                      <span class="donut-count">{arc.pct}%</span>
+                    </div>
+                  {/each}
+                </div>
+              </div>
+            {/if}
 
             <!-- Aggregate flower showing tracker distribution -->
             {#if Object.keys(trackerBreakdown).length > 0}
@@ -377,9 +477,26 @@
             {/if}
           </div>
 
+          <!-- Tracker breakdown with icons -->
+          {#if Object.keys(trackerBreakdown).length > 0}
+            <div class="breakdown-section tracker-section">
+              <h3 class="breakdown-label">By Tracker</h3>
+              <div class="tracker-breakdown">
+                {#each topN(trackerBreakdown, 8) as [tracker, count]}
+                  <div class="tracker-badge" style="--tracker-color: {getTrackerColor(tracker)}">
+                    <TrackerIcon {tracker} size={14} />
+                    <span class="tracker-name">{tracker}</span>
+                    <span class="tracker-count">{count.toLocaleString()}</span>
+                    <div class="tracker-bar" style="width: {pct(count, totalAssets)}%"></div>
+                  </div>
+                {/each}
+              </div>
+            </div>
+          {/if}
+
           <!-- Status breakdown bar -->
           <div class="breakdown-section">
-            <h3 class="breakdown-label">By Status</h3>
+            <h3 class="breakdown-label">Status Detail</h3>
             <div class="breakdown-bar">
               {#each statusOrder as status}
                 {#if statusBreakdown[status]}
@@ -397,10 +514,11 @@
               {/each}
             </div>
             <div class="breakdown-legend">
-              {#each topN(statusBreakdown, 4) as [status, count]}
+              {#each topN(statusBreakdown, 6) as [status, count]}
                 <span class="legend-item">
-                  <span class="legend-dot" style="background: {getStatusColor(status)}"></span>
-                  {status} <span class="legend-count">{count}</span>
+                  <StatusIcon {status} size={10} />
+                  <span class="legend-text">{status}</span>
+                  <span class="legend-count">{count}</span>
                 </span>
               {/each}
             </div>
@@ -410,11 +528,13 @@
           {#if Object.keys(countryBreakdown).length > 1}
             <div class="breakdown-section">
               <h3 class="breakdown-label">Top Countries</h3>
-              <div class="country-list">
-                {#each topN(countryBreakdown, 5) as [country, count]}
-                  <span class="country-item">
-                    {country} <span class="country-count">{count}</span>
-                  </span>
+              <div class="country-breakdown">
+                {#each topN(countryBreakdown, 8) as [country, count]}
+                  <div class="country-badge">
+                    <span class="country-name">{country}</span>
+                    <span class="country-count">{count}</span>
+                    <div class="country-bar" style="width: {pct(count, totalAssets)}%"></div>
+                  </div>
                 {/each}
               </div>
             </div>
@@ -510,13 +630,23 @@
                       </button>
                     </div>
 
+                    <!-- Tracker breakdown for this owner -->
+                    <div class="owner-tracker-breakdown">
+                      {#each topN(row.trackerBreakdown, 5) as [tracker, count]}
+                        <span class="owner-tracker">
+                          <TrackerIcon {tracker} size={12} />
+                          <span class="owner-tracker-count">{count}</span>
+                        </span>
+                      {/each}
+                    </div>
+
                     <!-- Status breakdown for this owner -->
                     <div class="owner-breakdown">
                       {#each topN(row.statusBreakdown, 6) as [status, count]}
                         <span class="owner-stat">
-                          <span class="owner-dot" style="background: {getStatusColor(status)}"
-                          ></span>
-                          {status}: {count}
+                          <StatusIcon {status} size={10} />
+                          <span class="owner-status-name">{status}</span>
+                          <span class="owner-status-count">{count}</span>
                         </span>
                       {/each}
                     </div>
@@ -525,23 +655,27 @@
                     <div class="asset-list">
                       {#each row.assets.slice(0, 10) as asset}
                         <a href={link(`asset/${asset.gem_id || asset.id}`)} class="asset-item">
-                          <span
-                            class="asset-status"
-                            style="background: {getStatusColor(asset.status?.toLowerCase())}"
-                          ></span>
+                          {#if asset.tracker}
+                            <TrackerIcon tracker={asset.tracker} size={12} />
+                          {/if}
+                          <StatusIcon status={asset.status} size={10} />
                           <span class="asset-name">{asset.name || asset.gem_id || 'Unknown'}</span>
                           <span class="asset-meta">
-                            {#if asset.country}{asset.country}{/if}
+                            {#if asset.country}
+                              <span class="asset-country">{asset.country}</span>
+                            {/if}
                             {#if asset.capacity && parseFloat(asset.capacity) > 0}
-                              · {formatCapacity(parseFloat(asset.capacity))}
+                              <span class="asset-capacity"
+                                >{formatCapacity(parseFloat(asset.capacity))}</span
+                              >
                             {/if}
                           </span>
                         </a>
                       {/each}
                       {#if row.assets.length > 10}
-                        <div class="more-assets">
-                          + {row.assets.length - 10} more assets
-                        </div>
+                        <a href={link(`entity/${row.id}`)} class="more-assets">
+                          View all {row.assets.length} assets →
+                        </a>
                       {/if}
                     </div>
                   </div>
@@ -613,14 +747,6 @@
     border: 1px solid #e0e0e0;
     padding: 24px 28px;
     margin-bottom: 32px;
-  }
-
-  .stats-with-flower {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 24px;
-    margin-bottom: 24px;
   }
 
   .aggregate-flower {
@@ -698,32 +824,8 @@
     color: #555;
   }
 
-  .legend-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-  }
-
   .legend-count {
     color: #999;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .country-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-  }
-
-  .country-item {
-    font-size: 13px;
-    color: #444;
-  }
-
-  .country-count {
-    color: #999;
-    font-size: 12px;
-    margin-left: 4px;
     font-variant-numeric: tabular-nums;
   }
 
@@ -938,12 +1040,6 @@
     color: #555;
   }
 
-  .owner-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-  }
-
   .asset-list {
     display: flex;
     flex-direction: column;
@@ -965,13 +1061,6 @@
     border-color: #ccc;
   }
 
-  .asset-status {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-
   .asset-name {
     font-size: 13px;
     color: #333;
@@ -986,13 +1075,6 @@
     font-size: 11px;
     color: #888;
     flex-shrink: 0;
-  }
-
-  .more-assets {
-    font-size: 12px;
-    color: #888;
-    padding: 8px 12px;
-    font-style: italic;
   }
 
   /* Continue Section */
@@ -1043,14 +1125,266 @@
     border-color: #bbb;
   }
 
+  /* Stats Hero Layout */
+  .stats-hero {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 24px;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+  }
+
+  /* Status Donut Chart */
+  .status-donut {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .donut-svg {
+    width: 100px;
+    height: 100px;
+    flex-shrink: 0;
+  }
+
+  .donut-svg path {
+    transition: opacity 0.15s;
+  }
+
+  .donut-svg path:hover {
+    opacity: 0.8;
+  }
+
+  .donut-total {
+    font-size: 12px;
+    font-weight: 600;
+    fill: #333;
+  }
+
+  .donut-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .donut-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+  }
+
+  .donut-label {
+    text-transform: capitalize;
+    color: #555;
+    min-width: 70px;
+  }
+
+  .donut-count {
+    color: #888;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Tracker Breakdown */
+  .tracker-section {
+    border-top: none;
+    padding-top: 0;
+    margin-top: 24px;
+  }
+
+  .tracker-breakdown {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 8px;
+  }
+
+  .tracker-badge {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    overflow: hidden;
+  }
+
+  .tracker-badge .tracker-bar {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    height: 3px;
+    background: var(--tracker-color, #888);
+    transition: width 0.3s ease;
+  }
+
+  .tracker-name {
+    font-size: 12px;
+    font-weight: 500;
+    color: #333;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .tracker-count {
+    font-size: 12px;
+    color: #666;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Country Breakdown */
+  .country-breakdown {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 6px;
+  }
+
+  .country-badge {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #fff;
+    border: 1px solid #e8e8e8;
+    overflow: hidden;
+  }
+
+  .country-badge .country-bar {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    height: 2px;
+    background: #999;
+  }
+
+  .country-name {
+    font-size: 12px;
+    color: #333;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .country-badge .country-count {
+    font-size: 11px;
+    color: #888;
+    font-variant-numeric: tabular-nums;
+    margin-left: 0;
+  }
+
+  /* Legend with icons */
+  .legend-text {
+    text-transform: capitalize;
+  }
+
+  /* Owner tracker breakdown in expanded row */
+  .owner-tracker-breakdown {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #eee;
+  }
+
+  .owner-tracker {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+  }
+
+  .owner-tracker-count {
+    font-size: 12px;
+    color: #666;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Owner status breakdown */
+  .owner-status-name {
+    font-size: 11px;
+    text-transform: capitalize;
+    color: #555;
+  }
+
+  .owner-status-count {
+    font-size: 11px;
+    color: #888;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Asset item improvements */
+  .asset-item {
+    gap: 8px;
+  }
+
+  .asset-country {
+    color: #666;
+  }
+
+  .asset-capacity {
+    color: #888;
+    margin-left: 4px;
+  }
+
+  .asset-capacity::before {
+    content: '·';
+    margin-right: 4px;
+    color: #ccc;
+  }
+
+  /* More assets link */
+  .more-assets {
+    font-size: 12px;
+    color: #666;
+    padding: 10px 12px;
+    font-style: normal;
+    text-decoration: none;
+    background: #f5f5f5;
+    border: 1px solid #e0e0e0;
+    text-align: center;
+    display: block;
+  }
+
+  .more-assets:hover {
+    background: #eee;
+    color: #333;
+  }
+
   @media (max-width: 768px) {
     .screener-layout {
       padding: 32px 20px 100px;
     }
 
+    .stats-hero {
+      flex-direction: column;
+      gap: 20px;
+    }
+
     .stat-group {
       flex-wrap: wrap;
       gap: 24px;
+    }
+
+    .status-donut {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .tracker-breakdown {
+      grid-template-columns: 1fr;
+    }
+
+    .country-breakdown {
+      grid-template-columns: 1fr 1fr;
     }
 
     .row-main {
@@ -1070,6 +1404,11 @@
 
     .row-details {
       padding: 16px;
+    }
+
+    .owner-tracker-breakdown {
+      flex-direction: column;
+      gap: 8px;
     }
   }
 </style>
