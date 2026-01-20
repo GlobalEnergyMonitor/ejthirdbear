@@ -898,6 +898,395 @@ summary {
 }
 
 /* ============================================================================
+   DATA VISUALIZATION COMPONENTS
+   Reusable patterns for data displays, charts, and interactive elements
+   ============================================================================ */
+
+/* ---------------------------------------------------------------------------
+   Stat Hero - Big numbers display (e.g., "1,234 assets")
+   --------------------------------------------------------------------------- */
+.stat-hero {
+  display: flex;
+  gap: var(--space-8);
+}
+
+.stat-hero-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-hero-value {
+  font-size: var(--font-size-3xl);
+  font-weight: 300;
+  color: var(--color-text-primary);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-hero-label {
+  font-size: var(--font-size-md);
+  font-weight: 500;
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  margin-top: var(--space-1);
+}
+
+/* ---------------------------------------------------------------------------
+   Breakdown Bar - Segmented horizontal bar showing distribution
+   --------------------------------------------------------------------------- */
+.breakdown-bar {
+  display: flex;
+  height: 8px;
+  overflow: hidden;
+  background: var(--color-gray-100);
+  gap: 1px;
+}
+
+.breakdown-bar-segment {
+  min-width: 3px;
+  transition: width var(--transition-slow);
+}
+
+/* Taller variant */
+.breakdown-bar-lg {
+  height: 12px;
+}
+
+/* ---------------------------------------------------------------------------
+   Breakdown Legend - Color dots with labels and counts
+   --------------------------------------------------------------------------- */
+.breakdown-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-top: var(--space-2);
+}
+
+.breakdown-legend-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--font-size-body);
+  color: var(--color-text-secondary);
+}
+
+.breakdown-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.breakdown-legend-count {
+  color: var(--color-text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Compact variant for tight spaces */
+.breakdown-legend-compact {
+  gap: var(--space-2);
+}
+
+.breakdown-legend-compact .breakdown-legend-item {
+  font-size: var(--font-size-sm);
+}
+
+.breakdown-legend-compact .breakdown-legend-dot {
+  width: 6px;
+  height: 6px;
+}
+
+/* ---------------------------------------------------------------------------
+   Section Label - Uppercase section headers ("BY STATUS", "TOP COUNTRIES")
+   --------------------------------------------------------------------------- */
+.section-label {
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  margin: 0 0 var(--space-2) 0;
+}
+
+.section-label-lg {
+  font-size: var(--font-size-sm);
+  margin-bottom: var(--space-3);
+}
+
+/* ---------------------------------------------------------------------------
+   Data Badge - Badge with optional progress bar at bottom
+   --------------------------------------------------------------------------- */
+.data-badge {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-primary);
+  border: var(--border-width) solid var(--color-border);
+  overflow: hidden;
+}
+
+.data-badge-bar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  transition: width var(--transition-slow);
+}
+
+.data-badge-label {
+  font-size: var(--font-size-body);
+  font-weight: 500;
+  color: var(--color-text-primary);
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.data-badge-count {
+  font-size: var(--font-size-body);
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Compact variant */
+.data-badge-sm {
+  padding: var(--space-1) var(--space-2);
+}
+
+.data-badge-sm .data-badge-label,
+.data-badge-sm .data-badge-count {
+  font-size: var(--font-size-sm);
+}
+
+/* ---------------------------------------------------------------------------
+   Expandable Row - Clickable row that expands to show details
+   --------------------------------------------------------------------------- */
+.expandable-row {
+  background: var(--color-bg-primary);
+  border: var(--border-width) solid var(--color-border);
+}
+
+.expandable-row.expanded {
+  border-color: var(--color-gray-400);
+}
+
+.expandable-row-toggle {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: var(--space-4) var(--space-5);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: background var(--transition-fast);
+}
+
+.expandable-row-toggle:hover {
+  background: var(--color-bg-secondary);
+}
+
+.expandable-row-details {
+  padding: var(--space-5);
+  background: var(--color-bg-secondary);
+  border-top: var(--border-width) solid var(--color-border);
+}
+
+/* Compact variant */
+.expandable-row-sm .expandable-row-toggle {
+  padding: var(--space-3) var(--space-4);
+}
+
+.expandable-row-sm .expandable-row-details {
+  padding: var(--space-4);
+}
+
+/* ---------------------------------------------------------------------------
+   Asset Item - Clickable asset row in lists
+   --------------------------------------------------------------------------- */
+.asset-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-primary);
+  border: var(--border-width) solid var(--color-border-light);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color var(--transition-fast);
+}
+
+.asset-item:hover {
+  border-color: var(--color-gray-300);
+}
+
+.asset-item-icon {
+  flex-shrink: 0;
+}
+
+.asset-item-name {
+  font-size: var(--font-size-body);
+  color: var(--color-text-primary);
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.asset-item-meta {
+  font-size: var(--font-size-md);
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
+}
+
+/* Grid layout for asset lists */
+.asset-item-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-2);
+}
+
+/* ---------------------------------------------------------------------------
+   Donut Chart Container
+   --------------------------------------------------------------------------- */
+.donut-chart {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.donut-chart-svg {
+  flex-shrink: 0;
+}
+
+.donut-chart-svg path {
+  transition: opacity var(--transition-fast);
+}
+
+.donut-chart-svg path:hover {
+  opacity: 0.8;
+}
+
+.donut-chart-center {
+  font-size: var(--font-size-body);
+  font-weight: 600;
+  fill: var(--color-text-primary);
+}
+
+.donut-chart-legend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* Vertical layout variant */
+.donut-chart-vertical {
+  flex-direction: column;
+  align-items: center;
+}
+
+.donut-chart-vertical .donut-chart-legend {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-3);
+}
+
+/* ---------------------------------------------------------------------------
+   Progress Bar (simple horizontal bar)
+   --------------------------------------------------------------------------- */
+.progress-bar {
+  height: 4px;
+  background: var(--color-gray-100);
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  transition: width var(--transition-slow);
+}
+
+.progress-bar-lg {
+  height: 8px;
+}
+
+/* ---------------------------------------------------------------------------
+   Mini Visualization Container - Wrapper for small inline viz
+   --------------------------------------------------------------------------- */
+.mini-viz {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   Inline Stat - Small stat display for use in rows/cards
+   --------------------------------------------------------------------------- */
+.inline-stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-1);
+}
+
+.inline-stat-value {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.inline-stat-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+}
+
+/* ---------------------------------------------------------------------------
+   Metric Card - Card displaying a single metric with optional breakdown
+   --------------------------------------------------------------------------- */
+.metric-card {
+  padding: var(--space-4);
+  background: var(--color-bg-primary);
+  border: var(--border-width) solid var(--color-border);
+}
+
+.metric-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--space-3);
+}
+
+.metric-card-title {
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+}
+
+.metric-card-value {
+  font-size: var(--font-size-2xl);
+  font-weight: 300;
+  color: var(--color-text-primary);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.metric-card-breakdown {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: var(--border-width) solid var(--color-border-light);
+}
+
+/* ============================================================================
    DARK MODE PREPARATION
    CSS custom properties make this trivial to add later
    ============================================================================ */
