@@ -4,6 +4,7 @@
  */
 
 import * as ownershipAPI from '$lib/ownership-api';
+import { getSpotlightOwnerData } from '$lib/ownership-data';
 
 export interface AssetBasics {
   id: string;
@@ -16,6 +17,7 @@ export interface AssetBasics {
   status: string | null;
   tracker: string | null;
   capacityMw: number | null;
+  country?: string | null;
 }
 
 export interface OwnershipChainNode {
@@ -197,36 +199,56 @@ export async function fetchOwnershipChain(assetId: string): Promise<OwnershipCha
 
 /**
  * Build an owner portfolio: subsidiaries, directly owned assets, and edges.
- * NOW USES: Ownership API GET /entities/{id}/graph/down
+ * Uses getSpotlightOwnerData which fetches from Ownership API + DuckDB metadata.
  */
 export async function fetchOwnerPortfolio(ownerEntityId: string): Promise<OwnerPortfolio | null> {
   try {
-    const [entity, owned] = await Promise.all([
-      ownershipAPI.getEntity(ownerEntityId),
-      ownershipAPI.getEntityOwned(ownerEntityId),
-    ]);
+    const spotlightData = await getSpotlightOwnerData(ownerEntityId);
 
-    const ownerName = entity.name || ownerEntityId;
+    if (!spotlightData) {
+      console.warn(`[fetchOwnerPortfolio] No data found for ${ownerEntityId}`);
+      return null;
+    }
+
+    // Convert SpotlightAsset[] to AssetBasics[] format
+    const convertAssets = (
+      assets: Array<{ id: string; name: string; tracker: string; status: string; country: string }>
+    ): AssetBasics[] =>
+      assets.map((a) => ({
+        id: a.id,
+        name: a.name,
+        locationId: null,
+        ownerEntityId: null,
+        lat: null,
+        lon: null,
+        status: a.status,
+        tracker: a.tracker,
+        capacityMw: null,
+        country: a.country || null,
+      }));
+
+    // Convert subsidiariesMatched to use AssetBasics[]
     const subsidiariesMatched = new Map<string, AssetBasics[]>();
-    const matchedEdges = new Map<string, { value: number | null }>();
-    const entityMap = new Map<string, { id: string; Name: string; type: string }>();
+    for (const [subId, assets] of spotlightData.subsidiariesMatched) {
+      subsidiariesMatched.set(subId, convertAssets(assets));
+    }
 
-    for (const sub of owned) {
-      subsidiariesMatched.set(sub.entityId, []);
-      matchedEdges.set(sub.entityId, { value: sub.ownershipPct ?? null });
-      entityMap.set(sub.entityId, { id: sub.entityId, Name: sub.entityName, type: 'entity' });
+    // Convert entityMap to include type field
+    const entityMap = new Map<string, { id: string; Name: string; type: string }>();
+    for (const [id, entity] of spotlightData.entityMap) {
+      entityMap.set(id, { ...entity, type: 'entity' });
     }
 
     return {
-      spotlightOwner: { id: ownerEntityId, Name: ownerName },
+      spotlightOwner: spotlightData.spotlightOwner,
       subsidiariesMatched,
-      directlyOwned: [],
-      matchedEdges,
+      directlyOwned: convertAssets(spotlightData.directlyOwned),
+      matchedEdges: spotlightData.matchedEdges,
       entityMap,
-      assets: [],
+      assets: convertAssets(spotlightData.assets),
     };
   } catch (error) {
-    console.warn(`[fetchOwnerPortfolio] API failed for ${ownerEntityId}:`, error);
+    console.warn(`[fetchOwnerPortfolio] Failed for ${ownerEntityId}:`, error);
     return null;
   }
 }

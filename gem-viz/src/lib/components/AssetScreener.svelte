@@ -14,22 +14,31 @@
   import { useFetch } from '$lib/component-data/use-fetch.svelte';
   import { colors, colorByTracker, regroupStatus } from '$lib/design-tokens';
 
-  // Props - entityId is required, component fetches its own data
+  // Props - can receive pre-fetched portfolio data or fetch its own
   let {
     entityId,
+    portfolio: prebakedPortfolio = null,
     assetClassName = 'assets',
     sortByOwnershipPct = true,
     includeUnitNames = false,
   } = $props();
 
   // ============================================================================
-  // DATA FETCHING - This component fetches: fetchOwnerPortfolio(entityId)
+  // DATA FETCHING - Uses prebaked data if provided, otherwise fetches
   // ============================================================================
   const {
-    data: portfolio,
-    loading,
-    error,
-  } = useFetch(() => fetchOwnerPortfolio(entityId), `portfolio:${entityId}`);
+    data: fetchedPortfolio,
+    loading: fetchLoading,
+    error: fetchError,
+  } = useFetch(
+    () => (prebakedPortfolio ? Promise.resolve(prebakedPortfolio) : fetchOwnerPortfolio(entityId)),
+    `portfolio:${entityId}`
+  );
+
+  // Use prebaked data if available, otherwise use fetched data
+  const portfolio = $derived(prebakedPortfolio || fetchedPortfolio);
+  const loading = $derived(!prebakedPortfolio && fetchLoading);
+  const error = $derived(!prebakedPortfolio ? fetchError : null);
 
   // Helper to convert data to Map (handles Map, Array of tuples, or Object)
   function toMap(data) {

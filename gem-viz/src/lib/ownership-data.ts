@@ -14,6 +14,7 @@ import {
   type GraphEdge,
 } from '$lib/ownership-api';
 import { fetchAssetMetadata } from '$lib/compose-queries';
+import { getOwnerAssets } from '$lib/duckdb-queries';
 
 // ID field mapping by tracker type (preserved for compatibility)
 const idFields = new Map([
@@ -187,7 +188,8 @@ export async function getAssetOwners(gemAssetId: string): Promise<AssetOwnersDat
 
 /**
  * Get all subsidiaries and assets owned by an entity (walks DOWN the ownership tree)
- * Uses the Ownership API to fetch the ownership graph for an entity.
+ * Uses DuckDB directly for fast asset queries.
+ * Falls back to API for entity metadata only.
  *
  * @param entityId - The GEM entity ID
  * @param entityName - Optional entity name (will be fetched if not provided)
@@ -198,91 +200,95 @@ export async function getSpotlightOwnerData(
   entityName?: string
 ): Promise<SpotlightOwnerData | null> {
   try {
-    // Fetch the ownership graph going DOWN from this entity
-    const graphData = await getEntityGraphDown(entityId);
+    // First, get assets directly owned by this entity from DuckDB (fast)
+    const directResult = await getOwnerAssets(entityId);
 
-    if (!graphData || !graphData.nodes || graphData.nodes.length === 0) {
-      console.warn(`No ownership data found for entity ${entityId}`);
-      return null;
-    }
-
-    // Use the root name from the API if entity name not provided
-    const effectiveEntityName = entityName || graphData.rootEntityName || entityId;
-
-    // Build entity map from all entity nodes
-    const entityMap = new Map<string, { id: string; Name: string }>();
-    entityMap.set(entityId, { id: entityId, Name: effectiveEntityName });
-
-    // Build matched edges map (ownership percentages)
-    const matchedEdges = new Map<string, { value: number | null }>();
-
-    // Group nodes by type
-    const entityNodes = graphData.nodes.filter((n) => n.type === 'entity' && n.id !== entityId);
-    const assetNodes = graphData.nodes.filter((n) => n.type === 'asset');
-
-    // Add all entities to the entity map
-    for (const node of entityNodes) {
-      entityMap.set(node.id, { id: node.id, Name: node.Name });
-    }
-
-    // Build edge map for direct subsidiaries of the root entity
-    const directSubsidiaryIds = new Set<string>();
-    for (const edge of graphData.edges) {
-      if (edge.source === entityId) {
-        directSubsidiaryIds.add(edge.target);
-        matchedEdges.set(edge.target, { value: edge.value || null });
-      }
-    }
-
-    // Group assets by their direct owner
+    // Build asset list
     const subsidiariesMatched = new Map<string, SpotlightAsset[]>();
     const directlyOwned: SpotlightAsset[] = [];
+    const allAssets: SpotlightAsset[] = [];
+    const entityMap = new Map<string, { id: string; Name: string }>();
+    const matchedEdges = new Map<string, { value: number | null }>();
 
-    // Fetch metadata for all assets from DuckDB to get tracker/status/country
-    const assetIds = assetNodes.map((n) => n.id);
-    const metadataMap = await fetchAssetMetadata(assetIds);
+    // Helper to convert DuckDB row to SpotlightAsset
+    const rowToAsset = (row: Record<string, unknown>): SpotlightAsset => ({
+      id: String(row.id || ''),
+      name: String(row.name || row.id || ''),
+      tracker: String(row.tracker || 'Unknown'),
+      status: String(row.status || 'Unknown'),
+      country: String(row.country || 'Unknown'),
+    });
 
-    for (const assetNode of assetNodes) {
-      // Find the edge that owns this asset
-      const ownerEdge = graphData.edges.find((e) => e.target === assetNode.id);
-
-      if (!ownerEdge) {
-        // No owner found, skip
-        continue;
+    // Add direct assets
+    if (directResult.success && directResult.data) {
+      for (const row of directResult.data) {
+        const asset = rowToAsset(row);
+        directlyOwned.push(asset);
+        allAssets.push(asset);
       }
+    }
 
-      // Use enriched metadata from DuckDB if available, otherwise fall back to API data
-      const metadata = metadataMap.get(assetNode.id);
-      const assetData: SpotlightAsset = {
-        id: assetNode.id,
-        name: metadata?.name || assetNode.Name,
-        tracker: metadata?.tracker || 'Unknown',
-        status: metadata?.status || 'Unknown',
-        country: metadata?.country || 'Unknown',
-      };
+    // Try to get entity graph from API (with short timeout fallback)
+    let effectiveEntityName = entityName || entityId;
+    try {
+      const graphData = await Promise.race([
+        getEntityGraphDown(entityId),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 10000)), // 10s timeout
+      ]);
 
-      if (ownerEdge.source === entityId) {
-        // Directly owned by the root entity
-        directlyOwned.push(assetData);
-      } else {
-        // Owned by a subsidiary
-        if (!subsidiariesMatched.has(ownerEdge.source)) {
-          subsidiariesMatched.set(ownerEdge.source, []);
+      if (graphData && graphData.nodes && graphData.nodes.length > 0) {
+        effectiveEntityName = entityName || graphData.rootEntityName || entityId;
+        entityMap.set(entityId, { id: entityId, Name: effectiveEntityName });
+
+        // Get subsidiary IDs and fetch their assets
+        const subsidiaryIds: string[] = [];
+        for (const node of graphData.nodes) {
+          if (node.id !== entityId) {
+            entityMap.set(node.id, { id: node.id, Name: node.Name });
+            subsidiaryIds.push(node.id);
+          }
         }
-        subsidiariesMatched.get(ownerEdge.source)!.push(assetData);
+
+        // Build edge map
+        for (const edge of graphData.edges) {
+          if (edge.source === entityId) {
+            matchedEdges.set(edge.target, { value: edge.value || null });
+          }
+        }
+
+        // Fetch assets for each subsidiary (in parallel for speed)
+        const subPromises = subsidiaryIds.map(async (subId) => {
+          const subResult = await getOwnerAssets(subId);
+          if (subResult.success && subResult.data && subResult.data.length > 0) {
+            return { subId, assets: subResult.data.map(rowToAsset) };
+          }
+          return { subId, assets: [] };
+        });
+
+        const subResults = await Promise.all(subPromises);
+        for (const { subId, assets } of subResults) {
+          if (assets.length > 0) {
+            subsidiariesMatched.set(subId, assets);
+            allAssets.push(...assets);
+          }
+        }
       }
+    } catch (apiErr) {
+      console.warn('[getSpotlightOwnerData] API failed, using DuckDB only:', apiErr);
+      // Continue with just direct assets if API fails
+    }
+
+    // Always set entity map for main entity
+    if (!entityMap.has(entityId)) {
+      entityMap.set(entityId, { id: entityId, Name: effectiveEntityName });
     }
 
     // Determine asset class from tracker types
     const trackers = new Set<string>();
-    const allAssets = [...directlyOwned];
-    subsidiariesMatched.forEach((assets) => {
-      allAssets.push(...assets);
-      assets.forEach((a) => {
-        if (a.tracker && a.tracker !== 'Unknown') {
-          trackers.add(a.tracker);
-        }
-      });
+    allAssets.forEach((a) => {
+      if (a.tracker && a.tracker !== 'Unknown') {
+        trackers.add(a.tracker);
+      }
     });
 
     const assetClassName =

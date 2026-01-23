@@ -297,16 +297,17 @@ export async function getOwnerAssets(
 ): Promise<QueryResult<Record<string, unknown>>> {
   const sql = `
     SELECT
-      "GEM unit ID" as id,
-      "Project" as name,
-      "Tracker" as tracker,
-      "Status" as status,
-      "Capacity (MW)" as capacity,
-      "Country" as country,
-      "Share" as ownershipShare
-    FROM ownership
-    WHERE "Owner GEM Entity ID" = '${ownerEntityId}'
-    ORDER BY "Tracker", "Status", "Project"
+      o."GEM unit ID" as id,
+      o."Project" as name,
+      o."Tracker" as tracker,
+      o."Status" as status,
+      o."Capacity (MW)" as capacity,
+      COALESCE(l."Country.Area", 'Unknown') as country,
+      o."Share" as ownershipShare
+    FROM ownership o
+    LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
+    WHERE o."Owner GEM Entity ID" = '${ownerEntityId}'
+    ORDER BY o."Tracker", o."Status", o."Project"
   `;
 
   return widgetQuery<Record<string, unknown>>(sql);
@@ -323,12 +324,13 @@ export async function getOwnerCountryBreakdown(
 ): Promise<QueryResult<FacetCount>> {
   const sql = `
     SELECT
-      "Country" as value,
-      COUNT(DISTINCT "GEM unit ID") as count
-    FROM ownership
-    WHERE "Owner GEM Entity ID" = '${ownerEntityId}'
-      AND "Country" IS NOT NULL
-    GROUP BY "Country"
+      COALESCE(l."Country.Area", 'Unknown') as value,
+      COUNT(DISTINCT o."GEM unit ID") as count
+    FROM ownership o
+    LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
+    WHERE o."Owner GEM Entity ID" = '${ownerEntityId}'
+      AND l."Country.Area" IS NOT NULL
+    GROUP BY l."Country.Area"
     ORDER BY count DESC
   `;
 

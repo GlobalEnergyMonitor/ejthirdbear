@@ -8,7 +8,7 @@
   import AssetScreener from '$lib/components/AssetScreener.svelte';
   import TrackerIcon from '$lib/components/TrackerIcon.svelte';
   import StatusIcon from '$lib/components/StatusIcon.svelte';
-  import { fetchOwnerPortfolio, fetchOwnerStats } from '$lib/component-data/schema';
+  import { fetchOwnerPortfolio } from '$lib/component-data/schema';
 
   // Server data from +page.server.js (API-based)
   /** @type {{ data: any }} */
@@ -27,7 +27,19 @@
   let entityName = $state(data?.entityName || '');
   let _entity = $state(data?.entity || null); // Available from server if needed
   let portfolio = $state(null); // Fetched client-side from DuckDB
-  let stats = $state(null); // Fetched client-side from DuckDB
+
+  // Compute stats from portfolio data (no longer uses fetchOwnerStats which returns 0)
+  const stats = $derived.by(() => {
+    if (!portfolio?.assets?.length) return null;
+    const assets = portfolio.assets;
+    const countries = new Set(assets.map((a) => a.country).filter(Boolean));
+    const totalCapacity = assets.reduce((sum, a) => sum + (Number(a.capacityMw) || 0), 0);
+    return {
+      total_assets: assets.length,
+      total_capacity_mw: totalCapacity > 0 ? totalCapacity : null,
+      countries: countries.size,
+    };
+  });
 
   // Derived data from portfolio (client-fetched)
   const trackerBreakdown = $derived.by(() => {
@@ -79,13 +91,8 @@
       if (!paramsId) throw new Error('Missing entity ID');
       entityId = paramsId;
 
-      const [portfolioResult, statsResult] = await Promise.all([
-        fetchOwnerPortfolio(paramsId),
-        fetchOwnerStats(paramsId),
-      ]);
-
-      portfolio = portfolioResult;
-      stats = statsResult;
+      // Fetch portfolio from DuckDB (stats are computed as a derived value from portfolio)
+      portfolio = await fetchOwnerPortfolio(paramsId);
 
       // Use portfolio name if we don't have one from API
       if (!entityName && portfolio?.spotlightOwner?.Name) {
@@ -242,7 +249,7 @@
           Full portfolio breakdown with subsidiary paths, mini bar charts, and status icons — ported
           from GEM's Observable notebook
         </p>
-        <AssetScreener {entityId} />
+        <AssetScreener {entityId} {portfolio} />
       </section>
     </article>
   {/if}
