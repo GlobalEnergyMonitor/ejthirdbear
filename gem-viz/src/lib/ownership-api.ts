@@ -40,19 +40,12 @@ export async function resolveAssetId(assetId: string): Promise<string> {
     return gPrefixToCompoundCache.get(assetId)!;
   }
 
-  // Try to resolve via DuckDB lookup
+  // Try to resolve via centralized DuckDB query
   try {
-    // Dynamic import to avoid circular dependencies and only load when needed
-    const { widgetQuery } = await import('./widgets/widget-utils');
-    const result = await widgetQuery<{ locationId: string }>(`
-      SELECT DISTINCT "GEM location ID" as locationId
-      FROM ownership
-      WHERE "GEM unit ID" = '${assetId}'
-      LIMIT 1
-    `);
+    const { resolveGPrefixId } = await import('./duckdb-queries');
+    const compoundId = await resolveGPrefixId(assetId);
 
-    if (result.success && result.data?.[0]?.locationId) {
-      const compoundId = `${result.data[0].locationId}_${assetId}`;
+    if (compoundId && compoundId !== assetId) {
       gPrefixToCompoundCache.set(assetId, compoundId);
       console.log(`[ID Resolver] Mapped ${assetId} → ${compoundId}`);
       return compoundId;

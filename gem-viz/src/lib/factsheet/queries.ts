@@ -1,9 +1,16 @@
 /**
  * Optimized query helpers for factsheet components
  * Provides parameterized queries and result caching
+ *
+ * Uses centralized DuckDB queries from $lib/duckdb-queries
  */
 
-import { widgetQuery } from '$lib/widgets/widget-utils';
+import {
+  getFactsheetAssets,
+  getCapacities,
+  getFieldStats,
+  getTrackerRowCount,
+} from '$lib/duckdb-queries';
 import type { Asset } from './types';
 
 /** Simple in-memory cache with TTL */
@@ -23,25 +30,9 @@ function setCache(key: string, data: unknown): void {
   queryCache.set(key, { data, timestamp: Date.now() });
 }
 
-/** Escape string for SQL (prevent injection) */
-function escapeSQL(value: string): string {
+/** Escape string for SQL (prevent injection) - kept for potential future use */
+function _escapeSQL(value: string): string {
   return value.replace(/'/g, "''");
-}
-
-/** Build WHERE clause from filters */
-function buildWhereClause(tracker?: string | null, statusFilter?: string[] | null): string {
-  const conditions: string[] = [];
-
-  if (tracker) {
-    conditions.push(`"Tracker" = '${escapeSQL(tracker)}'`);
-  }
-
-  if (statusFilter && statusFilter.length > 0) {
-    const escaped = statusFilter.map((s) => `'${escapeSQL(s.toLowerCase())}'`).join(', ');
-    conditions.push(`LOWER("Status") IN (${escaped})`);
-  }
-
-  return conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 }
 
 /** Fetch assets with optional filtering */
@@ -60,44 +51,30 @@ export async function fetchAssets(options: {
     return { success: true, data: cached };
   }
 
-  const whereClause = buildWhereClause(tracker, statusFilter);
-
-  // Determine sort column based on sortBy
-  const sortColumns: Record<string, string> = {
-    capacity: 'COALESCE("Capacity (MW)", "Capacity (Mtpa)")',
-    age: '"Start year"',
-    name: '"Project"',
-  };
-  const sortCol = sortColumns[sortBy] || sortColumns.capacity;
-  const orderDir = sortOrder === 'asc' ? 'ASC' : 'DESC';
-
-  const query = `
-    SELECT DISTINCT
-      COALESCE("GEM unit ID", "GEM Mine ID", "GEM Asset ID") as id,
-      "Project" as name,
-      "Status" as status,
-      COALESCE("Capacity (MW)", "Capacity (Mtpa)") as capacity,
-      CASE WHEN "Capacity (Mtpa)" IS NOT NULL THEN 'Mtpa' ELSE 'MW' END as capacityUnit,
-      "Country" as country,
-      "State" as state,
-      "Owner" as owner,
-      "Tracker" as tracker
-    FROM ownership
-    ${whereClause}
-    ORDER BY ${sortCol} ${orderDir} NULLS LAST
-    LIMIT ${limit}
-  `;
-
-  const result = await widgetQuery<Asset>(query);
+  // Use centralized DuckDB query
+  const result = await getFactsheetAssets({ tracker, statusFilter, sortBy, sortOrder, limit });
 
   if (result.success && result.data) {
-    setCache(cacheKey, result.data);
+    // Map FactsheetAsset to Asset type
+    const assets: Asset[] = result.data.map((row) => ({
+      id: row.id,
+      name: row.name,
+      status: row.status,
+      capacity: row.capacity ?? undefined,
+      capacityUnit: row.capacityUnit,
+      country: row.country,
+      state: row.state,
+      owner: row.owner,
+      tracker: row.tracker,
+    }));
+    setCache(cacheKey, assets);
+    return { success: true, data: assets };
   }
 
   return {
     success: result.success,
-    data: result.data || [],
-    error: result.error,
+    data: [],
+    error: 'Query failed',
   };
 }
 
@@ -111,17 +88,8 @@ export async function fetchCapacities(
     return cached;
   }
 
-  const whereClause = tracker
-    ? `WHERE "Tracker" = '${escapeSQL(tracker)}' AND COALESCE("Capacity (MW)", "Capacity (Mtpa)") IS NOT NULL`
-    : `WHERE COALESCE("Capacity (MW)", "Capacity (Mtpa)") IS NOT NULL`;
-
-  const result = await widgetQuery<{ capacity: number; country: string }>(`
-    SELECT DISTINCT
-      COALESCE("Capacity (MW)", "Capacity (Mtpa)") as capacity,
-      "Country" as country
-    FROM ownership
-    ${whereClause}
-  `);
+  // Use centralized DuckDB query
+  const result = await getCapacities(tracker);
 
   const global: number[] = [];
   const byCountry = new Map<string, number[]>();
@@ -155,17 +123,8 @@ export async function fetchFieldStats(
     return cached;
   }
 
-  const result = await widgetQuery<{ value: string | number | null; count: number }>(`
-    SELECT
-      "${escapeSQL(fieldName)}" as value,
-      COUNT(*) as count
-    FROM ownership
-    WHERE "Tracker" = '${escapeSQL(tracker)}'
-    GROUP BY "${escapeSQL(fieldName)}"
-    ORDER BY count DESC
-    LIMIT 100
-  `);
-
+  // Use centralized DuckDB query
+  const result = await getFieldStats(tracker, fieldName, 100);
   const data = result.data || [];
   setCache(cacheKey, data);
   return data;
@@ -179,13 +138,8 @@ export async function fetchRowCount(tracker: string): Promise<number> {
     return cached;
   }
 
-  const result = await widgetQuery<{ count: number }>(`
-    SELECT COUNT(*) as count
-    FROM ownership
-    WHERE "Tracker" = '${escapeSQL(tracker)}'
-  `);
-
-  const count = result.data?.[0]?.count || 0;
+  // Use centralized DuckDB query
+  const count = await getTrackerRowCount(tracker);
   setCache(cacheKey, count);
   return count;
 }

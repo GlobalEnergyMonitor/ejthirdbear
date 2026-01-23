@@ -5,16 +5,12 @@
    */
 
   import { onMount } from 'svelte';
-  import { widgetQuery } from './widget-utils';
+  import { getTopOwners } from '$lib/duckdb-queries';
   import { entityLink } from '$lib/links';
 
   // Props
-  let {
-    limit = 10,
-    metric = 'assets', // 'assets' or 'capacity'
-    tracker = null, // null for all, or specific tracker name
-    title = 'Top Owners',
-  } = $props();
+  /** @type {{ limit?: number; metric?: 'assets' | 'capacity'; tracker?: string | null; title?: string }} */
+  let { limit = 10, metric = 'assets', tracker = null, title = 'Top Owners' } = $props();
 
   // State
   let loading = $state(true);
@@ -28,24 +24,7 @@
     loading = true;
     error = null;
 
-    const trackerFilter = tracker ? `AND "Tracker" = '${tracker}'` : '';
-    const capacityCol = metric === 'capacity' ? 'SUM(COALESCE("Capacity (MW)", 0))' : 'COUNT(*)';
-
-    const sql = `
-      SELECT
-        "Owner" as owner_name,
-        "Owner GEM Entity ID" as entity_id,
-        ${capacityCol} as value,
-        COUNT(DISTINCT "GEM unit ID") as asset_count
-      FROM ownership
-      WHERE "Owner" IS NOT NULL AND "Owner" != ''
-      ${trackerFilter}
-      GROUP BY "Owner", "Owner GEM Entity ID"
-      ORDER BY value DESC
-      LIMIT ${limit}
-    `;
-
-    const result = await widgetQuery(sql);
+    const result = await getTopOwners({ limit, metric, tracker });
 
     if (result.success) {
       results = result.data || [];

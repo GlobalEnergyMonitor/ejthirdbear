@@ -5,7 +5,7 @@
    */
 
   import { onMount } from 'svelte';
-  import { widgetQuery } from './widget-utils';
+  import { getStatusDistribution } from '$lib/duckdb-queries';
   import { regroupStatus, colors } from '$lib/design-tokens';
 
   // Props
@@ -31,19 +31,7 @@
     loading = true;
     error = null;
 
-    const trackerFilter = tracker ? `WHERE "Tracker" = '${tracker}'` : '';
-
-    const sql = `
-      SELECT
-        "Status" as status,
-        COUNT(DISTINCT "GEM unit ID") as count
-      FROM ownership
-      ${trackerFilter}
-      GROUP BY "Status"
-      ORDER BY count DESC
-    `;
-
-    const result = await widgetQuery(sql);
+    const result = await getStatusDistribution(tracker);
 
     if (result.success) {
       // Regroup statuses

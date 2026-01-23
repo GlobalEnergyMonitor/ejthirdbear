@@ -9,7 +9,7 @@
   import { link } from '$lib/links';
   import DatasetFactsheet from '$lib/widgets/DatasetFactsheet.svelte';
   import ProjectCard from '$lib/components/ProjectCard.svelte';
-  import { widgetQuery } from '$lib/widgets/widget-utils';
+  import { getSampleAssets } from '$lib/duckdb-queries';
 
   // Get tracker from URL param
   const trackerParam = $derived($page.params.tracker);
@@ -117,28 +117,7 @@
   // Load sample assets for project cards
   async function loadSampleAssets() {
     try {
-      const result = await widgetQuery<{
-        id: string;
-        name: string;
-        status: string;
-        capacity: number;
-        country: string;
-        state: string;
-        owner: string;
-      }>(`
-        SELECT DISTINCT
-          "GEM unit ID" as id,
-          "Project" as name,
-          "Status" as status,
-          "Capacity (Mtpa)" as capacity,
-          "Country" as country,
-          "State" as state,
-          "Owner" as owner
-        FROM ownership
-        WHERE "Tracker" = '${tracker}'
-        ORDER BY capacity DESC NULLS LAST
-        LIMIT 5
-      `);
+      const result = await getSampleAssets(tracker, 5);
 
       if (result.success && result.data) {
         sampleAssets = result.data.map((row) => ({

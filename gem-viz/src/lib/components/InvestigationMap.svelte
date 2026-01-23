@@ -9,8 +9,7 @@
   import maplibregl from 'maplibre-gl';
   import 'maplibre-gl/dist/maplibre-gl.css';
   import { colorByTracker, colors } from '$lib/design-tokens';
-  import { widgetQuery } from '$lib/widgets/widget-utils';
-  import { buildIdList } from '$lib/utils/sql';
+  import { getInvestigationLocations } from '$lib/duckdb-queries';
   import AssetMicroCard from './AssetMicroCard.svelte';
 
   // Props
@@ -32,30 +31,7 @@
       return;
     }
 
-    const entityList = entityIds.length > 0 ? buildIdList(entityIds) : "'__none__'";
-    const assetList = assetIds.length > 0 ? buildIdList(assetIds) : "'__none__'";
-
-    const sql = `
-      SELECT DISTINCT
-        o."GEM unit ID" as asset_id,
-        o."Project" as name,
-        o."Tracker" as tracker,
-        o."Status" as status,
-        l."Latitude" as lat,
-        l."Longitude" as lng,
-        l."Country.Area" as country,
-        TRY_CAST(o."Capacity (MW)" AS DOUBLE) as capacity,
-        o."Owner" as owner
-      FROM ownership o
-      LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
-      WHERE (o."Owner GEM Entity ID" IN (${entityList})
-         OR o."GEM unit ID" IN (${assetList}))
-        AND l."Latitude" IS NOT NULL
-        AND l."Longitude" IS NOT NULL
-      LIMIT 500
-    `;
-
-    const result = await widgetQuery(sql);
+    const result = await getInvestigationLocations(entityIds, assetIds);
     if (result.success && result.data) {
       locations = result.data.filter(
         (d) => d.lat && d.lng && !isNaN(Number(d.lat)) && !isNaN(Number(d.lng))

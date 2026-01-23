@@ -64,7 +64,8 @@ import {
 
 ## DuckDB / MotherDuck (When Required)
 
-**Module:** `$lib/widgets/widget-utils.ts` → `widgetQuery()`
+**Primary Module:** `$lib/duckdb-queries.ts` (centralized queries)
+**Low-level:** `$lib/widgets/widget-utils.ts` → `widgetQuery()` (internal use only)
 
 DuckDB is used for operations that require:
 - Bulk data access (thousands of records)
@@ -80,17 +81,45 @@ DuckDB is used for operations that require:
 - **Reports/Compose** - Custom analytical queries
 - **Export** - Bulk data extraction
 
-### Query Function
+### Centralized Query Functions
+
+**IMPORTANT:** Always use functions from `$lib/duckdb-queries.ts` instead of raw `widgetQuery()`.
 
 ```typescript
-import { widgetQuery } from '$lib/widgets/widget-utils';
+// ✅ Good: Use centralized functions
+import { getAssetGeoPoints, getTopOwners, getStatusDistribution } from '$lib/duckdb-queries';
 
-const result = await widgetQuery<{ count: number }>(`
-  SELECT COUNT(*) as count
-  FROM ownership
-  WHERE "Tracker" = 'Coal Plant'
-`);
+const points = await getAssetGeoPoints({ tracker: 'Coal Plant' });
+const owners = await getTopOwners({ limit: 10, metric: 'capacity' });
+
+// ❌ Bad: Raw widgetQuery (only in duckdb-queries.ts internals)
+import { widgetQuery } from '$lib/widgets/widget-utils';
+const result = await widgetQuery(`SELECT ...`);
 ```
+
+### Available Functions
+
+| Function | Purpose | REST API Wishlist |
+|----------|---------|-------------------|
+| `getAssetGeoPoints()` | Map coordinates | GET /assets/geo |
+| `getAssetCoordinates()` | Coords by ID | POST /assets/geo |
+| `getFacetCounts()` | Filter dropdowns | GET /facets/{field} |
+| `getFieldDistribution()` | Factsheet stats | GET /trackers/{tracker}/fields |
+| `getTrackerStats()` | Tracker overview | GET /trackers/stats |
+| `getTopOwners()` | Owner rankings | GET /stats/top-owners |
+| `getStatusDistribution()` | Status donut | GET /stats/status-distribution |
+| `getCountryBreakdown()` | Country bars | GET /stats/by-country |
+| `getInvestigationLocations()` | Map for entities | POST /assets/locations |
+| `resolveGPrefixId()` | ID translation | API fix needed |
+
+### Page-Specific Query Modules
+
+Some pages have their own query modules for highly specialized queries:
+
+- **`$lib/compose-queries.ts`** - Compose/screener page queries (faceted filtering, parametric counts)
+- **`$lib/factsheet/queries.ts`** - Factsheet queries with caching
+
+These modules import from `duckdb-queries.ts` where possible and add page-specific logic.
 
 ### Files Using DuckDB
 
@@ -153,12 +182,15 @@ This ensures data availability even when the API is down.
 import { getEntity } from '$lib/ownership-api';
 const entity = await getEntity(entityId);
 
-// ✅ Good: DuckDB for bulk map data
+// ✅ Good: Centralized DuckDB for bulk map data
+import { getAssetGeoPoints } from '$lib/duckdb-queries';
+const points = await getAssetGeoPoints({ country: 'USA' });
+
+// ❌ Bad: Raw widgetQuery (use centralized functions)
 import { widgetQuery } from '$lib/widgets/widget-utils';
-const points = await widgetQuery(`
-  SELECT lat, lon, name FROM locations WHERE country = 'USA'
-`);
+const result = await widgetQuery(`SELECT lat, lon FROM locations...`);
 
 // ❌ Bad: DuckDB for single record (use REST API)
-const asset = await widgetQuery(`SELECT * FROM ownership WHERE id = '${id}'`);
+import { getAsset } from '$lib/ownership-api';
+const asset = await getAsset(id);
 ```

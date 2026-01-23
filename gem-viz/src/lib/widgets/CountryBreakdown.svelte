@@ -5,7 +5,7 @@
    */
 
   import { onMount } from 'svelte';
-  import { widgetQuery } from './widget-utils';
+  import { getCountryBreakdown } from '$lib/duckdb-queries';
 
   // Props
   let { limit = 15, tracker = null, title = 'Assets by Country' } = $props();
@@ -21,22 +21,7 @@
     loading = true;
     error = null;
 
-    const trackerFilter = tracker ? `WHERE o."Tracker" = '${tracker}'` : '';
-
-    const sql = `
-      SELECT
-        COALESCE(l."Country.Area", 'Unknown') as country,
-        COUNT(DISTINCT o."GEM unit ID") as asset_count,
-        SUM(COALESCE(o."Capacity (MW)", 0)) as total_capacity
-      FROM ownership o
-      LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
-      ${trackerFilter}
-      GROUP BY 1
-      ORDER BY asset_count DESC
-      LIMIT ${limit}
-    `;
-
-    const result = await widgetQuery(sql);
+    const result = await getCountryBreakdown({ limit, tracker });
 
     if (result.success) {
       results = result.data || [];

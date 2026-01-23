@@ -12,7 +12,11 @@
   import { entityLink } from '$lib/links';
   import { colors, colorByStatus } from '$lib/design-tokens';
   import { getAsset, getOwnershipGraph } from '$lib/ownership-api';
-  import { widgetQuery } from '$lib/widgets/widget-utils';
+  import {
+    getAssetFallback,
+    getAssetOwnersFallback,
+    getAssetLocationFallback,
+  } from '$lib/duckdb-queries';
   import { logApiFallback } from '$lib/api-fallback-log';
 
   // Components
@@ -112,51 +116,16 @@
   // --- DUCKDB FALLBACK ---
   /**
    * Load asset data from local DuckDB/parquet when API fails
+   * Uses centralized DuckDB queries from $lib/duckdb-queries
    * @param {string} assetId
    * @returns {Promise<{asset: AssetData, graph: GraphData}>}
    */
   async function loadFromDuckDB(assetId) {
-    // Query local parquet data for this asset
-    const assetSql = `
-      SELECT DISTINCT
-        "GEM unit ID" as id,
-        "Project" as name,
-        "Tracker" as tracker,
-        "Status" as status,
-        "Capacity (MW)" as capacity,
-        "Owner" as owner
-      FROM ownership
-      WHERE "GEM unit ID" = '${assetId}'
-      LIMIT 1
-    `;
-
-    const ownersSql = `
-      SELECT
-        "Owner" as ownerName,
-        "Owner GEM Entity ID" as ownerEntityId,
-        "Share" as share,
-        "Ownership Path" as ownershipPath
-      FROM ownership
-      WHERE "GEM unit ID" = '${assetId}'
-        AND "Owner" IS NOT NULL
-    `;
-
-    const locationSql = `
-      SELECT
-        l."Latitude" as latitude,
-        l."Longitude" as longitude,
-        l."Country.Area" as country
-      FROM ownership o
-      LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
-      WHERE o."GEM unit ID" = '${assetId}'
-        AND l."Latitude" IS NOT NULL
-      LIMIT 1
-    `;
-
+    // Use centralized DuckDB queries
     const [assetResult, ownersResult, locationResult] = await Promise.all([
-      widgetQuery(assetSql),
-      widgetQuery(ownersSql),
-      widgetQuery(locationSql),
+      getAssetFallback(assetId),
+      getAssetOwnersFallback(assetId),
+      getAssetLocationFallback(assetId),
     ]);
 
     if (!assetResult.success || !assetResult.data?.length) {
@@ -164,7 +133,7 @@
     }
 
     const assetRow = assetResult.data[0];
-    const location = locationResult.data?.[0] || {};
+    const location = locationResult.data?.[0];
     const owners = ownersResult.data || [];
 
     // Build asset object
@@ -175,10 +144,10 @@
       facilityType: String(assetRow.tracker || ''),
       status: String(assetRow.status || ''),
       capacity: assetRow.capacity != null ? Number(assetRow.capacity) : undefined,
-      country: location.country ? String(location.country) : undefined,
-      latitude: location.latitude != null ? Number(location.latitude) : undefined,
-      longitude: location.longitude != null ? Number(location.longitude) : undefined,
-      raw: assetRow,
+      country: location?.country ? String(location.country) : undefined,
+      latitude: location?.latitude != null ? Number(location.latitude) : undefined,
+      longitude: location?.longitude != null ? Number(location.longitude) : undefined,
+      raw: { ...assetRow },
     };
 
     // Build simple graph with owners
