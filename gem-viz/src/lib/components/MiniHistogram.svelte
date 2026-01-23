@@ -85,10 +85,24 @@
 
         {#if showAxis}
           <!-- X-axis labels -->
-          <text x="0" y={chartHeight + 12} font-size="9" fill="#666" text-anchor="start">
+          <text
+            x="0"
+            y={chartHeight + 12}
+            font-size="9"
+            fill="currentColor"
+            class="axis-label"
+            text-anchor="start"
+          >
             {formatSI(histogram.min)}
           </text>
-          <text x={chartWidth} y={chartHeight + 12} font-size="9" fill="#666" text-anchor="end">
+          <text
+            x={chartWidth}
+            y={chartHeight + 12}
+            font-size="9"
+            fill="currentColor"
+            class="axis-label"
+            text-anchor="end"
+          >
             {formatSI(histogram.max)}
           </text>
         {/if}
@@ -97,7 +111,8 @@
           x={chartWidth / 2}
           y={chartHeight / 2}
           font-size="10"
-          fill="#999"
+          fill="currentColor"
+          class="no-data"
           text-anchor="middle"
         >
           No data
@@ -131,7 +146,7 @@
     font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #666;
+    color: var(--color-text-secondary);
     margin-bottom: 4px;
   }
 
@@ -149,7 +164,7 @@
     display: flex;
     gap: 8px;
     font-size: 9px;
-    color: #999;
+    color: var(--color-text-tertiary);
     margin-top: 2px;
   }
 
@@ -162,6 +177,14 @@
     font-size: 8px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #999;
+    color: var(--color-text-tertiary);
+  }
+
+  .axis-label {
+    color: var(--color-text-secondary);
+  }
+
+  .no-data {
+    color: var(--color-text-tertiary);
   }
 </style>

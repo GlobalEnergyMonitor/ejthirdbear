@@ -85,7 +85,7 @@
     align-items: center;
     padding: 12px 40px;
     border-bottom: 1px solid var(--color-black);
-    background: #ffffff;
+    background: var(--color-bg-primary);
     position: sticky;
     top: 0;
     z-index: 1000;

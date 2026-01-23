@@ -210,34 +210,33 @@
   .chip {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    padding: 4px 6px 4px 8px;
-    background: #f0f0f0;
-    border: 1px solid #ddd;
-    border-radius: 3px;
-    font-size: 11px;
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-2) var(--space-1) var(--space-2);
+    background: var(--color-gray-100);
+    border: var(--border-width) solid var(--color-border);
+    font-size: var(--font-size-md);
     line-height: 1;
     max-width: 200px;
   }
 
   .compact .chip {
-    padding: 2px 4px 2px 6px;
-    font-size: 10px;
+    padding: 2px var(--space-1) 2px var(--space-2);
+    font-size: var(--font-size-xs);
   }
 
   .chip.range {
-    background: #e8f4f8;
-    border-color: #b8d4e3;
+    background: var(--color-accent-light, #e8f4f8);
+    border-color: var(--color-accent-border, #b8d4e3);
   }
 
   .chip-label {
-    color: #666;
+    color: var(--color-text-secondary);
     font-weight: 500;
     flex-shrink: 0;
   }
 
   .chip-value {
-    color: #000;
+    color: var(--color-text-primary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -253,44 +252,43 @@
     margin-left: 2px;
     background: transparent;
     border: none;
-    border-radius: 2px;
-    color: #666;
-    font-size: 12px;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-body);
     font-weight: bold;
     cursor: pointer;
     flex-shrink: 0;
   }
 
   .chip-remove:hover {
-    background: #ddd;
-    color: #000;
+    background: var(--color-gray-200);
+    color: var(--color-text-primary);
   }
 
   .compact .chip-remove {
     width: 12px;
     height: 12px;
-    font-size: 10px;
+    font-size: var(--font-size-xs);
   }
 
   .logic-op {
-    font-size: 9px;
+    font-size: var(--font-size-xs);
     font-weight: 500;
     text-transform: uppercase;
-    letter-spacing: 0.3px;
-    color: #888;
+    letter-spacing: var(--tracking-caps);
+    color: var(--color-text-tertiary);
     padding: 0 2px;
   }
 
   .logic-op.or {
-    color: #666;
+    color: var(--color-text-secondary);
   }
 
   .logic-op.and {
-    color: #444;
+    color: var(--color-text-primary);
     font-weight: 600;
   }
 
   .compact .logic-op {
-    font-size: 8px;
+    font-size: var(--font-size-xs);
   }
 </style>

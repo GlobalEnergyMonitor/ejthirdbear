@@ -628,19 +628,6 @@
     background: transparent;
   }
 
-  .chip-remove {
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 14px;
-    color: var(--color-text-secondary);
-    padding: 0 2px;
-  }
-
-  .chip-remove:hover {
-    color: var(--color-error);
-  }
-
   /* Table wrapper */
   .table-wrapper {
     overflow-x: auto;
@@ -768,12 +755,20 @@
   }
 
   tbody tr.highlighted {
-    background: linear-gradient(90deg, rgba(255, 215, 0, 0.15) 0%, rgba(255, 215, 0, 0.05) 100%);
-    border-left: 3px solid #d4a700;
+    background: linear-gradient(
+      90deg,
+      var(--color-highlight-bg, rgba(255, 215, 0, 0.15)) 0%,
+      var(--color-highlight-bg-fade, rgba(255, 215, 0, 0.05)) 100%
+    );
+    border-left: 3px solid var(--color-highlight, #d4a700);
   }
 
   tbody tr.highlighted:hover {
-    background: linear-gradient(90deg, rgba(255, 215, 0, 0.25) 0%, rgba(255, 215, 0, 0.1) 100%);
+    background: linear-gradient(
+      90deg,
+      var(--color-highlight-hover, rgba(255, 215, 0, 0.25)) 0%,
+      var(--color-highlight-hover-fade, rgba(255, 215, 0, 0.1)) 100%
+    );
   }
 
   tbody tr.highlighted td:first-child {

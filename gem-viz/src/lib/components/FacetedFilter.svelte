@@ -210,7 +210,7 @@
   }
 
   .facet-loading {
-    color: #999;
+    color: var(--color-text-tertiary);
     font-weight: 400;
     animation: pulse 1s infinite;
   }
@@ -237,17 +237,17 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.4px;
-    color: #555;
+    color: var(--color-text-secondary);
   }
 
   .facet-total {
     font-weight: 400;
-    color: #999;
+    color: var(--color-text-tertiary);
   }
 
   .facet-logic {
     font-weight: 400;
-    color: #666;
+    color: var(--color-text-secondary);
     text-transform: none;
     letter-spacing: 0;
     font-size: 9px;
@@ -257,7 +257,7 @@
   .facet-clear {
     font-size: 10px;
     font-weight: 400;
-    color: #444;
+    color: var(--color-text-primary);
     background: none;
     border: none;
     cursor: pointer;
@@ -272,13 +272,13 @@
     width: 100%;
     padding: 6px 8px;
     font-size: 11px;
-    border: 1px solid #ddd;
+    border: 1px solid var(--color-border);
     margin-bottom: 8px;
   }
 
   .facet-search:focus {
     outline: none;
-    border-color: #999;
+    border-color: var(--color-text-secondary);
   }
 
   .facet-options {
@@ -290,7 +290,7 @@
   .facet-options.expanded {
     max-height: 300px;
     overflow-y: auto;
-    border: 1px solid #e5e5e5;
+    border: 1px solid var(--color-border);
     border-radius: 4px;
     padding: 4px 0;
     margin-top: 4px;
@@ -332,7 +332,7 @@
   }
 
   .facet-option:hover {
-    background: #f5f5f5;
+    background: var(--color-gray-50);
   }
 
   .facet-option:hover .facet-bar {
@@ -354,13 +354,13 @@
 
   .no-results-divider {
     font-size: 9px;
-    color: #999;
+    color: var(--color-text-tertiary);
     text-transform: uppercase;
     letter-spacing: 0.3px;
     padding: 8px 10px 4px 10px;
-    border-top: 1px solid #eee;
+    border-top: 1px solid var(--color-border);
     margin-top: 4px;
-    background: #fafafa;
+    background: var(--color-gray-50);
   }
 
   .facet-option input[type='checkbox'] {
@@ -370,8 +370,8 @@
     min-width: 14px;
     margin: 0;
     pointer-events: none; /* Let clicks go through to label handler */
-    accent-color: #000;
-    border: 1px solid #999;
+    accent-color: var(--color-black);
+    border: 1px solid var(--color-text-tertiary);
     border-radius: 2px;
     appearance: auto;
     flex-shrink: 0;
@@ -391,7 +391,7 @@
   }
 
   .facet-count {
-    color: #666;
+    color: var(--color-text-secondary);
     font-size: 11px;
     flex-shrink: 0;
     font-variant-numeric: tabular-nums;
@@ -401,7 +401,7 @@
 
   /* Subtle highlight when count changes (applied via loading state) */
   .facet.loading .facet-count {
-    color: #bbb;
+    color: var(--color-gray-300);
   }
 
   .facet-toggle {
@@ -410,7 +410,7 @@
     gap: 4px;
     padding: 8px 2px;
     font-size: 11px;
-    color: #444;
+    color: var(--color-text-primary);
     background: none;
     border: none;
     cursor: pointer;

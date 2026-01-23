@@ -410,18 +410,18 @@
   }
 
   .status-cancelled {
-    background: #dce3e5;
+    background: var(--color-gray-200, #dce3e5);
     color: var(--gem-navy);
   }
 
   .status-retired {
-    background: #6e8c91;
-    color: white;
+    background: var(--color-text-secondary, #6e8c91);
+    color: var(--color-white, white);
   }
 
   .status-unknown {
-    background: #ddd;
-    color: #666;
+    background: var(--color-gray-200, #ddd);
+    color: var(--color-text-secondary, #666);
   }
 
   .metric strong {

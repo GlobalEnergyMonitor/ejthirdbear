@@ -82,7 +82,12 @@
 
 <style>
   .skeleton {
-    background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+    background: linear-gradient(
+      90deg,
+      var(--color-gray-100) 25%,
+      var(--color-gray-200) 50%,
+      var(--color-gray-100) 75%
+    );
     background-size: 200% 100%;
     border-radius: 2px;
   }
@@ -110,7 +115,12 @@
 
   .skeleton-line {
     height: 1em;
-    background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+    background: linear-gradient(
+      90deg,
+      var(--color-gray-100) 25%,
+      var(--color-gray-200) 50%,
+      var(--color-gray-100) 75%
+    );
     background-size: 200% 100%;
     border-radius: 2px;
   }
@@ -121,8 +131,8 @@
 
   /* Card variant */
   .skeleton-card {
-    background: #f9f9f9;
-    border: 1px solid #eee;
+    background: var(--color-gray-50);
+    border: 1px solid var(--color-border);
     padding: 16px;
     display: flex;
     flex-direction: column;
@@ -132,7 +142,12 @@
   .skeleton-card-header {
     height: 20px;
     width: 60%;
-    background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+    background: linear-gradient(
+      90deg,
+      var(--color-gray-100) 25%,
+      var(--color-gray-200) 50%,
+      var(--color-gray-100) 75%
+    );
     background-size: 200% 100%;
     border-radius: 2px;
   }
@@ -150,7 +165,7 @@
   /* Table row variant */
   .skeleton-table-row {
     background: none;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--color-border);
     padding: 0;
   }
 
@@ -163,7 +178,12 @@
 
   .skeleton-cell {
     height: 16px;
-    background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+    background: linear-gradient(
+      90deg,
+      var(--color-gray-100) 25%,
+      var(--color-gray-200) 50%,
+      var(--color-gray-100) 75%
+    );
     background-size: 200% 100%;
     border-radius: 2px;
   }
@@ -186,7 +206,12 @@
   .skeleton-stat .skeleton-stat-label {
     height: 12px;
     width: 60%;
-    background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+    background: linear-gradient(
+      90deg,
+      var(--color-gray-100) 25%,
+      var(--color-gray-200) 50%,
+      var(--color-gray-100) 75%
+    );
     background-size: 200% 100%;
     border-radius: 2px;
   }
@@ -194,7 +219,12 @@
   .skeleton-stat .skeleton-stat-value {
     height: 28px;
     width: 40%;
-    background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+    background: linear-gradient(
+      90deg,
+      var(--color-gray-100) 25%,
+      var(--color-gray-200) 50%,
+      var(--color-gray-100) 75%
+    );
     background-size: 200% 100%;
     border-radius: 2px;
   }

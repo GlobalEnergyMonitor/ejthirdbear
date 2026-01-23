@@ -37,8 +37,8 @@
 
 <style>
   .site-footer {
-    border-top: 1px solid var(--color-border, #e0e0e0);
-    background: #fafafa;
+    border-top: 1px solid var(--color-border);
+    background: var(--color-gray-50);
     padding: 32px 40px;
     margin-top: auto;
   }
@@ -63,12 +63,12 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: var(--color-text-secondary, #666);
+    color: var(--color-text-secondary);
   }
 
   .brand-org {
     font-size: 11px;
-    color: var(--color-text-tertiary, #999);
+    color: var(--color-text-tertiary);
   }
 
   .footer-links {
@@ -81,7 +81,7 @@
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: var(--color-text-secondary, #666);
+    color: var(--color-text-secondary);
     text-decoration: none;
     display: inline-flex;
     align-items: center;
@@ -89,7 +89,7 @@
   }
 
   .footer-links a:hover {
-    color: var(--color-black, #1a1a1a);
+    color: var(--color-black);
     text-decoration: underline;
   }
 
@@ -100,8 +100,8 @@
     min-width: 14px;
     height: 14px;
     padding: 0 3px;
-    background: var(--color-black, #1a1a1a);
-    color: white;
+    background: var(--color-black);
+    color: var(--color-white);
     font-size: 9px;
   }
 

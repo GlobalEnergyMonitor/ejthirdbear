@@ -101,38 +101,38 @@
 
 <style>
   .loading-wrapper-state {
-    padding: 24px;
+    padding: var(--space-6);
     text-align: center;
-    color: #666;
+    color: var(--color-text-secondary);
   }
 
   .loading-wrapper-state p {
-    margin: 8px 0 0 0;
-    font-size: 14px;
+    margin: var(--space-2) 0 0 0;
+    font-size: var(--font-size-body);
   }
 
   .loading-wrapper-state.error {
-    color: #c00;
-    background: #fff0f0;
-    border: 1px solid #fcc;
+    color: var(--color-error);
+    background: var(--color-error-bg, #fff0f0);
+    border: var(--border-width) solid var(--color-error-border, #fcc);
   }
 
   .loading-wrapper-state.empty {
-    color: #888;
-    background: #f9f9f9;
-    border: 1px dashed #ddd;
+    color: var(--color-text-tertiary);
+    background: var(--color-bg-secondary);
+    border: var(--border-width) dashed var(--color-border);
   }
 
   .error-message {
-    font-family: monospace;
+    font-family: var(--font-family-mono);
   }
 
   .spinner {
     width: 24px;
     height: 24px;
     margin: 0 auto;
-    border: 2px solid #eee;
-    border-top-color: #333;
+    border: 2px solid var(--color-gray-200);
+    border-top-color: var(--color-text-primary);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
   }
@@ -145,17 +145,17 @@
 
   .query-time {
     position: absolute;
-    top: 8px;
-    right: 8px;
-    font-size: 11px;
-    color: #999;
-    font-family: monospace;
+    top: var(--space-2);
+    right: var(--space-2);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+    font-family: var(--font-family-mono);
   }
 
   .skeleton-container {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--space-2);
     padding: 0;
     background: none;
   }

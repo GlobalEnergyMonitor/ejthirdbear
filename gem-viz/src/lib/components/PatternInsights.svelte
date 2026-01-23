@@ -420,8 +420,8 @@
   }
 
   .outlier-zscore.high {
-    background: #fff3e0;
-    color: #e65100;
+    background: var(--color-warning-bg, var(--color-gray-100));
+    color: var(--color-warning, var(--color-text-primary));
   }
 
   /* Methodology */

@@ -190,13 +190,13 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.4px;
-    color: #555;
+    color: var(--color-text-secondary);
   }
 
   .range-clear {
     font-size: 10px;
     font-weight: 400;
-    color: #0066c0;
+    color: var(--color-link, var(--color-accent));
     background: none;
     border: none;
     cursor: pointer;
@@ -218,13 +218,13 @@
 
   .histogram-bar {
     flex: 1;
-    background: #e0e0e0;
+    background: var(--color-gray-200);
     min-height: 2px;
     transition: background 0.15s;
   }
 
   .histogram-bar.in-range {
-    background: #666;
+    background: var(--color-text-secondary);
   }
 
   /* Slider */
@@ -240,7 +240,7 @@
     left: 0;
     right: 0;
     height: 4px;
-    background: #e0e0e0;
+    background: var(--color-gray-200);
     transform: translateY(-50%);
     border-radius: 2px;
   }
@@ -249,7 +249,7 @@
     position: absolute;
     top: 0;
     height: 100%;
-    background: #000;
+    background: var(--color-black);
     border-radius: 2px;
   }
 
@@ -270,8 +270,8 @@
     appearance: none;
     width: 16px;
     height: 16px;
-    background: #000;
-    border: 2px solid #fff;
+    background: var(--color-black);
+    border: 2px solid var(--color-white);
     border-radius: 50%;
     cursor: pointer;
     pointer-events: auto;
@@ -281,8 +281,8 @@
   .slider::-moz-range-thumb {
     width: 16px;
     height: 16px;
-    background: #000;
-    border: 2px solid #fff;
+    background: var(--color-black);
+    border: 2px solid var(--color-white);
     border-radius: 50%;
     cursor: pointer;
     pointer-events: auto;
@@ -307,24 +307,24 @@
     width: 100%;
     padding: 4px 6px;
     font-size: 11px;
-    border: 1px solid #ddd;
+    border: 1px solid var(--color-border);
     text-align: center;
   }
 
   .value-input input:focus {
     outline: none;
-    border-color: #999;
+    border-color: var(--color-text-secondary);
   }
 
   .unit {
     font-size: 10px;
-    color: #666;
+    color: var(--color-text-secondary);
     flex-shrink: 0;
   }
 
   .separator {
     font-size: 10px;
-    color: #666;
+    color: var(--color-text-secondary);
   }
 
   /* Range labels */
@@ -332,7 +332,7 @@
     display: flex;
     justify-content: space-between;
     font-size: 9px;
-    color: #999;
+    color: var(--color-text-tertiary);
     margin-top: 2px;
   }
 </style>

@@ -124,7 +124,14 @@
         </circle>
       {/if}
     {:else}
-      <text x={width / 2} y={height / 2} font-size="10" fill="#999" text-anchor="middle">
+      <text
+        x={width / 2}
+        y={height / 2}
+        font-size="10"
+        fill="currentColor"
+        text-anchor="middle"
+        class="no-data-text"
+      >
         No data
       </text>
     {/if}
@@ -157,7 +164,7 @@
     font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #666;
+    color: var(--color-text-secondary);
     margin-bottom: 2px;
   }
 
@@ -179,13 +186,13 @@
     display: flex;
     justify-content: space-between;
     font-size: 9px;
-    color: #999;
+    color: var(--color-text-tertiary);
     margin-top: 2px;
   }
 
   .value {
     font-weight: 600;
-    color: #333;
+    color: var(--color-text-primary);
   }
 
   .legend-below {
@@ -197,6 +204,10 @@
     font-size: 8px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #999;
+    color: var(--color-text-tertiary);
+  }
+
+  .no-data-text {
+    color: var(--color-text-tertiary);
   }
 </style>

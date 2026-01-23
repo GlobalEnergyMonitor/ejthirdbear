@@ -124,13 +124,13 @@
   }
 
   .btn.active {
-    background: #333;
-    color: #fff;
-    border-color: #333;
+    background: var(--color-text-primary);
+    color: var(--color-white);
+    border-color: var(--color-text-primary);
   }
 
   .btn-icon.active {
-    background: #333;
-    color: #fff;
+    background: var(--color-text-primary);
+    color: var(--color-white);
   }
 </style>

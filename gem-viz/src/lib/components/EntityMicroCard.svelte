@@ -134,14 +134,12 @@
 <style>
   .entity-micro-card {
     display: block;
-    background: white;
-    border: 1px solid #e0e0e0;
-    border-radius: 6px;
-    padding: 10px 12px;
-    font-size: 11px;
+    background: var(--color-bg-primary);
+    border: var(--border-width) solid var(--color-border);
+    padding: var(--space-3) var(--space-4);
+    font-size: var(--font-size-md);
     min-width: 180px;
     max-width: 280px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
     text-decoration: none;
     color: inherit;
     text-align: left;
@@ -152,20 +150,15 @@
 
   .entity-micro-card.clickable {
     cursor: pointer;
-    transition:
-      border-color 0.15s,
-      box-shadow 0.15s,
-      transform 0.1s;
+    transition: border-color var(--duration-base) var(--ease-in-out-quad);
   }
 
   .entity-micro-card.clickable:hover {
-    border-color: #999;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-    transform: translateY(-1px);
+    border-color: var(--color-gray-400);
   }
 
   .entity-micro-card.compact {
-    padding: 6px 8px;
+    padding: var(--space-2) var(--space-3);
     min-width: 140px;
   }
 
@@ -173,8 +166,8 @@
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    gap: 8px;
-    margin-bottom: 6px;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
   }
 
   .card-info {
@@ -184,17 +177,17 @@
 
   .entity-name {
     font-weight: 600;
-    font-size: 12px;
-    color: #111;
+    font-size: var(--font-size-body);
+    color: var(--color-text-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    line-height: 1.3;
+    line-height: var(--line-height-tight);
   }
 
   .entity-location {
-    font-size: 10px;
-    color: #666;
+    font-size: var(--font-size-md);
+    color: var(--color-text-tertiary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -211,9 +204,9 @@
   .card-stats {
     display: flex;
     align-items: baseline;
-    gap: 4px;
-    margin-bottom: 6px;
-    color: #444;
+    gap: var(--space-1);
+    margin-bottom: var(--space-2);
+    color: var(--color-text-secondary);
   }
 
   .stat {
@@ -225,68 +218,37 @@
   .stat-value {
     font-weight: 600;
     font-variant-numeric: tabular-nums;
-    color: #222;
+    color: var(--color-text-primary);
   }
 
   .stat-label {
-    font-size: 10px;
-    color: #888;
+    font-size: var(--font-size-md);
+    color: var(--color-text-tertiary);
   }
 
   .stat-divider {
-    color: #ccc;
+    color: var(--color-gray-300);
   }
 
   .tracker-bar {
     display: flex;
     height: 4px;
-    border-radius: 2px;
     overflow: hidden;
-    background: #f0f0f0;
-    margin-bottom: 4px;
+    background: var(--color-gray-100);
+    margin-bottom: var(--space-1);
   }
 
   .tracker-segment {
     height: 100%;
     min-width: 2px;
-    transition: width 0.3s ease-out;
+    transition: width var(--duration-slow) var(--ease-in-out-quad);
   }
 
   .tracker-summary {
-    font-size: 9px;
-    color: #888;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  /* Dark mode support */
-  @media (prefers-color-scheme: dark) {
-    .entity-micro-card {
-      background: #1a1a1a;
-      border-color: #333;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-    }
-
-    .entity-micro-card.clickable:hover {
-      border-color: #555;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-    }
-
-    .entity-name {
-      color: #eee;
-    }
-
-    .entity-location {
-      color: #999;
-    }
-
-    .stat-value {
-      color: #ddd;
-    }
-
-    .tracker-bar {
-      background: #333;
-    }
   }
 </style>

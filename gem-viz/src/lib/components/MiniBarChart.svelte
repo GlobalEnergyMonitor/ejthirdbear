@@ -99,15 +99,15 @@
   }
 
   .label {
-    font-size: 10px;
+    font-size: var(--font-size-xs);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: #666;
+    letter-spacing: var(--tracking-caps);
+    color: var(--color-text-secondary);
   }
 
   .total {
-    font-size: 10px;
-    color: #999;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
   }
 
   .bars {
@@ -135,25 +135,25 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    color: #333;
+    color: var(--color-text-primary);
   }
 
   .bar-value {
-    color: #666;
-    font-family: monospace;
-    font-size: 10px;
+    color: var(--color-text-secondary);
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-xs);
   }
 
   .overflow {
-    margin-top: 4px;
-    font-size: 9px;
-    color: #999;
+    margin-top: var(--space-1);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
   }
 
   .empty {
-    color: #999;
-    font-size: 10px;
-    padding: 10px 0;
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-xs);
+    padding: var(--space-3) 0;
     text-align: center;
   }
 
@@ -172,9 +172,9 @@
   }
 
   .legend-label {
-    font-size: 8px;
+    font-size: var(--font-size-xs);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: #999;
+    letter-spacing: var(--tracking-caps);
+    color: var(--color-text-tertiary);
   }
 </style>
