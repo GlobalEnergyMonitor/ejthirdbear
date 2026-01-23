@@ -225,6 +225,7 @@
         <div class="subtitle">Tracker mix</div>
       </div>
     {/if}
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
     <svg
       bind:this={svgEl}
       aria-label="Ownership flower showing tracker distribution"

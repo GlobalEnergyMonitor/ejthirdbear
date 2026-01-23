@@ -410,6 +410,7 @@
               {/if}
 
               <!-- Subsidiary name -->
+              <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
               <text
                 x={params.subsidiaryMarkHeight / 2 + 5}
                 y={(params.subsidiaryMarkHeight / 2) * 0.7}
