@@ -21,7 +21,7 @@
     'steel-plant': 'Steel Plant',
     'iron-mine': 'Iron Mine',
     'gas-pipeline': 'Gas Pipeline',
-    'bioenergy': 'Bioenergy Power',
+    bioenergy: 'Bioenergy Power',
   };
 
   // Map tracker to metadata CSV file

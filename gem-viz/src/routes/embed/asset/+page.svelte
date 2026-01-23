@@ -113,7 +113,11 @@
               <span class="owner-name">{row.owner?.Name || row.edge.source}</span>
               {#if row.edge.value != null}
                 <span class="owner-share">
-                  <OwnershipPie percentage={Number(row.edge.value)} size={16} fillColor={colors.navy} />
+                  <OwnershipPie
+                    percentage={Number(row.edge.value)}
+                    size={16}
+                    fillColor={colors.navy}
+                  />
                   {Number(row.edge.value).toFixed(1)}%
                 </span>
               {/if}
@@ -151,8 +155,13 @@
     text-align: center;
   }
 
-  .error p { margin: 0 0 var(--space-2) 0; }
-  .hint { font-size: var(--font-size-sm); color: var(--color-text-secondary); }
+  .error p {
+    margin: 0 0 var(--space-2) 0;
+  }
+  .hint {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+  }
 
   .asset-header {
     margin-bottom: var(--space-3);

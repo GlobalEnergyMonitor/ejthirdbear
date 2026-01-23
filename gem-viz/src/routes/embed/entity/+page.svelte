@@ -39,8 +39,9 @@
       const key = a.tracker || 'Unknown';
       counts.set(key, (counts.get(key) || 0) + 1);
     });
-    return Array.from(counts, ([tracker, count]) => ({ tracker, count }))
-      .sort((a, b) => b.count - a.count);
+    return Array.from(counts, ([tracker, count]) => ({ tracker, count })).sort(
+      (a, b) => b.count - a.count
+    );
   });
 
   onMount(async () => {
@@ -144,8 +145,13 @@
     text-align: center;
   }
 
-  .error p { margin: 0 0 var(--space-2) 0; }
-  .hint { font-size: var(--font-size-sm); color: var(--color-text-secondary); }
+  .error p {
+    margin: 0 0 var(--space-2) 0;
+  }
+  .hint {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+  }
 
   .entity-header {
     display: flex;
@@ -157,8 +163,12 @@
     border-bottom: var(--border-width) solid var(--color-border);
   }
 
-  .header-text { flex: 1; }
-  .header-flower { flex-shrink: 0; }
+  .header-text {
+    flex: 1;
+  }
+  .header-flower {
+    flex-shrink: 0;
+  }
 
   h1 {
     font-size: var(--font-size-xl);

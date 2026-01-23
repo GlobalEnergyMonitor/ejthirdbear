@@ -13,11 +13,7 @@
   const padding = $derived($page.url.searchParams.get('padding') || '16');
 </script>
 
-<div
-  class="embed-container"
-  class:dark={theme === 'dark'}
-  style="padding: {padding}px;"
->
+<div class="embed-container" class:dark={theme === 'dark'} style="padding: {padding}px;">
   {@render children()}
 </div>
 

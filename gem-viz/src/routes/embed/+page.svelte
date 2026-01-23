@@ -49,12 +49,18 @@
 
     <article class="widget-card">
       <h2>Tracker Factsheet</h2>
-      <p>Two-column metadata explorer. Click field categories on the left to see definitions and value distributions on the right.</p>
+      <p>
+        Two-column metadata explorer. Click field categories on the left to see definitions and
+        value distributions on the right.
+      </p>
       <code class="example-url">{base}/embed/tracker-factsheet?tracker=coal-mine</code>
       <h3>Parameters</h3>
       <dl>
         <dt>tracker</dt>
-        <dd>Required. Tracker slug: coal-mine, coal-plant, gas-plant, steel-plant, iron-mine, gas-pipeline, bioenergy</dd>
+        <dd>
+          Required. Tracker slug: coal-mine, coal-plant, gas-plant, steel-plant, iron-mine,
+          gas-pipeline, bioenergy
+        </dd>
         <dt>title</dt>
         <dd>Optional. Custom title override.</dd>
         <dt>height</dt>
@@ -83,12 +89,14 @@
   <section class="usage">
     <h2>Usage</h2>
     <p>Embed any widget using an iframe:</p>
-    <pre><code>&lt;iframe
+    <pre><code
+        >&lt;iframe
   src="{base}/embed/tracker-factsheet?tracker=coal-mine"
   width="900"
   height="550"
   frameborder="0"
-&gt;&lt;/iframe&gt;</code></pre>
+&gt;&lt;/iframe&gt;</code
+      ></pre>
 
     <h3>Common Parameters</h3>
     <dl>

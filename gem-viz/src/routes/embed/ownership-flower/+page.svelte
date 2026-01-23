@@ -34,12 +34,7 @@
 </svelte:head>
 
 {#if entityId}
-  <OwnershipFlower
-    ownerId={entityId}
-    size={validSize}
-    {showLabels}
-    {showTitle}
-  />
+  <OwnershipFlower ownerId={entityId} size={validSize} {showLabels} {showTitle} />
 {:else}
   <div class="error">
     <p>Missing required parameter: <code>entityId</code></p>
