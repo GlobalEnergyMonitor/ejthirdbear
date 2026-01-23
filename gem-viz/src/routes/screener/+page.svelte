@@ -132,26 +132,157 @@
 
   // Countries (from parquet)
   const countryOptions = [
-    'Afghanistan', 'Albania', 'Algeria', 'Angola', 'Argentina', 'Armenia', 'Australia', 'Austria',
-    'Azerbaijan', 'Bahamas', 'Bahrain', 'Bangladesh', 'Barbados', 'Belarus', 'Belgium', 'Bermuda',
-    'Bhutan', 'Bolivia', 'Bosnia and Herzegovina', 'Botswana', 'Brazil', 'Brunei', 'Bulgaria',
-    'Cambodia', 'Cameroon', 'Canada', 'Cayman Islands', 'Chile', 'China', 'Colombia', 'Congo',
-    'Costa Rica', 'Croatia', 'Cuba', 'Cyprus', 'Czech Republic', 'Denmark', 'Dominican Republic',
-    'Ecuador', 'Egypt', 'El Salvador', 'Estonia', 'Ethiopia', 'Finland', 'France', 'Gabon',
-    'Georgia', 'Germany', 'Ghana', 'Greece', 'Guatemala', 'Guinea', 'Honduras', 'Hong Kong',
-    'Hungary', 'Iceland', 'India', 'Indonesia', 'Iran', 'Iraq', 'Ireland', 'Israel', 'Italy',
-    'Ivory Coast', 'Jamaica', 'Japan', 'Jordan', 'Kazakhstan', 'Kenya', 'Kuwait', 'Kyrgyzstan',
-    'Laos', 'Latvia', 'Lebanon', 'Liberia', 'Libya', 'Lithuania', 'Luxembourg', 'Macau',
-    'Madagascar', 'Malawi', 'Malaysia', 'Mali', 'Malta', 'Mauritius', 'Mexico', 'Moldova',
-    'Mongolia', 'Montenegro', 'Morocco', 'Mozambique', 'Myanmar', 'Namibia', 'Nepal',
-    'Netherlands', 'New Zealand', 'Nicaragua', 'Niger', 'Nigeria', 'North Korea', 'North Macedonia',
-    'Norway', 'Oman', 'Pakistan', 'Panama', 'Papua New Guinea', 'Paraguay', 'Peru', 'Philippines',
-    'Poland', 'Portugal', 'Puerto Rico', 'Qatar', 'Romania', 'Russia', 'Saudi Arabia', 'Senegal',
-    'Serbia', 'Sierra Leone', 'Singapore', 'Slovakia', 'Slovenia', 'South Africa', 'South Korea',
-    'Spain', 'Sri Lanka', 'Sudan', 'Sweden', 'Switzerland', 'Syria', 'Taiwan', 'Tajikistan',
-    'Tanzania', 'Thailand', 'Timor-Leste', 'Trinidad and Tobago', 'Tunisia', 'Turkmenistan',
-    'Türkiye', 'Uganda', 'Ukraine', 'United Arab Emirates', 'United Kingdom', 'United States',
-    'Uruguay', 'Uzbekistan', 'Venezuela', 'Vietnam', 'Yemen', 'Zambia', 'Zimbabwe',
+    'Afghanistan',
+    'Albania',
+    'Algeria',
+    'Angola',
+    'Argentina',
+    'Armenia',
+    'Australia',
+    'Austria',
+    'Azerbaijan',
+    'Bahamas',
+    'Bahrain',
+    'Bangladesh',
+    'Barbados',
+    'Belarus',
+    'Belgium',
+    'Bermuda',
+    'Bhutan',
+    'Bolivia',
+    'Bosnia and Herzegovina',
+    'Botswana',
+    'Brazil',
+    'Brunei',
+    'Bulgaria',
+    'Cambodia',
+    'Cameroon',
+    'Canada',
+    'Cayman Islands',
+    'Chile',
+    'China',
+    'Colombia',
+    'Congo',
+    'Costa Rica',
+    'Croatia',
+    'Cuba',
+    'Cyprus',
+    'Czech Republic',
+    'Denmark',
+    'Dominican Republic',
+    'Ecuador',
+    'Egypt',
+    'El Salvador',
+    'Estonia',
+    'Ethiopia',
+    'Finland',
+    'France',
+    'Gabon',
+    'Georgia',
+    'Germany',
+    'Ghana',
+    'Greece',
+    'Guatemala',
+    'Guinea',
+    'Honduras',
+    'Hong Kong',
+    'Hungary',
+    'Iceland',
+    'India',
+    'Indonesia',
+    'Iran',
+    'Iraq',
+    'Ireland',
+    'Israel',
+    'Italy',
+    'Ivory Coast',
+    'Jamaica',
+    'Japan',
+    'Jordan',
+    'Kazakhstan',
+    'Kenya',
+    'Kuwait',
+    'Kyrgyzstan',
+    'Laos',
+    'Latvia',
+    'Lebanon',
+    'Liberia',
+    'Libya',
+    'Lithuania',
+    'Luxembourg',
+    'Macau',
+    'Madagascar',
+    'Malawi',
+    'Malaysia',
+    'Mali',
+    'Malta',
+    'Mauritius',
+    'Mexico',
+    'Moldova',
+    'Mongolia',
+    'Montenegro',
+    'Morocco',
+    'Mozambique',
+    'Myanmar',
+    'Namibia',
+    'Nepal',
+    'Netherlands',
+    'New Zealand',
+    'Nicaragua',
+    'Niger',
+    'Nigeria',
+    'North Korea',
+    'North Macedonia',
+    'Norway',
+    'Oman',
+    'Pakistan',
+    'Panama',
+    'Papua New Guinea',
+    'Paraguay',
+    'Peru',
+    'Philippines',
+    'Poland',
+    'Portugal',
+    'Puerto Rico',
+    'Qatar',
+    'Romania',
+    'Russia',
+    'Saudi Arabia',
+    'Senegal',
+    'Serbia',
+    'Sierra Leone',
+    'Singapore',
+    'Slovakia',
+    'Slovenia',
+    'South Africa',
+    'South Korea',
+    'Spain',
+    'Sri Lanka',
+    'Sudan',
+    'Sweden',
+    'Switzerland',
+    'Syria',
+    'Taiwan',
+    'Tajikistan',
+    'Tanzania',
+    'Thailand',
+    'Timor-Leste',
+    'Trinidad and Tobago',
+    'Tunisia',
+    'Turkmenistan',
+    'Türkiye',
+    'Uganda',
+    'Ukraine',
+    'United Arab Emirates',
+    'United Kingdom',
+    'United States',
+    'Uruguay',
+    'Uzbekistan',
+    'Venezuela',
+    'Vietnam',
+    'Yemen',
+    'Zambia',
+    'Zimbabwe',
   ];
 
   // Check if field has enum values
@@ -223,7 +354,9 @@
     if (!customTracker) return '';
     let desc = customTracker;
     if (customField && customOperator) {
-      const opLabel = [...numericOperators, ...textOperators].find(o => o.value === customOperator)?.label || customOperator;
+      const opLabel =
+        [...numericOperators, ...textOperators].find((o) => o.value === customOperator)?.label ||
+        customOperator;
       desc += ` where ${customField} ${opLabel}`;
       if (customValue && customOperator !== 'not_empty') desc += ` ${customValue}`;
     }
@@ -234,19 +367,21 @@
 
   // Continue to owners step with current form values
   function continueToOwners() {
-    const classData = [{
-      id: activePresetId || `custom-${Date.now()}`,
-      name: customTracker,
-      description: currentConfigDescription(),
-      tracker: customTracker,
-      filters: {
-        field: customField || undefined,
-        operator: customOperator || undefined,
-        value: customValue || undefined,
-        geography: customGeoFilter || undefined,
-        status: customStatusFilter || undefined,
+    const classData = [
+      {
+        id: activePresetId || `custom-${Date.now()}`,
+        name: customTracker,
+        description: currentConfigDescription(),
+        tracker: customTracker,
+        filters: {
+          field: customField || undefined,
+          operator: customOperator || undefined,
+          value: customValue || undefined,
+          geography: customGeoFilter || undefined,
+          status: customStatusFilter || undefined,
+        },
       },
-    }];
+    ];
     const basePath = link('screener/owners').replace(/\/$/, '');
     goto(`${basePath}?classes=${encodeURIComponent(JSON.stringify(classData))}`);
   }
@@ -289,9 +424,7 @@
     <section class="quick-add">
       <h2>
         Presets
-        <span class="refine-hint">
-          Click to load settings, then customize below
-        </span>
+        <span class="refine-hint"> Click to load settings, then customize below </span>
       </h2>
 
       <div class="quick-cards">
@@ -415,7 +548,8 @@
                     onclick={() => {
                       showGeoFilter = false;
                       customGeoFilter = '';
-                    }}>×</button>
+                    }}>×</button
+                  >
                 </div>
               </label>
             {/if}
@@ -442,23 +576,19 @@
                     onclick={() => {
                       showStatusFilter = false;
                       customStatusFilter = '';
-                    }}>×</button>
+                    }}>×</button
+                  >
                 </div>
               </label>
             {/if}
           </div>
         </div>
-
       </div>
     </section>
 
     <!-- Continue button -->
     <div class="continue-section">
-      <button
-        class="continue-btn"
-        onclick={continueToOwners}
-        disabled={!canContinue}
-      >
+      <button class="continue-btn" onclick={continueToOwners} disabled={!canContinue}>
         Continue to Owner Analysis
       </button>
       {#if !canContinue}
@@ -472,13 +602,13 @@
   /* Tufte-inspired information design */
   main {
     min-height: 100vh;
-    background: #fff;
+    background: var(--color-bg-primary);
   }
 
   .screener-layout {
     max-width: 960px;
     margin: 0 auto;
-    padding: 48px 32px 80px;
+    padding: var(--space-12) var(--space-8) 80px;
   }
 
   /* Header - typography hierarchy */
@@ -486,8 +616,8 @@
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    gap: 48px;
-    margin-bottom: 48px;
+    gap: var(--space-12);
+    margin-bottom: var(--space-12);
   }
 
   .header-content {
@@ -495,18 +625,18 @@
   }
 
   h1 {
-    font-size: 28px;
+    font-size: var(--font-size-2xl);
     font-weight: 400;
-    margin: 0 0 12px 0;
-    color: #111;
-    letter-spacing: -0.01em;
+    margin: 0 0 var(--space-3) 0;
+    color: var(--color-text-primary);
+    letter-spacing: var(--tracking-tight);
   }
 
   .subtitle {
-    font-size: 14px;
-    color: #666;
+    font-size: var(--font-size-lg);
+    color: var(--color-text-secondary);
     margin: 0;
-    line-height: 1.6;
+    line-height: var(--line-height-relaxed);
     max-width: 480px;
   }
 
@@ -514,28 +644,28 @@
   .current-config {
     display: flex;
     align-items: baseline;
-    gap: 12px;
-    padding: 12px 16px;
-    background: #f8fafb;
-    border-left: 2px solid #1a5f7a;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    background: var(--color-bg-secondary);
+    border-left: 2px solid var(--color-accent);
   }
 
   .config-label {
-    font-size: 10px;
+    font-size: var(--font-size-base);
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #888;
+    letter-spacing: var(--tracking-wide);
+    color: var(--color-text-tertiary);
   }
 
   .config-value {
-    font-size: 14px;
-    color: #333;
+    font-size: var(--font-size-lg);
+    color: var(--color-text-primary);
     flex: 1;
   }
 
   .clear-btn {
-    font-size: 11px;
-    color: #888;
+    font-size: var(--font-size-md);
+    color: var(--color-text-tertiary);
     background: none;
     border: none;
     cursor: pointer;
@@ -543,175 +673,125 @@
   }
 
   .clear-btn:hover {
-    color: #333;
-  }
-
-  .selected-list {
-    margin-top: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .selected-item {
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-    font-size: 13px;
-    line-height: 1.4;
-    padding-bottom: 8px;
-    border-bottom: 1px solid #eee;
-  }
-
-  .selected-item:last-child {
-    border-bottom: none;
-    padding-bottom: 0;
-  }
-
-  .selected-name {
-    font-weight: 500;
-    color: #111;
-  }
-
-  .selected-desc {
-    flex: 1;
-    color: #888;
-    font-size: 12px;
-  }
-
-  .remove-btn {
-    background: none;
-    border: none;
-    font-size: 14px;
-    color: #ccc;
-    cursor: pointer;
-    padding: 0;
-    line-height: 1;
-  }
-
-  .remove-btn:hover {
-    color: #999;
+    color: var(--color-text-primary);
   }
 
   /* Sections - whitespace instead of boxes */
   section {
-    margin-bottom: 48px;
+    margin-bottom: var(--space-12);
     padding: 0;
   }
 
   section h2 {
-    font-size: 11px;
+    font-size: var(--font-size-md);
     font-weight: 500;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
-    margin: 0 0 20px 0;
-    color: #666;
+    letter-spacing: var(--tracking-caps);
+    margin: 0 0 var(--space-5) 0;
+    color: var(--color-text-secondary);
     display: flex;
     align-items: baseline;
-    gap: 16px;
+    gap: var(--space-4);
     flex-wrap: wrap;
-    padding-bottom: 12px;
-    border-bottom: 1px solid #e5e5e5;
+    padding-bottom: var(--space-3);
+    border-bottom: var(--border-width) solid var(--color-border);
   }
 
   .refine-hint {
-    font-size: 12px;
+    font-size: var(--font-size-body);
     font-weight: 400;
     text-transform: none;
     letter-spacing: 0;
-    color: #888;
-  }
-
-  .refine-hint strong {
-    color: #555;
-    font-weight: 500;
+    color: var(--color-text-tertiary);
   }
 
   /* Quick add cards - minimal, typography-driven */
   .quick-cards {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 24px 32px;
+    gap: var(--space-6) var(--space-8);
   }
 
   .quick-card {
     position: relative;
-    padding: 0;
+    padding: var(--space-3) var(--space-4);
+    margin: calc(-1 * var(--space-3)) calc(-1 * var(--space-4));
     background: transparent;
     border: none;
     text-align: left;
     cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition:
+      background-color var(--duration-base) var(--ease-in-out-quad),
+      transform var(--duration-base) var(--ease-out-back);
+  }
+
+  .quick-card:hover {
+    background: var(--color-gray-50);
   }
 
   .quick-card:hover .card-name {
-    color: #111;
+    color: var(--color-text-primary);
   }
 
-  /* Active preset state */
+  /* Active/selected state */
   .quick-card.active {
-    background: #f0f7fa;
-    border-left: 2px solid #1a5f7a;
-    margin-left: -2px;
+    background: var(--color-bg-secondary);
+    border-left: 2px solid var(--color-accent);
+    margin-left: calc(-2px - var(--space-4));
+    padding-left: calc(var(--space-4) + 2px);
   }
 
   .quick-card.active .card-name {
-    color: #1a5f7a;
+    color: var(--color-text-primary);
   }
 
   .card-active-indicator {
     position: absolute;
-    top: 4px;
-    right: 8px;
-    font-size: 8px;
-    color: #1a5f7a;
+    top: var(--space-1);
+    right: var(--space-2);
+    font-size: var(--font-size-xs);
+    color: var(--color-accent);
   }
 
   .card-header {
     display: flex;
     align-items: baseline;
-    gap: 8px;
-    margin-bottom: 4px;
+    gap: var(--space-2);
+    margin-bottom: var(--space-1);
   }
 
   .card-name {
-    font-size: 14px;
+    font-size: var(--font-size-lg);
     font-weight: 500;
-    color: #555;
-    transition: color 0.1s;
+    color: var(--color-text-secondary);
+    transition: color var(--transition-fast);
   }
 
   .card-sublabel {
-    font-size: 11px;
-    color: #aaa;
+    font-size: var(--font-size-md);
+    color: var(--color-text-tertiary);
     font-style: italic;
   }
 
   .card-description {
-    font-size: 12px;
-    color: #888;
+    font-size: var(--font-size-body);
+    color: var(--color-text-tertiary);
     margin: 0;
-    line-height: 1.5;
-  }
-
-  .card-check {
-    position: absolute;
-    top: 0;
-    right: 0;
-    font-size: 12px;
-    color: #1a5f7a;
+    line-height: var(--line-height-normal);
   }
 
   /* Query builder - clean form design */
   .builder-form {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: var(--space-5);
   }
 
   .form-row {
     display: flex;
     align-items: flex-end;
-    gap: 16px;
+    gap: var(--space-4);
     flex-wrap: wrap;
   }
 
@@ -722,40 +802,40 @@
   }
 
   .field-label {
-    font-size: 10px;
+    font-size: var(--font-size-base);
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #888;
+    letter-spacing: var(--tracking-wide);
+    color: var(--color-text-tertiary);
     font-weight: 500;
   }
 
   .required {
-    color: #c00;
+    color: var(--color-error);
   }
 
   .optional {
     font-weight: 400;
     text-transform: none;
     letter-spacing: 0;
-    color: #aaa;
+    color: var(--color-text-tertiary);
   }
 
   .form-field select,
   .form-field input {
-    padding: 8px 10px;
-    font-size: 13px;
+    padding: var(--space-2) var(--space-2);
+    font-size: var(--font-size-body);
     border: none;
-    border-bottom: 1px solid #ddd;
+    border-bottom: var(--border-width) solid var(--color-gray-300);
     border-radius: 0;
     background: transparent;
     min-width: 160px;
-    color: #333;
+    color: var(--color-text-primary);
   }
 
   .form-field select:focus,
   .form-field input:focus {
     outline: none;
-    border-bottom-color: #333;
+    border-bottom-color: var(--color-text-primary);
   }
 
   .form-field select {
@@ -763,8 +843,8 @@
     appearance: none;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='4' viewBox='0 0 8 4'%3E%3Cpath fill='%23999' d='M0 0l4 4 4-4z'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
-    background-position: right 4px center;
-    padding-right: 20px;
+    background-position: right var(--space-1) center;
+    padding-right: var(--space-5);
   }
 
   .operator-field select {
@@ -776,29 +856,29 @@
   }
 
   .builder-hint {
-    font-size: 12px;
-    color: #888;
-    line-height: 1.6;
-    padding-left: 12px;
-    border-left: 1px solid #ddd;
-    margin-left: 4px;
+    font-size: var(--font-size-body);
+    color: var(--color-text-tertiary);
+    line-height: var(--line-height-relaxed);
+    padding-left: var(--space-3);
+    border-left: var(--border-width) solid var(--color-gray-300);
+    margin-left: var(--space-1);
   }
 
   .optional-filters {
     display: flex;
     flex-direction: column;
-    gap: 16px;
-    padding-top: 20px;
-    border-top: 1px solid #eee;
-    margin-top: 8px;
+    gap: var(--space-4);
+    padding-top: var(--space-5);
+    border-top: var(--border-width) solid var(--color-border-light);
+    margin-top: var(--space-2);
   }
 
   .optional-label {
-    font-size: 10px;
+    font-size: var(--font-size-base);
     text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: #aaa;
-    margin-bottom: -8px;
+    letter-spacing: var(--tracking-caps);
+    color: var(--color-text-tertiary);
+    margin-bottom: calc(-1 * var(--space-2));
   }
 
   .filter-row {
@@ -809,71 +889,36 @@
   .filter-input-row {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2);
   }
 
   .add-filter-btn {
     padding: 0;
-    font-size: 12px;
+    font-size: var(--font-size-body);
     background: none;
     border: none;
     cursor: pointer;
-    color: #888;
+    color: var(--color-text-tertiary);
     text-decoration: underline;
     text-underline-offset: 2px;
   }
 
   .add-filter-btn:hover {
-    color: #333;
-  }
-
-  .inline-field {
-    flex-direction: row;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .inline-field select,
-  .inline-field input {
-    min-width: 160px;
+    color: var(--color-text-primary);
   }
 
   .remove-filter {
     background: none;
     border: none;
-    font-size: 14px;
-    color: #ccc;
+    font-size: var(--font-size-lg);
+    color: var(--color-gray-300);
     cursor: pointer;
     padding: 0;
-    margin-left: 4px;
+    margin-left: var(--space-1);
   }
 
   .remove-filter:hover {
-    color: #999;
-  }
-
-  .add-class-btn {
-    align-self: flex-start;
-    padding: 0;
-    font-size: 13px;
-    font-weight: 400;
-    background: none;
-    color: #333;
-    border: none;
-    cursor: pointer;
-    text-decoration: underline;
-    text-underline-offset: 3px;
-    margin-top: 8px;
-  }
-
-  .add-class-btn:hover:not(:disabled) {
-    color: #000;
-  }
-
-  .add-class-btn:disabled {
-    color: #ccc;
-    cursor: not-allowed;
-    text-decoration: none;
+    color: var(--color-text-tertiary);
   }
 
   /* Continue section - prominent but simple */
@@ -881,35 +926,35 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 8px;
-    padding-top: 32px;
-    border-top: 1px solid #e5e5e5;
+    gap: var(--space-2);
+    padding-top: var(--space-8);
+    border-top: var(--border-width) solid var(--color-border);
   }
 
   .continue-hint {
-    font-size: 12px;
-    color: #999;
+    font-size: var(--font-size-body);
+    color: var(--color-text-tertiary);
     margin: 0;
   }
 
   .continue-btn {
-    padding: 12px 24px;
-    font-size: 14px;
+    padding: var(--space-3) var(--space-6);
+    font-size: var(--font-size-lg);
     font-weight: 500;
-    background: #333;
-    color: #fff;
+    background: var(--color-text-primary);
+    color: var(--color-white);
     border: none;
     cursor: pointer;
-    letter-spacing: 0.02em;
+    letter-spacing: var(--tracking-wide);
   }
 
   .continue-btn:hover:not(:disabled) {
-    background: #111;
+    background: var(--color-black);
   }
 
   .continue-btn:disabled {
-    background: #e5e5e5;
-    color: #999;
+    background: var(--color-border);
+    color: var(--color-text-tertiary);
     cursor: not-allowed;
   }
 
@@ -922,25 +967,17 @@
 
   @media (max-width: 640px) {
     .screener-layout {
-      padding: 32px 20px 60px;
+      padding: var(--space-8) var(--space-5) 60px;
     }
 
     .screener-header {
       flex-direction: column;
-      gap: 32px;
-    }
-
-    .selected-panel {
-      width: 100%;
+      gap: var(--space-8);
     }
 
     .quick-cards {
       grid-template-columns: 1fr;
-      gap: 16px;
-    }
-
-    .quick-card.selected::before {
-      left: -8px;
+      gap: var(--space-4);
     }
 
     .form-row {

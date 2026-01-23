@@ -621,7 +621,7 @@
                 </button>
 
                 <!-- Expanded details -->
-                {#if expandedRows.has(row.id)}
+                <div class="row-details-wrapper" class:expanded={expandedRows.has(row.id)}>
                   <div class="row-details">
                     <div class="details-header">
                       <h4>Assets ({row.matchedAssets})</h4>
@@ -679,7 +679,7 @@
                       {/if}
                     </div>
                   </div>
-                {/if}
+                </div>
               </div>
             {/each}
           </div>
@@ -806,7 +806,7 @@
 
   .bar-segment {
     min-width: 3px;
-    transition: width var(--transition-slow);
+    transition: width var(--duration-slower) var(--ease-in-out-quad);
   }
 
   .breakdown-legend {
@@ -888,6 +888,7 @@
   .result-row {
     background: var(--color-bg-primary);
     border: var(--border-width) solid var(--color-border);
+    transition: border-color var(--duration-slow) var(--ease-in-out-quad);
   }
 
   .result-row.expanded {
@@ -906,7 +907,7 @@
     cursor: pointer;
     text-align: left;
     font-family: inherit;
-    transition: background var(--transition-fast);
+    transition: background var(--duration-base) var(--ease-in-out-quad);
   }
 
   .row-flower {
@@ -988,10 +989,30 @@
     color: var(--color-text-tertiary);
     text-align: center;
     font-weight: 300;
+    transition: transform var(--duration-slow) var(--ease-in-out-quad);
   }
 
-  /* Expanded Row Details */
+  .result-row.expanded .row-expand {
+    transform: rotate(90deg);
+  }
+
+  /* Expanded Row Details - smooth height animation */
+  .row-details-wrapper {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows var(--duration-slow) var(--ease-in-out-quad);
+  }
+
+  .row-details-wrapper.expanded {
+    grid-template-rows: 1fr;
+  }
+
   .row-details {
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  .row-details-wrapper.expanded .row-details {
     padding: var(--space-5) var(--space-5) var(--space-6) 76px;
     background: var(--color-bg-secondary);
     border-top: var(--border-width) solid var(--color-border-light);
@@ -1095,15 +1116,12 @@
     color: var(--color-white);
     border: none;
     cursor: pointer;
-    transition:
-      background var(--transition-base),
-      transform var(--transition-fast);
+    transition: background var(--duration-slow) var(--ease-in-out-quad);
     letter-spacing: var(--tracking-wide);
   }
 
   .continue-btn:hover {
     background: var(--color-black);
-    transform: translateY(-1px);
   }
 
   /* Navigation */
@@ -1354,6 +1372,14 @@
   .more-assets:hover {
     background: var(--color-border);
     color: var(--color-text-primary);
+  }
+
+  /* Reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    .row-details-wrapper,
+    .row-expand {
+      transition: none;
+    }
   }
 
   @media (max-width: 768px) {

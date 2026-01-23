@@ -197,9 +197,7 @@
                 {displayMode === 'tree' ? 'Table' : 'Network'}
               </button>
               <span class="separator">|</span>
-              <button class="text-link muted" onclick={downloadData}>
-                Export
-              </button>
+              <button class="text-link muted" onclick={downloadData}> Export </button>
               {#if owners.length > 1}
                 <button class="close-btn" onclick={backToGrid} title="Return to grid">
                   <span class="sr-only">Close</span>
@@ -215,8 +213,7 @@
               <p>
                 <strong>Owner node</strong> is the primary entity.
                 <strong>Subsidiaries</strong> show ownership stakes.
-                <strong>Percentages</strong> appear on connection lines.
-                Click any node to explore.
+                <strong>Percentages</strong> appear on connection lines. Click any node to explore.
               </p>
             </aside>
           {/if}
@@ -289,9 +286,7 @@
                 />
               </div>
               <footer class="card-footer">
-                <button class="text-link" onclick={() => goToOwner(owner)}>
-                  Expand
-                </button>
+                <button class="text-link" onclick={() => goToOwner(owner)}> Expand </button>
                 <button class="text-link muted" onclick={() => openEntityPage(owner.id)}>
                   Profile
                 </button>
@@ -304,9 +299,7 @@
 
     <!-- Navigation: minimal -->
     <nav class="nav-row">
-      <button class="text-link nav-link" onclick={goBack}>
-        Back to results
-      </button>
+      <button class="text-link nav-link" onclick={goBack}> Back to results </button>
       <button class="text-link nav-link" onclick={() => goto(link('screener'))}>
         New search
       </button>
@@ -324,13 +317,13 @@
 
   main {
     min-height: 100vh;
-    background: #fafafa;
+    background: var(--color-bg-secondary);
   }
 
   .screener-layout {
     max-width: 1200px;
     margin: 0 auto;
-    padding: 32px 24px 48px;
+    padding: var(--space-8) var(--space-6) var(--space-12);
   }
 
   /* Header: compact, restrained */
@@ -338,24 +331,24 @@
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    margin-bottom: 24px;
-    padding-bottom: 16px;
-    border-bottom: 1px solid #e5e5e5;
+    margin-bottom: var(--space-6);
+    padding-bottom: var(--space-4);
+    border-bottom: var(--border-width) solid var(--color-border);
   }
 
   h1 {
-    font-size: 15px;
+    font-size: var(--font-size-lg);
     font-weight: 400;
-    letter-spacing: 0.02em;
+    letter-spacing: var(--tracking-wide);
     text-transform: uppercase;
-    color: #888;
+    color: var(--color-text-tertiary);
     margin: 0;
   }
 
   .subtitle {
-    font-size: 13px;
-    color: #666;
-    margin: 4px 0 0 0;
+    font-size: var(--font-size-body);
+    color: var(--color-text-secondary);
+    margin: var(--space-1) 0 0 0;
   }
 
   /* Text links: the primary action style */
@@ -363,8 +356,8 @@
     background: none;
     border: none;
     padding: 0;
-    font-size: 13px;
-    color: #1a5f7a;
+    font-size: var(--font-size-body);
+    color: var(--color-accent);
     cursor: pointer;
     text-decoration: none;
   }
@@ -374,16 +367,17 @@
   }
 
   .text-link.muted {
-    color: #888;
+    color: var(--color-text-tertiary);
+    transition: color var(--duration-slow) var(--ease-in-out-quad);
   }
 
   .text-link.muted:hover {
-    color: #555;
+    color: var(--color-text-secondary);
   }
 
   /* Visualization section */
   .viz-section {
-    margin-bottom: 32px;
+    margin-bottom: var(--space-8);
   }
 
   /* States: minimal */
@@ -391,69 +385,71 @@
   .empty-state,
   .error-state {
     text-align: center;
-    padding: 80px 24px;
-    color: #888;
+    padding: 80px var(--space-6);
+    color: var(--color-text-tertiary);
   }
 
   .spinner {
     width: 24px;
     height: 24px;
-    border: 2px solid #e0e0e0;
-    border-top-color: #888;
+    border: 2px solid var(--color-border);
+    border-top-color: var(--color-text-tertiary);
     border-radius: 50%;
     animation: spin 1s linear infinite;
-    margin: 0 auto 12px;
+    margin: 0 auto var(--space-3);
   }
 
   @keyframes spin {
-    to { transform: rotate(360deg); }
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .error-state {
-    color: #991b1b;
+    color: var(--color-error);
   }
 
   /* Single view: visualization-first */
   .single-view {
-    background: white;
-    border: 1px solid #e5e5e5;
+    background: var(--color-bg-primary);
+    border: var(--border-width) solid var(--color-border);
   }
 
   .owner-bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 20px;
-    border-bottom: 1px solid #eee;
+    padding: var(--space-3) var(--space-5);
+    border-bottom: var(--border-width) solid var(--color-border-light);
   }
 
   .owner-title {
     display: flex;
     align-items: baseline;
-    gap: 12px;
+    gap: var(--space-3);
   }
 
   .owner-title h2 {
     margin: 0;
-    font-size: 16px;
+    font-size: var(--font-size-lg);
     font-weight: 500;
-    color: #222;
+    color: var(--color-text-primary);
   }
 
   .country {
-    font-size: 12px;
-    color: #999;
+    font-size: var(--font-size-body);
+    color: var(--color-text-tertiary);
   }
 
   .bar-actions {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--space-3);
   }
 
   .separator {
-    color: #ddd;
-    font-size: 12px;
+    color: var(--color-gray-300);
+    font-size: var(--font-size-body);
   }
 
   .sr-only {
@@ -474,26 +470,27 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 18px;
+    font-size: var(--font-size-xl);
     background: none;
     border: none;
     cursor: pointer;
-    color: #999;
-    margin-left: 8px;
+    color: var(--color-text-tertiary);
+    margin-left: var(--space-2);
+    transition: color var(--duration-slow) var(--ease-in-out-quad);
   }
 
   .close-btn:hover {
-    color: #555;
+    color: var(--color-text-secondary);
   }
 
   /* Help panel: subtle, inline */
   .help-panel {
-    padding: 12px 20px;
-    background: #f9f9f9;
-    border-bottom: 1px solid #eee;
-    font-size: 12px;
-    color: #666;
-    line-height: 1.6;
+    padding: var(--space-3) var(--space-5);
+    background: var(--color-bg-secondary);
+    border-bottom: var(--border-width) solid var(--color-border-light);
+    font-size: var(--font-size-body);
+    color: var(--color-text-secondary);
+    line-height: var(--line-height-relaxed);
   }
 
   .help-panel p {
@@ -501,50 +498,50 @@
   }
 
   .help-panel strong {
-    color: #555;
+    color: var(--color-text-secondary);
     font-weight: 500;
   }
 
   /* Graph container: maximize space */
   .graph-container {
-    padding: 32px 20px 40px;
+    padding: var(--space-8) var(--space-5) var(--space-10);
   }
 
   /* Tabular view */
   .tabular-view {
-    padding: 24px 20px;
+    padding: var(--space-6) var(--space-5);
   }
 
   .ownership-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 13px;
+    font-size: var(--font-size-body);
   }
 
   .ownership-table th,
   .ownership-table td {
-    padding: 10px 12px;
+    padding: var(--space-2) var(--space-3);
     text-align: left;
-    border-bottom: 1px solid #eee;
+    border-bottom: var(--border-width) solid var(--color-border-light);
   }
 
   .ownership-table th {
     font-weight: 500;
-    color: #888;
-    font-size: 11px;
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-md);
     text-transform: uppercase;
-    letter-spacing: 0.03em;
+    letter-spacing: var(--tracking-wide);
   }
 
   .ownership-table .placeholder {
-    color: #bbb;
+    color: var(--color-gray-400);
     font-style: italic;
   }
 
   /* Entity link footer */
   .entity-link {
-    padding: 12px 20px;
-    border-top: 1px solid #eee;
+    padding: var(--space-3) var(--space-5);
+    border-top: var(--border-width) solid var(--color-border-light);
     text-align: right;
   }
 
@@ -552,49 +549,52 @@
   .grid-view {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 20px;
+    gap: var(--space-5);
   }
 
   .graph-card {
-    background: white;
-    border: 1px solid #e5e5e5;
-    transition: border-color 0.15s;
+    background: var(--color-bg-primary);
+    border: var(--border-width) solid var(--color-border);
+    transition:
+      border-color var(--duration-slow) var(--ease-in-out-quad),
+      box-shadow var(--duration-slow) var(--ease-in-out-quad);
   }
 
   .graph-card:hover {
-    border-color: #ccc;
+    border-color: var(--color-gray-300);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   }
 
   .card-header {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    padding: 10px 14px;
-    border-bottom: 1px solid #eee;
+    padding: var(--space-2) var(--space-3);
+    border-bottom: var(--border-width) solid var(--color-border-light);
   }
 
   .card-header h3 {
     margin: 0;
-    font-size: 13px;
+    font-size: var(--font-size-body);
     font-weight: 500;
-    color: #333;
+    color: var(--color-text-primary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     flex: 1;
-    margin-right: 8px;
+    margin-right: var(--space-2);
   }
 
   .card-graph {
     cursor: pointer;
-    padding: 8px 0;
+    padding: var(--space-2) 0;
   }
 
   .card-footer {
     display: flex;
     justify-content: space-between;
-    padding: 10px 14px;
-    border-top: 1px solid #eee;
+    padding: var(--space-2) var(--space-3);
+    border-top: var(--border-width) solid var(--color-border-light);
   }
 
   /* Navigation row: minimal */
@@ -602,12 +602,12 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding-top: 24px;
-    border-top: 1px solid #e5e5e5;
+    padding-top: var(--space-6);
+    border-top: var(--border-width) solid var(--color-border);
   }
 
   .nav-link {
-    font-size: 13px;
+    font-size: var(--font-size-body);
   }
 
   /* Responsive */
@@ -615,7 +615,7 @@
     .screener-header {
       flex-direction: column;
       align-items: flex-start;
-      gap: 8px;
+      gap: var(--space-2);
     }
 
     .grid-view {
@@ -625,7 +625,7 @@
     .owner-bar {
       flex-direction: column;
       align-items: flex-start;
-      gap: 12px;
+      gap: var(--space-3);
     }
 
     .bar-actions {

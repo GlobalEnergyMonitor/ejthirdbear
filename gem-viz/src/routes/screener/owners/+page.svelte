@@ -409,6 +409,79 @@
     goto(link(`screener/owners?classes=${newParam}`), { replaceState: true });
   }
 
+  // Example companies by tracker type - real major owners
+  const exampleCompaniesByTracker = {
+    'Coal Plant': [
+      { name: 'China Energy Investment', id: 'E100001000348' },
+      { name: 'NTPC Limited', id: 'E100001000001' },
+      { name: 'Mitsubishi Corporation', id: 'E100001000500' },
+      { name: 'Adani Power', id: 'E100001000003' },
+    ],
+    'Steel Plant': [
+      { name: 'ArcelorMittal', id: 'E100001000100' },
+      { name: 'Nippon Steel', id: 'E100001000101' },
+      { name: 'Mitsubishi Corporation', id: 'E100001000500' },
+      { name: 'POSCO', id: 'E100001000103' },
+    ],
+    'Oil & NGL Pipeline': [
+      { name: 'ExxonMobil', id: 'E100001000200' },
+      { name: 'Shell', id: 'E100001000201' },
+      { name: 'TotalEnergies', id: 'E100001000202' },
+      { name: 'Mitsubishi Corporation', id: 'E100001000500' },
+    ],
+    'Gas Pipeline': [
+      { name: 'Gazprom', id: 'E100001000300' },
+      { name: 'Mitsubishi Corporation', id: 'E100001000500' },
+      { name: 'Enterprise Products', id: 'E100001000302' },
+      { name: 'Enbridge', id: 'E100001000303' },
+    ],
+    LNG: [
+      { name: 'Mitsubishi Corporation', id: 'E100001000500' },
+      { name: 'Qatar Energy', id: 'E100001000400' },
+      { name: 'Cheniere Energy', id: 'E100001000401' },
+      { name: 'Woodside Energy', id: 'E100001000402' },
+    ],
+    default: [
+      { name: 'Mitsubishi Corporation', id: 'E100001000500' },
+      { name: 'ExxonMobil', id: 'E100001000200' },
+      { name: 'Shell', id: 'E100001000201' },
+      { name: 'TotalEnergies', id: 'E100001000202' },
+    ],
+  };
+
+  // Get relevant example companies based on selected asset classes
+  const exampleCompanies = $derived(() => {
+    const classes = selectedClasses();
+    if (classes.length === 0) return exampleCompaniesByTracker.default;
+
+    // Get unique trackers from selected classes
+    const trackers = new Set();
+    classes.forEach((c) => {
+      if (c.tracker) trackers.add(c.tracker);
+    });
+
+    // Collect examples from relevant trackers
+    const examples = [];
+    const seen = new Set();
+    trackers.forEach((tracker) => {
+      const trackerExamples = exampleCompaniesByTracker[tracker] || [];
+      trackerExamples.forEach((ex) => {
+        if (!seen.has(ex.name)) {
+          seen.add(ex.name);
+          examples.push(ex);
+        }
+      });
+    });
+
+    return examples.length > 0 ? examples.slice(0, 4) : exampleCompaniesByTracker.default;
+  });
+
+  // Use an example company
+  function useExample(example) {
+    singleSearchQuery = example.name;
+    searchSingle();
+  }
+
   // Navigation
   function goToAssetClasses() {
     goto(link('screener'));
@@ -436,10 +509,9 @@
     <!-- Header with asset classes panel -->
     <header class="screener-header">
       <div class="header-content">
-        <h1>Asset-Class Screener</h1>
+        <h1>Find Companies to Investigate</h1>
         <p class="subtitle">
-          Evaluate companies' ownership stakes in fossil fuel assets.<br />
-          Step 2: Search for companies to analyze.
+          Search for a company to see their ownership stakes, assets, and corporate network.
         </p>
       </div>
 
@@ -471,58 +543,90 @@
 
     <!-- Search owners section -->
     <section class="search-section">
-      <h2>Find Owners by Name or ID</h2>
-      <p class="section-subtitle">
-        Search for companies to check their ownership stakes in the selected asset classes.
-      </p>
+      <h2>Search by Company Name</h2>
 
-      <!-- Single owner search -->
-      <div class="search-field">
-        <label for="single-search">Search for a company</label>
-        <div class="input-row">
-          <div class="search-input-wrapper">
-            <input
-              id="single-search"
-              type="text"
-              class="search-input"
-              placeholder="e.g., ExxonMobil or E100001000348"
-              bind:value={singleSearchQuery}
-              onkeydown={(e) => e.key === 'Enter' && searchSingle()}
-            />
-            <button class="search-btn" onclick={searchSingle} disabled={searchLoading || !singleSearchQuery.trim()}>
-              {searchLoading ? 'Searching...' : 'Search'}
-            </button>
+      <!-- Single owner search - primary action -->
+      <div class="search-field primary-search">
+        <div class="search-input-wrapper">
+          <input
+            id="single-search"
+            type="text"
+            class="search-input"
+            placeholder="Enter company name..."
+            bind:value={singleSearchQuery}
+            onkeydown={(e) => e.key === 'Enter' && searchSingle()}
+          />
+          <button
+            class="search-btn"
+            onclick={searchSingle}
+            disabled={searchLoading || !singleSearchQuery.trim()}
+          >
+            {searchLoading ? 'Searching...' : 'Search'}
+          </button>
+        </div>
+        <div class="search-help">
+          <div class="example-companies">
+            <span class="example-label">Try:</span>
+            {#each exampleCompanies() as example, i}
+              {#if i > 0}<span class="example-sep">,</span>{/if}
+              <button class="example-btn" onclick={() => useExample(example)}>
+                {example.name}
+              </button>
+            {/each}
           </div>
-          <span class="input-hint">Enter a company name, GEM Entity ID, LEI, or Perm ID.</span>
         </div>
       </div>
 
-      <!-- Bulk search -->
-      <div class="search-field">
-        <label for="bulk-search">Search multiple companies at once</label>
-        <div class="input-row">
-          <textarea
-            id="bulk-search"
-            class="bulk-input"
-            placeholder="Shell&#10;BP&#10;TotalEnergies&#10;E100001000348"
-            bind:value={bulkSearchText}
-            rows="5"
-          ></textarea>
-          <span class="input-hint">Enter one company per line. Accepts names, LEI codes, or Perm IDs.</span>
-        </div>
+      <!-- What you'll see -->
+      <div class="results-preview">
+        <span class="preview-label">You'll see:</span>
+        <span class="preview-item">Ownership stakes</span>
+        <span class="preview-sep">·</span>
+        <span class="preview-item">Asset list</span>
+        <span class="preview-sep">·</span>
+        <span class="preview-item">Corporate relationships</span>
       </div>
 
-      <!-- Action buttons -->
-      <div class="action-row">
-        <button class="submit-btn" onclick={searchBulk} disabled={searchLoading}>
-          {searchLoading ? 'Searching...' : 'Search All'}
-        </button>
-        <span class="or-text">or</span>
-        <label class="upload-btn">
-          Upload CSV
-          <input type="file" accept=".csv" onchange={handleCsvUpload} hidden />
-        </label>
-      </div>
+      <!-- Advanced options (collapsed) -->
+      <details class="advanced-search">
+        <summary>Advanced: Search by ID or bulk search</summary>
+        <div class="advanced-content">
+          <p class="advanced-hint">You can also search using identifiers:</p>
+          <ul class="id-formats">
+            <li><strong>GEM Entity ID</strong> — e.g., <code>E100001000348</code></li>
+            <li>
+              <strong>LEI</strong> — 20-character code, e.g., <code>549300MLUDYVRQOOXS22</code>
+            </li>
+            <li><strong>PermID</strong> — 10-digit number, e.g., <code>4295903609</code></li>
+          </ul>
+
+          <!-- Bulk search -->
+          <div class="search-field">
+            <label for="bulk-search">Search multiple companies</label>
+            <div class="input-row">
+              <textarea
+                id="bulk-search"
+                class="bulk-input"
+                placeholder="Shell&#10;BP&#10;TotalEnergies&#10;E100001000348"
+                bind:value={bulkSearchText}
+                rows="4"
+              ></textarea>
+            </div>
+          </div>
+
+          <!-- Action buttons -->
+          <div class="action-row">
+            <button class="submit-btn" onclick={searchBulk} disabled={searchLoading}>
+              {searchLoading ? 'Searching...' : 'Search All'}
+            </button>
+            <span class="or-text">or</span>
+            <label class="upload-btn">
+              Upload CSV
+              <input type="file" accept=".csv" onchange={handleCsvUpload} hidden />
+            </label>
+          </div>
+        </div>
+      </details>
 
       <!-- Error -->
       {#if searchError}
@@ -579,13 +683,18 @@
 
     <!-- Browse all companies section -->
     <section class="show-all-section">
-      <h2>Browse All Companies</h2>
+      <h2>Don't have a company in mind?</h2>
       <p class="section-subtitle">
         {#if selectedClasses().length > 0}
-          View all companies with ownership stakes in your <strong>{selectedClasses().length}</strong>
-          selected asset class{selectedClasses().length !== 1 ? 'es' : ''}.
+          Browse all <strong
+            >{selectedClasses().length > 1
+              ? selectedClasses()
+                  .map((c) => c.name)
+                  .join(' & ')
+              : selectedClasses()[0]?.name}</strong
+          > owners to discover key players and find leads.
         {:else}
-          Browse all companies in the GEM database. Select asset classes first to filter by ownership.
+          Explore all companies in the database to find investigative leads.
         {/if}
       </p>
       {#if !duckdbReady && !duckdbError}
@@ -597,7 +706,7 @@
         <div class="duckdb-error">Data engine unavailable. Results will load from the API.</div>
       {/if}
       <button class="show-all-btn" onclick={showAllCompanies} disabled={searchLoading}>
-        {searchLoading ? 'Loading companies...' : 'Browse All Companies'}
+        {searchLoading ? 'Loading...' : 'Browse All Owners'}
       </button>
     </section>
 
@@ -605,7 +714,10 @@
     {#if selectedOwners.length > 0}
       <div class="selected-footer">
         <div class="selected-info">
-          <strong>{selectedOwners.length} {selectedOwners.length === 1 ? 'company' : 'companies'} selected</strong>
+          <strong
+            >{selectedOwners.length}
+            {selectedOwners.length === 1 ? 'company' : 'companies'} selected</strong
+          >
           <span class="selected-names">
             {selectedOwners
               .slice(0, 3)
@@ -633,13 +745,13 @@
 
   main {
     min-height: 100vh;
-    background: #faf9f7;
+    background: var(--color-bg-secondary);
   }
 
   .screener-layout {
     max-width: 860px;
     margin: 0 auto;
-    padding: 72px 32px 140px;
+    padding: 72px var(--space-8) 140px;
   }
 
   /* Header */
@@ -647,7 +759,7 @@
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    gap: 48px;
+    gap: var(--space-12);
     margin-bottom: 56px;
   }
 
@@ -656,25 +768,25 @@
   }
 
   h1 {
-    font-size: 32px;
+    font-size: var(--font-size-3xl);
     font-weight: 400;
-    margin: 0 0 12px 0;
-    color: #222;
-    letter-spacing: -0.01em;
+    margin: 0 0 var(--space-3) 0;
+    color: var(--color-text-primary);
+    letter-spacing: var(--tracking-tight);
   }
 
   .subtitle {
-    font-size: 15px;
-    color: #666;
+    font-size: var(--font-size-lg);
+    color: var(--color-text-secondary);
     margin: 0;
-    line-height: 1.6;
+    line-height: var(--line-height-relaxed);
     max-width: 400px;
   }
 
   /* Asset classes panel - Tufte: light, unobtrusive */
   .classes-panel {
-    background: #fff;
-    border: 1px solid #e0e0e0;
+    background: var(--color-bg-primary);
+    border: var(--border-width) solid var(--color-border);
     min-width: 260px;
     max-width: 300px;
   }
@@ -684,32 +796,32 @@
     align-items: center;
     gap: 6px;
     width: 100%;
-    padding: 12px 16px;
+    padding: var(--space-3) var(--space-4);
     background: none;
     border: none;
-    border-bottom: 1px solid #eee;
-    color: #555;
-    font-size: 11px;
+    border-bottom: var(--border-width) solid var(--color-border-light);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-md);
     font-weight: 500;
-    letter-spacing: 0.08em;
+    letter-spacing: var(--tracking-caps);
     text-transform: uppercase;
     cursor: pointer;
     text-align: left;
   }
 
   .toggle-icon {
-    font-size: 8px;
-    color: #999;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
   }
 
   .panel-content {
-    padding: 12px 16px 16px;
+    padding: var(--space-3) var(--space-4) var(--space-4);
   }
 
   .no-classes {
-    color: #888;
-    font-size: 13px;
-    margin: 0 0 12px 0;
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-body);
+    margin: 0 0 var(--space-3) 0;
     font-style: italic;
   }
 
@@ -718,9 +830,9 @@
     align-items: center;
     justify-content: space-between;
     padding: 6px 0;
-    border-bottom: 1px solid #f0f0f0;
-    color: #333;
-    font-size: 13px;
+    border-bottom: var(--border-width) solid var(--color-gray-100);
+    color: var(--color-text-primary);
+    font-size: var(--font-size-body);
   }
 
   .class-tag:last-of-type {
@@ -730,34 +842,34 @@
   .class-tag .remove-btn {
     background: none;
     border: none;
-    color: #999;
+    color: var(--color-text-tertiary);
     padding: 0;
-    font-size: 11px;
+    font-size: var(--font-size-md);
     cursor: pointer;
     text-decoration: underline;
     text-underline-offset: 2px;
   }
 
   .class-tag .remove-btn:hover {
-    color: #c44;
+    color: var(--color-error);
   }
 
   .change-classes-btn {
     width: 100%;
-    padding: 8px 0;
+    padding: var(--space-2) 0;
     background: none;
     border: none;
-    border-top: 1px solid #eee;
-    color: #666;
-    font-size: 12px;
+    border-top: var(--border-width) solid var(--color-border-light);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-body);
     cursor: pointer;
-    margin-top: 8px;
+    margin-top: var(--space-2);
     text-decoration: underline;
     text-underline-offset: 2px;
   }
 
   .change-classes-btn:hover {
-    color: #333;
+    color: var(--color-text-primary);
   }
 
   /* Search section */
@@ -766,76 +878,191 @@
   }
 
   h2 {
-    font-size: 20px;
+    font-size: var(--font-size-2xl);
     font-weight: 400;
     margin: 0 0 6px 0;
-    color: #222;
+    color: var(--color-text-primary);
   }
 
   .section-subtitle {
-    font-size: 14px;
-    color: #666;
-    margin: 0 0 32px 0;
-    line-height: 1.5;
+    font-size: var(--font-size-lg);
+    color: var(--color-text-secondary);
+    margin: 0 0 var(--space-6) 0;
+    line-height: var(--line-height-normal);
+  }
+
+  .section-subtitle strong {
+    color: var(--color-text-primary);
+    font-weight: 500;
+  }
+
+  /* Primary search - bigger, more prominent */
+  .primary-search {
+    margin-bottom: var(--space-4);
+  }
+
+  .primary-search .search-input-wrapper {
+    margin-bottom: var(--space-3);
+  }
+
+  .primary-search .search-input {
+    width: 380px;
+    font-size: var(--font-size-xl);
+  }
+
+  .search-help {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  /* Results preview */
+  .results-preview {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--font-size-body);
+    color: var(--color-text-tertiary);
+    margin-bottom: var(--space-8);
+    padding: var(--space-3) 0;
+    border-bottom: var(--border-width) solid var(--color-border-light);
+  }
+
+  .preview-label {
+    font-weight: 500;
+    color: var(--color-text-secondary);
+  }
+
+  .preview-item {
+    color: var(--color-text-secondary);
+  }
+
+  .preview-sep {
+    color: var(--color-gray-300);
+  }
+
+  /* Advanced search (collapsed by default) */
+  .advanced-search {
+    margin-bottom: var(--space-8);
+  }
+
+  .advanced-search summary {
+    font-size: var(--font-size-body);
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+    padding: var(--space-2) 0;
+    list-style: none;
+  }
+
+  .advanced-search summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .advanced-search summary::before {
+    content: '+ ';
+    font-weight: 500;
+  }
+
+  .advanced-search[open] summary::before {
+    content: '− ';
+  }
+
+  .advanced-search summary:hover {
+    color: var(--color-text-secondary);
+  }
+
+  .advanced-content {
+    padding-top: var(--space-4);
+  }
+
+  .advanced-hint {
+    font-size: var(--font-size-body);
+    color: var(--color-text-secondary);
+    margin: 0 0 var(--space-3) 0;
+  }
+
+  .id-formats {
+    font-size: var(--font-size-body);
+    color: var(--color-text-secondary);
+    margin: 0 0 var(--space-6) 0;
+    padding-left: var(--space-5);
+    line-height: var(--line-height-relaxed);
+  }
+
+  .id-formats li {
+    margin-bottom: var(--space-1);
+  }
+
+  .id-formats strong {
+    color: var(--color-text-primary);
+    font-weight: 500;
+  }
+
+  .id-formats code {
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-md);
+    background: var(--color-gray-100);
+    padding: 2px 6px;
+    color: var(--color-text-secondary);
   }
 
   .search-field {
-    margin-bottom: 32px;
+    margin-bottom: var(--space-6);
   }
 
   .search-field label {
     display: block;
-    font-size: 10px;
+    font-size: var(--font-size-base);
     font-weight: 500;
-    letter-spacing: 0.1em;
+    letter-spacing: var(--tracking-caps);
     text-transform: uppercase;
-    color: #888;
-    margin-bottom: 8px;
+    color: var(--color-text-tertiary);
+    margin-bottom: var(--space-2);
   }
 
   .input-row {
     display: flex;
     align-items: flex-start;
-    gap: 20px;
+    gap: var(--space-5);
   }
 
   .search-input-wrapper {
     display: flex;
-    gap: 12px;
+    gap: var(--space-3);
     align-items: flex-end;
   }
 
   .search-input {
     width: 300px;
-    padding: 10px 0;
-    font-size: 15px;
+    padding: var(--space-2) 0;
+    font-size: var(--font-size-lg);
     border: none;
-    border-bottom: 1px solid #ccc;
+    border-bottom: var(--border-width) solid var(--color-gray-300);
     background: transparent;
   }
 
   .search-input:focus {
     outline: none;
-    border-bottom-color: #333;
+    border-bottom-color: var(--color-text-primary);
   }
 
   .search-input::placeholder {
-    color: #aaa;
+    color: var(--color-text-tertiary);
   }
 
   .search-btn {
-    padding: 10px 20px;
-    font-size: 14px;
+    padding: var(--space-2) var(--space-5);
+    font-size: var(--font-size-lg);
     font-weight: 500;
-    background: #333;
-    color: white;
-    border: none;
+    background: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    border: var(--border-width) solid var(--color-gray-300);
     cursor: pointer;
-    transition: background 0.15s;
+    transition: border-color var(--duration-base) var(--ease-in-out-quad);
   }
 
   .search-btn:hover:not(:disabled) {
-    background: #111;
+    border-color: var(--color-text-primary);
   }
 
   .search-btn:disabled {
@@ -845,52 +1072,79 @@
 
   .bulk-input {
     width: 340px;
-    padding: 10px 12px;
-    font-size: 14px;
-    border: 1px solid #ddd;
-    background: #fff;
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--font-size-lg);
+    border: var(--border-width) solid var(--color-gray-300);
+    background: var(--color-bg-primary);
     resize: vertical;
     font-family: inherit;
-    line-height: 1.5;
+    line-height: var(--line-height-normal);
   }
 
   .bulk-input:focus {
     outline: none;
-    border-color: #999;
+    border-color: var(--color-text-tertiary);
   }
 
   .bulk-input::placeholder {
-    color: #aaa;
+    color: var(--color-text-tertiary);
   }
 
-  .input-hint {
-    font-size: 12px;
-    color: #888;
-    line-height: 1.5;
-    padding-top: 8px;
-    max-width: 260px;
+  /* Example companies */
+  .example-companies {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1);
+    margin-top: var(--space-2);
+    font-size: var(--font-size-body);
+  }
+
+  .example-label {
+    color: var(--color-text-tertiary);
+    margin-right: var(--space-1);
+  }
+
+  .example-sep {
+    color: var(--color-text-tertiary);
+  }
+
+  .example-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--color-accent);
+    font-size: var(--font-size-body);
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-color: transparent;
+    transition: text-decoration-color var(--duration-base) var(--ease-in-out-quad);
+  }
+
+  .example-btn:hover {
+    text-decoration-color: var(--color-accent);
   }
 
   /* Action row - minimal button styling */
   .action-row {
     display: flex;
     align-items: center;
-    gap: 16px;
-    margin-top: 8px;
+    gap: var(--space-4);
+    margin-top: var(--space-2);
   }
 
   .submit-btn {
-    padding: 8px 20px;
-    font-size: 13px;
-    background: #fff;
-    color: #333;
-    border: 1px solid #ccc;
+    padding: var(--space-2) var(--space-5);
+    font-size: var(--font-size-body);
+    background: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    border: var(--border-width) solid var(--color-gray-300);
     cursor: pointer;
-    transition: border-color 0.15s;
+    transition: border-color var(--transition-base);
   }
 
   .submit-btn:hover:not(:disabled) {
-    border-color: #666;
+    border-color: var(--color-text-secondary);
   }
 
   .submit-btn:disabled {
@@ -899,15 +1153,15 @@
   }
 
   .or-text {
-    font-size: 12px;
-    color: #999;
+    font-size: var(--font-size-body);
+    color: var(--color-text-tertiary);
   }
 
   .upload-btn {
     padding: 0;
-    font-size: 13px;
+    font-size: var(--font-size-body);
     background: none;
-    color: #666;
+    color: var(--color-text-secondary);
     border: none;
     cursor: pointer;
     text-decoration: underline;
@@ -915,28 +1169,28 @@
   }
 
   .upload-btn:hover {
-    color: #333;
+    color: var(--color-text-primary);
   }
 
   .search-error {
-    padding: 10px 12px;
-    background: #fff;
-    border-left: 3px solid #c66;
-    color: #833;
-    font-size: 13px;
-    margin-top: 20px;
+    padding: var(--space-2) var(--space-3);
+    background: var(--color-bg-primary);
+    border-left: 3px solid var(--color-error);
+    color: var(--color-error);
+    font-size: var(--font-size-body);
+    margin-top: var(--space-5);
   }
 
   /* Results - clean grid */
   .search-results {
-    margin-top: 40px;
-    padding-top: 32px;
-    border-top: 1px solid #e0e0e0;
+    margin-top: var(--space-10);
+    padding-top: var(--space-8);
+    border-top: var(--border-width) solid var(--color-border);
   }
 
   /* Result groups for disambiguation */
   .result-group {
-    margin-bottom: 40px;
+    margin-bottom: var(--space-10);
   }
 
   .result-group:last-child {
@@ -946,44 +1200,44 @@
   .group-header {
     display: flex;
     align-items: baseline;
-    gap: 12px;
-    margin-bottom: 16px;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
   }
 
   .match-count {
-    font-size: 13px;
+    font-size: var(--font-size-body);
     font-weight: 400;
-    color: #555;
+    color: var(--color-text-secondary);
   }
 
   .match-count.exact {
-    color: #555;
+    color: var(--color-text-secondary);
   }
 
   .match-count.multiple {
-    color: #555;
+    color: var(--color-text-secondary);
   }
 
   .match-count.none {
-    color: #999;
+    color: var(--color-text-tertiary);
     font-style: italic;
   }
 
   .select-hint {
-    font-size: 12px;
-    color: #888;
+    font-size: var(--font-size-body);
+    color: var(--color-text-tertiary);
     font-weight: 400;
   }
 
   .group-actions {
-    margin-top: 16px;
+    margin-top: var(--space-4);
   }
 
   .select-all-btn {
     padding: 0;
-    font-size: 12px;
+    font-size: var(--font-size-body);
     background: none;
-    color: #666;
+    color: var(--color-text-secondary);
     border: none;
     cursor: pointer;
     text-decoration: underline;
@@ -991,13 +1245,13 @@
   }
 
   .select-all-btn:hover {
-    color: #333;
+    color: var(--color-text-primary);
   }
 
   .results-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 16px;
+    gap: var(--space-4);
     max-height: 480px;
     overflow-y: auto;
     padding: 2px;
@@ -1006,11 +1260,15 @@
   /* Simplified result wrapper - Tufte: minimal borders */
   .result-wrapper {
     position: relative;
-    transition: opacity 0.15s;
+    transition:
+      opacity var(--duration-base) var(--ease-in-out-quad),
+      transform var(--duration-base) var(--ease-out-back);
+    cursor: pointer;
   }
 
   .result-wrapper:hover {
     opacity: 0.85;
+    transform: translateY(-2px);
   }
 
   .result-wrapper.selected {
@@ -1021,7 +1279,7 @@
     content: '';
     position: absolute;
     inset: -4px;
-    border: 1px solid #888;
+    border: var(--border-width) solid var(--color-text-tertiary);
     pointer-events: none;
   }
 
@@ -1031,35 +1289,35 @@
     right: -6px;
     width: 16px;
     height: 16px;
-    background: #333;
-    color: white;
+    background: var(--color-text-primary);
+    color: var(--color-white);
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 10px;
+    font-size: var(--font-size-base);
     font-weight: 500;
   }
 
   /* Browse all section */
   .show-all-section {
-    padding-top: 40px;
-    margin-top: 16px;
-    border-top: 1px solid #e0e0e0;
+    padding-top: var(--space-10);
+    margin-top: var(--space-4);
+    border-top: var(--border-width) solid var(--color-border);
   }
 
   .show-all-btn {
-    padding: 8px 20px;
-    font-size: 13px;
-    background: #fff;
-    color: #333;
-    border: 1px solid #ccc;
+    padding: var(--space-2) var(--space-5);
+    font-size: var(--font-size-body);
+    background: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    border: var(--border-width) solid var(--color-gray-300);
     cursor: pointer;
-    transition: border-color 0.15s;
+    transition: border-color var(--transition-base);
   }
 
   .show-all-btn:hover:not(:disabled) {
-    border-color: #666;
+    border-color: var(--color-text-secondary);
   }
 
   .show-all-btn:disabled {
@@ -1070,17 +1328,17 @@
   .loading-indicator {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 12px;
-    color: #888;
-    margin-bottom: 12px;
+    gap: var(--space-2);
+    font-size: var(--font-size-body);
+    color: var(--color-text-tertiary);
+    margin-bottom: var(--space-3);
   }
 
   .spinner {
     width: 14px;
     height: 14px;
-    border: 1.5px solid #ddd;
-    border-top-color: #666;
+    border: 1.5px solid var(--color-gray-300);
+    border-top-color: var(--color-text-secondary);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
   }
@@ -1092,10 +1350,10 @@
   }
 
   .duckdb-error {
-    font-size: 12px;
-    color: #886600;
+    font-size: var(--font-size-body);
+    color: var(--color-warning);
     padding: 0;
-    margin-bottom: 12px;
+    margin-bottom: var(--space-3);
     font-style: italic;
   }
 
@@ -1108,14 +1366,27 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 14px 40px;
-    background: #fff;
-    border-top: 1px solid #ddd;
+    padding: var(--space-3) var(--space-10);
+    background: var(--color-bg-primary);
+    border-top: var(--border-width) solid var(--color-gray-300);
+    animation: footerSlideUp 0.4s var(--ease-in-out-quad);
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
+  }
+
+  @keyframes footerSlideUp {
+    from {
+      opacity: 0;
+      transform: translateY(100%);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   .selected-info {
-    font-size: 13px;
-    color: #333;
+    font-size: var(--font-size-body);
+    color: var(--color-text-primary);
   }
 
   .selected-info strong {
@@ -1123,36 +1394,35 @@
   }
 
   .selected-names {
-    color: #888;
+    color: var(--color-text-tertiary);
     margin-left: 6px;
-    font-size: 12px;
+    font-size: var(--font-size-body);
   }
 
   .continue-btn {
-    padding: 20px 48px;
-    font-size: 18px;
+    padding: var(--space-5) var(--space-12);
+    font-size: var(--font-size-xl);
     font-weight: 600;
-    background: #222;
-    color: white;
+    background: var(--color-text-primary);
+    color: var(--color-white);
     border: none;
     cursor: pointer;
-    transition: background 0.15s, transform 0.1s;
-    letter-spacing: 0.02em;
+    transition: background var(--duration-slow) var(--ease-in-out-quad);
+    letter-spacing: var(--tracking-wide);
   }
 
   .continue-btn:hover {
-    background: #000;
-    transform: translateY(-1px);
+    background: var(--color-black);
   }
 
   @media (max-width: 768px) {
     .screener-layout {
-      padding: 48px 20px 120px;
+      padding: var(--space-12) var(--space-5) 120px;
     }
 
     .screener-header {
       flex-direction: column;
-      gap: 32px;
+      gap: var(--space-8);
     }
 
     .classes-panel {
@@ -1162,7 +1432,7 @@
 
     .input-row {
       flex-direction: column;
-      gap: 12px;
+      gap: var(--space-3);
     }
 
     .search-input,
@@ -1180,8 +1450,8 @@
 
     .selected-footer {
       flex-direction: column;
-      gap: 12px;
-      padding: 14px 20px;
+      gap: var(--space-3);
+      padding: var(--space-3) var(--space-5);
     }
   }
 </style>
