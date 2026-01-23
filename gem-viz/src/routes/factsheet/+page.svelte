@@ -55,42 +55,42 @@
   main {
     max-width: 800px;
     margin: 0 auto;
-    padding: 40px 20px;
-    font-family: system-ui, sans-serif;
+    padding: var(--space-10) var(--space-5);
+    font-family: var(--font-family-sans);
   }
 
   header {
-    margin-bottom: 32px;
+    margin-bottom: var(--space-8);
   }
 
   .breadcrumb {
-    font-size: 12px;
-    margin-bottom: 12px;
+    font-size: var(--font-size-body);
+    margin-bottom: var(--space-3);
   }
 
   .breadcrumb a {
-    color: #333;
+    color: var(--color-text-primary);
     text-decoration: none;
   }
 
   h1 {
-    font-size: 32px;
-    margin: 0 0 8px 0;
+    font-size: var(--font-size-3xl);
+    margin: 0 0 var(--space-2) 0;
     text-transform: uppercase;
-    letter-spacing: 1px;
-    color: #004a63;
+    letter-spacing: var(--tracking-wide);
+    color: var(--color-accent);
   }
 
   h2 {
-    font-size: 16px;
+    font-size: var(--font-size-xl);
     text-transform: uppercase;
-    color: #004a63;
-    margin: 0 0 12px 0;
+    color: var(--color-accent);
+    margin: 0 0 var(--space-3) 0;
   }
 
   .lead {
-    font-size: 14px;
-    color: #666;
+    font-size: var(--font-size-lg);
+    color: var(--color-text-secondary);
     margin: 0;
   }
 
@@ -101,12 +101,12 @@
   }
 
   .tracker-list li {
-    padding: 8px 0;
-    border-bottom: 1px solid #eee;
+    padding: var(--space-2) 0;
+    border-bottom: var(--border-width) solid var(--color-gray-100);
   }
 
   .tracker-list a {
-    color: #016b83;
+    color: var(--color-link);
     text-decoration: none;
     font-weight: 500;
   }
@@ -116,12 +116,12 @@
   }
 
   .unavailable {
-    color: #999;
+    color: var(--color-text-tertiary);
   }
 
   .redirect-notice {
-    color: #666;
+    color: var(--color-text-secondary);
     font-style: italic;
-    margin-top: 24px;
+    margin-top: var(--space-6);
   }
 </style>

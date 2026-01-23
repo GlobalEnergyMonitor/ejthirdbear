@@ -482,12 +482,12 @@
   /* Layout */
   main {
     width: 100%;
-    padding: 40px;
+    padding: var(--space-10);
   }
 
   /* Loading/Error */
   .loading {
-    padding: 30px 0;
+    padding: var(--space-8) 0;
     color: var(--color-gray-600);
   }
   .loading.error {
@@ -496,77 +496,77 @@
 
   /* Typography */
   .asset-detail {
-    font-family: Georgia, serif;
+    font-family: var(--font-family-serif);
   }
   h1 {
-    font-size: 32px;
+    font-size: var(--font-size-3xl);
     font-weight: normal;
-    margin: 0 0 10px 0;
-    line-height: 1.2;
+    margin: 0 0 var(--space-3) 0;
+    line-height: var(--leading-tight);
   }
   h2 {
-    font-size: 18px;
+    font-size: var(--font-size-2xl);
     font-weight: normal;
-    margin: 40px 0 20px 0;
-    border-bottom: 1px solid var(--color-border);
-    padding-bottom: 10px;
+    margin: var(--space-10) 0 var(--space-5) 0;
+    border-bottom: var(--border-width) solid var(--color-border);
+    padding-bottom: var(--space-3);
   }
   .asset-id {
-    font-size: 12px;
+    font-size: var(--font-size-body);
     color: var(--color-text-secondary);
-    font-family: monospace;
-    margin-bottom: 12px;
+    font-family: var(--font-family-mono);
+    margin-bottom: var(--space-3);
   }
   .page-actions {
-    margin-bottom: 20px;
+    margin-bottom: var(--space-5);
   }
 
   /* Meta Grid */
   .meta-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 20px;
-    padding: 20px 0;
-    margin-bottom: 40px;
-    border-bottom: 1px solid var(--color-border);
+    gap: var(--space-5);
+    padding: var(--space-5) 0;
+    margin-bottom: var(--space-10);
+    border-bottom: var(--border-width) solid var(--color-border);
   }
   .meta-item {
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: var(--space-1);
   }
   .label {
-    font-size: 9px;
+    font-size: var(--font-size-xs);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: var(--tracking-tight);
     color: var(--color-text-tertiary);
     font-weight: bold;
   }
   .value {
-    font-size: 14px;
+    font-size: var(--font-size-lg);
     color: var(--color-black);
   }
   .status-badge {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2);
     font-weight: bold;
   }
   .status-dot {
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    background: var(--status-color, #808080);
+    background: var(--status-color, var(--color-gray-500));
   }
   .ownership-value {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2);
   }
 
   /* Owners Table */
   .owners-section {
-    margin: 40px 0;
+    margin: var(--space-10) 0;
   }
   .owners-table-wrapper {
     overflow-x: auto;
@@ -574,21 +574,21 @@
   .owners-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 13px;
+    font-size: var(--font-size-md);
   }
   .owners-table th,
   .owners-table td {
-    padding: 12px 15px;
+    padding: var(--space-3) var(--space-4);
     text-align: left;
-    border-bottom: 1px solid var(--color-gray-100);
+    border-bottom: var(--border-width) solid var(--color-gray-100);
   }
   .owners-table th {
-    font-size: 10px;
+    font-size: var(--font-size-base);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: var(--tracking-tight);
     color: var(--color-text-secondary);
     font-weight: bold;
-    border-bottom: 1px solid var(--color-black);
+    border-bottom: var(--border-width) solid var(--color-black);
   }
   .owners-table tbody tr:hover {
     background: var(--color-gray-50);
@@ -605,9 +605,9 @@
   }
   .owner-id {
     display: block;
-    font-size: 10px;
+    font-size: var(--font-size-base);
     color: var(--color-text-tertiary);
-    font-family: monospace;
+    font-family: var(--font-family-mono);
     margin-top: 2px;
   }
   .owner-share {
@@ -616,12 +616,12 @@
   .share-value {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--space-1);
   }
 
   /* Viz Sections */
   .viz-section {
-    margin: 40px 0;
+    margin: var(--space-10) 0;
   }
   .viz-section h2 {
     margin-top: 0;
@@ -630,53 +630,53 @@
   /* Properties */
   .properties dl {
     display: grid;
-    gap: 15px;
+    gap: var(--space-4);
   }
   .property {
     display: grid;
     grid-template-columns: 250px 1fr;
-    gap: 20px;
-    padding: 12px 0;
-    border-bottom: 1px solid var(--color-gray-100);
+    gap: var(--space-5);
+    padding: var(--space-3) 0;
+    border-bottom: var(--border-width) solid var(--color-gray-100);
   }
   .property:last-child {
     border-bottom: none;
   }
   dt {
-    font-size: 11px;
+    font-size: var(--font-size-sm);
     font-weight: bold;
     color: var(--color-text-secondary);
     text-transform: uppercase;
-    letter-spacing: 0.3px;
+    letter-spacing: var(--tracking-tight);
   }
   dd {
-    font-size: 13px;
+    font-size: var(--font-size-md);
     color: var(--color-black);
     margin: 0;
   }
 
   /* JSON Dump */
   .json-dump {
-    margin-top: 60px;
-    padding-top: 40px;
+    margin-top: var(--space-16);
+    padding-top: var(--space-10);
     border-top: 2px solid var(--color-black);
   }
   .json-dump h2 {
-    font-family: monospace;
-    font-size: 14px;
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-lg);
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: var(--tracking-wide);
   }
   .json-dump details {
     background: var(--color-gray-50);
-    border: 1px solid var(--color-border);
-    border-radius: 4px;
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
   }
   .json-dump summary {
-    padding: 12px 16px;
+    padding: var(--space-3) var(--space-4);
     cursor: pointer;
-    font-family: monospace;
-    font-size: 12px;
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-body);
     color: var(--color-gray-600);
     background: var(--color-gray-100);
   }
@@ -685,10 +685,10 @@
   }
   .json-blob {
     margin: 0;
-    padding: 20px;
-    font-family: 'SFMono-Regular', Consolas, monospace;
-    font-size: 11px;
-    line-height: 1.5;
+    padding: var(--space-5);
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-sm);
+    line-height: var(--leading-relaxed);
     overflow: auto;
     background: var(--color-code-bg, #1e1e1e);
     color: var(--color-code-text, #d4d4d4);
@@ -702,7 +702,7 @@
     }
     .property {
       grid-template-columns: 1fr;
-      gap: 5px;
+      gap: var(--space-1);
     }
   }
 </style>

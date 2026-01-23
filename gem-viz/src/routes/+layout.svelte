@@ -39,17 +39,17 @@
   }
 
   .build-footer {
-    padding: 12px 40px;
+    padding: var(--space-3) var(--space-10);
     display: flex;
-    gap: 20px;
+    gap: var(--space-5);
     align-items: center;
-    font-size: 12px;
+    font-size: var(--font-size-body);
     color: var(--color-black);
-    background: #f5f5f5;
+    background: var(--color-bg-tertiary);
   }
 
   .version {
-    font-family: Georgia, serif;
+    font-family: var(--font-family);
     color: var(--color-black);
     text-decoration: none;
   }
@@ -59,8 +59,8 @@
   }
 
   .build-info {
-    font-family: monospace;
-    font-size: 10px;
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-base);
     color: var(--color-text-secondary);
     cursor: help;
   }

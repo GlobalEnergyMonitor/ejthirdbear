@@ -110,16 +110,16 @@
 <style>
   main {
     width: 100%;
-    padding: 40px 20px;
-    font-family: system-ui, sans-serif;
+    padding: var(--space-10) var(--space-5);
+    font-family: var(--font-family-sans);
   }
 
   header {
-    margin-bottom: 32px;
+    margin-bottom: var(--space-8);
   }
   .breadcrumb {
-    font-size: 12px;
-    margin-bottom: 12px;
+    font-size: var(--font-size-body);
+    margin-bottom: var(--space-3);
   }
   .breadcrumb a {
     color: var(--color-gray-700);
@@ -129,13 +129,13 @@
     text-decoration: underline;
   }
   h1 {
-    font-size: 32px;
-    margin: 0 0 8px 0;
+    font-size: var(--font-size-3xl);
+    margin: 0 0 var(--space-2) 0;
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: var(--tracking-wide);
   }
   .lead {
-    font-size: 14px;
+    font-size: var(--font-size-lg);
     color: var(--color-text-secondary);
     margin: 0;
   }
@@ -143,28 +143,28 @@
   .filter-bar {
     display: flex;
     align-items: center;
-    gap: 16px;
-    margin-bottom: 24px;
+    gap: var(--space-4);
+    margin-bottom: var(--space-6);
     flex-wrap: wrap;
   }
   .filter-label {
-    font-size: 12px;
+    font-size: var(--font-size-body);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: var(--tracking-wide);
     color: var(--color-text-secondary);
   }
   .filter-chips {
     display: flex;
-    gap: 8px;
+    gap: var(--space-2);
     flex-wrap: wrap;
   }
   .chip {
-    padding: 6px 12px;
-    font-size: 12px;
+    padding: var(--space-1) var(--space-3);
+    font-size: var(--font-size-body);
     border: none;
     background: transparent;
     cursor: pointer;
-    transition: all 0.15s;
+    transition: var(--transition-fast);
   }
   .chip:hover {
     text-decoration: underline;
@@ -175,12 +175,12 @@
   }
 
   .dashboard {
-    margin-bottom: 40px;
+    margin-bottom: var(--space-10);
   }
   .widget-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 20px;
+    gap: var(--space-5);
   }
   .widget-cell.wide {
     grid-column: span 2;
@@ -192,35 +192,35 @@
   }
 
   .factsheet-cta {
-    padding: 20px;
-    margin-bottom: 32px;
+    padding: var(--space-5);
+    margin-bottom: var(--space-8);
   }
   .factsheet-cta h3 {
-    font-size: 14px;
+    font-size: var(--font-size-lg);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: var(--tracking-wide);
     color: var(--color-black);
-    margin: 0 0 8px 0;
+    margin: 0 0 var(--space-2) 0;
   }
   .factsheet-cta p {
-    font-size: 13px;
-    color: #666;
-    margin: 0 0 12px 0;
+    font-size: var(--font-size-md);
+    color: var(--color-text-secondary);
+    margin: 0 0 var(--space-3) 0;
   }
   .cta-links {
     display: flex;
-    gap: 12px;
+    gap: var(--space-3);
     flex-wrap: wrap;
   }
   .factsheet-link {
     display: inline-block;
-    padding: 8px 16px;
+    padding: var(--space-2) var(--space-4);
     background: transparent;
     color: var(--color-black);
     text-decoration: none;
-    font-size: 13px;
+    font-size: var(--font-size-md);
     font-weight: 500;
-    transition: background 0.15s;
+    transition: var(--transition-fast);
     text-decoration: underline;
   }
   .factsheet-link:hover {
@@ -234,8 +234,8 @@
   }
 
   .page-footer {
-    padding-top: 20px;
-    font-size: 12px;
+    padding-top: var(--space-5);
+    font-size: var(--font-size-body);
     color: var(--color-text-secondary);
   }
   .page-footer a {

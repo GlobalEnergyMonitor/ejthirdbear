@@ -77,7 +77,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 40px 20px;
+    padding: var(--space-10) var(--space-5);
     background: var(--color-gray-50);
   }
 
@@ -91,87 +91,87 @@
     font-weight: bold;
     line-height: 1;
     color: var(--color-black);
-    margin-bottom: 10px;
-    font-family: system-ui, sans-serif;
+    margin-bottom: var(--space-2);
+    font-family: var(--font-family-sans);
   }
 
   h1 {
-    font-size: 24px;
+    font-size: var(--font-size-2xl);
     font-weight: bold;
     text-transform: uppercase;
-    letter-spacing: 1px;
-    margin: 0 0 15px 0;
+    letter-spacing: var(--tracking-wide);
+    margin: 0 0 var(--space-4) 0;
     color: var(--color-black);
   }
 
   .error-message {
-    font-size: 14px;
+    font-size: var(--font-size-lg);
     color: var(--color-text-secondary);
-    margin: 0 0 30px 0;
-    padding: 15px;
+    margin: 0 0 var(--space-8) 0;
+    padding: var(--space-4);
     background: var(--color-white);
-    border: 1px solid var(--color-border);
+    border: var(--border-width) solid var(--color-border);
   }
 
   .suggestions {
     text-align: left;
-    margin-bottom: 30px;
-    padding: 20px;
+    margin-bottom: var(--space-8);
+    padding: var(--space-5);
     background: var(--color-white);
-    border: 1px solid var(--color-border);
+    border: var(--border-width) solid var(--color-border);
   }
 
   .suggestions-title {
-    font-size: 11px;
+    font-size: var(--font-size-sm);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: var(--tracking-wide);
     color: var(--color-text-tertiary);
-    margin: 0 0 10px 0;
+    margin: 0 0 var(--space-2) 0;
     font-weight: bold;
   }
 
   .suggestions ul {
     margin: 0;
-    padding-left: 20px;
+    padding-left: var(--space-5);
   }
 
   .suggestions li {
-    font-size: 13px;
+    font-size: var(--font-size-md);
     color: var(--color-gray-700);
-    margin-bottom: 6px;
+    margin-bottom: var(--space-1);
   }
 
   .actions {
     display: flex;
-    gap: 12px;
+    gap: var(--space-3);
     justify-content: center;
-    margin-bottom: 40px;
+    margin-bottom: var(--space-10);
   }
 
   .actions .btn {
-    padding: 12px 24px;
+    padding: var(--space-3) var(--space-6);
   }
 
   .footer-note {
-    border-top: 1px solid var(--color-border);
-    padding-top: 20px;
+    border-top: var(--border-width) solid var(--color-border);
+    padding-top: var(--space-5);
   }
 
   .footer-note p {
-    font-size: 11px;
+    font-size: var(--font-size-sm);
     color: var(--color-text-tertiary);
-    margin: 0 0 10px 0;
+    margin: 0 0 var(--space-2) 0;
   }
 
   .id-hint {
-    font-size: 10px;
-    line-height: 1.6;
+    font-size: var(--font-size-base);
+    line-height: var(--leading-relaxed);
   }
 
   .id-hint code {
     background: var(--color-gray-100);
-    padding: 2px 6px;
-    font-family: 'Monaco', 'Courier New', monospace;
-    font-size: 10px;
+    padding: 2px var(--space-1);
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-base);
   }
 </style>

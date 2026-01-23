@@ -272,99 +272,99 @@
   /* Layout */
   main {
     width: 100%;
-    padding: 20px 40px;
+    padding: var(--space-5) var(--space-10);
   }
 
   /* Header */
   header {
     display: flex;
-    gap: 16px;
+    gap: var(--space-4);
     align-items: center;
     flex-wrap: wrap;
-    border-bottom: 1px solid var(--color-gray-200);
-    padding-bottom: 18px;
-    margin-bottom: 18px;
+    border-bottom: var(--border-width) solid var(--color-gray-200);
+    padding-bottom: var(--space-5);
+    margin-bottom: var(--space-5);
   }
   .back-link {
     color: var(--color-black);
     text-decoration: underline;
-    font-size: 11px;
+    font-size: var(--font-size-sm);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: var(--tracking-tight);
   }
   .back-link:hover {
     text-decoration: none;
   }
   .title {
-    font-size: 15px;
+    font-size: var(--font-size-xl);
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.6px;
+    letter-spacing: var(--tracking-tight);
   }
   .count {
-    font-size: 10px;
+    font-size: var(--font-size-base);
     color: var(--color-gray-600);
-    padding: 6px 10px;
-    border: 1px solid var(--color-gray-200);
-    border-radius: 999px;
+    padding: var(--space-1) var(--space-3);
+    border: var(--border-width) solid var(--color-gray-200);
+    border-radius: var(--radius-full);
     background: var(--color-gray-50);
   }
   .export-link {
     margin-left: auto;
-    font-size: 11px;
+    font-size: var(--font-size-sm);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    padding: 4px 10px;
-    background: var(--color-asset-text, #1565c0);
+    letter-spacing: var(--tracking-tight);
+    padding: var(--space-1) var(--space-3);
+    background: var(--color-asset-text, var(--color-accent));
     color: var(--color-white);
     text-decoration: none;
   }
   .export-link:hover {
-    background: var(--color-asset-text, #1565c0);
+    background: var(--color-asset-text, var(--color-accent));
   }
 
   /* Filter Info */
   .filter-info {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 10px 14px;
-    background: #fdfbf7;
-    border: 1px solid var(--color-gray-200);
-    margin-bottom: 16px;
-    font-size: 12px;
-    border-radius: 6px;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    background: var(--color-bg-secondary);
+    border: var(--border-width) solid var(--color-gray-200);
+    margin-bottom: var(--space-4);
+    font-size: var(--font-size-body);
+    border-radius: var(--radius-lg);
   }
   .filter-label {
     font-weight: bold;
     text-transform: uppercase;
-    font-size: 10px;
+    font-size: var(--font-size-base);
     color: var(--color-gray-700);
-    letter-spacing: 0.4px;
+    letter-spacing: var(--tracking-tight);
   }
   .filter-desc {
-    font-family: monospace;
+    font-family: var(--font-family-mono);
     color: var(--color-gray-700);
   }
   .query-time {
     margin-left: auto;
     color: var(--color-text-secondary);
-    font-size: 10px;
+    font-size: var(--font-size-base);
   }
 
   /* Bulk Actions */
   .bulk-actions {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
     background: var(--color-white);
-    border: 1px solid var(--color-border);
-    margin-bottom: 20px;
+    border: var(--border-width) solid var(--color-border);
+    margin-bottom: var(--space-5);
     flex-wrap: wrap;
   }
   .table-container {
-    margin-bottom: 20px;
+    margin-bottom: var(--space-5);
   }
 
   /* States */
@@ -372,7 +372,7 @@
   .error-state,
   .empty-state {
     text-align: center;
-    padding: 60px 20px;
+    padding: var(--space-16) var(--space-5);
     color: var(--color-text-secondary);
   }
   .spinner {
@@ -382,7 +382,7 @@
     border-top-color: var(--color-black);
     border-radius: 50%;
     animation: spin 1s linear infinite;
-    margin: 0 auto 20px;
+    margin: 0 auto var(--space-5);
   }
   @keyframes spin {
     to {
@@ -393,8 +393,8 @@
     color: var(--color-error);
   }
   .error-state button {
-    margin-top: 10px;
-    padding: 8px 16px;
+    margin-top: var(--space-3);
+    padding: var(--space-2) var(--space-4);
     background: var(--color-black);
     color: var(--color-white);
     border: none;
@@ -402,16 +402,16 @@
   }
   .limit-notice {
     text-align: center;
-    padding: 20px;
+    padding: var(--space-5);
     color: var(--color-text-secondary);
-    font-size: 12px;
+    font-size: var(--font-size-body);
     font-style: italic;
   }
 
   /* Responsive */
   @media (max-width: 768px) {
     main {
-      padding: 15px;
+      padding: var(--space-4);
     }
   }
 </style>

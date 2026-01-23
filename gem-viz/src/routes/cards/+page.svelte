@@ -157,21 +157,21 @@
     width: 100%;
     max-width: 1400px;
     margin: 0 auto;
-    padding: 40px 20px;
-    font-family: system-ui, sans-serif;
+    padding: var(--space-10) var(--space-5);
+    font-family: var(--font-family-sans);
   }
 
   header {
-    margin-bottom: 32px;
+    margin-bottom: var(--space-8);
   }
 
   .breadcrumb {
-    font-size: 12px;
-    margin-bottom: 12px;
+    font-size: var(--font-size-body);
+    margin-bottom: var(--space-3);
   }
 
   .breadcrumb a {
-    color: #333;
+    color: var(--color-text-primary);
     text-decoration: none;
   }
 
@@ -180,16 +180,16 @@
   }
 
   h1 {
-    font-size: 32px;
-    margin: 0 0 8px 0;
+    font-size: var(--font-size-3xl);
+    margin: 0 0 var(--space-2) 0;
     text-transform: uppercase;
-    letter-spacing: 1px;
-    color: #004a63;
+    letter-spacing: var(--tracking-wide);
+    color: var(--color-accent);
   }
 
   .lead {
-    font-size: 14px;
-    color: #666;
+    font-size: var(--font-size-lg);
+    color: var(--color-text-secondary);
     margin: 0;
     max-width: 600px;
   }
@@ -197,49 +197,49 @@
   .filter-bar {
     display: flex;
     align-items: center;
-    gap: 16px;
-    margin-bottom: 32px;
+    gap: var(--space-4);
+    margin-bottom: var(--space-8);
     flex-wrap: wrap;
   }
 
   .filter-label {
-    font-size: 12px;
+    font-size: var(--font-size-body);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: #666;
+    letter-spacing: var(--tracking-tight);
+    color: var(--color-text-secondary);
   }
 
   .filter-chips {
     display: flex;
-    gap: 8px;
+    gap: var(--space-2);
     flex-wrap: wrap;
   }
 
   .chip {
-    padding: 6px 12px;
-    font-size: 12px;
-    border: 1px solid #ddd;
-    background: #fff;
+    padding: var(--space-1) var(--space-3);
+    font-size: var(--font-size-body);
+    border: var(--border-width) solid var(--color-border);
+    background: var(--color-white);
     cursor: pointer;
-    transition: all 0.15s;
-    border-radius: 4px;
+    transition: all var(--transition-fast);
+    border-radius: var(--radius-md);
   }
 
   .chip:hover {
-    border-color: #999;
+    border-color: var(--color-gray-500);
   }
 
   .chip.active {
-    background: #004a63;
-    color: #fff;
-    border-color: #004a63;
+    background: var(--color-accent);
+    color: var(--color-white);
+    border-color: var(--color-accent);
   }
 
   .card-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-    gap: 32px;
-    margin-bottom: 48px;
+    gap: var(--space-8);
+    margin-bottom: var(--space-12);
   }
 
   @media (max-width: 500px) {
@@ -249,13 +249,13 @@
   }
 
   .page-footer {
-    border-top: 1px solid #ddd;
-    padding-top: 20px;
-    font-size: 12px;
-    color: #666;
+    border-top: var(--border-width) solid var(--color-border);
+    padding-top: var(--space-5);
+    font-size: var(--font-size-body);
+    color: var(--color-text-secondary);
   }
 
   .page-footer a {
-    color: #016b83;
+    color: var(--color-link);
   }
 </style>

@@ -243,27 +243,27 @@
     width: 100%;
     max-width: 1200px;
     margin: 0 auto;
-    padding: 40px 20px;
-    font-family: system-ui, sans-serif;
+    padding: var(--space-10) var(--space-5);
+    font-family: var(--font-family-sans);
   }
 
   .embed-container {
-    padding: 20px;
+    padding: var(--space-5);
     max-width: 900px;
     margin: 0 auto;
   }
 
   header {
-    margin-bottom: 32px;
+    margin-bottom: var(--space-8);
   }
 
   .breadcrumb {
-    font-size: 12px;
-    margin-bottom: 12px;
+    font-size: var(--font-size-body);
+    margin-bottom: var(--space-3);
   }
 
   .breadcrumb a {
-    color: #333;
+    color: var(--color-text-primary);
     text-decoration: none;
   }
 
@@ -272,78 +272,78 @@
   }
 
   h1 {
-    font-size: 32px;
-    margin: 0 0 8px 0;
+    font-size: var(--font-size-3xl);
+    margin: 0 0 var(--space-2) 0;
     text-transform: uppercase;
-    letter-spacing: 1px;
-    color: #004a63;
+    letter-spacing: var(--tracking-wide);
+    color: var(--color-accent);
   }
 
   h2 {
-    font-size: 20px;
+    font-size: var(--font-size-2xl);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: #004a63;
-    margin: 0 0 8px 0;
+    letter-spacing: var(--tracking-tight);
+    color: var(--color-accent);
+    margin: 0 0 var(--space-2) 0;
   }
 
   h3 {
-    font-size: 14px;
+    font-size: var(--font-size-lg);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: #004a63;
-    margin: 0 0 8px 0;
+    letter-spacing: var(--tracking-tight);
+    color: var(--color-accent);
+    margin: 0 0 var(--space-2) 0;
   }
 
   .lead {
-    font-size: 14px;
-    color: #666;
+    font-size: var(--font-size-lg);
+    color: var(--color-text-secondary);
     margin: 0;
     max-width: 600px;
   }
 
   .factsheet-section {
-    margin-bottom: 48px;
+    margin-bottom: var(--space-12);
   }
 
   .sample-assets {
-    margin-bottom: 48px;
+    margin-bottom: var(--space-12);
   }
 
   .section-desc {
-    font-size: 13px;
-    color: #666;
-    margin: 0 0 16px 0;
+    font-size: var(--font-size-md);
+    color: var(--color-text-secondary);
+    margin: 0 0 var(--space-4) 0;
   }
 
   .cards-grid {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: var(--space-3);
   }
 
   .citation {
-    background: #f2f2eb;
-    padding: 20px;
-    border-radius: 0 14px 14px 14px;
-    margin-bottom: 32px;
+    background: var(--color-bg-secondary);
+    padding: var(--space-5);
+    border-radius: 0 var(--radius-xl) var(--radius-xl) var(--radius-xl);
+    margin-bottom: var(--space-8);
   }
 
   .citation p {
-    font-size: 13px;
-    color: #333;
+    font-size: var(--font-size-md);
+    color: var(--color-text-primary);
     margin: 0;
-    line-height: 1.5;
+    line-height: var(--leading-relaxed);
   }
 
   .page-footer {
-    border-top: 1px solid #ddd;
-    padding-top: 20px;
-    font-size: 12px;
-    color: #666;
+    border-top: var(--border-width) solid var(--color-border);
+    padding-top: var(--space-5);
+    font-size: var(--font-size-body);
+    color: var(--color-text-secondary);
   }
 
   .page-footer a {
-    color: #016b83;
+    color: var(--color-link);
   }
 </style>

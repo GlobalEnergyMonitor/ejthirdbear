@@ -126,117 +126,117 @@
 
 <style>
   main {
-    padding: 30px 40px 60px;
+    padding: var(--space-7) var(--space-10) var(--space-16);
   }
 
   .page-header {
-    margin-bottom: 24px;
+    margin-bottom: var(--space-6);
   }
 
   .page-type {
-    font-size: 12px;
+    font-size: var(--font-size-body);
     text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: #666;
+    letter-spacing: var(--tracking-wide);
+    color: var(--color-text-secondary);
   }
 
   h1 {
-    margin: 8px 0 6px;
-    font-size: 32px;
+    margin: var(--space-2) 0 var(--space-1);
+    font-size: var(--font-size-3xl);
     font-weight: normal;
-    font-family: Georgia, serif;
+    font-family: var(--font-family-serif);
   }
 
   .page-header p {
     margin: 0;
-    color: #666;
-    font-size: 14px;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-lg);
   }
 
   .preset-section {
-    margin-top: 28px;
+    margin-top: var(--space-7);
   }
 
   .section-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 12px;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
   }
 
   .section-header h2 {
     margin: 0;
-    font-size: 16px;
+    font-size: var(--font-size-xl);
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: var(--tracking-wide);
   }
 
   .section-actions {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2);
   }
 
   .section-status {
-    font-size: 12px;
-    color: #666;
+    font-size: var(--font-size-body);
+    color: var(--color-text-secondary);
   }
 
   .section-status.error {
-    color: #b00020;
+    color: var(--color-error);
   }
 
   .empty-state {
-    font-size: 13px;
-    color: #666;
+    font-size: var(--font-size-md);
+    color: var(--color-text-secondary);
     margin: 0;
   }
 
   .preset-grid {
     display: grid;
-    gap: 14px;
+    gap: var(--space-3);
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   }
 
   .preset-card {
-    border: 1px solid #ddd;
-    background: #fff;
-    padding: 16px;
+    border: var(--border-width) solid var(--color-border);
+    background: var(--color-white);
+    padding: var(--space-4);
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: var(--space-2);
   }
 
   .preset-card h3 {
     margin: 0;
-    font-size: 16px;
+    font-size: var(--font-size-xl);
   }
 
   .preset-card p {
     margin: 0;
-    font-size: 13px;
-    color: #444;
+    font-size: var(--font-size-md);
+    color: var(--color-text-primary);
   }
 
   .preset-icon {
-    width: 36px;
-    height: 36px;
-    border: 1px solid #ddd;
+    width: var(--space-9);
+    height: var(--space-9);
+    border: var(--border-width) solid var(--color-border);
     display: grid;
     place-items: center;
-    font-size: 11px;
+    font-size: var(--font-size-sm);
     text-transform: uppercase;
   }
 
   .preset-meta {
-    font-size: 11px;
-    color: #666;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
   }
 
   .preset-actions {
     display: flex;
-    gap: 8px;
+    gap: var(--space-2);
     margin-top: auto;
   }
 
@@ -244,28 +244,28 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 6px 10px;
-    font-size: 12px;
-    border: 1px solid #000;
-    background: #000;
-    color: #fff;
+    padding: var(--space-1) var(--space-2);
+    font-size: var(--font-size-body);
+    border: var(--border-width) solid var(--color-black);
+    background: var(--color-black);
+    color: var(--color-white);
     text-decoration: none;
     cursor: pointer;
   }
 
   .btn.ghost {
-    background: #fff;
-    color: #000;
-    border-color: #ddd;
+    background: var(--color-white);
+    color: var(--color-black);
+    border-color: var(--color-border);
   }
 
   .btn.ghost:hover {
-    border-color: #000;
+    border-color: var(--color-black);
   }
 
   @media (max-width: 720px) {
     main {
-      padding: 24px 20px 50px;
+      padding: var(--space-6) var(--space-5) var(--space-12);
     }
 
     .section-header {

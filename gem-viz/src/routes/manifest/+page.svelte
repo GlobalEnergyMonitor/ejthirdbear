@@ -227,184 +227,184 @@
 <style>
   main {
     width: 100%;
-    padding: 40px 20px;
-    font-family: system-ui, sans-serif;
+    padding: var(--space-10) var(--space-5);
+    font-family: var(--font-family-sans);
   }
 
   header {
-    margin-bottom: 40px;
+    margin-bottom: var(--space-10);
     border-bottom: 2px solid var(--color-black);
-    padding-bottom: 20px;
+    padding-bottom: var(--space-5);
   }
   h1 {
-    font-size: 32px;
-    margin: 0 0 8px 0;
+    font-size: var(--font-size-3xl);
+    margin: 0 0 var(--space-2) 0;
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: var(--tracking-wide);
   }
   .subtitle {
-    font-size: 14px;
+    font-size: var(--font-size-lg);
     color: var(--color-text-secondary);
-    margin: 0 0 16px 0;
+    margin: 0 0 var(--space-4) 0;
   }
   .meta-bar {
     display: flex;
-    gap: 24px;
-    font-size: 12px;
+    gap: var(--space-6);
+    font-size: var(--font-size-body);
     color: var(--color-text-secondary);
     flex-wrap: wrap;
   }
   .meta-bar span {
     background: var(--color-gray-100);
-    padding: 4px 8px;
+    padding: var(--space-1) var(--space-2);
   }
   .error-banner {
-    background: #fee;
-    border: 1px solid var(--color-error);
-    padding: 12px;
-    margin-top: 16px;
+    background: var(--color-error-bg, #fee);
+    border: var(--border-width) solid var(--color-error);
+    padding: var(--space-3);
+    margin-top: var(--space-4);
     color: var(--color-error);
   }
 
   .toc {
     background: var(--color-gray-50);
-    padding: 20px;
-    margin-bottom: 40px;
-    border: 1px solid var(--color-border);
+    padding: var(--space-5);
+    margin-bottom: var(--space-10);
+    border: var(--border-width) solid var(--color-border);
   }
   .toc h2 {
-    font-size: 14px;
+    font-size: var(--font-size-lg);
     text-transform: uppercase;
-    margin: 0 0 12px 0;
+    margin: 0 0 var(--space-3) 0;
   }
   .toc ul {
     list-style: none;
     padding: 0;
     margin: 0;
     display: flex;
-    gap: 20px;
+    gap: var(--space-5);
     flex-wrap: wrap;
   }
   .toc a {
     color: var(--color-gray-700);
     text-decoration: none;
-    font-size: 13px;
+    font-size: var(--font-size-md);
   }
   .toc a:hover {
     text-decoration: underline;
   }
 
   section {
-    margin-bottom: 60px;
+    margin-bottom: var(--space-16);
   }
   section h2 {
-    font-size: 24px;
+    font-size: var(--font-size-2xl);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    border-bottom: 1px solid var(--color-black);
-    padding-bottom: 8px;
-    margin-bottom: 16px;
+    letter-spacing: var(--tracking-tight);
+    border-bottom: var(--border-width) solid var(--color-black);
+    padding-bottom: var(--space-2);
+    margin-bottom: var(--space-4);
   }
   section h3 {
-    font-size: 18px;
-    margin: 24px 0 12px 0;
+    font-size: var(--font-size-2xl);
+    margin: var(--space-6) 0 var(--space-3) 0;
     color: var(--color-gray-700);
   }
   .section-desc {
-    font-size: 13px;
+    font-size: var(--font-size-md);
     color: var(--color-text-secondary);
-    margin-bottom: 24px;
+    margin-bottom: var(--space-6);
   }
 
   .api-card {
     background: var(--color-white);
-    border: 1px solid var(--color-border);
-    padding: 16px;
+    border: var(--border-width) solid var(--color-border);
+    padding: var(--space-4);
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    font-size: 13px;
+    gap: var(--space-1);
+    font-size: var(--font-size-md);
   }
 
   .no-data {
     color: var(--color-text-tertiary);
-    font-size: 12px;
-    padding: 16px;
+    font-size: var(--font-size-body);
+    padding: var(--space-4);
     font-style: italic;
   }
 
   .config-card {
     background: var(--color-white);
-    border: 1px solid var(--color-border);
-    padding: 16px;
-    margin-bottom: 16px;
+    border: var(--border-width) solid var(--color-border);
+    padding: var(--space-4);
+    margin-bottom: var(--space-4);
   }
   .config-card h3 {
-    margin: 0 0 12px 0;
-    font-size: 16px;
+    margin: 0 0 var(--space-3) 0;
+    font-size: var(--font-size-xl);
   }
   .config-list {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 8px;
+    gap: var(--space-2);
     margin: 0;
   }
   .config-list div {
     display: flex;
-    gap: 8px;
+    gap: var(--space-2);
   }
   .config-list dt {
-    font-size: 11px;
+    font-size: var(--font-size-sm);
     color: var(--color-text-tertiary);
     text-transform: uppercase;
     min-width: 80px;
   }
   .config-list dd {
     margin: 0;
-    font-size: 13px;
+    font-size: var(--font-size-md);
   }
   .config-list code {
     background: var(--color-gray-100);
-    padding: 2px 6px;
-    font-size: 11px;
+    padding: 2px var(--space-1);
+    font-size: var(--font-size-sm);
   }
   .docs-ref {
-    font-size: 11px;
+    font-size: var(--font-size-sm);
     color: var(--color-text-secondary);
-    margin-top: 12px;
+    margin-top: var(--space-3);
     font-style: italic;
   }
 
   .source-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 16px;
-    margin-bottom: 32px;
+    gap: var(--space-4);
+    margin-bottom: var(--space-8);
   }
   .source-card {
     background: var(--color-white);
-    border: 1px solid var(--color-border);
-    padding: 16px;
+    border: var(--border-width) solid var(--color-border);
+    padding: var(--space-4);
   }
   .source-card h4 {
-    margin: 0 0 8px 0;
-    font-size: 14px;
+    margin: 0 0 var(--space-2) 0;
+    font-size: var(--font-size-lg);
   }
   .source-desc {
-    font-size: 12px;
+    font-size: var(--font-size-body);
     color: var(--color-text-secondary);
-    margin: 0 0 12px 0;
+    margin: 0 0 var(--space-3) 0;
   }
   .source-meta {
     display: flex;
-    gap: 16px;
-    margin: 0 0 8px 0;
-    font-size: 11px;
+    gap: var(--space-4);
+    margin: 0 0 var(--space-2) 0;
+    font-size: var(--font-size-sm);
     flex-wrap: wrap;
   }
   .source-meta div {
     display: flex;
-    gap: 4px;
+    gap: var(--space-1);
   }
   .source-meta dt {
     color: var(--color-text-tertiary);
@@ -413,70 +413,70 @@
     margin: 0;
   }
   .source-notes {
-    font-size: 11px;
+    font-size: var(--font-size-sm);
     color: var(--color-text-secondary);
-    margin: 8px 0 0 0;
+    margin: var(--space-2) 0 0 0;
     font-style: italic;
   }
   .source-url,
   .source-path {
-    font-size: 10px;
+    font-size: var(--font-size-base);
     color: var(--color-gray-700);
     word-break: break-all;
     display: block;
-    margin-top: 8px;
+    margin-top: var(--space-2);
   }
   .source-path {
     background: var(--color-gray-100);
-    padding: 4px 8px;
+    padding: var(--space-1) var(--space-2);
     color: var(--color-gray-700);
   }
 
   .version-list {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    gap: 12px;
+    gap: var(--space-3);
     margin: 0;
   }
   .version-list div {
     display: flex;
-    gap: 8px;
+    gap: var(--space-2);
   }
   .version-list dt {
-    font-size: 12px;
+    font-size: var(--font-size-body);
     color: var(--color-text-tertiary);
     min-width: 120px;
   }
   .version-list dd {
     margin: 0;
-    font-size: 13px;
+    font-size: var(--font-size-md);
   }
   .version-list a {
     color: var(--color-gray-700);
   }
 
   .release-notes {
-    margin-top: 24px;
+    margin-top: var(--space-6);
   }
   .release-notes summary {
     cursor: pointer;
-    font-size: 13px;
+    font-size: var(--font-size-md);
     color: var(--color-gray-700);
   }
   .release-notes pre {
     background: var(--color-gray-100);
-    padding: 16px;
-    font-size: 12px;
+    padding: var(--space-4);
+    font-size: var(--font-size-body);
     white-space: pre-wrap;
-    margin-top: 12px;
-    line-height: 1.6;
+    margin-top: var(--space-3);
+    line-height: var(--leading-relaxed);
   }
 
   footer {
-    border-top: 1px solid var(--color-border);
-    padding-top: 20px;
+    border-top: var(--border-width) solid var(--color-border);
+    padding-top: var(--space-5);
     text-align: center;
-    font-size: 12px;
+    font-size: var(--font-size-body);
     color: var(--color-text-secondary);
   }
   footer a {

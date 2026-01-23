@@ -601,9 +601,9 @@
 <style>
   main {
     width: 100%;
-    padding: 40px 20px 80px;
-    font-family: system-ui, sans-serif;
-    line-height: 1.6;
+    padding: var(--space-10) var(--space-5) var(--space-20);
+    font-family: var(--font-family-sans);
+    line-height: var(--leading-relaxed);
   }
 
   /* Keep prose sections readable */
@@ -613,13 +613,13 @@
   }
 
   .page-header {
-    margin-bottom: 40px;
-    padding-bottom: 24px;
+    margin-bottom: var(--space-10);
+    padding-bottom: var(--space-6);
     border-bottom: 2px solid var(--color-black);
   }
   .breadcrumb {
-    font-size: 12px;
-    margin-bottom: 12px;
+    font-size: var(--font-size-body);
+    margin-bottom: var(--space-3);
   }
   .breadcrumb a {
     color: var(--color-gray-700);
@@ -629,28 +629,28 @@
     text-decoration: underline;
   }
   h1 {
-    font-size: 36px;
-    margin: 0 0 12px 0;
+    font-size: var(--font-size-4xl);
+    margin: 0 0 var(--space-3) 0;
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: var(--tracking-wide);
   }
   .lead {
-    font-size: 18px;
+    font-size: var(--font-size-2xl);
     color: var(--color-gray-700);
     margin: 0;
   }
 
   .toc {
     background: var(--color-gray-50);
-    padding: 20px 24px;
-    margin-bottom: 48px;
-    border: 1px solid var(--color-border);
+    padding: var(--space-5) var(--space-6);
+    margin-bottom: var(--space-12);
+    border: var(--border-width) solid var(--color-border);
   }
   .toc h2 {
-    font-size: 12px;
+    font-size: var(--font-size-body);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin: 0 0 12px 0;
+    letter-spacing: var(--tracking-wide);
+    margin: 0 0 var(--space-3) 0;
     color: var(--color-text-secondary);
   }
   .toc ul {
@@ -659,53 +659,53 @@
     margin: 0;
     display: flex;
     flex-wrap: wrap;
-    gap: 8px 24px;
+    gap: var(--space-2) var(--space-6);
   }
   .toc a {
     color: var(--color-gray-700);
     text-decoration: none;
-    font-size: 14px;
+    font-size: var(--font-size-lg);
   }
   .toc a:hover {
     text-decoration: underline;
   }
 
   section {
-    margin-bottom: 56px;
+    margin-bottom: var(--space-14);
   }
   section h2 {
-    font-size: 24px;
+    font-size: var(--font-size-2xl);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    border-bottom: 1px solid var(--color-black);
-    padding-bottom: 8px;
-    margin: 0 0 20px 0;
+    letter-spacing: var(--tracking-wide);
+    border-bottom: var(--border-width) solid var(--color-black);
+    padding-bottom: var(--space-2);
+    margin: 0 0 var(--space-5) 0;
   }
   section h3 {
-    font-size: 16px;
+    font-size: var(--font-size-xl);
     font-weight: 600;
-    margin: 28px 0 12px 0;
+    margin: var(--space-7) 0 var(--space-3) 0;
     color: var(--color-gray-700);
   }
   section p {
-    margin: 0 0 16px 0;
+    margin: 0 0 var(--space-4) 0;
     color: var(--color-gray-700);
   }
   .section-intro {
     color: var(--color-text-secondary);
-    font-size: 15px;
+    font-size: var(--font-size-lg);
   }
 
   ul,
   ol {
-    margin: 0 0 20px 0;
-    padding-left: 24px;
+    margin: 0 0 var(--space-5) 0;
+    padding-left: var(--space-6);
   }
   li {
-    margin-bottom: 8px;
+    margin-bottom: var(--space-2);
   }
   .feature-list li {
-    margin-bottom: 12px;
+    margin-bottom: var(--space-3);
   }
 
   a {
@@ -715,19 +715,19 @@
   .data-table {
     width: 100%;
     border-collapse: collapse;
-    margin: 16px 0 24px;
-    font-size: 14px;
+    margin: var(--space-4) 0 var(--space-6);
+    font-size: var(--font-size-lg);
   }
   .data-table th,
   .data-table td {
     text-align: left;
-    padding: 10px 12px;
-    border-bottom: 1px solid var(--color-border);
+    padding: var(--space-2) var(--space-3);
+    border-bottom: var(--border-width) solid var(--color-border);
   }
   .data-table th {
     background: var(--color-gray-50);
     font-weight: 600;
-    font-size: 12px;
+    font-size: var(--font-size-body);
     text-transform: uppercase;
   }
   .data-table tbody tr:hover {
@@ -737,19 +737,19 @@
   .data-version-box {
     background: var(--color-gray-50);
     border: 2px solid var(--color-black);
-    padding: 20px;
-    margin-bottom: 24px;
+    padding: var(--space-5);
+    margin-bottom: var(--space-6);
   }
   .data-version-box h4 {
-    margin: 0 0 16px 0;
-    font-size: 12px;
+    margin: 0 0 var(--space-4) 0;
+    font-size: var(--font-size-body);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: var(--tracking-wide);
   }
   .version-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 20px;
+    gap: var(--space-5);
   }
   .stats-grid {
     grid-template-columns: repeat(4, 1fr);
@@ -757,58 +757,58 @@
   .version-item {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--space-1);
   }
   .stat-item {
     text-align: center;
     flex-direction: column-reverse;
   }
   .version-item .label {
-    font-size: 10px;
+    font-size: var(--font-size-base);
     text-transform: uppercase;
     color: var(--color-text-secondary);
-    letter-spacing: 0.5px;
+    letter-spacing: var(--tracking-wide);
   }
   .version-item .value {
-    font-size: 16px;
+    font-size: var(--font-size-xl);
     font-weight: 600;
-    font-family: monospace;
+    font-family: var(--font-family-mono);
   }
   .stat-value {
-    font-size: 28px;
+    font-size: var(--font-size-3xl);
     font-weight: 700;
     color: var(--color-black);
   }
   .version-meta {
-    margin-top: 16px;
-    padding-top: 12px;
-    border-top: 1px solid var(--color-border);
-    font-size: 11px;
+    margin-top: var(--space-4);
+    padding-top: var(--space-3);
+    border-top: var(--border-width) solid var(--color-border);
+    font-size: var(--font-size-sm);
     color: var(--color-text-secondary);
     display: flex;
-    gap: 16px;
+    gap: var(--space-4);
   }
   .data-contact {
-    font-size: 13px;
+    font-size: var(--font-size-md);
     color: var(--color-text-secondary);
-    margin-top: 16px;
+    margin-top: var(--space-4);
   }
 
   .example-box {
     background: var(--color-gray-50);
-    padding: 16px 20px;
-    margin: 16px 0 24px;
+    padding: var(--space-4) var(--space-5);
+    margin: var(--space-4) 0 var(--space-6);
     border-left: 3px solid var(--color-gray-700);
   }
   .example-box code {
     display: block;
-    font-size: 13px;
+    font-size: var(--font-size-md);
     color: var(--color-gray-700);
-    margin-bottom: 12px;
+    margin-bottom: var(--space-3);
     word-break: break-word;
   }
   .example-note {
-    font-size: 13px;
+    font-size: var(--font-size-md);
     color: var(--color-text-secondary);
     margin: 0;
     font-style: italic;
@@ -821,13 +821,13 @@
   .status-list li {
     display: flex;
     align-items: center;
-    gap: 10px;
-    margin-bottom: 10px;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
   }
   .status-dot {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
+    width: var(--space-3);
+    height: var(--space-3);
+    border-radius: var(--radius-full);
     flex-shrink: 0;
   }
   .status-dot.proposed {
@@ -844,24 +844,24 @@
   }
 
   .viz-guide {
-    margin: 16px 0;
+    margin: var(--space-4) 0;
   }
   .viz-guide dt {
     font-weight: 600;
-    margin-top: 16px;
+    margin-top: var(--space-4);
   }
   .viz-guide dd {
-    margin: 4px 0 0 0;
+    margin: var(--space-1) 0 0 0;
     color: var(--color-gray-600);
   }
 
   .changelog {
-    margin-top: 24px;
+    margin-top: var(--space-6);
   }
   .release {
-    margin-bottom: 32px;
-    padding-bottom: 24px;
-    border-bottom: 1px solid var(--color-gray-100);
+    margin-bottom: var(--space-8);
+    padding-bottom: var(--space-6);
+    border-bottom: var(--border-width) solid var(--color-gray-100);
   }
   .release:last-child {
     border-bottom: none;
@@ -869,45 +869,45 @@
   .release header {
     display: flex;
     align-items: baseline;
-    gap: 16px;
-    margin-bottom: 12px;
+    gap: var(--space-4);
+    margin-bottom: var(--space-3);
   }
   .release h3 {
     margin: 0;
-    font-size: 18px;
-    font-family: 'Monaco', monospace;
+    font-size: var(--font-size-2xl);
+    font-family: var(--font-family-mono);
   }
   .release time {
-    font-size: 13px;
+    font-size: var(--font-size-md);
     color: var(--color-text-secondary);
   }
   .release ul {
     margin: 0;
-    padding-left: 20px;
+    padding-left: var(--space-5);
   }
   .release li {
-    font-size: 14px;
+    font-size: var(--font-size-lg);
     color: var(--color-gray-600);
-    margin-bottom: 6px;
+    margin-bottom: var(--space-1);
   }
 
   .tech-list {
     columns: 2;
-    column-gap: 32px;
+    column-gap: var(--space-8);
   }
   .tech-list li {
-    font-size: 14px;
+    font-size: var(--font-size-lg);
   }
 
   .page-footer {
-    margin-top: 48px;
-    padding-top: 24px;
-    border-top: 1px solid var(--color-border);
+    margin-top: var(--space-12);
+    padding-top: var(--space-6);
+    border-top: var(--border-width) solid var(--color-border);
   }
   .page-footer a {
     color: var(--color-gray-700);
     text-decoration: none;
-    font-size: 14px;
+    font-size: var(--font-size-lg);
   }
   .page-footer a:hover {
     text-decoration: underline;
@@ -915,51 +915,51 @@
 
   /* Developer Tools Section */
   .known-issue {
-    background: #fff3cd;
-    border: 1px solid #ffc107;
-    padding: 12px 16px;
-    border-radius: 4px;
-    font-size: 14px;
-    margin: 16px 0;
+    background: var(--color-warning-bg);
+    border: var(--border-width) solid var(--color-warning);
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-lg);
+    margin: var(--space-4) 0;
   }
 
   .fallback-log-box {
     background: var(--color-gray-50);
-    border: 1px solid var(--color-border);
-    padding: 20px;
-    margin-top: 16px;
+    border: var(--border-width) solid var(--color-border);
+    padding: var(--space-5);
+    margin-top: var(--space-4);
   }
 
   .log-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 16px;
+    margin-bottom: var(--space-4);
     flex-wrap: wrap;
-    gap: 12px;
+    gap: var(--space-3);
   }
 
   .log-header h4 {
     margin: 0;
-    font-size: 14px;
+    font-size: var(--font-size-lg);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: var(--tracking-wide);
   }
 
   .log-actions {
     display: flex;
-    gap: 8px;
+    gap: var(--space-2);
   }
 
   .log-actions button {
-    padding: 8px 16px;
-    font-size: 13px;
+    padding: var(--space-2) var(--space-4);
+    font-size: var(--font-size-md);
     background: var(--color-black);
-    color: white;
+    color: var(--color-white);
     border: none;
     cursor: pointer;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: var(--tracking-wide);
   }
 
   .log-actions button:hover:not(:disabled) {
@@ -972,9 +972,9 @@
   }
 
   .log-actions button.secondary {
-    background: white;
+    background: var(--color-white);
     color: var(--color-gray-700);
-    border: 1px solid var(--color-border);
+    border: var(--border-width) solid var(--color-border);
   }
 
   .log-actions button.secondary:hover:not(:disabled) {
@@ -983,17 +983,17 @@
 
   .empty-log {
     color: var(--color-text-secondary);
-    font-size: 14px;
+    font-size: var(--font-size-lg);
     font-style: italic;
     margin: 0;
   }
 
   .log-summary {
     display: flex;
-    gap: 24px;
-    margin-bottom: 16px;
-    padding-bottom: 16px;
-    border-bottom: 1px solid var(--color-border);
+    gap: var(--space-6);
+    margin-bottom: var(--space-4);
+    padding-bottom: var(--space-4);
+    border-bottom: var(--border-width) solid var(--color-border);
   }
 
   .summary-stat {
@@ -1003,41 +1003,41 @@
   }
 
   .summary-stat .stat-num {
-    font-size: 24px;
+    font-size: var(--font-size-2xl);
     font-weight: 700;
-    font-family: monospace;
+    font-family: var(--font-family-mono);
   }
 
   .summary-stat .stat-label {
-    font-size: 11px;
+    font-size: var(--font-size-sm);
     text-transform: uppercase;
     color: var(--color-text-secondary);
-    letter-spacing: 0.5px;
+    letter-spacing: var(--tracking-wide);
   }
 
   .fallback-table {
     width: 100%;
-    font-size: 13px;
+    font-size: var(--font-size-md);
     border-collapse: collapse;
   }
 
   .fallback-table th,
   .fallback-table td {
     text-align: left;
-    padding: 8px 10px;
-    border-bottom: 1px solid var(--color-border);
+    padding: var(--space-2) var(--space-2);
+    border-bottom: var(--border-width) solid var(--color-border);
   }
 
   .fallback-table th {
     background: var(--color-gray-100);
     font-weight: 600;
-    font-size: 11px;
+    font-size: var(--font-size-sm);
     text-transform: uppercase;
   }
 
   .fallback-table .asset-name {
     display: block;
-    font-size: 11px;
+    font-size: var(--font-size-sm);
     color: var(--color-text-secondary);
     max-width: 200px;
     overflow: hidden;
@@ -1046,51 +1046,51 @@
   }
 
   .fallback-table .error-cell {
-    color: #dc3545;
-    font-family: monospace;
+    color: var(--color-error);
+    font-family: var(--font-family-mono);
   }
 
   .fallback-table .time-cell {
-    font-family: monospace;
+    font-family: var(--font-family-mono);
     color: var(--color-text-secondary);
   }
 
   .fallback-table .success {
-    color: #28a745;
+    color: var(--color-success);
   }
 
   .fallback-table .failure {
-    color: #dc3545;
+    color: var(--color-error);
   }
 
   .log-note {
-    font-size: 12px;
+    font-size: var(--font-size-body);
     color: var(--color-text-secondary);
-    margin: 12px 0 0 0;
+    margin: var(--space-3) 0 0 0;
     font-style: italic;
   }
 
   @media (max-width: 600px) {
     .toc ul {
       flex-direction: column;
-      gap: 8px;
+      gap: var(--space-2);
     }
     .tech-list {
       columns: 1;
     }
     .release header {
       flex-direction: column;
-      gap: 4px;
+      gap: var(--space-1);
     }
     .stats-grid {
       grid-template-columns: repeat(2, 1fr);
     }
     .stat-value {
-      font-size: 22px;
+      font-size: var(--font-size-2xl);
     }
     .version-meta {
       flex-direction: column;
-      gap: 4px;
+      gap: var(--space-1);
     }
     .log-header {
       flex-direction: column;

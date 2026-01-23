@@ -69,32 +69,32 @@
   main {
     width: 100%;
     margin: 0;
-    padding: 20px 40px;
+    padding: var(--space-5) var(--space-10);
   }
 
   /* Featured Sections */
   .asset-links {
     display: flex;
-    gap: 14px;
+    gap: var(--space-3);
     align-items: baseline;
-    margin-bottom: 24px;
+    margin-bottom: var(--space-6);
     flex-wrap: wrap;
   }
   .asset-links p {
     margin: 0;
-    font-size: 11px;
+    font-size: var(--font-size-md);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: var(--tracking-wide);
     color: var(--color-gray-600);
   }
   .link-list {
     display: flex;
-    gap: 12px;
+    gap: var(--space-3);
     flex-wrap: wrap;
   }
   .link-list a {
     color: var(--color-black);
-    font-size: 12px;
+    font-size: var(--font-size-body);
     text-decoration: underline;
   }
   .link-list a:hover {
@@ -107,7 +107,7 @@
     gap: 6px;
   }
   .entity-icon {
-    font-size: 10px;
+    font-size: var(--font-size-base);
     font-weight: 600;
     color: var(--color-text-secondary);
     flex-shrink: 0;

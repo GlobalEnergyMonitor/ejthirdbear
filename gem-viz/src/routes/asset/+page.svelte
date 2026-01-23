@@ -119,58 +119,58 @@
   /* Layout */
   main {
     width: 100%;
-    padding: 20px 40px;
+    padding: var(--space-5) var(--space-10);
   }
 
   /* Header */
   header {
     display: flex;
-    gap: 16px;
+    gap: var(--space-4);
     align-items: center;
     flex-wrap: wrap;
-    border-bottom: 1px solid var(--color-gray-200);
-    padding-bottom: 18px;
-    margin-bottom: 20px;
+    border-bottom: var(--border-width) solid var(--color-gray-200);
+    padding-bottom: var(--space-5);
+    margin-bottom: var(--space-5);
   }
   .back-link {
     color: var(--color-black);
     text-decoration: underline;
-    font-size: 11px;
+    font-size: var(--font-size-sm);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: var(--tracking-tight);
   }
   .back-link:hover {
     text-decoration: none;
   }
   .title {
-    font-size: 15px;
+    font-size: var(--font-size-xl);
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.6px;
+    letter-spacing: var(--tracking-tight);
   }
   .count {
-    font-size: 10px;
+    font-size: var(--font-size-base);
     color: var(--color-gray-600);
     margin-left: auto;
-    padding: 6px 10px;
-    border: 1px solid var(--color-gray-200);
-    border-radius: 999px;
+    padding: var(--space-1) var(--space-3);
+    border: var(--border-width) solid var(--color-gray-200);
+    border-radius: var(--radius-full);
     background: var(--color-gray-50);
   }
 
   /* Empty States */
   .no-data {
-    padding: 60px 20px;
+    padding: var(--space-16) var(--space-5);
     text-align: center;
     color: var(--color-text-tertiary);
-    font-size: 14px;
+    font-size: var(--font-size-lg);
     font-style: italic;
   }
 
   /* Responsive */
   @media (max-width: 768px) {
     main {
-      padding: 15px;
+      padding: var(--space-4);
     }
   }
 </style>

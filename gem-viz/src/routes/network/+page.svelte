@@ -24,27 +24,27 @@
     width: 100%;
     height: 100vh;
     margin: 0;
-    padding: 20px 40px;
+    padding: var(--space-5) var(--space-10);
     display: flex;
     flex-direction: column;
   }
 
   header {
-    padding-bottom: 15px;
-    margin-bottom: 20px;
+    padding-bottom: var(--space-4);
+    margin-bottom: var(--space-5);
   }
 
   h1 {
-    font-size: 16px;
+    font-size: var(--font-size-xl);
     font-weight: bold;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: var(--tracking-tight);
     margin: 0;
   }
 
   .intro {
-    font-size: 12px;
-    margin: 0 0 20px 0;
+    font-size: var(--font-size-body);
+    margin: 0 0 var(--space-5) 0;
     color: var(--color-text-secondary);
   }
 </style>
