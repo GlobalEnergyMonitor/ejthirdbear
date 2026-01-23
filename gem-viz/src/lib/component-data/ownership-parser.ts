@@ -24,7 +24,6 @@
  *
  * CONSUMERS:
  * ----------
- * - OwnershipHierarchy.svelte
  * - MermaidOwnership.svelte
  * - AssetScreener.svelte
  * - asset/[id]/+page.svelte

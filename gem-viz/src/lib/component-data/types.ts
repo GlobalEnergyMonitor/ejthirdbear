@@ -66,7 +66,7 @@ export interface AssetOwnersData {
   allEntityIds: string[];
 }
 
-/** OwnershipHierarchy / MermaidOwnership component data */
+/** MermaidOwnership component data */
 export interface OwnershipPathData {
   assetId: string;
   assetName: string;
