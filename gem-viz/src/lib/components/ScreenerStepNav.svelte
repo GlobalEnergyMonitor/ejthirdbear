@@ -43,15 +43,27 @@
 <nav class="step-nav">
   {#each steps as step, i}
     {#if i > 0}
-      <div class="step-line" class:completed={isCompleted(step.num)}></div>
+      <div class="step-line" class:completed={isCompleted(step.num)}>
+        <div class="step-line-fill"></div>
+      </div>
     {/if}
     {#if isCompleted(step.num)}
-      <a href={getStepUrl(step)} class="step completed">
-        <span class="step-num">{step.num}</span>
+      <a href={getStepUrl(step)} class="step completed" style="--step-delay: {i * 0.05}s">
+        <span class="step-num">
+          <svg
+            class="check-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="3"
+          >
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        </span>
         <span class="step-label">{step.label}</span>
       </a>
     {:else}
-      <div class="step" class:active={isActive(step.num)}>
+      <div class="step" class:active={isActive(step.num)} style="--step-delay: {i * 0.05}s">
         <span class="step-num">{step.num}</span>
         <span class="step-label">{step.label}</span>
       </div>
@@ -65,19 +77,20 @@
     align-items: center;
     justify-content: center;
     gap: 0;
-    margin-bottom: 32px;
-    padding-bottom: 24px;
-    border-bottom: 1px solid #e0e0e0;
+    margin-bottom: var(--space-8);
+    padding-bottom: var(--space-6);
+    border-bottom: var(--border-width) solid var(--color-border);
   }
 
   .step {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 16px;
-    opacity: 0.4;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-4);
+    opacity: 0.35;
     text-decoration: none;
     color: inherit;
+    transition: opacity var(--duration-slow) var(--ease-in-out-quad);
   }
 
   .step.active,
@@ -86,7 +99,7 @@
   }
 
   a.step:hover {
-    opacity: 0.8;
+    opacity: 0.85;
   }
 
   .step-num {
@@ -95,36 +108,87 @@
     justify-content: center;
     width: 28px;
     height: 28px;
-    border: 2px solid #1a5f7a;
-    border-radius: 50%;
-    font-size: 13px;
+    border: 2px solid var(--color-accent);
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-md);
     font-weight: 600;
-    color: #1a5f7a;
+    color: var(--color-accent);
+    transition:
+      background-color var(--duration-slow) var(--ease-in-out-quad),
+      border-color var(--duration-slow) var(--ease-in-out-quad),
+      color var(--duration-slow) var(--ease-in-out-quad);
   }
 
   .step.active .step-num {
-    background: #1a5f7a;
-    color: white;
+    background: var(--color-accent);
+    color: var(--color-white);
   }
 
   .step.completed .step-num {
-    background: #3a7a8a;
-    color: white;
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: var(--color-white);
+  }
+
+  .check-icon {
+    width: 14px;
+    height: 14px;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    animation: checkDraw 0.4s var(--ease-in-out-quad) forwards;
   }
 
   .step-label {
-    font-size: 13px;
+    font-size: var(--font-size-md);
     font-weight: 500;
-    color: #333;
+    color: var(--color-text-primary);
+    transition: color 0.2s ease;
+  }
+
+  .step.active .step-label {
+    color: var(--color-accent);
   }
 
   .step-line {
     width: 40px;
     height: 2px;
-    background: #ddd;
+    background: var(--color-gray-200);
+    position: relative;
+    overflow: hidden;
   }
 
-  .step-line.completed {
-    background: #1a5f7a;
+  .step-line-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 0;
+    background: var(--color-accent);
+    transition: width var(--duration-slower) var(--ease-in-out-quad);
+  }
+
+  .step-line.completed .step-line-fill {
+    width: 100%;
+  }
+
+  /* Animations */
+  @keyframes checkDraw {
+    from {
+      stroke-dasharray: 24;
+      stroke-dashoffset: 24;
+    }
+    to {
+      stroke-dasharray: 24;
+      stroke-dashoffset: 0;
+    }
+  }
+
+  /* Reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    .step-line-fill,
+    .check-icon {
+      animation: none;
+      transition: none;
+    }
   }
 </style>
