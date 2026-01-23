@@ -35,7 +35,7 @@
     large: { width: 400, height: 400, labelSize: 12, baseRadius: 40, maxRadius: 140 },
   };
 
-  let svgEl;
+  let svgEl = $state(null);
   let loading = $state(!prebakedPortfolio);
   /** @type {string | null} */
   let error = $state(null);
@@ -231,7 +231,7 @@
       class:clickable={Boolean(resolvedOwnerId)}
       onclick={resolvedOwnerId ? handleFlowerClick : undefined}
       role={resolvedOwnerId ? 'button' : 'img'}
-      tabindex={resolvedOwnerId ? 0 : undefined}
+      tabindex={resolvedOwnerId ? 0 : -1}
       onkeydown={(e) => resolvedOwnerId && e.key === 'Enter' && handleFlowerClick()}
     ></svg>
   {/if}

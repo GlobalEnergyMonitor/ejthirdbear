@@ -417,7 +417,7 @@
                 class="subsidiary-name"
                 class:clickable={!group.isDirect}
                 role={group.isDirect ? 'text' : 'button'}
-                tabindex={group.isDirect ? undefined : 0}
+                tabindex={group.isDirect ? -1 : 0}
                 onclick={() => !group.isDirect && goto(entityLink(group.id))}
                 onkeydown={(e) =>
                   !group.isDirect && e.key === 'Enter' && goto(entityLink(group.id))}
