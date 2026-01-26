@@ -1,8 +1,9 @@
 import { error } from '@sveltejs/kit';
 import { listAssets, getAsset, getOwnershipGraph } from '$lib/ownership-api';
 
-// Only prerender in production builds - dev mode uses API fetching
-export const prerender = process.env.NODE_ENV !== 'development';
+// Disable prerendering - pages load client-side with DuckDB
+// This dramatically speeds up builds since we don't need to fetch 200k+ pages from API
+export const prerender = false;
 
 // This function tells SvelteKit which asset IDs to prerender at build time
 export async function entries() {

@@ -67,7 +67,7 @@
   );
 
   // Get connected node IDs from filtered edges
-  const connectedNodeIds = $derived(() => {
+  const connectedNodeIds = $derived.by(() => {
     const ids = new Set<string>();
     filteredEdges.forEach((e) => {
       ids.add(e.source);
@@ -78,7 +78,7 @@
 
   // Filter nodes to only those in connected edges
   const filteredNodes = $derived(
-    nodes.filter((n) => connectedNodeIds().has(n.id) || n.id === rootId)
+    nodes.filter((n) => connectedNodeIds.has(n.id) || n.id === rootId)
   );
 
   // Build node map for quick lookup

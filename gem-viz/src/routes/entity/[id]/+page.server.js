@@ -1,8 +1,9 @@
 import { error } from '@sveltejs/kit';
 import { listEntities, getEntity, getEntityOwners, getEntityOwned } from '$lib/ownership-api';
 
-// Only prerender in production builds - dev mode uses client-side fetching
-export const prerender = process.env.NODE_ENV !== 'development';
+// Disable prerendering - pages load client-side with DuckDB
+// This dramatically speeds up builds since we don't need to fetch 150k+ pages from API
+export const prerender = false;
 
 // This function tells SvelteKit which entity IDs to prerender at build time
 export async function entries() {
@@ -52,6 +53,16 @@ export async function load({ params }) {
       fromAPI: true,
     };
   } catch (err) {
-    throw error(500, `Failed to fetch entity from API: ${err.message}`);
+    // Don't throw 500 - return minimal data and let client-side DuckDB handle it
+    console.warn(`[Entity Server] API failed for ${entityId}: ${err.message}`);
+    return {
+      entityId,
+      entityName: null,
+      entity: null,
+      owners: null,
+      owned: null,
+      fromAPI: false,
+      apiError: err.message,
+    };
   }
 }
