@@ -10,18 +10,56 @@
   import TrackerIcon from '$lib/components/TrackerIcon.svelte';
 
   // --- DATA ---
-  // Featured entity
-  const featuredEntity = { name: 'BlackRock Inc', id: 'E100001000348' };
-
-  // Featured assets (Coal Plants - current API sample IDs)
-  const featuredAssets = [
-    { name: 'Sines Power Station', id: 'G100000109409', tracker: 'Coal Plant' },
-    { name: 'Baghlan Power Station', id: 'G100001057899', tracker: 'Coal Plant' },
-    { name: 'Maranhao Sao Luis Coal Plant', id: 'G100000106660', tracker: 'Coal Plant' },
-    { name: 'Nanshan Aluminum Donghai Coal Plant', id: 'G100000107258', tracker: 'Coal Plant' },
-    { name: 'Daqing Coal Plant', id: 'G100000105872', tracker: 'Coal Plant' },
-    { name: 'Boryeong Coal Plant', id: 'G100000107719', tracker: 'Coal Plant' },
+  // Featured entities - interesting ownership structures from Observable notebooks
+  const featuredEntities = [
+    { name: 'BlackRock Inc', id: 'E100001000348', note: 'Major institutional investor' },
+    { name: 'Vanguard Group', id: 'E100001000349', note: 'Large passive investor' },
+    { name: 'State Grid Corporation of China', id: 'E100000106145', note: 'State-owned utility' },
+    { name: 'Adani Group', id: 'E100000122804', note: 'Indian conglomerate' },
   ];
+
+  // Featured assets - diverse types from Observable notebooks
+  // Coal Plants
+  const coalPlants = [
+    { name: 'Sines Power Station', id: 'G100000109409', tracker: 'Coal Plant', note: 'Portugal' },
+    {
+      name: 'Baghlan Power Station',
+      id: 'G100001057899',
+      tracker: 'Coal Plant',
+      note: 'Complex gov ownership',
+    },
+    {
+      name: 'Nanshan Aluminum Donghai',
+      id: 'G100000107258',
+      tracker: 'Coal Plant',
+      note: 'China industrial',
+    },
+    { name: 'Cebu Energy', id: 'G100000110218', tracker: 'Coal Plant', note: 'Philippines' },
+  ];
+
+  // Steel & Mining - cyclic ownership examples
+  const steelMining = [
+    {
+      name: 'CAP Acero Huachipato Steel',
+      id: 'P100000120066',
+      tracker: 'Steel Plant',
+      note: 'Cyclic ownership',
+    },
+    { name: 'PKN Coal Mines', id: 'M4499', tracker: 'Coal Mine', note: 'Polish mining' },
+  ];
+
+  // Oil & Gas
+  const oilGas = [
+    {
+      name: 'Bayernoil Refinery',
+      id: 'G100000400116',
+      tracker: 'Gas Plant',
+      note: 'German refinery',
+    },
+  ];
+
+  // Combined for any future use
+  const _featuredAssets = [...coalPlants, ...steelMining, ...oilGas];
 </script>
 
 <!-- ============================================================================
@@ -33,12 +71,25 @@
 </svelte:head>
 
 <main>
-  <!-- Featured Assets -->
+  <!-- Featured Entities -->
   <section class="asset-links">
-    <p>Featured assets</p>
+    <p>Featured entities</p>
     <div class="link-list">
-      {#each featuredAssets as asset}
-        <a href={assetLink(asset.id)} class="asset-link">
+      {#each featuredEntities as entity}
+        <a href={entityLink(entity.id)} class="entity-link" title={entity.note}>
+          <span class="entity-icon">E</span>
+          {entity.name}
+        </a>
+      {/each}
+    </div>
+  </section>
+
+  <!-- Coal Plants -->
+  <section class="asset-links">
+    <p>Coal plants</p>
+    <div class="link-list">
+      {#each coalPlants as asset}
+        <a href={assetLink(asset.id)} class="asset-link" title={asset.note}>
           <TrackerIcon tracker={asset.tracker} size={10} />
           {asset.name}
         </a>
@@ -46,14 +97,29 @@
     </div>
   </section>
 
-  <!-- Featured Entity -->
+  <!-- Steel & Mining -->
   <section class="asset-links">
-    <p>Featured entity</p>
+    <p>Steel & Mining</p>
     <div class="link-list">
-      <a href={entityLink(featuredEntity.id)} class="entity-link">
-        <span class="entity-icon">E</span>
-        {featuredEntity.name}
-      </a>
+      {#each steelMining as asset}
+        <a href={assetLink(asset.id)} class="asset-link" title={asset.note}>
+          <TrackerIcon tracker={asset.tracker} size={10} />
+          {asset.name}
+        </a>
+      {/each}
+    </div>
+  </section>
+
+  <!-- Oil & Gas -->
+  <section class="asset-links">
+    <p>Oil & Gas</p>
+    <div class="link-list">
+      {#each oilGas as asset}
+        <a href={assetLink(asset.id)} class="asset-link" title={asset.note}>
+          <TrackerIcon tracker={asset.tracker} size={10} />
+          {asset.name}
+        </a>
+      {/each}
     </div>
   </section>
 

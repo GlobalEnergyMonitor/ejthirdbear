@@ -4,6 +4,9 @@
   import SiteFooter from '$lib/components/SiteFooter.svelte';
   import CommandPalette from '$lib/components/CommandPalette.svelte';
   import { link } from '$lib/links';
+  import { page } from '$app/stores';
+
+  let { children } = $props();
 
   // Build info injected by Vite at build time
   const buildTime = __BUILD_TIME__;
@@ -16,20 +19,26 @@
   <meta name="build-hash" content={buildHash} />
 </svelte:head>
 
-<a href="#main-content" class="skip-link">Skip to content</a>
-<div class="app">
-  <SiteNav />
-  <main id="main-content">
-    <slot />
-  </main>
-  <CommandPalette />
-  <SiteFooter />
+{#if $page.url.pathname.startsWith('/embed') || $page.url.pathname.startsWith('/e/')}
+  {@render children()}
+{:else}
+  <a href="#main-content" class="skip-link">Skip to content</a>
+  <div class="app">
+    <SiteNav />
+    <main id="main-content">
+      {@render children()}
+    </main>
+    <CommandPalette />
+    <SiteFooter />
 
-  <footer class="build-footer">
-    <a href={link('about')} class="version" title="View methodology and changelog">v{appVersion}</a>
-    <span class="build-info" title={buildTime}>build: {buildHash}</span>
-  </footer>
-</div>
+    <footer class="build-footer">
+      <a href={link('about')} class="version" title="View methodology and changelog"
+        >v{appVersion}</a
+      >
+      <span class="build-info" title={buildTime}>build: {buildHash}</span>
+    </footer>
+  </div>
+{/if}
 
 <style>
   .app {

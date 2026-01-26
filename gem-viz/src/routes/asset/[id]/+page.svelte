@@ -22,11 +22,11 @@
   // Components
   import AssetMap from '$lib/components/AssetMap.svelte';
   import OwnershipPie from '$lib/components/OwnershipPie.svelte';
-  import MermaidOwnership from '$lib/components/MermaidOwnership.svelte';
   import RelationshipNetwork from '$lib/components/RelationshipNetwork.svelte';
   import StatusIcon from '$lib/components/StatusIcon.svelte';
   import AddToCartButton from '$lib/components/AddToCartButton.svelte';
   import Citation from '$lib/components/Citation.svelte';
+  import { DagreOwnershipGraph, OwnershipSummaryTables } from '$lib/components/ownership';
 
   /**
    * @typedef {Object} AssetData
@@ -376,14 +376,26 @@
       {#if graphEdges.length > 0}
         <section class="viz-section">
           <h2>Ownership Structure</h2>
-          <MermaidOwnership
-            edges={graphEdges}
-            {nodeMap}
-            {assetId}
-            {assetName}
-            zoom={0.7}
-            direction="TD"
-          />
+          <div class="viz-tabs">
+            <p class="viz-description">
+              Interactive graph showing ownership hierarchy. Hover over nodes to highlight paths.
+            </p>
+            <DagreOwnershipGraph
+              nodes={graphNodes}
+              edges={graphEdges}
+              rootId={assetId}
+              direction="TB"
+              showPies={true}
+              maxDepth={10}
+              width={800}
+              height={500}
+            />
+          </div>
+        </section>
+
+        <section class="viz-section">
+          <h2>Ownership Summary</h2>
+          <OwnershipSummaryTables nodes={graphNodes} edges={graphEdges} rootId={assetId} />
         </section>
 
         <section class="viz-section">
@@ -441,6 +453,17 @@
       <Citation variant="footer" trackers={asset?.facilityType ? [asset.facilityType] : []} />
     </article>
   {/if}
+
+  <!-- Embed Link -->
+  <a
+    href="/embed/asset?id={assetId}"
+    class="embed-link"
+    target="_blank"
+    rel="noopener"
+    title="Open embeddable version"
+  >
+    Embed ↗
+  </a>
 </main>
 
 <!-- ============================================================================
@@ -595,6 +618,16 @@
   .viz-section h2 {
     margin-top: 0;
   }
+  .viz-description {
+    font-size: var(--font-size-body);
+    color: var(--color-text-secondary);
+    margin: 0 0 var(--space-4) 0;
+  }
+  .viz-tabs {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
 
   /* Properties */
   .properties dl {
@@ -673,5 +706,25 @@
       grid-template-columns: 1fr;
       gap: var(--space-1);
     }
+  }
+
+  /* Embed Link */
+  .embed-link {
+    position: fixed;
+    bottom: var(--space-4);
+    right: var(--space-4);
+    padding: var(--space-2) var(--space-3);
+    background: var(--color-bg-secondary);
+    border: var(--border-width) solid var(--color-border);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    text-decoration: none;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+  }
+
+  .embed-link:hover {
+    opacity: 1;
+    color: var(--color-black);
   }
 </style>

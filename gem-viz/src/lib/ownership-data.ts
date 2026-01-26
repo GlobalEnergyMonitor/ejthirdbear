@@ -13,7 +13,6 @@ import {
   type GraphNode,
   type GraphEdge,
 } from '$lib/ownership-api';
-import { fetchAssetMetadata } from '$lib/compose-queries';
 import { getOwnerAssets } from '$lib/duckdb-queries';
 
 // ID field mapping by tracker type (preserved for compatibility)

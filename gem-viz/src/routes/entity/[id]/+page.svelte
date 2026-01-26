@@ -4,11 +4,11 @@
   import { link, assetLink } from '$lib/links';
   import { page } from '$app/stores';
   import OwnershipExplorerD3 from '$lib/components/OwnershipExplorerD3.svelte';
-  import OwnershipFlower from '$lib/components/OwnershipFlower.svelte';
   import AssetScreener from '$lib/components/AssetScreener.svelte';
   import TrackerIcon from '$lib/components/TrackerIcon.svelte';
   import StatusIcon from '$lib/components/StatusIcon.svelte';
   import { fetchOwnerPortfolio } from '$lib/component-data/schema';
+  import { EntityPortfolioFilters, EntityPortfolioHeader } from '$lib/components/ownership';
 
   // Server data from +page.server.js (API-based)
   /** @type {{ data: any }} */
@@ -28,22 +28,8 @@
   let _entity = $state(data?.entity || null); // Available from server if needed
   let portfolio = $state(null); // Fetched client-side from DuckDB
 
-  // Compute stats from portfolio data (no longer uses fetchOwnerStats which returns 0)
-  const stats = $derived.by(() => {
-    if (!portfolio?.assets?.length) return null;
-    const assets = portfolio.assets;
-    const countries = new Set(assets.map((a) => a.country).filter(Boolean));
-    const totalCapacity = assets.reduce((sum, a) => sum + (Number(a.capacityMw) || 0), 0);
-    return {
-      total_assets: assets.length,
-      total_capacity_mw: totalCapacity > 0 ? totalCapacity : null,
-      countries: countries.size,
-    };
-  });
-
   // Derived data from portfolio (client-fetched)
   const trackerBreakdown = $derived.by(() => {
-    // From client fetch - portfolio has assets
     const counts = new Map();
     (portfolio?.assets || []).forEach((a) => {
       const key = a.tracker || 'Unknown';
@@ -65,7 +51,92 @@
     );
   });
 
-  const summaryAssets = $derived((portfolio?.assets || []).slice(0, 20));
+  // Filter state
+  let selectedCountries = $state(new Set());
+  let selectedTrackers = $state(new Set());
+  let selectedStatuses = $state(new Set());
+
+  // Filtered assets based on selections
+  const filteredAssets = $derived.by(() => {
+    const assets = portfolio?.assets || [];
+    if (
+      selectedCountries.size === 0 &&
+      selectedTrackers.size === 0 &&
+      selectedStatuses.size === 0
+    ) {
+      return assets;
+    }
+    return assets.filter((asset) => {
+      if (selectedCountries.size > 0 && !selectedCountries.has(asset.country || 'Unknown')) {
+        return false;
+      }
+      if (selectedTrackers.size > 0 && !selectedTrackers.has(asset.tracker || 'Unknown')) {
+        return false;
+      }
+      if (selectedStatuses.size > 0 && !selectedStatuses.has(asset.status || 'Unknown')) {
+        return false;
+      }
+      return true;
+    });
+  });
+
+  // Build a filtered portfolio for AssetScreener when filters are active
+  const filteredPortfolio = $derived.by(() => {
+    if (!portfolio) return null;
+    if (
+      selectedCountries.size === 0 &&
+      selectedTrackers.size === 0 &&
+      selectedStatuses.size === 0
+    ) {
+      return portfolio;
+    }
+
+    // Filter the subsidiariesMatched map
+    const filteredSubsidiaries = new Map();
+    for (const [subId, assets] of portfolio.subsidiariesMatched || []) {
+      const filtered = assets.filter((asset) => {
+        if (selectedCountries.size > 0 && !selectedCountries.has(asset.country || 'Unknown')) {
+          return false;
+        }
+        if (selectedTrackers.size > 0 && !selectedTrackers.has(asset.tracker || 'Unknown')) {
+          return false;
+        }
+        if (selectedStatuses.size > 0 && !selectedStatuses.has(asset.status || 'Unknown')) {
+          return false;
+        }
+        return true;
+      });
+      if (filtered.length > 0) {
+        filteredSubsidiaries.set(subId, filtered);
+      }
+    }
+
+    // Filter directlyOwned
+    const filteredDirect = (portfolio.directlyOwned || []).filter((asset) => {
+      if (selectedCountries.size > 0 && !selectedCountries.has(asset.country || 'Unknown')) {
+        return false;
+      }
+      if (selectedTrackers.size > 0 && !selectedTrackers.has(asset.tracker || 'Unknown')) {
+        return false;
+      }
+      if (selectedStatuses.size > 0 && !selectedStatuses.has(asset.status || 'Unknown')) {
+        return false;
+      }
+      return true;
+    });
+
+    return {
+      ...portfolio,
+      subsidiariesMatched: filteredSubsidiaries,
+      directlyOwned: filteredDirect,
+      assets: filteredAssets,
+    };
+  });
+
+  const summaryAssets = $derived(filteredAssets.slice(0, 20));
+  const hasActiveFilters = $derived(
+    selectedCountries.size > 0 || selectedTrackers.size > 0 || selectedStatuses.size > 0
+  );
 
   // Client-side fetch for portfolio data (API provides basic entity, but we need DuckDB for portfolio)
   onMount(async () => {
@@ -91,7 +162,7 @@
       if (!paramsId) throw new Error('Missing entity ID');
       entityId = paramsId;
 
-      // Fetch portfolio from DuckDB (stats are computed as a derived value from portfolio)
+      // Fetch portfolio from DuckDB
       portfolio = await fetchOwnerPortfolio(paramsId);
 
       // Use portfolio name if we don't have one from API
@@ -126,57 +197,15 @@
     <p class="loading error">{error}</p>
   {:else}
     <article class="entity-detail">
-      <div class="entity-header">
-        <div class="header-content">
-          <h1>{entityName || `ID: ${entityId}`}</h1>
-          <p class="entity-subtitle">
-            {#if stats?.total_assets || portfolio?.assets?.length}
-              {(stats?.total_assets ?? portfolio?.assets?.length ?? 0).toLocaleString()} assets
-              {#if stats?.total_capacity_mw}
-                · {Number(stats.total_capacity_mw).toLocaleString()} MW
-              {/if}
-              {#if stats?.countries}
-                · {stats.countries} countries
-              {/if}
-            {/if}
-          </p>
-        </div>
-        {#if portfolio}
-          <div class="header-flower">
-            <OwnershipFlower {portfolio} size="medium" showTitle={false} />
-          </div>
-        {/if}
-      </div>
-
-      <div class="meta-grid">
-        <div class="meta-item">
-          <span class="label">GEM Entity ID</span>
-          <span class="value"><code>{entityId}</code></span>
-        </div>
-
-        <div class="meta-item">
-          <span class="label">Assets Tracked</span>
-          <span class="value">
-            {(stats?.total_assets ?? portfolio?.assets?.length ?? 0).toLocaleString()}
-          </span>
-        </div>
-
-        {#if stats?.total_capacity_mw !== null && stats?.total_capacity_mw !== undefined}
-          <div class="meta-item">
-            <span class="label">Total Capacity (MW)</span>
-            <span class="value">
-              {Number(stats.total_capacity_mw || 0).toLocaleString()}
-            </span>
-          </div>
-        {/if}
-
-        {#if stats?.countries}
-          <div class="meta-item">
-            <span class="label">Countries</span>
-            <span class="value">{stats.countries}</span>
-          </div>
-        {/if}
-      </div>
+      <!-- Unified header component with stats and flower -->
+      <EntityPortfolioHeader
+        {portfolio}
+        {entityId}
+        {entityName}
+        sticky={false}
+        showFlower={true}
+        flowerSize="medium"
+      />
 
       {#if trackerBreakdown.length > 0}
         <section class="breakdown-section">
@@ -207,9 +236,30 @@
         </section>
       {/if}
 
+      {#if portfolio?.assets?.length > 0}
+        <section class="filter-section">
+          <h2>Filter Assets</h2>
+          <EntityPortfolioFilters
+            assets={portfolio.assets}
+            {selectedCountries}
+            {selectedTrackers}
+            {selectedStatuses}
+            onCountryChange={(c) => (selectedCountries = c)}
+            onTrackerChange={(t) => (selectedTrackers = t)}
+            onStatusChange={(s) => (selectedStatuses = s)}
+          />
+        </section>
+      {/if}
+
       {#if summaryAssets.length > 0}
         <section class="properties">
-          <h2>Representative Assets</h2>
+          <h2>
+            {#if hasActiveFilters}
+              Filtered Assets ({filteredAssets.length} of {portfolio?.assets?.length})
+            {:else}
+              Representative Assets
+            {/if}
+          </h2>
           <div class="asset-list">
             {#each summaryAssets as asset}
               <div class="asset-card">
@@ -244,15 +294,35 @@
       </section>
 
       <section class="asset-screener-section">
-        <h2>Asset Screener (Observable)</h2>
+        <h2>
+          Asset Screener
+          {#if hasActiveFilters}
+            <span class="filter-indicator"
+              >({filteredAssets.length} of {portfolio?.assets?.length || 0} assets)</span
+            >
+          {/if}
+        </h2>
         <p class="section-subtitle">
-          Full portfolio breakdown with subsidiary paths, mini bar charts, and status icons — ported
-          from GEM's Observable notebook
+          Full portfolio breakdown with subsidiary paths, mini bar charts, and status icons
+          {#if hasActiveFilters}
+            — filtered by your selections above
+          {/if}
         </p>
-        <AssetScreener {entityId} {portfolio} />
+        <AssetScreener {entityId} portfolio={filteredPortfolio} />
       </section>
     </article>
   {/if}
+
+  <!-- Embed Link -->
+  <a
+    href="/embed/entity?id={entityId}"
+    class="embed-link"
+    target="_blank"
+    rel="noopener"
+    title="Open embeddable version"
+  >
+    Embed ↗
+  </a>
 </main>
 
 <style>
@@ -305,36 +375,6 @@
     font-family: var(--font-family);
   }
 
-  .entity-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: var(--space-8);
-    margin-bottom: var(--space-8);
-  }
-
-  .header-content {
-    flex: 1;
-  }
-
-  .header-flower {
-    flex-shrink: 0;
-  }
-
-  h1 {
-    font-size: var(--font-size-3xl);
-    font-weight: normal;
-    margin: 0 0 var(--space-2) 0;
-    line-height: var(--line-height-snug);
-  }
-
-  .entity-subtitle {
-    font-size: var(--font-size-lg);
-    color: var(--color-text-secondary);
-    margin: 0;
-    font-family: var(--font-family-sans);
-  }
-
   h2 {
     font-size: var(--font-size-xl);
     font-weight: normal;
@@ -343,33 +383,11 @@
     padding-bottom: var(--space-2);
   }
 
-  .meta-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: var(--space-5);
-    margin-bottom: var(--space-10);
-    padding: var(--space-5);
-    background: var(--color-bg-secondary);
-    border: var(--border-width) solid var(--color-gray-300);
-  }
-
-  .meta-item {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-  }
-
-  .label {
-    font-size: var(--font-size-sm);
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-wide);
-    color: var(--color-text-tertiary);
-    font-weight: bold;
-  }
-
-  .value {
-    font-size: var(--font-size-lg);
-    color: var(--color-black);
+  .filter-indicator {
+    font-size: var(--font-size-body);
+    font-weight: normal;
+    color: var(--color-text-secondary);
+    margin-left: var(--space-2);
   }
 
   .breakdown-section {
@@ -441,6 +459,15 @@
     font-family: var(--font-family-sans);
   }
 
+  .filter-section {
+    margin: var(--space-8) 0;
+  }
+
+  .filter-section h2 {
+    margin-top: 0;
+    margin-bottom: var(--space-4);
+  }
+
   .properties {
     margin: var(--space-10) 0;
   }
@@ -501,21 +528,28 @@
   }
 
   @media (max-width: 768px) {
-    .entity-header {
-      flex-direction: column;
-      gap: var(--space-5);
-    }
-
-    .header-flower {
-      align-self: center;
-    }
-
-    .meta-grid {
-      grid-template-columns: 1fr;
-    }
-
     .asset-list {
       grid-template-columns: 1fr;
     }
+  }
+
+  /* Embed Link */
+  .embed-link {
+    position: fixed;
+    bottom: var(--space-4);
+    right: var(--space-4);
+    padding: var(--space-2) var(--space-3);
+    background: var(--color-bg-secondary);
+    border: var(--border-width) solid var(--color-border);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    text-decoration: none;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+  }
+
+  .embed-link:hover {
+    opacity: 1;
+    color: var(--color-black);
   }
 </style>
