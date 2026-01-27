@@ -1,10 +1,10 @@
 {
-  "version": "675eab8",
-  "commit": "675eab8",
-  "message": "feat(entity): add ownership components and connect filter flow",
+  "version": "b04a166",
+  "commit": "b04a166",
+  "message": "fix: multiple bug fixes for v0.1.25 deploy",
   "author": "EJ Fox",
-  "timestamp": "2026-01-26T21:35:49.716Z",
-  "deployed": "2026-01-26T21:35:49.716Z",
-  "buildTime": "1/26/2026, 4:35:49 PM",
-  "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.1.25"
+  "timestamp": "2026-01-27T17:30:57.091Z",
+  "deployed": "2026-01-27T17:30:57.091Z",
+  "buildTime": "1/27/2026, 12:30:57 PM",
+  "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.1.26"
 }

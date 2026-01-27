@@ -27,7 +27,7 @@ const config = {
       // 1. All data is fetched upfront in entries() and written to disk cache
       // 2. Page rendering only reads from the JSON cache (no DB calls)
       // 3. File reads are thread-safe
-      concurrency: 4,   // Parallel page rendering (balance between speed and I/O pressure)
+      concurrency: 50,  // Higher concurrency - API can handle it
       crawl: false,     // Don't crawl - entries() generates all routes from +page.server.js
       handleHttpError: ({ status, path, message }) => {
         // Skip 404/500 errors from problematic/missing assets and continue build

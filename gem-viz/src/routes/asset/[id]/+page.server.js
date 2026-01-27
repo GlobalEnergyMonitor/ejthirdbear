@@ -1,62 +1,28 @@
 import { error } from '@sveltejs/kit';
-import { listAssets, getAsset, getOwnershipGraph } from '$lib/ownership-api';
+import { getAssetIds, getAsset } from '$lib/server/build-cache.js';
 
-// Disable prerendering - pages load client-side with DuckDB
-// This dramatically speeds up builds since we don't need to fetch 200k+ pages from API
-export const prerender = false;
+export const prerender = true;
 
-// This function tells SvelteKit which asset IDs to prerender at build time
+// Return cached IDs - cache is loaded ONCE and kept in memory
 export async function entries() {
-  try {
-    const allIds = new Set();
-    const pageSize = 500;
-    let offset = 0;
-    let pageCount = 0;
-    let hasMore = true;
-
-    while (hasMore && pageCount < 500) {
-      const response = await listAssets({ limit: pageSize, offset });
-      response.results.forEach((asset) => {
-        if (asset.id) allIds.add(asset.id);
-      });
-
-      pageCount += 1;
-      offset += pageSize;
-      hasMore = response.results.length === pageSize;
-    }
-
-    return Array.from(allIds).map((id) => ({ id }));
-  } catch {
-    // API not reachable - return empty for dev mode
-    return [];
+  const ids = getAssetIds();
+  if (ids.length > 0) {
+    console.log(`[Asset] Prerendering ${ids.length} pages from memory cache...`);
+    return ids.map(id => ({ id }));
   }
+  console.warn('[Asset] No cache found - run npm run prefetch first');
+  return [];
 }
 
-// Load function runs at build time for prerendered pages
+// Read from in-memory cache - O(1) lookup, no file I/O
 export async function load({ params }) {
   const assetId = params.id;
   if (!assetId) throw error(404, 'Missing asset ID');
 
-  try {
-    const [asset, graph] = await Promise.all([
-      getAsset(assetId),
-      getOwnershipGraph({ root: assetId, direction: 'up', max_depth: 12 }),
-    ]);
-
-    return {
-      asset,
-      graph,
-      fromAPI: true,
-    };
-  } catch (err) {
-    // Return empty data and let client-side try DuckDB fallback
-    // This allows the page to render and attempt local data loading
-    return {
-      asset: null,
-      graph: null,
-      fromAPI: false,
-      apiError: err._status === 404 ? 'not_found' : 'api_error',
-      assetId, // Pass ID so client can try DuckDB
-    };
+  const cached = getAsset(assetId);
+  if (cached?.success) {
+    return { asset: cached.asset, graph: cached.graph, fromAPI: true };
   }
+
+  return { asset: null, graph: null, fromAPI: false, apiError: 'not_cached', assetId };
 }
