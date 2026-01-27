@@ -12,6 +12,7 @@
   import { link, assetLink, entityLink } from '$lib/links';
   import { investigationCart } from '$lib/investigationCart';
   import { listAssets, listEntities } from '$lib/ownership-api';
+  import { commandPaletteOpen } from '$lib/stores/commandPalette';
 
   /**
    * @type {{
@@ -26,9 +27,19 @@
     limit = 5,
   } = $props();
 
-  // State
+  // State - sync with global store
   let open = $state(embedded);
   let showHelp = $state(false);
+
+  // Subscribe to the global store for external triggers
+  $effect(() => {
+    const unsubscribe = commandPaletteOpen.subscribe((value) => {
+      if (value && !embedded) {
+        openPalette();
+      }
+    });
+    return unsubscribe;
+  });
   let query = $state('');
   let selectedIndex = $state(0);
   let loading = $state(false);
@@ -754,6 +765,7 @@
   function close() {
     open = false;
     query = '';
+    commandPaletteOpen.set(false);
   }
 
   // Watch query changes

@@ -1,44 +1,28 @@
-import adapter from '@sveltejs/adapter-static';
+import adapter from '@sveltejs/adapter-node';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
-import { readFileSync } from 'fs';
 
 // Entity pages are not prerendered at build time
 // They will return 404 errors (focus on asset pages)
 
-const packageJson = JSON.parse(readFileSync('./package.json', 'utf-8'));
-const version = packageJson.version;
-
-const isDev = process.env.NODE_ENV === 'development';
-const basePath = isDev ? '' : `/gem-viz/v${version}`;
+// No base path needed for dynamic deployment
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
   preprocess: vitePreprocess(),
   kit: {
     adapter: adapter({
-      pages: 'build',
-      assets: 'build',
-      fallback: '404.html',  // Fallback page for missing routes (also serves as SPA fallback)
-      precompress: false,  // Disable to reduce file descriptor pressure during prerender
-      strict: false
+      out: 'build',
+      precompress: true
     }),
+    // No prerendering - pages render dynamically on the server
     prerender: {
-      // Higher concurrency is safe because:
-      // 1. All data is fetched upfront in entries() and written to disk cache
-      // 2. Page rendering only reads from the JSON cache (no DB calls)
-      // 3. File reads are thread-safe
-      concurrency: 50,  // Higher concurrency - API can handle it
-      crawl: false,     // Don't crawl - entries() generates all routes from +page.server.js
-      handleHttpError: ({ status, path, message }) => {
-        // Skip 404/500 errors from problematic/missing assets and continue build
-        console.warn(`WARNING: Skipping ${path} (status ${status}: ${message})`);
-        // Don't throw - just log and continue
-      },
-      handleUnseenRoutes: 'ignore'  // Ignore unseen routes (we're generating the list)
+      entries: [],
+      handleUnseenRoutes: 'ignore'
     },
     paths: {
-      // Use root base path for local dev so Vite HMR works without a subpath
-      base: basePath,
+      // For static builds: base: `/gem-viz/v${version}`
+      // For dynamic/Fly.io: base: ''
+      base: '',
       // Use absolute paths for assets to fix nested route resolution
       // Without this, /asset/[id]/ pages use wrong relative paths
       relative: false

@@ -7,7 +7,7 @@
   import { page, navigating } from '$app/stores';
   import { link } from '$lib/links';
   import { investigationCart } from '$lib/investigationCart';
-  import { browser } from '$app/environment';
+  import { openCommandPalette } from '$lib/stores/commandPalette';
 
   // Cart count for badge
   const cartCount = $derived($investigationCart.length);
@@ -26,11 +26,9 @@
     return currentPath.includes(`/${path}`);
   }
 
-  // Trigger command palette
+  // Trigger command palette via store
   function openSearch() {
-    if (!browser) return;
-    // Dispatch CMD+K to trigger CommandPalette
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }));
+    openCommandPalette();
   }
 
   // Navigation links (primary only - others moved to footer)

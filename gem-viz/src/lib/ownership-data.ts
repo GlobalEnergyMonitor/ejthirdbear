@@ -186,6 +186,182 @@ export async function getAssetOwners(gemAssetId: string): Promise<AssetOwnersDat
 // ============================================================================
 
 /**
+ * Progressive streaming version of getSpotlightOwnerData
+ * Yields updates as data becomes available for a smoother UX.
+ *
+ * @param entityId - The GEM entity ID
+ * @param entityName - Optional entity name
+ * @yields Progress updates with partial portfolio data
+ */
+export async function* streamOwnerPortfolio(
+  entityId: string,
+  entityName?: string
+): AsyncGenerator<{
+  phase: 'init' | 'direct' | 'subsidiaries' | 'done' | 'error';
+  message: string;
+  portfolio: SpotlightOwnerData | null;
+  error?: string;
+}> {
+  const subsidiariesMatched = new Map<string, SpotlightAsset[]>();
+  const directlyOwned: SpotlightAsset[] = [];
+  const allAssets: SpotlightAsset[] = [];
+  const entityMap = new Map<string, { id: string; Name: string }>();
+  const matchedEdges = new Map<string, { value: number | null }>();
+  let effectiveEntityName = entityName || entityId;
+
+  // Helper to convert DuckDB row to SpotlightAsset
+  const rowToAsset = (row: Record<string, unknown>): SpotlightAsset => ({
+    id: String(row.id || ''),
+    name: String(row.name || row.id || ''),
+    tracker: String(row.tracker || 'Unknown'),
+    status: String(row.status || 'Unknown'),
+    country: String(row.country || 'Unknown'),
+  });
+
+  // Helper to build current portfolio state
+  const buildPortfolio = (): SpotlightOwnerData => {
+    const trackers = new Set<string>();
+    allAssets.forEach((a) => {
+      if (a.tracker && a.tracker !== 'Unknown') trackers.add(a.tracker);
+    });
+
+    const assetClassName =
+      trackers.size === 1
+        ? Array.from(trackers)[0]
+        : trackers.size > 0
+          ? `assets (${trackers.size} types)`
+          : 'assets';
+
+    return {
+      spotlightOwner: { id: entityId, Name: effectiveEntityName },
+      subsidiariesMatched: new Map(subsidiariesMatched),
+      directlyOwned: [...directlyOwned],
+      assets: [...allAssets],
+      entityMap: new Map(entityMap),
+      matchedEdges: new Map(matchedEdges),
+      assetClassName,
+    };
+  };
+
+  try {
+    // Phase 1: Initialize
+    yield { phase: 'init', message: 'Initializing DuckDB...', portfolio: null };
+
+    // Phase 2: Fetch direct assets
+    yield { phase: 'direct', message: 'Loading directly owned assets...', portfolio: null };
+
+    const directResult = await getOwnerAssets(entityId);
+
+    if (directResult.success && directResult.data) {
+      for (const row of directResult.data) {
+        const asset = rowToAsset(row);
+        directlyOwned.push(asset);
+        allAssets.push(asset);
+      }
+    }
+
+    // Set entity in map
+    entityMap.set(entityId, { id: entityId, Name: effectiveEntityName });
+
+    // Yield first batch of data
+    yield {
+      phase: 'direct',
+      message: `Found ${directlyOwned.length} directly owned assets`,
+      portfolio: buildPortfolio(),
+    };
+
+    // Phase 3: Fetch subsidiaries
+    yield {
+      phase: 'subsidiaries',
+      message: 'Loading subsidiary ownership graph...',
+      portfolio: buildPortfolio(),
+    };
+
+    // Get entity graph from API
+    let subsidiaryIds: string[] = [];
+    try {
+      const graphData = await Promise.race([
+        getEntityGraphDown(entityId),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 10000)),
+      ]);
+
+      if (graphData && graphData.nodes && graphData.nodes.length > 0) {
+        effectiveEntityName = entityName || graphData.rootEntityName || entityId;
+        entityMap.set(entityId, { id: entityId, Name: effectiveEntityName });
+
+        for (const node of graphData.nodes) {
+          if (node.id !== entityId) {
+            entityMap.set(node.id, { id: node.id, Name: node.Name });
+            subsidiaryIds.push(node.id);
+          }
+        }
+
+        for (const edge of graphData.edges) {
+          if (edge.source === entityId) {
+            matchedEdges.set(edge.target, { value: edge.value || null });
+          }
+        }
+      }
+    } catch (apiErr) {
+      console.warn('[streamOwnerPortfolio] API failed, using DuckDB only:', apiErr);
+    }
+
+    // Yield update with subsidiary count
+    yield {
+      phase: 'subsidiaries',
+      message: `Found ${subsidiaryIds.length} subsidiaries, loading their assets...`,
+      portfolio: buildPortfolio(),
+    };
+
+    // Fetch subsidiary assets in batches and yield progress
+    const BATCH_SIZE = 5;
+    for (let i = 0; i < subsidiaryIds.length; i += BATCH_SIZE) {
+      const batch = subsidiaryIds.slice(i, i + BATCH_SIZE);
+
+      const batchResults = await Promise.all(
+        batch.map(async (subId) => {
+          const subResult = await getOwnerAssets(subId);
+          if (subResult.success && subResult.data && subResult.data.length > 0) {
+            return { subId, assets: subResult.data.map(rowToAsset) };
+          }
+          return { subId, assets: [] };
+        })
+      );
+
+      for (const { subId, assets } of batchResults) {
+        if (assets.length > 0) {
+          subsidiariesMatched.set(subId, assets);
+          allAssets.push(...assets);
+        }
+      }
+
+      // Yield progress update after each batch
+      const processedCount = Math.min(i + BATCH_SIZE, subsidiaryIds.length);
+      yield {
+        phase: 'subsidiaries',
+        message: `Processed ${processedCount}/${subsidiaryIds.length} subsidiaries (${allAssets.length} total assets)`,
+        portfolio: buildPortfolio(),
+      };
+    }
+
+    // Phase 4: Done
+    yield {
+      phase: 'done',
+      message: `Complete: ${allAssets.length} assets loaded`,
+      portfolio: buildPortfolio(),
+    };
+  } catch (err) {
+    console.error('Error in streamOwnerPortfolio:', err);
+    yield {
+      phase: 'error',
+      message: 'Failed to load entity data',
+      portfolio: buildPortfolio(),
+      error: err instanceof Error ? err.message : 'Unknown error',
+    };
+  }
+}
+
+/**
  * Get all subsidiaries and assets owned by an entity (walks DOWN the ownership tree)
  * Uses DuckDB directly for fast asset queries.
  * Falls back to API for entity metadata only.

@@ -1,20 +1,10 @@
 import { error } from '@sveltejs/kit';
-import { getEntityIds, getEntity } from '$lib/server/build-cache.js';
+import { getEntity } from '$lib/server/build-cache.js';
 
-export const prerender = true;
+// Dynamic SSR - no prerendering
+export const prerender = false;
 
-// Return cached IDs - cache is loaded ONCE and kept in memory
-export async function entries() {
-  const ids = getEntityIds();
-  if (ids.length > 0) {
-    console.log(`[Entity] Prerendering ${ids.length} pages from memory cache...`);
-    return ids.map(id => ({ id }));
-  }
-  console.warn('[Entity] No cache found - run npm run prefetch first');
-  return [];
-}
-
-// Read from in-memory cache - O(1) lookup, no file I/O
+// Read from in-memory cache - O(1) lookup
 export async function load({ params }) {
   const entityId = params.id;
   if (!entityId) throw error(404, 'Missing entity ID');
@@ -31,5 +21,13 @@ export async function load({ params }) {
     };
   }
 
-  return { entityId, entityName: null, entity: null, owners: null, owned: null, fromAPI: false, apiError: 'not_cached' };
+  return {
+    entityId,
+    entityName: null,
+    entity: null,
+    owners: null,
+    owned: null,
+    fromAPI: false,
+    apiError: 'not_cached',
+  };
 }

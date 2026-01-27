@@ -5,7 +5,6 @@
  */
 
 import { readFileSync, existsSync } from 'fs';
-import { join } from 'path';
 
 const ASSET_CACHE_FILE = '.svelte-kit/asset-cache/assets.json';
 const ASSET_IDS_FILE = '.svelte-kit/asset-cache/ids.json';
@@ -29,7 +28,9 @@ function loadAssetCache() {
   if (existsSync(ASSET_CACHE_FILE)) {
     const raw = readFileSync(ASSET_CACHE_FILE, 'utf-8');
     assetCache = JSON.parse(raw);
-    console.log(`[BuildCache] Asset cache loaded: ${Object.keys(assetCache).length} items in ${Date.now() - start}ms`);
+    console.log(
+      `[BuildCache] Asset cache loaded: ${Object.keys(assetCache).length} items in ${Date.now() - start}ms`
+    );
   } else {
     console.warn('[BuildCache] No asset cache found - run npm run prefetch first');
     assetCache = {};
@@ -51,7 +52,9 @@ function loadEntityCache() {
   if (existsSync(ENTITY_CACHE_FILE)) {
     const raw = readFileSync(ENTITY_CACHE_FILE, 'utf-8');
     entityCache = JSON.parse(raw);
-    console.log(`[BuildCache] Entity cache loaded: ${Object.keys(entityCache).length} items in ${Date.now() - start}ms`);
+    console.log(
+      `[BuildCache] Entity cache loaded: ${Object.keys(entityCache).length} items in ${Date.now() - start}ms`
+    );
   } else {
     console.warn('[BuildCache] No entity cache found - run npm run prefetch first');
     entityCache = {};

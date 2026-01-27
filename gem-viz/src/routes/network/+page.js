@@ -1,2 +1,2 @@
-// Enable prerendering - DuckDB code is dynamically imported only on client
-export const prerender = true;
+// SSR mode - render dynamically on the server
+export const prerender = false;

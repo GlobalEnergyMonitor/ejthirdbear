@@ -2,5 +2,6 @@
 // DO Spaces requires explicit /index.html in URLs
 export const trailingSlash = 'always';
 
-// Prerender all pages
-export const prerender = true;
+// SSR mode - pages render dynamically on the server
+// Set to true for static builds (DO Spaces)
+export const prerender = false;

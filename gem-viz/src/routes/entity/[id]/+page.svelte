@@ -7,8 +7,8 @@
   import AssetScreener from '$lib/components/AssetScreener.svelte';
   import TrackerIcon from '$lib/components/TrackerIcon.svelte';
   import StatusIcon from '$lib/components/StatusIcon.svelte';
-  import { fetchOwnerPortfolio } from '$lib/component-data/schema';
   import { EntityPortfolioFilters, EntityPortfolioHeader } from '$lib/components/ownership';
+  import { streamOwnerPortfolio } from '$lib/ownership-data';
 
   // Server data from +page.server.js (API-based)
   /** @type {{ data: any }} */
@@ -19,14 +19,15 @@
     return id && /^G\d+$/.test(id);
   }
 
-  // Local state - initialized from server data if available
-  let loading = $state(true); // Start loading until we fetch portfolio
+  // Progressive loading states
+  let loadingPhase = $state('init'); // 'init' | 'direct' | 'subsidiaries' | 'done' | 'error'
+  let loadingMessage = $state('Initializing DuckDB...');
   let error = $state(null);
 
   let entityId = $state(data?.entityId || '');
   let entityName = $state(data?.entityName || '');
   let _entity = $state(data?.entity || null); // Available from server if needed
-  let portfolio = $state(null); // Fetched client-side from DuckDB
+  let portfolio = $state(null); // Fetched client-side from DuckDB - progressively updated
 
   // Derived data from portfolio (client-fetched)
   const trackerBreakdown = $derived.by(() => {
@@ -138,7 +139,7 @@
     selectedCountries.size > 0 || selectedTrackers.size > 0 || selectedStatuses.size > 0
   );
 
-  // Client-side fetch for portfolio data (API provides basic entity, but we need DuckDB for portfolio)
+  // Client-side fetch for portfolio data with PROGRESSIVE STREAMING
   onMount(async () => {
     const paramsId = $page.params?.id;
 
@@ -154,29 +155,38 @@
       entityName = data.entity.name;
     }
 
-    // Always fetch portfolio data from DuckDB (API doesn't provide this)
+    // Stream portfolio data progressively from DuckDB
     try {
-      loading = true;
       error = null;
-
       if (!paramsId) throw new Error('Missing entity ID');
       entityId = paramsId;
 
-      // Fetch portfolio from DuckDB
-      portfolio = await fetchOwnerPortfolio(paramsId);
+      // Use streaming fetch - updates portfolio as data arrives
+      for await (const update of streamOwnerPortfolio(paramsId)) {
+        loadingPhase = update.phase;
+        loadingMessage = update.message;
 
-      // Use portfolio name if we don't have one from API
-      if (!entityName && portfolio?.spotlightOwner?.Name) {
-        entityName = portfolio.spotlightOwner.Name;
+        // Update portfolio progressively
+        if (update.portfolio) {
+          portfolio = update.portfolio;
+
+          // Use portfolio name if we don't have one from API
+          if (!entityName && portfolio?.spotlightOwner?.Name) {
+            entityName = portfolio.spotlightOwner.Name;
+          }
+        }
+
+        if (update.phase === 'error') {
+          error = update.error;
+        }
       }
     } catch (err) {
       console.error('Entity portfolio load error:', err);
+      loadingPhase = 'error';
       // Don't set error if we have basic entity data from API
       if (!data?.entity) {
         error = err?.message || 'Failed to load entity';
       }
-    } finally {
-      loading = false;
     }
   });
 </script>
@@ -191,12 +201,46 @@
     <span class="entity-type">Entity Profile</span>
   </header>
 
-  {#if loading}
-    <p class="loading">Loading entity directly from MotherDuck…</p>
-  {:else if error}
+  {#if loadingPhase === 'error' && error}
     <p class="loading error">{error}</p>
+  {:else if loadingPhase !== 'done' && !portfolio}
+    <div class="loading-progress">
+      <p class="loading">{loadingMessage}</p>
+      <div class="progress-phases">
+        <span
+          class="phase"
+          class:active={loadingPhase === 'init'}
+          class:done={['direct', 'subsidiaries', 'done'].includes(loadingPhase)}>Initialize</span
+        >
+        <span class="phase-arrow">→</span>
+        <span
+          class="phase"
+          class:active={loadingPhase === 'direct'}
+          class:done={['subsidiaries', 'done'].includes(loadingPhase)}>Direct Assets</span
+        >
+        <span class="phase-arrow">→</span>
+        <span
+          class="phase"
+          class:active={loadingPhase === 'subsidiaries'}
+          class:done={loadingPhase === 'done'}>Subsidiaries</span
+        >
+        <span class="phase-arrow">→</span>
+        <span class="phase" class:active={loadingPhase === 'done'}>Complete</span>
+      </div>
+    </div>
   {:else}
     <article class="entity-detail">
+      <!-- Show loading banner if still streaming data -->
+      {#if loadingPhase !== 'done' && loadingPhase !== 'error'}
+        <div class="streaming-banner">
+          <span class="streaming-dot"></span>
+          {loadingMessage}
+          {#if portfolio?.assets?.length}
+            — {portfolio.assets.length} assets loaded
+          {/if}
+        </div>
+      {/if}
+
       <!-- Unified header component with stats and flower -->
       <EntityPortfolioHeader
         {portfolio}
@@ -341,6 +385,84 @@
 
   .loading.error {
     color: var(--color-error);
+  }
+
+  .loading-progress {
+    padding: var(--space-8) 0;
+  }
+
+  .progress-phases {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-top: var(--space-4);
+    font-size: var(--font-size-sm);
+    font-family: var(--font-family-sans);
+  }
+
+  .phase {
+    padding: var(--space-1) var(--space-2);
+    background: var(--color-gray-100);
+    border: 1px solid var(--color-gray-300);
+    color: var(--color-text-tertiary);
+    transition: all 0.2s ease;
+  }
+
+  .phase.active {
+    background: var(--color-accent, #f59e0b);
+    border-color: var(--color-accent, #f59e0b);
+    color: white;
+    animation: pulse 1s ease-in-out infinite;
+  }
+
+  .phase.done {
+    background: var(--color-success, #10b981);
+    border-color: var(--color-success, #10b981);
+    color: white;
+  }
+
+  .phase-arrow {
+    color: var(--color-gray-400);
+  }
+
+  @keyframes pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.7;
+    }
+  }
+
+  .streaming-banner {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
+    background: var(--color-accent, #f59e0b);
+    color: white;
+    font-size: var(--font-size-sm);
+    font-family: var(--font-family-sans);
+    margin-bottom: var(--space-6);
+  }
+
+  .streaming-dot {
+    width: 8px;
+    height: 8px;
+    background: white;
+    border-radius: 50%;
+    animation: blink 1s ease-in-out infinite;
+  }
+
+  @keyframes blink {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.3;
+    }
   }
 
   header {

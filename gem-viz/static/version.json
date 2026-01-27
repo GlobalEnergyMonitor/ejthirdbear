@@ -1,10 +1,10 @@
 {
-  "version": "b04a166",
-  "commit": "b04a166",
-  "message": "fix: multiple bug fixes for v0.1.25 deploy",
+  "version": "8fa954d",
+  "commit": "8fa954d",
+  "message": "perf: 100x faster static builds with MotherDuck bulk queries",
   "author": "EJ Fox",
-  "timestamp": "2026-01-27T17:30:57.091Z",
-  "deployed": "2026-01-27T17:30:57.091Z",
-  "buildTime": "1/27/2026, 12:30:57 PM",
-  "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.1.26"
+  "timestamp": "2026-01-27T17:37:05.436Z",
+  "deployed": "2026-01-27T17:37:05.436Z",
+  "buildTime": "1/27/2026, 12:37:05 PM",
+  "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.1.27"
 }

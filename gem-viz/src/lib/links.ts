@@ -12,7 +12,11 @@
  */
 
 import { base } from '$app/paths';
-import { dev } from '$app/environment';
+import { building } from '$app/environment';
+
+// SSR mode uses clean URLs, static builds need /index.html
+// Use building context - during static builds this will be true
+const isStaticBuild = building;
 
 /**
  * Generate a link that works in both dev and production
@@ -23,14 +27,18 @@ export function link(path: string): string {
   // Remove leading slash if present
   const cleanPath = path.startsWith('/') ? path.slice(1) : path;
 
+  // SSR/dynamic mode: use clean URLs with trailing slash
+  // Static builds (DO Spaces): use /index.html
+  const useStaticPaths = isStaticBuild;
+
   // Handle index/home
   if (cleanPath === '' || cleanPath === 'index') {
-    return dev ? `${base}/` : `${base}/index.html`;
+    return useStaticPaths ? `${base}/index.html` : `${base}/`;
   }
 
-  // Dev mode: trailing slash (SvelteKit handles routing)
-  // Production: explicit /index.html (DO Spaces requires it)
-  return dev ? `${base}/${cleanPath}/` : `${base}/${cleanPath}/index.html`;
+  // SSR mode: trailing slash (SvelteKit/Node handles routing)
+  // Static builds: explicit /index.html (DO Spaces requires it)
+  return useStaticPaths ? `${base}/${cleanPath}/index.html` : `${base}/${cleanPath}/`;
 }
 
 /**
