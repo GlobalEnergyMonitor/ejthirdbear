@@ -1,7 +1,7 @@
 <script>
   /**
-   * SiteNav - Persistent navigation component
-   * Used in +layout.svelte for consistent navigation across all pages
+   * SiteNav - GEM-branded navigation component
+   * White background, teal logo, rounded container
    */
 
   import { page, navigating } from '$app/stores';
@@ -18,6 +18,9 @@
   // Loading state
   const isNavigating = $derived(!!$navigating);
 
+  // Mobile menu state
+  let menuOpen = $state(false);
+
   // Check if link is active
   function isActive(path) {
     if (path === '' || path === 'index') {
@@ -29,206 +32,384 @@
   // Trigger command palette via store
   function openSearch() {
     openCommandPalette();
+    menuOpen = false;
   }
 
-  // Navigation links (primary only - others moved to footer)
+  // Toggle mobile menu
+  function toggleMenu() {
+    menuOpen = !menuOpen;
+  }
+
+  // Close menu when navigating
+  $effect(() => {
+    if ($navigating) {
+      menuOpen = false;
+    }
+  });
+
+  // Navigation links
   const navLinks = [
     { path: 'index', label: 'Map' },
-    { path: 'asset', label: 'All Assets' },
+    { path: 'asset', label: 'Assets' },
     { path: 'explore', label: 'Explore' },
-    { path: 'screener', label: 'Asset Screener' },
+    { path: 'screener', label: 'Screener' },
+    { path: 'report', label: 'Report', showBadge: true },
   ];
 </script>
 
-<nav class="site-nav">
-  {#if isNavigating}
-    <div class="loading-bar"></div>
-  {/if}
-  <div class="nav-brand">
-    <a href={link('index')}>GEM Viz</a>
-    <button class="search-btn" onclick={openSearch} title="Search (⌘K)">
-      <svg
-        width="14"
-        height="14"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-      >
-        <circle cx="11" cy="11" r="8" />
-        <path d="m21 21-4.35-4.35" />
-      </svg>
-    </button>
-  </div>
-  <div class="nav-links">
-    {#each navLinks as { path, label, showBadge }}
-      <a
-        href={link(path)}
-        class:active={isActive(path)}
-        class:has-badge={showBadge && cartCount > 0}
-      >
-        {label}
-        {#if showBadge && cartCount > 0}
-          <span class="badge">{cartCount}</span>
-        {/if}
+<div class="nav-wrapper">
+  <nav class="site-nav">
+    {#if isNavigating}
+      <div class="loading-bar"></div>
+    {/if}
+    <div class="nav-inner">
+      <a href={link('index')} class="nav-logo">
+        <span class="logo-text">gem</span>
+        <span class="logo-suffix">viz</span>
       </a>
-    {/each}
-  </div>
-</nav>
+
+      <!-- Desktop navigation -->
+      <div class="nav-links desktop-only">
+        {#each navLinks as { path, label, showBadge }}
+          <a href={link(path)} class:active={isActive(path)}>
+            {label}
+            {#if showBadge && cartCount > 0}
+              <span class="badge">{cartCount}</span>
+            {/if}
+          </a>
+        {/each}
+        <button class="search-btn" onclick={openSearch} title="Search (⌘K)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.35-4.35" />
+          </svg>
+        </button>
+      </div>
+
+      <!-- Mobile hamburger -->
+      <button class="menu-btn mobile-only" onclick={toggleMenu} aria-label="Toggle menu">
+        {#if menuOpen}
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        {:else}
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 12h18M3 6h18M3 18h18" />
+          </svg>
+        {/if}
+      </button>
+    </div>
+
+    <!-- Mobile menu dropdown -->
+    {#if menuOpen}
+      <div class="mobile-menu">
+        {#each navLinks as { path, label, showBadge }}
+          <a href={link(path)} class:active={isActive(path)} onclick={() => (menuOpen = false)}>
+            {label}
+            {#if showBadge && cartCount > 0}
+              <span class="badge">{cartCount}</span>
+            {/if}
+          </a>
+        {/each}
+        <button class="search-btn-mobile" onclick={openSearch}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.35-4.35" />
+          </svg>
+          Search
+        </button>
+      </div>
+    {/if}
+  </nav>
+</div>
 
 <style>
-  .site-nav {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px 40px;
-    border-bottom: 1px solid var(--color-black);
-    background: var(--color-bg-primary);
+  .nav-wrapper {
     position: sticky;
     top: 0;
     z-index: 1000;
+    padding: 0 20px 12px 20px;
   }
 
-  /* Subtle loading bar */
+  .site-nav {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    max-width: var(--container-xl);
+    margin: 0 auto;
+    overflow: hidden;
+  }
+
+  .nav-inner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 24px;
+    height: 64px;
+    box-sizing: border-box;
+  }
+
+  /* Loading bar */
   .loading-bar {
     position: absolute;
     bottom: 0;
     left: 0;
-    height: 1px;
-    background: var(--color-black);
+    height: 2px;
+    background: #006d77;
     animation: loading 1s ease-in-out infinite;
   }
 
   @keyframes loading {
-    0% {
-      width: 0;
-      left: 0;
-    }
-    50% {
-      width: 40%;
-      left: 30%;
-    }
-    100% {
-      width: 0;
-      left: 100%;
-    }
+    0% { width: 0; left: 0; }
+    50% { width: 40%; left: 30%; }
+    100% { width: 0; left: 100%; }
   }
 
-  .nav-brand {
+  /* Logo */
+  .nav-logo {
+    display: flex;
+    align-items: baseline;
+    text-decoration: none;
+    gap: 0;
+  }
+
+  .logo-text {
+    font-family: 'Plus Jakarta Sans', var(--font-family), sans-serif;
+    font-size: 42px;
+    font-weight: 800;
+    color: #006d77;
+    letter-spacing: -2px;
+    line-height: 1;
+  }
+
+  .logo-suffix {
+    font-family: 'Plus Jakarta Sans', var(--font-family), sans-serif;
+    font-size: 16px;
+    font-weight: 600;
+    color: rgba(0, 109, 119, 0.45);
+    letter-spacing: 0.5px;
+    text-transform: lowercase;
+    margin-left: 2px;
+  }
+
+  .nav-logo:hover .logo-text {
+    color: #004a63;
+  }
+
+  .nav-logo:hover .logo-suffix {
+    color: rgba(0, 74, 99, 0.55);
+  }
+
+  /* Desktop navigation */
+  .nav-links {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
   }
 
-  .nav-brand a {
+  .nav-links a {
+    font-family: var(--font-family);
     font-size: 14px;
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--color-black);
+    font-weight: 500;
+    color: #444;
     text-decoration: none;
+    padding: 8px 14px;
+    border-radius: 6px;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
   }
 
-  .nav-brand a:hover {
-    text-decoration: underline;
+  .nav-links a:hover {
+    color: #006d77;
+    background: rgba(0, 109, 119, 0.06);
+  }
+
+  .nav-links a.active {
+    color: #006d77;
+    background: rgba(0, 109, 119, 0.1);
+    font-weight: 600;
   }
 
   .search-btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 24px;
-    height: 24px;
+    width: 36px;
+    height: 36px;
     padding: 0;
-    border: 1px solid var(--color-border);
+    border: 1px solid #ddd;
+    border-radius: 6px;
     background: transparent;
-    color: var(--color-text-secondary);
+    color: #666;
     cursor: pointer;
-    transition: all 0.15s;
+    transition: all 0.15s ease;
+    margin-left: 8px;
   }
 
   .search-btn:hover {
-    border-color: var(--color-black);
-    color: var(--color-black);
+    border-color: #006d77;
+    color: #006d77;
+    background: rgba(0, 109, 119, 0.05);
   }
 
-  .nav-links {
-    display: flex;
-    gap: 20px;
-  }
-
-  .nav-links a {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--color-text-secondary);
-    text-decoration: none;
-    padding: 4px 0;
-    border-bottom: 1px solid transparent;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    transition:
-      color 0.15s,
-      border-color 0.15s;
-  }
-
-  .nav-links a:hover {
-    color: var(--color-black);
-    border-bottom-color: var(--color-border);
-  }
-
-  .nav-links a.active {
-    color: var(--color-black);
-    border-bottom-color: var(--color-black);
-  }
-
+  /* Badge */
   .badge {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 14px;
-    height: 14px;
-    padding: 0 3px;
-    background: var(--color-black);
-    color: var(--color-white);
-    font-size: 9px;
-    font-weight: normal;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    background: #fe4f2d;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 9px;
     font-variant-numeric: tabular-nums;
   }
 
+  /* Mobile hamburger */
+  .menu-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: #444;
+    cursor: pointer;
+    transition: color 0.15s ease;
+    border-radius: 6px;
+  }
+
+  .menu-btn:hover {
+    color: #006d77;
+    background: rgba(0, 109, 119, 0.06);
+  }
+
+  /* Mobile menu */
+  .mobile-menu {
+    display: none;
+    flex-direction: column;
+    background: #fff;
+    border-top: 1px solid #eee;
+    padding: 12px 16px 20px;
+  }
+
+  .mobile-menu a {
+    font-family: var(--font-family);
+    font-size: 16px;
+    font-weight: 500;
+    color: #444;
+    text-decoration: none;
+    padding: 14px 12px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .mobile-menu a:hover {
+    color: #006d77;
+    background: rgba(0, 109, 119, 0.06);
+  }
+
+  .mobile-menu a.active {
+    color: #006d77;
+    background: rgba(0, 109, 119, 0.1);
+    font-weight: 600;
+  }
+
+  .search-btn-mobile {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 8px;
+    padding: 14px 16px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    background: transparent;
+    color: #444;
+    font-family: var(--font-family);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .search-btn-mobile:hover {
+    border-color: #006d77;
+    color: #006d77;
+  }
+
+  /* Responsive */
+  .desktop-only {
+    display: flex;
+  }
+
+  .mobile-only {
+    display: none;
+  }
+
   @media (max-width: 768px) {
+    .nav-wrapper {
+      padding: 0 12px 8px 12px;
+    }
+
     .site-nav {
-      padding: 12px 20px;
-      flex-wrap: wrap;
-      gap: 12px;
+      border-radius: 10px;
     }
 
-    .nav-links {
-      width: 100%;
-      justify-content: flex-start;
-      gap: 12px;
-      flex-wrap: wrap;
+    .nav-inner {
+      padding: 10px 16px;
+      height: 56px;
     }
 
-    .nav-links a {
-      font-size: 10px;
+    .logo-text {
+      font-size: 34px;
+      letter-spacing: -1.5px;
+    }
+
+    .logo-suffix {
+      font-size: 13px;
+    }
+
+    .desktop-only {
+      display: none;
+    }
+
+    .mobile-only {
+      display: flex;
+    }
+
+    .mobile-menu {
+      display: flex;
     }
   }
 
   @media print {
-    .site-nav {
+    .nav-wrapper {
       position: relative;
-      border-bottom: none;
+      padding: 0;
     }
 
-    .nav-links {
+    .site-nav {
+      box-shadow: none;
+      border-radius: 0;
+    }
+
+    .nav-links,
+    .menu-btn {
       display: none;
     }
   }
 
-  /* Hide on pages that have their own full-width layout (like network) */
-  :global(.full-width-page) .site-nav {
+  /* Hide on pages that have their own full-width layout */
+  :global(.full-width-page) .nav-wrapper {
     display: none;
   }
 </style>
