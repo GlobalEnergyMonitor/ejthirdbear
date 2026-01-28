@@ -72,6 +72,8 @@
   let error = $state(null);
   let showUnmatchedList = $state(false);
   let expandedRows = $state(new Set());
+  let currentPage = $state(1);
+  const resultsPerPage = 25;
 
   // Aggregate stats
   let totalCapacity = $state(0);
@@ -497,6 +499,24 @@
   // Derived donut arcs
   const statusArcs = $derived(totalAssets > 0 ? getStatusArcs(statusBreakdown, totalAssets) : []);
 
+  // Pagination
+  const allResults = $derived(assetOnly() ? assetResults : matchedResults);
+  const totalResults = $derived(allResults.length);
+  const totalPages = $derived(Math.ceil(totalResults / resultsPerPage));
+  const paginatedResults = $derived(() => {
+    const start = (currentPage - 1) * resultsPerPage;
+    const end = start + resultsPerPage;
+    return allResults.slice(start, end);
+  });
+
+  function goToPage(page) {
+    const pageNum = Math.max(1, Math.min(page, totalPages));
+    if (pageNum !== currentPage) {
+      currentPage = pageNum;
+      expandedRows.clear();
+    }
+  }
+
   // Calculate percentage
   function pct(value, total) {
     if (!total) return 0;
@@ -697,9 +717,9 @@
       {#if assetOnly() && assetResults.length > 0}
         <section class="results-section">
           <div class="results-list">
-            {#each assetResults as asset, i}
+            {#each paginatedResults() as asset, i}
               <a href={link(`asset/${asset.id}`)} class="asset-row">
-                <div class="asset-row-rank">{i + 1}</div>
+                <div class="asset-row-rank">{(currentPage - 1) * resultsPerPage + i + 1}</div>
                 <div class="asset-row-info">
                   <div class="asset-row-name">{asset.name || asset.id}</div>
                 </div>
@@ -741,13 +761,13 @@
       {/if}
 
       <!-- Results Table -->
-      {#if matchedResults.length > 0}
+      {#if !assetOnly() && matchedResults.length > 0}
         <section class="results-section">
           <div class="results-list">
-            {#each matchedResults as row, i}
+            {#each paginatedResults() as row, i}
               <div class="result-row" class:expanded={expandedRows.has(row.id)}>
                 <button class="row-main" onclick={() => toggleRow(row.id)}>
-                  <div class="row-rank">{i + 1}</div>
+                  <div class="row-rank">{(currentPage - 1) * resultsPerPage + i + 1}</div>
 
                   <!-- Mini flower showing tracker distribution -->
                   <div class="row-flower">
@@ -862,6 +882,29 @@
             {/each}
           </div>
         </section>
+
+        <!-- Pagination Controls -->
+        {#if totalPages > 1}
+          <div class="pagination">
+            <button
+              class="pagination-btn"
+              onclick={() => goToPage(currentPage - 1)}
+              disabled={currentPage === 1}
+            >
+              ← Previous
+            </button>
+            <div class="pagination-info">
+              Page {currentPage} of {totalPages} ({totalResults.toLocaleString()} total)
+            </div>
+            <button
+              class="pagination-btn"
+              onclick={() => goToPage(currentPage + 1)}
+              disabled={currentPage === totalPages}
+            >
+              Next →
+            </button>
+          </div>
+        {/if}
 
         <!-- Continue button -->
         <div class="continue-section">
@@ -1625,6 +1668,46 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* Pagination */
+  .pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-6);
+    padding: var(--space-6);
+    margin: var(--space-8) 0;
+    border-top: var(--border-width) solid var(--color-border);
+    border-bottom: var(--border-width) solid var(--color-border);
+  }
+
+  .pagination-btn {
+    padding: var(--space-3) var(--space-4);
+    font-size: var(--font-size-body);
+    background: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    border: var(--border-width) solid var(--color-border);
+    cursor: pointer;
+    transition: all var(--duration-base) var(--ease-in-out-quad);
+    border-radius: 4px;
+  }
+
+  .pagination-btn:hover:not(:disabled) {
+    background: var(--color-bg-secondary);
+    border-color: var(--color-gray-400);
+  }
+
+  .pagination-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .pagination-info {
+    font-size: var(--font-size-body);
+    color: var(--color-text-secondary);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
   /* Reduced motion */
   @media (prefers-reduced-motion: reduce) {
     .row-details-wrapper,
@@ -1695,6 +1778,18 @@
     .asset-row-status,
     .asset-row-capacity {
       display: none;
+    }
+
+    .pagination {
+      gap: var(--space-4);
+      padding: var(--space-4);
+      flex-wrap: wrap;
+    }
+
+    .pagination-info {
+      width: 100%;
+      text-align: center;
+      order: 3;
     }
   }
 </style>
