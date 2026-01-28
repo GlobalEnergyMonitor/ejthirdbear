@@ -19,6 +19,7 @@
   import TrackerIcon from '$lib/components/TrackerIcon.svelte';
   import { colorByStatus, colorByTracker, regroupStatus } from '$lib/design-tokens';
   import { formatCompact } from '$lib/format';
+  import { escapeSQL } from '$lib/utils/sql';
 
   // DuckDB utilities
   let loadParquetFromPath;
@@ -27,6 +28,7 @@
   // Get params from URL
   const classesParam = $derived($page.url.searchParams.get('classes') || '');
   const ownersParam = $derived($page.url.searchParams.get('owners') || '');
+  const modeParam = $derived($page.url.searchParams.get('mode') || '');
 
   // Parse selected classes for display
   const selectedClasses = $derived(() => {
@@ -59,9 +61,13 @@
     return ownersParam.split(',').filter((id) => id.trim());
   });
 
+  // Check if showing assets only (no owner filter)
+  const assetOnly = $derived(() => modeParam === 'assets' || ownerIds().length === 0);
+
   // Results state
   let matchedResults = $state([]);
   let unmatchedOwners = $state([]);
+  let assetResults = $state([]);
   let loading = $state(true);
   let error = $state(null);
   let showUnmatchedList = $state(false);
@@ -73,6 +79,101 @@
   let statusBreakdown = $state({});
   let trackerBreakdown = $state({});
   let countryBreakdown = $state({});
+
+  /**
+   * Build SQL query to fetch assets matching the selected classes (no owner filter)
+   */
+  function buildAssetQuery(classes) {
+    const classConditions = (classes || [])
+      .map((cls) => {
+        const conditions = [];
+
+        if (cls.tracker) {
+          conditions.push(`Tracker = '${escapeSQL(cls.tracker)}'`);
+        }
+
+        if (cls.filters) {
+          const filterCond = buildFilterCondition(cls.filters);
+          if (filterCond) conditions.push(filterCond);
+
+          if (cls.filters.status) {
+            conditions.push(`Status ILIKE '${escapeSQL(cls.filters.status)}'`);
+          }
+        }
+
+        return conditions.length > 0 ? `(${conditions.join(' AND ')})` : null;
+      })
+      .filter(Boolean);
+
+    const whereClause = classConditions.length > 0 ? `AND (${classConditions.join(' OR ')})` : '';
+    const limitClause = classConditions.length === 0 ? 'LIMIT 50000' : '';
+
+    return `
+      SELECT
+        "GEM unit ID" as id,
+        MAX("Project") as name,
+        MAX(Status) as status,
+        MAX(Tracker) as tracker,
+        MAX("Capacity (MW)") as capacity
+      FROM ownership
+      WHERE "GEM unit ID" IS NOT NULL
+        AND "GEM unit ID" != ''
+        ${whereClause}
+      GROUP BY "GEM unit ID"
+      ORDER BY capacity DESC NULLS LAST
+      ${limitClause}
+    `;
+  }
+
+  /**
+   * Build SQL WHERE clause from asset class filter
+   */
+  function buildFilterCondition(filter) {
+    if (!filter || !filter.field || !filter.operator) return null;
+
+    const field = filter.field;
+    const op = filter.operator;
+    const value = filter.value;
+
+    const fieldMap = {
+      'Capacity (MW)': '"Capacity (MW)"',
+      Status: 'Status',
+      Captive: 'Captive',
+      'Start Year': '"Start Year"',
+      'Main production equipment': '"Main production equipment"',
+      'Water Depth (m)': '"Water Depth (m)"',
+      'Capacity (Mtpa)': '"Capacity (Mtpa)"',
+      'Mine Type': '"Mine Type"',
+      'Capacity (ttpa)': '"Capacity (ttpa)"',
+      'Capacity (Bcm/y)': '"Capacity (Bcm/y)"',
+      Feedstock: 'Feedstock',
+    };
+
+    const sqlField = fieldMap[field] || `"${field}"`;
+
+    switch (op) {
+      case '>':
+      case '<':
+      case '>=':
+      case '<=':
+        return `${sqlField} ${op} ${Number(value) || 0}`;
+      case '=':
+        return `${sqlField} ILIKE '${escapeSQL(String(value))}'`;
+      case 'contains':
+        return `${sqlField} ILIKE '%${escapeSQL(String(value))}%'`;
+      case 'not_empty':
+        return `${sqlField} IS NOT NULL AND ${sqlField} != ''`;
+      case 'in': {
+        const vals = String(value)
+          .split(',')
+          .map((v) => `'${escapeSQL(v.trim())}'`)
+          .join(',');
+        return `${sqlField} IN (${vals})`;
+      }
+      default:
+        return null;
+    }
+  }
 
   // Status display order
   const statusOrder = [
@@ -90,12 +191,6 @@
 
   // Load data on mount using DuckDB
   onMount(async () => {
-    const ids = ownerIds();
-    if (ids.length === 0) {
-      loading = false;
-      return;
-    }
-
     try {
       // Initialize DuckDB
       const duckdbUtils = await import('$lib/duckdb-utils');
@@ -104,6 +199,60 @@
 
       const ownershipPath = assetPath('all_trackers_ownership@1.parquet');
       await loadParquetFromPath(ownershipPath, 'ownership');
+
+      if (assetOnly()) {
+        const classes = selectedClasses();
+        const sql = buildAssetQuery(classes);
+        const result = await query(sql);
+
+        if (!result.success) {
+          throw new Error(result.error || 'Query failed');
+        }
+
+        const assets = (result.data || []).map((row) => {
+          const status = (row.status || 'unknown').toLowerCase();
+          const tracker = row.tracker || 'Unknown';
+          const country = row.country || 'Unknown';
+          const capacity = parseFloat(row.capacity) || 0;
+
+          return {
+            id: row.id,
+            name: row.name || row.id,
+            tracker,
+            status,
+            country,
+            capacity,
+          };
+        });
+
+        assetResults = assets;
+
+        let aggCapacity = 0;
+        const aggStatus = {};
+        const aggTracker = {};
+        const aggCountry = {};
+
+        assets.forEach((asset) => {
+          aggCapacity += asset.capacity || 0;
+          aggStatus[asset.status] = (aggStatus[asset.status] || 0) + 1;
+          aggTracker[asset.tracker] = (aggTracker[asset.tracker] || 0) + 1;
+          aggCountry[asset.country] = (aggCountry[asset.country] || 0) + 1;
+        });
+
+        totalAssets = assets.length;
+        totalCapacity = aggCapacity;
+        statusBreakdown = aggStatus;
+        trackerBreakdown = aggTracker;
+        countryBreakdown = aggCountry;
+        loading = false;
+        return;
+      }
+
+      const ids = ownerIds();
+      if (ids.length === 0) {
+        loading = false;
+        return;
+      }
 
       // Build tracker filter clause
       const tracker = trackerFilter();
@@ -121,8 +270,8 @@
           // Query parquet for assets owned by this entity
           const sql = `
             SELECT
-              "GEM Asset ID" as gem_id,
-              "Project Name" as name,
+              "GEM unit ID" as gem_id,
+              "Project" as name,
               Status,
               Tracker,
               Country,
@@ -405,20 +554,22 @@
     <LoadingWrapper
       {loading}
       {error}
-      empty={matchedResults.length === 0 && unmatchedOwners.length === 0}
+      empty={matchedResults.length === 0 && unmatchedOwners.length === 0 && assetResults.length === 0}
       loadingMessage="Analyzing ownership data..."
-      emptyMessage="No owners selected."
+      emptyMessage={assetOnly() ? 'No assets found.' : 'No owners selected.'}
     >
       <!-- Aggregate Stats Panel -->
-      {#if matchedResults.length > 0}
+      {#if matchedResults.length > 0 || assetResults.length > 0}
         <section class="stats-panel">
           <div class="stats-hero">
             <!-- Big numbers -->
             <div class="stat-group">
-              <div class="stat-large">
-                <span class="stat-value">{matchedResults.length}</span>
-                <span class="stat-label">{matchedResults.length === 1 ? 'Owner' : 'Owners'}</span>
-              </div>
+              {#if !assetOnly()}
+                <div class="stat-large">
+                  <span class="stat-value">{matchedResults.length}</span>
+                  <span class="stat-label">{matchedResults.length === 1 ? 'Owner' : 'Owners'}</span>
+                </div>
+              {/if}
               <div class="stat-large">
                 <span class="stat-value">{formatCompact(totalAssets)}</span>
                 <span class="stat-label">Assets</span>
@@ -539,6 +690,33 @@
               </div>
             </div>
           {/if}
+        </section>
+      {/if}
+
+      <!-- Asset Results Table (for asset-only mode) -->
+      {#if assetOnly() && assetResults.length > 0}
+        <section class="results-section">
+          <div class="results-list">
+            {#each assetResults as asset, i}
+              <a href={link(`asset/${asset.id}`)} class="asset-row">
+                <div class="asset-row-rank">{i + 1}</div>
+                <div class="asset-row-info">
+                  <div class="asset-row-name">{asset.name || asset.id}</div>
+                </div>
+                <div class="asset-row-tracker">
+                  {#if asset.tracker}
+                    <TrackerIcon tracker={asset.tracker} size={14} />
+                    <span class="asset-row-tracker-name">{asset.tracker}</span>
+                  {/if}
+                </div>
+                <div class="asset-row-status">
+                  <StatusIcon status={asset.status} size={10} />
+                  <span class="asset-row-status-name">{asset.status}</span>
+                </div>
+                <div class="asset-row-capacity">{formatCapacity(asset.capacity)}</div>
+              </a>
+            {/each}
+          </div>
         </section>
       {/if}
 
@@ -1374,6 +1552,79 @@
     color: var(--color-text-primary);
   }
 
+  /* Asset Row Styles */
+  .asset-row {
+    display: grid;
+    grid-template-columns: 40px 1fr 120px 100px 100px;
+    align-items: center;
+    gap: var(--space-4);
+    padding: var(--space-4) var(--space-5);
+    background: var(--color-bg-primary);
+    border: var(--border-width) solid var(--color-border);
+    text-decoration: none;
+    color: inherit;
+    transition: background var(--duration-base) var(--ease-in-out-quad);
+  }
+
+  .asset-row:hover {
+    background: var(--color-bg-secondary);
+    border-color: var(--color-gray-300);
+  }
+
+  .asset-row-rank {
+    font-size: var(--font-size-lg);
+    font-weight: 500;
+    color: var(--color-text-tertiary);
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .asset-row-info {
+    min-width: 0;
+  }
+
+  .asset-row-name {
+    font-size: var(--font-size-lg);
+    font-weight: 500;
+    color: var(--color-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .asset-row-tracker {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .asset-row-tracker-name {
+    font-size: var(--font-size-body);
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .asset-row-status {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .asset-row-status-name {
+    font-size: var(--font-size-body);
+    color: var(--color-text-secondary);
+    text-transform: capitalize;
+  }
+
+  .asset-row-capacity {
+    text-align: right;
+    font-size: var(--font-size-lg);
+    color: var(--color-text-primary);
+    font-variant-numeric: tabular-nums;
+  }
+
   /* Reduced motion */
   @media (prefers-reduced-motion: reduce) {
     .row-details-wrapper,
@@ -1432,6 +1683,18 @@
     .owner-tracker-breakdown {
       flex-direction: column;
       gap: var(--space-2);
+    }
+
+    .asset-row {
+      grid-template-columns: 32px 1fr 40px;
+      gap: var(--space-3);
+      padding: var(--space-3) var(--space-4);
+    }
+
+    .asset-row-tracker,
+    .asset-row-status,
+    .asset-row-capacity {
+      display: none;
     }
   }
 </style>
