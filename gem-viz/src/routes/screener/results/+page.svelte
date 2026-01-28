@@ -13,6 +13,8 @@
   import { onMount } from 'svelte';
   import LoadingWrapper from '$lib/components/LoadingWrapper.svelte';
   import ScreenerStepNav from '$lib/components/ScreenerStepNav.svelte';
+  import FilterBreadcrumbs from '$lib/components/FilterBreadcrumbs.svelte';
+  import DataTable from '$lib/components/DataTable.svelte';
   import MiniFlower from '$lib/components/MiniFlower.svelte';
   import OwnershipFlower from '$lib/components/OwnershipFlower.svelte';
   import StatusIcon from '$lib/components/StatusIcon.svelte';
@@ -20,6 +22,7 @@
   import { colorByStatus, colorByTracker, regroupStatus } from '$lib/design-tokens';
   import { formatCompact } from '$lib/format';
   import { escapeSQL } from '$lib/utils/sql';
+  import { ASSET_ID_COALESCE } from '$lib/duckdb-queries';
 
   // DuckDB utilities
   let loadParquetFromPath;
@@ -47,6 +50,32 @@
       return classes[0].tracker;
     }
     return null;
+  });
+
+  // Build filter state for FilterBreadcrumbs component
+  const filterState = $derived(() => {
+    const classes = selectedClasses();
+    const trackers = [];
+    const statuses = [];
+
+    classes.forEach((cls) => {
+      if (cls.tracker && !trackers.includes(cls.tracker)) {
+        trackers.push(cls.tracker);
+      }
+      if (cls.filters?.status && !statuses.includes(cls.filters.status)) {
+        statuses.push(cls.filters.status);
+      }
+    });
+
+    return {
+      trackers,
+      statuses,
+      countries: [],
+      ownerCountries: [],
+      owners: [],
+      capacityMin: null,
+      capacityMax: null,
+    };
   });
 
   // Parse owner IDs
@@ -112,16 +141,16 @@
 
     return `
       SELECT
-        "GEM unit ID" as id,
+        ${ASSET_ID_COALESCE} as id,
         MAX("Project") as name,
         MAX(Status) as status,
         MAX(Tracker) as tracker,
         MAX("Capacity (MW)") as capacity
       FROM ownership
-      WHERE "GEM unit ID" IS NOT NULL
-        AND "GEM unit ID" != ''
+      WHERE ${ASSET_ID_COALESCE} IS NOT NULL
+        AND ${ASSET_ID_COALESCE} != ''
         ${whereClause}
-      GROUP BY "GEM unit ID"
+      GROUP BY ${ASSET_ID_COALESCE}
       ORDER BY capacity DESC NULLS LAST
       ${limitClause}
     `;
@@ -272,7 +301,7 @@
           // Query parquet for assets owned by this entity
           const sql = `
             SELECT
-              "GEM unit ID" as gem_id,
+              ${ASSET_ID_COALESCE} as gem_id,
               "Project" as name,
               Status,
               Tracker,
@@ -551,6 +580,25 @@
       )
     );
   }
+
+  // Asset table columns for DataTable
+  const assetTableColumns = [
+    { key: 'name', label: 'Asset Name', sortable: true, width: '50%' },
+    { key: 'tracker', label: 'Tracker', sortable: true, width: '20%' },
+    { key: 'status', label: 'Status', sortable: true, width: '15%' },
+    { key: 'capacity', label: 'Capacity (MW)', sortable: true, type: 'number', width: '15%' },
+  ];
+
+  // Format asset data for DataTable
+  const assetTableData = $derived(() => {
+    return assetResults.map((asset) => ({
+      ...asset,
+      tracker: asset.tracker || 'Unknown',
+      status: (asset.status || 'unknown').toLowerCase(),
+      capacity: parseFloat(asset.capacity) || 0,
+      _href: link(`asset/${asset.id}`),
+    }));
+  });
 </script>
 
 <svelte:head>
@@ -571,10 +619,19 @@
       </div>
     </header>
 
+    <!-- Active Filters -->
+    {#if filterState().trackers.length > 0 || filterState().statuses.length > 0}
+      <div class="filter-display">
+        <FilterBreadcrumbs filters={filterState()} compact={true} />
+      </div>
+    {/if}
+
     <LoadingWrapper
       {loading}
       {error}
-      empty={matchedResults.length === 0 && unmatchedOwners.length === 0 && assetResults.length === 0}
+      empty={matchedResults.length === 0 &&
+        unmatchedOwners.length === 0 &&
+        assetResults.length === 0}
       loadingMessage="Analyzing ownership data..."
       emptyMessage={assetOnly() ? 'No assets found.' : 'No owners selected.'}
     >
@@ -716,26 +773,41 @@
       <!-- Asset Results Table (for asset-only mode) -->
       {#if assetOnly() && assetResults.length > 0}
         <section class="results-section">
-          <div class="results-list">
-            {#each paginatedResults() as asset, i}
-              <a href={link(`asset/${asset.id}`)} class="asset-row">
-                <div class="asset-row-rank">{(currentPage - 1) * resultsPerPage + i + 1}</div>
-                <div class="asset-row-info">
-                  <div class="asset-row-name">{asset.name || asset.id}</div>
-                </div>
-                <div class="asset-row-tracker">
-                  {#if asset.tracker}
-                    <TrackerIcon tracker={asset.tracker} size={14} />
-                    <span class="asset-row-tracker-name">{asset.tracker}</span>
+          <div class="asset-table-wrapper">
+            <DataTable
+              columns={assetTableColumns}
+              data={assetTableData()}
+              pageSize={resultsPerPage}
+              showGlobalSearch={true}
+              showColumnFilters={false}
+              showPagination={true}
+              showExport={false}
+              showColumnToggle={false}
+              showSelection={false}
+              striped={true}
+              onRowClick={(row) => goto(row._href)}
+            >
+              <svelte:fragment slot="cell-name" let:row let:value>
+                <a href={row._href} class="asset-link">{value || row.id}</a>
+              </svelte:fragment>
+              <svelte:fragment slot="cell-tracker" let:value>
+                <div class="tracker-cell">
+                  {#if value}
+                    <TrackerIcon tracker={value} size={12} />
+                    <span>{value}</span>
                   {/if}
                 </div>
-                <div class="asset-row-status">
-                  <StatusIcon status={asset.status} size={10} />
-                  <span class="asset-row-status-name">{asset.status}</span>
+              </svelte:fragment>
+              <svelte:fragment slot="cell-status" let:value>
+                <div class="status-cell">
+                  <StatusIcon status={value} size={10} />
+                  <span>{value}</span>
                 </div>
-                <div class="asset-row-capacity">{formatCapacity(asset.capacity)}</div>
-              </a>
-            {/each}
+              </svelte:fragment>
+              <svelte:fragment slot="cell-capacity" let:value>
+                <span class="capacity-cell">{formatCapacity(value)}</span>
+              </svelte:fragment>
+            </DataTable>
           </div>
         </section>
       {/if}
@@ -883,8 +955,8 @@
           </div>
         </section>
 
-        <!-- Pagination Controls -->
-        {#if totalPages > 1}
+        <!-- Pagination Controls (Owner Results Only) -->
+        {#if !assetOnly() && totalPages > 1}
           <div class="pagination">
             <button
               class="pagination-btn"
@@ -960,6 +1032,12 @@
     background: var(--color-border);
     padding: var(--space-1) var(--space-2);
     margin: 0;
+  }
+
+  /* Filter Display */
+  .filter-display {
+    margin-bottom: var(--space-6);
+    padding: var(--space-3) 0;
   }
 
   /* Stats Panel */
@@ -1595,76 +1673,30 @@
     color: var(--color-text-primary);
   }
 
-  /* Asset Row Styles */
-  .asset-row {
-    display: grid;
-    grid-template-columns: 40px 1fr 120px 100px 100px;
-    align-items: center;
-    gap: var(--space-4);
-    padding: var(--space-4) var(--space-5);
-    background: var(--color-bg-primary);
-    border: var(--border-width) solid var(--color-border);
+  /* Asset Table Wrapper */
+  .asset-table-wrapper {
+    margin-bottom: var(--space-8);
+  }
+
+  .asset-link {
+    color: var(--color-accent);
     text-decoration: none;
-    color: inherit;
-    transition: background var(--duration-base) var(--ease-in-out-quad);
+    transition: color var(--duration-base);
   }
 
-  .asset-row:hover {
-    background: var(--color-bg-secondary);
-    border-color: var(--color-gray-300);
-  }
-
-  .asset-row-rank {
-    font-size: var(--font-size-lg);
-    font-weight: 500;
-    color: var(--color-text-tertiary);
-    text-align: center;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .asset-row-info {
-    min-width: 0;
-  }
-
-  .asset-row-name {
-    font-size: var(--font-size-lg);
-    font-weight: 500;
+  .asset-link:hover {
     color: var(--color-text-primary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    text-decoration: underline;
   }
 
-  .asset-row-tracker {
+  .tracker-cell,
+  .status-cell {
     display: flex;
     align-items: center;
     gap: var(--space-2);
   }
 
-  .asset-row-tracker-name {
-    font-size: var(--font-size-body);
-    color: var(--color-text-secondary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .asset-row-status {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-  }
-
-  .asset-row-status-name {
-    font-size: var(--font-size-body);
-    color: var(--color-text-secondary);
-    text-transform: capitalize;
-  }
-
-  .asset-row-capacity {
-    text-align: right;
-    font-size: var(--font-size-lg);
-    color: var(--color-text-primary);
+  .capacity-cell {
     font-variant-numeric: tabular-nums;
   }
 
@@ -1768,17 +1800,6 @@
       gap: var(--space-2);
     }
 
-    .asset-row {
-      grid-template-columns: 32px 1fr 40px;
-      gap: var(--space-3);
-      padding: var(--space-3) var(--space-4);
-    }
-
-    .asset-row-tracker,
-    .asset-row-status,
-    .asset-row-capacity {
-      display: none;
-    }
 
     .pagination {
       gap: var(--space-4);
