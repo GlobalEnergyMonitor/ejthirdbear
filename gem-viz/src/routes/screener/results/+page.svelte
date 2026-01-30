@@ -365,11 +365,6 @@
         </div>
 
         <div class="toolbar-actions">
-          <label class="filter-toggle">
-            <input type="checkbox" bind:checked={showOnlyInvestigation} />
-            <span>Only show entities in my investigation ({investigationEntities.length})</span>
-          </label>
-
           {#if cartItems.length > 0}
             <button class="clear-cart-btn" onclick={() => investigationCart.clear()}>
               Clear cart ({cartItems.length})
