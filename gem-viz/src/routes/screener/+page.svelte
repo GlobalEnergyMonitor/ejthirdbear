@@ -145,7 +145,7 @@
   <title>Asset Class Screener — Global Energy Monitor</title>
   <meta
     name="description"
-    content="Screen and analyze corporate ownership exposure to specific classes of energy assets such as coal plants, gas infrastructure, and steel facilities."
+    content="Screen and analyze corporate ownership in specific classes of energy assets such as coal plants, gas infrastructure, and steel facilities."
   />
 </svelte:head>
 

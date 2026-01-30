@@ -2,7 +2,7 @@
   /**
    * ASSET-CLASS SCREENER - Results
    *
-   * Shows OWNERS who have exposure to selected asset classes.
+   * Shows OWNERS who have ownership stakes in selected asset classes.
    * Designed for investigative journalists building dossiers.
    *
    * Key features:
@@ -281,7 +281,7 @@
   <title>Screener Results — Global Energy Monitor</title>
   <meta
     name="description"
-    content="View companies with ownership exposure to selected asset classes and add them to your investigation."
+    content="View companies with ownership stakes in selected asset classes and add them to your investigation."
   />
 </svelte:head>
 
@@ -289,7 +289,7 @@
   currentStep={3}
   showStepNav={false}
   subtitle={viewMode === 'filtered'
-    ? `Showing ${selectedOwnerIds().length} selected companies and their exposure to ${classDescription()}.`
+    ? `Showing ${selectedOwnerIds().length} selected companies and their ownership in ${classDescription()}.`
     : `Showing all companies with ownership stakes in ${classDescription()}.`}
   {classesParam}
   maxWidth="wide"
