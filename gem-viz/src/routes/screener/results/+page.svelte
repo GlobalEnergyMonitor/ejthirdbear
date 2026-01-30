@@ -17,7 +17,7 @@
   import LoadingWrapper from '$lib/components/LoadingWrapper.svelte';
   import DataSourceBadge from '$lib/components/DataSourceBadge.svelte';
   import { entityLink } from '$lib/links';
-  import { investigationStore } from '$lib/stores/investigation';
+  import { investigationCart } from '$lib/investigationCart';
 
   // URL params
   const classesParam = $derived($page.url.searchParams.get('classes') || '');
@@ -61,6 +61,7 @@
   let showUnmatched = $state(false);
 
   // Data source tracking
+  /** @type {'motherduck' | 'local'} */
   let dataSource = $state('motherduck');
   let queryTime = $state(null);
 
@@ -69,10 +70,13 @@
   let showOnlyInvestigation = $state(false);
 
   // Investigation cart state (reactive)
-  let investigationEntities = $state([]);
-  investigationStore.subscribe((state) => {
-    investigationEntities = state.entities;
+  let cartItems = $state([]);
+  investigationCart.subscribe((items) => {
+    cartItems = items;
   });
+
+  // Get just entities from cart
+  const investigationEntities = $derived(cartItems.filter((item) => item.type === 'entity'));
 
   // Filtered owners based on search
   const filteredOwners = $derived(() => {
@@ -86,8 +90,7 @@
 
     // Filter to only show entities in investigation
     if (showOnlyInvestigation) {
-      const investigationIds = new Set(investigationEntities.map((e) => e.id));
-      result = result.filter((o) => investigationIds.has(o.entityId));
+      result = result.filter((o) => isInInvestigation(o.entityId));
     }
 
     return result;
@@ -95,28 +98,32 @@
 
   // Check if entity is in investigation
   function isInInvestigation(entityId) {
-    return investigationEntities.some((e) => e.id === entityId);
+    // Entity IDs need E prefix for the cart
+    const cartId = entityId?.startsWith('E') ? entityId : `E${entityId}`;
+    return cartItems.some((item) => item.id === cartId);
   }
 
   // Toggle entity in investigation
   function toggleInvestigation(owner) {
-    if (isInInvestigation(owner.entityId)) {
-      investigationStore.removeEntity(owner.entityId);
-    } else {
-      investigationStore.addEntity({
-        id: owner.entityId,
-        name: owner.name,
-        type: 'entity',
-      });
-    }
+    // Entity IDs need E prefix for the cart
+    const cartId = owner.entityId?.startsWith('E') ? owner.entityId : `E${owner.entityId}`;
+    investigationCart.toggle({
+      id: cartId,
+      name: owner.name,
+      type: 'entity',
+    });
   }
 
   // Add all visible results to investigation
   function addAllToInvestigation() {
     const toAdd = filteredOwners()
       .filter((o) => o.entityId && !isInInvestigation(o.entityId))
-      .map((o) => ({ id: o.entityId, name: o.name, type: 'entity' }));
-    investigationStore.addEntities(toAdd);
+      .map((o) => ({
+        id: o.entityId?.startsWith('E') ? o.entityId : `E${o.entityId}`,
+        name: o.name,
+        type: /** @type {const} */ ('entity'),
+      }));
+    investigationCart.addMany(toAdd);
   }
 
   // Load owners data
@@ -347,6 +354,12 @@
               <span>Only show entities in my investigation ({investigationEntities.length})</span>
             </label>
 
+            {#if cartItems.length > 0}
+              <button class="clear-cart-btn" onclick={() => investigationCart.clear()}>
+                Clear cart ({cartItems.length})
+              </button>
+            {/if}
+
             {#if filteredOwners().length > 0}
               <button class="add-all-btn" onclick={addAllToInvestigation}>
                 + Add all {filteredOwners().length} to investigation
@@ -356,10 +369,10 @@
         </div>
 
         <!-- Investigation cart summary -->
-        {#if investigationEntities.length > 0}
+        {#if cartItems.length > 0}
           <div class="investigation-summary">
             <strong>Investigation Cart:</strong>
-            {investigationEntities.length} entities selected
+            {cartItems.length} items selected ({investigationEntities.length} entities)
             <a href="/report/" class="report-link">→ Generate Report</a>
           </div>
         {/if}
@@ -674,6 +687,21 @@
 
   .add-all-btn:hover {
     background: #2d5a75;
+  }
+
+  .clear-cart-btn {
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--font-size-sm);
+    background: white;
+    color: #c53030;
+    border: 1px solid #c53030;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .clear-cart-btn:hover {
+    background: #fff5f5;
   }
 
   /* Investigation summary */

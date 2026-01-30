@@ -1,0 +1,218 @@
+<script>
+  /**
+   * SITEMAP PAGE
+   * Complete directory of all pages and routes in GEM Viz
+   */
+
+  const sections = [
+    {
+      title: 'Main',
+      routes: [
+        { path: '/', name: 'Home', description: 'Landing page with key statistics' },
+        { path: '/explore', name: 'Explore', description: 'Search and browse the database' },
+        { path: '/about', name: 'About', description: 'About GEM Viz and data sources' },
+      ],
+    },
+    {
+      title: 'Investigation Tools',
+      routes: [
+        { path: '/screener', name: 'Screener', description: 'Asset-class screener for building investigations' },
+        { path: '/screener/results', name: 'Screener Results', description: 'View matched owners from screener' },
+        { path: '/screener/owners', name: 'Owner Search', description: 'Search for specific owners' },
+        { path: '/screener/visualize', name: 'Visualize', description: 'Visualization tools' },
+        { path: '/report', name: 'Investigation Report', description: 'Generate reports from your cart' },
+        { path: '/compose', name: 'Compose', description: 'Build custom queries' },
+      ],
+    },
+    {
+      title: 'Asset & Entity Pages',
+      routes: [
+        { path: '/asset', name: 'Assets', description: 'Browse all assets' },
+        { path: '/asset/search', name: 'Asset Search', description: 'Search assets' },
+        { path: '/asset/[id]', name: 'Asset Detail', description: 'Individual asset page (e.g. /asset/G100000109409)' },
+        { path: '/entity/[id]', name: 'Entity Detail', description: 'Individual entity page (e.g. /entity/E100001000348)' },
+      ],
+    },
+    {
+      title: 'Visualizations',
+      routes: [
+        { path: '/network', name: 'Ownership Network', description: 'Full ownership network graph' },
+        { path: '/globe', name: 'Globe', description: '3D globe visualization' },
+        { path: '/cards', name: 'Cards', description: 'Card-based view' },
+      ],
+    },
+    {
+      title: 'Reference',
+      routes: [
+        { path: '/factsheet', name: 'Factsheets', description: 'Tracker factsheet index' },
+        { path: '/factsheet/[tracker]', name: 'Tracker Factsheet', description: 'Individual tracker factsheet' },
+        { path: '/presets', name: 'Presets', description: 'Saved query presets' },
+        { path: '/manifest', name: 'Data Manifest', description: 'Data files and schema documentation' },
+      ],
+    },
+    {
+      title: 'Embeds',
+      description: 'Embeddable widgets for external use',
+      routes: [
+        { path: '/embed', name: 'Embed Index', description: 'Overview of available embeds' },
+        { path: '/embed/asset', name: 'Asset Embed', description: 'Embed an asset card' },
+        { path: '/embed/entity', name: 'Entity Embed', description: 'Embed an entity card' },
+        { path: '/embed/asset-ring', name: 'Asset Ring', description: 'Circular asset visualization' },
+        { path: '/embed/network-3d', name: '3D Network', description: '3D ownership network' },
+        { path: '/embed/network-explorer', name: 'Network Explorer', description: 'Interactive network explorer' },
+        { path: '/embed/ownership-flower', name: 'Ownership Flower', description: 'Radial ownership diagram' },
+        { path: '/embed/ownership-graph', name: 'Ownership Graph', description: 'Hierarchical ownership graph' },
+        { path: '/embed/ownership-mermaid', name: 'Ownership Mermaid', description: 'Mermaid diagram of ownership' },
+        { path: '/embed/tracker-factsheet', name: 'Tracker Factsheet', description: 'Embeddable tracker stats' },
+        { path: '/embed/ultimate-owners', name: 'Ultimate Owners', description: 'Ultimate beneficial owners widget' },
+      ],
+    },
+  ];
+
+  const totalRoutes = sections.reduce((sum, s) => sum + s.routes.length, 0);
+</script>
+
+<svelte:head>
+  <title>Sitemap — GEM Viz</title>
+  <meta name="description" content="Complete directory of all pages in GEM Viz" />
+</svelte:head>
+
+<main>
+  <header>
+    <p class="label">Directory</p>
+    <h1>Sitemap</h1>
+    <p class="count">{totalRoutes} pages</p>
+  </header>
+
+  <div class="sections">
+    {#each sections as section}
+      <section>
+        <h2>{section.title}</h2>
+        {#if section.description}
+          <p class="section-desc">{section.description}</p>
+        {/if}
+        <ul>
+          {#each section.routes as route}
+            <li>
+              <a href={route.path.includes('[') ? '#' : route.path}>
+                <span class="route-name">{route.name}</span>
+                <span class="route-path">{route.path}</span>
+              </a>
+              <span class="route-desc">{route.description}</span>
+            </li>
+          {/each}
+        </ul>
+      </section>
+    {/each}
+  </div>
+</main>
+
+<style>
+  main {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: var(--space-10) var(--space-5);
+  }
+
+  header {
+    margin-bottom: var(--space-10);
+  }
+
+  .label {
+    font-size: var(--font-size-sm);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
+    color: var(--color-text-tertiary);
+    margin: 0 0 var(--space-2) 0;
+  }
+
+  h1 {
+    font-size: var(--font-size-3xl);
+    font-weight: 400;
+    margin: 0 0 var(--space-2) 0;
+    letter-spacing: -0.02em;
+  }
+
+  .count {
+    font-family: var(--font-family-data);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-tertiary);
+    margin: 0;
+  }
+
+  .sections {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-10);
+  }
+
+  section h2 {
+    font-size: var(--font-size-lg);
+    font-weight: 600;
+    margin: 0 0 var(--space-2) 0;
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
+  }
+
+  .section-desc {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    margin: 0 0 var(--space-4) 0;
+  }
+
+  ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  li {
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  li:last-child {
+    border-bottom: none;
+  }
+
+  li a {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-3);
+    text-decoration: none;
+    color: inherit;
+  }
+
+  li a:hover .route-name {
+    text-decoration: underline;
+  }
+
+  .route-name {
+    font-weight: 500;
+    color: var(--color-black);
+  }
+
+  .route-path {
+    font-family: var(--font-family-data);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-tertiary);
+  }
+
+  .route-desc {
+    display: block;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    margin-top: var(--space-1);
+  }
+
+  @media (max-width: 600px) {
+    li a {
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .route-path {
+      margin-top: 2px;
+    }
+  }
+</style>

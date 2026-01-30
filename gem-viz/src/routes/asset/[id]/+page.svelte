@@ -84,7 +84,7 @@
   let asset = $state(data?.asset || null);
   let graph = $state(data?.graph || null);
 
-  /** @type {'api' | 'motherduck' | 'duckdb' | 'server' | null} */
+  /** @type {'api' | 'motherduck' | 'local' | 'server' | null} */
   let dataSource = $state(data?.asset ? 'server' : null);
 
   const assetId = $derived(asset?.id || '');

@@ -41,6 +41,11 @@
   let copied = $state(false);
   let showClearConfirm = $state(false);
 
+  // Large cart handling
+  const LARGE_CART_THRESHOLD = 500;
+  let showLargeCartWarning = $state(false);
+  let userConfirmedLargeCart = $state(false);
+
   // Derived cart data
   const cartItems = $derived($investigationCart);
   const entityIds = $derived(cartItems.filter((i) => i.type === 'entity').map((i) => i.id));
@@ -288,6 +293,14 @@
       return;
     }
 
+    // Show warning for large carts unless user confirmed
+    if (cartItems.length >= LARGE_CART_THRESHOLD && !userConfirmedLargeCart) {
+      showLargeCartWarning = true;
+      loading = false;
+      return;
+    }
+
+    showLargeCartWarning = false;
     loading = true;
     error = null;
     const startTime = Date.now();
@@ -609,6 +622,22 @@
   function clearCart() {
     investigationCart.clear();
     showClearConfirm = false;
+    showLargeCartWarning = false;
+    userConfirmedLargeCart = false;
+  }
+
+  // Proceed with loading large cart
+  function proceedWithLargeCart() {
+    userConfirmedLargeCart = true;
+    showLargeCartWarning = false;
+    loadReport();
+  }
+
+  // Quick export of cart IDs (for backup before clearing)
+  function exportCartIds() {
+    const ids = cartItems.map((i) => i.id).join('\n');
+    const content = `# GEM Investigation Cart IDs\n# Exported: ${new Date().toISOString()}\n# Total items: ${cartItems.length}\n\n${ids}`;
+    downloadFile(content, `gem-cart-ids-${Date.now()}.txt`, 'text/plain');
   }
 
   // Load on mount and when cart changes
@@ -656,6 +685,37 @@
       <p>Add assets or entities to your investigation cart to generate a report.</p>
       <p>
         <a href={link('explore')}>Go to Explore</a> to search and add items.
+      </p>
+    </section>
+  {:else if showLargeCartWarning}
+    <section class="large-cart-warning">
+      <div class="warning-icon">Cart Review</div>
+      <p class="warning-count">{cartItems.length.toLocaleString()}</p>
+      <h2>items in your investigation</h2>
+      <p class="warning-message">
+        Generating a report for this many items may be slow.
+        Consider exporting your cart IDs first, or clearing items you don't need.
+      </p>
+
+      <div class="warning-stats">
+        <span>{entityIds.length} entities</span>
+        <span>{assetIds.length} assets</span>
+      </div>
+
+      <div class="warning-actions">
+        <button class="btn btn-primary" onclick={proceedWithLargeCart}>
+          Generate Report
+        </button>
+        <button class="btn btn-outline" onclick={exportCartIds}>
+          Export IDs
+        </button>
+        <button class="btn btn-outline" onclick={() => (showClearConfirm = true)}>
+          Clear Cart
+        </button>
+      </div>
+
+      <p class="warning-tip">
+        Exporting IDs creates a backup you can re-import later.
       </p>
     </section>
   {:else if loading}
@@ -1106,6 +1166,70 @@
   }
   .empty-cart a {
     color: var(--color-gray-700);
+  }
+
+  /* Large Cart Warning */
+  .large-cart-warning {
+    text-align: center;
+    padding: var(--space-16) var(--space-5);
+    max-width: 480px;
+    margin: 0 auto;
+  }
+  .large-cart-warning .warning-icon {
+    font-size: var(--font-size-sm);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
+    color: var(--color-text-tertiary);
+    margin-bottom: var(--space-4);
+  }
+  .large-cart-warning h2 {
+    margin: 0 0 var(--space-6) 0;
+    font-size: var(--font-size-3xl);
+    font-weight: 400;
+    letter-spacing: -0.02em;
+  }
+  .large-cart-warning .warning-count {
+    font-size: 4rem;
+    font-weight: 300;
+    color: var(--color-black);
+    margin: 0 0 var(--space-2) 0;
+    line-height: 1;
+    font-family: var(--font-family-data);
+  }
+  .large-cart-warning .warning-message {
+    color: var(--color-text-secondary);
+    margin: 0 0 var(--space-6) 0;
+    line-height: 1.6;
+    font-size: var(--font-size-md);
+  }
+  .large-cart-warning .warning-stats {
+    display: flex;
+    justify-content: center;
+    gap: var(--space-6);
+    margin-bottom: var(--space-8);
+    font-size: var(--font-size-sm);
+    font-family: var(--font-family-data);
+    color: var(--color-text-tertiary);
+  }
+  .large-cart-warning .warning-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-6);
+  }
+  .large-cart-warning .warning-tip {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-tertiary);
+    margin: 0;
+  }
+  .btn-primary {
+    background: var(--color-black);
+    color: var(--color-white);
+    border: 1px solid var(--color-black);
+  }
+  .btn-primary:hover {
+    background: var(--color-gray-800);
   }
 
   /* Toolbar */

@@ -8,10 +8,11 @@
   const cartCount = $derived($investigationCart.length);
 
   const footerLinks = [
-    { path: 'coal-tracker', label: 'Coal Tracker' },
-    { path: 'compose', label: 'Compose' },
+    { path: 'explore', label: 'Explore' },
+    { path: 'asset', label: 'Assets' },
     { path: 'network', label: 'Ownership Network' },
     { path: 'report', label: 'Investigation Report', showBadge: true },
+    { path: 'sitemap', label: 'Sitemap' },
     { path: 'about', label: 'About' },
   ];
 </script>
@@ -60,7 +61,7 @@
 
   .brand-name {
     font-size: 12px;
-    font-weight: 600;
+    font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: var(--color-text-secondary);
