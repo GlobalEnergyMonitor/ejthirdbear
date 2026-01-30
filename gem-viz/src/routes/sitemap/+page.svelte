@@ -16,11 +16,27 @@
     {
       title: 'Investigation Tools',
       routes: [
-        { path: '/screener', name: 'Screener', description: 'Asset-class screener for building investigations' },
-        { path: '/screener/results', name: 'Screener Results', description: 'View matched owners from screener' },
-        { path: '/screener/owners', name: 'Owner Search', description: 'Search for specific owners' },
+        {
+          path: '/screener',
+          name: 'Screener',
+          description: 'Asset-class screener for building investigations',
+        },
+        {
+          path: '/screener/results',
+          name: 'Screener Results',
+          description: 'View matched owners from screener',
+        },
+        {
+          path: '/screener/owners',
+          name: 'Owner Search',
+          description: 'Search for specific owners',
+        },
         { path: '/screener/visualize', name: 'Visualize', description: 'Visualization tools' },
-        { path: '/report', name: 'Investigation Report', description: 'Generate reports from your cart' },
+        {
+          path: '/report',
+          name: 'Investigation Report',
+          description: 'Generate reports from your cart',
+        },
         { path: '/compose', name: 'Compose', description: 'Build custom queries' },
       ],
     },
@@ -29,14 +45,26 @@
       routes: [
         { path: '/asset', name: 'Assets', description: 'Browse all assets' },
         { path: '/asset/search', name: 'Asset Search', description: 'Search assets' },
-        { path: '/asset/[id]', name: 'Asset Detail', description: 'Individual asset page (e.g. /asset/G100000109409)' },
-        { path: '/entity/[id]', name: 'Entity Detail', description: 'Individual entity page (e.g. /entity/E100001000348)' },
+        {
+          path: '/asset/[id]',
+          name: 'Asset Detail',
+          description: 'Individual asset page (e.g. /asset/G100000109409)',
+        },
+        {
+          path: '/entity/[id]',
+          name: 'Entity Detail',
+          description: 'Individual entity page (e.g. /entity/E100001000348)',
+        },
       ],
     },
     {
       title: 'Visualizations',
       routes: [
-        { path: '/network', name: 'Ownership Network', description: 'Full ownership network graph' },
+        {
+          path: '/network',
+          name: 'Ownership Network',
+          description: 'Full ownership network graph',
+        },
         { path: '/globe', name: 'Globe', description: '3D globe visualization' },
         { path: '/cards', name: 'Cards', description: 'Card-based view' },
       ],
@@ -45,9 +73,22 @@
       title: 'Reference',
       routes: [
         { path: '/factsheet', name: 'Factsheets', description: 'Tracker factsheet index' },
-        { path: '/factsheet/[tracker]', name: 'Tracker Factsheet', description: 'Individual tracker factsheet' },
+        {
+          path: '/factsheet/[tracker]',
+          name: 'Tracker Factsheet',
+          description: 'Individual tracker factsheet',
+        },
         { path: '/presets', name: 'Presets', description: 'Saved query presets' },
-        { path: '/manifest', name: 'Data Manifest', description: 'Data files and schema documentation' },
+        {
+          path: '/manifest',
+          name: 'Data Manifest',
+          description: 'Data files and schema documentation',
+        },
+        {
+          path: '/kitchen-sink',
+          name: 'Kitchen Sink',
+          description: 'Component library with live examples',
+        },
       ],
     },
     {
@@ -57,14 +98,42 @@
         { path: '/embed', name: 'Embed Index', description: 'Overview of available embeds' },
         { path: '/embed/asset', name: 'Asset Embed', description: 'Embed an asset card' },
         { path: '/embed/entity', name: 'Entity Embed', description: 'Embed an entity card' },
-        { path: '/embed/asset-ring', name: 'Asset Ring', description: 'Circular asset visualization' },
+        {
+          path: '/embed/asset-ring',
+          name: 'Asset Ring',
+          description: 'Circular asset visualization',
+        },
         { path: '/embed/network-3d', name: '3D Network', description: '3D ownership network' },
-        { path: '/embed/network-explorer', name: 'Network Explorer', description: 'Interactive network explorer' },
-        { path: '/embed/ownership-flower', name: 'Ownership Flower', description: 'Radial ownership diagram' },
-        { path: '/embed/ownership-graph', name: 'Ownership Graph', description: 'Hierarchical ownership graph' },
-        { path: '/embed/ownership-mermaid', name: 'Ownership Mermaid', description: 'Mermaid diagram of ownership' },
-        { path: '/embed/tracker-factsheet', name: 'Tracker Factsheet', description: 'Embeddable tracker stats' },
-        { path: '/embed/ultimate-owners', name: 'Ultimate Owners', description: 'Ultimate beneficial owners widget' },
+        {
+          path: '/embed/network-explorer',
+          name: 'Network Explorer',
+          description: 'Interactive network explorer',
+        },
+        {
+          path: '/embed/ownership-flower',
+          name: 'Ownership Flower',
+          description: 'Radial ownership diagram',
+        },
+        {
+          path: '/embed/ownership-graph',
+          name: 'Ownership Graph',
+          description: 'Hierarchical ownership graph',
+        },
+        {
+          path: '/embed/ownership-mermaid',
+          name: 'Ownership Mermaid',
+          description: 'Mermaid diagram of ownership',
+        },
+        {
+          path: '/embed/tracker-factsheet',
+          name: 'Tracker Factsheet',
+          description: 'Embeddable tracker stats',
+        },
+        {
+          path: '/embed/ultimate-owners',
+          name: 'Ultimate Owners',
+          description: 'Ultimate beneficial owners widget',
+        },
       ],
     },
   ];

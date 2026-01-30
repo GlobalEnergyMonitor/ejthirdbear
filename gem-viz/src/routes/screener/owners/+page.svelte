@@ -10,42 +10,29 @@
   import { page } from '$app/stores';
   import { listEntities, getEntity } from '$lib/ownership-api';
   import EntityMicroCard from '$lib/components/EntityMicroCard.svelte';
-  import ScreenerStepNav from '$lib/components/ScreenerStepNav.svelte';
+  import ScreenerLayout from '$lib/components/ScreenerLayout.svelte';
+  import AssetClassesPanel from '$lib/components/AssetClassesPanel.svelte';
   import DataSourceBadge from '$lib/components/DataSourceBadge.svelte';
 
   // Get selected classes from URL params
   const classesParam = $derived($page.url.searchParams.get('classes') || '');
 
-  // Parse selected classes for display
-  // Note: URLSearchParams.get() already decodes the value, so don't double-decode
+  // Parse selected classes for example companies feature
   const selectedClasses = $derived.by(() => {
     if (!classesParam) return [];
     try {
       const parsed = JSON.parse(classesParam);
-      // Validate it's an array of objects with at least a name
       if (Array.isArray(parsed)) {
         return parsed.map((item) => ({
-          id: item.id || '',
           name: item.name || item.id || 'Unknown',
-          description: item.description || '',
           tracker: item.tracker || '',
-          filters: item.filters || null,
         }));
       }
       return [];
-    } catch (e) {
-      console.warn('[Screener] Failed to parse classes param:', e);
-      // Legacy format: comma-separated simple names like "Coal Plant, Steel Plant"
-      // Only use this fallback if the param doesn't look like JSON
-      if (!classesParam.startsWith('[')) {
-        return classesParam.split(',').map((c) => ({ name: c.trim() }));
-      }
+    } catch {
       return [];
     }
   });
-
-  // Selected asset classes panel state
-  let classesExpanded = $state(true);
 
   // Search state
   let singleSearchQuery = $state('');
@@ -56,6 +43,10 @@
   // Search results with disambiguation tracking
   // Each entry: { term: string, results: Entity[], matchCount: number }
   let searchResultGroups = $state([]);
+
+  // Debug: track API calls
+  let debugApiCalls = $state([]);
+  let debugLastSearchTime = $state(null);
 
   // Selected owners (use Map for O(1) lookup by ID)
   let selectedOwnerMap = $state(new Map());
@@ -95,22 +86,28 @@
    */
   async function searchSingleEntity(input) {
     const parsed = parseSearchInput(input);
+    const startTime = performance.now();
 
     if (parsed.type === 'gem_entity_id') {
       // Direct lookup by GEM Entity ID
       try {
+        debugApiCalls = [...debugApiCalls, { type: 'getEntity', params: { id: parsed.value }, time: Date.now() }];
         const entity = await getEntity(parsed.value);
         return entity ? [entity] : [];
       } catch {
         // If not found, fall back to search
-        const response = await listEntities({ q: parsed.value, limit: 10 });
+        const params = { q: parsed.value, limit: 10 };
+        debugApiCalls = [...debugApiCalls, { type: 'listEntities', params, time: Date.now() }];
+        const response = await listEntities(params);
         return response.results || [];
       }
     }
 
     // For other types, use text search
     // (API would need to support LEI/Perm ID fields for proper lookup)
-    const response = await listEntities({ q: parsed.value, limit: 20 });
+    const params = { q: parsed.value, limit: 20 };
+    debugApiCalls = [...debugApiCalls, { type: 'listEntities', params, time: Date.now() }];
+    const response = await listEntities(params);
     return response.results || [];
   }
 
@@ -122,12 +119,16 @@
     searchLoading = true;
     searchError = null;
     searchResultGroups = [];
+    debugApiCalls = [];
+    const startTime = performance.now();
 
     try {
       const results = await searchSingleEntity(term);
       searchResultGroups = [{ term, results, matchCount: results.length }];
+      debugLastSearchTime = performance.now() - startTime;
     } catch (err) {
       searchError = err?.message || 'Search failed';
+      debugLastSearchTime = performance.now() - startTime;
     } finally {
       searchLoading = false;
     }
@@ -140,6 +141,8 @@
     searchLoading = true;
     searchError = null;
     searchResultGroups = [];
+    debugApiCalls = [];
+    const startTime = performance.now();
 
     try {
       // Parse lines - handle both newlines and commas
@@ -157,6 +160,7 @@
 
       // Filter out groups with no results, keep groups for disambiguation
       searchResultGroups = groups.filter((g) => g.results.length > 0);
+      debugLastSearchTime = performance.now() - startTime;
 
       // Also track terms with no matches
       const noMatches = groups.filter((g) => g.results.length === 0);
@@ -166,6 +170,7 @@
       }
     } catch (err) {
       searchError = err?.message || 'Bulk search failed';
+      debugLastSearchTime = performance.now() - startTime;
     } finally {
       searchLoading = false;
     }
@@ -212,13 +217,6 @@
 
   // Check if owner is selected (O(1))
   const isSelected = (owner) => selectedOwnerMap.has(owner.id);
-
-  // Remove a selected class
-  function removeClass(classToRemove) {
-    const updated = selectedClasses.filter((c) => c.name !== classToRemove.name);
-    const newParam = encodeURIComponent(JSON.stringify(updated));
-    goto(link(`screener/owners?classes=${newParam}`), { replaceState: true });
-  }
 
   // Example companies by tracker type - real major owners
   const exampleCompaniesByTracker = {
@@ -293,10 +291,6 @@
   }
 
   // Navigation
-  function goToAssetClasses() {
-    goto(link('screener'));
-  }
-
   function continueToResults() {
     const ownerIds = selectedOwners.map((o) => o.id).join(',');
     goto(
@@ -309,212 +303,224 @@
 
 <svelte:head>
   <title>Find Owners — Global Energy Monitor</title>
-  <meta name="description" content="Search for companies by name, GEM Entity ID, LEI, or Perm ID to analyze their ownership of energy assets." />
+  <meta
+    name="description"
+    content="Search for companies by name, GEM Entity ID, LEI, or Perm ID to analyze their ownership of energy assets."
+  />
 </svelte:head>
 
-<main>
-  <div class="screener-layout">
-    <!-- Step indicator -->
-    <ScreenerStepNav currentStep={2} {classesParam} />
+<ScreenerLayout
+  currentStep={2}
+  subtitle="Search for a company to see their ownership stakes, assets, and corporate network."
+  {classesParam}
+>
+  {#snippet headerRight()}
+    <AssetClassesPanel
+      {classesParam}
+      onRemove={(cls) => {
+        const updated = selectedClasses.filter((c) => c.name !== cls.name);
+        const newParam = encodeURIComponent(JSON.stringify(updated));
+        goto(link(`screener/owners?classes=${newParam}`), { replaceState: true });
+      }}
+    />
+  {/snippet}
 
-    <!-- Header with asset classes panel -->
-    <header class="screener-header">
-      <div class="header-content">
-        <h1>Find Companies to Investigate</h1>
-        <p class="subtitle">
-          Search for a company to see their ownership stakes, assets, and corporate network.
-        </p>
-      </div>
+  <!-- Search owners section -->
+  <section class="search-section">
+    <h2>Search by Company Name</h2>
 
-      <!-- Selected asset classes panel -->
-      <div class="classes-panel" class:expanded={classesExpanded}>
-        <button class="panel-header" onclick={() => (classesExpanded = !classesExpanded)}>
-          <span class="toggle-icon">{classesExpanded ? '▼' : '▶'}</span>
-          Selected Asset Classes
+    <!-- Single owner search - primary action -->
+    <div class="search-field primary-search">
+      <div class="search-input-wrapper">
+        <input
+          id="single-search"
+          type="text"
+          class="search-input"
+          placeholder="Enter company name..."
+          bind:value={singleSearchQuery}
+          onkeydown={(e) => e.key === 'Enter' && searchSingle()}
+        />
+        <button
+          class="search-btn"
+          onclick={searchSingle}
+          disabled={searchLoading || !singleSearchQuery.trim()}
+        >
+          {searchLoading ? 'Searching...' : 'Search'}
         </button>
-        {#if classesExpanded}
-          <div class="panel-content">
-            {#if selectedClasses.length === 0}
-              <p class="no-classes">No asset classes selected. Add classes to filter results.</p>
-            {:else}
-              {#each selectedClasses as assetClass}
-                <span class="class-tag">
-                  {assetClass.name}
-                  <button class="remove-btn" onclick={() => removeClass(assetClass)}>Remove</button>
-                </span>
-              {/each}
-            {/if}
-            <button class="change-classes-btn" onclick={goToAssetClasses}>
-              Edit asset class selection
-            </button>
-          </div>
-        {/if}
       </div>
-    </header>
+      <div class="search-help">
+        <div class="example-companies">
+          <span class="example-label">Try:</span>
+          {#each exampleCompanies as example, i}
+            {#if i > 0}<span class="example-sep">,</span>{/if}
+            <button class="example-btn" onclick={() => useExample(example)}>
+              {example.name}
+            </button>
+          {/each}
+        </div>
+      </div>
+    </div>
 
-    <!-- Search owners section -->
-    <section class="search-section">
-      <h2>Search by Company Name</h2>
+    <!-- What you'll see -->
+    <div class="results-preview">
+      <span class="preview-label">You'll see:</span>
+      <span class="preview-item">Ownership stakes</span>
+      <span class="preview-sep">·</span>
+      <span class="preview-item">Asset list</span>
+      <span class="preview-sep">·</span>
+      <span class="preview-item">Corporate relationships</span>
+    </div>
 
-      <!-- Single owner search - primary action -->
-      <div class="search-field primary-search">
-        <div class="search-input-wrapper">
-          <input
-            id="single-search"
-            type="text"
-            class="search-input"
-            placeholder="Enter company name..."
-            bind:value={singleSearchQuery}
-            onkeydown={(e) => e.key === 'Enter' && searchSingle()}
-          />
-          <button
-            class="search-btn"
-            onclick={searchSingle}
-            disabled={searchLoading || !singleSearchQuery.trim()}
-          >
-            {searchLoading ? 'Searching...' : 'Search'}
+    <!-- Advanced options (collapsed) -->
+    <details class="advanced-search">
+      <summary>Advanced: Search by ID or bulk search</summary>
+      <div class="advanced-content">
+        <p class="advanced-hint">You can also search using identifiers:</p>
+        <ul class="id-formats">
+          <li><strong>GEM Entity ID</strong> — e.g., <code>E100001000348</code></li>
+          <li>
+            <strong>LEI</strong> — 20-character code, e.g., <code>549300MLUDYVRQOOXS22</code>
+          </li>
+          <li><strong>PermID</strong> — 10-digit number, e.g., <code>4295903609</code></li>
+        </ul>
+
+        <!-- Bulk search -->
+        <div class="search-field">
+          <label for="bulk-search">Search multiple companies</label>
+          <div class="input-row">
+            <textarea
+              id="bulk-search"
+              class="bulk-input"
+              placeholder="Shell&#10;BP&#10;TotalEnergies&#10;E100001000348"
+              bind:value={bulkSearchText}
+              rows="4"
+            ></textarea>
+          </div>
+        </div>
+
+        <!-- Action buttons -->
+        <div class="action-row">
+          <button class="submit-btn" onclick={searchBulk} disabled={searchLoading}>
+            {searchLoading ? 'Searching...' : 'Search All'}
           </button>
-        </div>
-        <div class="search-help">
-          <div class="example-companies">
-            <span class="example-label">Try:</span>
-            {#each exampleCompanies as example, i}
-              {#if i > 0}<span class="example-sep">,</span>{/if}
-              <button class="example-btn" onclick={() => useExample(example)}>
-                {example.name}
-              </button>
-            {/each}
-          </div>
+          <span class="or-text">or</span>
+          <label class="upload-btn">
+            Upload CSV
+            <input type="file" accept=".csv" onchange={handleCsvUpload} hidden />
+          </label>
         </div>
       </div>
+    </details>
 
-      <!-- What you'll see -->
-      <div class="results-preview">
-        <span class="preview-label">You'll see:</span>
-        <span class="preview-item">Ownership stakes</span>
-        <span class="preview-sep">·</span>
-        <span class="preview-item">Asset list</span>
-        <span class="preview-sep">·</span>
-        <span class="preview-item">Corporate relationships</span>
-      </div>
+    <!-- Error -->
+    {#if searchError}
+      <div class="search-error">{searchError}</div>
+    {/if}
 
-      <!-- Advanced options (collapsed) -->
-      <details class="advanced-search">
-        <summary>Advanced: Search by ID or bulk search</summary>
-        <div class="advanced-content">
-          <p class="advanced-hint">You can also search using identifiers:</p>
-          <ul class="id-formats">
-            <li><strong>GEM Entity ID</strong> — e.g., <code>E100001000348</code></li>
-            <li>
-              <strong>LEI</strong> — 20-character code, e.g., <code>549300MLUDYVRQOOXS22</code>
-            </li>
-            <li><strong>PermID</strong> — 10-digit number, e.g., <code>4295903609</code></li>
-          </ul>
-
-          <!-- Bulk search -->
-          <div class="search-field">
-            <label for="bulk-search">Search multiple companies</label>
-            <div class="input-row">
-              <textarea
-                id="bulk-search"
-                class="bulk-input"
-                placeholder="Shell&#10;BP&#10;TotalEnergies&#10;E100001000348"
-                bind:value={bulkSearchText}
-                rows="4"
-              ></textarea>
-            </div>
-          </div>
-
-          <!-- Action buttons -->
-          <div class="action-row">
-            <button class="submit-btn" onclick={searchBulk} disabled={searchLoading}>
-              {searchLoading ? 'Searching...' : 'Search All'}
-            </button>
-            <span class="or-text">or</span>
-            <label class="upload-btn">
-              Upload CSV
-              <input type="file" accept=".csv" onchange={handleCsvUpload} hidden />
-            </label>
-          </div>
+    <!-- Results with disambiguation -->
+    {#if searchResultGroups.length > 0}
+      <div class="search-results">
+        <div class="results-source-row">
+          <DataSourceBadge source="api" label="Entity Search" />
         </div>
-      </details>
-
-      <!-- Error -->
-      {#if searchError}
-        <div class="search-error">{searchError}</div>
-      {/if}
-
-      <!-- Results with disambiguation -->
-      {#if searchResultGroups.length > 0}
-        <div class="search-results">
-          <div class="results-source-row">
-            <DataSourceBadge source="api" label="Entity Search" />
-          </div>
-          {#each searchResultGroups as group}
-            <div class="result-group">
-              <div class="group-header">
-                {#if group.matchCount === 1}
-                  <span class="match-count exact">Found: "{group.term}"</span>
-                {:else if group.matchCount > 1}
-                  <span class="match-count multiple">
-                    {group.matchCount} results for "{group.term}"
-                  </span>
-                  <span class="select-hint">Select the companies you want to analyze</span>
-                {:else}
-                  <span class="match-count none">No results for "{group.term}"</span>
-                {/if}
-              </div>
-              <div class="results-grid">
-                {#each group.results as entity}
-                  <div class="result-wrapper" class:selected={isSelected(entity)}>
-                    <EntityMicroCard
-                      name={entity.name}
-                      location={entity.headquartersCountry || ''}
-                      assetCount={entity.assetCount || 0}
-                      onclick={() => selectOwner(entity)}
-                    />
-                    {#if isSelected(entity)}
-                      <div class="result-check">✓</div>
-                    {/if}
-                  </div>
-                {/each}
-              </div>
-              {#if group.matchCount > 1}
-                <div class="group-actions">
-                  <button
-                    class="select-all-btn"
-                    onclick={() => group.results.forEach((e) => selectOwner(e, false))}
-                  >
-                    Select all {group.matchCount} companies
-                  </button>
-                </div>
+        {#each searchResultGroups as group}
+          <div class="result-group">
+            <div class="group-header">
+              {#if group.matchCount === 1}
+                <span class="match-count exact">Found: "{group.term}"</span>
+              {:else if group.matchCount > 1}
+                <span class="match-count multiple">
+                  {group.matchCount} results for "{group.term}"
+                </span>
+                <span class="select-hint">Select the companies you want to analyze</span>
+              {:else}
+                <span class="match-count none">No results for "{group.term}"</span>
               {/if}
+            </div>
+            <div class="results-grid">
+              {#each group.results as entity}
+                <div class="result-wrapper" class:selected={isSelected(entity)}>
+                  <EntityMicroCard
+                    name={entity.name}
+                    location={entity.headquartersCountry || ''}
+                    assetCount={entity.assetCount || 0}
+                    onclick={() => selectOwner(entity)}
+                  />
+                  {#if isSelected(entity)}
+                    <div class="result-check">✓</div>
+                  {/if}
+                </div>
+              {/each}
+            </div>
+            {#if group.matchCount > 1}
+              <div class="group-actions">
+                <button
+                  class="select-all-btn"
+                  onclick={() => group.results.forEach((e) => selectOwner(e, false))}
+                >
+                  Select all {group.matchCount} companies
+                </button>
+              </div>
+            {/if}
+          </div>
+        {/each}
+      </div>
+    {/if}
+  </section>
+
+  <!-- Browse all companies section -->
+  <section class="show-all-section">
+    <h2>Want every asset instead?</h2>
+    <p class="section-subtitle">
+      {#if selectedClasses.length > 0}
+        Show every <strong
+          >{selectedClasses.length > 1
+            ? selectedClasses.map((c) => c.name).join(' & ')
+            : selectedClasses[0]?.name}</strong
+        > asset worldwide — no ownership filter.
+      {:else}
+        Show every asset in the database — no ownership filter.
+      {/if}
+    </p>
+    <button class="show-all-btn" onclick={showAllAssets}> Show all assets </button>
+  </section>
+
+  <!-- Debug panel -->
+  {#if debugApiCalls.length > 0}
+    <details class="debug-panel">
+      <summary class="debug-summary">
+        <span class="debug-icon">⚙</span>
+        API Debug
+        {#if debugLastSearchTime}
+          <span class="debug-time">({debugLastSearchTime.toFixed(0)}ms)</span>
+        {/if}
+      </summary>
+      <div class="debug-content">
+        <div class="debug-meta">
+          <span class="debug-label">API calls:</span>
+          <span class="debug-value">{debugApiCalls.length}</span>
+        </div>
+        <div class="debug-meta">
+          <span class="debug-label">Results:</span>
+          <span class="debug-value">{searchResultGroups.reduce((sum, g) => sum + g.results.length, 0)} entities</span>
+        </div>
+        <div class="debug-calls">
+          <span class="debug-label">Requests:</span>
+          {#each debugApiCalls as call, i}
+            <div class="debug-call">
+              <span class="call-type">{call.type}</span>
+              <code class="call-params">{JSON.stringify(call.params)}</code>
             </div>
           {/each}
         </div>
-      {/if}
-    </section>
+      </div>
+    </details>
+  {/if}
 
-    <!-- Browse all companies section -->
-    <section class="show-all-section">
-      <h2>Want every asset instead?</h2>
-      <p class="section-subtitle">
-        {#if selectedClasses.length > 0}
-          Show every <strong
-            >{selectedClasses.length > 1
-              ? selectedClasses.map((c) => c.name).join(' & ')
-              : selectedClasses[0]?.name}</strong
-          > asset worldwide — no ownership filter.
-        {:else}
-          Show every asset in the database — no ownership filter.
-        {/if}
-      </p>
-      <button class="show-all-btn" onclick={showAllAssets}> Show all assets </button>
-    </section>
-
-    <!-- Selected owners footer -->
+  <!-- Selected owners footer -->
+  {#snippet footer()}
     {#if selectedOwners.length > 0}
-      <div class="selected-footer">
+      <div class="selected-footer-content">
         <div class="selected-info">
           <strong
             >{selectedOwners.length}
@@ -533,137 +539,10 @@
         <button class="continue-btn" onclick={continueToResults}>Continue to Results</button>
       </div>
     {/if}
-  </div>
-</main>
+  {/snippet}
+</ScreenerLayout>
 
 <style>
-  /* ============================================
-   * TUFTE-STYLE INFORMATION DESIGN
-   * - High data-ink ratio
-   * - Typography-driven hierarchy
-   * - Generous whitespace
-   * - Minimal chrome
-   * ============================================ */
-
-  main {
-    min-height: 100vh;
-    background: var(--color-bg-secondary);
-  }
-
-  .screener-layout {
-    max-width: 860px;
-    margin: 0 auto;
-    padding: 72px var(--space-8) 140px;
-  }
-
-  /* Header */
-  .screener-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: var(--space-12);
-    margin-bottom: 56px;
-  }
-
-  .header-content {
-    flex: 1;
-  }
-
-  /* h1 uses global styles from app.css */
-
-  .subtitle {
-    max-width: 400px;
-  }
-
-  /* Asset classes panel - Tufte: light, unobtrusive */
-  .classes-panel {
-    background: var(--color-bg-primary);
-    border: var(--border-width) solid var(--color-border);
-    min-width: 260px;
-    max-width: 300px;
-  }
-
-  .panel-header {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    width: 100%;
-    padding: var(--space-3) var(--space-4);
-    background: none;
-    border: none;
-    border-bottom: var(--border-width) solid var(--color-border-light);
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-md);
-    font-weight: 500;
-    letter-spacing: var(--tracking-caps);
-    text-transform: uppercase;
-    cursor: pointer;
-    text-align: left;
-  }
-
-  .toggle-icon {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-tertiary);
-  }
-
-  .panel-content {
-    padding: var(--space-3) var(--space-4) var(--space-4);
-  }
-
-  .no-classes {
-    color: var(--color-text-tertiary);
-    font-size: var(--font-size-body);
-    margin: 0 0 var(--space-3) 0;
-    font-style: italic;
-  }
-
-  .class-tag {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 6px 0;
-    border-bottom: var(--border-width) solid var(--color-gray-100);
-    color: var(--color-text-primary);
-    font-size: var(--font-size-body);
-  }
-
-  .class-tag:last-of-type {
-    border-bottom: none;
-  }
-
-  .class-tag .remove-btn {
-    background: none;
-    border: none;
-    color: var(--color-text-tertiary);
-    padding: 0;
-    font-size: var(--font-size-md);
-    cursor: pointer;
-    text-decoration: underline;
-    text-underline-offset: 2px;
-  }
-
-  .class-tag .remove-btn:hover {
-    color: var(--color-error);
-  }
-
-  .change-classes-btn {
-    width: 100%;
-    padding: var(--space-2) 0;
-    background: none;
-    border: none;
-    border-top: var(--border-width) solid var(--color-border-light);
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-body);
-    cursor: pointer;
-    margin-top: var(--space-2);
-    text-decoration: underline;
-    text-underline-offset: 2px;
-  }
-
-  .change-classes-btn:hover {
-    color: var(--color-text-primary);
-  }
-
   /* Search section */
   .search-section {
     margin-bottom: 56px;
@@ -685,7 +564,7 @@
   }
 
   .primary-search .search-input {
-    width: 380px;
+    width: 100%;
     font-size: var(--font-size-xl);
   }
 
@@ -695,11 +574,13 @@
     gap: var(--space-2);
   }
 
-  /* Results preview */
+  /* Results preview - inline grid */
   .results-preview {
-    display: flex;
-    align-items: center;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: max-content;
     gap: var(--space-2);
+    align-items: center;
     font-size: var(--font-size-body);
     color: var(--color-text-tertiary);
     margin-bottom: var(--space-8);
@@ -806,13 +687,14 @@
   }
 
   .search-input-wrapper {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(200px, 380px) auto;
     gap: var(--space-3);
-    align-items: flex-end;
+    align-items: end;
   }
 
   .search-input {
-    width: 300px;
+    width: 100%;
     padding: var(--space-2) 0;
     font-size: var(--font-size-lg);
     border: none;
@@ -904,11 +786,13 @@
     text-decoration-color: var(--color-accent);
   }
 
-  /* Action row - minimal button styling */
+  /* Action row - grid layout */
   .action-row {
-    display: flex;
-    align-items: center;
+    display: grid;
+    grid-template-columns: auto auto auto;
     gap: var(--space-4);
+    align-items: center;
+    justify-content: start;
     margin-top: var(--space-2);
   }
 
@@ -983,9 +867,11 @@
   }
 
   .group-header {
-    display: flex;
-    align-items: baseline;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: max-content;
     gap: var(--space-3);
+    align-items: baseline;
     margin-bottom: var(--space-4);
   }
 
@@ -1035,16 +921,23 @@
 
   .results-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    grid-template-columns: repeat(3, 1fr);
     gap: var(--space-4);
     max-height: 480px;
     overflow-y: auto;
     padding: 2px;
   }
 
-  /* Simplified result wrapper - Tufte: minimal borders */
+  @media (max-width: 900px) {
+    .results-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  /* Simplified result wrapper - grid-friendly */
   .result-wrapper {
     position: relative;
+    min-width: 0; /* Allow shrinking in grid */
     transition:
       opacity var(--duration-base) var(--ease-in-out-quad),
       transform var(--duration-base) var(--ease-out-back);
@@ -1110,51 +1003,40 @@
     cursor: not-allowed;
   }
 
-  /* Selected footer - simplified */
-  .selected-footer {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    display: flex;
-    justify-content: space-between;
+  /* Selected footer content - grid for no overlap */
+  .selected-footer-content {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: var(--space-6);
     align-items: center;
-    padding: var(--space-3) var(--space-10);
-    background: var(--color-bg-primary);
-    border-top: var(--border-width) solid var(--color-gray-300);
-    animation: footerSlideUp 0.4s var(--ease-in-out-quad);
-    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
-  }
-
-  @keyframes footerSlideUp {
-    from {
-      opacity: 0;
-      transform: translateY(100%);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
+    max-width: 960px;
+    margin: 0 auto;
   }
 
   .selected-info {
     font-size: var(--font-size-body);
     color: var(--color-text-primary);
+    min-width: 0; /* Allow text truncation */
+    overflow: hidden;
   }
 
   .selected-info strong {
     font-weight: 500;
+    white-space: nowrap;
   }
 
   .selected-names {
     color: var(--color-text-tertiary);
     margin-left: 6px;
     font-size: var(--font-size-body);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .continue-btn {
-    padding: var(--space-5) var(--space-12);
-    font-size: var(--font-size-xl);
+    padding: var(--space-4) var(--space-8);
+    font-size: var(--font-size-lg);
     font-weight: 600;
     background: var(--color-text-primary);
     color: var(--color-white);
@@ -1162,6 +1044,8 @@
     cursor: pointer;
     transition: background var(--duration-slow) var(--ease-in-out-quad);
     letter-spacing: var(--tracking-wide);
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 
   .continue-btn:hover {
@@ -1169,18 +1053,12 @@
   }
 
   @media (max-width: 768px) {
-    .screener-layout {
-      padding: var(--space-12) var(--space-5) 120px;
+    .search-input-wrapper {
+      grid-template-columns: 1fr;
     }
 
-    .screener-header {
-      flex-direction: column;
-      gap: var(--space-8);
-    }
-
-    .classes-panel {
-      width: 100%;
-      max-width: none;
+    .search-btn {
+      justify-self: start;
     }
 
     .input-row {
@@ -1194,17 +1072,147 @@
     }
 
     .action-row {
-      flex-wrap: wrap;
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .or-text {
+      display: none;
+    }
+
+    .results-preview {
+      grid-auto-flow: row;
+      grid-auto-columns: 1fr;
+      justify-items: start;
+    }
+
+    .preview-sep {
+      display: none;
     }
 
     .results-grid {
       grid-template-columns: 1fr;
     }
 
-    .selected-footer {
-      flex-direction: column;
-      gap: var(--space-3);
-      padding: var(--space-3) var(--space-5);
+    .group-header {
+      grid-auto-flow: row;
     }
+
+    .selected-footer-content {
+      grid-template-columns: 1fr;
+      gap: var(--space-3);
+      text-align: center;
+    }
+
+    .selected-info {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: var(--space-1);
+    }
+
+    .selected-names {
+      margin-left: 0;
+    }
+
+    .continue-btn {
+      width: 100%;
+    }
+  }
+
+  /* Debug panel */
+  .debug-panel {
+    margin-top: var(--space-12);
+    border-top: 1px solid var(--color-border);
+    padding-top: var(--space-4);
+  }
+
+  .debug-summary {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    gap: var(--space-2);
+    align-items: center;
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-tertiary);
+    padding: var(--space-2) 0;
+    list-style: none;
+  }
+
+  .debug-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .debug-summary::before {
+    content: '▶';
+    font-size: 10px;
+    transition: transform 0.2s ease;
+  }
+
+  .debug-panel[open] .debug-summary::before {
+    transform: rotate(90deg);
+  }
+
+  .debug-icon {
+    font-size: var(--font-size-body);
+  }
+
+  .debug-time {
+    color: var(--color-text-tertiary);
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-xs);
+  }
+
+  .debug-content {
+    margin-top: var(--space-4);
+    padding: var(--space-4);
+    background: var(--color-gray-50);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+  }
+
+  .debug-meta {
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+    font-size: var(--font-size-sm);
+  }
+
+  .debug-label {
+    color: var(--color-text-tertiary);
+    font-weight: 500;
+  }
+
+  .debug-value {
+    color: var(--color-text-secondary);
+    font-family: var(--font-family-mono);
+  }
+
+  .debug-calls {
+    margin-top: var(--space-4);
+  }
+
+  .debug-call {
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+    font-size: var(--font-size-sm);
+  }
+
+  .call-type {
+    color: var(--gem-teal);
+    font-family: var(--font-family-mono);
+    font-weight: 500;
+  }
+
+  .call-params {
+    background: #1e1e1e;
+    color: #d4d4d4;
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-xs);
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+    overflow-x: auto;
+    white-space: nowrap;
   }
 </style>

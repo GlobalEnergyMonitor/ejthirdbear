@@ -654,7 +654,10 @@
 
 <svelte:head>
   <title>Investigation Report — Global Energy Monitor</title>
-  <meta name="description" content="Generate detailed ownership investigation reports for selected entities and assets from the Global Energy Monitor database." />
+  <meta
+    name="description"
+    content="Generate detailed ownership investigation reports for selected entities and assets from the Global Energy Monitor database."
+  />
 </svelte:head>
 
 <main class="report-container">
@@ -693,8 +696,8 @@
       <p class="warning-count">{cartItems.length.toLocaleString()}</p>
       <h2>items in your investigation</h2>
       <p class="warning-message">
-        Generating a report for this many items may be slow.
-        Consider exporting your cart IDs first, or clearing items you don't need.
+        Generating a report for this many items may be slow. Consider exporting your cart IDs first,
+        or clearing items you don't need.
       </p>
 
       <div class="warning-stats">
@@ -703,20 +706,14 @@
       </div>
 
       <div class="warning-actions">
-        <button class="btn btn-primary" onclick={proceedWithLargeCart}>
-          Generate Report
-        </button>
-        <button class="btn btn-outline" onclick={exportCartIds}>
-          Export IDs
-        </button>
+        <button class="btn btn-primary" onclick={proceedWithLargeCart}> Generate Report </button>
+        <button class="btn btn-outline" onclick={exportCartIds}> Export IDs </button>
         <button class="btn btn-outline" onclick={() => (showClearConfirm = true)}>
           Clear Cart
         </button>
       </div>
 
-      <p class="warning-tip">
-        Exporting IDs creates a backup you can re-import later.
-      </p>
+      <p class="warning-tip">Exporting IDs creates a backup you can re-import later.</p>
     </section>
   {:else if loading}
     <section class="loading">

@@ -414,7 +414,10 @@
 
 <svelte:head>
   <title>Global Asset Map — Global Energy Monitor</title>
-  <meta name="description" content="Interactive map visualization of energy assets worldwide. Filter by tracker type, status, and country to explore the global energy infrastructure." />
+  <meta
+    name="description"
+    content="Interactive map visualization of energy assets worldwide. Filter by tracker type, status, and country to explore the global energy infrastructure."
+  />
 </svelte:head>
 
 <div class="explorer">
@@ -438,7 +441,7 @@
         <span class="stat-label">countries</span>
       </div>
       <div class="stat query-stat">
-        <DataSourceBadge source="local" label="DuckDB" queryTime={queryTime} />
+        <DataSourceBadge source="local" label="DuckDB" {queryTime} />
       </div>
     </div>
   </header>

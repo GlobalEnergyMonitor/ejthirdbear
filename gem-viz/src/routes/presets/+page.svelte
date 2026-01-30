@@ -44,7 +44,10 @@
 
 <svelte:head>
   <title>Saved Presets — Global Energy Monitor</title>
-  <meta name="description" content="Manage saved filter presets and asset class definitions for quick access to commonly used data views." />
+  <meta
+    name="description"
+    content="Manage saved filter presets and asset class definitions for quick access to commonly used data views."
+  />
 </svelte:head>
 
 <main>

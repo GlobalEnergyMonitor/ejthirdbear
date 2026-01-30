@@ -87,7 +87,7 @@
     align-items: center;
     gap: var(--space-2);
     padding: var(--space-2) var(--space-4);
-    opacity: 0.35;
+    opacity: 0.5;
     text-decoration: none;
     color: inherit;
     transition: opacity var(--duration-slow) var(--ease-in-out-quad);
@@ -142,11 +142,17 @@
     font-size: var(--font-size-md);
     font-weight: 500;
     color: var(--color-text-primary);
-    transition: color 0.2s ease;
+    opacity: 0.65;
+    transition: opacity 0.2s ease;
   }
 
   .step.active .step-label {
+    opacity: 1;
     color: var(--color-accent);
+  }
+
+  .step.completed .step-label {
+    opacity: 1;
   }
 
   .step-line {

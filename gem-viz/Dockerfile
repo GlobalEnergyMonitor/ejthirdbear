@@ -4,6 +4,16 @@
 FROM node:20-slim AS builder
 WORKDIR /app
 
+# Build args for SvelteKit PUBLIC_ env vars (must be available at build time)
+ARG PUBLIC_MOTHERDUCK_TOKEN
+ARG PUBLIC_OWNERSHIP_API_BASE_URL=https://gem-ownership-api.fly.dev
+ARG PUBLIC_SITE_URL=
+
+# Set as env vars for the build
+ENV PUBLIC_MOTHERDUCK_TOKEN=$PUBLIC_MOTHERDUCK_TOKEN
+ENV PUBLIC_OWNERSHIP_API_BASE_URL=$PUBLIC_OWNERSHIP_API_BASE_URL
+ENV PUBLIC_SITE_URL=$PUBLIC_SITE_URL
+
 # Install ca-certificates for MotherDuck SSL/gRPC
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 
@@ -12,12 +22,7 @@ RUN npm ci
 
 COPY . .
 
-# Prefetch data from MotherDuck
-ARG PUBLIC_MOTHERDUCK_TOKEN
-ENV PUBLIC_MOTHERDUCK_TOKEN=$PUBLIC_MOTHERDUCK_TOKEN
-RUN npm run prefetch
-
-# Build the app
+# Build the app (SSR mode queries MotherDuck at runtime, no prefetch needed)
 RUN npm run build
 
 # Production image
@@ -27,11 +32,9 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev
 
-# Copy built app, static files, and cache
+# Copy built app and static files
 COPY --from=builder /app/build ./build
 COPY --from=builder /app/static ./static
-COPY --from=builder /app/.svelte-kit/asset-cache ./.svelte-kit/asset-cache
-COPY --from=builder /app/.svelte-kit/entity-cache ./.svelte-kit/entity-cache
 
 ENV NODE_ENV=production
 ENV PORT=3000

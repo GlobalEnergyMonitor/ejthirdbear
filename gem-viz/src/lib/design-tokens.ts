@@ -18,148 +18,159 @@
  */
 
 // =============================================================================
-// 1. UI COLORS (Warm Neutrals)
+// 1. GEM BRAND COLORS
 // =============================================================================
 
 export const colors = {
-  // Core
-  black: '#1a1a1a',
-  white: '#fefefe',
+  // --- GEM Core Brand ---
+  primaryBlue: '#1D4961', // Primary text/UI color
+  navy: '#1D4961', // Aliased to primary blue
+  mint: '#9DF7E5',
+  mintDataviz: '#A5E9E4', // Slightly muted for charts
+  orange: '#FE4F2D',
+  teal: '#1D4961', // Aliased to primary blue
+  midnight: '#1D4961', // Aliased to primary blue
+  warmWhite: '#FFFFFE', // Near-white from mocks
+  white: '#FFFFFF',
 
-  // Gray scale (stone-tinted for warmth)
-  gray50: '#fafaf9',
-  gray100: '#f5f5f4',
-  gray200: '#e7e5e4',
-  gray300: '#d6d3d1',
-  gray400: '#a8a29e',
-  gray500: '#78716c',
-  gray600: '#57534e',
-  gray700: '#44403c',
-  gray800: '#292524',
-  gray900: '#1c1917',
+  // --- GEM Secondary Palette (Nadieh Bremer) ---
+  deepRed: '#7F142A',
+  redLight: '#CA4A50',
+  yellow: '#FFE366',
+  mintGreen: '#95E6AF',
+  green: '#51BF7E',
+  midnightGreen: '#004F61',
+  blue: '#099ED8',
+  purple: '#A0AAE5',
+  midnightPurple: '#061F5F',
+  grey: '#BECCCF',
 
-  // Semantic UI
-  bgPrimary: '#fefefe',
-  bgSecondary: '#fafaf9',
-  bgTertiary: '#f5f5f4',
+  // --- Neutrals (derived from brand) ---
+  black: '#1D4961', // Use primary blue as black
+  gray50: '#F2F2EB', // warmWhite
+  gray100: '#ECEAE3',
+  gray200: '#dce3e5',
+  gray300: '#BECCCF',
+  gray400: '#9EAAAD',
+  gray500: '#6e8c91',
+  gray600: '#4c6267',
+  gray700: '#3a4d51',
+  gray800: '#1C1F23',
+  gray900: '#1D4961', // primary blue
 
-  textPrimary: '#1a1a1a',
-  textSecondary: '#57534e',
-  textTertiary: '#a8a29e',
+  // --- Semantic UI ---
+  bgPrimary: '#FFFFFF',
+  bgSecondary: '#F2F2EB',
+  bgTertiary: '#ECEAE3',
 
-  border: '#e7e5e4',
-  borderDark: '#1a1a1a',
-  borderLight: '#f5f5f4',
+  textPrimary: '#1D4961',
+  textSecondary: '#4c6267',
+  textTertiary: '#9EAAAD',
 
-  // Feedback (muted, not garish)
-  success: '#3d7a4a',
-  successLight: '#dcfce7',
-  warning: '#b45309',
-  warningLight: '#fef3c7',
-  error: '#b91c1c',
-  errorLight: '#fee2e2',
-  info: '#57534e',
-  infoLight: '#f5f5f4',
+  border: '#dce3e5',
+  borderDark: '#1D4961',
+  borderLight: '#ECEAE3',
 
-  // Legacy aliases (for old code compatibility)
-  navy: '#44403c',
-  mint: '#e7e5e4',
-  mintDataviz: '#d6d3d1',
-  orange: '#78716c',
-  teal: '#44403c',
-  midnight: '#1c1917',
-  warmWhite: '#fafaf9',
-  deepRed: '#292524',
-  yellow: '#d6d3d1',
-  mintGreen: '#a8a29e',
-  green: '#78716c',
-  midnightGreen: '#44403c',
-  blue: '#78716c',
-  purple: '#a8a29e',
-  midnightPurple: '#1a1a1a',
-  grey: '#c9c4c0',
-  red: '#44403c',
+  // --- Feedback ---
+  success: '#51BF7E',
+  successLight: '#95E6AF',
+  warning: '#FE4F2D',
+  warningLight: '#FED3CA',
+  error: '#7F142A',
+  errorLight: '#f4b7b3',
+  info: '#1D4961',
+  infoLight: '#E9EEF1',
 } as const;
 
 // =============================================================================
 // 2. TRACKER COLORS (Data Visualization)
+// From Nadieh Bremer's Ownership Interface - Condensed palette
 // =============================================================================
 
 export const trackerColors: Record<string, string> = {
-  // Fossil fuels (warm grayscale range)
-  'Coal Plant': '#1c1917',
-  'Coal Mine': '#292524',
-  'Gas Plant': '#3f3a37',
-  'Gas Pipeline': '#4a4440',
-  'Oil & NGL Pipeline': '#57534e',
-  'Bioenergy Power': '#6b645f',
+  // Coal (Deep Red)
+  'Coal Plant': '#7F142A',
+  'Coal Mine': '#7F142A',
 
-  // Industrial
-  'Iron Mine': '#78716c',
-  'Iron Ore Mine': '#78716c',
-  'Steel Plant': '#8f8883',
-  'Cement and Concrete': '#a8a29e',
+  // Oil & Gas (Lighter Red)
+  'Gas Plant': '#CA4A50',
+  'Gas Pipeline': '#CA4A50',
+  'Oil & NGL Pipeline': '#CA4A50',
 
-  // Renewables (lighter warm grayscale)
-  Nuclear: '#b9b3af',
-  Hydropower: '#c9c4c0',
-  Wind: '#d6d3d1',
-  Geothermal: '#e1dfdd',
-  Solar: '#ecebe8',
+  // Cement (Grey-Teal)
+  'Cement and Concrete': '#6e8c91',
+
+  // Bioenergy (Purple)
+  'Bioenergy Power': '#A0AAE5',
+
+  // Geothermal (Deep Teal)
+  Geothermal: '#004F61',
+
+  // Iron & Steel (Midnight Green)
+  'Iron Mine': '#004F61',
+  'Iron Ore Mine': '#004F61',
+  'Steel Plant': '#004F61',
+
+  // Renewables (from Global Integrated Power Tracker spec)
+  Solar: '#FFE366',
+  Wind: '#51BF7E',
+  Hydropower: '#099ED8',
+  Nuclear: '#4A57A8',
 };
 
 // As Map for iteration
 export const trackerColorMap = new Map(Object.entries(trackerColors));
 
-// Renewable-only subset
+// Renewable-only subset (from Global Integrated Power Tracker spec)
 export const renewableTrackerColors: Record<string, string> = {
-  Nuclear: '#b9b3af',
-  Hydropower: '#c9c4c0',
-  Wind: '#d6d3d1',
-  Geothermal: '#e1dfdd',
-  Solar: '#ecebe8',
+  Solar: '#FFE366',
+  Wind: '#51BF7E',
+  Hydropower: '#099ED8',
+  Nuclear: '#4A57A8',
+  Geothermal: '#004F61',
 };
 
 export const renewableTrackerColorMap = new Map(Object.entries(renewableTrackerColors));
 
 // =============================================================================
 // 3. STATUS COLORS
+// Fossil uses red scale, Renewables use green scale
 // =============================================================================
 
-// Aggregated status colors
+// Aggregated status colors (for fossil/dirty assets)
 export const statusColors: Record<string, string> = {
-  operating: '#3f3a37',
-  prospective: '#a8a29e',
-  retired: '#1c1917',
-  cancelled: '#d6d3d1',
-  unknown: '#ecebe8',
+  operating: '#7F142A', // Deep red - active fossil
+  prospective: '#CA4A50', // Lighter red - planned fossil
+  retired: '#6e8c91', // Grey-teal - shut down
+  cancelled: '#dce3e5', // Light grey - never built
+  unknown: '#BECCCF',
 };
 
 // Granular status colors
 export const statusColorsGranular: Record<string, string> = {
-  // Operating
-  operating: '#3f3a37',
-  'operating pre-retirement': '#3f3a37',
+  // Operating (fossil = red)
+  operating: '#7F142A',
+  'operating pre-retirement': '#7F142A',
 
-  // Prospective (gradient from light to dark)
-  proposed: '#d6d3d1',
-  announced: '#d6d3d1',
-  'pre-permit': '#c9c4c0',
-  permitted: '#c9c4c0',
-  'pre-construction': '#b9b3af',
-  construction: '#a8a29e',
+  // Prospective (gradient from light to dark red)
+  proposed: '#f4b7b3',
+  announced: '#f4b7b3',
+  'pre-permit': '#CA4A50',
+  permitted: '#CA4A50',
+  'pre-construction': '#CA4A50',
+  construction: '#7F142A',
 
-  // Retired
-  retired: '#1c1917',
-  mothballed: '#1c1917',
-  idle: '#1c1917',
-  'mothballed pre-retirement': '#1c1917',
+  // Retired (grey-teal)
+  retired: '#6e8c91',
+  mothballed: '#6e8c91',
+  idle: '#6e8c91',
+  'mothballed pre-retirement': '#6e8c91',
 
-  // Cancelled
-  cancelled: '#d6d3d1',
-  shelved: '#d6d3d1',
-  'cancelled - inferred 4 y': '#d6d3d1',
-  'shelved - inferred 2 y': '#d6d3d1',
+  // Cancelled (light grey)
+  cancelled: '#dce3e5',
+  shelved: '#BECCCF',
+  'cancelled - inferred 4 y': '#dce3e5',
+  'shelved - inferred 2 y': '#BECCCF',
 };
 
 // Status groupings
@@ -184,21 +195,21 @@ export const statusGroups = {
 
 // Status color legend (for viz legends)
 export const statusColorLegend = [
-  { color: '#3f3a37', label: 'Operating', statuses: statusGroups.operating },
-  { color: '#a8a29e', label: 'Prospective', statuses: statusGroups.prospective },
-  { color: '#1c1917', label: 'Retired', statuses: statusGroups.retired },
-  { color: '#d6d3d1', label: 'Cancelled', statuses: statusGroups.cancelled },
+  { color: '#7F142A', label: 'Operating', statuses: statusGroups.operating },
+  { color: '#CA4A50', label: 'Prospective', statuses: statusGroups.prospective },
+  { color: '#6e8c91', label: 'Retired', statuses: statusGroups.retired },
+  { color: '#dce3e5', label: 'Cancelled', statuses: statusGroups.cancelled },
 ];
 
 // Prospective-only legend (more granular)
 export const prospectiveColorLegend = [
-  { color: '#d6d3d1', label: 'Proposed/Announced', statuses: ['proposed', 'announced'] },
+  { color: '#f4b7b3', label: 'Proposed/Announced', statuses: ['proposed', 'announced'] },
   {
-    color: '#c9c4c0',
+    color: '#CA4A50',
     label: 'Pre-construction',
     statuses: ['pre-permit', 'permitted', 'pre-construction'],
   },
-  { color: '#a8a29e', label: 'Construction', statuses: ['construction'] },
+  { color: '#7F142A', label: 'Construction', statuses: ['construction'] },
 ];
 
 // =============================================================================
@@ -206,26 +217,41 @@ export const prospectiveColorLegend = [
 // =============================================================================
 
 export const mapColors = {
-  coal: '#1c1917',
-  coalMine: '#292524',
-  gas: '#3f3a37',
-  steel: '#8f8883',
-  iron: '#78716c',
-  bioenergy: '#6b645f',
-  default: '#78716c',
-  selected: '#1c1917',
-  unselected: '#c9c4c0',
-  stroke: '#1c1917',
+  // Tracker-specific
+  coal: '#7F142A', // Deep red
+  coalMine: '#7F142A',
+  gas: '#CA4A50', // Lighter red
+  steel: '#004F61', // Midnight green
+  iron: '#004F61',
+  cement: '#6e8c91', // Grey-teal
+  bioenergy: '#A0AAE5', // Purple
+
+  // Renewables
+  solar: '#FFE366',
+  wind: '#51BF7E',
+  hydro: '#099ED8',
+
+  // UI states
+  default: '#1D4961', // Primary blue
+  selected: '#FE4F2D', // GEM orange
+  unselected: '#BECCCF', // Grey
+  stroke: '#FFFFFF',
 } as const;
 
 export const trackerToMapColor: Record<string, string> = {
   'Coal Plant': mapColors.coal,
   'Coal Mine': mapColors.coalMine,
   'Gas Plant': mapColors.gas,
+  'Gas Pipeline': mapColors.gas,
+  'Oil & NGL Pipeline': mapColors.gas,
   'Steel Plant': mapColors.steel,
   'Iron Mine': mapColors.iron,
   'Iron Ore Mine': mapColors.iron,
+  'Cement and Concrete': mapColors.cement,
   'Bioenergy Power': mapColors.bioenergy,
+  Solar: mapColors.solar,
+  Wind: mapColors.wind,
+  Hydropower: mapColors.hydro,
 };
 
 // =============================================================================
@@ -233,33 +259,196 @@ export const trackerToMapColor: Record<string, string> = {
 // =============================================================================
 
 export const ownershipColors = {
-  direct: '#1a1a1a',
-  indirect: '#666666',
-  ultimate: '#333333',
-  edge: '#999999',
-  edgeHighlight: '#333333',
+  direct: '#1D4961', // Primary blue
+  indirect: '#1D4961', // Primary blue
+  ultimate: '#1D4961', // Primary blue
+  edge: '#BECCCF', // Grey
+  edgeHighlight: '#FE4F2D', // Orange
 } as const;
 
 // =============================================================================
-// 6. TYPOGRAPHY
+// 6. TYPOGRAPHY - GEM Type Hierarchy
+// Plus Jakarta Sans for UI, Roboto Condensed for Data/Stats (UPPERCASE)
 // =============================================================================
 
 export const fonts = {
-  serif: "Georgia, 'Times New Roman', serif",
-  mono: "'SF Mono', Consolas, 'Liberation Mono', Menlo, monospace",
-  sans: 'system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
+  // Plus Jakarta Sans - Headlines, Body, Buttons, UI
+  sans: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+  display: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+  // Roboto Condensed - Data/Numbers/Stats (UPPERCASE)
+  data: "'Roboto Condensed', 'Arial Narrow', sans-serif",
+  mono: "'Roboto Condensed', 'Arial Narrow', sans-serif" /* Use Roboto Condensed instead of monospace */,
 } as const;
 
 export const fontSizes = {
-  xs: '8px',
-  sm: '9px',
-  base: '10px',
-  md: '11px',
-  body: '12px',
-  lg: '14px',
-  xl: '17px',
-  '2xl': '20px',
-  '3xl': '24px',
+  xs: '10px', // Annotations, footnotes (uppercase)
+  sm: '12px', // Tables, small text
+  base: '14px', // Body text
+  md: '16px', // Large body / small sublines
+  lg: '18px', // Sublines
+  xl: '24px', // Section headers
+  '2xl': '32px', // Page titles
+  '3xl': '40px', // Large headlines
+  '4xl': '56px', // Hero headlines
+  '5xl': '72px', // Display headlines
+} as const;
+
+export const fontWeights = {
+  regular: 400,
+  medium: 500,
+  semibold: 600,
+  bold: 700,
+} as const;
+
+export const lineHeights = {
+  none: 1,
+  tight: 1.1,
+  snug: 1.25,
+  normal: 1.5,
+  relaxed: 1.65,
+} as const;
+
+export const letterSpacing = {
+  tighter: '-0.02em',
+  tight: '-0.01em',
+  normal: '0',
+  wide: '0.02em',
+  wider: '0.04em',
+  widest: '0.08em',
+} as const;
+
+// Typography presets for easy use
+export const typography = {
+  // Headlines (Plus Jakarta Sans Bold)
+  headlineDisplay: {
+    fontFamily: fonts.display,
+    fontSize: fontSizes['5xl'],
+    fontWeight: fontWeights.bold,
+    lineHeight: lineHeights.tight,
+    letterSpacing: letterSpacing.tight,
+  },
+  headlineHero: {
+    fontFamily: fonts.display,
+    fontSize: fontSizes['4xl'],
+    fontWeight: fontWeights.bold,
+    lineHeight: lineHeights.tight,
+    letterSpacing: letterSpacing.tight,
+  },
+  headline1: {
+    fontFamily: fonts.display,
+    fontSize: fontSizes['3xl'],
+    fontWeight: fontWeights.bold,
+    lineHeight: lineHeights.snug,
+    letterSpacing: letterSpacing.tight,
+  },
+  headline2: {
+    fontFamily: fonts.display,
+    fontSize: fontSizes['2xl'],
+    fontWeight: fontWeights.bold,
+    lineHeight: lineHeights.snug,
+  },
+  headline3: {
+    fontFamily: fonts.display,
+    fontSize: fontSizes.xl,
+    fontWeight: fontWeights.bold,
+    lineHeight: lineHeights.snug,
+  },
+
+  // Sublines (Plus Jakarta Sans Bold, smaller)
+  subline1: {
+    fontFamily: fonts.sans,
+    fontSize: fontSizes.lg,
+    fontWeight: fontWeights.bold,
+    lineHeight: lineHeights.normal,
+  },
+  subline2: {
+    fontFamily: fonts.sans,
+    fontSize: fontSizes.md,
+    fontWeight: fontWeights.bold,
+    lineHeight: lineHeights.normal,
+  },
+
+  // Body (Plus Jakarta Sans Regular)
+  bodyLg: {
+    fontFamily: fonts.sans,
+    fontSize: fontSizes.md,
+    fontWeight: fontWeights.regular,
+    lineHeight: lineHeights.relaxed,
+  },
+  bodyBase: {
+    fontFamily: fonts.sans,
+    fontSize: fontSizes.base,
+    fontWeight: fontWeights.regular,
+    lineHeight: lineHeights.relaxed,
+  },
+  bodySm: {
+    fontFamily: fonts.sans,
+    fontSize: fontSizes.sm,
+    fontWeight: fontWeights.regular,
+    lineHeight: lineHeights.normal,
+  },
+
+  // Buttons (Plus Jakarta Sans Bold)
+  button: {
+    fontFamily: fonts.sans,
+    fontSize: fontSizes.base,
+    fontWeight: fontWeights.bold,
+    textTransform: 'uppercase' as const,
+    letterSpacing: letterSpacing.wide,
+  },
+
+  // Emphasis (Plus Jakarta Sans Bold Uppercase)
+  emphasis: {
+    fontFamily: fonts.sans,
+    fontWeight: fontWeights.bold,
+    textTransform: 'uppercase' as const,
+    letterSpacing: letterSpacing.wider,
+  },
+
+  // Data (Roboto Condensed - UPPERCASE)
+  dataDisplay: {
+    fontFamily: fonts.data,
+    fontSize: fontSizes['3xl'],
+    fontWeight: fontWeights.bold,
+    textTransform: 'uppercase' as const,
+    letterSpacing: letterSpacing.wide,
+  },
+  dataLarge: {
+    fontFamily: fonts.data,
+    fontSize: fontSizes['2xl'],
+    fontWeight: fontWeights.bold,
+    textTransform: 'uppercase' as const,
+    letterSpacing: letterSpacing.wide,
+  },
+  dataMedium: {
+    fontFamily: fonts.data,
+    fontSize: fontSizes.lg,
+    fontWeight: fontWeights.semibold,
+    textTransform: 'uppercase' as const,
+    letterSpacing: letterSpacing.wide,
+  },
+  dataSmall: {
+    fontFamily: fonts.data,
+    fontSize: fontSizes.base,
+    fontWeight: fontWeights.medium,
+    textTransform: 'uppercase' as const,
+    letterSpacing: letterSpacing.wide,
+  },
+
+  // Tables & Annotations
+  table: {
+    fontFamily: fonts.sans,
+    fontSize: fontSizes.sm,
+    fontWeight: fontWeights.regular,
+    lineHeight: lineHeights.normal,
+  },
+  annotation: {
+    fontFamily: fonts.sans,
+    fontSize: fontSizes.xs,
+    fontWeight: fontWeights.bold,
+    textTransform: 'uppercase' as const,
+    letterSpacing: letterSpacing.widest,
+  },
 } as const;
 
 // =============================================================================
@@ -286,7 +475,8 @@ export const spacing = {
 /**
  * Get color for a tracker type
  */
-export function getTrackerColor(tracker: string): string {
+export function getTrackerColor(tracker: string | undefined | null): string {
+  if (!tracker) return colors.gray500;
   return trackerColors[tracker] || colors.gray500;
 }
 
@@ -480,12 +670,12 @@ export const colorByStatus = new Map(Object.entries(statusColorsGranular));
 
 // Prospective status colors as Map (legacy format)
 export const statusColorsProspective = new Map([
-  ['#d6d3d1', { descript: 'proposed/announced', statuses: ['proposed', 'announced'] }],
+  ['#f4b7b3', { descript: 'proposed/announced', statuses: ['proposed', 'announced'] }],
   [
-    '#c9c4c0',
+    '#CA4A50',
     { descript: 'pre-construction', statuses: ['pre-permit', 'permitted', 'pre-construction'] },
   ],
-  ['#a8a29e', { descript: 'construction', statuses: ['construction'] }],
+  ['#7F142A', { descript: 'construction', statuses: ['construction'] }],
 ]);
 
 export const colorByStatusProspective = new Map(
@@ -496,10 +686,10 @@ export const colorByStatusProspective = new Map(
 
 // Aggregated status colors as Map (legacy format)
 export const statusColorsMap = new Map([
-  ['#3f3a37', { descript: 'operating', statuses: statusGroups.operating }],
-  ['#a8a29e', { descript: 'prospective', statuses: statusGroups.prospective }],
-  ['#1c1917', { descript: 'retired/mothballed/idle', statuses: statusGroups.retired }],
-  ['#d6d3d1', { descript: 'cancelled/shelved', statuses: statusGroups.cancelled }],
+  ['#7F142A', { descript: 'operating', statuses: statusGroups.operating }],
+  ['#CA4A50', { descript: 'prospective', statuses: statusGroups.prospective }],
+  ['#6e8c91', { descript: 'retired/mothballed/idle', statuses: statusGroups.retired }],
+  ['#dce3e5', { descript: 'cancelled/shelved', statuses: statusGroups.cancelled }],
 ]);
 
 // =============================================================================

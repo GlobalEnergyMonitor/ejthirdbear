@@ -92,9 +92,8 @@ export interface AssetClassDefinition {
  * Required field: 'Main production equipment' (from detailed Steel Plant tracker)
  */
 export const CoalBasedSteelClass: AssetClassDefinition = {
-  name: 'Coal-Based Steel Plants',
-  description:
-    'Steel plants using coal/coke-based production, identified by blast furnaces (BF) as main production equipment',
+  name: 'Coal-Based Steel',
+  description: 'Blast furnace steel plants.',
   applicableTrackers: ['Steel Plant'],
   matcher: (record: Record<string, unknown>) => {
     const equipment = String(record['Main production equipment'] || '').toUpperCase();
@@ -129,9 +128,8 @@ export const CoalBasedSteelClass: AssetClassDefinition = {
  * Required field: 'Captive' (from detailed Coal Plant tracker)
  */
 export const CaptiveCoalPlantClass: AssetClassDefinition = {
-  name: 'Captive Coal Plants',
-  description:
-    'Coal-fired power plants serving captive (non-grid) use such as mining operations or industrial facilities',
+  name: 'Captive Coal',
+  description: 'Coal plants/units whose power goes to a specific private user.',
   applicableTrackers: ['Coal Plant'],
   matcher: (record: Record<string, unknown>) => {
     const captiveField = String(record['Captive'] || '').trim();
@@ -167,8 +165,8 @@ export const CaptiveCoalPlantClass: AssetClassDefinition = {
  * Required field: 'Water Depth (m)' or 'Max Water Depth (m)' (from detailed pipeline trackers)
  */
 export const DeepWaterInfraClass: AssetClassDefinition = {
-  name: 'Deep Water Infrastructure',
-  description: 'Oil and gas infrastructure in deep water (>200m depth)',
+  name: 'Deep Water Oil',
+  description: 'Offshore oil-extraction in water depths of at least 200m.',
   applicableTrackers: ['Oil & NGL Pipeline', 'Gas Pipeline'],
   matcher: (record: Record<string, unknown>) => {
     const depthField = record['Water Depth (m)'] || record['Max Water Depth (m)'];

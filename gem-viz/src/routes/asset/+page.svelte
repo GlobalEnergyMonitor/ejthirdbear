@@ -78,7 +78,10 @@
 
 <svelte:head>
   <title>Browse Assets — Global Energy Monitor</title>
-  <meta name="description" content="Browse all energy assets in the Global Energy Monitor database including coal plants, gas plants, steel facilities, and more." />
+  <meta
+    name="description"
+    content="Browse all energy assets in the Global Energy Monitor database including coal plants, gas plants, steel facilities, and more."
+  />
 </svelte:head>
 
 <main>

@@ -125,9 +125,14 @@
       .attr('stroke-width', size === 'small' ? 1 : 1.5);
 
     // Labels (only if showLabels is true and not small size)
+    // Only show labels for slices >= 10% to avoid clutter
     if (showLabels && size !== 'small') {
+      const totalCount = d3.sum(petalsData, (d) => d.count) || 1;
+      const labelThreshold = 0.1; // 10% minimum to show label
+      const labelData = petalsData.filter((d) => d.count / totalCount >= labelThreshold);
+
       g.selectAll('text.label')
-        .data(petalsData)
+        .data(labelData)
         .join('text')
         .attr('class', 'label')
         .attr('x', (d) => Math.cos((d.angleStart + d.angleEnd) / 2 - Math.PI / 2) * (d.length + 10))
@@ -140,6 +145,7 @@
         })
         .text((d) => `${d.tracker} (${d.count})`)
         .style('font-size', `${labelSize}px`)
+        .style('font-weight', '600')
         .style('fill', '#111');
     }
   }

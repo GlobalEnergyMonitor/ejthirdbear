@@ -1,13 +1,14 @@
 /* ============================================================================
    GEM VIZ DESIGN SYSTEM
    ============================================================================
-   A comprehensive design system for the Global Energy Monitor visualization.
+   Global Energy Monitor Brand Colors + Data Visualization System
+   Based on GEM Color Guide (Nadieh Bremer collaboration)
 
    CONTENTS:
-   1. Typography Scale
+   1. Typography Scale (Plus Jakarta Sans)
    2. Spacing Scale
-   3. Color Palette (UI)
-   4. Color Palette (Data Visualization)
+   3. GEM Core Color Palette
+   4. GEM Secondary/Data Viz Palette
    5. Semantic Tokens
    6. Transitions & Effects
 
@@ -17,43 +18,62 @@
    - Always prefer CSS variables over hardcoded hex values
    ============================================================================ */
 
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Roboto+Condensed:wght@400;500;600;700&display=swap');
+
 :root {
   /* ==========================================================================
-     1. TYPOGRAPHY SCALE
-     Minor third ratio (1.2) from 12px base — restrained, academic
+     1. TYPOGRAPHY SCALE - GEM Type Hierarchy
+
+     HEADLINES:     Plus Jakarta Sans Bold (large)
+     SUBLINES:      Plus Jakarta Sans Bold (medium)
+     BODY:          Plus Jakarta Sans Regular
+     BUTTONS:       Plus Jakarta Sans Bold
+     EMPHASIS:      Plus Jakarta Sans Bold Uppercase
+     TABLES/NOTES:  Plus Jakarta Sans Regular 12pt or Bold Uppercase 10pt
      ========================================================================== */
 
-  --font-family: Georgia, 'Times New Roman', serif;
-  --font-family-mono: 'SF Mono', Consolas, 'Liberation Mono', Menlo, monospace;
-  --font-family-sans: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  /* Font families */
+  --font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-family-display: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-family-data: 'Roboto Condensed', 'Arial Narrow', sans-serif;
+  --font-family-mono: var(--font-family-data); /* Use Roboto Condensed instead of monospace */
 
-  /* Size scale: Each step = previous × 1.2 */
-  --font-size-xs: 8px; /* Footnotes, superscripts */
-  --font-size-sm: 9px; /* Captions, labels */
-  --font-size-base: 10px; /* Data tables, dense UI */
-  --font-size-md: 11px; /* Secondary text */
-  --font-size-body: 12px; /* Body text (base) */
-  --font-size-lg: 14px; /* Subheads */
-  --font-size-xl: 17px; /* Section heads */
-  --font-size-2xl: 20px; /* Page titles */
-  --font-size-3xl: 24px; /* Display */
+  /* Font weights */
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* Size scale - Based on GEM Brand Guidelines */
+  --font-size-xs: 10px; /* Annotations, footnotes (uppercase) */
+  --font-size-sm: 12px; /* Tables, small text */
+  --font-size-base: 14px; /* Body text */
+  --font-size-md: 16px; /* Large body / small sublines */
+  --font-size-lg: 18px; /* Sublines */
+  --font-size-xl: 24px; /* Section headers */
+  --font-size-2xl: 32px; /* Page titles */
+  --font-size-3xl: 40px; /* Large headlines */
+  --font-size-4xl: 56px; /* Hero headlines */
+  --font-size-5xl: 72px; /* Display headlines */
 
   /* Line heights */
+  --line-height-none: 1;
   --line-height-tight: 1.1;
   --line-height-snug: 1.25;
   --line-height-normal: 1.5;
   --line-height-relaxed: 1.65;
 
   /* Letter spacing */
+  --tracking-tighter: -0.02em;
   --tracking-tight: -0.01em;
   --tracking-normal: 0;
-  --tracking-wide: 0.025em;
-  --tracking-wider: 0.05em;
-  --tracking-caps: 0.1em;
+  --tracking-wide: 0.02em;
+  --tracking-wider: 0.04em;
+  --tracking-widest: 0.08em;
 
   /* ==========================================================================
      2. SPACING SCALE
-     4px base unit — allows for 4, 8, 12, 16, 20, 24, 32, 40, 48, 64
+     4px base unit — allows for 4, 8, 12, 16, 20, 24, 32, 40, 48, 64, 80, 96
      ========================================================================== */
 
   --space-1: 4px;
@@ -66,6 +86,8 @@
   --space-10: 40px;
   --space-12: 48px;
   --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
 
   /* Legacy aliases */
   --spacing-xs: var(--space-1);
@@ -74,91 +96,168 @@
   --spacing-lg: var(--space-5);
 
   /* ==========================================================================
-     3. COLOR PALETTE — UI (Warm Neutrals)
-     Subtle warmth for refined feel. Avoid harsh pure black/white.
+     2b. CONTAINER & LAYOUT WIDTHS
+     Based on GEM website layout patterns
      ========================================================================== */
 
-  /* Neutrals (stone-tinted grays) */
-  --color-black: #1a1a1a;
-  --color-white: #fefefe;
+  --container-xs: 480px; /* Narrow content (forms, login) */
+  --container-sm: 640px; /* Single column content */
+  --container-md: 768px; /* Medium content */
+  --container-lg: 960px; /* Article/screener width */
+  --container-xl: 1200px; /* Main content container */
+  --container-2xl: 1400px; /* Wide layouts, dashboards */
+  --container-full: 100%;
 
-  --color-gray-50: #fafaf9;
-  --color-gray-100: #f5f5f4;
-  --color-gray-200: #e7e5e4;
-  --color-gray-300: #d6d3d1;
-  --color-gray-400: #a8a29e;
-  --color-gray-500: #78716c;
-  --color-gray-600: #57534e;
-  --color-gray-700: #44403c;
-  --color-gray-800: #292524;
-  --color-gray-900: #1c1917;
+  /* Site gutter/edge padding */
+  --site-gutter: var(--space-6);
+  --site-gutter-lg: var(--space-12);
 
-  /* Accent (used sparingly) */
-  --color-accent: #1a1a1a;
-  --color-accent-muted: #57534e;
-
-  /* Feedback colors (muted, not garish) */
-  --color-success: #3d7a4a;
-  --color-success-light: #dcfce7;
-  --color-warning: #b45309;
-  --color-warning-light: #fef3c7;
-  --color-error: #b91c1c;
-  --color-error-light: #fee2e2;
-  --color-info: #57534e;
-  --color-info-light: #f5f5f4;
+  /* Card/section border radius - matches GEM rounded card style */
+  --radius-card: 16px;
+  --radius-card-lg: 24px;
 
   /* ==========================================================================
-     4. COLOR PALETTE — DATA VISUALIZATION
-     Distinct colors for trackers, statuses, and maps.
-     These need to be visually distinguishable in charts.
+     3. GEM CORE COLOR PALETTE
+     Navy, Mint, Orange, Teal, Midnight, Warm White
      ========================================================================== */
 
-  /* --- Tracker Colors (Warm Grayscale) --- */
-  --color-tracker-coal-plant: #1c1917;
-  --color-tracker-coal-mine: #292524;
-  --color-tracker-gas-plant: #3f3a37;
-  --color-tracker-gas-pipeline: #4a4440;
-  --color-tracker-oil-pipeline: #57534e;
-  --color-tracker-iron-ore: #78716c;
-  --color-tracker-steel: #8f8883;
-  --color-tracker-cement: #a8a29e;
-  --color-tracker-bioenergy: #6b645f;
+  /* --- Core Brand Colors --- */
+  --gem-primary-blue: #1d4961; /* Primary text/UI color */
+  --gem-navy: #1d4961; /* Aliased to primary blue for consistency */
+  --gem-mint: #9df7e5;
+  --gem-mint-dataviz: #a5e9e4; /* Slightly muted for charts */
+  --gem-orange: #fe4f2d;
+  --gem-teal: #1d4961; /* Aliased to primary blue for consistency */
+  --gem-midnight: #1d4961; /* Aliased to primary blue for consistency */
+  --gem-warm-white: #fffffe; /* Near-white from mocks - NOT the yellowy #f2f2eb */
+  --gem-white: #ffffff;
 
-  /* --- Tracker Colors (Renewable) --- */
-  --color-tracker-nuclear: #b9b3af;
-  --color-tracker-hydro: #c9c4c0;
-  --color-tracker-wind: #d6d3d1;
-  --color-tracker-geothermal: #e1dfdd;
-  --color-tracker-solar: #ecebe8;
+  /* --- Core Tints (10%, 25%, 50%) --- based on #1d4961 */
+  --gem-navy-50: #8ea4b0;
+  --gem-navy-25: #c7d1d8;
+  --gem-navy-10: #e9eef1;
+  --gem-teal-50: #8ea4b0;
+  --gem-teal-25: #c7d1d8;
+  --gem-teal-10: #e9eef1;
+  --gem-orange-50: #fea695;
+  --gem-orange-25: #fed3ca;
+  --gem-orange-10: #ffeeea;
+  --gem-mint-50: #cdfaf1;
+  --gem-mint-25: #e6fdf8;
+  --gem-mint-10: #f6fffd;
 
-  /* --- Status Colors --- */
-  --color-status-operating: #3f3a37;
-  --color-status-prospective: #a8a29e;
-  --color-status-retired: #1c1917;
-  --color-status-cancelled: #d6d3d1;
-  --color-status-unknown: #ecebe8;
+  /* Neutrals (derived from brand) */
+  --color-black: var(--gem-primary-blue);
+  --color-white: var(--gem-white);
 
-  /* --- Status Colors (Granular Prospective) --- */
-  --color-status-proposed: #d6d3d1;
-  --color-status-announced: #d6d3d1;
-  --color-status-permitted: #c9c4c0;
-  --color-status-construction: #a8a29e;
+  --color-gray-50: var(--gem-warm-white);
+  --color-gray-100: #eceae3;
+  --color-gray-200: #dce3e5;
+  --color-gray-300: #becccf;
+  --color-gray-400: #9eaaad;
+  --color-gray-500: #6e8c91;
+  --color-gray-600: #4c6267;
+  --color-gray-700: #3a4d51;
+  --color-gray-800: #1c1f23;
+  --color-gray-900: var(--gem-midnight);
+
+  /* Accent colors */
+  --color-accent: var(--gem-orange);
+  --color-accent-muted: var(--gem-teal);
+
+  /* Feedback colors (using brand palette) */
+  --color-success: #51bf7e;
+  --color-success-light: #95e6af;
+  --color-warning: var(--gem-orange);
+  --color-warning-light: var(--gem-orange-25);
+  --color-error: #7f142a;
+  --color-error-light: #f4b7b3;
+  --color-info: var(--gem-teal);
+  --color-info-light: var(--gem-teal-10);
+
+  /* ==========================================================================
+     4. GEM DATA VISUALIZATION PALETTE
+     From Nadieh Bremer's ownership interface color system
+     ========================================================================== */
+
+  /* --- Secondary Palette (Many-hue categorical) --- */
+  --gem-deep-red: #7f142a;
+  --gem-red-light: #ca4a50;
+  --gem-yellow: #ffe366;
+  --gem-mint-green: #95e6af;
+  --gem-green: #51bf7e;
+  --gem-midnight-green: #004f61;
+  --gem-blue: #099ed8;
+  --gem-purple: #a0aae5;
+  --gem-midnight-purple: #061f5f;
+  --gem-grey: #becccf;
+
+  /* --- Tracker Colors (Ownership Condensed) --- */
+  --color-tracker-coal: #7f142a;
+  --color-tracker-coal-plant: #7f142a;
+  --color-tracker-coal-mine: #7f142a;
+  --color-tracker-gas-plant: #ca4a50;
+  --color-tracker-gas-pipeline: #ca4a50;
+  --color-tracker-oil-pipeline: #ca4a50;
+  --color-tracker-cement: #6e8c91;
+  --color-tracker-bioenergy: #a0aae5;
+  --color-tracker-iron-ore: #004f61;
+  --color-tracker-steel: #004f61;
+
+  /* --- Tracker Colors (Renewable/Future) --- */
+  --color-tracker-solar: #ffe366;
+  --color-tracker-wind: #51bf7e;
+  --color-tracker-hydro: #099ed8;
+  --color-tracker-nuclear: #584ca9;
+  --color-tracker-geothermal: #348d59;
+
+  /* --- Status Colors (Fossil/Dirty - Red Scale) --- */
+  --color-status-operating: #7f142a;
+  --color-status-construction: #7f142a;
+  --color-status-pre-construction: #ca4a50;
+  --color-status-announced: #f4b7b3;
+  --color-status-prospective: #ca4a50;
+
+  /* --- Status Colors (Renewables - Green Scale) --- */
+  --color-status-operating-renewable: #348d59;
+  --color-status-construction-renewable: #348d59;
+  --color-status-pre-construction-renewable: #51bf7e;
+  --color-status-announced-renewable: #95e6af;
+
+  /* --- Status Colors (Retired/Cancelled - Grey Scale) --- */
+  --color-status-retired: #6e8c91;
+  --color-status-cancelled: #dce3e5;
+  --color-status-shelved: #becccf;
+  --color-status-unknown: #dce3e5;
+  --color-status-proposed: #becccf;
+  --color-status-permitted: #9eaaad;
+
+  /* --- Positive/Negative/Neutral Semantic Colors --- */
+  --color-positive-1: #099ed8;
+  --color-positive-2: #1d4961;
+  --color-negative-1: #7f142a;
+  --color-negative-2: #ca4a50;
+  --color-neutral: #4a57a8;
 
   /* --- Map Colors --- */
-  --color-map-coal: #1c1917;
-  --color-map-coal-mine: #292524;
-  --color-map-gas: #3f3a37;
-  --color-map-steel: #8f8883;
-  --color-map-iron: #78716c;
-  --color-map-bioenergy: #6b645f;
-  --color-map-default: #78716c;
-  --color-map-selected: #1c1917;
-  --color-map-unselected: #c9c4c0;
+  --color-map-coal: #7f142a;
+  --color-map-coal-mine: #7f142a;
+  --color-map-gas: #ca4a50;
+  --color-map-steel: #004f61;
+  --color-map-iron: #004f61;
+  --color-map-bioenergy: #a0aae5;
+  --color-map-cement: #6e8c91;
+  --color-map-solar: #ffe366;
+  --color-map-wind: #51bf7e;
+  --color-map-hydro: #099ed8;
+  --color-map-default: var(--gem-teal);
+  --color-map-selected: var(--gem-orange);
+  --color-map-unselected: var(--gem-grey);
 
   /* --- Ownership Hierarchy --- */
-  --color-owner-direct: #1a1a1a;
-  --color-owner-indirect: #666666;
-  --color-owner-ultimate: #333333;
+  --color-owner-direct: var(--gem-midnight);
+  --color-owner-indirect: var(--gem-teal);
+  --color-owner-ultimate: var(--gem-navy);
 
   /* ==========================================================================
      5. SEMANTIC TOKENS
@@ -173,13 +272,13 @@
   --color-bg-hover: var(--color-gray-100);
   --color-bg-active: var(--color-gray-200);
 
-  /* Text */
-  --color-text-primary: var(--color-black);
+  /* Text - GEM Navy-ish blue for primary text */
+  --color-text-primary: #1d4961;
   --color-text-secondary: var(--color-gray-600);
   --color-text-tertiary: var(--color-gray-400);
   --color-text-inverse: var(--color-white);
-  --color-text-link: var(--color-black);
-  --color-text-link-hover: var(--color-gray-700);
+  --color-text-link: #1d4961;
+  --color-text-link-hover: var(--gem-navy);
 
   /* Borders */
   --color-border: var(--color-gray-200);
@@ -232,6 +331,110 @@
   --z-modal: 1000;
   --z-toast: 1100;
 }
+
+/* ============================================================================
+   CONTAINER & LAYOUT UTILITIES
+   Based on GEM website max-width patterns
+   ============================================================================ */
+
+/* Base container - centered with padding */
+.container {
+  width: 100%;
+  max-width: var(--container-xl);
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: var(--site-gutter);
+  padding-right: var(--site-gutter);
+}
+
+/* Container size variants */
+.container-xs {
+  max-width: var(--container-xs);
+}
+.container-sm {
+  max-width: var(--container-sm);
+}
+.container-md {
+  max-width: var(--container-md);
+}
+.container-lg {
+  max-width: var(--container-lg);
+}
+.container-xl {
+  max-width: var(--container-xl);
+}
+.container-2xl {
+  max-width: var(--container-2xl);
+}
+.container-full {
+  max-width: 100%;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* Responsive container - grows with larger screens */
+@media (min-width: 1024px) {
+  .container {
+    padding-left: var(--site-gutter-lg);
+    padding-right: var(--site-gutter-lg);
+  }
+}
+
+/* ============================================================================
+   GEM-STYLE CARD SECTIONS
+   Rounded corners, warm-white background, contained content
+   ============================================================================ */
+
+/* Section card - the floating white card look from GEM website */
+.section-card {
+  background: var(--gem-white);
+  border-radius: var(--radius-card);
+  padding: var(--space-10) var(--space-8);
+  margin: var(--space-8) 0;
+}
+
+.section-card-lg {
+  background: var(--gem-white);
+  border-radius: var(--radius-card-lg);
+  padding: var(--space-16) var(--space-12);
+  margin: var(--space-10) 0;
+}
+
+/* Dark section card (navy background like GEM "Explore by Theme") */
+.section-card-dark {
+  background: var(--gem-navy);
+  border-radius: var(--radius-card-lg);
+  padding: var(--space-12) var(--space-10);
+  color: var(--gem-white);
+}
+
+.section-card-dark h2,
+.section-card-dark h3 {
+  color: var(--gem-white);
+}
+
+/* Page wrapper - warm white background for the whole page */
+.page-wrapper {
+  background: var(--gem-warm-white);
+  min-height: 100vh;
+}
+
+/* Content wrapper - constrains content within the page */
+.content-wrapper {
+  max-width: var(--container-xl);
+  margin: 0 auto;
+  padding: var(--space-8) var(--site-gutter);
+}
+
+@media (min-width: 1024px) {
+  .content-wrapper {
+    padding: var(--space-12) var(--site-gutter-lg);
+  }
+}
+
+/* ============================================================================
+   COMMON PANEL STYLES (Legacy)
+   ============================================================================ */
 
 /* Common Panel Styles */
 .panel {
@@ -306,6 +509,14 @@
 .data-table td {
   padding: 6px 10px;
   border-bottom: var(--border-width) solid var(--color-border);
+}
+
+/* Numeric cells in data tables use Roboto Condensed */
+.data-table td[data-numeric],
+.data-table .numeric {
+  font-family: var(--font-family-data);
+  font-variant-numeric: tabular-nums lining-nums;
+  text-transform: uppercase;
 }
 
 .data-table tr:last-child td {
@@ -388,6 +599,26 @@
   border-color: var(--color-info);
 }
 
+/* GEM Mint Tag - Primary data tag style from GEM brand */
+.tag,
+.gem-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 8px;
+  background: var(--gem-mint);
+  color: var(--gem-navy);
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  line-height: 1.2;
+  border-radius: 5px;
+  border: none;
+}
+
+.tag + .tag,
+.gem-tag + .gem-tag {
+  margin-left: var(--space-2);
+}
+
 /* Utility Classes */
 .truncate {
   overflow: hidden;
@@ -416,31 +647,235 @@
 }
 
 /* ============================================================================
-   BUTTON STYLES
+   GEM TYPOGRAPHY CLASSES
+   Based on GEM Type Hierarchy (Plus Jakarta Sans + Roboto Condensed)
    ============================================================================ */
 
-/* Base button reset */
+/* --- Headlines (Plus Jakarta Sans Bold) --- */
+.headline-display {
+  font-family: var(--font-family-display);
+  font-size: var(--font-size-5xl);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
+  letter-spacing: var(--tracking-tight);
+  color: var(--color-text-primary);
+}
+
+.headline-hero {
+  font-family: var(--font-family-display);
+  font-size: var(--font-size-4xl);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
+  letter-spacing: var(--tracking-tight);
+  color: var(--color-text-primary);
+}
+
+.headline-1 {
+  font-family: var(--font-family-display);
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-snug);
+  letter-spacing: var(--tracking-tight);
+  color: var(--color-text-primary);
+}
+
+.headline-2 {
+  font-family: var(--font-family-display);
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-snug);
+  color: var(--color-text-primary);
+}
+
+.headline-3 {
+  font-family: var(--font-family-display);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-snug);
+  color: var(--color-text-primary);
+}
+
+/* --- Sublines (Plus Jakarta Sans Bold, smaller) --- */
+.subline-1 {
+  font-family: var(--font-family);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-normal);
+  color: var(--color-text-primary);
+}
+
+.subline-2 {
+  font-family: var(--font-family);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-normal);
+  color: var(--color-text-primary);
+}
+
+.subline-3 {
+  font-family: var(--font-family);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-normal);
+  color: var(--color-text-primary);
+}
+
+/* --- Body Text (Plus Jakarta Sans Regular) --- */
+.body-lg {
+  font-family: var(--font-family);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-relaxed);
+  color: var(--color-text-primary);
+}
+
+.body-base {
+  font-family: var(--font-family);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-relaxed);
+  color: var(--color-text-primary);
+}
+
+.body-sm {
+  font-family: var(--font-family);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-normal);
+  color: var(--color-text-secondary);
+}
+
+/* --- Emphasis (Plus Jakarta Sans Bold Uppercase) --- */
+.emphasis {
+  font-family: var(--font-family);
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wider);
+}
+
+.emphasis-lg {
+  font-family: var(--font-family);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wider);
+}
+
+.emphasis-sm {
+  font-family: var(--font-family);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wider);
+}
+
+/* --- Tables & Annotations (Plus Jakarta Sans) --- */
+.table-text {
+  font-family: var(--font-family);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-normal);
+}
+
+.annotation {
+  font-family: var(--font-family);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-widest);
+  color: var(--color-text-tertiary);
+}
+
+.footnote-text {
+  font-family: var(--font-family);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-normal);
+  color: var(--color-text-secondary);
+}
+
+/* --- Data Typography (Roboto Condensed Uppercase for stats) --- */
+.data-display {
+  font-family: var(--font-family-data);
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.data-large {
+  font-family: var(--font-family-data);
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.data-medium {
+  font-family: var(--font-family-data);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.data-small {
+  font-family: var(--font-family-data);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.data-xs {
+  font-family: var(--font-family-data);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* ============================================================================
+   BUTTON STYLES - GEM Brand
+   Based on GEM Type Hierarchy: Plus Jakarta Sans Bold, Pill-shaped
+   Three primary variants: Orange CTA, White Outline, Navy/Teal Filled
+   ============================================================================ */
+
+/* Base button - GEM pill style */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  font-family: system-ui, sans-serif;
+  gap: 8px;
+  font-family: var(--font-family);
   font-size: var(--font-size-md);
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  font-weight: var(--font-weight-bold);
+  /* Title case, NOT uppercase - per brand spec */
+  text-transform: none;
+  letter-spacing: normal;
   cursor: pointer;
-  transition: all 0.15s ease;
-  border: 2px solid var(--color-border-dark);
-  background: var(--color-border-dark);
-  color: var(--color-bg-primary);
-  padding: 6px 12px;
+  transition: all var(--duration-base) var(--ease-out);
+  border: 2px solid var(--gem-navy);
+  background: var(--gem-navy);
+  color: var(--gem-white);
+  padding: 12px 28px;
+  border-radius: 999px; /* Full pill shape */
+  text-decoration: none;
+  line-height: 1.2;
 }
 
 .btn:hover:not(:disabled) {
-  background: var(--color-bg-primary);
-  color: var(--color-border-dark);
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .btn:disabled {
@@ -448,98 +883,186 @@
   cursor: not-allowed;
 }
 
-/* Inverted state (for "active" or "selected" buttons) */
-.btn-active,
-.btn.active {
-  background: var(--color-bg-primary);
-  color: var(--color-border-dark);
+/* --- PRIMARY: Orange CTA (Access data) --- */
+.btn-primary,
+.btn-orange,
+.btn-cta {
+  background: var(--gem-orange);
+  border-color: var(--gem-orange);
+  color: var(--gem-white);
 }
 
-.btn-active:hover:not(:disabled),
-.btn.active:hover:not(:disabled) {
-  background: var(--color-bg-tertiary);
+.btn-primary:hover:not(:disabled),
+.btn-orange:hover:not(:disabled),
+.btn-cta:hover:not(:disabled) {
+  background: #e5462a; /* Slightly darker orange */
+  border-color: #e5462a;
 }
 
-/* Size variants */
+/* --- SECONDARY: White Outline (Subscribe) --- */
+.btn-secondary,
+.btn-outline,
+.btn-white {
+  background: var(--gem-white);
+  border-color: var(--gem-navy);
+  color: var(--gem-navy);
+}
+
+.btn-secondary:hover:not(:disabled),
+.btn-outline:hover:not(:disabled),
+.btn-white:hover:not(:disabled) {
+  background: var(--gem-navy-10);
+  border-color: var(--gem-navy);
+}
+
+/* --- TERTIARY: Navy/Teal Filled (Read now) --- */
+.btn-tertiary,
+.btn-navy {
+  background: var(--gem-navy);
+  border-color: var(--gem-navy);
+  color: var(--gem-white);
+}
+
+.btn-tertiary:hover:not(:disabled),
+.btn-navy:hover:not(:disabled) {
+  background: var(--gem-midnight);
+  border-color: var(--gem-midnight);
+}
+
+/* Teal variant */
+.btn-teal {
+  background: var(--gem-teal);
+  border-color: var(--gem-teal);
+  color: var(--gem-white);
+}
+
+.btn-teal:hover:not(:disabled) {
+  background: var(--gem-navy);
+  border-color: var(--gem-navy);
+}
+
+/* Ghost (transparent with subtle border) */
+.btn-ghost {
+  background: transparent;
+  border-color: var(--color-gray-300);
+  color: var(--color-text-primary);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  border-color: var(--gem-navy);
+  background: var(--gem-white);
+}
+
+/* --- Size Variants --- */
 .btn-sm,
 .btn-small {
   font-size: var(--font-size-sm);
-  padding: 5px 9px;
+  padding: 8px 18px;
 }
 
 .btn-lg {
   font-size: var(--font-size-lg);
-  padding: 8px 16px;
+  padding: 16px 36px;
 }
 
-/* Danger variant */
+.btn-xl {
+  font-size: var(--font-size-xl);
+  padding: 20px 48px;
+}
+
+/* --- Active/Selected State --- */
+.btn-active,
+.btn.active {
+  background: var(--gem-navy-10);
+  border-color: var(--gem-navy);
+  color: var(--gem-navy);
+}
+
+.btn-orange.active,
+.btn-cta.active,
+.btn-primary.active {
+  background: var(--gem-orange-10);
+  border-color: var(--gem-orange);
+  color: var(--gem-orange);
+}
+
+.btn-teal.active {
+  background: var(--gem-teal-10);
+  border-color: var(--gem-teal);
+  color: var(--gem-teal);
+}
+
+/* --- Danger Variant --- */
 .btn-danger {
-  background: #c62828;
-  border-color: #c62828;
+  background: var(--gem-deep-red);
+  border-color: var(--gem-deep-red);
+  color: var(--gem-white);
 }
 
 .btn-danger:hover:not(:disabled) {
-  background: var(--color-bg-primary);
-  color: #c62828;
+  background: #6a1023;
+  border-color: #6a1023;
 }
 
-/* Outline variant (white bg, black border) */
-.btn-outline {
-  background: var(--color-bg-primary);
-  color: var(--color-border-dark);
-  border-color: var(--color-border-dark);
-}
-
-.btn-outline:hover:not(:disabled) {
-  background: var(--color-border-dark);
-  color: var(--color-bg-primary);
-}
-
-/* Primary variant (slightly larger, bolder) */
-.btn-primary {
-  padding: 10px 20px;
-  font-size: var(--font-size-base);
-}
-
-/* Icon button (square) */
+/* --- Icon Button (Circle) --- */
 .btn-icon {
-  width: 24px;
-  height: 24px;
+  width: 44px;
+  height: 44px;
   padding: 0;
-  font-size: 14px;
-  font-weight: bold;
+  border-radius: 50%;
 }
 
 .btn-icon.btn-sm {
-  width: 18px;
-  height: 18px;
-  font-size: 12px;
+  width: 36px;
+  height: 36px;
 }
 
 .btn-icon.btn-lg {
-  width: 32px;
-  height: 32px;
-  font-size: 18px;
+  width: 52px;
+  height: 52px;
 }
 
-/* Minimal/link style button */
+/* --- Link Style Button --- */
 .btn-link {
   border: none;
   background: transparent;
-  color: var(--color-text-primary);
+  color: var(--gem-navy);
   text-decoration: underline;
-  padding: 2px 4px;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+  padding: 4px 8px;
+  border-radius: 0;
 }
 
 .btn-link:hover:not(:disabled) {
   background: transparent;
-  text-decoration: none;
+  color: var(--gem-teal);
+  text-decoration-color: var(--gem-teal);
 }
 
 .btn-link.active {
   background: transparent;
   color: var(--color-text-secondary);
-  border: none;
+}
+
+/* --- Button Group (for toggle buttons) --- */
+.btn-group {
+  display: inline-flex;
+  gap: 0;
+}
+
+.btn-group .btn {
+  border-radius: 0;
+  margin-left: -2px;
+}
+
+.btn-group .btn:first-child {
+  border-radius: 999px 0 0 999px;
+  margin-left: 0;
+}
+
+.btn-group .btn:last-child {
+  border-radius: 0 999px 999px 0;
 }
 
 /* ============================================================================
@@ -558,13 +1081,27 @@
   text-transform: uppercase;
   font-size: var(--font-size-xs);
   letter-spacing: var(--tracking-caps);
-  font-weight: normal;
+  font-weight: 700;
   color: var(--color-text-tertiary);
 }
 
 /* Lining figures for tabular data */
 .tabular-nums {
   font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* Data typography - Roboto Condensed UPPERCASE for stats/numbers */
+.data-type,
+.stat-value,
+.stat-hero-value,
+.metric-card-value,
+.inline-stat-value,
+.data-badge-count,
+.breakdown-legend-count {
+  font-family: var(--font-family-data);
+  font-variant-numeric: tabular-nums lining-nums;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
 }
 
 /* Oldstyle figures for running text */
@@ -615,7 +1152,7 @@
   line-height: 0.8;
   padding-right: 0.1em;
   margin-top: 0.05em;
-  font-weight: normal;
+  font-weight: 700;
 }
 
 /* Lead paragraph (slightly larger first paragraph) */
@@ -822,7 +1359,7 @@ dl {
 }
 
 dt {
-  font-weight: normal;
+  font-weight: 700;
   color: var(--color-text-tertiary);
   font-size: var(--font-size-sm);
   text-transform: uppercase;
@@ -942,7 +1479,7 @@ summary {
 
 .stat-hero-label {
   font-size: var(--font-size-md);
-  font-weight: 500;
+  font-weight: 700;
   color: var(--color-text-tertiary);
   text-transform: uppercase;
   letter-spacing: var(--tracking-caps);
@@ -1019,7 +1556,7 @@ summary {
    --------------------------------------------------------------------------- */
 .section-label {
   font-size: var(--font-size-xs);
-  font-weight: 500;
+  font-weight: 700;
   color: var(--color-text-tertiary);
   text-transform: uppercase;
   letter-spacing: var(--tracking-caps);
@@ -1055,7 +1592,7 @@ summary {
 
 .data-badge-label {
   font-size: var(--font-size-body);
-  font-weight: 500;
+  font-weight: 700;
   color: var(--color-text-primary);
   flex: 1;
   min-width: 0;
@@ -1078,6 +1615,23 @@ summary {
 .data-badge-sm .data-badge-label,
 .data-badge-sm .data-badge-count {
   font-size: var(--font-size-sm);
+}
+
+/* Mint variant - GEM brand style */
+.data-badge-mint,
+.data-badge.mint {
+  background: var(--gem-mint);
+  border-color: var(--gem-mint);
+}
+
+.data-badge-mint .data-badge-label,
+.data-badge.mint .data-badge-label {
+  color: var(--gem-navy);
+}
+
+.data-badge-mint .data-badge-count,
+.data-badge.mint .data-badge-count {
+  color: var(--gem-teal);
 }
 
 /* ---------------------------------------------------------------------------
@@ -1193,7 +1747,7 @@ summary {
 
 .donut-chart-center {
   font-size: var(--font-size-body);
-  font-weight: 600;
+  font-weight: 700;
   fill: var(--color-text-primary);
 }
 
@@ -1255,7 +1809,7 @@ summary {
 
 .inline-stat-value {
   font-size: var(--font-size-lg);
-  font-weight: 600;
+  font-weight: 700;
   color: var(--color-text-primary);
   font-variant-numeric: tabular-nums;
 }
@@ -1283,7 +1837,7 @@ summary {
 
 .metric-card-title {
   font-size: var(--font-size-xs);
-  font-weight: 500;
+  font-weight: 700;
   color: var(--color-text-tertiary);
   text-transform: uppercase;
   letter-spacing: var(--tracking-caps);
@@ -1301,6 +1855,89 @@ summary {
   margin-top: var(--space-3);
   padding-top: var(--space-3);
   border-top: var(--border-width) solid var(--color-border-light);
+}
+
+/* ---------------------------------------------------------------------------
+   Loading Progress - Centralized loading state with step indicators
+   --------------------------------------------------------------------------- */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 300px;
+  padding: var(--space-12) var(--space-6);
+}
+
+.loading-state-message {
+  color: var(--gem-navy);
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  margin: 0;
+}
+
+.loading-state-steps {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+  font-size: var(--font-size-sm);
+}
+
+.loading-step {
+  padding: 8px 14px;
+  background: var(--color-gray-100);
+  border: none;
+  border-radius: 5px;
+  color: var(--color-text-tertiary);
+  font-weight: 700;
+  transition: all 0.2s ease;
+}
+
+.loading-step.active {
+  background: var(--gem-teal);
+  color: var(--gem-warm-white);
+  animation: loading-pulse 1.5s ease-in-out infinite;
+}
+
+.loading-step.done {
+  background: var(--gem-mint);
+  color: var(--gem-navy);
+  font-weight: 700;
+}
+
+.loading-step-arrow {
+  color: var(--color-gray-300);
+  font-size: var(--font-size-lg);
+}
+
+@keyframes loading-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.02);
+  }
+}
+
+/* Spinner for simple loading */
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--gem-mint);
+  border-top-color: var(--gem-teal);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ============================================================================

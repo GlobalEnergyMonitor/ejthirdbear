@@ -47,6 +47,19 @@
     flex-direction: column;
   }
 
+  main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: var(--space-8) var(--space-6);
+  }
+
+  main > :global(*) {
+    width: 100%;
+    max-width: var(--container-xl);
+  }
+
   .build-footer {
     padding: var(--space-3) var(--space-10);
     display: flex;

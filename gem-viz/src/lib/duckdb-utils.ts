@@ -28,65 +28,81 @@ export interface DuckDBInstance {
 // Singleton instances
 let db: duckdb.AsyncDuckDB | null = null;
 let conn: duckdb.AsyncDuckDBConnection | null = null;
+let initPromise: Promise<DuckDBInstance> | null = null;
 
 /**
  * Initialize DuckDB with optimized settings for browser use
  * Following best practices for WASM performance
+ * Uses promise-based locking to prevent duplicate initialization
  */
 export async function initDuckDB(): Promise<DuckDBInstance> {
+  // Return existing instance if already initialized
   if (db && conn) return { db, conn };
 
-  try {
-    console.log('Initializing DuckDB-WASM...');
+  // Return existing promise if initialization is in progress
+  if (initPromise) return initPromise;
 
-    const MANUAL_BUNDLES: duckdb.DuckDBBundles = {
-      mvp: {
-        mainModule: duckdb_wasm_mvp,
-        mainWorker: duckdb_worker_mvp,
-      },
-      eh: {
-        mainModule: duckdb_wasm_eh,
-        mainWorker: duckdb_worker_eh,
-      },
-    };
+  // Start initialization and store promise to prevent race conditions
+  initPromise = (async () => {
+    // Double-check in case another call completed while we were waiting
+    if (db && conn) return { db, conn };
 
-    // Select appropriate bundle (prefers eh when available)
-    const bundle = await duckdb.selectBundle(MANUAL_BUNDLES);
-    console.debug('[duckdb-utils] Selected bundle', {
-      mainModule: bundle.mainModule,
-      mainWorker: bundle.mainWorker,
-      version: (bundle as any)?.version ?? 'unknown',
-    });
+    try {
+      console.log('Initializing DuckDB-WASM...');
 
-    // Create worker for background processing using bundled worker file
-    const worker = new Worker(bundle.mainWorker);
-    const logger = new duckdb.ConsoleLogger();
+      const MANUAL_BUNDLES: duckdb.DuckDBBundles = {
+        mvp: {
+          mainModule: duckdb_wasm_mvp,
+          mainWorker: duckdb_worker_mvp,
+        },
+        eh: {
+          mainModule: duckdb_wasm_eh,
+          mainWorker: duckdb_worker_eh,
+        },
+      };
 
-    // Initialize database
-    db = new duckdb.AsyncDuckDB(logger, worker);
-    await db.instantiate(bundle.mainModule);
-
-    // Create connection
-    conn = await db.connect();
-
-    // Enable httpfs for remote parquet files
-    await conn
-      .query(
-        `
-      INSTALL httpfs;
-      LOAD httpfs;
-    `
-      )
-      .catch(() => {
-        console.log('httpfs extension not available in WASM build');
+      // Select appropriate bundle (prefers eh when available)
+      const bundle = await duckdb.selectBundle(MANUAL_BUNDLES);
+      console.debug('[duckdb-utils] Selected bundle', {
+        mainModule: bundle.mainModule,
+        mainWorker: bundle.mainWorker,
+        version: (bundle as any)?.version ?? 'unknown',
       });
 
-    console.log('DuckDB initialized successfully');
-    return { db, conn };
-  } catch (error) {
-    console.error('Failed to initialize DuckDB:', error);
-    throw error;
-  }
+      // Create worker for background processing using bundled worker file
+      const worker = new Worker(bundle.mainWorker);
+      const logger = new duckdb.ConsoleLogger();
+
+      // Initialize database
+      db = new duckdb.AsyncDuckDB(logger, worker);
+      await db.instantiate(bundle.mainModule);
+
+      // Create connection
+      conn = await db.connect();
+
+      // Enable httpfs for remote parquet files
+      await conn
+        .query(
+          `
+        INSTALL httpfs;
+        LOAD httpfs;
+      `
+        )
+        .catch(() => {
+          console.log('httpfs extension not available in WASM build');
+        });
+
+      console.log('DuckDB initialized successfully');
+      return { db: db!, conn: conn! };
+    } catch (error) {
+      console.error('Failed to initialize DuckDB:', error);
+      // Clear promise so retry is possible
+      initPromise = null;
+      throw error;
+    }
+  })();
+
+  return initPromise;
 }
 
 /**

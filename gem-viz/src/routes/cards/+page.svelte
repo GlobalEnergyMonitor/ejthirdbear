@@ -20,7 +20,10 @@
 
 <svelte:head>
   <title>Asset Cards — Global Energy Monitor</title>
-  <meta name="description" content="Browse energy assets as visual cards showing key information about ownership, status, and location." />
+  <meta
+    name="description"
+    content="Browse energy assets as visual cards showing key information about ownership, status, and location."
+  />
 </svelte:head>
 
 <main>

@@ -211,7 +211,7 @@
 
   .facet-loading {
     color: var(--color-text-tertiary);
-    font-weight: 400;
+    font-weight: 700;
     animation: pulse 1s infinite;
   }
 
@@ -234,19 +234,19 @@
 
   .facet-label {
     font-size: 10px;
-    font-weight: 600;
+    font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.4px;
     color: var(--color-text-secondary);
   }
 
   .facet-total {
-    font-weight: 400;
+    font-weight: 700;
     color: var(--color-text-tertiary);
   }
 
   .facet-logic {
-    font-weight: 400;
+    font-weight: 700;
     color: var(--color-text-secondary);
     text-transform: none;
     letter-spacing: 0;
@@ -256,7 +256,7 @@
 
   .facet-clear {
     font-size: 10px;
-    font-weight: 400;
+    font-weight: 700;
     color: var(--color-text-primary);
     background: none;
     border: none;
@@ -328,7 +328,7 @@
   }
 
   .facet-option.selected .facet-bar {
-    background: linear-gradient(90deg, rgba(0, 0, 0, 0.12) 0%, rgba(0, 0, 0, 0.04) 100%);
+    background: linear-gradient(90deg, rgba(254, 79, 45, 0.25) 0%, rgba(254, 79, 45, 0.08) 100%);
   }
 
   .facet-option:hover {
@@ -340,7 +340,9 @@
   }
 
   .facet-option.selected {
-    font-weight: 500;
+    font-weight: 700;
+    border-left: 3px solid var(--gem-orange, #fe4f2d);
+    padding-left: 7px;
   }
 
   .facet-option.zero-count {
@@ -370,7 +372,7 @@
     min-width: 14px;
     margin: 0;
     pointer-events: none; /* Let clicks go through to label handler */
-    accent-color: var(--color-black);
+    accent-color: var(--gem-orange, #fe4f2d);
     border: 1px solid var(--color-text-tertiary);
     border-radius: 2px;
     appearance: auto;
@@ -394,6 +396,10 @@
     color: var(--color-text-secondary);
     font-size: 11px;
     flex-shrink: 0;
+    font-family: var(--font-family-data);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
     font-variant-numeric: tabular-nums;
     min-width: 40px;
     text-align: right;

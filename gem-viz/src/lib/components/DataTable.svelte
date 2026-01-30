@@ -539,7 +539,7 @@
   .data-table-container {
     background: var(--color-white);
     border: none;
-    font-family: 'IBM Plex Mono', 'Fira Code', monospace;
+    font-family: var(--font-family-data);
     border-radius: 0;
     overflow: hidden;
   }

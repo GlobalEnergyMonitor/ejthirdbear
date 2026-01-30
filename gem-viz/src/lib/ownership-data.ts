@@ -13,7 +13,7 @@ import {
   type GraphNode,
   type GraphEdge,
 } from '$lib/ownership-api';
-import { getOwnerAssets } from '$lib/duckdb-queries';
+import { getOwnerAssets, getOwnerAssetCount } from '$lib/duckdb-queries';
 
 // ID field mapping by tracker type (preserved for compatibility)
 const idFields = new Map([
@@ -88,6 +88,8 @@ export interface SpotlightOwnerData {
   entityMap: Map<string, { id: string; Name: string }>;
   matchedEdges: Map<string, { value: number | null }>;
   assetClassName: string;
+  truncated?: boolean; // True if results were limited for performance
+  totalCount?: number; // Actual total count before limiting
 }
 
 // ============================================================================
@@ -189,6 +191,12 @@ export async function getAssetOwners(gemAssetId: string): Promise<AssetOwnersDat
  * Progressive streaming version of getSpotlightOwnerData
  * Yields updates as data becomes available for a smoother UX.
  *
+ * Performance limits for large entities (like BlackRock):
+ * - Max 500 direct assets per entity
+ * - Max 50 subsidiaries processed
+ * - Max 200 assets per subsidiary
+ * - Max 5000 total assets
+ *
  * @param entityId - The GEM entity ID
  * @param entityName - Optional entity name
  * @yields Progress updates with partial portfolio data
@@ -202,12 +210,20 @@ export async function* streamOwnerPortfolio(
   portfolio: SpotlightOwnerData | null;
   error?: string;
 }> {
+  // Performance limits to prevent browser freeze
+  const MAX_DIRECT_ASSETS = 500;
+  const MAX_SUBSIDIARIES = 50;
+  const MAX_ASSETS_PER_SUBSIDIARY = 200;
+  const MAX_TOTAL_ASSETS = 5000;
+
   const subsidiariesMatched = new Map<string, SpotlightAsset[]>();
   const directlyOwned: SpotlightAsset[] = [];
   const allAssets: SpotlightAsset[] = [];
   const entityMap = new Map<string, { id: string; Name: string }>();
   const matchedEdges = new Map<string, { value: number | null }>();
   let effectiveEntityName = entityName || entityId;
+  let truncated = false;
+  let totalAssetCount = 0;
 
   // Helper to convert DuckDB row to SpotlightAsset
   const rowToAsset = (row: Record<string, unknown>): SpotlightAsset => ({
@@ -219,7 +235,7 @@ export async function* streamOwnerPortfolio(
   });
 
   // Helper to build current portfolio state
-  const buildPortfolio = (): SpotlightOwnerData => {
+  const buildPortfolio = (): SpotlightOwnerData & { truncated?: boolean; totalCount?: number } => {
     const trackers = new Set<string>();
     allAssets.forEach((a) => {
       if (a.tracker && a.tracker !== 'Unknown') trackers.add(a.tracker);
@@ -240,6 +256,8 @@ export async function* streamOwnerPortfolio(
       entityMap: new Map(entityMap),
       matchedEdges: new Map(matchedEdges),
       assetClassName,
+      truncated,
+      totalCount: totalAssetCount,
     };
   };
 
@@ -247,10 +265,20 @@ export async function* streamOwnerPortfolio(
     // Phase 1: Initialize
     yield { phase: 'init', message: 'Initializing DuckDB...', portfolio: null };
 
-    // Phase 2: Fetch direct assets
-    yield { phase: 'direct', message: 'Loading directly owned assets...', portfolio: null };
+    // Phase 2: First get the count to know if this is a large entity
+    yield { phase: 'direct', message: 'Checking entity size...', portfolio: null };
 
-    const directResult = await getOwnerAssets(entityId);
+    const directCount = await getOwnerAssetCount(entityId);
+    totalAssetCount = directCount;
+
+    // Now fetch direct assets with limit
+    yield {
+      phase: 'direct',
+      message: `Loading directly owned assets (${directCount} total)...`,
+      portfolio: null,
+    };
+
+    const directResult = await getOwnerAssets(entityId, MAX_DIRECT_ASSETS);
 
     if (directResult.success && directResult.data) {
       for (const row of directResult.data) {
@@ -260,13 +288,22 @@ export async function* streamOwnerPortfolio(
       }
     }
 
+    if (directCount > MAX_DIRECT_ASSETS) {
+      truncated = true;
+    }
+
     // Set entity in map
     entityMap.set(entityId, { id: entityId, Name: effectiveEntityName });
 
     // Yield first batch of data
+    const directMsg =
+      directCount > MAX_DIRECT_ASSETS
+        ? `Loaded ${directlyOwned.length} of ${directCount} directly owned assets (limited for performance)`
+        : `Found ${directlyOwned.length} directly owned assets`;
+
     yield {
       phase: 'direct',
-      message: `Found ${directlyOwned.length} directly owned assets`,
+      message: directMsg,
       portfolio: buildPortfolio(),
     };
 
@@ -306,21 +343,44 @@ export async function* streamOwnerPortfolio(
       console.warn('[streamOwnerPortfolio] API failed, using DuckDB only:', apiErr);
     }
 
+    // Limit subsidiaries for large entities
+    const totalSubsidiaries = subsidiaryIds.length;
+    if (subsidiaryIds.length > MAX_SUBSIDIARIES) {
+      subsidiaryIds = subsidiaryIds.slice(0, MAX_SUBSIDIARIES);
+      truncated = true;
+    }
+
     // Yield update with subsidiary count
+    const subMsg =
+      totalSubsidiaries > MAX_SUBSIDIARIES
+        ? `Found ${totalSubsidiaries} subsidiaries (processing first ${MAX_SUBSIDIARIES} for performance)...`
+        : `Found ${subsidiaryIds.length} subsidiaries, loading their assets...`;
+
     yield {
       phase: 'subsidiaries',
-      message: `Found ${subsidiaryIds.length} subsidiaries, loading their assets...`,
+      message: subMsg,
       portfolio: buildPortfolio(),
     };
 
     // Fetch subsidiary assets in batches and yield progress
     const BATCH_SIZE = 5;
     for (let i = 0; i < subsidiaryIds.length; i += BATCH_SIZE) {
+      // Check if we've hit the total asset limit
+      if (allAssets.length >= MAX_TOTAL_ASSETS) {
+        truncated = true;
+        yield {
+          phase: 'subsidiaries',
+          message: `Reached ${MAX_TOTAL_ASSETS} asset limit for performance. Stopping load.`,
+          portfolio: buildPortfolio(),
+        };
+        break;
+      }
+
       const batch = subsidiaryIds.slice(i, i + BATCH_SIZE);
 
       const batchResults = await Promise.all(
         batch.map(async (subId) => {
-          const subResult = await getOwnerAssets(subId);
+          const subResult = await getOwnerAssets(subId, MAX_ASSETS_PER_SUBSIDIARY);
           if (subResult.success && subResult.data && subResult.data.length > 0) {
             return { subId, assets: subResult.data.map(rowToAsset) };
           }
@@ -330,8 +390,14 @@ export async function* streamOwnerPortfolio(
 
       for (const { subId, assets } of batchResults) {
         if (assets.length > 0) {
-          subsidiariesMatched.set(subId, assets);
-          allAssets.push(...assets);
+          // Only add up to the remaining budget
+          const remaining = MAX_TOTAL_ASSETS - allAssets.length;
+          const toAdd = assets.slice(0, remaining);
+          if (toAdd.length < assets.length) {
+            truncated = true;
+          }
+          subsidiariesMatched.set(subId, toAdd);
+          allAssets.push(...toAdd);
         }
       }
 
@@ -345,9 +411,13 @@ export async function* streamOwnerPortfolio(
     }
 
     // Phase 4: Done
+    const doneMsg = truncated
+      ? `Complete: ${allAssets.length} assets loaded (limited for performance, entity has more)`
+      : `Complete: ${allAssets.length} assets loaded`;
+
     yield {
       phase: 'done',
-      message: `Complete: ${allAssets.length} assets loaded`,
+      message: doneMsg,
       portfolio: buildPortfolio(),
     };
   } catch (err) {
@@ -366,6 +436,12 @@ export async function* streamOwnerPortfolio(
  * Uses DuckDB directly for fast asset queries.
  * Falls back to API for entity metadata only.
  *
+ * Performance limits for large entities:
+ * - Max 500 direct assets per entity
+ * - Max 50 subsidiaries processed
+ * - Max 200 assets per subsidiary
+ * - Max 5000 total assets
+ *
  * @param entityId - The GEM entity ID
  * @param entityName - Optional entity name (will be fetched if not provided)
  * @returns Spotlight owner data with subsidiaries and assets, or null if not found
@@ -374,9 +450,15 @@ export async function getSpotlightOwnerData(
   entityId: string,
   entityName?: string
 ): Promise<SpotlightOwnerData | null> {
+  // Performance limits to prevent browser freeze
+  const MAX_DIRECT_ASSETS = 500;
+  const MAX_SUBSIDIARIES = 50;
+  const MAX_ASSETS_PER_SUBSIDIARY = 200;
+  const MAX_TOTAL_ASSETS = 5000;
+
   try {
     // First, get assets directly owned by this entity from DuckDB (fast)
-    const directResult = await getOwnerAssets(entityId);
+    const directResult = await getOwnerAssets(entityId, MAX_DIRECT_ASSETS);
 
     // Build asset list
     const subsidiariesMatched = new Map<string, SpotlightAsset[]>();
@@ -384,6 +466,7 @@ export async function getSpotlightOwnerData(
     const allAssets: SpotlightAsset[] = [];
     const entityMap = new Map<string, { id: string; Name: string }>();
     const matchedEdges = new Map<string, { value: number | null }>();
+    let truncated = false;
 
     // Helper to convert DuckDB row to SpotlightAsset
     const rowToAsset = (row: Record<string, unknown>): SpotlightAsset => ({
@@ -401,6 +484,10 @@ export async function getSpotlightOwnerData(
         directlyOwned.push(asset);
         allAssets.push(asset);
       }
+      // Check if we hit the limit
+      if (directResult.data.length >= MAX_DIRECT_ASSETS) {
+        truncated = true;
+      }
     }
 
     // Try to get entity graph from API (with short timeout fallback)
@@ -416,12 +503,18 @@ export async function getSpotlightOwnerData(
         entityMap.set(entityId, { id: entityId, Name: effectiveEntityName });
 
         // Get subsidiary IDs and fetch their assets
-        const subsidiaryIds: string[] = [];
+        let subsidiaryIds: string[] = [];
         for (const node of graphData.nodes) {
           if (node.id !== entityId) {
             entityMap.set(node.id, { id: node.id, Name: node.Name });
             subsidiaryIds.push(node.id);
           }
+        }
+
+        // Limit subsidiaries for large entities
+        if (subsidiaryIds.length > MAX_SUBSIDIARIES) {
+          subsidiaryIds = subsidiaryIds.slice(0, MAX_SUBSIDIARIES);
+          truncated = true;
         }
 
         // Build edge map
@@ -433,7 +526,7 @@ export async function getSpotlightOwnerData(
 
         // Fetch assets for each subsidiary (in parallel for speed)
         const subPromises = subsidiaryIds.map(async (subId) => {
-          const subResult = await getOwnerAssets(subId);
+          const subResult = await getOwnerAssets(subId, MAX_ASSETS_PER_SUBSIDIARY);
           if (subResult.success && subResult.data && subResult.data.length > 0) {
             return { subId, assets: subResult.data.map(rowToAsset) };
           }
@@ -443,8 +536,18 @@ export async function getSpotlightOwnerData(
         const subResults = await Promise.all(subPromises);
         for (const { subId, assets } of subResults) {
           if (assets.length > 0) {
-            subsidiariesMatched.set(subId, assets);
-            allAssets.push(...assets);
+            // Only add up to the remaining budget
+            const remaining = MAX_TOTAL_ASSETS - allAssets.length;
+            if (remaining <= 0) {
+              truncated = true;
+              break;
+            }
+            const toAdd = assets.slice(0, remaining);
+            if (toAdd.length < assets.length) {
+              truncated = true;
+            }
+            subsidiariesMatched.set(subId, toAdd);
+            allAssets.push(...toAdd);
           }
         }
       }
@@ -481,6 +584,7 @@ export async function getSpotlightOwnerData(
       entityMap,
       matchedEdges,
       assetClassName,
+      truncated,
     };
   } catch (err) {
     console.error('Error fetching spotlight owner data:', err);

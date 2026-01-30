@@ -49,9 +49,7 @@
 
   // Navigation links
   const navLinks = [
-    { path: 'index', label: 'Map' },
-    { path: 'asset', label: 'Assets' },
-    { path: 'explore', label: 'Explore' },
+    { path: 'compose', label: 'Compose' },
     { path: 'screener', label: 'Screener' },
     { path: 'report', label: 'Report', showBadge: true },
   ];
@@ -79,7 +77,14 @@
           </a>
         {/each}
         <button class="search-btn" onclick={openSearch} title="Search (⌘K)">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
             <circle cx="11" cy="11" r="8" />
             <path d="m21 21-4.35-4.35" />
           </svg>
@@ -89,11 +94,25 @@
       <!-- Mobile hamburger -->
       <button class="menu-btn mobile-only" onclick={toggleMenu} aria-label="Toggle menu">
         {#if menuOpen}
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
             <path d="M18 6L6 18M6 6l12 12" />
           </svg>
         {:else}
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
             <path d="M3 12h18M3 6h18M3 18h18" />
           </svg>
         {/if}
@@ -112,7 +131,14 @@
           </a>
         {/each}
         <button class="search-btn-mobile" onclick={openSearch}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
             <circle cx="11" cy="11" r="8" />
             <path d="m21 21-4.35-4.35" />
           </svg>
@@ -155,14 +181,23 @@
     bottom: 0;
     left: 0;
     height: 2px;
-    background: #006d77;
+    background: #1d4961;
     animation: loading 1s ease-in-out infinite;
   }
 
   @keyframes loading {
-    0% { width: 0; left: 0; }
-    50% { width: 40%; left: 30%; }
-    100% { width: 0; left: 100%; }
+    0% {
+      width: 0;
+      left: 0;
+    }
+    50% {
+      width: 40%;
+      left: 30%;
+    }
+    100% {
+      width: 0;
+      left: 100%;
+    }
   }
 
   /* Logo */
@@ -177,7 +212,7 @@
     font-family: 'Plus Jakarta Sans', var(--font-family), sans-serif;
     font-size: 42px;
     font-weight: 800;
-    color: #006d77;
+    color: #1d4961;
     letter-spacing: -2px;
     line-height: 1;
   }
@@ -185,19 +220,19 @@
   .logo-suffix {
     font-family: 'Plus Jakarta Sans', var(--font-family), sans-serif;
     font-size: 16px;
-    font-weight: 600;
-    color: rgba(0, 109, 119, 0.45);
+    font-weight: 700;
+    color: rgba(29, 73, 97, 0.5);
     letter-spacing: 0.5px;
     text-transform: lowercase;
     margin-left: 2px;
   }
 
   .nav-logo:hover .logo-text {
-    color: #004a63;
+    color: #0f3a4e;
   }
 
   .nav-logo:hover .logo-suffix {
-    color: rgba(0, 74, 99, 0.55);
+    color: rgba(29, 73, 97, 0.7);
   }
 
   /* Desktop navigation */
@@ -210,7 +245,7 @@
   .nav-links a {
     font-family: var(--font-family);
     font-size: 14px;
-    font-weight: 500;
+    font-weight: 700;
     color: #444;
     text-decoration: none;
     padding: 8px 14px;
@@ -222,14 +257,14 @@
   }
 
   .nav-links a:hover {
-    color: #006d77;
-    background: rgba(0, 109, 119, 0.06);
+    color: #1d4961;
+    background: rgba(29, 73, 97, 0.08);
   }
 
   .nav-links a.active {
-    color: #006d77;
-    background: rgba(0, 109, 119, 0.1);
-    font-weight: 600;
+    color: #1d4961;
+    background: rgba(29, 73, 97, 0.12);
+    font-weight: 700;
   }
 
   .search-btn {
@@ -249,9 +284,9 @@
   }
 
   .search-btn:hover {
-    border-color: #006d77;
-    color: #006d77;
-    background: rgba(0, 109, 119, 0.05);
+    border-color: #1d4961;
+    color: #1d4961;
+    background: rgba(29, 73, 97, 0.05);
   }
 
   /* Badge */
@@ -265,7 +300,7 @@
     background: #fe4f2d;
     color: #fff;
     font-size: 11px;
-    font-weight: 600;
+    font-weight: 700;
     border-radius: 9px;
     font-variant-numeric: tabular-nums;
   }
@@ -287,8 +322,8 @@
   }
 
   .menu-btn:hover {
-    color: #006d77;
-    background: rgba(0, 109, 119, 0.06);
+    color: #1d4961;
+    background: rgba(29, 73, 97, 0.08);
   }
 
   /* Mobile menu */
@@ -303,7 +338,7 @@
   .mobile-menu a {
     font-family: var(--font-family);
     font-size: 16px;
-    font-weight: 500;
+    font-weight: 700;
     color: #444;
     text-decoration: none;
     padding: 14px 12px;
@@ -314,14 +349,14 @@
   }
 
   .mobile-menu a:hover {
-    color: #006d77;
-    background: rgba(0, 109, 119, 0.06);
+    color: #1d4961;
+    background: rgba(29, 73, 97, 0.08);
   }
 
   .mobile-menu a.active {
-    color: #006d77;
-    background: rgba(0, 109, 119, 0.1);
-    font-weight: 600;
+    color: #1d4961;
+    background: rgba(29, 73, 97, 0.12);
+    font-weight: 700;
   }
 
   .search-btn-mobile {
@@ -336,14 +371,14 @@
     color: #444;
     font-family: var(--font-family);
     font-size: 14px;
-    font-weight: 500;
+    font-weight: 700;
     cursor: pointer;
     transition: all 0.15s ease;
   }
 
   .search-btn-mobile:hover {
-    border-color: #006d77;
-    color: #006d77;
+    border-color: #1d4961;
+    color: #1d4961;
   }
 
   /* Responsive */

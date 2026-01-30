@@ -10,9 +10,39 @@
    * @type {{
    *   variant?: 'footer' | 'compact' | 'full',
    *   trackers?: string[],
+   *   dataSource?: 'api' | 'motherduck' | 'duckdb' | 'local' | 'server' | null,
+   *   queryTime?: number | null,
+   *   freshness?: 'fresh' | 'cached' | 'stale' | null,
    * }}
    */
-  let { variant = 'footer', trackers = [] } = $props();
+  let {
+    variant = 'footer',
+    trackers = [],
+    dataSource = null,
+    queryTime = null,
+    freshness = null,
+  } = $props();
+
+  // Data source display info
+  const sourceInfo = {
+    api: { label: 'Live API', desc: 'Fetched from ownership API (real-time)', icon: '⚡' },
+    motherduck: { label: 'MotherDuck', desc: 'Cloud database (always fresh)', icon: '🦆' },
+    duckdb: { label: 'Local Cache', desc: 'Loaded from local DuckDB/Parquet', icon: '💾' },
+    local: { label: 'Local Cache', desc: 'Loaded from local Parquet (may be stale)', icon: '💾' },
+    server: { label: 'Server', desc: 'Pre-rendered via API', icon: '🖥' },
+  };
+  const source = $derived(
+    dataSource ? sourceInfo[dataSource] || { label: dataSource, desc: '', icon: '•' } : null
+  );
+
+  // Format query time for display
+  const queryTimeDisplay = $derived(
+    queryTime !== null
+      ? queryTime < 1000
+        ? `${Math.round(queryTime)}ms`
+        : `${(queryTime / 1000).toFixed(1)}s`
+      : null
+  );
 
   // Build citation date (use build time or current date)
   const citationDate = new Date().toLocaleDateString('en-US', {
@@ -88,9 +118,22 @@
       </p>
       <p class="date">Retrieved {citationDate}</p>
     </div>
-    <button class="cite-btn" onclick={() => copyCitation('ap')} title="Copy citation">
-      {copied ? 'Copied' : 'Cite'}
-    </button>
+    <div class="footer-actions">
+      {#if source}
+        <span class="data-source-badge {dataSource}" title={source.desc}>
+          <span class="source-icon">{source.icon}</span>
+          <span class="source-label">
+            Data via <strong>{source.label}</strong>
+            {#if queryTimeDisplay}
+              <span class="query-time">({queryTimeDisplay})</span>
+            {/if}
+          </span>
+        </span>
+      {/if}
+      <button class="cite-btn" onclick={() => copyCitation('ap')} title="Copy citation">
+        {copied ? 'Copied' : 'Cite'}
+      </button>
+    </div>
   </footer>
 {:else if variant === 'compact'}
   <span class="citation-compact">
@@ -202,6 +245,69 @@
 
   .cite-btn:hover {
     background: var(--color-gray-50);
+  }
+
+  .footer-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .data-source-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: help;
+    transition: transform 0.1s ease;
+  }
+
+  .data-source-badge:hover {
+    transform: scale(1.02);
+  }
+
+  .data-source-badge.api,
+  .data-source-badge.server {
+    background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+    border: 1px solid #6ee7b7;
+    color: #065f46;
+  }
+
+  .data-source-badge.motherduck {
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    border: 1px solid #f59e0b;
+    color: #78350f;
+  }
+
+  .data-source-badge.duckdb,
+  .data-source-badge.local {
+    background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+    border: 1px solid #d1d5db;
+    color: #4b5563;
+  }
+
+  .query-time {
+    font-size: 9px;
+    opacity: 0.7;
+    margin-left: 4px;
+  }
+
+  .source-icon {
+    font-size: 12px;
+    line-height: 1;
+  }
+
+  .source-label {
+    font-size: 10px;
+    letter-spacing: 0.3px;
+  }
+
+  .source-label strong {
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
   }
 
   /* Compact variant */

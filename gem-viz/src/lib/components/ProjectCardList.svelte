@@ -133,7 +133,7 @@
   }
 
   h2 {
-    color: var(--gem-navy, #004a63);
+    color: var(--gem-primary-blue, #1d4961);
     font-size: 1.25rem;
     font-weight: 700;
     margin: 0 0 0.5rem 0;
@@ -142,7 +142,7 @@
   }
 
   .description {
-    color: var(--gem-teal, #016b83);
+    color: var(--gem-primary-blue, #1d4961);
     font-size: 0.875rem;
     margin: 0 0 1rem 0;
   }

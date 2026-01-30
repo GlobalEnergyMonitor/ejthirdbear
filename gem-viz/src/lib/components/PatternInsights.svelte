@@ -324,7 +324,7 @@
     font-size: 24px;
     font-weight: bold;
     color: var(--color-black);
-    font-family: monospace;
+    font-family: var(--font-family-data);
   }
 
   .metric-label {
@@ -407,7 +407,7 @@
   }
 
   .outlier-value {
-    font-family: monospace;
+    font-family: var(--font-family-data);
     color: var(--color-text-secondary);
   }
 
@@ -416,7 +416,7 @@
     padding: 2px 6px;
     background: var(--color-gray-100);
     border-radius: 2px;
-    font-family: monospace;
+    font-family: var(--font-family-data);
   }
 
   .outlier-zscore.high {

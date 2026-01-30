@@ -14,7 +14,10 @@
   import { entityLink, assetLink } from '$lib/links';
   import { colors, ownershipColors } from '$lib/design-tokens';
   import * as d3 from 'd3';
-  import dagreD3 from 'dagre-d3';
+
+  // Dynamic import for dagre-d3 (doesn't work well with SSR)
+  let dagreD3: typeof import('dagre-d3') | null = $state(null);
+  let dagreError = $state(false);
 
   interface GraphNode {
     id: string;
@@ -132,7 +135,14 @@
   }
 
   function renderGraph() {
-    if (!svgEl || filteredNodes.length === 0) return;
+    if (!svgEl || filteredNodes.length === 0 || !dagreD3) return;
+
+    // Check that dagre-d3 loaded properly
+    if (!dagreD3.graphlib || !dagreD3.render) {
+      console.error('dagre-d3 did not load properly');
+      dagreError = true;
+      return;
+    }
 
     const svg = d3.select(svgEl);
     svg.selectAll('*').remove();
@@ -265,10 +275,7 @@
     svg.selectAll('g.edgeLabel').style('opacity', 1);
   }
 
-  function addOwnershipPies(
-    svg: d3.Selection<SVGSVGElement, unknown, null, undefined>,
-    g: dagreD3.graphlib.Graph
-  ) {
+  function addOwnershipPies(svg: d3.Selection<SVGSVGElement, unknown, null, undefined>, g: any) {
     // Add small pie charts to nodes showing their total outgoing ownership
     svg.selectAll('g.node').each(function () {
       const nodeEl = d3.select(this);
@@ -324,22 +331,26 @@
     });
   }
 
-  onMount(() => {
-    if (filteredNodes.length > 0) {
-      tick().then(renderGraph);
-    }
+  onMount(async () => {
+    // DISABLED: dagre-d3 causes crashes in production
+    // TODO: Replace with a different graph library
+    dagreError = true;
   });
 
   // Re-render when data changes
   $effect(() => {
-    if (filteredNodes.length > 0 && svgEl) {
+    if (filteredNodes.length > 0 && svgEl && dagreD3) {
       renderGraph();
     }
   });
 </script>
 
 <div class="dagre-ownership-graph" bind:this={_containerEl}>
-  {#if filteredNodes.length === 0}
+  {#if dagreError}
+    <div class="empty-state">
+      <p>Graph visualization unavailable</p>
+    </div>
+  {:else if filteredNodes.length === 0}
     <div class="empty-state">
       <p>No ownership data available</p>
     </div>

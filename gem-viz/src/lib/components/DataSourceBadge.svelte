@@ -36,7 +36,10 @@
 </script>
 
 {#if config}
-  <span class="badge {config.color} {size}" title="{config.name}{timeDisplay ? ` (${timeDisplay})` : ''}">
+  <span
+    class="badge {config.color} {size}"
+    title="{config.name}{timeDisplay ? ` (${timeDisplay})` : ''}"
+  >
     <span class="icon">{config.icon}</span>
     <span class="label">{label || config.name}</span>
     {#if timeDisplay}

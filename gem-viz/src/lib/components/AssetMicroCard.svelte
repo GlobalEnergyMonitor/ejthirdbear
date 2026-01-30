@@ -96,14 +96,14 @@
 <style>
   .asset-micro-card {
     display: block;
-    background: white;
-    border: 1px solid #e0e0e0;
+    background: var(--color-white);
+    border: 1px solid var(--color-border);
     border-radius: 6px;
     padding: 10px 12px;
     font-size: 11px;
     min-width: 200px;
     max-width: 280px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    box-shadow: var(--shadow-md);
     text-decoration: none;
     color: inherit;
     text-align: left;

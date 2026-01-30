@@ -1,7 +1,7 @@
 /**
  * API Fallback Logger
  *
- * Tracks when coal plant API calls fail and we fall back to DuckDB.
+ * Tracks when REST API calls fail and we fall back to MotherDuck.
  * This data can be exported to report issues to the API team.
  *
  * Key Issue: Coal plant API uses compound IDs (L{location}_G{unit})
@@ -15,7 +15,7 @@ export interface FallbackEvent {
   assetId: string;
   assetName?: string;
   apiError: string;
-  fallbackSource: 'duckdb' | 'none';
+  fallbackSource: 'motherduck' | 'none';
   fallbackSuccess: boolean;
   timestamp: string;
   url: string;

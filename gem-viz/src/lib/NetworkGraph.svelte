@@ -5,6 +5,7 @@
   import { Deck } from '@deck.gl/core';
   import { ScatterplotLayer, LineLayer } from '@deck.gl/layers';
   import { colors, hexToRgb } from '$lib/design-tokens';
+  import { ASSET_ID_COALESCE } from '$lib/duckdb-queries';
   // Use d3-force-3d for better performance (even in 2D mode)
   import {
     forceSimulation,
@@ -152,11 +153,11 @@
       loadingPhase = 'Counting total edges...';
       console.debug('[NetworkGraph] Counting edges');
 
-      // The ownership table uses "GEM unit ID" for assets and "Owner GEM Entity ID" for owners
+      // The ownership table uses various ID columns depending on tracker - use COALESCE pattern
       const countResult = await query(`
         SELECT COUNT(*) as total
         FROM ownership
-        WHERE "GEM unit ID" IS NOT NULL
+        WHERE ${ASSET_ID_COALESCE} IS NOT NULL
           AND "Owner GEM Entity ID" IS NOT NULL
       `);
 
@@ -175,11 +176,11 @@
       let edgeQuery;
 
       if (config.sampleMode === 'top') {
-        // Use GEM unit ID (asset) -> Owner GEM Entity ID (owner) relationship
+        // Use COALESCE for asset ID (different columns per tracker) -> Owner GEM Entity ID (owner) relationship
         edgeQuery = `
           WITH entity_counts AS (
             SELECT entity_id, COUNT(*) as cnt FROM (
-              SELECT "GEM unit ID" as entity_id FROM ownership WHERE "GEM unit ID" IS NOT NULL
+              SELECT ${ASSET_ID_COALESCE} as entity_id FROM ownership WHERE ${ASSET_ID_COALESCE} IS NOT NULL
               UNION ALL
               SELECT "Owner GEM Entity ID" as entity_id FROM ownership WHERE "Owner GEM Entity ID" IS NOT NULL
             ) GROUP BY entity_id
@@ -188,28 +189,28 @@
             SELECT entity_id FROM entity_counts ORDER BY cnt DESC LIMIT ${Math.ceil(config.maxEdges / 5)}
           )
           SELECT
-            "GEM unit ID" as source_id,
+            ${ASSET_ID_COALESCE} as source_id,
             "Project" as source_name,
             "Owner GEM Entity ID" as target_id,
             "Owner" as target_name,
             "Share" as share
           FROM ownership
-          WHERE "GEM unit ID" IS NOT NULL
+          WHERE ${ASSET_ID_COALESCE} IS NOT NULL
             AND "Owner GEM Entity ID" IS NOT NULL
-            AND ("GEM unit ID" IN (SELECT entity_id FROM top_entities)
+            AND (${ASSET_ID_COALESCE} IN (SELECT entity_id FROM top_entities)
                  OR "Owner GEM Entity ID" IN (SELECT entity_id FROM top_entities))
           LIMIT ${config.maxEdges}
         `;
       } else if (config.sampleMode === 'random') {
         edgeQuery = `
           SELECT
-            "GEM unit ID" as source_id,
+            ${ASSET_ID_COALESCE} as source_id,
             "Project" as source_name,
             "Owner GEM Entity ID" as target_id,
             "Owner" as target_name,
             "Share" as share
           FROM ownership
-          WHERE "GEM unit ID" IS NOT NULL
+          WHERE ${ASSET_ID_COALESCE} IS NOT NULL
             AND "Owner GEM Entity ID" IS NOT NULL
           ORDER BY RANDOM()
           LIMIT ${config.maxEdges}
@@ -217,13 +218,13 @@
       } else {
         edgeQuery = `
           SELECT
-            "GEM unit ID" as source_id,
+            ${ASSET_ID_COALESCE} as source_id,
             "Project" as source_name,
             "Owner GEM Entity ID" as target_id,
             "Owner" as target_name,
             "Share" as share
           FROM ownership
-          WHERE "GEM unit ID" IS NOT NULL
+          WHERE ${ASSET_ID_COALESCE} IS NOT NULL
             AND "Owner GEM Entity ID" IS NOT NULL
           LIMIT ${config.maxEdges}
         `;
@@ -679,7 +680,7 @@
       getTooltip: ({ object }) => {
         if (!object) return null;
         return {
-          html: `<div style="padding: 8px; font-family: monospace; font-size: 11px; max-width: 280px;">
+          html: `<div style="padding: 8px; font-family: var(--font-family-data); font-size: 11px; max-width: 280px;">
             <strong>${object.name}</strong><br/>
             <span style="color: ${colors.gray500};">${object.id}</span><br/>
             <span style="color: ${colors.gray600};">↑${object.inDegree}</span>
@@ -1052,7 +1053,7 @@
 
   .stats .zoom {
     color: var(--color-text-secondary);
-    font-family: monospace;
+    font-family: var(--font-family-data);
     font-size: 10px;
   }
 

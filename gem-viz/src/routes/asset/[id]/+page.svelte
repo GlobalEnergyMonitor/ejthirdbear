@@ -169,7 +169,11 @@
 
 <svelte:head>
   <title>{assetName || assetId} — Global Energy Monitor</title>
-  <meta name="description" content="Ownership details and corporate structure for {assetName || assetId} from the Global Energy Monitor database." />
+  <meta
+    name="description"
+    content="Ownership details and corporate structure for {assetName ||
+      assetId} from the Global Energy Monitor database."
+  />
 </svelte:head>
 
 <main>

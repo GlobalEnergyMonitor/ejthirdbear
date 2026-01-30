@@ -19,7 +19,10 @@
 
 <svelte:head>
   <title>Data Manifest — Global Energy Monitor</title>
-  <meta name="description" content="Technical data manifest showing available datasets, schema information, and data freshness for the Global Energy Monitor ownership database." />
+  <meta
+    name="description"
+    content="Technical data manifest showing available datasets, schema information, and data freshness for the Global Energy Monitor ownership database."
+  />
 </svelte:head>
 
 <main>

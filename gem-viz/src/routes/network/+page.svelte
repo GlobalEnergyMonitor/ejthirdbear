@@ -4,7 +4,10 @@
 
 <svelte:head>
   <title>Ownership Network — Global Energy Monitor</title>
-  <meta name="description" content="Explore corporate ownership networks and relationships between entities in the global energy sector through interactive network visualizations." />
+  <meta
+    name="description"
+    content="Explore corporate ownership networks and relationships between entities in the global energy sector through interactive network visualizations."
+  />
 </svelte:head>
 
 <main>

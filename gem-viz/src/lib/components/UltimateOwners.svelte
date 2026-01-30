@@ -325,7 +325,7 @@
     font-size: 14px;
     font-weight: bold;
     color: var(--color-gray-700);
-    font-family: monospace;
+    font-family: var(--font-family-data);
   }
 
   .ownership-path {

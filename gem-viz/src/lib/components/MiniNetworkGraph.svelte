@@ -16,6 +16,7 @@
     forceX,
     forceY,
   } from 'd3-force-3d';
+  import { ASSET_ID_COALESCE } from '$lib/duckdb-queries';
 
   // Props
   let { entityId = '', entityName: _entityName = '', maxHops = 2, height = 300 } = $props();
@@ -78,13 +79,13 @@
       // First, get direct connections
       const directQuery = `
         SELECT
-          "GEM unit ID" as source_id,
+          ${ASSET_ID_COALESCE} as source_id,
           "Project" as source_name,
           "Owner GEM Entity ID" as target_id,
           "Owner" as target_name,
           "Share" as share
         FROM ownership
-        WHERE "GEM unit ID" IS NOT NULL
+        WHERE ${ASSET_ID_COALESCE} IS NOT NULL
           AND "Owner GEM Entity ID" IS NOT NULL
           AND "Owner GEM Entity ID" = '${entityId}'
       `;
@@ -109,15 +110,15 @@
           // Get edges where these assets connect to other owners
           const expandQuery = `
             SELECT DISTINCT
-              "GEM unit ID" as source_id,
+              ${ASSET_ID_COALESCE} as source_id,
               "Project" as source_name,
               "Owner GEM Entity ID" as target_id,
               "Owner" as target_name,
               "Share" as share
             FROM ownership
-            WHERE "GEM unit ID" IS NOT NULL
+            WHERE ${ASSET_ID_COALESCE} IS NOT NULL
               AND "Owner GEM Entity ID" IS NOT NULL
-              AND "GEM unit ID" IN (${nodeList.map((id) => `'${id}'`).join(',')})
+              AND ${ASSET_ID_COALESCE} IN (${nodeList.map((id) => `'${id}'`).join(',')})
             LIMIT 500
           `;
           const expandResult = await query(expandQuery);
@@ -503,7 +504,7 @@
       getTooltip: ({ object }) => {
         if (!object) return null;
         return {
-          html: `<div style="padding:6px;font-family:monospace;font-size:10px;">
+          html: `<div style="padding:6px;font-family:Roboto Condensed, sans-serif;font-weight:700;font-size:10px;">
             <strong>${object.name}</strong><br/>
             <span style="color:#888;">${object.id}</span><br/>
             ${object.connections} connections
@@ -555,8 +556,8 @@
 <style>
   .mini-network {
     position: relative;
-    border: 1px solid #ddd;
-    background: #fafafa;
+    border: 1px solid var(--color-border);
+    background: var(--color-bg-secondary);
     overflow: hidden;
   }
 
@@ -627,7 +628,7 @@
     margin-left: 6px;
     font-size: 9px;
     text-transform: uppercase;
-    background: #ff6432;
+    background: var(--gem-orange);
     color: white;
     padding: 2px 5px;
     vertical-align: middle;

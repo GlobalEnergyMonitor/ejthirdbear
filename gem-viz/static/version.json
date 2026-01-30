@@ -1,10 +1,10 @@
 {
-  "version": "8fa954d",
-  "commit": "8fa954d",
-  "message": "perf: 100x faster static builds with MotherDuck bulk queries",
+  "version": "5f026fa",
+  "commit": "5f026fa",
+  "message": "feat: unified cart, large cart warning, sitemap page",
   "author": "EJ Fox",
-  "timestamp": "2026-01-27T17:37:05.436Z",
-  "deployed": "2026-01-27T17:37:05.436Z",
-  "buildTime": "1/27/2026, 12:37:05 PM",
-  "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.1.27"
+  "timestamp": "2026-01-30T18:27:41.003Z",
+  "deployed": "2026-01-30T18:27:41.003Z",
+  "buildTime": "1/30/2026, 1:27:41 PM",
+  "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.1.28"
 }

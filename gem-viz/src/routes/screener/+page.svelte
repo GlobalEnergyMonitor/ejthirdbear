@@ -4,10 +4,9 @@
    * Presets fill the query form. User can customize. One asset class at a time.
    */
 
-  import { link } from '$lib/links';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
-  import ScreenerStepNav from '$lib/components/ScreenerStepNav.svelte';
+  import ScreenerLayout from '$lib/components/ScreenerLayout.svelte';
   import {
     TRACKERS,
     SCREENER_PRESETS,
@@ -29,8 +28,6 @@
   let customValue = $state('');
   let customGeoFilter = $state('');
   let customStatusFilter = $state('');
-  let showGeoFilter = $state(false);
-  let showStatusFilter = $state(false);
 
   // Get field config for current selection
   const fieldConfig = $derived(
@@ -82,8 +79,6 @@
     customValue = '';
     customGeoFilter = '';
     customStatusFilter = '';
-    showGeoFilter = false;
-    showStatusFilter = false;
   }
 
   // Check if form has enough to continue (just tracker is enough)
@@ -105,9 +100,9 @@
     return desc;
   });
 
-  // Continue to owners step with current form values
-  function continueToOwners() {
-    const classData = [
+  // Build class data from current form values
+  function buildClassData() {
+    return [
       {
         id: activePresetId || `custom-${Date.now()}`,
         name: customTracker,
@@ -122,7 +117,20 @@
         },
       },
     ];
+  }
+
+  // Show all owners with stakes in selected asset class
+  function showAllOwners() {
+    const classData = buildClassData();
     const url = new URL('/screener/results', $page.url.origin);
+    url.searchParams.set('classes', JSON.stringify(classData));
+    goto(url.pathname + url.search);
+  }
+
+  // Search for specific owners
+  function searchSpecificOwners() {
+    const classData = buildClassData();
+    const url = new URL('/screener/owners', $page.url.origin);
     url.searchParams.set('classes', JSON.stringify(classData));
     goto(url.pathname + url.search);
   }
@@ -135,91 +143,146 @@
 
 <svelte:head>
   <title>Asset Class Screener — Global Energy Monitor</title>
-  <meta name="description" content="Screen and analyze corporate ownership exposure to specific classes of energy assets such as coal plants, gas infrastructure, and steel facilities." />
+  <meta
+    name="description"
+    content="Screen and analyze corporate ownership exposure to specific classes of energy assets such as coal plants, gas infrastructure, and steel facilities."
+  />
 </svelte:head>
 
-<main>
-  <div class="screener-layout">
-    <!-- Step indicator -->
-    <ScreenerStepNav currentStep={1} />
+<ScreenerLayout
+  currentStep={1}
+  subtitle="Evaluate companies' ownership stakes in classes of fossil fuel assets. Start by selecting asset-classes below, or building your own query."
+>
+  {#snippet headerRight()}
+    <!-- Current selection summary -->
+    <div class="selection-badge" class:has-selection={customTracker}>
+      {#if customTracker}
+        <span class="selection-text">{currentConfigDescription()}</span>
+        <button class="clear-btn" onclick={clearForm}>×</button>
+      {:else}
+        <span class="selection-text">None selected yet</span>
+      {/if}
+    </div>
+  {/snippet}
 
-    <!-- Header -->
-    <header class="screener-header">
-      <div class="header-content">
-        <p class="subtitle">
-          Evaluate companies' ownership stakes in classes of fossil fuel assets. Start by selecting
-          asset-classes below, or building your own query.
-        </p>
-      </div>
+  <!-- Presets section -->
+  <section class="quick-add">
+    <h2>
+      Quick add classes of assets
+      <span class="refine-hint"
+        >Refine by <strong>geography</strong> or <strong>status</strong> (operating, proposed, etc) after
+        making selections</span
+      >
+    </h2>
 
-      <!-- Current selection summary -->
-      <div class="selection-badge" class:has-selection={customTracker}>
-        {#if customTracker}
-          <span class="selection-text">{currentConfigDescription()}</span>
-          <button class="clear-btn" onclick={clearForm}>×</button>
-        {:else}
-          <span class="selection-text">None selected yet</span>
-        {/if}
-      </div>
-    </header>
-
-    <!-- Presets section -->
-    <section class="quick-add">
-      <h2>
-        Quick add classes of assets
-        <span class="refine-hint"
-          >Refine by <strong>geography</strong> or <strong>status</strong> (operating, proposed, etc)
-          after making selections</span
+    <div class="quick-cards">
+      {#each SCREENER_PRESETS as card}
+        <button
+          class="quick-card"
+          class:active={isActivePreset(card)}
+          onclick={() => applyPreset(card)}
         >
-      </h2>
-
-      <div class="quick-cards">
-        {#each SCREENER_PRESETS as card}
-          <button
-            class="quick-card"
-            class:active={isActivePreset(card)}
-            onclick={() => applyPreset(card)}
-          >
-            <div class="card-header">
-              <span class="card-name">{card.name}</span>
-              {#if card.subLabel}
-                <span class="card-sublabel">{card.subLabel}</span>
-              {/if}
-            </div>
-            <p class="card-description">{card.description}</p>
-            {#if isActivePreset(card)}
-              <div class="card-active-indicator">●</div>
+          <div class="card-header">
+            <span class="card-name">{card.name}</span>
+            {#if card.subLabel}
+              <span class="card-sublabel">{card.subLabel}</span>
             {/if}
-          </button>
-        {/each}
+          </div>
+          <p class="card-description">{card.description}</p>
+          {#if isActivePreset(card)}
+            <div class="card-active-indicator">●</div>
+          {/if}
+        </button>
+      {/each}
+    </div>
+  </section>
+
+  <!-- Filter Selection - Wizard-style steps -->
+  <section class="filter-section">
+    <h2>Build Your Query</h2>
+
+    <!-- Live summary that builds as they select -->
+    <div class="query-summary" class:has-selection={customTracker}>
+      <span class="summary-label">You're looking for:</span>
+      <span class="summary-text">
+        {#if !customTracker}
+          <span class="placeholder">Select an asset type to get started...</span>
+        {:else}
+          <strong>{customStatusFilter || 'All'}</strong>
+          <strong>{customTracker}</strong>
+          {#if customGeoFilter}
+            in <strong>{customGeoFilter}</strong>
+          {:else}
+            <span class="muted">worldwide</span>
+          {/if}
+        {/if}
+      </span>
+    </div>
+
+    <div class="filter-grid">
+      <!-- Step 1: Asset Type -->
+      <div class="filter-step" class:completed={customTracker}>
+        <div class="step-number">1</div>
+        <label class="filter-field">
+          <span class="filter-label">What type of asset?</span>
+          <span class="filter-hint">Choose the category of energy infrastructure</span>
+          <select
+            bind:value={customTracker}
+            class="filter-select"
+            onchange={() => {
+              customField = '';
+              customOperator = '';
+            }}
+          >
+            <option value="">Select asset type...</option>
+            {#each TRACKERS as tracker}
+              <option value={tracker}>{tracker}</option>
+            {/each}
+          </select>
+        </label>
       </div>
-    </section>
 
-    <!-- Custom query builder -->
-    <section class="query-builder">
-      <div class="builder-form">
-        <div class="form-row main-row">
-          <label class="form-field">
-            <span class="field-label">Asset type <span class="required">*</span></span>
-            <select
-              bind:value={customTracker}
-              onchange={() => {
-                customField = '';
-                customOperator = '';
-              }}
-            >
-              <option value="">Select...</option>
-              {#each TRACKERS as tracker}
-                <option value={tracker}>{tracker}</option>
-              {/each}
-            </select>
-          </label>
+      <!-- Step 2: Country -->
+      <div class="filter-step" class:completed={customGeoFilter} class:disabled={!customTracker}>
+        <div class="step-number">2</div>
+        <label class="filter-field">
+          <span class="filter-label">Where in the world?</span>
+          <span class="filter-hint">Narrow down by country, or leave blank for worldwide</span>
+          <select bind:value={customGeoFilter} class="filter-select" disabled={!customTracker}>
+            <option value="">All countries (worldwide)</option>
+            {#each COUNTRIES as country}
+              <option value={country}>{country}</option>
+            {/each}
+          </select>
+        </label>
+      </div>
 
-          {#if customTracker}
+      <!-- Step 3: Status -->
+      <div class="filter-step" class:completed={customStatusFilter} class:disabled={!customTracker}>
+        <div class="step-number">3</div>
+        <label class="filter-field">
+          <span class="filter-label">What's the project status?</span>
+          <span class="filter-hint">Filter by operating, proposed, under construction, etc.</span>
+          <select bind:value={customStatusFilter} class="filter-select" disabled={!customTracker}>
+            <option value="">All statuses</option>
+            {#each STATUS_VALUES as status}
+              <option value={status}>{status}</option>
+            {/each}
+          </select>
+        </label>
+      </div>
+    </div>
+
+    <!-- Advanced field filter (shown when tracker selected) -->
+    {#if customTracker}
+      <details class="advanced-filter">
+        <summary>Advanced: Filter by specific field</summary>
+        <div class="advanced-content">
+          <div class="form-row">
             <label class="form-field">
-              <span class="field-label">Field <span class="required">*</span></span>
+              <span class="field-label">Field</span>
               <select bind:value={customField} onchange={() => (customOperator = '')}>
-                <option value="">Select...</option>
+                <option value="">Select field...</option>
                 {#each availableFields as field}
                   <option value={field}>{field}</option>
                 {/each}
@@ -227,8 +290,8 @@
             </label>
 
             {#if customField}
-              <label class="form-field operator-field">
-                <span class="field-label">Condition <span class="required">*</span></span>
+              <label class="form-field">
+                <span class="field-label">Condition</span>
                 <select bind:value={customOperator}>
                   <option value="">Select...</option>
                   {#each currentOperators as op}
@@ -238,8 +301,8 @@
               </label>
 
               {#if customOperator && customOperator !== 'not_empty'}
-                <label class="form-field value-field">
-                  <span class="field-label">Value <span class="required">*</span></span>
+                <label class="form-field">
+                  <span class="field-label">Value</span>
                   {#if isEnumField(customField)}
                     <select bind:value={customValue}>
                       <option value="">Select...</option>
@@ -257,137 +320,96 @@
                 </label>
               {/if}
             {/if}
-          {/if}
-        </div>
-
-        {#if customTracker && !customField}
-          <div class="builder-hint">
-            Select a field to define your filter criteria. Numeric fields support comparison
-            operators, while text fields support exact match or contains.
           </div>
+        </div>
+      </details>
+    {/if}
+  </section>
+
+  <!-- Step 4: Continue -->
+  <section class="filter-section continue-step">
+    <div class="filter-step" class:completed={canContinue} class:disabled={!canContinue}>
+      <div class="step-number">4</div>
+      <div class="continue-content">
+        <span class="filter-label">Ready to explore?</span>
+        {#if !canContinue}
+          <span class="filter-hint">Complete the steps above to continue</span>
+        {:else}
+          <span class="filter-hint">Choose how you want to view ownership data for {customTracker}</span>
         {/if}
 
-        <!-- Optional filters - each on own line -->
-        <div class="optional-filters">
-          <div class="optional-label">Optional filters</div>
-
-          <!-- Country filter row -->
-          <div class="filter-row">
-            {#if !showGeoFilter}
-              <button class="add-filter-btn" onclick={() => (showGeoFilter = true)}>
-                + Add country filter
-              </button>
-            {:else}
-              <label class="form-field">
-                <span class="field-label">Country <span class="optional">(optional)</span></span>
-                <div class="filter-input-row">
-                  <select bind:value={customGeoFilter}>
-                    <option value="">All countries</option>
-                    {#each COUNTRIES as country}
-                      <option value={country}>{country}</option>
-                    {/each}
-                  </select>
-                  <button
-                    class="remove-filter"
-                    onclick={() => {
-                      showGeoFilter = false;
-                      customGeoFilter = '';
-                    }}>×</button
-                  >
-                </div>
-              </label>
-            {/if}
-          </div>
-
-          <!-- Status filter row -->
-          <div class="filter-row">
-            {#if !showStatusFilter}
-              <button class="add-filter-btn" onclick={() => (showStatusFilter = true)}>
-                + Add status filter
-              </button>
-            {:else}
-              <label class="form-field">
-                <span class="field-label">Status <span class="optional">(optional)</span></span>
-                <div class="filter-input-row">
-                  <select bind:value={customStatusFilter}>
-                    <option value="">All statuses</option>
-                    {#each STATUS_VALUES as status}
-                      <option value={status}>{status}</option>
-                    {/each}
-                  </select>
-                  <button
-                    class="remove-filter"
-                    onclick={() => {
-                      showStatusFilter = false;
-                      customStatusFilter = '';
-                    }}>×</button
-                  >
-                </div>
-              </label>
-            {/if}
-          </div>
+        <div class="continue-options">
+          <button class="continue-btn primary" onclick={showAllOwners} disabled={!canContinue}>
+            <span class="btn-icon">→</span>
+            Show All Owners
+            <span class="btn-sublabel">See every company with stakes</span>
+          </button>
+          <button class="continue-btn secondary" onclick={searchSpecificOwners} disabled={!canContinue}>
+            <span class="btn-icon">⌕</span>
+            Search Specific Owners
+            <span class="btn-sublabel">Find companies from a list</span>
+          </button>
         </div>
       </div>
-    </section>
-
-    <!-- Continue button -->
-    <div class="continue-section">
-      <button class="continue-btn" onclick={continueToOwners} disabled={!canContinue}>
-        Continue to Owner Analysis
-      </button>
-      {#if !canContinue}
-        <p class="continue-hint">Select a preset or choose an asset type above</p>
-      {/if}
     </div>
-  </div>
-</main>
+  </section>
+
+  <!-- Debug panel -->
+  {#if customTracker}
+    <details class="debug-panel">
+      <summary class="debug-summary">
+        <span class="debug-icon">⚙</span>
+        Query Config Debug
+      </summary>
+      <div class="debug-content">
+        <div class="debug-meta">
+          <span class="debug-label">Tracker:</span>
+          <span class="debug-value">{customTracker}</span>
+        </div>
+        {#if customGeoFilter}
+          <div class="debug-meta">
+            <span class="debug-label">Geography:</span>
+            <span class="debug-value">{customGeoFilter}</span>
+          </div>
+        {/if}
+        {#if customStatusFilter}
+          <div class="debug-meta">
+            <span class="debug-label">Status:</span>
+            <span class="debug-value">{customStatusFilter}</span>
+          </div>
+        {/if}
+        {#if customField && customOperator}
+          <div class="debug-meta">
+            <span class="debug-label">Filter:</span>
+            <span class="debug-value">{customField} {customOperator} {customValue || '(any)'}</span>
+          </div>
+        {/if}
+        <div class="debug-json">
+          <span class="debug-label">Class Data JSON:</span>
+          <button class="copy-btn" onclick={() => navigator.clipboard.writeText(JSON.stringify(buildClassData(), null, 2))}>
+            Copy
+          </button>
+          <pre class="debug-code">{JSON.stringify(buildClassData(), null, 2)}</pre>
+        </div>
+      </div>
+    </details>
+  {/if}
+</ScreenerLayout>
 
 <style>
-  /* Tufte-inspired information design */
-  main {
-    min-height: 100vh;
-    background: var(--color-bg-primary);
-  }
-
-  .screener-layout {
-    max-width: 960px;
-    margin: 0 auto;
-    padding: var(--space-12) var(--space-8) 80px;
-  }
-
-  /* Header - typography hierarchy */
-  .screener-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: var(--space-8);
-    margin-bottom: var(--space-10);
-  }
-
-  .header-content {
-    flex: 1;
-  }
-
-  .subtitle {
-    font-size: var(--font-size-lg);
-    color: var(--color-text-secondary);
-    margin: 0;
-    line-height: var(--line-height-relaxed);
-    max-width: 560px;
-  }
-
-  /* Selection badge */
+  /* Selection badge - grid for no overlap */
   .selection-badge {
-    display: flex;
-    align-items: center;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: var(--space-3);
+    align-items: center;
     padding: var(--space-4) var(--space-6);
     background: var(--gem-teal);
     color: white;
     border-radius: var(--radius-sm);
     font-size: var(--font-size-lg);
-    white-space: nowrap;
-    min-width: 200px;
+    min-width: 180px;
+    max-width: 340px;
   }
 
   .selection-badge.has-selection {
@@ -395,7 +417,9 @@
   }
 
   .selection-text {
-    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .clear-btn {
@@ -441,10 +465,10 @@
     color: var(--color-text-tertiary);
   }
 
-  /* Quick add cards - minimal, typography-driven */
+  /* Quick add cards - explicit 3-column grid */
   .quick-cards {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: var(--space-6) var(--space-8);
   }
 
@@ -526,7 +550,7 @@
 
   .form-row {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     align-items: end;
     gap: var(--space-4);
   }
@@ -592,125 +616,299 @@
     width: 100%;
   }
 
-  .builder-hint {
-    font-size: var(--font-size-body);
-    color: var(--color-text-tertiary);
-    line-height: var(--line-height-relaxed);
-    padding-left: var(--space-3);
-    border-left: var(--border-width) solid var(--color-gray-300);
-    margin-left: var(--space-1);
+  /* Filter section - wizard-style */
+  .filter-section {
+    margin-bottom: var(--space-10);
   }
 
-  .optional-filters {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
-    padding-top: var(--space-5);
-    border-top: var(--border-width) solid var(--color-border-light);
-    margin-top: var(--space-2);
+  .filter-section h2 {
+    font-size: var(--font-size-md);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-caps);
+    margin: 0 0 var(--space-6) 0;
+    color: var(--color-text-secondary);
+    padding-bottom: var(--space-3);
+    border-bottom: var(--border-width) solid var(--color-border);
   }
 
-  .optional-label {
-    font-size: var(--font-size-base);
+  /* Live query summary */
+  .query-summary {
+    padding: var(--space-4) var(--space-5);
+    background: var(--color-gray-50);
+    margin-bottom: var(--space-8);
+    border-left: 3px solid var(--color-gray-200);
+    transition: all var(--duration-base) var(--ease-in-out-quad);
+  }
+
+  .query-summary.has-selection {
+    background: var(--gem-teal-light, #e8f4f4);
+    border-left-color: var(--gem-teal, #1d4961);
+  }
+
+  .summary-label {
+    display: block;
+    font-size: var(--font-size-sm);
     text-transform: uppercase;
     letter-spacing: var(--tracking-caps);
     color: var(--color-text-tertiary);
-    margin-bottom: calc(-1 * var(--space-2));
+    margin-bottom: var(--space-1);
   }
 
-  .filter-row {
+  .summary-text {
+    font-size: var(--font-size-xl);
+    color: var(--color-text-primary);
+    line-height: var(--line-height-relaxed);
+  }
+
+  .summary-text .placeholder {
+    color: var(--color-text-tertiary);
+    font-style: italic;
+  }
+
+  .summary-text .muted {
+    color: var(--color-text-tertiary);
+  }
+
+  .summary-text strong {
+    font-weight: 600;
+    color: var(--gem-primary-blue, #1d4961);
+  }
+
+  /* Filter steps */
+  .filter-grid {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    margin-bottom: var(--space-6);
+  }
+
+  .filter-step {
     display: grid;
-    align-items: end;
+    grid-template-columns: 40px minmax(0, 1fr);
+    gap: var(--space-5);
+    align-items: start;
+    padding: var(--space-4) 0;
+    border-bottom: var(--border-width) solid var(--color-border-light);
+    transition: opacity var(--duration-base) var(--ease-in-out-quad);
   }
 
-  .filter-input-row {
+  .filter-step:last-child {
+    border-bottom: none;
+  }
+
+  .filter-step.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  .filter-step.completed .step-number {
+    background: var(--gem-teal, #1d4961);
+    color: white;
+  }
+
+  .step-number {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--color-gray-100);
+    color: var(--color-text-tertiary);
     display: flex;
     align-items: center;
-    gap: var(--space-2);
-  }
-
-  .add-filter-btn {
-    padding: 0;
+    justify-content: center;
     font-size: var(--font-size-body);
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: var(--color-text-tertiary);
-    text-decoration: underline;
-    text-underline-offset: 2px;
+    font-weight: 600;
+    flex-shrink: 0;
+    transition: all var(--duration-base) var(--ease-in-out-quad);
   }
 
-  .add-filter-btn:hover {
+  .filter-field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .filter-label {
+    font-size: var(--font-size-lg);
+    font-weight: 500;
     color: var(--color-text-primary);
   }
 
-  .remove-filter {
-    background: none;
-    border: none;
-    font-size: var(--font-size-lg);
-    color: var(--color-gray-300);
-    cursor: pointer;
-    padding: 0;
-    margin-left: var(--space-1);
-  }
-
-  .remove-filter:hover {
-    color: var(--color-text-tertiary);
-  }
-
-  /* Continue section - prominent but simple */
-  .continue-section {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--space-2);
-    padding-top: var(--space-8);
-    border-top: var(--border-width) solid var(--color-border);
-  }
-
-  .continue-hint {
+  .filter-hint {
     font-size: var(--font-size-body);
     color: var(--color-text-tertiary);
-    margin: 0;
+    margin-bottom: var(--space-2);
+  }
+
+  .filter-select {
+    padding: var(--space-3) 0;
+    font-size: var(--font-size-xl);
+    border: none;
+    border-bottom: 2px solid var(--color-gray-300);
+    border-radius: 0;
+    background: transparent;
+    color: var(--color-text-primary);
+    width: 100%;
+    -webkit-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='6' viewBox='0 0 12 6'%3E%3Cpath fill='%23999' d='M0 0l6 6 6-6z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0 center;
+    padding-right: var(--space-6);
+    cursor: pointer;
+    transition: border-color var(--duration-base) var(--ease-in-out-quad);
+  }
+
+  .filter-select:hover:not(:disabled) {
+    border-bottom-color: var(--color-text-tertiary);
+  }
+
+  .filter-select:focus {
+    outline: none;
+    border-bottom-color: var(--gem-teal, #1d4961);
+  }
+
+  .filter-select:disabled {
+    cursor: not-allowed;
+    color: var(--color-text-tertiary);
+  }
+
+  /* Advanced filter section */
+  .advanced-filter {
+    margin-top: var(--space-4);
+    padding-top: var(--space-4);
+    border-top: var(--border-width) solid var(--color-border-light);
+  }
+
+  .advanced-filter summary {
+    font-size: var(--font-size-body);
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+    padding: var(--space-2) 0;
+    list-style: none;
+  }
+
+  .advanced-filter summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .advanced-filter summary::before {
+    content: '+ ';
+    font-weight: 500;
+  }
+
+  .advanced-filter[open] summary::before {
+    content: '− ';
+  }
+
+  .advanced-filter summary:hover {
+    color: var(--color-text-secondary);
+  }
+
+  .advanced-content {
+    padding-top: var(--space-4);
+  }
+
+  /* Continue step (Step 4) */
+  .continue-step {
+    margin-top: var(--space-4);
+  }
+
+  .continue-step .filter-step {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  .continue-content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .continue-options {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-4);
+    margin-top: var(--space-4);
+    max-width: 500px;
   }
 
   .continue-btn {
-    padding: var(--space-3) var(--space-6);
+    display: grid;
+    grid-template-rows: auto auto auto;
+    gap: var(--space-1);
+    align-content: start;
+    padding: var(--space-5) var(--space-6);
     font-size: var(--font-size-lg);
     font-weight: 500;
-    background: var(--color-text-primary);
-    color: var(--color-white);
-    border: none;
     cursor: pointer;
-    letter-spacing: var(--tracking-wide);
+    border-radius: var(--radius-sm);
+    transition: all var(--duration-base) var(--ease-in-out-quad);
+    min-width: 0; /* Allow shrinking in grid */
+    text-align: left;
   }
 
-  .continue-btn:hover:not(:disabled) {
-    background: var(--color-black);
+  .btn-icon {
+    font-size: var(--font-size-xl);
+    line-height: 1;
+    margin-bottom: var(--space-1);
+  }
+
+  .btn-sublabel {
+    font-size: var(--font-size-body);
+    font-weight: 400;
+    opacity: 0.8;
+  }
+
+  .continue-btn.primary {
+    background: var(--gem-teal, #1d4961);
+    color: var(--color-white);
+    border: none;
+  }
+
+  .continue-btn.primary:hover:not(:disabled) {
+    background: var(--gem-primary-blue, #153444);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(29, 73, 97, 0.3);
+  }
+
+  .continue-btn.secondary {
+    background: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    border: 2px solid var(--color-gray-200);
+  }
+
+  .continue-btn.secondary:hover:not(:disabled) {
+    border-color: var(--gem-teal, #1d4961);
+    transform: translateY(-2px);
   }
 
   .continue-btn:disabled {
-    background: var(--color-border);
+    background: var(--color-gray-100);
     color: var(--color-text-tertiary);
+    border-color: var(--color-border);
     cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
+
+  .continue-btn:disabled .btn-icon {
+    opacity: 0.4;
   }
 
   /* Responsive */
   @media (max-width: 900px) {
     .quick-cards {
-      grid-template-columns: repeat(2, 1fr);
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .filter-step {
+      grid-template-columns: 32px minmax(0, 1fr);
+      gap: var(--space-3);
     }
   }
 
   @media (max-width: 640px) {
-    .screener-layout {
-      padding: var(--space-8) var(--space-5) 60px;
-    }
-
-    .screener-header {
-      gap: var(--space-8);
-    }
-
     .quick-cards {
       grid-template-columns: 1fr;
       gap: var(--space-4);
@@ -724,5 +922,115 @@
     .form-field input {
       width: 100%;
     }
+
+    .continue-options {
+      grid-template-columns: 1fr;
+      max-width: 100%;
+    }
+
+    .selection-badge {
+      max-width: 100%;
+    }
+  }
+
+  /* Debug panel */
+  .debug-panel {
+    margin-top: var(--space-12);
+    border-top: 1px solid var(--color-border);
+    padding-top: var(--space-4);
+  }
+
+  .debug-summary {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    gap: var(--space-2);
+    align-items: center;
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-tertiary);
+    padding: var(--space-2) 0;
+    list-style: none;
+  }
+
+  .debug-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .debug-summary::before {
+    content: '▶';
+    font-size: 10px;
+    transition: transform 0.2s ease;
+  }
+
+  .debug-panel[open] .debug-summary::before {
+    transform: rotate(90deg);
+  }
+
+  .debug-icon {
+    font-size: var(--font-size-body);
+  }
+
+  .debug-content {
+    margin-top: var(--space-4);
+    padding: var(--space-4);
+    background: var(--color-gray-50);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+  }
+
+  .debug-meta {
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+    font-size: var(--font-size-sm);
+  }
+
+  .debug-label {
+    color: var(--color-text-tertiary);
+    font-weight: 500;
+  }
+
+  .debug-value {
+    color: var(--color-text-secondary);
+    font-family: var(--font-family-mono);
+  }
+
+  .debug-json {
+    margin-top: var(--space-4);
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: var(--space-2);
+    align-items: start;
+  }
+
+  .copy-btn {
+    padding: var(--space-1) var(--space-3);
+    font-size: var(--font-size-xs);
+    background: white;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    color: var(--color-text-secondary);
+  }
+
+  .copy-btn:hover {
+    background: var(--color-gray-100);
+  }
+
+  .debug-code {
+    grid-column: 1 / -1;
+    margin: 0;
+    margin-top: var(--space-2);
+    padding: var(--space-4);
+    background: #1e1e1e;
+    color: #d4d4d4;
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-xs);
+    line-height: 1.5;
+    border-radius: var(--radius-sm);
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
   }
 </style>

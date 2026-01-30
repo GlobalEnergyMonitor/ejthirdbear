@@ -18,30 +18,59 @@ let initPromise: Promise<void> | null = null;
 
 /**
  * Initialize DuckDB and register parquet files
+ * Uses promise-based locking to prevent duplicate initialization
  */
 export async function initWidgetDB(): Promise<void> {
   // Skip initialization on server (SSR) - DuckDB requires browser APIs
   if (!browser) return;
+
+  // Already fully initialized
   if (initialized) return;
+
+  // Initialization in progress - wait for it
   if (initPromise) return initPromise;
 
+  // Start initialization
   initPromise = (async () => {
+    // Double-check after acquiring "lock"
+    if (initialized) return;
+
+    console.log('[widget-utils] Starting DuckDB initialization...');
     await initDuckDB();
 
-    // Load parquet file by fetching and registering it
-    // (DuckDB WASM can't query URL paths directly - needs file registration)
-    const result = await loadParquetFromPath(PARQUET_FILES.ownership, 'ownership');
-    if (!result.success) {
-      throw new Error(`Failed to load ownership parquet: ${result.error}`);
+    // Check if tables already exist (in case of HMR or race condition)
+    const { conn } = await initDuckDB();
+    const tablesResult = await conn.query(`
+      SELECT table_name FROM information_schema.tables
+      WHERE table_name IN ('ownership', 'locations')
+    `);
+    const existingTables = new Set(tablesResult.toArray().map((r) => r.table_name));
+
+    // Load parquet files only if tables don't exist
+    if (!existingTables.has('ownership')) {
+      console.log('[widget-utils] Loading ownership parquet...');
+      const result = await loadParquetFromPath(PARQUET_FILES.ownership, 'ownership');
+      if (!result.success) {
+        initPromise = null; // Allow retry
+        throw new Error(`Failed to load ownership parquet: ${result.error}`);
+      }
+    } else {
+      console.log('[widget-utils] Ownership table already exists, skipping load');
     }
 
-    const locResult = await loadParquetFromPath(PARQUET_FILES.locations, 'locations');
-    if (!locResult.success) {
-      throw new Error(`Failed to load locations parquet: ${locResult.error}`);
+    if (!existingTables.has('locations')) {
+      console.log('[widget-utils] Loading locations parquet...');
+      const locResult = await loadParquetFromPath(PARQUET_FILES.locations, 'locations');
+      if (!locResult.success) {
+        initPromise = null; // Allow retry
+        throw new Error(`Failed to load locations parquet: ${locResult.error}`);
+      }
+    } else {
+      console.log('[widget-utils] Locations table already exists, skipping load');
     }
 
     initialized = true;
-    console.log('Widget DB initialized with ownership + locations tables');
+    console.log('[widget-utils] Widget DB ready');
   })();
 
   return initPromise;

@@ -8,7 +8,10 @@
 
 <svelte:head>
   <title>Embeddable Widgets — Global Energy Monitor</title>
-  <meta name="description" content="Embed interactive ownership visualizations from Global Energy Monitor on your website or in reports." />
+  <meta
+    name="description"
+    content="Embed interactive ownership visualizations from Global Energy Monitor on your website or in reports."
+  />
 </svelte:head>
 
 <div class="embed-index">

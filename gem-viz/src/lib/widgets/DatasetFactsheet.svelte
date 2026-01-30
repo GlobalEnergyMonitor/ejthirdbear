@@ -265,7 +265,7 @@
 
   .category-header h4::before {
     content: '+';
-    color: #09d0d8;
+    color: var(--gem-teal);
     font-size: 1.2rem;
     margin-right: 5px;
   }

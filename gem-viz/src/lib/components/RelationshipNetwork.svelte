@@ -338,11 +338,11 @@
   }
 
   .status-operating {
-    background: #4caf50;
+    background: var(--color-status-operating);
     color: white;
   }
   .status-retired {
-    background: var(--color-text-tertiary);
+    background: var(--color-status-retired);
     color: white;
   }
   .status-construction {

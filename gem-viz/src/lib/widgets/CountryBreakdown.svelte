@@ -49,7 +49,7 @@
 <div class="widget country-breakdown">
   <header>
     <h3>{title}</h3>
-    <DataSourceBadge source="motherduck" queryTime={queryTime} size="sm" />
+    <DataSourceBadge source="motherduck" {queryTime} size="sm" />
   </header>
 
   {#if loading}

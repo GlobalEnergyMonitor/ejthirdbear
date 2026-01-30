@@ -1,9 +1,89 @@
 /**
- * Runtime API client for Cloudflare Workers (no fs access)
+ * Runtime API client for SSR (Fly.io)
  * Fetches data directly from the ownership API
+ * Includes server-side ID resolution for G-prefix IDs
  */
 
+import idMap from './id-map.json';
+
 const API_BASE = 'https://gem-ownership-api.fly.dev';
+
+/**
+ * Resolve G-prefix ID to compound ID using pre-built mapping
+ * @param {string} assetId
+ * @returns {string}
+ */
+function resolveAssetId(assetId) {
+  // Only resolve G-prefix IDs
+  if (!assetId.startsWith('G') || assetId.includes('_')) {
+    return assetId;
+  }
+  // Look up in mapping, fall back to original
+  const resolved = idMap[assetId];
+  if (resolved) {
+    console.log(`[Server ID] Resolved ${assetId} → ${resolved}`);
+  }
+  return resolved || assetId;
+}
+
+/**
+ * Normalize raw API asset response to match client-side expected format
+ * @param {Object} raw - Raw API response
+ * @returns {Object} Normalized asset object
+ */
+function normalizeAsset(raw) {
+  if (!raw) return null;
+  return {
+    id: raw.asset_id || raw.id || '',
+    name: raw.asset_name || raw.name || '',
+    facilityType: raw.asset_type || raw.facility_type || null,
+    status: raw.operating_status || raw.status || null,
+    capacity: raw.capacity_value ?? raw.capacity ?? null,
+    capacityUnit: raw.capacity_unit || null,
+    country: raw.country || null,
+    latitude: raw.latitude ?? null,
+    longitude: raw.longitude ?? null,
+    ownerName: raw.owner_name || null,
+    ownerEntityId: raw.owner_entity_id || null,
+    parentName: raw.parent_name || null,
+    parentEntityId: raw.parent_entity_id || null,
+    raw,
+  };
+}
+
+/**
+ * Normalize ownership graph response to match client-side expected format
+ * API returns: { nodes: [{asset_id, asset_name, ...}, {entity_id, name, ...}], edges: [...] }
+ * Client expects: { nodes: [{id, Name, type}], edges: [{source, target, value}] }
+ * @param {Object} raw - Raw API graph response
+ * @returns {Object} Normalized graph object
+ */
+function normalizeGraph(raw) {
+  if (!raw) return { nodes: [], edges: [] };
+
+  const nodes = (raw.nodes || []).map((node) => {
+    const isAsset = node.node_type === 'asset' || node.asset_id;
+    return {
+      id: node.asset_id || node.entity_id || node.id || '',
+      Name: node.asset_name || node.name || node.full_name || '',
+      name: node.asset_name || node.name || node.full_name || '',
+      type: isAsset ? 'asset' : 'entity',
+      is_root: node.is_root,
+      is_terminal: node.is_terminal,
+    };
+  });
+
+  const edges = (raw.edges || []).map((edge) => ({
+    source: edge.source,
+    target: edge.target,
+    value: edge.value ?? edge.ownership_percentage ?? null,
+    type: edge.type,
+    depth: edge.depth,
+    imputedShare: edge.imputed_share,
+  }));
+
+  return { nodes, edges, root: raw.root };
+}
 
 async function fetchJSON(path, timeout = 30000) {
   const controller = new AbortController();
@@ -25,10 +105,18 @@ async function fetchJSON(path, timeout = 30000) {
 
 export async function fetchAssetData(assetId) {
   try {
-    const [asset, graph] = await Promise.all([
-      fetchJSON(`/assets/${encodeURIComponent(assetId)}`),
-      fetchJSON(`/ownership/graph?root=${encodeURIComponent(assetId)}&direction=up&max_depth=12`),
+    // Resolve G-prefix to compound ID
+    const resolvedId = resolveAssetId(assetId);
+
+    const [rawAsset, rawGraph] = await Promise.all([
+      fetchJSON(`/assets/${encodeURIComponent(resolvedId)}`),
+      fetchJSON(
+        `/ownership/graph?root=${encodeURIComponent(resolvedId)}&direction=up&max_depth=12`
+      ),
     ]);
+    // Normalize to match client-side expected format
+    const asset = normalizeAsset(rawAsset);
+    const graph = normalizeGraph(rawGraph);
     return { asset, graph, success: true };
   } catch (err) {
     console.error(`[API] Failed to fetch asset ${assetId}:`, err.message);

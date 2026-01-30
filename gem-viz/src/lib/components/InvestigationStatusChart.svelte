@@ -4,19 +4,14 @@
    * Shows operating/proposed/retired breakdown for assets in the investigation
    */
 
-  import { regroupStatus, colors } from '$lib/design-tokens';
+  import { regroupStatus, statusColors as designStatusColors } from '$lib/design-tokens';
 
   // Props - receive pre-computed data from parent
   let { assetDetails = [], entityPortfolios = [] } = $props();
 
-  // Status colors
-  const statusColors = {
-    operating: '#4A57A8',
-    proposed: colors.yellow,
-    retired: colors.midnightPurple,
-    cancelled: colors.grey,
-    unknown: '#ddd',
-  };
+  // Use centralized status colors from design tokens
+  // Fossil assets: red scale, Retired: grey-teal, Cancelled: light grey
+  const statusColors = designStatusColors;
 
   // Compute status distribution from asset details
   const statusData = $derived.by(() => {
@@ -176,14 +171,14 @@
   }
 
   .count {
-    font-family: monospace;
+    font-family: var(--font-family-data);
     color: var(--color-black);
     min-width: 50px;
     text-align: right;
   }
 
   .pct {
-    font-family: monospace;
+    font-family: var(--font-family-data);
     color: var(--color-text-secondary);
     min-width: 35px;
     text-align: right;

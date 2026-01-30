@@ -1016,7 +1016,10 @@
 
 <svelte:head>
   <title>Asset Filter — Global Energy Monitor</title>
-  <meta name="description" content="Build custom filtered views of energy assets by tracker type, status, country, and ownership to analyze specific segments of the global energy infrastructure." />
+  <meta
+    name="description"
+    content="Build custom filtered views of energy assets by tracker type, status, country, and ownership to analyze specific segments of the global energy infrastructure."
+  />
 </svelte:head>
 
 <main>
@@ -1223,7 +1226,7 @@
                 <span class="loading-text">Loading...</span>
               {:else}
                 <span class="result-count">{formatCount(totalCount)} results</span>
-                <DataSourceBadge source="motherduck" queryTime={queryTime} />
+                <DataSourceBadge source="motherduck" {queryTime} />
               {/if}
             </div>
           </div>

@@ -1,14 +1,16 @@
 import { error } from '@sveltejs/kit';
 import { getEntity } from '$lib/server/build-cache.js';
+import { fetchEntityData } from '$lib/server/api-client.js';
 
 // Dynamic SSR - no prerendering
 export const prerender = false;
 
-// Read from in-memory cache - O(1) lookup
+// Read from cache first, fall back to runtime API
 export async function load({ params }) {
   const entityId = params.id;
   if (!entityId) throw error(404, 'Missing entity ID');
 
+  // Try in-memory cache first (for static builds)
   const cached = getEntity(entityId);
   if (cached?.success) {
     return {
@@ -21,6 +23,20 @@ export async function load({ params }) {
     };
   }
 
+  // Fall back to runtime API (for SSR on Fly.io)
+  const data = await fetchEntityData(entityId);
+  if (data.success) {
+    return {
+      entityId,
+      entityName: data.entity?.name,
+      entity: data.entity,
+      owners: data.owners,
+      owned: data.owned,
+      fromAPI: true,
+    };
+  }
+
+  // Return error state for client-side handling
   return {
     entityId,
     entityName: null,
@@ -28,6 +44,6 @@ export async function load({ params }) {
     owners: null,
     owned: null,
     fromAPI: false,
-    apiError: 'not_cached',
+    apiError: data.error || 'Failed to load entity',
   };
 }

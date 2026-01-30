@@ -207,7 +207,7 @@
           path.lineTo(s, s);
           return path.toString();
         })
-        .style('stroke', colors.red || '#b10000')
+        .style('stroke', colors.redLight || '#b10000')
         .style('stroke-width', 1.25)
         .style('stroke-linecap', 'round');
     } else if (status === 'retired') {

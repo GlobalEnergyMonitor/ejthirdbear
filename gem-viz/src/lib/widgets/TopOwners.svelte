@@ -54,7 +54,7 @@
 <div class="widget top-owners">
   <header>
     <h3>{title}</h3>
-    <DataSourceBadge source="motherduck" queryTime={queryTime} size="sm" />
+    <DataSourceBadge source="motherduck" {queryTime} size="sm" />
   </header>
 
   {#if loading}

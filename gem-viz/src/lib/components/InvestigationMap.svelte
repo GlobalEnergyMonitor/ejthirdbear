@@ -227,7 +227,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #f5f5f5;
+    background: var(--color-bg-secondary);
     color: var(--color-text-secondary);
     font-size: 13px;
   }

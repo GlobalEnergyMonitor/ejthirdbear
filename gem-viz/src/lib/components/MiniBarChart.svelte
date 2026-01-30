@@ -6,6 +6,7 @@
    */
 
   import { formatCompact } from '$lib/format';
+  import { colors } from '$lib/design-tokens';
 
   let {
     data = [], // Array of { label: string, value: number, color?: string }
@@ -13,7 +14,7 @@
     width = 200,
     barHeight = 14,
     gap = 3,
-    color = '#000',
+    color = colors.navy, // GEM Navy as default bar color
     label = '',
     showValues = true,
     colorMap = {}, // Optional map of label -> color
@@ -140,7 +141,7 @@
 
   .bar-value {
     color: var(--color-text-secondary);
-    font-family: var(--font-family-mono);
+    font-family: var(--font-family-data);
     font-size: var(--font-size-xs);
   }
 

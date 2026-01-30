@@ -138,12 +138,11 @@
     border: var(--border-width) solid var(--color-border);
     padding: var(--space-3) var(--space-4);
     font-size: var(--font-size-md);
-    min-width: 180px;
-    max-width: 280px;
+    min-width: 0; /* Allow shrinking in grid */
+    width: 100%;
     text-decoration: none;
     color: inherit;
     text-align: left;
-    width: 100%;
     font-family: inherit;
     cursor: default;
   }
@@ -159,20 +158,18 @@
 
   .entity-micro-card.compact {
     padding: var(--space-2) var(--space-3);
-    min-width: 140px;
   }
 
   .card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: var(--space-2);
+    align-items: start;
     margin-bottom: var(--space-2);
   }
 
   .card-info {
-    flex: 1;
-    min-width: 0;
+    min-width: 0; /* Essential for text-overflow in grid children */
   }
 
   .entity-name {

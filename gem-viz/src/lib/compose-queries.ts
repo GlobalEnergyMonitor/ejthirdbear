@@ -4,6 +4,7 @@
  */
 
 import { browser } from '$app/environment';
+import { ASSET_ID_COALESCE_O } from './duckdb-queries';
 
 type WidgetQuery = (
   _sql: string
@@ -376,7 +377,7 @@ export async function fetchResults(
     `),
     widgetQuery(`
       SELECT DISTINCT
-        o."GEM unit ID" as asset_id,
+        ${ASSET_ID_COALESCE_O} as asset_id,
         o."Project" as name,
         o."Tracker" as tracker,
         o."Status" as status,
@@ -488,14 +489,14 @@ export async function fetchAssetMetadata(assetIds: string[]): Promise<Map<string
 
   const result = await widgetQuery(`
     SELECT DISTINCT
-      o."GEM unit ID" as id,
+      ${ASSET_ID_COALESCE_O} as id,
       o."Project" as name,
       o."Tracker" as tracker,
       o."Status" as status,
       l."Country.Area" as country
     FROM ownership o
     LEFT JOIN ${LOCATIONS_DEDUP} l ON o."GEM location ID" = l."GEM.location.ID"
-    WHERE o."GEM unit ID" IN (${escapedIds})
+    WHERE ${ASSET_ID_COALESCE_O} IN (${escapedIds})
   `);
 
   if (result.success && result.data) {

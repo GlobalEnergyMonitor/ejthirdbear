@@ -8,7 +8,10 @@
   import { entityLink, assetLink } from '$lib/links';
   import { colors, ownershipColors } from '$lib/design-tokens';
   import * as d3 from 'd3';
-  import dagreD3 from 'dagre-d3';
+
+  // Dynamic import for dagre-d3 (doesn't work well with SSR)
+  let dagreD3: typeof import('dagre-d3') | null = $state(null);
+  let dagreError = $state(false);
 
   interface GraphNode {
     id: string;
@@ -59,7 +62,14 @@
   }
 
   function renderGraph() {
-    if (!svgEl || nodes.length === 0) return;
+    if (!svgEl || nodes.length === 0 || !dagreD3) return;
+
+    // Check that dagre-d3 loaded properly
+    if (!dagreD3.graphlib || !dagreD3.render) {
+      console.error('dagre-d3 did not load properly');
+      dagreError = true;
+      return;
+    }
 
     const svg = d3.select(svgEl);
     svg.selectAll('*').remove();
@@ -134,21 +144,22 @@
     });
   }
 
-  onMount(() => {
-    if (nodes.length > 0) {
-      tick().then(renderGraph);
-    }
+  onMount(async () => {
+    // DISABLED: dagre-d3 causes crashes in production
+    dagreError = true;
   });
 
   $effect(() => {
-    if (nodes.length > 0 && svgEl) {
+    if (nodes.length > 0 && svgEl && dagreD3) {
       renderGraph();
     }
   });
 </script>
 
 <div class="intermediary-mini-graph" class:compact>
-  {#if nodes.length === 0}
+  {#if dagreError}
+    <div class="empty-state">Graph unavailable</div>
+  {:else if nodes.length === 0}
     <div class="empty-state">No subsidiary data</div>
   {:else}
     <svg bind:this={svgEl} class="mini-graph-svg"></svg>

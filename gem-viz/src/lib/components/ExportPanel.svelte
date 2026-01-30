@@ -5,6 +5,7 @@
   import { investigationCart } from '$lib/investigationCart';
   import { buildIdList } from '$lib/utils/sql';
   import TrackerIcon from '$lib/components/TrackerIcon.svelte';
+  import { ASSET_ID_COALESCE_O } from '$lib/duckdb-queries';
 
   let loading = $state(false);
   let exporting = $state(false);
@@ -129,13 +130,14 @@
     const whereParts = [];
     if (entityIds.length > 0)
       whereParts.push(`o."Owner GEM Entity ID" IN (${buildIdList(entityIds)})`);
-    if (assetIds.length > 0) whereParts.push(`o."GEM unit ID" IN (${buildIdList(assetIds)})`);
+    if (assetIds.length > 0)
+      whereParts.push(`${ASSET_ID_COALESCE_O} IN (${buildIdList(assetIds)})`);
     const whereClause = whereParts.length > 0 ? `WHERE ${whereParts.join(' OR ')}` : 'WHERE 1=0';
 
     const summarySql = `
       SELECT
         COUNT(*) as ownership_rows,
-        COUNT(DISTINCT o."GEM unit ID") as distinct_assets,
+        COUNT(DISTINCT ${ASSET_ID_COALESCE_O}) as distinct_assets,
         COUNT(DISTINCT o."Owner GEM Entity ID") as distinct_entities,
         COUNT(DISTINCT o."Tracker") as distinct_trackers,
         COUNT(DISTINCT o."Status") as distinct_statuses,
@@ -356,7 +358,7 @@
         o.*, l."Latitude", l."Longitude", l."Country.Area" as "Country"
       FROM ownership o
       LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
-      WHERE o."GEM unit ID" IN (${buildIdList(assetIds)})
+      WHERE ${ASSET_ID_COALESCE_O} IN (${buildIdList(assetIds)})
     `;
   }
 
@@ -428,7 +430,7 @@
       const assetIds = assetItems.map((a) => a.id);
       const entityIds = entityItems.map((e) => e.id);
       const whereClause = [
-        assetIds.length ? `o."GEM unit ID" IN (${buildIdList(assetIds)})` : null,
+        assetIds.length ? `${ASSET_ID_COALESCE_O} IN (${buildIdList(assetIds)})` : null,
         entityIds.length ? `o."Owner GEM Entity ID" IN (${buildIdList(entityIds)})` : null,
       ]
         .filter(Boolean)
@@ -1009,7 +1011,7 @@
   }
 
   .spark-val {
-    font-family: monospace;
+    font-family: var(--font-family-data);
     color: var(--color-text-secondary);
   }
 
@@ -1044,8 +1046,7 @@
   }
 
   .details-mono {
-    font-family:
-      ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+    font-family: var(--font-family-data);
     font-size: 10px;
     white-space: pre-wrap;
     padding: 10px;
@@ -1068,14 +1069,13 @@
   }
 
   .log-time {
-    font-family: monospace;
+    font-family: var(--font-family-data);
     color: var(--color-text-secondary);
   }
 
   .log-detail {
     grid-column: 1 / -1;
-    font-family:
-      ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+    font-family: var(--font-family-data);
     color: var(--color-text-secondary);
     white-space: pre-wrap;
   }
@@ -1101,8 +1101,7 @@
 
   .manifest-v {
     font-size: 12px;
-    font-family:
-      ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+    font-family: var(--font-family-data);
   }
 
   .btn.btn-small {
@@ -1112,7 +1111,7 @@
 
   .error-banner {
     padding: 12px 0;
-    color: var(--color-error-text, #c62828);
+    color: var(--color-error);
     margin-bottom: 20px;
     font-size: 12px;
   }
@@ -1174,7 +1173,7 @@
   }
 
   .item-card.entity {
-    border-left: 3px solid var(--color-entity-text, #7b1fa2);
+    border-left: 3px solid var(--gem-teal);
     padding-left: 12px;
   }
 
@@ -1201,7 +1200,7 @@
   }
 
   .item-id {
-    font-family: monospace;
+    font-family: var(--font-family-data);
   }
 
   .item-tracker {
@@ -1240,7 +1239,7 @@
   }
 
   .remove-btn:hover {
-    color: var(--color-error-text, #c62828);
+    color: var(--color-error);
   }
 
   @media (max-width: 768px) {

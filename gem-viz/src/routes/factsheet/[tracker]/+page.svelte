@@ -167,7 +167,10 @@
 
 <svelte:head>
   <title>{info.title} Factsheet — Global Energy Monitor</title>
-  <meta name="description" content="Field-level documentation and data distribution analysis for the {info.title} dataset from Global Energy Monitor." />
+  <meta
+    name="description"
+    content="Field-level documentation and data distribution analysis for the {info.title} dataset from Global Energy Monitor."
+  />
 </svelte:head>
 
 {#if embed}

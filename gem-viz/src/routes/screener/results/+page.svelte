@@ -16,11 +16,23 @@
   import { goto } from '$app/navigation';
   import LoadingWrapper from '$lib/components/LoadingWrapper.svelte';
   import DataSourceBadge from '$lib/components/DataSourceBadge.svelte';
+  import ScreenerLayout from '$lib/components/ScreenerLayout.svelte';
+  import AssetClassesPanel from '$lib/components/AssetClassesPanel.svelte';
   import { entityLink } from '$lib/links';
   import { investigationCart } from '$lib/investigationCart';
 
   // URL params
   const classesParam = $derived($page.url.searchParams.get('classes') || '');
+  const ownersParam = $derived($page.url.searchParams.get('owners') || '');
+
+  // Parse selected owner IDs (comma-separated entity IDs)
+  const selectedOwnerIds = $derived(() => {
+    if (!ownersParam) return [];
+    return ownersParam.split(',').filter(id => id.trim());
+  });
+
+  // Mode: 'all' = show all owners, 'filtered' = show only selected owners
+  const viewMode = $derived(selectedOwnerIds().length > 0 ? 'filtered' : 'all');
 
   // Parse selected classes
   const selectedClasses = $derived(() => {
@@ -64,6 +76,8 @@
   /** @type {'motherduck' | 'local'} */
   let dataSource = $state('motherduck');
   let queryTime = $state(null);
+  let executedQuery = $state('');
+  let availableAssetTypes = $state([]);
 
   // Search/filter for journalists with watchlists
   let searchQuery = $state('');
@@ -136,115 +150,91 @@
         return;
       }
 
-      // Try MotherDuck first, fall back to local DuckDB
-      let queryFn;
-      dataSource = 'motherduck';
-
-      try {
-        const motherduck = await import('$lib/motherduck-wasm');
-        await motherduck.initMotherDuck();
-        queryFn = motherduck.query;
-      } catch (mdErr) {
-        console.warn('MotherDuck unavailable, using local DuckDB:', mdErr);
-        dataSource = 'local';
-        const duckdb = await import('$lib/duckdb-utils');
-        const { assetPath } = await import('$lib/links');
-        await duckdb.loadParquetFromPath(
-          assetPath('all_trackers_ownership@1.parquet'),
-          'ownership'
-        );
-        queryFn = duckdb.query;
-      }
+      // Use unified query layer (MotherDuck with automatic table mapping)
+      const { unifiedQuery } = await import('$lib/data/unified-query');
 
       const cls = classes[0];
       const trackerVal = cls?.tracker;
       const statusVal = cls?.filters?.status;
+      const ownerIds = selectedOwnerIds();
+      const hasOwnerFilter = ownerIds.length > 0;
 
       const queryStartTime = performance.now();
 
-      // Different column names for MotherDuck vs local parquet
-      let sql;
-      if (dataSource === 'motherduck') {
-        // MotherDuck: gem_data.global_energy_ownership_tracker_october_2025_v1.asset_ownership
-        // Column mapping: Tracker -> Asset Type, Status -> Status (may not exist)
-        const tableName = 'gem_data.global_energy_ownership_tracker_october_2025_v1.asset_ownership';
-        const trackerClause = trackerVal ? `AND "Asset Type" = '${trackerVal.replace(/'/g, "''")}'` : '';
-        const statusClause = ''; // Status column may not exist in new schema
+      // Map UI tracker names to MotherDuck "Asset Type" values
+      const trackerToAssetType = {
+        'Steel Plant': 'Iron & Steel Plant',
+        'Coal Plant': 'Coal Plant',
+        'Gas Pipeline': 'Natural Gas Transmission Pipeline',
+        'Oil & NGL Pipeline': 'Oil or NGL Pipeline',
+        'Coal Mine': 'Coal Mine',
+        'Iron Mine': 'Iron Ore Mine',
+        'Cement Plant': 'Cement or Concrete Plant',
+      };
+      const assetTypeVal = trackerVal ? (trackerToAssetType[trackerVal] || trackerVal) : null;
 
-        sql = `
-          WITH owner_totals AS (
-            SELECT
-              "Immediate Owner Entity Name" as name,
-              "Immediate Owner Entity ID" as entity_id,
-              COUNT(DISTINCT "Asset ID") as total_assets
-            FROM ${tableName}
-            WHERE "Immediate Owner Entity Name" IS NOT NULL AND "Immediate Owner Entity Name" != ''
-            GROUP BY "Immediate Owner Entity Name", "Immediate Owner Entity ID"
-          ),
-          owner_filtered AS (
-            SELECT
-              "Immediate Owner Entity Name" as name,
-              "Immediate Owner Entity ID" as entity_id,
-              COUNT(DISTINCT "Asset ID") as filtered_assets
-            FROM ${tableName}
-            WHERE "Immediate Owner Entity Name" IS NOT NULL AND "Immediate Owner Entity Name" != ''
-              ${trackerClause}
-              ${statusClause}
-            GROUP BY "Immediate Owner Entity Name", "Immediate Owner Entity ID"
-          )
-          SELECT
-            t.name,
-            t.entity_id,
-            t.total_assets,
-            COALESCE(f.filtered_assets, 0) as filtered_assets
-          FROM owner_totals t
-          LEFT JOIN owner_filtered f ON t.entity_id = f.entity_id
-          WHERE f.filtered_assets > 0
-          ORDER BY f.filtered_assets DESC, t.total_assets DESC
-          LIMIT 200
-        `;
-      } else {
-        // Local DuckDB: ownership table from parquet
-        const tableName = 'ownership';
-        const trackerClause = trackerVal ? `AND "Tracker" = '${trackerVal.replace(/'/g, "''")}'` : '';
-        const statusClause = statusVal ? `AND "Status" ILIKE '${statusVal.replace(/'/g, "''")}'` : '';
+      // Build filter clauses
+      // MotherDuck columns: "Immediate Owner Entity Name", "Immediate Owner Entity ID", "Asset Type", "Asset ID"
+      const trackerClause = assetTypeVal
+        ? `AND "Asset Type" = '${assetTypeVal.replace(/'/g, "''")}'`
+        : '';
+      const ownerClause = hasOwnerFilter
+        ? `AND "Immediate Owner Entity ID" IN (${ownerIds.map(id => `'${id.replace(/'/g, "''")}'`).join(', ')})`
+        : '';
 
-        sql = `
-          WITH owner_totals AS (
-            SELECT
-              "Owner" as name,
-              "Owner GEM Entity ID" as entity_id,
-              COUNT(DISTINCT COALESCE("GEM unit ID", "GEM Mine ID", "Steel Plant ID", "GEM Asset ID", "ProjectID")) as total_assets
-            FROM ${tableName}
-            WHERE "Owner" IS NOT NULL AND "Owner" != ''
-            GROUP BY "Owner", "Owner GEM Entity ID"
-          ),
-          owner_filtered AS (
-            SELECT
-              "Owner" as name,
-              "Owner GEM Entity ID" as entity_id,
-              COUNT(DISTINCT COALESCE("GEM unit ID", "GEM Mine ID", "Steel Plant ID", "GEM Asset ID", "ProjectID")) as filtered_assets
-            FROM ${tableName}
-            WHERE "Owner" IS NOT NULL AND "Owner" != ''
-              ${trackerClause}
-              ${statusClause}
-            GROUP BY "Owner", "Owner GEM Entity ID"
-          )
-          SELECT
-            t.name,
-            t.entity_id,
-            t.total_assets,
-            COALESCE(f.filtered_assets, 0) as filtered_assets
-          FROM owner_totals t
-          LEFT JOIN owner_filtered f ON t.entity_id = f.entity_id
-          WHERE f.filtered_assets > 0
-          ORDER BY f.filtered_assets DESC, t.total_assets DESC
-          LIMIT 200
-        `;
+      // Debug: Check what Asset Types exist
+      try {
+        const debugResult = await unifiedQuery(`
+          SELECT DISTINCT "Asset Type" as asset_type, COUNT(*) as cnt
+          FROM ownership
+          GROUP BY "Asset Type"
+          ORDER BY cnt DESC
+          LIMIT 20
+        `);
+        console.log('Available Asset Types:', debugResult.data);
+        availableAssetTypes = debugResult.data || [];
+      } catch (debugErr) {
+        console.warn('Debug query failed:', debugErr);
       }
 
-      const result = await queryFn(sql);
+      const sql = `
+        WITH owner_totals AS (
+          SELECT
+            "Immediate Owner Entity Name" as name,
+            "Immediate Owner Entity ID" as entity_id,
+            COUNT(DISTINCT "Asset ID") as total_assets
+          FROM ownership
+          WHERE "Immediate Owner Entity Name" IS NOT NULL AND "Immediate Owner Entity Name" != ''
+            ${ownerClause}
+          GROUP BY "Immediate Owner Entity Name", "Immediate Owner Entity ID"
+        ),
+        owner_filtered AS (
+          SELECT
+            "Immediate Owner Entity Name" as name,
+            "Immediate Owner Entity ID" as entity_id,
+            COUNT(DISTINCT "Asset ID") as filtered_assets
+          FROM ownership
+          WHERE "Immediate Owner Entity Name" IS NOT NULL AND "Immediate Owner Entity Name" != ''
+            ${ownerClause}
+            ${trackerClause}
+          GROUP BY "Immediate Owner Entity Name", "Immediate Owner Entity ID"
+        )
+        SELECT
+          t.name,
+          t.entity_id,
+          t.total_assets,
+          COALESCE(f.filtered_assets, 0) as filtered_assets
+        FROM owner_totals t
+        LEFT JOIN owner_filtered f ON t.entity_id = f.entity_id
+        WHERE f.filtered_assets > 0 OR ${hasOwnerFilter ? 'TRUE' : 'FALSE'}
+        ORDER BY f.filtered_assets DESC, t.total_assets DESC
+        LIMIT 200
+      `;
+
+      executedQuery = sql.trim();
+      const result = await unifiedQuery(sql);
       queryTime = performance.now() - queryStartTime;
+      dataSource = /** @type {'motherduck' | 'local'} */ (result.source || 'motherduck');
 
       if (!result.success) {
         throw new Error(result.error || 'Query failed');
@@ -289,289 +279,328 @@
 
 <svelte:head>
   <title>Screener Results — Global Energy Monitor</title>
-  <meta name="description" content="View companies with ownership exposure to selected asset classes and add them to your investigation." />
+  <meta
+    name="description"
+    content="View companies with ownership exposure to selected asset classes and add them to your investigation."
+  />
 </svelte:head>
 
-<main>
-  <div class="screener-layout">
-    <!-- Header -->
-    <header class="screener-header">
-      <div class="header-left">
-        <h1>Asset-Class Screener</h1>
-        <p class="subtitle">
-          Evaluate companies' ownership stakes in classes of fossil fuel assets. Start by selecting
-          asset-classes below, or building your own query.
-        </p>
+<ScreenerLayout
+  currentStep={3}
+  showStepNav={false}
+  subtitle={viewMode === 'filtered'
+    ? `Showing ${selectedOwnerIds().length} selected companies and their exposure to ${classDescription()}.`
+    : `Showing all companies with ownership stakes in ${classDescription()}.`}
+  {classesParam}
+  maxWidth="wide"
+>
+  {#snippet headerRight()}
+    <AssetClassesPanel
+      {classesParam}
+      onRemove={(cls) => removeAssetClass(selectedClasses().findIndex((c) => c.name === cls.name))}
+    />
+  {/snippet}
+
+  <!-- Active filters summary -->
+  <section class="filters-summary">
+    <h3>Active Filters</h3>
+    <div class="filter-tags">
+      {#each selectedClasses() as cls}
+        <div class="filter-tag asset-class">
+          <span class="tag-label">Asset:</span>
+          <span class="tag-value">{cls.tracker || cls.name}</span>
+        </div>
+        {#if cls.filters?.status}
+          <div class="filter-tag status">
+            <span class="tag-label">Status:</span>
+            <span class="tag-value">{cls.filters.status}</span>
+          </div>
+        {/if}
+        {#if cls.filters?.geography}
+          <div class="filter-tag geography">
+            <span class="tag-label">Country:</span>
+            <span class="tag-value">{cls.filters.geography}</span>
+          </div>
+        {/if}
+      {/each}
+      {#if viewMode === 'filtered'}
+        <div class="filter-tag owners">
+          <span class="tag-label">Owners:</span>
+          <span class="tag-value">{selectedOwnerIds().length} selected</span>
+        </div>
+      {/if}
+    </div>
+    <a href="/screener/" class="edit-filters-link">← Edit filters</a>
+  </section>
+
+  <LoadingWrapper {loading} {error} loadingMessage="Finding owners...">
+    <!-- Results section -->
+    <section class="results-section">
+      <div class="results-header">
+        <div class="results-title-row">
+          <h2>{viewMode === 'filtered' ? 'Selected Companies' : 'All Owners'}</h2>
+          <DataSourceBadge source={dataSource} {queryTime} />
+        </div>
+        <span class="result-count">
+          {#if viewMode === 'filtered'}
+            {owners.length} of {selectedOwnerIds().length} selected found
+          {:else}
+            {filteredOwners().length} of {owners.length} owners
+          {/if}
+        </span>
       </div>
 
-      <!-- Selected asset-classes panel -->
-      <aside class="selected-classes">
-        <button class="panel-toggle"> ▼ View selected asset-classes </button>
-        <div class="panel-content">
-          {#each selectedClasses() as cls, i}
-            <div class="selected-class">
-              <span class="class-name">{cls.description || classDescription()}</span>
-              <button class="remove-btn" onclick={() => removeAssetClass(i)}>Remove</button>
-            </div>
-          {:else}
-            <p class="no-selection">No asset classes selected</p>
-          {/each}
-          <a href="/screener/" class="add-link">Add/change asset classes</a>
-        </div>
-      </aside>
-    </header>
-
-    <LoadingWrapper {loading} {error} loadingMessage="Finding owners...">
-      <!-- Results section -->
-      <section class="results-section">
-        <div class="results-header">
-          <div class="results-title-row">
-            <h2>Owner Search Results</h2>
-            <DataSourceBadge source={dataSource} queryTime={queryTime} />
-          </div>
-          <span class="result-count">
-            {filteredOwners().length} of {owners.length} owners
-          </span>
+      <!-- Search and filter toolbar -->
+      <div class="search-toolbar">
+        <div class="search-input-wrapper">
+          <input
+            type="text"
+            class="search-input"
+            placeholder="Search for companies on your watchlist..."
+            bind:value={searchQuery}
+          />
+          {#if searchQuery}
+            <button class="clear-search" onclick={() => (searchQuery = '')}>×</button>
+          {/if}
         </div>
 
-        <!-- Search and filter toolbar -->
-        <div class="search-toolbar">
-          <div class="search-input-wrapper">
-            <input
-              type="text"
-              class="search-input"
-              placeholder="Search for companies on your watchlist..."
-              bind:value={searchQuery}
-            />
-            {#if searchQuery}
-              <button class="clear-search" onclick={() => (searchQuery = '')}>×</button>
-            {/if}
-          </div>
+        <div class="toolbar-actions">
+          <label class="filter-toggle">
+            <input type="checkbox" bind:checked={showOnlyInvestigation} />
+            <span>Only show entities in my investigation ({investigationEntities.length})</span>
+          </label>
 
-          <div class="toolbar-actions">
-            <label class="filter-toggle">
-              <input type="checkbox" bind:checked={showOnlyInvestigation} />
-              <span>Only show entities in my investigation ({investigationEntities.length})</span>
-            </label>
+          {#if cartItems.length > 0}
+            <button class="clear-cart-btn" onclick={() => investigationCart.clear()}>
+              Clear cart ({cartItems.length})
+            </button>
+          {/if}
 
-            {#if cartItems.length > 0}
-              <button class="clear-cart-btn" onclick={() => investigationCart.clear()}>
-                Clear cart ({cartItems.length})
-              </button>
-            {/if}
-
-            {#if filteredOwners().length > 0}
-              <button class="add-all-btn" onclick={addAllToInvestigation}>
-                + Add all {filteredOwners().length} to investigation
-              </button>
-            {/if}
-          </div>
+          {#if filteredOwners().length > 0}
+            <button class="add-all-btn" onclick={addAllToInvestigation}>
+              + Add all {filteredOwners().length} to investigation
+            </button>
+          {/if}
         </div>
+      </div>
 
-        <!-- Investigation cart summary -->
-        {#if cartItems.length > 0}
-          <div class="investigation-summary">
-            <strong>Investigation Cart:</strong>
-            {cartItems.length} items selected ({investigationEntities.length} entities)
-            <a href="/report/" class="report-link">→ Generate Report</a>
+      <!-- Investigation cart summary -->
+      {#if cartItems.length > 0}
+        <div class="investigation-summary">
+          <strong>Investigation Cart:</strong>
+          {cartItems.length} items selected ({investigationEntities.length} entities)
+          <a href="/report/" class="report-link">→ Generate Report</a>
+        </div>
+      {/if}
+
+      <div class="results-box">
+        <!-- Unmatched notice -->
+        {#if unmatchedCount > 0}
+          <div class="unmatched-notice">
+            <strong>Unmatched Owners:</strong>
+            {unmatchedCount} from your search didn't find matches,
+            <button class="link-btn" onclick={() => (showUnmatched = !showUnmatched)}>
+              {showUnmatched ? 'hide list' : 'view list'}.
+            </button>
           </div>
         {/if}
 
-        <div class="results-box">
-          <!-- Unmatched notice -->
-          {#if unmatchedCount > 0}
-            <div class="unmatched-notice">
-              <strong>Unmatched Owners:</strong>
-              {unmatchedCount} from your search didn't find matches,
-              <button class="link-btn" onclick={() => (showUnmatched = !showUnmatched)}>
-                {showUnmatched ? 'hide list' : 'view list'}.
-              </button>
-            </div>
-          {/if}
-
-          <!-- Matched owners intro -->
-          <div class="matched-intro">
-            <strong>Matched Owners:</strong> Click any company name to explore ownership chains and intermediaries
-          </div>
-
-          <!-- Results table -->
-          <table class="results-table">
-            <thead>
-              <tr>
-                <th class="col-select"></th>
-                <th class="col-company">Company name:</th>
-                <th class="col-total">Total Portfolio:</th>
-                <th class="col-filtered">Exposure to {classDescription()}:</th>
-              </tr>
-            </thead>
-            <tbody>
-              {#each filteredOwners() as owner (owner.entityId || owner.name)}
-                {@const inInvestigation = isInInvestigation(owner.entityId)}
-                <tr class:in-investigation={inInvestigation}>
-                  <td class="col-select">
-                    <button
-                      class="select-btn"
-                      class:selected={inInvestigation}
-                      onclick={() => toggleInvestigation(owner)}
-                      title={inInvestigation ? 'Remove from investigation' : 'Add to investigation'}
-                    >
-                      {inInvestigation ? '✓' : '+'}
-                    </button>
-                  </td>
-                  <td class="col-company">
-                    <a href={entityLink(owner.entityId)} class="company-link">
-                      {owner.name}
-                    </a>
-                  </td>
-                  <td class="col-total">
-                    {describeTotal(owner.totalAssets)}
-                  </td>
-                  <td class="col-filtered">
-                    {describeFiltered(owner.filteredAssets, classDescription())}
-                  </td>
-                </tr>
-              {:else}
-                <tr>
-                  <td colspan="4" class="empty-row">
-                    {#if searchQuery}
-                      No owners matching "{searchQuery}" found.
-                      <button class="link-btn" onclick={() => (searchQuery = '')}
-                        >Clear search</button
-                      >
-                    {:else if showOnlyInvestigation}
-                      No entities in your investigation match this asset class.
-                      <button class="link-btn" onclick={() => (showOnlyInvestigation = false)}
-                        >Show all</button
-                      >
-                    {:else}
-                      No owners found for this asset class.
-                    {/if}
-                  </td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
+        <!-- Matched owners intro -->
+        <div class="matched-intro">
+          <strong>Matched Owners:</strong> Click any company name to explore ownership chains and intermediaries
         </div>
-      </section>
-    </LoadingWrapper>
-  </div>
-</main>
+
+        <!-- Results table -->
+        <table class="results-table">
+          <thead>
+            <tr>
+              <th class="col-select"></th>
+              <th class="col-company">Company name:</th>
+              <th class="col-total">Total Portfolio:</th>
+              <th class="col-filtered">Exposure to {classDescription()}:</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each filteredOwners() as owner (owner.entityId || owner.name)}
+              {@const inInvestigation = isInInvestigation(owner.entityId)}
+              <tr class:in-investigation={inInvestigation}>
+                <td class="col-select">
+                  <button
+                    class="select-btn"
+                    class:selected={inInvestigation}
+                    onclick={() => toggleInvestigation(owner)}
+                    title={inInvestigation ? 'Remove from investigation' : 'Add to investigation'}
+                  >
+                    {inInvestigation ? '✓' : '+'}
+                  </button>
+                </td>
+                <td class="col-company">
+                  <a href={entityLink(owner.entityId)} class="company-link">
+                    {owner.name}
+                  </a>
+                </td>
+                <td class="col-total">
+                  {describeTotal(owner.totalAssets)}
+                </td>
+                <td class="col-filtered">
+                  {describeFiltered(owner.filteredAssets, classDescription())}
+                </td>
+              </tr>
+            {:else}
+              <tr>
+                <td colspan="4" class="empty-row">
+                  {#if searchQuery}
+                    No owners matching "{searchQuery}" found.
+                    <button class="link-btn" onclick={() => (searchQuery = '')}>Clear search</button
+                    >
+                  {:else if showOnlyInvestigation}
+                    No entities in your investigation match this asset class.
+                    <button class="link-btn" onclick={() => (showOnlyInvestigation = false)}
+                      >Show all</button
+                    >
+                  {:else}
+                    No owners found for this asset class.
+                  {/if}
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </LoadingWrapper>
+
+  <!-- Debug panel -->
+  {#if executedQuery}
+    <details class="debug-panel">
+      <summary class="debug-summary">
+        <span class="debug-icon">⚙</span>
+        Query Debug
+        {#if queryTime}
+          <span class="debug-time">({queryTime.toFixed(0)}ms)</span>
+        {/if}
+      </summary>
+      <div class="debug-content">
+        <div class="debug-meta">
+          <span class="debug-label">View mode:</span>
+          <span class="debug-value">{viewMode} ({viewMode === 'filtered' ? selectedOwnerIds().length + ' owners selected' : 'showing all'})</span>
+        </div>
+        <div class="debug-meta">
+          <span class="debug-label">Asset Type filter:</span>
+          <span class="debug-value">{selectedClasses()[0]?.tracker || 'none'} → {(() => {
+            const t = selectedClasses()[0]?.tracker;
+            const map = {'Steel Plant': 'Iron & Steel Plant', 'Gas Pipeline': 'Natural Gas Transmission Pipeline', 'Oil & NGL Pipeline': 'Oil or NGL Pipeline', 'Iron Mine': 'Iron Ore Mine', 'Cement Plant': 'Cement or Concrete Plant'};
+            return t ? (map[t] || t) : 'none';
+          })()}</span>
+        </div>
+        <div class="debug-meta">
+          <span class="debug-label">Data source:</span>
+          <span class="debug-value">{dataSource}</span>
+        </div>
+        <div class="debug-meta">
+          <span class="debug-label">Results:</span>
+          <span class="debug-value">{owners.length} owners returned</span>
+        </div>
+        {#if availableAssetTypes.length > 0}
+          <div class="debug-asset-types">
+            <span class="debug-label">Available Trackers in DB:</span>
+            <div class="asset-type-list">
+              {#each availableAssetTypes as at}
+                <span class="asset-type-item" class:match={at.asset_type === selectedClasses()[0]?.tracker}>
+                  {at.asset_type || '(empty)'} ({at.cnt})
+                </span>
+              {/each}
+            </div>
+          </div>
+        {/if}
+        <div class="debug-sql">
+          <div class="debug-sql-header">
+            <span class="debug-label">SQL Query:</span>
+            <button class="copy-btn" onclick={() => navigator.clipboard.writeText(executedQuery)}>
+              Copy
+            </button>
+          </div>
+          <pre class="debug-code">{executedQuery}</pre>
+        </div>
+      </div>
+    </details>
+  {/if}
+</ScreenerLayout>
 
 <style>
-  main {
-    min-height: 100vh;
-    background: #f5f3ef;
+  /* Filters summary */
+  .filters-summary {
+    padding: var(--space-4) var(--space-5);
+    background: var(--color-gray-50);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    margin-bottom: var(--space-6);
   }
 
-  .screener-layout {
-    max-width: 1100px;
-    margin: 0 auto;
-    padding: var(--space-8) var(--space-6);
+  .filters-summary h3 {
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-caps);
+    color: var(--color-text-tertiary);
+    margin: 0 0 var(--space-3) 0;
   }
 
-  /* Header */
-  .screener-header {
+  .filter-tags {
     display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: var(--space-8);
-    margin-bottom: var(--space-8);
-  }
-
-  .header-left {
-    flex: 1;
-  }
-
-  h1 {
-    font-size: 2.5rem;
-    font-weight: 400;
-    margin: 0 0 var(--space-3);
-    color: #1d4961;
-    letter-spacing: -0.02em;
-  }
-
-  .subtitle {
-    color: #4a5568;
-    margin: 0;
-    font-size: var(--font-size-md);
-    line-height: 1.6;
-    max-width: 500px;
-  }
-
-  /* Selected classes panel */
-  .selected-classes {
-    background: #e8f4f4;
-    border-radius: var(--radius-md);
-    padding: var(--space-4);
-    min-width: 280px;
-    max-width: 320px;
-  }
-
-  .panel-toggle {
-    display: block;
-    width: 100%;
-    text-align: left;
-    background: none;
-    border: none;
-    font-weight: 600;
-    font-size: var(--font-size-md);
-    color: #1d4961;
-    cursor: pointer;
+    flex-wrap: wrap;
+    gap: var(--space-2);
     margin-bottom: var(--space-3);
   }
 
-  .panel-content {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-  }
-
-  .selected-class {
-    display: flex;
-    justify-content: space-between;
+  .filter-tag {
+    display: inline-flex;
     align-items: center;
     gap: var(--space-2);
-  }
-
-  .class-name {
-    font-size: var(--font-size-sm);
-    color: #2d3748;
-  }
-
-  .remove-btn {
-    padding: 2px 8px;
-    font-size: 11px;
+    padding: var(--space-1) var(--space-3);
     background: white;
-    border: 1px solid #cbd5e0;
-    border-radius: 3px;
-    cursor: pointer;
-    color: #4a5568;
-  }
-
-  .remove-btn:hover {
-    background: #f7fafc;
-  }
-
-  .no-selection {
-    font-size: var(--font-size-sm);
-    color: #718096;
-    margin: 0;
-  }
-
-  .add-link {
-    display: inline-block;
-    padding: var(--space-2) var(--space-3);
-    background: white;
-    border: 1px solid #cbd5e0;
+    border: 1px solid var(--color-border);
     border-radius: var(--radius-sm);
-    text-decoration: none;
     font-size: var(--font-size-sm);
-    color: #2d3748;
-    text-align: center;
   }
 
-  .add-link:hover {
-    background: #f7fafc;
+  .filter-tag.asset-class {
+    border-color: var(--gem-teal);
+    background: var(--gem-teal-light, #e8f4f4);
+  }
+
+  .filter-tag.status {
+    border-color: var(--color-accent);
+  }
+
+  .filter-tag.geography {
+    border-color: #6b7280;
+  }
+
+  .filter-tag.owners {
+    border-color: var(--gem-primary-blue);
+    background: #e8f0f4;
+  }
+
+  .tag-label {
+    color: var(--color-text-tertiary);
+    font-weight: 500;
+  }
+
+  .tag-value {
+    color: var(--color-text-primary);
+    font-weight: 500;
+  }
+
+  .edit-filters-link {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .edit-filters-link:hover {
+    color: var(--color-text-primary);
   }
 
   /* Results section */
@@ -580,16 +609,19 @@
   }
 
   .results-header {
-    display: flex;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: var(--space-4);
     align-items: baseline;
     margin-bottom: var(--space-4);
   }
 
   .results-title-row {
-    display: flex;
-    align-items: center;
+    display: grid;
+    grid-template-columns: auto auto;
     gap: var(--space-3);
+    align-items: center;
+    min-width: 0;
   }
 
   h2 {
@@ -604,10 +636,10 @@
     color: #718096;
   }
 
-  /* Search toolbar */
+  /* Search toolbar - grid layout */
   .search-toolbar {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: 1fr auto;
     gap: var(--space-4);
     margin-bottom: var(--space-4);
     padding: var(--space-4);
@@ -618,8 +650,7 @@
 
   .search-input-wrapper {
     position: relative;
-    flex: 1;
-    min-width: 250px;
+    min-width: 0;
   }
 
   .search-input {
@@ -655,19 +686,21 @@
   }
 
   .toolbar-actions {
-    display: flex;
-    align-items: center;
+    display: grid;
+    grid-auto-flow: column;
     gap: var(--space-4);
-    flex-wrap: wrap;
+    align-items: center;
   }
 
   .filter-toggle {
-    display: flex;
-    align-items: center;
+    display: grid;
+    grid-template-columns: auto auto;
     gap: var(--space-2);
+    align-items: center;
     font-size: var(--font-size-sm);
     color: #4a5568;
     cursor: pointer;
+    white-space: nowrap;
   }
 
   .filter-toggle input {
@@ -758,13 +791,6 @@
 
   tr.in-investigation {
     background: rgba(29, 73, 97, 0.04);
-  }
-
-  .country-hint {
-    display: block;
-    font-size: 11px;
-    color: #a0aec0;
-    margin-top: 2px;
   }
 
   .results-box {
@@ -863,17 +889,19 @@
 
   /* Responsive */
   @media (max-width: 768px) {
-    .screener-header {
-      flex-direction: column;
+    .results-header {
+      grid-template-columns: 1fr;
+      gap: var(--space-2);
     }
 
-    .selected-classes {
-      width: 100%;
-      max-width: none;
+    .search-toolbar {
+      grid-template-columns: 1fr;
     }
 
-    h1 {
-      font-size: 1.75rem;
+    .toolbar-actions {
+      grid-auto-flow: row;
+      grid-template-columns: repeat(2, 1fr);
+      justify-items: start;
     }
 
     .results-table {
@@ -888,5 +916,143 @@
     .col-filtered {
       width: 35%;
     }
+  }
+
+  /* Debug panel */
+  .debug-panel {
+    margin-top: var(--space-12);
+    border-top: 1px solid var(--color-border);
+    padding-top: var(--space-4);
+  }
+
+  .debug-summary {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    gap: var(--space-2);
+    align-items: center;
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-tertiary);
+    padding: var(--space-2) 0;
+    list-style: none;
+  }
+
+  .debug-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .debug-summary::before {
+    content: '▶';
+    font-size: 10px;
+    transition: transform 0.2s ease;
+  }
+
+  .debug-panel[open] .debug-summary::before {
+    transform: rotate(90deg);
+  }
+
+  .debug-icon {
+    font-size: var(--font-size-body);
+  }
+
+  .debug-time {
+    color: var(--color-text-tertiary);
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-xs);
+  }
+
+  .debug-content {
+    margin-top: var(--space-4);
+    padding: var(--space-4);
+    background: var(--color-gray-50);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+  }
+
+  .debug-meta {
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+    font-size: var(--font-size-sm);
+  }
+
+  .debug-label {
+    color: var(--color-text-tertiary);
+    font-weight: 500;
+  }
+
+  .debug-value {
+    color: var(--color-text-secondary);
+    font-family: var(--font-family-mono);
+  }
+
+  .debug-sql {
+    margin-top: var(--space-4);
+  }
+
+  .debug-sql-header {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: var(--space-2);
+    align-items: center;
+    margin-bottom: var(--space-2);
+  }
+
+  .copy-btn {
+    padding: var(--space-1) var(--space-3);
+    font-size: var(--font-size-xs);
+    background: white;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    color: var(--color-text-secondary);
+  }
+
+  .copy-btn:hover {
+    background: var(--color-gray-100);
+  }
+
+  .debug-code {
+    margin: 0;
+    padding: var(--space-4);
+    background: #1e1e1e;
+    color: #d4d4d4;
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-xs);
+    line-height: 1.5;
+    border-radius: var(--radius-sm);
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .debug-asset-types {
+    margin-top: var(--space-4);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--color-border);
+  }
+
+  .asset-type-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+  }
+
+  .asset-type-item {
+    display: inline-block;
+    padding: var(--space-1) var(--space-2);
+    background: var(--color-gray-100);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs);
+    font-family: var(--font-family-mono);
+    color: var(--color-text-secondary);
+  }
+
+  .asset-type-item.match {
+    background: var(--gem-teal);
+    color: white;
+    font-weight: 600;
   }
 </style>

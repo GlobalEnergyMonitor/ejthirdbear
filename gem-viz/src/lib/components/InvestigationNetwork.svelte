@@ -143,7 +143,7 @@
     // Draw links
     const link = g
       .append('g')
-      .attr('stroke', '#999')
+      .attr('stroke', colors.gray400)
       .attr('stroke-opacity', 0.4)
       .selectAll('line')
       .data(links)
@@ -171,9 +171,9 @@
       .attr('fill', (d) => {
         if (d.type === 'entity') return d.inCart ? colors.navy : colors.midnightPurple;
         if (d.tracker) return colorByTracker.get(d.tracker) || colors.mint;
-        return d.inCart ? colors.grey : '#ccc';
+        return d.inCart ? colors.grey : colors.gray300;
       })
-      .attr('stroke', (d) => (d.inCart ? colors.black : '#fff'))
+      .attr('stroke', (d) => (d.inCart ? colors.black : colors.white))
       .attr('stroke-width', (d) => (d.inCart ? 2 : 1));
 
     // Node type labels
@@ -183,7 +183,7 @@
       .attr('dy', '0.35em')
       .attr('font-size', (d) => (d.inCart ? '10px' : '8px'))
       .attr('font-weight', 'bold')
-      .attr('fill', '#fff')
+      .attr('fill', colors.white)
       .text((d) => (d.type === 'entity' ? 'E' : 'A'));
 
     // Node name labels
@@ -193,7 +193,7 @@
       .attr('y', (d) => (d.inCart ? 24 : 18))
       .attr('text-anchor', 'middle')
       .attr('font-size', '9px')
-      .attr('fill', '#333')
+      .attr('fill', colors.midnight)
       .text((d) => {
         const name = d.name || d.id;
         return name.length > 15 ? name.slice(0, 15) + '...' : name;
@@ -299,7 +299,7 @@
 
   svg {
     display: block;
-    background: #fafafa;
+    background: var(--color-bg-secondary);
     border: 1px solid var(--color-border);
   }
 
@@ -325,20 +325,20 @@
   }
 
   .dot.entity {
-    background: var(--color-entity-text, #7b1fa2);
+    background: var(--gem-teal);
   }
 
   .dot.entity.cart {
-    background: var(--color-navy, #002b5c);
+    background: var(--gem-navy);
     border: 2px solid var(--color-black);
   }
 
   .dot.asset {
-    background: #ccc;
+    background: var(--color-gray-300);
   }
 
   .dot.asset.cart {
-    background: var(--color-grey, #666);
+    background: var(--color-gray-500);
     border: 2px solid var(--color-black);
   }
 

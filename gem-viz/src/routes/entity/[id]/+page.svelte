@@ -238,7 +238,11 @@
 
 <svelte:head>
   <title>{entityName || entityId || 'Entity'} — Global Energy Monitor</title>
-  <meta name="description" content="Corporate ownership profile for {entityName || entityId} including subsidiary structure, asset portfolio, and ownership hierarchy." />
+  <meta
+    name="description"
+    content="Corporate ownership profile for {entityName ||
+      entityId} including subsidiary structure, asset portfolio, and ownership hierarchy."
+  />
 </svelte:head>
 
 <main>

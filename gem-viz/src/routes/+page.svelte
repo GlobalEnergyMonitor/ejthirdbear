@@ -68,7 +68,10 @@
 
 <svelte:head>
   <title>Global Energy Monitor — Ownership Data Explorer</title>
-  <meta name="description" content="Explore ownership structures, corporate relationships, and asset portfolios across global energy infrastructure with interactive visualizations." />
+  <meta
+    name="description"
+    content="Explore ownership structures, corporate relationships, and asset portfolios across global energy infrastructure with interactive visualizations."
+  />
 </svelte:head>
 
 <main class="home">

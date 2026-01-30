@@ -13,13 +13,13 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(pkg.version)
   },
   plugins: [
-    sveltekit(),
-    ViteMinifyPlugin({})
+    sveltekit()
+    // ViteMinifyPlugin removed - breaks Svelte 5
   ],
 
   server: {
     port: 3737,
-    // Required for MotherDuck WASM client
+    // Required for MotherDuck WASM client (SharedArrayBuffer)
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin',
       'Cross-Origin-Embedder-Policy': 'require-corp'
@@ -28,7 +28,7 @@ export default defineConfig({
 
   build: {
     sourcemap: true,
-    minify: 'terser',
+    minify: false, // disabled - minification breaks Svelte 5 runtime
     rollupOptions: {
       external: [
         // Exclude Node.js-only packages from browser bundle
@@ -44,6 +44,8 @@ export default defineConfig({
             return undefined;
           }
           if (id.includes('node_modules')) {
+            // Keep dagre separate so it only loads when needed
+            if (id.includes('dagre')) return 'vendor-dagre';
             if (id.includes('d3')) return 'vendor-d3';
             if (id.includes('maplibre')) return 'vendor-maplibre';
             return 'vendor';
@@ -58,7 +60,7 @@ export default defineConfig({
   },
 
   optimizeDeps: {
-    include: ['@duckdb/duckdb-wasm', '@motherduck/wasm-client', 'd3', 'maplibre-gl', 'maplibre-gl-draw'],
+    include: ['@duckdb/duckdb-wasm', '@motherduck/wasm-client', 'd3', 'maplibre-gl', 'maplibre-gl-draw', 'dagre-d3', 'dagre'],
     exclude: ['duckdb']
   },
 

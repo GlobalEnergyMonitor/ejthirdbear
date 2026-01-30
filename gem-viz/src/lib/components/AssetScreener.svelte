@@ -12,7 +12,7 @@
   import { assetLink, entityLink } from '$lib/links';
   import { fetchOwnerPortfolio } from '$lib/component-data/schema';
   import { useFetch } from '$lib/component-data/use-fetch.svelte';
-  import { colors, colorByTracker, regroupStatus } from '$lib/design-tokens';
+  import { colors, colorByTracker, regroupStatus, statusColors } from '$lib/design-tokens';
 
   // Props - can receive pre-fetched portfolio data or fetch its own
   let {
@@ -242,15 +242,9 @@
     return getStatusColor(status);
   }
 
-  // Get status color
+  // Get status color from centralized design tokens
   function getStatusColor(status) {
-    const statusColorMap = {
-      proposed: colors.purple,
-      operating: '#4A57A8',
-      retired: colors.midnightPurple,
-      cancelled: colors.grey,
-    };
-    return statusColorMap[status] || colors.grey;
+    return statusColors[status] || statusColors.unknown;
   }
 
   // Generate arc path for ownership percentage pie
@@ -345,8 +339,8 @@
       <svg width={svgWidth} height={svgHeight + margin.top + margin.bottom}>
         <defs>
           <linearGradient id="gradient-fade" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#fafaf7" />
-            <stop offset="100%" stop-color="#f7f7f3" />
+            <stop offset="0%" stop-color={colors.warmWhite} />
+            <stop offset="100%" stop-color={colors.gray100} />
           </linearGradient>
         </defs>
 
@@ -355,7 +349,7 @@
           <path
             d="M 0 {-margin.top - 5} L 0 {svgHeight + margin.bottom - 5}"
             fill="none"
-            stroke="#d8d8ce"
+            stroke={colors.gray200}
             stroke-width="3.5"
             stroke-linecap="round"
           />
@@ -373,7 +367,7 @@
                 params.assetsX -
                 params.assetSpacing * 2} {group.top}"
               fill="none"
-              stroke="#d8d8ce"
+              stroke={colors.gray200}
               stroke-width="3"
               stroke-linecap="round"
             />
@@ -394,8 +388,8 @@
                     cx="0"
                     cy={pieRadius}
                     r={pieRadius + 1}
-                    fill="#cce1e6"
-                    stroke="#ffffff"
+                    fill={colors.mintDataviz}
+                    stroke={colors.white}
                     stroke-width="1.25"
                     class="subsidiary-circle"
                     role="button"
@@ -553,7 +547,7 @@
                     {@const n = loc.units.length}
                     {@const TAU = Math.PI * 2}
                     <!-- Background circle -->
-                    <circle r={loc.r} fill="none" stroke="#aab2c0" stroke-width="2" />
+                    <circle r={loc.r} fill="none" stroke={colors.gray300} stroke-width="2" />
                     <!-- Unit circles with mix-blend-mode multiply -->
                     <g class="unit-ring" style="isolation: isolate;">
                       {#each loc.units as unit, ui}
@@ -723,11 +717,16 @@
 </div>
 
 <style>
+  /* ==========================================================================
+     GEM Asset Screener - Using GEM Typography System
+     ========================================================================== */
+
   .loading-state,
   .error-state {
-    padding: 60px 20px;
+    padding: var(--space-12) var(--space-5);
     text-align: center;
-    font-size: 13px;
+    font-family: var(--font-family);
+    font-size: var(--font-size-base);
   }
 
   .loading-state {
@@ -740,18 +739,19 @@
 
   .asset-screener {
     position: relative;
-    font-family: 'Plus Jakarta Sans', Georgia, serif;
+    font-family: var(--font-family);
     width: 100%;
   }
 
+  /* --- Header --- */
   .chart-header {
     display: flex;
     align-items: flex-start;
-    gap: 2em;
-    padding: 0.4em 1.8em;
-    border-bottom: 3px solid #d8d8ce;
-    background: #016b83;
-    color: #ffffff;
+    gap: var(--space-8);
+    padding: var(--space-3) var(--space-6);
+    border-bottom: 3px solid var(--color-border);
+    background: var(--gem-teal);
+    color: var(--gem-white);
   }
 
   .name-wrapper {
@@ -759,25 +759,32 @@
   }
 
   .name-wrapper h3 {
-    font-weight: 700;
+    font-family: var(--font-family-display);
+    font-weight: var(--font-weight-bold);
+    font-size: var(--font-size-xl);
+    line-height: var(--line-height-snug);
     margin: 0;
-    font-size: 1.2em;
+    color: var(--gem-white);
   }
 
   .subtitle {
-    font-size: 0.7em;
+    font-family: var(--font-family);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-bold);
     text-transform: uppercase;
-    letter-spacing: 0.08em;
-    font-weight: 500;
-    color: #9df7e5;
-    margin: 0 0 0.5em 0;
+    letter-spacing: var(--tracking-widest);
+    color: var(--gem-mint);
+    margin: 0 0 var(--space-2) 0;
   }
 
-  .details {
-    font-size: 0.9em;
+  .details-wrapper .details {
+    font-family: var(--font-family);
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-regular);
     margin: 0;
   }
 
+  /* --- Chart Area --- */
   .chart-wrapper {
     min-height: 420px;
     overflow: visible;
@@ -794,7 +801,7 @@
 
   .subsidiary-circle {
     cursor: pointer;
-    transition: fill-opacity 0.15s;
+    transition: fill-opacity var(--duration-fast) var(--ease-out);
   }
 
   .subsidiary-circle:hover {
@@ -805,119 +812,136 @@
     pointer-events: none;
   }
 
+  /* --- Subsidiary Names --- */
   .subsidiary-name {
-    font-size: 0.9em;
-    font-weight: 500;
-    letter-spacing: 0.03em;
+    font-family: var(--font-family);
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-medium);
+    letter-spacing: var(--tracking-wide);
   }
 
   .subsidiary-name.clickable {
     cursor: pointer;
     text-decoration: underline;
     text-decoration-color: transparent;
-    transition: text-decoration-color 0.15s;
+    transition: text-decoration-color var(--duration-fast) var(--ease-out);
   }
 
   .subsidiary-name.clickable:hover {
     text-decoration-color: currentColor;
   }
 
+  /* --- Bar Charts (Mini) --- */
   .bar-chart .bar-title {
-    font-size: 0.55em;
-    font-weight: 500;
+    font-family: var(--font-family);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-bold);
     text-transform: uppercase;
-    letter-spacing: 0.07em;
-    fill: #797975;
+    letter-spacing: var(--tracking-wider);
+    fill: var(--color-text-tertiary);
   }
 
   .bar-segment {
     cursor: pointer;
-    transition: opacity 0.15s;
+    transition: opacity var(--duration-fast) var(--ease-out);
   }
 
   .bar-segment:hover {
     opacity: 0.7;
   }
 
+  /* --- Asset Groups --- */
   .asset-group {
     cursor: pointer;
   }
 
   .asset-circle,
   .unit-circle {
-    transition: r 0.15s;
+    transition: r var(--duration-fast) var(--ease-out);
   }
 
   .asset-group:hover .asset-circle {
     r: 10;
   }
 
+  /* Asset names use data typography (Roboto Condensed UPPERCASE) */
   .asset-name {
-    font-size: 0.75em;
-    font-weight: 500;
+    font-family: var(--font-family-data);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
     text-transform: uppercase;
-    letter-spacing: 0.07em;
-    fill: var(--color-gray-700);
+    letter-spacing: var(--tracking-wider);
+    fill: var(--color-text-secondary);
   }
 
+  /* --- Additional Info Footer --- */
   .additional-info {
     text-align: center;
-    padding: 1em;
+    padding: var(--space-4);
   }
 
   .additional-info p {
-    margin: 0;
+    font-family: var(--font-family);
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-medium);
     font-style: italic;
-    color: var(--color-gray-700);
-    font-weight: 500;
-    font-size: 0.95em;
+    color: var(--color-text-secondary);
+    margin: 0;
   }
 
   .additional-info span {
-    padding: 0.8em;
-    border-top: 2px solid #fe4f2d;
+    display: inline-block;
+    padding: var(--space-3);
+    border-top: 2px solid var(--gem-orange);
   }
 
+  /* --- Legend --- */
   .legend-container {
-    padding: 0.6em 1.6em;
-    border-top: 3px solid #016b83;
+    padding: var(--space-3) var(--space-6);
+    border-top: 3px solid var(--gem-teal);
     background: transparent;
   }
 
   .legend {
     display: flex;
     flex-wrap: wrap;
-    gap: 1.5em;
+    gap: var(--space-5);
     justify-content: center;
-    font-size: 0.9em;
-    color: var(--color-gray-700);
+    font-family: var(--font-family);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
   }
 
   .legend-item {
     display: flex;
     align-items: center;
-    gap: 0.4em;
+    gap: var(--space-2);
   }
 
   .legend-bubble {
-    width: 13px;
-    height: 13px;
+    width: 12px;
+    height: 12px;
     border-radius: 50%;
+    flex-shrink: 0;
   }
 
+  /* --- Status Icon Legend --- */
   .status-icon-legend {
     display: flex;
-    gap: 1.2em;
+    gap: var(--space-4);
     justify-content: center;
-    margin-top: 0.5em;
-    font-size: 0.8em;
-    color: var(--color-text-secondary);
+    margin-top: var(--space-2);
+    font-family: var(--font-family);
+    font-size: var(--font-size-xs);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
+    color: var(--color-text-tertiary);
   }
 
   .status-icon-item {
     display: flex;
     align-items: center;
-    gap: 0.3em;
+    gap: var(--space-1);
   }
 
   .status-icon-item svg {
@@ -928,23 +952,32 @@
     pointer-events: none;
   }
 
+  /* --- Tooltip --- */
   .tooltip {
     position: absolute;
     bottom: 100px;
     right: 20px;
-    background: white;
-    border: none;
-    padding: 10px 14px;
-    font-size: 12px;
+    background: var(--gem-white);
+    border: 1px solid var(--color-border);
+    padding: var(--space-3) var(--space-4);
+    font-family: var(--font-family);
+    font-size: var(--font-size-sm);
     max-width: 250px;
     pointer-events: none;
-    box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.1);
-    z-index: 100;
+    box-shadow: var(--shadow-md);
+    z-index: var(--z-dropdown);
+  }
+
+  .tooltip strong {
+    font-weight: var(--font-weight-bold);
+    color: var(--color-text-primary);
   }
 
   .tooltip .ownership-pct {
-    color: #016b83;
-    font-weight: bold;
+    font-family: var(--font-family-data);
+    color: var(--gem-teal);
+    font-weight: var(--font-weight-bold);
+    text-transform: uppercase;
   }
 
   .tooltip .status {
@@ -954,7 +987,9 @@
 
   .tooltip .asset-count,
   .tooltip .unit-count {
-    color: var(--color-gray-500);
-    font-size: 0.9em;
+    font-family: var(--font-family-data);
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-xs);
+    text-transform: uppercase;
   }
 </style>

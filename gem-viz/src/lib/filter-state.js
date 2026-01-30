@@ -27,6 +27,10 @@
  */
 
 import { base } from '$app/paths';
+import { ASSET_ID_COALESCE } from './duckdb-queries';
+
+// Also export for use in inline SQL within the same file
+const ASSET_ID_SQL = ASSET_ID_COALESCE;
 
 /**
  * @typedef {Object} FilterState
@@ -374,10 +378,10 @@ export function buildSqlWhere(filters, tableAlias = '', columnNames = {}) {
   if (filters.ownersAnd?.length && columns.owner) {
     const escaped = filters.ownersAnd.map((o) => `'${o.replace(/'/g, "''")}'`);
     const ownerCount = filters.ownersAnd.length;
-    conditions.push(`${prefix}"GEM unit ID" IN (
-      SELECT "GEM unit ID" FROM ownership
+    conditions.push(`${prefix ? ASSET_ID_SQL.replace(/"/g, `${prefix}"`) : ASSET_ID_SQL} IN (
+      SELECT ${ASSET_ID_SQL} FROM ownership
       WHERE "${columns.owner}" IN (${escaped.join(', ')})
-      GROUP BY "GEM unit ID"
+      GROUP BY ${ASSET_ID_SQL}
       HAVING COUNT(DISTINCT "${columns.owner}") = ${ownerCount}
     )`);
   }

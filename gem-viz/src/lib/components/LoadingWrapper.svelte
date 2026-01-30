@@ -113,8 +113,8 @@
 
   .loading-wrapper-state.error {
     color: var(--color-error);
-    background: var(--color-error-bg, #fff0f0);
-    border: var(--border-width) solid var(--color-error-border, #fcc);
+    background: var(--color-error-light);
+    border: var(--border-width) solid var(--color-error);
   }
 
   .loading-wrapper-state.empty {

@@ -1,373 +1,538 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import maplibregl from 'maplibre-gl';
-  import MapLibreDraw from 'maplibre-gl-draw';
   import 'maplibre-gl/dist/maplibre-gl.css';
-  import 'maplibre-gl-draw/dist/mapbox-gl-draw.css'; // Legacy CSS path
-  import {
-    mapFilter,
-    clearMapFilter,
-    setMapFilter,
-    isPolygonFilter,
-    isBoundsFilter,
-  } from '$lib/mapFilter';
-  import { link, assetPath } from '$lib/links';
-  import { trackerToMapColor, mapColors } from '$lib/design-tokens';
-  import AssetMicroCard from '$lib/components/AssetMicroCard.svelte';
+  import chroma from 'chroma-js';
+  import { assetPath, assetLink } from '$lib/links';
+  import { trackerToMapColor, mapColors, colors } from '$lib/design-tokens';
+  import ProjectCard from '$lib/components/ProjectCard.svelte';
+  import { fetchAssetBasics } from '$lib/component-data/schema';
 
   let mapContainer = $state(null);
   let map;
-  let draw;
   let loading = $state(true);
   let error = $state(null);
-  let latCol;
-  let lonCol;
-  let isDrawing = false;
+  let isSpinning = $state(true);
+  let spinAnimation;
+  let geojsonData = $state(null);
+  let totalAssetCount = $state(null);
 
-  // Popup state for hover cards
-  let popupAsset = $state(null);
-  let popupPosition = $state({ x: 0, y: 0 });
+  // HARDCODED light mode as requested
+  let isDarkMode = $state(false);
 
-  function closePopup() {
-    popupAsset = null;
+  // Spin control
+  const spinSpeed = 0.12;
+  let userInteracting = false;
+
+  // Dynamic callouts
+  let visibleCallouts = $state([]);
+
+  // Layer visibility toggles - group similar trackers together
+  const trackerGroups = {
+    coal: ['Coal Plant', 'Coal Mine'],
+    gas: ['Gas Plant', 'Gas Pipeline', 'Oil & NGL Pipeline'],
+    steel: ['Steel Plant', 'Iron Mine', 'Iron Ore Mine'],
+    bioenergy: ['Bioenergy Power', 'Cement and Concrete'],
+  };
+
+  let visibleGroups = $state({
+    coal: true,
+    gas: true,
+    steel: true,
+    bioenergy: true,
+  });
+
+  function toggleTrackerGroup(group) {
+    visibleGroups[group] = !visibleGroups[group];
+    updateLayerFilters();
   }
 
+  function updateLayerFilters() {
+    if (!map) return;
+
+    // Build list of visible trackers
+    const visibleTrackers = Object.entries(visibleGroups)
+      .filter(([_, visible]) => visible)
+      .flatMap(([group]) => trackerGroups[group]);
+
+    // Create filter expression
+    const filter =
+      visibleTrackers.length > 0
+        ? ['in', ['get', 'tracker'], ['literal', visibleTrackers]]
+        : ['==', ['get', 'tracker'], '__none__']; // Hide all if nothing selected
+
+    // Apply to all point layers
+    ['points', 'points-glow-outer', 'points-glow-mid', 'points-heat'].forEach((layerId) => {
+      if (map.getLayer(layerId)) {
+        map.setFilter(layerId, filter);
+      }
+    });
+  }
+
+  // Hover tooltip state - only show when zoomed in
+  const TOOLTIP_MIN_ZOOM = 3;
+  let hoveredAsset = $state(null);
+  let tooltipPosition = $state({ x: 0, y: 0 });
+  let currentZoom = $state(0);
+  let tooltipLoading = $state(false);
+
+  // Cache for fetched asset data to avoid repeated API calls
+  const assetDataCache = new Map();
+
+  function setupHoverInteraction() {
+    if (!map) return;
+
+    // Track zoom level
+    map.on('zoom', () => {
+      currentZoom = map.getZoom();
+      // Hide tooltip when zooming out
+      if (currentZoom < TOOLTIP_MIN_ZOOM) {
+        hoveredAsset = null;
+      }
+    });
+
+    // Hover on points layer
+    map.on('mouseenter', 'points', async (e) => {
+      if (currentZoom < TOOLTIP_MIN_ZOOM) return;
+      if (!e.features?.length) return;
+
+      map.getCanvas().style.cursor = 'pointer';
+      const feature = e.features[0];
+      const props = feature.properties || {};
+
+      // Get asset ID from geojson
+      const assetId = String(props.id ?? props['GEM location ID'] ?? feature.id ?? 'unknown');
+
+      // Use clientX/clientY for fixed positioning
+      tooltipPosition = {
+        x: e.originalEvent.clientX,
+        y: e.originalEvent.clientY,
+      };
+
+      // Check cache first
+      if (assetDataCache.has(assetId)) {
+        hoveredAsset = assetDataCache.get(assetId);
+        return;
+      }
+
+      // Show loading state with minimal data from geojson
+      tooltipLoading = true;
+      hoveredAsset = {
+        id: assetId,
+        name: assetId, // Will be replaced by API data
+        tracker: props.tracker || 'Unknown',
+        status: null,
+        country: props.country || null,
+        state: props.state || null,
+        capacity: null,
+        owner: null,
+      };
+
+      // Fetch full data from API
+      try {
+        const fullData = await fetchAssetBasics(assetId);
+        if (fullData) {
+          const enrichedAsset = {
+            id: fullData.id,
+            name: fullData.name || assetId,
+            tracker: fullData.tracker || props.tracker || 'Unknown',
+            status: fullData.status || null,
+            country: fullData.country || props.country || null,
+            state: props.state || null,
+            capacity: fullData.capacityMw || null,
+            owner: fullData.ownerName || null,
+          };
+          // Cache the result
+          assetDataCache.set(assetId, enrichedAsset);
+          // Only update if still hovering the same asset
+          if (hoveredAsset?.id === assetId) {
+            hoveredAsset = enrichedAsset;
+          }
+        }
+      } catch (err) {
+        console.warn(`Failed to fetch asset data for ${assetId}:`, err);
+      } finally {
+        tooltipLoading = false;
+      }
+    });
+
+    map.on('mousemove', 'points', (e) => {
+      if (currentZoom < TOOLTIP_MIN_ZOOM) return;
+      if (!hoveredAsset) return;
+
+      // Use clientX/clientY for fixed positioning
+      tooltipPosition = {
+        x: e.originalEvent.clientX,
+        y: e.originalEvent.clientY,
+      };
+    });
+
+    map.on('mouseleave', 'points', () => {
+      map.getCanvas().style.cursor = '';
+      hoveredAsset = null;
+    });
+
+    // Click to navigate to asset page
+    map.on('click', 'points', (e) => {
+      if (!e.features?.length) return;
+      const props = e.features[0].properties;
+      const locationId = props.id || props.gem_id;
+
+      // Use cached asset ID if available (from API fetch), otherwise use location ID
+      const cachedData = assetDataCache.get(locationId);
+      const navigateId = cachedData?.id || locationId;
+
+      if (navigateId) {
+        window.location.href = assetLink(navigateId);
+      }
+    });
+  }
+
+  // Core point colors
   const trackerColorStops = Object.entries(trackerToMapColor).flatMap(([tracker, color]) => [
     tracker,
     color,
   ]);
 
-  // Shape mappings for different tracker types (used for visual distinction)
-  // Maps tracker type to number of sides (3=triangle, 4=square, 5=pentagon, 6=hexagon, 12+=circle)
-  const trackerShapes = {
-    'Coal Plant': 4, // square - power
-    'Gas Plant': 4, // square - power
-    'Bioenergy Power': 4, // square - power
-    'Coal Mine': 3, // triangle - extraction
-    'Iron Mine': 3, // triangle - extraction
-    'Steel Plant': 6, // hexagon - industrial
-    'Cement and Concrete': 6, // hexagon - industrial
-    'Gas Pipeline': 5, // pentagon - infrastructure
-    'Oil & NGL Pipeline': 5, // pentagon - infrastructure
-  };
-
-  // Generate shape stops for MapLibre expression (reserved for future polygon layer)
-  const _trackerShapeStops = Object.entries(trackerShapes).flatMap(([tracker, sides]) => [
+  // Softer glow colors: increase lightness, decrease saturation for readability
+  const trackerGlowColorStops = Object.entries(trackerToMapColor).flatMap(([tracker, color]) => [
     tracker,
-    sides,
+    chroma(color).desaturate(2).brighten(0.8).hex(),
   ]);
 
+  // GEM Core Palette
+  const palette = {
+    navy: '#004A63',
+    mintDataviz: '#A5E9E4',
+    orange: '#FE4F2D',
+    teal: '#016B83',
+    midnight: '#002430',
+    warmWhite: '#F2F2EB',
+    white: '#FFFFFF',
+  };
+
+  // Theme colors using core palette
+  const themes = {
+    dark: {
+      background: palette.midnight,
+      land: '#0a1a20',
+      landStroke: palette.navy,
+      ocean: palette.midnight,
+      text: palette.mintDataviz,
+      textMuted: '#7FA4B1', // navy-50
+      accent: palette.orange,
+      panel: 'rgba(0, 36, 48, 0.9)',
+      panelBorder: palette.teal,
+      glow: palette.mintDataviz,
+      statColor: palette.mintDataviz,
+      capacityColor: palette.orange,
+    },
+    light: {
+      background: palette.warmWhite,
+      land: palette.white,
+      landStroke: '#BFDAE0', // navy-25
+      ocean: palette.warmWhite,
+      text: palette.midnight,
+      textMuted: palette.navy,
+      accent: palette.orange,
+      panel: 'rgba(255, 255, 255, 0.94)',
+      panelBorder: palette.navy,
+      glow: palette.teal,
+      statColor: palette.navy,
+      capacityColor: palette.orange,
+    },
+  };
+
+  // Light mode is hardcoded - no system preference detection
+
+  function updateMapTheme() {
+    if (!map) return;
+    const theme = isDarkMode ? themes.dark : themes.light;
+
+    map.setPaintProperty('background', 'background-color', theme.background);
+    map.setPaintProperty('land', 'fill-color', theme.land);
+    map.setPaintProperty('borders', 'line-color', theme.landStroke);
+  }
+
+  function startSpinning() {
+    if (spinAnimation) return;
+
+    function spin() {
+      if (!map || userInteracting || !isSpinning) {
+        spinAnimation = null;
+        return;
+      }
+
+      const center = map.getCenter();
+      center.lng += spinSpeed;
+      map.setCenter(center);
+
+      spinAnimation = requestAnimationFrame(spin);
+    }
+
+    spinAnimation = requestAnimationFrame(spin);
+  }
+
+  function stopSpinning() {
+    if (spinAnimation) {
+      cancelAnimationFrame(spinAnimation);
+      spinAnimation = null;
+    }
+  }
+
+  function updateDynamicCallouts() {
+    if (!map || !geojsonData) return;
+
+    const bounds = map.getBounds();
+    const center = map.getCenter();
+
+    const inView = geojsonData.features
+      .filter((f) => {
+        const [lon, lat] = f.geometry.coordinates;
+        const lonDiff = Math.abs(((lon - center.lng + 180) % 360) - 180);
+        return lonDiff < 70 && lat > bounds.getSouth() && lat < bounds.getNorth();
+      })
+      .filter((f) => f.properties.capacity && f.properties.capacity > 0)
+      .sort((a, b) => (b.properties.capacity || 0) - (a.properties.capacity || 0))
+      .slice(0, 3);
+
+    visibleCallouts = inView.map((f, i) => {
+      const point = map.project(f.geometry.coordinates);
+      const [lon] = f.geometry.coordinates;
+      const lonDiff = lon - center.lng;
+
+      let angle = lonDiff > 0 ? 35 : -35;
+      if (i === 1) angle = lonDiff > 0 ? -25 : 25;
+      if (i === 2) angle = 0;
+
+      const distFromCenter = Math.abs(lonDiff);
+      const opacity = Math.max(0.4, 1 - (distFromCenter / 70) * 0.6);
+
+      return {
+        name: f.properties.name || f.properties.project || 'Unknown',
+        tracker: f.properties.tracker || 'Asset',
+        capacity: f.properties.capacity,
+        x: point.x,
+        y: point.y,
+        angle,
+        opacity,
+      };
+    });
+  }
+
   onMount(async () => {
-    // Wait for mapContainer to be ready
     await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // Light mode hardcoded - no system detection
 
     try {
       if (!mapContainer) {
-        console.error('Map container not ready after delay');
         loading = false;
         return;
       }
 
-      // Fetch static GeoJSON (generated at build time)
-      console.log('Loading static GeoJSON...');
-      const response = await fetch(assetPath('points.geojson'));
-      if (!response.ok) {
-        throw new Error(`Failed to load GeoJSON: ${response.statusText}`);
+      // Fetch total asset count from DuckDB (async, non-blocking)
+      // Wrapped in try-catch to ensure map loads even if DuckDB fails
+      try {
+        import('$lib/duckdb-utils')
+          .then(async ({ loadParquetFromPath, query }) => {
+            try {
+              const ownershipPath = assetPath('all_trackers_ownership@1.parquet');
+              await loadParquetFromPath(ownershipPath, 'ownership');
+              const result = await query(`
+                SELECT COUNT(DISTINCT COALESCE("GEM unit ID", "GEM Mine ID", "Steel Plant ID", "GEM Asset ID", "ProjectID")) as cnt
+                FROM ownership
+              `);
+              if (result.success && result.data?.[0]?.cnt) {
+                totalAssetCount = Number(result.data[0].cnt);
+              }
+            } catch (e) {
+              console.warn('Could not fetch asset count:', e);
+            }
+          })
+          .catch((e) => console.warn('DuckDB import failed:', e));
+      } catch (e) {
+        console.warn('DuckDB initialization skipped:', e);
       }
 
-      const geojson = await response.json();
-      console.log(`Loaded ${geojson.features.length.toLocaleString()} points from static GeoJSON`);
+      const response = await fetch(assetPath('points.geojson'));
+      if (!response.ok) throw new Error(`Failed to load GeoJSON: ${response.statusText}`);
 
-      // Get column names from GeoJSON metadata
-      latCol = geojson.metadata?.columns?.lat || 'Latitude';
-      lonCol = geojson.metadata?.columns?.lon || 'Longitude';
+      geojsonData = await response.json();
+      console.log(`Loaded ${geojsonData.features.length.toLocaleString()} points`);
 
-      // Create map
+      const theme = isDarkMode ? themes.dark : themes.light;
+
       map = new maplibregl.Map({
         container: mapContainer,
-        style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
-        center: [0, 20],
-        zoom: 1,
-      });
-
-      map.addControl(new maplibregl.NavigationControl());
-
-      // Add drawing controls with both rectangle and polygon support
-      draw = new MapLibreDraw({
-        displayControlsDefault: false,
-        controls: {
-          polygon: true,
-          trash: true,
-        },
-        modes: {
-          ...MapLibreDraw.modes,
-        },
-      });
-      map.addControl(/** @type {any} */ (draw));
-
-      // Handle draw.create event for when shapes are finished
-      map.on('draw.create', (e) => {
-        const feature = e.features[0];
-
-        if (feature.geometry.type === 'Polygon') {
-          const coordinates = feature.geometry.coordinates[0];
-
-          setMapFilter({
-            type: 'polygon',
-            coordinates,
-            latCol,
-            lonCol,
-          });
-        }
-      });
-
-      // Handle draw.update event for when shapes are moved/edited
-      map.on('draw.update', (e) => {
-        const feature = e.features[0];
-
-        if (feature.geometry.type === 'Polygon') {
-          const coordinates = feature.geometry.coordinates[0];
-
-          setMapFilter({
-            type: 'polygon',
-            coordinates,
-            latCol,
-            lonCol,
-          });
-        }
-      });
-
-      // Handle draw.delete event
-      map.on('draw.delete', () => {
-        clearMapFilter();
-      });
-
-      // Handle shift + drag for rectangle drawing
-      let startPoint = null;
-      let shiftPressed = false;
-
-      window.addEventListener('keydown', (e) => {
-        if (e.key === 'Shift') shiftPressed = true;
-      });
-
-      window.addEventListener('keyup', (e) => {
-        if (e.key === 'Shift') shiftPressed = false;
-        if (e.key === 'Escape') handleClearFilter();
-      });
-
-      map.on('mousedown', (e) => {
-        if (shiftPressed && !isDrawing) {
-          isDrawing = true;
-          startPoint = e.lngLat;
-          map.dragPan.disable();
-        }
-      });
-
-      map.on('mousemove', (e) => {
-        if (isDrawing && startPoint) {
-          // Remove existing rectangle
-          draw.deleteAll();
-
-          // Draw temporary rectangle
-          const coords = [
-            [startPoint.lng, startPoint.lat],
-            [e.lngLat.lng, startPoint.lat],
-            [e.lngLat.lng, e.lngLat.lat],
-            [startPoint.lng, e.lngLat.lat],
-            [startPoint.lng, startPoint.lat],
-          ];
-
-          draw.add({
-            type: 'Feature',
-            geometry: {
-              type: 'Polygon',
-              coordinates: [coords],
+        style: {
+          version: 8,
+          name: 'GEM Globe',
+          sources: {
+            countries: {
+              type: 'geojson',
+              data: 'https://d2ad6b4ur7yvpq.cloudfront.net/naturalearth-3.3.0/ne_110m_admin_0_countries.geojson',
             },
-          });
-        }
+          },
+          layers: [
+            {
+              id: 'background',
+              type: 'background',
+              paint: { 'background-color': theme.background },
+            },
+            {
+              id: 'land',
+              type: 'fill',
+              source: 'countries',
+              paint: { 'fill-color': theme.land, 'fill-opacity': 1 },
+            },
+            {
+              id: 'borders',
+              type: 'line',
+              source: 'countries',
+              paint: { 'line-color': theme.landStroke, 'line-width': 0.5, 'line-opacity': 0.5 },
+            },
+          ],
+          glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+        },
+        center: [20, 15],
+        zoom: 2.35,
+        maxZoom: 6,
+        minZoom: 1.6,
       });
 
-      map.on('mouseup', (e) => {
-        if (isDrawing && startPoint) {
-          const endPoint = e.lngLat;
+      map.on('mousedown', () => {
+        userInteracting = true;
+        stopSpinning();
+      });
 
-          // Calculate bounds
-          const bounds = {
-            north: Math.max(startPoint.lat, endPoint.lat),
-            south: Math.min(startPoint.lat, endPoint.lat),
-            east: Math.max(startPoint.lng, endPoint.lng),
-            west: Math.min(startPoint.lng, endPoint.lng),
-            latCol,
-            lonCol,
-          };
+      map.on('mouseup', () => {
+        userInteracting = false;
+      });
 
-          setMapFilter(bounds);
-          console.log('Rectangle filter set:', bounds);
+      // Auto-pause spinning when user drags the globe
+      map.on('dragend', () => {
+        userInteracting = false;
+        isSpinning = false; // Stay paused after user interaction
+      });
 
-          isDrawing = false;
-          startPoint = null;
-          map.dragPan.enable();
-        }
+      map.on('style.load', () => {
+        map.setProjection({ type: 'globe' });
       });
 
       map.on('load', () => {
-        // Add GeoJSON source directly (already in correct format!)
         map.addSource('points', {
           type: 'geojson',
-          data: geojson,
+          data: geojsonData,
         });
 
-        // Add distinct layers per category for different shapes
-        // Power plants - squares (rendered as circles with square-ish proportions)
+        // Layer 1: Outer glow (large, very transparent, blurred)
+        // Uses desaturated/brightened colors for readability
         map.addLayer({
-          id: 'points-power',
+          id: 'points-glow-outer',
           type: 'circle',
           source: 'points',
-          filter: [
-            'in',
-            ['get', 'tracker'],
-            ['literal', ['Coal Plant', 'Gas Plant', 'Bioenergy Power']],
-          ],
           paint: {
-            'circle-radius': 6,
-            'circle-color': ['match', ['get', 'tracker'], ...trackerColorStops, mapColors.default],
-            'circle-opacity': 0.9,
-            'circle-stroke-width': 2.5,
-            'circle-stroke-color': '#fff',
-            'circle-stroke-opacity': 0.9,
-          },
-        });
-
-        // Mines - triangular appearance (smaller, pointed look)
-        map.addLayer({
-          id: 'points-mines',
-          type: 'circle',
-          source: 'points',
-          filter: ['in', ['get', 'tracker'], ['literal', ['Coal Mine', 'Iron Mine']]],
-          paint: {
-            'circle-radius': 5,
-            'circle-color': ['match', ['get', 'tracker'], ...trackerColorStops, mapColors.default],
-            'circle-opacity': 0.9,
-            'circle-stroke-width': 1,
-            'circle-stroke-color': '#000',
-            'circle-stroke-opacity': 0.8,
-          },
-        });
-
-        // Industrial - hexagonal (larger, industrial feel)
-        map.addLayer({
-          id: 'points-industrial',
-          type: 'circle',
-          source: 'points',
-          filter: ['in', ['get', 'tracker'], ['literal', ['Steel Plant', 'Cement and Concrete']]],
-          paint: {
-            'circle-radius': 7,
-            'circle-color': ['match', ['get', 'tracker'], ...trackerColorStops, mapColors.default],
-            'circle-opacity': 0.85,
-            'circle-stroke-width': 2,
-            'circle-stroke-color': '#333',
-            'circle-stroke-opacity': 0.7,
-          },
-        });
-
-        // Pipelines - linear infrastructure (elongated look via stroke)
-        map.addLayer({
-          id: 'points-pipelines',
-          type: 'circle',
-          source: 'points',
-          filter: ['in', ['get', 'tracker'], ['literal', ['Gas Pipeline', 'Oil & NGL Pipeline']]],
-          paint: {
-            'circle-radius': 4,
-            'circle-color': ['match', ['get', 'tracker'], ...trackerColorStops, mapColors.default],
-            'circle-opacity': 0.9,
-            'circle-stroke-width': 3,
-            'circle-stroke-color': [
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 0, 4, 2, 6, 4, 10, 6, 14],
+            'circle-color': [
               'match',
               ['get', 'tracker'],
-              ...trackerColorStops,
+              ...trackerGlowColorStops,
               mapColors.default,
             ],
-            'circle-stroke-opacity': 0.4,
+            'circle-opacity': 0.12,
+            'circle-blur': 1,
+            'circle-stroke-width': 0,
           },
         });
 
-        // Default/other trackers
+        // Layer 2: Middle glow
+        // Uses desaturated/brightened colors for readability
         map.addLayer({
-          id: 'points-other',
+          id: 'points-glow-mid',
           type: 'circle',
           source: 'points',
-          filter: [
-            '!',
-            [
-              'in',
-              ['get', 'tracker'],
-              [
-                'literal',
-                [
-                  'Coal Plant',
-                  'Gas Plant',
-                  'Bioenergy Power',
-                  'Coal Mine',
-                  'Iron Mine',
-                  'Steel Plant',
-                  'Cement and Concrete',
-                  'Gas Pipeline',
-                  'Oil & NGL Pipeline',
-                ],
-              ],
-            ],
-          ],
           paint: {
-            'circle-radius': 5,
-            'circle-color': ['match', ['get', 'tracker'], ...trackerColorStops, mapColors.default],
-            'circle-opacity': 0.85,
-            'circle-stroke-width': 1.5,
-            'circle-stroke-color': mapColors.stroke,
-            'circle-stroke-opacity': 0.6,
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 0, 2, 2, 3, 4, 5, 6, 8],
+            'circle-color': [
+              'match',
+              ['get', 'tracker'],
+              ...trackerGlowColorStops,
+              mapColors.default,
+            ],
+            'circle-opacity': 0.2,
+            'circle-blur': 0.5,
+            'circle-stroke-width': 0,
           },
         });
 
-        // Show popup on hover
-        map.on('mouseenter', 'points', (e) => {
-          map.getCanvas().style.cursor = 'pointer';
-
-          const feature = e.features?.[0];
-          if (!feature) return;
-
-          const props = feature.properties;
-          const point = map.project(e.lngLat);
-
-          popupAsset = {
-            id: props.unitId || props['GEM unit ID'] || props.id,
-            name: props.name || props.project || props.Project,
-            tracker: props.tracker,
-            status: props.status,
-            country: props.country || props['Country.Area'],
-            capacity: props.capacity || props['Capacity (MW)'],
-            owner: props.owner,
-          };
-
-          popupPosition = {
-            x: point.x,
-            y: point.y - 10,
-          };
+        // Layer 3: Core points (small, crisp, higher opacity)
+        map.addLayer({
+          id: 'points',
+          type: 'circle',
+          source: 'points',
+          paint: {
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 0, 0.8, 2, 1.2, 4, 2, 6, 3.5],
+            'circle-color': ['match', ['get', 'tracker'], ...trackerColorStops, mapColors.default],
+            'circle-opacity': 0.9,
+            'circle-blur': 0,
+            'circle-stroke-width': 0,
+          },
         });
 
-        map.on('mouseleave', 'points', () => {
-          map.getCanvas().style.cursor = '';
-          closePopup();
-        });
-
-        map.on('movestart', closePopup);
-
-        // Fit to bounds
-        const bounds = new maplibregl.LngLatBounds();
-        geojson.features.forEach((feature) => {
-          bounds.extend(feature.geometry.coordinates);
-        });
-        map.fitBounds(bounds, { padding: 50 });
+        // Heatmap layer for density visualization
+        map.addLayer(
+          {
+            id: 'points-heat',
+            type: 'heatmap',
+            source: 'points',
+            maxzoom: 4,
+            paint: {
+              'heatmap-weight': 0.3,
+              'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 0, 0.3, 4, 0.8],
+              'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 0, 3, 4, 8],
+              'heatmap-opacity': ['interpolate', ['linear'], ['zoom'], 0, 0.4, 3, 0.2, 4, 0],
+              'heatmap-color': [
+                'interpolate',
+                ['linear'],
+                ['heatmap-density'],
+                0,
+                'transparent',
+                0.1,
+                isDarkMode ? 'rgba(127, 20, 42, 0.1)' : 'rgba(127, 20, 42, 0.05)',
+                0.3,
+                isDarkMode ? 'rgba(202, 74, 80, 0.2)' : 'rgba(202, 74, 80, 0.1)',
+                0.5,
+                isDarkMode ? 'rgba(254, 79, 45, 0.3)' : 'rgba(254, 79, 45, 0.15)',
+                0.7,
+                isDarkMode ? 'rgba(254, 79, 45, 0.5)' : 'rgba(254, 79, 45, 0.25)',
+                1,
+                isDarkMode ? 'rgba(157, 247, 229, 0.6)' : 'rgba(254, 79, 45, 0.4)',
+              ],
+            },
+          },
+          'points-glow-outer'
+        );
 
         loading = false;
+        currentZoom = map.getZoom();
+        startSpinning();
+        updateDynamicCallouts();
+        setupHoverInteraction();
+      });
+
+      map.on('moveend', updateDynamicCallouts);
+      map.on('move', () => {
+        if (visibleCallouts.length > 0) {
+          visibleCallouts = visibleCallouts.map((c) => {
+            const feature = geojsonData.features.find(
+              (f) => (f.properties.name || f.properties.project) === c.name
+            );
+            if (!feature) return c;
+            const point = map.project(feature.geometry.coordinates);
+            return { ...c, x: point.x, y: point.y };
+          });
+        }
       });
     } catch (err) {
       console.error('Map error:', err);
@@ -376,204 +541,540 @@
     }
   });
 
-  function handleClearFilter() {
-    clearMapFilter();
-    if (draw) {
-      draw.deleteAll();
-    }
-    console.log('Map filter cleared');
-  }
-
-  // Helper function to check if point is in polygon using ray casting
-  function pointInPolygon(x, y, polygon) {
-    let inside = false;
-    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-      const xi = polygon[i][0],
-        yi = polygon[i][1];
-      const xj = polygon[j][0],
-        yj = polygon[j][1];
-
-      const intersect = yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
-      if (intersect) inside = !inside;
-    }
-    return inside;
-  }
-
-  // Update map visualization when filter changes
-  $effect(() => {
-    const filter = $mapFilter;
-    if (!map || !map.getLayer('points') || !map.getSource('points')) return;
-
-    if (filter) {
-      if (isPolygonFilter(filter)) {
-        // For polygons, we need to re-filter the source data
-        const source = map.getSource('points');
-        const originalData = source._data;
-        const polyCoords = filter.coordinates;
-
-        // Filter features by polygon
-        const filteredFeatures = originalData.features.map((feature) => {
-          const lon = feature.properties.lon;
-          const lat = feature.properties.lat;
-          const isInside = pointInPolygon(lon, lat, polyCoords);
-
-          return {
-            ...feature,
-            properties: {
-              ...feature.properties,
-              selected: isInside,
-            },
-          };
-        });
-
-        map.getSource('points').setData({
-          type: 'FeatureCollection',
-          features: filteredFeatures,
-        });
-
-        // Style based on selected property
-        map.setPaintProperty('points', 'circle-opacity', [
-          'case',
-          ['get', 'selected'],
-          0.8, // Selected
-          0.2, // Non-selected
-        ]);
-
-        map.setPaintProperty('points', 'circle-color', [
-          'case',
-          ['get', 'selected'],
-          mapColors.selected,
-          mapColors.unselected,
-        ]);
-      } else if (isBoundsFilter(filter)) {
-        // Rectangle bounds filter
-        const { north, south, east, west } = filter;
-
-        map.setPaintProperty('points', 'circle-opacity', [
-          'case',
-          [
-            'all',
-            ['>=', ['get', 'lat'], south],
-            ['<=', ['get', 'lat'], north],
-            ['>=', ['get', 'lon'], west],
-            ['<=', ['get', 'lon'], east],
-          ],
-          0.8, // Selected points
-          0.2, // Non-selected points
-        ]);
-
-        map.setPaintProperty('points', 'circle-color', [
-          'case',
-          [
-            'all',
-            ['>=', ['get', 'lat'], south],
-            ['<=', ['get', 'lat'], north],
-            ['>=', ['get', 'lon'], west],
-            ['<=', ['get', 'lon'], east],
-          ],
-          mapColors.selected,
-          mapColors.unselected,
-        ]);
-      }
-    } else {
-      // No filter - reset to default with type colors
-      map.setPaintProperty('points', 'circle-opacity', 0.85);
-      map.setPaintProperty('points', 'circle-color', [
-        'match',
-        ['get', 'tracker'],
-        ...trackerColorStops,
-        mapColors.default,
-      ]);
-    }
+  onDestroy(() => {
+    stopSpinning();
   });
 
-  // Legend data
-  const legendItems = [
-    { label: 'Coal Plant', color: trackerToMapColor['Coal Plant'] || mapColors.default },
-    { label: 'Coal Mine', color: trackerToMapColor['Coal Mine'] || mapColors.default },
-    { label: 'Gas Plant', color: trackerToMapColor['Gas Plant'] || mapColors.default },
-    { label: 'Steel Plant', color: trackerToMapColor['Steel Plant'] || mapColors.default },
-    { label: 'Iron Mine', color: trackerToMapColor['Iron Mine'] || mapColors.default },
-    { label: 'Bioenergy', color: trackerToMapColor['Bioenergy Power'] || mapColors.default },
-  ];
+  function toggleSpin() {
+    isSpinning = !isSpinning;
+    if (isSpinning && !userInteracting) {
+      startSpinning();
+    } else {
+      stopSpinning();
+    }
+  }
 
-  // Compute search URL with query params
-  const searchUrl = $derived(
-    $mapFilter
-      ? `${link('asset/search')}?${
-          isPolygonFilter($mapFilter)
-            ? `polygon=${encodeURIComponent(JSON.stringify($mapFilter.coordinates))}`
-            : `bounds=${encodeURIComponent(JSON.stringify($mapFilter))}`
-        }`
-      : ''
-  );
+  function formatCapacity(mw) {
+    if (!mw) return '';
+    if (mw >= 1000) return `${(mw / 1000).toFixed(1)} GW`;
+    return `${Math.round(mw)} MW`;
+  }
 </script>
 
-<div class="map-wrapper">
-  <div bind:this={mapContainer} class="map"></div>
+<div class="globe-wrapper" class:dark={isDarkMode} class:light={!isDarkMode}>
+  <!-- SVG filter for glow effect -->
+  <svg class="filters" aria-hidden="true">
+    <defs>
+      <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation="2" result="coloredBlur" />
+        <feMerge>
+          <feMergeNode in="coloredBlur" />
+          <feMergeNode in="SourceGraphic" />
+        </feMerge>
+      </filter>
+      <filter id="glow-strong" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation="4" result="coloredBlur" />
+        <feMerge>
+          <feMergeNode in="coloredBlur" />
+          <feMergeNode in="coloredBlur" />
+          <feMergeNode in="SourceGraphic" />
+        </feMerge>
+      </filter>
+    </defs>
+  </svg>
 
-  <!-- Hover popup with AssetMicroCard -->
-  {#if popupAsset}
-    <div class="hover-popup" style="left: {popupPosition.x}px; top: {popupPosition.y}px;">
-      <AssetMicroCard
-        id={popupAsset.id}
-        name={popupAsset.name}
-        tracker={popupAsset.tracker}
-        status={popupAsset.status}
-        country={popupAsset.country}
-        capacity={popupAsset.capacity}
-        owner={popupAsset.owner}
+  <div bind:this={mapContainer} class="globe"></div>
+
+  <!-- Dynamic callouts -->
+  {#each visibleCallouts as callout}
+    <div
+      class="callout"
+      class:callout-left={callout.angle < 0}
+      style="
+        left: {callout.x}px;
+        top: {callout.y}px;
+        opacity: {callout.opacity};
+      "
+    >
+      <div class="callout-line" style="transform: rotate({callout.angle}deg)"></div>
+      <div
+        class="callout-label"
+        style="transform: translate({callout.angle >= 0
+          ? '50px'
+          : '-100%'}, -50%) translateX({callout.angle >= 0 ? '0' : '-50px'})"
+      >
+        <span class="callout-name">{callout.name}</span>
+        <span class="callout-meta">
+          <span class="callout-type">{callout.tracker}</span>
+          {#if callout.capacity}
+            <span class="callout-capacity">{formatCapacity(callout.capacity)}</span>
+          {/if}
+        </span>
+      </div>
+    </div>
+  {/each}
+
+  <!-- Spin control -->
+  <button
+    class="spin-toggle"
+    onclick={toggleSpin}
+    aria-label={isSpinning ? 'Pause rotation' : 'Resume rotation'}
+  >
+    <span class="spin-icon">{isSpinning ? '⏸' : '▶'}</span>
+  </button>
+
+  <!-- Stats -->
+  <div class="stats-overlay">
+    <div class="stat-item">
+      <span class="stat-value"
+        >{totalAssetCount?.toLocaleString() ||
+          geojsonData?.features?.length?.toLocaleString() ||
+          '—'}</span
+      >
+      <span class="stat-label">Assets Tracked</span>
+    </div>
+  </div>
+
+  <!-- Asset tooltip (only when zoomed in) - matches /compose exactly -->
+  {#if hoveredAsset && currentZoom >= TOOLTIP_MIN_ZOOM}
+    <div
+      class="asset-tooltip"
+      class:loading={tooltipLoading}
+      style="left: {tooltipPosition.x + 12}px; top: {tooltipPosition.y - 10}px;"
+    >
+      <ProjectCard
+        asset={{
+          id: hoveredAsset.id,
+          name: hoveredAsset.name,
+          status: hoveredAsset.status,
+          country: hoveredAsset.country,
+          capacity: hoveredAsset.capacity,
+          owner: hoveredAsset.owner,
+          tracker: hoveredAsset.tracker,
+        }}
         variant="compact"
+        open={true}
+        showLink={false}
       />
+      {#if tooltipLoading}
+        <div class="tooltip-loading">
+          <div class="tooltip-spinner"></div>
+        </div>
+      {/if}
     </div>
   {/if}
 
-  {#if $mapFilter}
-    <div class="filter-indicator">
-      <span>Geographic filter active</span>
-      <a href={searchUrl} class="view-assets-btn"> View Assets </a>
-      <button class="clear-filter-btn" onclick={handleClearFilter}> Clear (ESC) </button>
+  <!-- Legend (clickable to toggle layers) -->
+  <div class="legend">
+    <div class="legend-title">Asset Types</div>
+    <div class="legend-items">
+      <button
+        class="legend-item"
+        class:disabled={!visibleGroups.coal}
+        onclick={() => toggleTrackerGroup('coal')}
+      >
+        <span class="legend-dot" style="--dot-color: {mapColors.coal}"></span>
+        <span>Coal</span>
+      </button>
+      <button
+        class="legend-item"
+        class:disabled={!visibleGroups.gas}
+        onclick={() => toggleTrackerGroup('gas')}
+      >
+        <span class="legend-dot" style="--dot-color: {mapColors.gas}"></span>
+        <span>Gas/Oil</span>
+      </button>
+      <button
+        class="legend-item"
+        class:disabled={!visibleGroups.steel}
+        onclick={() => toggleTrackerGroup('steel')}
+      >
+        <span class="legend-dot" style="--dot-color: {mapColors.steel}"></span>
+        <span>Steel/Iron</span>
+      </button>
+      <button
+        class="legend-item"
+        class:disabled={!visibleGroups.bioenergy}
+        onclick={() => toggleTrackerGroup('bioenergy')}
+      >
+        <span class="legend-dot" style="--dot-color: {mapColors.bioenergy}"></span>
+        <span>Bioenergy</span>
+      </button>
+    </div>
+  </div>
+
+  {#if loading}
+    <div class="overlay loading">
+      <div class="loading-spinner"></div>
+      <span class="loading-text">Loading assets...</span>
     </div>
   {/if}
-  {#if loading}
-    <div class="overlay loading">Loading map...</div>
-  {/if}
+
   {#if error}
     <div class="overlay error">{error}</div>
   {/if}
-  <div class="map-instructions">
-    SHIFT+drag for rectangle • Click polygon tool to draw custom shapes
-  </div>
-  <div class="legend">
-    {#each legendItems as item}
-      <div class="legend-item">
-        <span class="legend-dot" style="background: {item.color}"></span>
-        <span class="legend-label">{item.label}</span>
-      </div>
-    {/each}
-  </div>
 </div>
 
 <style>
-  .map-wrapper {
-    position: relative;
-    width: 100%;
-    height: 80vh;
-    min-height: 600px;
-    overflow: visible;
+  .filters {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
   }
 
-  .map {
+  .globe-wrapper {
+    position: relative;
+    width: 100%;
+    height: var(--globe-height, 92vh);
+    min-height: var(--globe-min-height, 700px);
+    overflow: hidden;
+    transition: background-color 0.3s ease;
+  }
+
+  /* Dark mode - GEM Core Palette */
+  .globe-wrapper.dark {
+    --bg-color: #002430; /* midnight */
+    --bg-ocean: #001820;
+    --text-color: #a5e9e4; /* mintDataviz */
+    --text-muted: #7fa4b1; /* navy-50 */
+    --panel-bg: rgba(0, 36, 48, 0.92);
+    --panel-border: #016b83; /* teal */
+    --glow-color: rgba(165, 233, 228, 0.4); /* mintDataviz */
+    --accent: #fe4f2d; /* orange */
+    --stat-color: #a5e9e4; /* mintDataviz */
+    --navy: #004a63;
+    --teal: #016b83;
+    background: var(--bg-color);
+  }
+
+  /* Light mode - GEM Core Palette */
+  .globe-wrapper.light {
+    --bg-color: #f2f2eb; /* warmWhite */
+    --bg-ocean: #f2f2eb;
+    --text-color: #1d4961; /* primary blue */
+    --text-muted: #1d4961; /* primary blue */
+    --panel-bg: rgba(255, 255, 255, 0.96);
+    --panel-border: #1d4961; /* primary blue */
+    --glow-color: rgba(29, 73, 97, 0.25); /* primary blue */
+    --accent: #fe4f2d; /* orange */
+    --stat-color: #1d4961; /* primary blue */
+    --navy: #1d4961;
+    --teal: #1d4961;
+    background: var(--bg-color);
+  }
+
+  .globe {
     width: 100%;
     height: 100%;
   }
 
-  /* Ensure maplibre-gl-draw controls have space */
-  .map-wrapper :global(.maplibregl-ctrl-top-right) {
-    right: 10px;
-    top: 10px;
+  /* Apply blend mode to map canvas for better point overlap */
+  .globe-wrapper.dark :global(.maplibregl-canvas) {
+    mix-blend-mode: screen;
   }
 
+  .globe-wrapper.light :global(.maplibregl-canvas) {
+    mix-blend-mode: multiply;
+  }
+
+  .globe-wrapper :global(.maplibregl-ctrl-attrib) {
+    display: none;
+  }
+
+  /* Callouts */
+  .callout {
+    position: absolute;
+    pointer-events: none;
+    z-index: 10;
+    transition: opacity 0.4s ease;
+  }
+
+  .callout-line {
+    position: absolute;
+    width: 45px;
+    height: 1px;
+    background: linear-gradient(to right, var(--teal) 0%, transparent 100%);
+    transform-origin: left center;
+    opacity: 0.8;
+  }
+
+  .callout-left .callout-line {
+    transform-origin: right center;
+    background: linear-gradient(to left, var(--teal) 0%, transparent 100%);
+  }
+
+  .callout-label {
+    position: absolute;
+    white-space: nowrap;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 8px 12px;
+    background: var(--panel-bg);
+    border-left: 3px solid var(--teal);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  }
+
+  .callout-left .callout-label {
+    border-left: none;
+    border-right: 3px solid var(--teal);
+  }
+
+  .callout-name {
+    font-family: var(--font-family-data, 'Roboto Condensed', sans-serif);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-color);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .callout-meta {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .callout-type {
+    font-size: 9px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .callout-capacity {
+    font-family: var(--font-family-data, 'Roboto Condensed', sans-serif);
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.02em;
+  }
+
+  /* Spin toggle */
+  .spin-toggle {
+    position: absolute;
+    bottom: 24px;
+    right: 24px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--panel-bg);
+    border: 2px solid var(--teal);
+    color: var(--teal);
+    font-size: 14px;
+    cursor: pointer;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  }
+
+  .spin-toggle:hover {
+    background: var(--teal);
+    color: var(--bg-color);
+    transform: scale(1.08);
+    box-shadow: 0 4px 20px var(--glow-color);
+  }
+
+  .spin-icon {
+    font-size: 12px;
+  }
+
+  /* Stats */
+  .stats-overlay {
+    position: absolute;
+    top: 24px;
+    right: 24px;
+    z-index: 20;
+    text-align: right;
+  }
+
+  .stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    padding: 12px 16px;
+    background: var(--panel-bg);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-right: 3px solid var(--teal);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  }
+
+  .stat-value {
+    font-family: var(--font-family-data, 'Roboto Condensed', sans-serif);
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--stat-color);
+    line-height: 1;
+    letter-spacing: -0.01em;
+  }
+
+  .globe-wrapper.dark .stat-value {
+    text-shadow: 0 0 30px var(--glow-color);
+  }
+
+  .globe-wrapper.light .stat-value {
+    text-shadow: 0 2px 8px rgba(0, 74, 99, 0.15);
+  }
+
+  .stat-label {
+    font-family: var(--font-family-data, 'Roboto Condensed', sans-serif);
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  /* Legend */
+  .legend {
+    position: absolute;
+    bottom: 24px;
+    left: 24px;
+    z-index: 20;
+    padding: 14px 18px;
+    background: var(--panel-bg);
+    border-left: 3px solid var(--teal);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  }
+
+  .legend-title {
+    font-family: var(--font-family-data, 'Roboto Condensed', sans-serif);
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--teal);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--teal);
+    opacity: 0.8;
+  }
+
+  .legend-items {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 11px;
+    color: var(--text-color);
+    letter-spacing: 0.02em;
+    background: none;
+    border: none;
+    padding: 4px 6px;
+    margin: -4px -6px;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
+    text-align: left;
+    width: calc(100% + 12px);
+  }
+
+  .legend-item:hover {
+    opacity: 0.8;
+  }
+
+  .legend-item.disabled {
+    opacity: 0.35;
+  }
+
+  .legend-item.disabled .legend-dot {
+    box-shadow: none;
+  }
+
+  .legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--dot-color);
+    box-shadow:
+      0 0 8px var(--dot-color),
+      0 0 2px var(--dot-color);
+    transition: box-shadow 0.15s ease;
+  }
+
+  /* Asset tooltip on hover - matches /compose exactly */
+  .asset-tooltip {
+    position: fixed;
+    z-index: 1000;
+    max-width: 320px;
+    pointer-events: none;
+    animation: tooltipFadeIn 0.15s ease-out;
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-radius: 12px;
+    padding: 4px;
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.12),
+      0 2px 8px rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+  }
+
+  @keyframes tooltipFadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .asset-tooltip :global(.project-card) {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+  }
+
+  .asset-tooltip :global(.project-card summary) {
+    background: transparent;
+    cursor: default;
+  }
+
+  .asset-tooltip :global(.details-section) {
+    background: transparent;
+  }
+
+  .asset-tooltip.loading :global(.project-card) {
+    opacity: 0.7;
+  }
+
+  .tooltip-loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+
+  .tooltip-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid transparent;
+    border-top-color: var(--teal);
+    border-right-color: var(--teal);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+  }
+
+  /* Loading */
   .overlay {
     position: absolute;
     top: 0;
@@ -581,139 +1082,74 @@
     right: 0;
     bottom: 0;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    background: color-mix(in srgb, var(--color-white) 95%, transparent);
-    font-size: 14px;
-    z-index: 10;
+    gap: 16px;
+    background: var(--bg-color);
+    z-index: 100;
   }
 
-  .overlay.loading {
-    color: var(--color-text-secondary);
+  .loading-spinner {
+    width: 32px;
+    height: 32px;
+    border: 2px solid transparent;
+    border-top-color: var(--teal);
+    border-right-color: var(--teal);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  .loading-text {
+    font-family: var(--font-family-data, 'Roboto Condensed', sans-serif);
+    font-size: 11px;
+    color: var(--teal);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .overlay.error {
-    color: var(--color-error);
+    color: var(--accent);
     font-weight: 500;
   }
 
-  .filter-indicator {
-    position: absolute;
-    top: 10px;
-    left: 50%;
-    transform: translateX(-50%);
-    color: var(--color-text-secondary);
-    padding: 0;
-    z-index: 20;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    font-size: 12px;
-    font-weight: bold;
-  }
-
-  .view-assets-btn {
-    background: transparent;
-    border: 0;
-    color: var(--color-text-secondary);
-    padding: 0;
-    cursor: pointer;
-    font-size: 10px;
-    font-weight: bold;
-    transition: all 0.2s;
-    text-decoration: none;
-    display: inline-block;
-  }
-
-  .view-assets-btn:hover {
-    color: var(--color-text-primary);
-  }
-
-  .clear-filter-btn {
-    background: transparent;
-    border: 0;
-    color: var(--color-text-secondary);
-    padding: 0;
-    cursor: pointer;
-    font-size: 10px;
-    font-weight: bold;
-    transition: background 0.2s;
-  }
-
-  .clear-filter-btn:hover {
-    color: var(--color-text-primary);
-  }
-
-  .map-instructions {
-    position: absolute;
-    bottom: 10px;
-    left: 50%;
-    transform: translateX(-50%);
-    color: var(--color-text-secondary);
-    padding: 0;
-    font-size: 10px;
-    z-index: 20;
-    pointer-events: none;
-  }
-
-  .legend {
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    padding: 0;
-    z-index: 20;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    font-size: 11px;
-  }
-
-  .legend-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .legend-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    border: 0;
-  }
-
-  .legend-label {
-    color: var(--color-gray-700);
-    font-weight: 500;
-  }
-
-  /* Hover popup */
-  .hover-popup {
-    position: absolute;
-    transform: translate(-50%, -100%);
-    z-index: 100;
-    pointer-events: none;
-    animation: popup-appear 0.12s ease-out;
-  }
-
-  .hover-popup::after {
+  /* Vignette - subtle in both modes */
+  .globe-wrapper::after {
     content: '';
     position: absolute;
-    bottom: -8px;
-    left: 50%;
-    transform: translateX(-50%);
-    border: 8px solid transparent;
-    border-top-color: white;
-    border-bottom: none;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    border-radius: inherit;
   }
 
-  @keyframes popup-appear {
-    from {
-      opacity: 0;
-      transform: translate(-50%, -95%);
-    }
-    to {
-      opacity: 1;
-      transform: translate(-50%, -100%);
-    }
+  .globe-wrapper.dark::after {
+    background: radial-gradient(ellipse at center, transparent 35%, rgba(0, 8, 16, 0.6) 100%);
+  }
+
+  .globe-wrapper.light::after {
+    background: radial-gradient(ellipse at center, transparent 50%, rgba(242, 242, 235, 0.4) 100%);
+  }
+
+  /* Refined academic border */
+  .globe-wrapper::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    border: 1px solid var(--navy);
+    opacity: 0.15;
+    z-index: 5;
   }
 </style>

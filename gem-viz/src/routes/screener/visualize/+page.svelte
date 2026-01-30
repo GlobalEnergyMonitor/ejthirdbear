@@ -131,7 +131,10 @@
 
 <svelte:head>
   <title>Ownership Networks — Global Energy Monitor</title>
-  <meta name="description" content="Visualize ownership network connections between selected companies and their energy asset portfolios." />
+  <meta
+    name="description"
+    content="Visualize ownership network connections between selected companies and their energy asset portfolios."
+  />
 </svelte:head>
 
 <main>
