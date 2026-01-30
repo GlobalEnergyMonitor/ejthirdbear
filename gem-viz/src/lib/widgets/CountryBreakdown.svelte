@@ -6,6 +6,7 @@
 
   import { onMount } from 'svelte';
   import { getCountryBreakdown } from '$lib/duckdb-queries';
+  import DataSourceBadge from '$lib/components/DataSourceBadge.svelte';
 
   // Props
   let { limit = 15, tracker = null, title = 'Assets by Country' } = $props();
@@ -48,7 +49,7 @@
 <div class="widget country-breakdown">
   <header>
     <h3>{title}</h3>
-    <span class="query-time">{queryTime}ms</span>
+    <DataSourceBadge source="motherduck" queryTime={queryTime} size="sm" />
   </header>
 
   {#if loading}
@@ -95,7 +96,7 @@
   .query-time {
     font-size: 10px;
     color: var(--color-text-tertiary);
-    font-family: monospace;
+    font-family: var(--font-family-data);
   }
 
   .loading,
@@ -135,13 +136,13 @@
   }
   .bar {
     height: 100%;
-    background: var(--color-gray-700);
+    background: var(--gem-navy);
     transition: width 0.3s ease;
   }
   .count {
     min-width: 40px;
     text-align: right;
-    font-family: monospace;
+    font-family: var(--font-family-data);
     color: var(--color-text-secondary);
   }
 </style>

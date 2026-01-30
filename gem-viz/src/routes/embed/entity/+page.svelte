@@ -65,7 +65,7 @@
 </script>
 
 <svelte:head>
-  <title>{entityName} | GEM Viz Embed</title>
+  <title>{entityName} — GEM Embed</title>
   <meta name="robots" content="noindex" />
 </svelte:head>
 

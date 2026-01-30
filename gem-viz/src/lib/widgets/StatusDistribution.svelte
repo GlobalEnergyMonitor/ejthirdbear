@@ -6,7 +6,8 @@
 
   import { onMount } from 'svelte';
   import { getStatusDistribution } from '$lib/duckdb-queries';
-  import { regroupStatus, colors } from '$lib/design-tokens';
+  import { regroupStatus, statusColors as designStatusColors } from '$lib/design-tokens';
+  import DataSourceBadge from '$lib/components/DataSourceBadge.svelte';
 
   // Props
   let { tracker = null, title = 'Status Distribution' } = $props();
@@ -18,14 +19,9 @@
   let queryTime = $state(0);
   let total = $state(0);
 
-  // Status colors
-  const statusColors = {
-    operating: '#4A57A8',
-    proposed: colors.yellow,
-    retired: colors.midnightPurple,
-    cancelled: colors.grey,
-    unknown: '#ddd',
-  };
+  // Use centralized status colors from design tokens
+  // Fossil assets: red scale, Retired: grey-teal, Cancelled: light grey
+  const statusColors = designStatusColors;
 
   async function loadData() {
     loading = true;
@@ -107,7 +103,7 @@
 <div class="widget status-distribution">
   <header>
     <h3>{title}</h3>
-    <span class="query-time">{queryTime}ms</span>
+    <DataSourceBadge source="motherduck" queryTime={queryTime} size="sm" />
   </header>
 
   {#if loading}
@@ -165,7 +161,7 @@
   .query-time {
     font-size: 10px;
     color: var(--color-text-tertiary);
-    font-family: monospace;
+    font-family: var(--font-family-data);
   }
 
   .loading,
@@ -219,7 +215,7 @@
     color: var(--color-gray-700);
   }
   .pct {
-    font-family: monospace;
+    font-family: var(--font-family-data);
     color: var(--color-text-secondary);
   }
 </style>

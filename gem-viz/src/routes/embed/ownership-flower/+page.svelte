@@ -29,7 +29,7 @@
 </script>
 
 <svelte:head>
-  <title>Ownership Flower | GEM Viz Embed</title>
+  <title>Ownership Flower — GEM Embed</title>
   <meta name="robots" content="noindex" />
 </svelte:head>
 

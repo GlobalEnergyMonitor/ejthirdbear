@@ -190,7 +190,8 @@
      ============================================================================ -->
 
 <svelte:head>
-  <title>Search Results — GEM Viz</title>
+  <title>Asset Search — Global Energy Monitor</title>
+  <meta name="description" content="Search for energy assets by name, ID, location, or owner in the Global Energy Monitor database." />
 </svelte:head>
 
 <main>

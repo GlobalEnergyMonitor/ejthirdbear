@@ -20,7 +20,8 @@
 </script>
 
 <svelte:head>
-  <title>Dataset Factsheets - GEM Viz</title>
+  <title>Dataset Factsheets — Global Energy Monitor</title>
+  <meta name="description" content="Explore detailed field-level documentation for each tracker dataset including Coal Plants, Gas Plants, Steel Plants, and more." />
 </svelte:head>
 
 <main>

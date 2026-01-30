@@ -126,7 +126,7 @@
 </script>
 
 <svelte:head>
-  <title>{tracker} Factsheet | GEM Viz Embed</title>
+  <title>{tracker} Factsheet — GEM Embed</title>
   <meta name="robots" content="noindex" />
 </svelte:head>
 

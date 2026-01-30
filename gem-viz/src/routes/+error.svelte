@@ -28,7 +28,7 @@
 </script>
 
 <svelte:head>
-  <title>{status} — GEM Viz</title>
+  <title>Error {status} — Global Energy Monitor</title>
 </svelte:head>
 
 <main>

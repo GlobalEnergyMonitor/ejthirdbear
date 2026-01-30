@@ -11,12 +11,7 @@
   import { page } from '$app/stores';
   import { entityLink } from '$lib/links';
   import { colors, colorByStatus } from '$lib/design-tokens';
-  import { getAsset, getOwnershipGraph } from '$lib/ownership-api';
-  import {
-    getAssetFallback,
-    getAssetOwnersFallback,
-    getAssetLocationFallback,
-  } from '$lib/duckdb-queries';
+  import { fetchAssetData } from '$lib/asset-data';
   import { logApiFallback } from '$lib/api-fallback-log';
 
   // Components
@@ -26,6 +21,7 @@
   import StatusIcon from '$lib/components/StatusIcon.svelte';
   import AddToCartButton from '$lib/components/AddToCartButton.svelte';
   import Citation from '$lib/components/Citation.svelte';
+  import DataSourceBadge from '$lib/components/DataSourceBadge.svelte';
   import { DagreOwnershipGraph, OwnershipSummaryTables } from '$lib/components/ownership';
 
   /**
@@ -88,6 +84,9 @@
   let asset = $state(data?.asset || null);
   let graph = $state(data?.graph || null);
 
+  /** @type {'api' | 'motherduck' | 'duckdb' | 'server' | null} */
+  let dataSource = $state(data?.asset ? 'server' : null);
+
   const assetId = $derived(asset?.id || '');
   const assetName = $derived(asset?.name || assetId);
 
@@ -113,67 +112,8 @@
     Object.entries(asset?.raw || {}).filter(([, value]) => value != null && value !== '')
   );
 
-  // --- DUCKDB FALLBACK ---
-  /**
-   * Load asset data from local DuckDB/parquet when API fails
-   * Uses centralized DuckDB queries from $lib/duckdb-queries
-   * @param {string} assetId
-   * @returns {Promise<{asset: AssetData, graph: GraphData}>}
-   */
-  async function loadFromDuckDB(assetId) {
-    // Use centralized DuckDB queries
-    const [assetResult, ownersResult, locationResult] = await Promise.all([
-      getAssetFallback(assetId),
-      getAssetOwnersFallback(assetId),
-      getAssetLocationFallback(assetId),
-    ]);
-
-    if (!assetResult.success || !assetResult.data?.length) {
-      throw new Error(`Asset '${assetId}' not found in local data`);
-    }
-
-    const assetRow = assetResult.data[0];
-    const location = locationResult.data?.[0];
-    const owners = ownersResult.data || [];
-
-    // Build asset object
-    /** @type {AssetData} */
-    const assetData = {
-      id: String(assetRow.id || ''),
-      name: String(assetRow.name || ''),
-      facilityType: String(assetRow.tracker || ''),
-      status: String(assetRow.status || ''),
-      capacity: assetRow.capacity != null ? Number(assetRow.capacity) : undefined,
-      country: location?.country ? String(location.country) : undefined,
-      latitude: location?.latitude != null ? Number(location.latitude) : undefined,
-      longitude: location?.longitude != null ? Number(location.longitude) : undefined,
-      raw: { ...assetRow },
-    };
-
-    // Build simple graph with owners
-    /** @type {GraphNode[]} */
-    const nodes = [
-      { id: String(assetId), Name: String(assetRow.name || ''), type: 'asset' },
-      ...owners.map((o) => ({
-        id: String(o.ownerEntityId || `owner-${o.ownerName}`),
-        Name: String(o.ownerName || ''),
-        type: 'entity',
-      })),
-    ];
-
-    /** @type {GraphEdge[]} */
-    const edges = owners.map((o) => ({
-      source: String(o.ownerEntityId || `owner-${o.ownerName}`),
-      target: String(assetId),
-      value: Number(o.share) || 0,
-    }));
-
-    /** @type {{ asset: AssetData, graph: GraphData }} */
-    const result = { asset: assetData, graph: { nodes, edges } };
-    return result;
-  }
-
   // --- DATA FETCHING (client-side fallback) ---
+  // Uses unified asset-data layer that handles both API and DuckDB sources
   onMount(async () => {
     const paramsId = get(page)?.params?.id || data?.assetId;
 
@@ -193,50 +133,26 @@
       loading = true;
       if (!paramsId) throw new Error('Missing asset ID');
 
-      // Try API first
-      try {
-        const [assetData, graphData] = await Promise.all([
-          getAsset(paramsId),
-          getOwnershipGraph({ root: paramsId, direction: 'up', max_depth: 12 }),
-        ]);
+      // Use unified data layer - tries API first, falls back to DuckDB
+      const result = await fetchAssetData(paramsId);
 
-        asset = assetData;
-        graph = graphData;
-        console.log(`[API] Loaded asset ${paramsId} from API`);
-      } catch (apiError) {
-        // API failed - try DuckDB fallback
-        let fallbackSuccess = false;
-        let assetName = '';
+      if (result.source === 'none' || !result.asset) {
+        throw new Error(result.error || `Asset '${paramsId}' not found`);
+      }
 
-        try {
-          const duckdbData = await loadFromDuckDB(paramsId);
-          asset = duckdbData.asset;
-          graph = duckdbData.graph;
-          assetName = duckdbData.asset?.name || '';
-          fallbackSuccess = true;
-          console.log(`[DuckDB] Loaded asset ${paramsId} from local parquet`);
-        } catch (duckdbError) {
-          // Both failed
-          console.error(`[FALLBACK FAILED] Asset ${paramsId} not found in API or DuckDB`);
+      asset = result.asset;
+      graph = result.graph;
+      dataSource = result.source;
+      console.log(`[${result.source.toUpperCase()}] Loaded asset ${paramsId}`);
 
-          // Log the complete failure
-          logApiFallback({
-            assetId: paramsId,
-            apiError: apiError?.message || 'API returned 404',
-            fallbackSource: 'none',
-            fallbackSuccess: false,
-          });
-
-          throw duckdbError;
-        }
-
-        // Log successful fallback for API team reporting
+      // Log fallback usage for API team reporting
+      if (result.source === 'motherduck') {
         logApiFallback({
           assetId: paramsId,
-          assetName,
-          apiError: apiError?.message || 'API returned 404 (ID format mismatch)',
-          fallbackSource: 'duckdb',
-          fallbackSuccess,
+          assetName: result.asset?.name || '',
+          apiError: 'API returned 404 (ID format mismatch)',
+          fallbackSource: 'motherduck',
+          fallbackSuccess: true,
         });
       }
     } catch (err) {
@@ -252,7 +168,8 @@
      ============================================================================ -->
 
 <svelte:head>
-  <title>{assetName || assetId} — GEM Viz</title>
+  <title>{assetName || assetId} — Global Energy Monitor</title>
+  <meta name="description" content="Ownership details and corporate structure for {assetName || assetId} from the Global Energy Monitor database." />
 </svelte:head>
 
 <main>
@@ -263,7 +180,10 @@
   {:else}
     <article class="asset-detail">
       <!-- Header -->
-      <h1>{assetName || assetId}</h1>
+      <div class="header-row">
+        <h1>{assetName || assetId}</h1>
+        <DataSourceBadge source={dataSource} size="md" />
+      </div>
       <p class="asset-id">GEM Unit ID: {assetId}</p>
       <div class="page-actions">
         <AddToCartButton
@@ -450,7 +370,11 @@
       </section>
 
       <!-- Citation -->
-      <Citation variant="footer" trackers={asset?.facilityType ? [asset.facilityType] : []} />
+      <Citation
+        variant="footer"
+        trackers={asset?.facilityType ? [asset.facilityType] : []}
+        {dataSource}
+      />
     </article>
   {/if}
 
@@ -474,7 +398,9 @@
   /* Layout */
   main {
     width: 100%;
+    max-width: 100%;
     padding: var(--space-10);
+    overflow-x: hidden;
   }
 
   /* Loading/Error */
@@ -489,6 +415,13 @@
   /* Typography */
   .asset-detail {
     font-family: var(--font-family-serif);
+  }
+  .header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    flex-wrap: wrap;
   }
   h1 {
     font-size: var(--font-size-3xl);
@@ -633,13 +566,15 @@
   .properties dl {
     display: grid;
     gap: var(--space-4);
+    overflow: hidden;
   }
   .property {
     display: grid;
-    grid-template-columns: 250px 1fr;
+    grid-template-columns: minmax(120px, 200px) minmax(0, 1fr);
     gap: var(--space-5);
     padding: var(--space-3) 0;
     border-bottom: var(--border-width) solid var(--color-gray-100);
+    max-width: 100%;
   }
   .property:last-child {
     border-bottom: none;
@@ -655,6 +590,8 @@
     font-size: var(--font-size-md);
     color: var(--color-black);
     margin: 0;
+    word-break: break-word;
+    overflow-wrap: anywhere;
   }
 
   /* JSON Dump */
@@ -692,8 +629,8 @@
     font-size: var(--font-size-sm);
     line-height: var(--leading-relaxed);
     overflow: auto;
-    background: var(--color-code-bg, #1e1e1e);
-    color: var(--color-code-text, #d4d4d4);
+    background: var(--gem-midnight);
+    color: var(--color-gray-200);
     max-height: 600px;
   }
 

@@ -51,7 +51,7 @@
       loading = true;
       error = null;
 
-      const pageSize = 1000;
+      const pageSize = 500;
       let offset = 0;
       let hasMore = true;
       const results = [];
@@ -77,7 +77,8 @@
      ============================================================================ -->
 
 <svelte:head>
-  <title>All Assets — GEM Viz</title>
+  <title>Browse Assets — Global Energy Monitor</title>
+  <meta name="description" content="Browse all energy assets in the Global Energy Monitor database including coal plants, gas plants, steel facilities, and more." />
 </svelte:head>
 
 <main>

@@ -16,6 +16,8 @@
   import { Deck, OrthographicView } from '@deck.gl/core';
   import { ScatterplotLayer } from '@deck.gl/layers';
   import { colors, hexToRgb, colorByTracker } from '$lib/design-tokens';
+  import { ASSET_ID_COALESCE_O } from '$lib/duckdb-queries';
+  import DataSourceBadge from '$lib/components/DataSourceBadge.svelte';
 
   // DuckDB utilities - loaded dynamically
   let loadParquetFromPath, query;
@@ -187,7 +189,7 @@
         QUALIFY ROW_NUMBER() OVER (PARTITION BY "GEM.location.ID" ORDER BY "GEM.location.ID") = 1
       )
       SELECT DISTINCT
-        o."GEM unit ID" as id,
+        ${ASSET_ID_COALESCE_O} as id,
         o.Project as name,
         o.Tracker as tracker,
         o.Status as status,
@@ -411,7 +413,8 @@
 </script>
 
 <svelte:head>
-  <title>Global Asset Explorer — GEM Viz</title>
+  <title>Global Asset Map — Global Energy Monitor</title>
+  <meta name="description" content="Interactive map visualization of energy assets worldwide. Filter by tracker type, status, and country to explore the global energy infrastructure." />
 </svelte:head>
 
 <div class="explorer">
@@ -435,8 +438,7 @@
         <span class="stat-label">countries</span>
       </div>
       <div class="stat query-stat">
-        <span class="stat-value">{queryTime}ms</span>
-        <span class="stat-label">query</span>
+        <DataSourceBadge source="local" label="DuckDB" queryTime={queryTime} />
       </div>
     </div>
   </header>
@@ -510,7 +512,7 @@
                 <div
                   class="bar-fill"
                   style="width: {item.pct * 100}%; background: {colorByTracker.get(item.tracker) ||
-                    '#888'}"
+                    colors.gray500}"
                 ></div>
               </div>
               <span class="bar-value">{Math.round(item.pct * 100)}%</span>
@@ -577,7 +579,7 @@
           <div class="legend-item">
             <span
               class="legend-dot"
-              style="background: {colorByTracker.get(item.tracker) || '#888'}"
+              style="background: {colorByTracker.get(item.tracker) || colors.gray500}"
             ></span>
             <span>{item.tracker}</span>
           </div>
@@ -836,7 +838,7 @@
   .map-container {
     flex: 1;
     position: relative;
-    background: #1a1a2e;
+    background: var(--gem-midnight);
   }
 
   .deck-container {

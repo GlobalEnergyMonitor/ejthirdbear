@@ -18,7 +18,8 @@
 </script>
 
 <svelte:head>
-  <title>Data Manifest — GEM Viz Admin</title>
+  <title>Data Manifest — Global Energy Monitor</title>
+  <meta name="description" content="Technical data manifest showing available datasets, schema information, and data freshness for the Global Energy Monitor ownership database." />
 </svelte:head>
 
 <main>
@@ -259,7 +260,7 @@
     padding: var(--space-1) var(--space-2);
   }
   .error-banner {
-    background: var(--color-error-bg, #fee);
+    background: var(--color-error-light);
     border: var(--border-width) solid var(--color-error);
     padding: var(--space-3);
     margin-top: var(--space-4);

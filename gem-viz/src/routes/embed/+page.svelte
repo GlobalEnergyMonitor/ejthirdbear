@@ -7,7 +7,8 @@
 </script>
 
 <svelte:head>
-  <title>Embeddable Widgets | GEM Viz</title>
+  <title>Embeddable Widgets — Global Energy Monitor</title>
+  <meta name="description" content="Embed interactive ownership visualizations from Global Energy Monitor on your website or in reports." />
 </svelte:head>
 
 <div class="embed-index">
@@ -82,6 +83,91 @@
         <dd>Optional. "true" (default) or "false".</dd>
         <dt>showTitle</dt>
         <dd>Optional. "true" (default) or "false".</dd>
+      </dl>
+    </article>
+
+    <article class="widget-card">
+      <h2>Ownership Graph</h2>
+      <p>
+        Interactive dagre-based ownership hierarchy graph showing upstream or downstream
+        relationships.
+      </p>
+      <code class="example-url">{base}/embed/ownership-graph?entityId=E12345&direction=up</code>
+      <h3>Parameters</h3>
+      <dl>
+        <dt>entityId</dt>
+        <dd>Required. The entity ID to display.</dd>
+        <dt>direction</dt>
+        <dd>
+          Optional. "up" (who owns this entity) or "down" (what this entity owns). Default: "up".
+        </dd>
+        <dt>showPies</dt>
+        <dd>Optional. Show ownership percentage pies (default: true).</dd>
+      </dl>
+    </article>
+
+    <article class="widget-card">
+      <h2>Ultimate Owners</h2>
+      <p>Shows the ultimate parent owners at the top of the ownership chain.</p>
+      <code class="example-url">{base}/embed/ultimate-owners?entityId=E12345</code>
+      <h3>Parameters</h3>
+      <dl>
+        <dt>entityId</dt>
+        <dd>Required. The entity ID to display.</dd>
+      </dl>
+    </article>
+
+    <article class="widget-card">
+      <h2>Ownership Flow Diagram</h2>
+      <p>Mermaid-based flowchart visualization of ownership relationships.</p>
+      <code class="example-url">{base}/embed/ownership-mermaid?entityId=E12345</code>
+      <h3>Parameters</h3>
+      <dl>
+        <dt>entityId</dt>
+        <dd>Required. The entity ID to display.</dd>
+        <dt>direction</dt>
+        <dd>Optional. "BT" (bottom-to-top) or "TB" (top-to-bottom). Default: "BT".</dd>
+        <dt>zoom</dt>
+        <dd>Optional. Zoom level (default: 0.7).</dd>
+      </dl>
+    </article>
+
+    <article class="widget-card">
+      <h2>3D Network Graph</h2>
+      <p>Interactive 3D force-directed ownership network visualization.</p>
+      <code class="example-url">{base}/embed/network-3d?entityId=E12345&height=600</code>
+      <h3>Parameters</h3>
+      <dl>
+        <dt>entityId</dt>
+        <dd>Required. The entity ID to display.</dd>
+        <dt>height</dt>
+        <dd>Optional. Height in pixels (default: 500).</dd>
+        <dt>maxHops</dt>
+        <dd>Optional. Maximum relationship hops to show (default: 3).</dd>
+      </dl>
+    </article>
+
+    <article class="widget-card">
+      <h2>Full Network Explorer</h2>
+      <p>Complete D3 force-directed network explorer with interactive controls.</p>
+      <code class="example-url">{base}/embed/network-explorer?entityId=E12345</code>
+      <h3>Parameters</h3>
+      <dl>
+        <dt>entityId</dt>
+        <dd>Required. The entity ID to display.</dd>
+      </dl>
+    </article>
+
+    <article class="widget-card">
+      <h2>Asset Ring</h2>
+      <p>Circular visualization of asset distribution by type and status.</p>
+      <code class="example-url">{base}/embed/asset-ring?entityId=E12345</code>
+      <h3>Parameters</h3>
+      <dl>
+        <dt>entityId</dt>
+        <dd>Required. The entity ID to display.</dd>
+        <dt>maxAssets</dt>
+        <dd>Optional. Maximum assets to display (default: 150).</dd>
       </dl>
     </article>
   </section>

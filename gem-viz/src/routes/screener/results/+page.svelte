@@ -1,39 +1,28 @@
 <script>
   /**
-   * ASSET-CLASS SCREENER - Step 3: Results
-   * Rich analysis view showing owners with detailed asset breakdowns.
-   * Data-dense Tufte-style presentation with expandable rows.
-   * Uses DuckDB queries on parquet for full asset details.
+   * ASSET-CLASS SCREENER - Results
+   *
+   * Shows OWNERS who have exposure to selected asset classes.
+   * Designed for investigative journalists building dossiers.
+   *
+   * Key features:
+   * - Search/filter to find specific companies from your watchlist
+   * - Add to Investigation cart for building reports
+   * - Natural language descriptions of ownership exposure
    */
 
-  import { link, assetPath } from '$lib/links';
-  import { goto } from '$app/navigation';
   import { page } from '$app/stores';
-  import { getEntity } from '$lib/ownership-api';
   import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
   import LoadingWrapper from '$lib/components/LoadingWrapper.svelte';
-  import ScreenerStepNav from '$lib/components/ScreenerStepNav.svelte';
-  import FilterBreadcrumbs from '$lib/components/FilterBreadcrumbs.svelte';
-  import DataTable from '$lib/components/DataTable.svelte';
-  import MiniFlower from '$lib/components/MiniFlower.svelte';
-  import OwnershipFlower from '$lib/components/OwnershipFlower.svelte';
-  import StatusIcon from '$lib/components/StatusIcon.svelte';
-  import TrackerIcon from '$lib/components/TrackerIcon.svelte';
-  import { colorByStatus, colorByTracker, regroupStatus } from '$lib/design-tokens';
-  import { formatCompact } from '$lib/format';
-  import { escapeSQL } from '$lib/utils/sql';
-  import { ASSET_ID_COALESCE } from '$lib/duckdb-queries';
+  import DataSourceBadge from '$lib/components/DataSourceBadge.svelte';
+  import { entityLink } from '$lib/links';
+  import { investigationStore } from '$lib/stores/investigation';
 
-  // DuckDB utilities
-  let loadParquetFromPath;
-  let query;
-
-  // Get params from URL
+  // URL params
   const classesParam = $derived($page.url.searchParams.get('classes') || '');
-  const ownersParam = $derived($page.url.searchParams.get('owners') || '');
-  const modeParam = $derived($page.url.searchParams.get('mode') || '');
 
-  // Parse selected classes for display
+  // Parse selected classes
   const selectedClasses = $derived(() => {
     if (!classesParam) return [];
     try {
@@ -43,1774 +32,792 @@
     }
   });
 
-  // Get tracker filter from classes
-  const trackerFilter = $derived(() => {
+  // Build human-readable description of selected class
+  const classDescription = $derived(() => {
     const classes = selectedClasses();
-    if (classes.length > 0 && classes[0].tracker) {
-      return classes[0].tracker;
+    if (classes.length === 0) return 'selected assets';
+
+    const cls = classes[0];
+    const parts = [];
+
+    if (cls.filters?.status) {
+      parts.push(cls.filters.status);
     }
-    return null;
-  });
 
-  // Build filter state for FilterBreadcrumbs component
-  const filterState = $derived(() => {
-    const classes = selectedClasses();
-    const trackers = [];
-    const statuses = [];
+    parts.push(cls.tracker || cls.name || 'assets');
 
-    classes.forEach((cls) => {
-      if (cls.tracker && !trackers.includes(cls.tracker)) {
-        trackers.push(cls.tracker);
-      }
-      if (cls.filters?.status && !statuses.includes(cls.filters.status)) {
-        statuses.push(cls.filters.status);
-      }
-    });
-
-    return {
-      trackers,
-      statuses,
-      countries: [],
-      ownerCountries: [],
-      owners: [],
-      capacityMin: null,
-      capacityMax: null,
-    };
-  });
-
-  // Parse owner IDs
-  const ownerIds = $derived(() => {
-    if (!ownersParam) return [];
-    try {
-      const parsed = JSON.parse(decodeURIComponent(ownersParam));
-      if (Array.isArray(parsed)) return parsed;
-    } catch {
-      // JSON parse failed, fall back to comma-separated
+    if (cls.filters?.geography) {
+      parts.push(`in ${cls.filters.geography}`);
     }
-    return ownersParam.split(',').filter((id) => id.trim());
+
+    return parts.join(' ');
   });
 
-  // Check if showing assets only (no owner filter)
-  const assetOnly = $derived(() => modeParam === 'assets' || ownerIds().length === 0);
-
-  // Results state
-  let matchedResults = $state([]);
-  let unmatchedOwners = $state([]);
-  let assetResults = $state([]);
+  // State
   let loading = $state(true);
   let error = $state(null);
-  let showUnmatchedList = $state(false);
-  let expandedRows = $state(new Set());
-  let currentPage = $state(1);
-  const resultsPerPage = 25;
+  let owners = $state([]);
+  let unmatchedCount = $state(0);
+  let showUnmatched = $state(false);
 
-  // Aggregate stats
-  let totalCapacity = $state(0);
-  let totalAssets = $state(0);
-  let statusBreakdown = $state({});
-  let trackerBreakdown = $state({});
-  let countryBreakdown = $state({});
+  // Data source tracking
+  let dataSource = $state('motherduck');
+  let queryTime = $state(null);
 
-  /**
-   * Build SQL query to fetch assets matching the selected classes (no owner filter)
-   */
-  function buildAssetQuery(classes) {
-    const classConditions = (classes || [])
-      .map((cls) => {
-        const conditions = [];
+  // Search/filter for journalists with watchlists
+  let searchQuery = $state('');
+  let showOnlyInvestigation = $state(false);
 
-        if (cls.tracker) {
-          conditions.push(`Tracker = '${escapeSQL(cls.tracker)}'`);
-        }
+  // Investigation cart state (reactive)
+  let investigationEntities = $state([]);
+  investigationStore.subscribe((state) => {
+    investigationEntities = state.entities;
+  });
 
-        if (cls.filters) {
-          const filterCond = buildFilterCondition(cls.filters);
-          if (filterCond) conditions.push(filterCond);
+  // Filtered owners based on search
+  const filteredOwners = $derived(() => {
+    let result = owners;
 
-          if (cls.filters.status) {
-            conditions.push(`Status ILIKE '${escapeSQL(cls.filters.status)}'`);
-          }
-        }
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter((o) => o.name.toLowerCase().includes(query));
+    }
 
-        return conditions.length > 0 ? `(${conditions.join(' AND ')})` : null;
-      })
-      .filter(Boolean);
+    // Filter to only show entities in investigation
+    if (showOnlyInvestigation) {
+      const investigationIds = new Set(investigationEntities.map((e) => e.id));
+      result = result.filter((o) => investigationIds.has(o.entityId));
+    }
 
-    const whereClause = classConditions.length > 0 ? `AND (${classConditions.join(' OR ')})` : '';
-    const limitClause = classConditions.length === 0 ? 'LIMIT 50000' : '';
+    return result;
+  });
 
-    return `
-      SELECT
-        ${ASSET_ID_COALESCE} as id,
-        MAX("Project") as name,
-        MAX(Status) as status,
-        MAX(Tracker) as tracker,
-        MAX("Capacity (MW)") as capacity
-      FROM ownership
-      WHERE ${ASSET_ID_COALESCE} IS NOT NULL
-        AND ${ASSET_ID_COALESCE} != ''
-        ${whereClause}
-      GROUP BY ${ASSET_ID_COALESCE}
-      ORDER BY capacity DESC NULLS LAST
-      ${limitClause}
-    `;
+  // Check if entity is in investigation
+  function isInInvestigation(entityId) {
+    return investigationEntities.some((e) => e.id === entityId);
   }
 
-  /**
-   * Build SQL WHERE clause from asset class filter
-   */
-  function buildFilterCondition(filter) {
-    if (!filter || !filter.field || !filter.operator) return null;
-
-    const field = filter.field;
-    const op = filter.operator;
-    const value = filter.value;
-
-    const fieldMap = {
-      'Capacity (MW)': '"Capacity (MW)"',
-      Status: 'Status',
-      Captive: 'Captive',
-      'Start Year': '"Start Year"',
-      'Main production equipment': '"Main production equipment"',
-      'Water Depth (m)': '"Water Depth (m)"',
-      'Capacity (Mtpa)': '"Capacity (Mtpa)"',
-      'Mine Type': '"Mine Type"',
-      'Capacity (ttpa)': '"Capacity (ttpa)"',
-      'Capacity (Bcm/y)': '"Capacity (Bcm/y)"',
-      Feedstock: 'Feedstock',
-    };
-
-    const sqlField = fieldMap[field] || `"${field}"`;
-
-    switch (op) {
-      case '>':
-      case '<':
-      case '>=':
-      case '<=':
-        return `${sqlField} ${op} ${Number(value) || 0}`;
-      case '=':
-        return `${sqlField} ILIKE '${escapeSQL(String(value))}'`;
-      case 'contains':
-        return `${sqlField} ILIKE '%${escapeSQL(String(value))}%'`;
-      case 'not_empty':
-        return `${sqlField} IS NOT NULL AND ${sqlField} != ''`;
-      case 'in': {
-        const vals = String(value)
-          .split(',')
-          .map((v) => `'${escapeSQL(v.trim())}'`)
-          .join(',');
-        return `${sqlField} IN (${vals})`;
-      }
-      default:
-        return null;
+  // Toggle entity in investigation
+  function toggleInvestigation(owner) {
+    if (isInInvestigation(owner.entityId)) {
+      investigationStore.removeEntity(owner.entityId);
+    } else {
+      investigationStore.addEntity({
+        id: owner.entityId,
+        name: owner.name,
+        type: 'entity',
+      });
     }
   }
 
-  // Status display order
-  const statusOrder = [
-    'operating',
-    'construction',
-    'pre-construction',
-    'permitted',
-    'announced',
-    'proposed',
-    'mothballed',
-    'retired',
-    'cancelled',
-    'shelved',
-  ];
+  // Add all visible results to investigation
+  function addAllToInvestigation() {
+    const toAdd = filteredOwners()
+      .filter((o) => o.entityId && !isInInvestigation(o.entityId))
+      .map((o) => ({ id: o.entityId, name: o.name, type: 'entity' }));
+    investigationStore.addEntities(toAdd);
+  }
 
-  // Load data on mount using DuckDB
+  // Load owners data
   onMount(async () => {
     try {
-      // Initialize DuckDB
-      const duckdbUtils = await import('$lib/duckdb-utils');
-      loadParquetFromPath = duckdbUtils.loadParquetFromPath;
-      query = duckdbUtils.query;
-
-      const ownershipPath = assetPath('all_trackers_ownership@1.parquet');
-      await loadParquetFromPath(ownershipPath, 'ownership');
-
-      if (assetOnly()) {
-        const classes = selectedClasses();
-        const sql = buildAssetQuery(classes);
-        const result = await query(sql);
-
-        if (!result.success) {
-          throw new Error(result.error || 'Query failed');
-        }
-
-        const assets = (result.data || []).map((row) => {
-          const status = (row.status || 'unknown').toLowerCase();
-          const tracker = row.tracker || 'Unknown';
-          const country = row.country || 'Unknown';
-          const capacity = parseFloat(row.capacity) || 0;
-
-          return {
-            id: row.id,
-            name: row.name || row.id,
-            tracker,
-            status,
-            country,
-            capacity,
-          };
-        });
-
-        assetResults = assets;
-
-        let aggCapacity = 0;
-        const aggStatus = {};
-        const aggTracker = {};
-        const aggCountry = {};
-
-        assets.forEach((asset) => {
-          aggCapacity += asset.capacity || 0;
-          aggStatus[asset.status] = (aggStatus[asset.status] || 0) + 1;
-          aggTracker[asset.tracker] = (aggTracker[asset.tracker] || 0) + 1;
-          aggCountry[asset.country] = (aggCountry[asset.country] || 0) + 1;
-        });
-
-        totalAssets = assets.length;
-        totalCapacity = aggCapacity;
-        statusBreakdown = aggStatus;
-        trackerBreakdown = aggTracker;
-        countryBreakdown = aggCountry;
+      const classes = selectedClasses();
+      if (classes.length === 0) {
+        error = 'No asset class selected. Go back and select one.';
         loading = false;
         return;
       }
 
-      const ids = ownerIds();
-      if (ids.length === 0) {
-        loading = false;
-        return;
+      // Try MotherDuck first, fall back to local DuckDB
+      let queryFn;
+      dataSource = 'motherduck';
+
+      try {
+        const motherduck = await import('$lib/motherduck-wasm');
+        await motherduck.initMotherDuck();
+        queryFn = motherduck.query;
+      } catch (mdErr) {
+        console.warn('MotherDuck unavailable, using local DuckDB:', mdErr);
+        dataSource = 'local';
+        const duckdb = await import('$lib/duckdb-utils');
+        const { assetPath } = await import('$lib/links');
+        await duckdb.loadParquetFromPath(
+          assetPath('all_trackers_ownership@1.parquet'),
+          'ownership'
+        );
+        queryFn = duckdb.query;
       }
 
-      // Build tracker filter clause
-      const tracker = trackerFilter();
-      const trackerClause = tracker ? `AND Tracker = '${tracker.replace(/'/g, "''")}'` : '';
+      const cls = classes[0];
+      const trackerVal = cls?.tracker;
+      const statusVal = cls?.filters?.status;
 
-      // Query for each owner's assets
-      const matched = [];
-      const unmatched = [];
+      const trackerClause = trackerVal ? `AND "Tracker" = '${trackerVal.replace(/'/g, "''")}'` : '';
+      const statusClause = statusVal ? `AND "Status" ILIKE '${statusVal.replace(/'/g, "''")}'` : '';
 
-      for (const id of ids) {
-        try {
-          // Get entity info from API
-          const entity = await getEntity(id);
+      const tableName =
+        dataSource === 'motherduck' ? 'gem_data.ownership.all_trackers_ownership' : 'ownership';
 
-          // Query parquet for assets owned by this entity
-          const sql = `
-            SELECT
-              ${ASSET_ID_COALESCE} as gem_id,
-              "Project" as name,
-              Status,
-              Tracker,
-              Country,
-              "Capacity (MW)" as capacity,
-              "Ownership %" as ownership_pct
-            FROM ownership
-            WHERE "Owner GEM Entity ID" = '${id.replace(/'/g, "''")}'
+      const queryStartTime = performance.now();
+
+      // Query for owners with both total assets and filtered assets
+      const sql = `
+        WITH owner_totals AS (
+          SELECT
+            "Owner" as name,
+            "Owner GEM Entity ID" as entity_id,
+            COUNT(DISTINCT COALESCE("GEM unit ID", "GEM Mine ID", "Steel Plant ID", "GEM Asset ID", "ProjectID")) as total_assets
+          FROM ${tableName}
+          WHERE "Owner" IS NOT NULL AND "Owner" != ''
+          GROUP BY "Owner", "Owner GEM Entity ID"
+        ),
+        owner_filtered AS (
+          SELECT
+            "Owner" as name,
+            "Owner GEM Entity ID" as entity_id,
+            COUNT(DISTINCT COALESCE("GEM unit ID", "GEM Mine ID", "Steel Plant ID", "GEM Asset ID", "ProjectID")) as filtered_assets
+          FROM ${tableName}
+          WHERE "Owner" IS NOT NULL AND "Owner" != ''
             ${trackerClause}
-            ORDER BY "Capacity (MW)" DESC NULLS LAST
-            LIMIT 100
-          `;
+            ${statusClause}
+          GROUP BY "Owner", "Owner GEM Entity ID"
+        )
+        SELECT
+          t.name,
+          t.entity_id,
+          t.total_assets,
+          COALESCE(f.filtered_assets, 0) as filtered_assets
+        FROM owner_totals t
+        LEFT JOIN owner_filtered f ON t.entity_id = f.entity_id
+        WHERE f.filtered_assets > 0
+        ORDER BY f.filtered_assets DESC, t.total_assets DESC
+        LIMIT 200
+      `;
 
-          const result = await query(sql);
+      const result = await queryFn(sql);
+      queryTime = performance.now() - queryStartTime;
 
-          if (!result.success || !result.data || result.data.length === 0) {
-            // Try without tracker filter to see if owner exists
-            const checkSql = `
-              SELECT COUNT(*) as cnt
-              FROM ownership
-              WHERE "Owner GEM Entity ID" = '${id.replace(/'/g, "''")}'
-            `;
-            const checkResult = await query(checkSql);
-            const hasAnyAssets = checkResult.success && checkResult.data?.[0]?.cnt > 0;
-
-            if (!hasAnyAssets) {
-              unmatched.push({ id, name: entity?.name || id, reason: 'No assets found' });
-            } else {
-              // Has assets but none match filter
-              matched.push({
-                id,
-                name: entity?.name || id,
-                country: entity?.headquartersCountry || '',
-                totalAssets: checkResult.data[0].cnt,
-                matchedAssets: 0,
-                capacity: 0,
-                assets: [],
-                statusBreakdown: {},
-                trackerBreakdown: {},
-                countryBreakdown: {},
-              });
-            }
-            continue;
-          }
-
-          // Calculate breakdowns
-          const ownerStatusBreakdown = {};
-          const ownerTrackerBreakdown = {};
-          const ownerCountryBreakdown = {};
-          let ownerCapacity = 0;
-
-          const assets = result.data.map((row) => {
-            const status = (row.Status || 'unknown').toLowerCase();
-            ownerStatusBreakdown[status] = (ownerStatusBreakdown[status] || 0) + 1;
-
-            const t = row.Tracker || 'Unknown';
-            ownerTrackerBreakdown[t] = (ownerTrackerBreakdown[t] || 0) + 1;
-
-            const country = row.Country || 'Unknown';
-            ownerCountryBreakdown[country] = (ownerCountryBreakdown[country] || 0) + 1;
-
-            const cap = parseFloat(row.capacity) || 0;
-            ownerCapacity += cap;
-
-            return {
-              gem_id: row.gem_id,
-              name: row.name || row.gem_id,
-              status: status,
-              tracker: row.Tracker,
-              country: row.Country,
-              capacity: cap,
-              ownershipPct: row.ownership_pct,
-            };
-          });
-
-          matched.push({
-            id,
-            name: entity?.name || id,
-            country: entity?.headquartersCountry || '',
-            totalAssets: assets.length,
-            matchedAssets: assets.length,
-            capacity: ownerCapacity,
-            assets,
-            statusBreakdown: ownerStatusBreakdown,
-            trackerBreakdown: ownerTrackerBreakdown,
-            countryBreakdown: ownerCountryBreakdown,
-          });
-        } catch (err) {
-          console.error(`Failed to load data for ${id}:`, err);
-          unmatched.push({ id, name: id, reason: err?.message || 'Query failed' });
-        }
+      if (!result.success) {
+        throw new Error(result.error || 'Query failed');
       }
 
-      // Sort by capacity descending
-      matched.sort((a, b) => b.capacity - a.capacity);
-      matchedResults = matched;
-      unmatchedOwners = unmatched;
+      owners = (result.data || []).map((row) => ({
+        name: row.name || 'Unknown',
+        entityId: row.entity_id || null,
+        totalAssets: Number(row.total_assets) || 0,
+        filteredAssets: Number(row.filtered_assets) || 0,
+      }));
 
-      // Calculate aggregates
-      let aggCapacity = 0;
-      let aggAssets = 0;
-      const aggStatus = {};
-      const aggTracker = {};
-      const aggCountry = {};
-
-      matched.forEach((owner) => {
-        aggCapacity += owner.capacity;
-        aggAssets += owner.matchedAssets;
-
-        Object.entries(owner.statusBreakdown).forEach(([status, count]) => {
-          aggStatus[status] = (aggStatus[status] || 0) + count;
-        });
-
-        Object.entries(owner.trackerBreakdown).forEach(([tracker, count]) => {
-          aggTracker[tracker] = (aggTracker[tracker] || 0) + count;
-        });
-
-        Object.entries(owner.countryBreakdown).forEach(([country, count]) => {
-          aggCountry[country] = (aggCountry[country] || 0) + count;
-        });
-      });
-
-      totalCapacity = aggCapacity;
-      totalAssets = aggAssets;
-      statusBreakdown = aggStatus;
-      trackerBreakdown = aggTracker;
-      countryBreakdown = aggCountry;
+      loading = false;
     } catch (err) {
-      console.error('Results page error:', err);
-      error = err?.message || 'Failed to load results';
-    } finally {
+      console.error('Failed to load owners:', err);
+      error = err?.message || 'Failed to load data';
       loading = false;
     }
   });
 
-  // Toggle row expansion
-  function toggleRow(id) {
-    const newSet = new Set(expandedRows);
-    if (newSet.has(id)) {
-      newSet.delete(id);
+  // Natural language helpers
+  function describeTotal(count) {
+    if (count === 1) return 'Ownership stakes in 1 asset in Global Energy Ownership Tracker';
+    return `Ownership stakes in ${count} assets in Global Energy Ownership Tracker`;
+  }
+
+  function describeFiltered(count, description) {
+    if (count === 1) return `Ownership stakes in one ${description}`;
+    return `Ownership stakes in ${count} ${description}`;
+  }
+
+  function removeAssetClass(index) {
+    const classes = selectedClasses();
+    classes.splice(index, 1);
+    if (classes.length === 0) {
+      goto('/screener/');
     } else {
-      newSet.add(id);
-    }
-    expandedRows = newSet;
-  }
-
-  // Format capacity
-  function formatCapacity(mw) {
-    if (!mw || mw === 0) return '—';
-    if (mw >= 1000) {
-      return `${(mw / 1000).toFixed(1)} GW`;
-    }
-    return `${formatCompact(mw)} MW`;
-  }
-
-  // Get status color
-  function getStatusColor(status) {
-    return colorByStatus.get(status) || '#888';
-  }
-
-  // Get tracker color
-  function getTrackerColor(tracker) {
-    return colorByTracker.get(tracker) || '#888';
-  }
-
-  // Compute donut chart arcs for status
-  function getStatusArcs(breakdown, total) {
-    const arcs = [];
-    let startAngle = -Math.PI / 2;
-    const cx = 50,
-      cy = 50,
-      r = 45,
-      innerR = 28;
-
-    // Group into operating/proposed/retired/cancelled
-    const grouped = {};
-    for (const [status, count] of Object.entries(breakdown)) {
-      const group = regroupStatus(status);
-      grouped[group] = (grouped[group] || 0) + count;
-    }
-
-    const statusColors = {
-      operating: colorByStatus.get('operating') || '#4A57A8',
-      proposed: colorByStatus.get('proposed') || '#E5A835',
-      retired: colorByStatus.get('retired') || '#6B5B95',
-      cancelled: colorByStatus.get('cancelled') || '#888',
-      unknown: '#ddd',
-    };
-
-    const sortedStatuses = ['operating', 'proposed', 'retired', 'cancelled'].filter(
-      (s) => grouped[s] > 0
-    );
-
-    for (const status of sortedStatuses) {
-      const count = grouped[status];
-      const angle = (count / total) * 2 * Math.PI;
-      const endAngle = startAngle + angle;
-
-      const x1 = cx + r * Math.cos(startAngle);
-      const y1 = cy + r * Math.sin(startAngle);
-      const x2 = cx + r * Math.cos(endAngle);
-      const y2 = cy + r * Math.sin(endAngle);
-      const x3 = cx + innerR * Math.cos(endAngle);
-      const y3 = cy + innerR * Math.sin(endAngle);
-      const x4 = cx + innerR * Math.cos(startAngle);
-      const y4 = cy + innerR * Math.sin(startAngle);
-
-      const largeArc = angle > Math.PI ? 1 : 0;
-
-      arcs.push({
-        path: `M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} L ${x3} ${y3} A ${innerR} ${innerR} 0 ${largeArc} 0 ${x4} ${y4} Z`,
-        color: statusColors[status] || '#ddd',
-        status,
-        count,
-        pct: Math.round((count / total) * 100),
-      });
-
-      startAngle = endAngle;
-    }
-
-    return arcs;
-  }
-
-  // Derived donut arcs
-  const statusArcs = $derived(totalAssets > 0 ? getStatusArcs(statusBreakdown, totalAssets) : []);
-
-  // Pagination
-  const allResults = $derived(assetOnly() ? assetResults : matchedResults);
-  const totalResults = $derived(allResults.length);
-  const totalPages = $derived(Math.ceil(totalResults / resultsPerPage));
-  const paginatedResults = $derived(() => {
-    const start = (currentPage - 1) * resultsPerPage;
-    const end = start + resultsPerPage;
-    return allResults.slice(start, end);
-  });
-
-  function goToPage(page) {
-    const pageNum = Math.max(1, Math.min(page, totalPages));
-    if (pageNum !== currentPage) {
-      currentPage = pageNum;
-      expandedRows.clear();
+      goto(`/screener/results?classes=${encodeURIComponent(JSON.stringify(classes))}`);
     }
   }
-
-  // Calculate percentage
-  function pct(value, total) {
-    if (!total) return 0;
-    return (value / total) * 100;
-  }
-
-  // Top N items from breakdown
-  function topN(breakdown, n = 5) {
-    return Object.entries(breakdown)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, n);
-  }
-
-  // Navigation
-  function goBack() {
-    goto(link(`screener/owners?classes=${encodeURIComponent(classesParam)}`));
-  }
-
-  function continueToVisualize() {
-    const ownerIdList = matchedResults.map((o) => o.id).join(',');
-    goto(
-      link(
-        `screener/visualize?classes=${encodeURIComponent(classesParam)}&owners=${encodeURIComponent(ownerIdList)}`
-      )
-    );
-  }
-
-  function visualizeSingle(ownerId) {
-    goto(
-      link(
-        `screener/visualize?classes=${encodeURIComponent(classesParam)}&owners=${encodeURIComponent(ownerId)}`
-      )
-    );
-  }
-
-  // Asset table columns for DataTable
-  const assetTableColumns = [
-    { key: 'name', label: 'Asset Name', sortable: true, width: '50%' },
-    { key: 'tracker', label: 'Tracker', sortable: true, width: '20%' },
-    { key: 'status', label: 'Status', sortable: true, width: '15%' },
-    { key: 'capacity', label: 'Capacity (MW)', sortable: true, type: 'number', width: '15%' },
-  ];
-
-  // Format asset data for DataTable
-  const assetTableData = $derived(() => {
-    return assetResults.map((asset) => ({
-      ...asset,
-      tracker: asset.tracker || 'Unknown',
-      status: (asset.status || 'unknown').toLowerCase(),
-      capacity: parseFloat(asset.capacity) || 0,
-      _href: link(`asset/${asset.id}`),
-    }));
-  });
 </script>
 
 <svelte:head>
-  <title>Screening Results — GEM Ownership Tracker</title>
+  <title>Screener Results — Global Energy Monitor</title>
+  <meta name="description" content="View companies with ownership exposure to selected asset classes and add them to your investigation." />
 </svelte:head>
 
 <main>
   <div class="screener-layout">
-    <ScreenerStepNav currentStep={3} {classesParam} {ownersParam} />
-
     <!-- Header -->
     <header class="screener-header">
-      <div class="header-content">
-        <h1>Screening Results</h1>
-        {#if trackerFilter()}
-          <p class="filter-badge">{trackerFilter()}</p>
-        {/if}
+      <div class="header-left">
+        <h1>Asset-Class Screener</h1>
+        <p class="subtitle">
+          Evaluate companies' ownership stakes in classes of fossil fuel assets. Start by selecting
+          asset-classes below, or building your own query.
+        </p>
       </div>
+
+      <!-- Selected asset-classes panel -->
+      <aside class="selected-classes">
+        <button class="panel-toggle"> ▼ View selected asset-classes </button>
+        <div class="panel-content">
+          {#each selectedClasses() as cls, i}
+            <div class="selected-class">
+              <span class="class-name">{cls.description || classDescription()}</span>
+              <button class="remove-btn" onclick={() => removeAssetClass(i)}>Remove</button>
+            </div>
+          {:else}
+            <p class="no-selection">No asset classes selected</p>
+          {/each}
+          <a href="/screener/" class="add-link">Add/change asset classes</a>
+        </div>
+      </aside>
     </header>
 
-    <!-- Active Filters -->
-    {#if filterState().trackers.length > 0 || filterState().statuses.length > 0}
-      <div class="filter-display">
-        <FilterBreadcrumbs filters={filterState()} compact={true} />
-      </div>
-    {/if}
+    <LoadingWrapper {loading} {error} loadingMessage="Finding owners...">
+      <!-- Results section -->
+      <section class="results-section">
+        <div class="results-header">
+          <div class="results-title-row">
+            <h2>Owner Search Results</h2>
+            <DataSourceBadge source={dataSource} queryTime={queryTime} />
+          </div>
+          <span class="result-count">
+            {filteredOwners().length} of {owners.length} owners
+          </span>
+        </div>
 
-    <LoadingWrapper
-      {loading}
-      {error}
-      empty={matchedResults.length === 0 &&
-        unmatchedOwners.length === 0 &&
-        assetResults.length === 0}
-      loadingMessage="Analyzing ownership data..."
-      emptyMessage={assetOnly() ? 'No assets found.' : 'No owners selected.'}
-    >
-      <!-- Aggregate Stats Panel -->
-      {#if matchedResults.length > 0 || assetResults.length > 0}
-        <section class="stats-panel">
-          <div class="stats-hero">
-            <!-- Big numbers -->
-            <div class="stat-group">
-              {#if !assetOnly()}
-                <div class="stat-large">
-                  <span class="stat-value">{matchedResults.length}</span>
-                  <span class="stat-label">{matchedResults.length === 1 ? 'Owner' : 'Owners'}</span>
-                </div>
-              {/if}
-              <div class="stat-large">
-                <span class="stat-value">{formatCompact(totalAssets)}</span>
-                <span class="stat-label">Assets</span>
-              </div>
-              <div class="stat-large">
-                <span class="stat-value">{formatCapacity(totalCapacity)}</span>
-                <span class="stat-label">Total Capacity</span>
-              </div>
-            </div>
-
-            <!-- Status donut chart -->
-            {#if statusArcs.length > 0}
-              <div class="status-donut">
-                <svg viewBox="0 0 100 100" class="donut-svg">
-                  {#each statusArcs as arc}
-                    <path d={arc.path} fill={arc.color}>
-                      <title>{arc.status}: {arc.count.toLocaleString()} ({arc.pct}%)</title>
-                    </path>
-                  {/each}
-                  <text
-                    x="50"
-                    y="50"
-                    text-anchor="middle"
-                    dominant-baseline="middle"
-                    class="donut-total"
-                  >
-                    {formatCompact(totalAssets)}
-                  </text>
-                </svg>
-                <div class="donut-legend">
-                  {#each statusArcs as arc}
-                    <div class="donut-legend-item">
-                      <StatusIcon status={arc.status} size={10} />
-                      <span class="donut-label">{arc.status}</span>
-                      <span class="donut-count">{arc.pct}%</span>
-                    </div>
-                  {/each}
-                </div>
-              </div>
-            {/if}
-
-            <!-- Aggregate flower showing tracker distribution -->
-            {#if Object.keys(trackerBreakdown).length > 0}
-              <div class="aggregate-flower">
-                <OwnershipFlower
-                  portfolio={{
-                    assets: Object.entries(trackerBreakdown).flatMap(([tracker, count]) =>
-                      Array(count).fill({ tracker })
-                    ),
-                  }}
-                  size="large"
-                  showLabels={false}
-                  showTitle={false}
-                />
-              </div>
+        <!-- Search and filter toolbar -->
+        <div class="search-toolbar">
+          <div class="search-input-wrapper">
+            <input
+              type="text"
+              class="search-input"
+              placeholder="Search for companies on your watchlist..."
+              bind:value={searchQuery}
+            />
+            {#if searchQuery}
+              <button class="clear-search" onclick={() => (searchQuery = '')}>×</button>
             {/if}
           </div>
 
-          <!-- Tracker breakdown with icons -->
-          {#if Object.keys(trackerBreakdown).length > 0}
-            <div class="breakdown-section tracker-section">
-              <h3 class="breakdown-label">By Tracker</h3>
-              <div class="tracker-breakdown">
-                {#each topN(trackerBreakdown, 8) as [tracker, count]}
-                  <div class="tracker-badge" style="--tracker-color: {getTrackerColor(tracker)}">
-                    <TrackerIcon {tracker} size={14} />
-                    <span class="tracker-name">{tracker}</span>
-                    <span class="tracker-count">{count.toLocaleString()}</span>
-                    <div class="tracker-bar" style="width: {pct(count, totalAssets)}%"></div>
-                  </div>
-                {/each}
-              </div>
-            </div>
-          {/if}
+          <div class="toolbar-actions">
+            <label class="filter-toggle">
+              <input type="checkbox" bind:checked={showOnlyInvestigation} />
+              <span>Only show entities in my investigation ({investigationEntities.length})</span>
+            </label>
 
-          <!-- Status breakdown bar -->
-          <div class="breakdown-section">
-            <h3 class="breakdown-label">Status Detail</h3>
-            <div class="breakdown-bar">
-              {#each statusOrder as status}
-                {#if statusBreakdown[status]}
-                  <div
-                    class="bar-segment"
-                    style="width: {pct(
-                      statusBreakdown[status],
-                      totalAssets
-                    )}%; background: {getStatusColor(status)}"
-                    title="{status}: {statusBreakdown[status]} ({Math.round(
-                      pct(statusBreakdown[status], totalAssets)
-                    )}%)"
-                  ></div>
-                {/if}
-              {/each}
-            </div>
-            <div class="breakdown-legend">
-              {#each topN(statusBreakdown, 6) as [status, count]}
-                <span class="legend-item">
-                  <StatusIcon {status} size={10} />
-                  <span class="legend-text">{status}</span>
-                  <span class="legend-count">{count}</span>
-                </span>
-              {/each}
-            </div>
+            {#if filteredOwners().length > 0}
+              <button class="add-all-btn" onclick={addAllToInvestigation}>
+                + Add all {filteredOwners().length} to investigation
+              </button>
+            {/if}
           </div>
+        </div>
 
-          <!-- Country breakdown -->
-          {#if Object.keys(countryBreakdown).length > 1}
-            <div class="breakdown-section">
-              <h3 class="breakdown-label">Top Countries</h3>
-              <div class="country-breakdown">
-                {#each topN(countryBreakdown, 8) as [country, count]}
-                  <div class="country-badge">
-                    <span class="country-name">{country}</span>
-                    <span class="country-count">{count}</span>
-                    <div class="country-bar" style="width: {pct(count, totalAssets)}%"></div>
-                  </div>
-                {/each}
-              </div>
-            </div>
-          {/if}
-        </section>
-      {/if}
-
-      <!-- Asset Results Table (for asset-only mode) -->
-      {#if assetOnly() && assetResults.length > 0}
-        <section class="results-section">
-          <div class="asset-table-wrapper">
-            <DataTable
-              columns={assetTableColumns}
-              data={assetTableData()}
-              pageSize={resultsPerPage}
-              showGlobalSearch={true}
-              showColumnFilters={false}
-              showPagination={true}
-              showExport={false}
-              showColumnToggle={false}
-              showSelection={false}
-              striped={true}
-              onRowClick={(row) => goto(row._href)}
-            >
-              <svelte:fragment slot="cell-name" let:row let:value>
-                <a href={row._href} class="asset-link">{value || row.id}</a>
-              </svelte:fragment>
-              <svelte:fragment slot="cell-tracker" let:value>
-                <div class="tracker-cell">
-                  {#if value}
-                    <TrackerIcon tracker={value} size={12} />
-                    <span>{value}</span>
-                  {/if}
-                </div>
-              </svelte:fragment>
-              <svelte:fragment slot="cell-status" let:value>
-                <div class="status-cell">
-                  <StatusIcon status={value} size={10} />
-                  <span>{value}</span>
-                </div>
-              </svelte:fragment>
-              <svelte:fragment slot="cell-capacity" let:value>
-                <span class="capacity-cell">{formatCapacity(value)}</span>
-              </svelte:fragment>
-            </DataTable>
-          </div>
-        </section>
-      {/if}
-
-      <!-- Unmatched notice -->
-      {#if unmatchedOwners.length > 0}
-        <aside class="unmatched-notice">
-          <p class="unmatched-text">
-            {unmatchedOwners.length}
-            {unmatchedOwners.length === 1 ? 'owner' : 'owners'} could not be matched.
-            <button class="toggle-details" onclick={() => (showUnmatchedList = !showUnmatchedList)}>
-              {showUnmatchedList ? 'Hide' : 'Details'}
-            </button>
-          </p>
-          {#if showUnmatchedList}
-            <ul class="unmatched-list">
-              {#each unmatchedOwners as owner}
-                <li>{owner.name} <span class="reason">— {owner.reason}</span></li>
-              {/each}
-            </ul>
-          {/if}
-        </aside>
-      {/if}
-
-      <!-- Results Table -->
-      {#if !assetOnly() && matchedResults.length > 0}
-        <section class="results-section">
-          <div class="results-list">
-            {#each paginatedResults() as row, i}
-              <div class="result-row" class:expanded={expandedRows.has(row.id)}>
-                <button class="row-main" onclick={() => toggleRow(row.id)}>
-                  <div class="row-rank">{(currentPage - 1) * resultsPerPage + i + 1}</div>
-
-                  <!-- Mini flower showing tracker distribution -->
-                  <div class="row-flower">
-                    <MiniFlower
-                      trackers={Object.entries(row.trackerBreakdown).map(([tracker, count]) => ({
-                        tracker,
-                        count,
-                      }))}
-                      size={36}
-                    />
-                  </div>
-
-                  <div class="row-info">
-                    <div class="row-name">{row.name}</div>
-                    {#if row.country}
-                      <div class="row-country">{row.country}</div>
-                    {/if}
-                  </div>
-
-                  <div class="row-stats">
-                    <div class="row-stat">
-                      <span class="stat-num">{row.matchedAssets}</span>
-                      <span class="stat-text">assets</span>
-                    </div>
-                    <div class="row-stat">
-                      <span class="stat-num">{formatCapacity(row.capacity)}</span>
-                      <span class="stat-text">capacity</span>
-                    </div>
-                  </div>
-
-                  <!-- Status mini-bar -->
-                  <div class="row-status-bar">
-                    {#each statusOrder as status}
-                      {#if row.statusBreakdown[status]}
-                        <div
-                          class="mini-segment"
-                          style="flex: {row.statusBreakdown[status]}; background: {getStatusColor(
-                            status
-                          )}"
-                          title="{status}: {row.statusBreakdown[status]}"
-                        ></div>
-                      {/if}
-                    {/each}
-                  </div>
-
-                  <div class="row-expand">
-                    {expandedRows.has(row.id) ? '−' : '+'}
-                  </div>
-                </button>
-
-                <!-- Expanded details -->
-                <div class="row-details-wrapper" class:expanded={expandedRows.has(row.id)}>
-                  <div class="row-details">
-                    <div class="details-header">
-                      <h4>Assets ({row.matchedAssets})</h4>
-                      <button class="visualize-btn" onclick={() => visualizeSingle(row.id)}>
-                        View in Visualizer →
-                      </button>
-                    </div>
-
-                    <!-- Tracker breakdown for this owner -->
-                    <div class="owner-tracker-breakdown">
-                      {#each topN(row.trackerBreakdown, 5) as [tracker, count]}
-                        <span class="owner-tracker">
-                          <TrackerIcon {tracker} size={12} />
-                          <span class="owner-tracker-count">{count}</span>
-                        </span>
-                      {/each}
-                    </div>
-
-                    <!-- Status breakdown for this owner -->
-                    <div class="owner-breakdown">
-                      {#each topN(row.statusBreakdown, 6) as [status, count]}
-                        <span class="owner-stat">
-                          <StatusIcon {status} size={10} />
-                          <span class="owner-status-name">{status}</span>
-                          <span class="owner-status-count">{count}</span>
-                        </span>
-                      {/each}
-                    </div>
-
-                    <!-- Asset list (show top 10) -->
-                    <div class="asset-list">
-                      {#each row.assets.slice(0, 10) as asset}
-                        <a href={link(`asset/${asset.gem_id || asset.id}`)} class="asset-item">
-                          {#if asset.tracker}
-                            <TrackerIcon tracker={asset.tracker} size={12} />
-                          {/if}
-                          <StatusIcon status={asset.status} size={10} />
-                          <span class="asset-name">{asset.name || asset.gem_id || 'Unknown'}</span>
-                          <span class="asset-meta">
-                            {#if asset.country}
-                              <span class="asset-country">{asset.country}</span>
-                            {/if}
-                            {#if asset.capacity && parseFloat(asset.capacity) > 0}
-                              <span class="asset-capacity"
-                                >{formatCapacity(parseFloat(asset.capacity))}</span
-                              >
-                            {/if}
-                          </span>
-                        </a>
-                      {/each}
-                      {#if row.assets.length > 10}
-                        <a href={link(`entity/${row.id}`)} class="more-assets">
-                          View all {row.assets.length} assets →
-                        </a>
-                      {/if}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            {/each}
-          </div>
-        </section>
-
-        <!-- Pagination Controls (Owner Results Only) -->
-        {#if !assetOnly() && totalPages > 1}
-          <div class="pagination">
-            <button
-              class="pagination-btn"
-              onclick={() => goToPage(currentPage - 1)}
-              disabled={currentPage === 1}
-            >
-              ← Previous
-            </button>
-            <div class="pagination-info">
-              Page {currentPage} of {totalPages} ({totalResults.toLocaleString()} total)
-            </div>
-            <button
-              class="pagination-btn"
-              onclick={() => goToPage(currentPage + 1)}
-              disabled={currentPage === totalPages}
-            >
-              Next →
-            </button>
+        <!-- Investigation cart summary -->
+        {#if investigationEntities.length > 0}
+          <div class="investigation-summary">
+            <strong>Investigation Cart:</strong>
+            {investigationEntities.length} entities selected
+            <a href="/report/" class="report-link">→ Generate Report</a>
           </div>
         {/if}
 
-        <!-- Continue button -->
-        <div class="continue-section">
-          <button class="continue-btn" onclick={continueToVisualize}>
-            Continue to Visualization
-          </button>
-        </div>
-      {/if}
-    </LoadingWrapper>
+        <div class="results-box">
+          <!-- Unmatched notice -->
+          {#if unmatchedCount > 0}
+            <div class="unmatched-notice">
+              <strong>Unmatched Owners:</strong>
+              {unmatchedCount} from your search didn't find matches,
+              <button class="link-btn" onclick={() => (showUnmatched = !showUnmatched)}>
+                {showUnmatched ? 'hide list' : 'view list'}.
+              </button>
+            </div>
+          {/if}
 
-    <!-- Navigation -->
-    <nav class="nav-buttons">
-      <button class="back-btn" onclick={goBack}> ← Back to Owner Selection </button>
-    </nav>
+          <!-- Matched owners intro -->
+          <div class="matched-intro">
+            <strong>Matched Owners:</strong> Click any company name to explore ownership chains and intermediaries
+          </div>
+
+          <!-- Results table -->
+          <table class="results-table">
+            <thead>
+              <tr>
+                <th class="col-select"></th>
+                <th class="col-company">Company name:</th>
+                <th class="col-total">Total Portfolio:</th>
+                <th class="col-filtered">Exposure to {classDescription()}:</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each filteredOwners() as owner (owner.entityId || owner.name)}
+                {@const inInvestigation = isInInvestigation(owner.entityId)}
+                <tr class:in-investigation={inInvestigation}>
+                  <td class="col-select">
+                    <button
+                      class="select-btn"
+                      class:selected={inInvestigation}
+                      onclick={() => toggleInvestigation(owner)}
+                      title={inInvestigation ? 'Remove from investigation' : 'Add to investigation'}
+                    >
+                      {inInvestigation ? '✓' : '+'}
+                    </button>
+                  </td>
+                  <td class="col-company">
+                    <a href={entityLink(owner.entityId)} class="company-link">
+                      {owner.name}
+                    </a>
+                  </td>
+                  <td class="col-total">
+                    {describeTotal(owner.totalAssets)}
+                  </td>
+                  <td class="col-filtered">
+                    {describeFiltered(owner.filteredAssets, classDescription())}
+                  </td>
+                </tr>
+              {:else}
+                <tr>
+                  <td colspan="4" class="empty-row">
+                    {#if searchQuery}
+                      No owners matching "{searchQuery}" found.
+                      <button class="link-btn" onclick={() => (searchQuery = '')}
+                        >Clear search</button
+                      >
+                    {:else if showOnlyInvestigation}
+                      No entities in your investigation match this asset class.
+                      <button class="link-btn" onclick={() => (showOnlyInvestigation = false)}
+                        >Show all</button
+                      >
+                    {:else}
+                      No owners found for this asset class.
+                    {/if}
+                  </td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </LoadingWrapper>
   </div>
 </main>
 
 <style>
   main {
     min-height: 100vh;
-    background: var(--color-bg-secondary);
+    background: #f5f3ef;
   }
 
   .screener-layout {
-    max-width: 960px;
+    max-width: 1100px;
     margin: 0 auto;
-    padding: var(--space-12) var(--space-8) 120px;
+    padding: var(--space-8) var(--space-6);
   }
 
   /* Header */
   .screener-header {
-    margin-bottom: var(--space-8);
-  }
-
-  .header-content {
-    display: flex;
-    align-items: baseline;
-    gap: var(--space-4);
-  }
-
-  h1 {
-    font-size: var(--font-size-2xl);
-    font-weight: 400;
-    margin: 0;
-    color: var(--color-text-primary);
-    letter-spacing: var(--tracking-tight);
-  }
-
-  .filter-badge {
-    font-size: var(--font-size-body);
-    font-weight: 500;
-    color: var(--color-text-secondary);
-    background: var(--color-border);
-    padding: var(--space-1) var(--space-2);
-    margin: 0;
-  }
-
-  /* Filter Display */
-  .filter-display {
-    margin-bottom: var(--space-6);
-    padding: var(--space-3) 0;
-  }
-
-  /* Stats Panel */
-  .stats-panel {
-    background: var(--color-bg-primary);
-    border: var(--border-width) solid var(--color-border);
-    padding: var(--space-6);
-    margin-bottom: var(--space-8);
-  }
-
-  .aggregate-flower {
-    flex-shrink: 0;
-  }
-
-  .stat-group {
-    display: flex;
-    gap: var(--space-12);
-  }
-
-  .stat-large {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .stat-value {
-    font-size: var(--font-size-3xl);
-    font-weight: 300;
-    color: var(--color-text-primary);
-    line-height: var(--line-height-tight);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .stat-label {
-    font-size: var(--font-size-md);
-    font-weight: 500;
-    color: var(--color-text-tertiary);
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-caps);
-    margin-top: 6px;
-  }
-
-  /* Breakdown sections */
-  .breakdown-section {
-    margin-top: var(--space-5);
-    padding-top: var(--space-5);
-    border-top: var(--border-width) solid var(--color-border-light);
-  }
-
-  .breakdown-label {
-    font-size: var(--font-size-base);
-    font-weight: 500;
-    color: var(--color-text-tertiary);
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-caps);
-    margin: 0 0 var(--space-2) 0;
-  }
-
-  .breakdown-bar {
-    display: flex;
-    height: 8px;
-    overflow: hidden;
-    background: var(--color-gray-100);
-    gap: 1px;
-  }
-
-  .bar-segment {
-    min-width: 3px;
-    transition: width var(--duration-slower) var(--ease-in-out-quad);
-  }
-
-  .breakdown-legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-4);
-    margin-top: var(--space-2);
-  }
-
-  .legend-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: var(--font-size-body);
-    color: var(--color-text-secondary);
-  }
-
-  .legend-count {
-    color: var(--color-text-tertiary);
-    font-variant-numeric: tabular-nums;
-  }
-
-  /* Unmatched notice */
-  .unmatched-notice {
-    margin-bottom: var(--space-6);
-    padding-left: var(--space-3);
-    border-left: 2px solid var(--color-gray-300);
-  }
-
-  .unmatched-text {
-    font-size: var(--font-size-body);
-    color: var(--color-text-secondary);
-    margin: 0;
-  }
-
-  .toggle-details {
-    background: none;
-    border: none;
-    color: var(--color-text-secondary);
-    text-decoration: underline;
-    cursor: pointer;
-    font-size: var(--font-size-body);
-    padding: 0;
-    margin-left: var(--space-1);
-  }
-
-  .toggle-details:hover {
-    color: var(--color-text-primary);
-  }
-
-  .unmatched-list {
-    margin: var(--space-3) 0 0 0;
-    padding: 0;
-    list-style: none;
-  }
-
-  .unmatched-list li {
-    font-size: var(--font-size-body);
-    color: var(--color-text-secondary);
-    padding: var(--space-1) 0;
-  }
-
-  .unmatched-list .reason {
-    color: var(--color-text-tertiary);
-  }
-
-  /* Results Section */
-  .results-section {
-    margin-bottom: var(--space-8);
-  }
-
-  .results-list {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  /* Result Row */
-  .result-row {
-    background: var(--color-bg-primary);
-    border: var(--border-width) solid var(--color-border);
-    transition: border-color var(--duration-slow) var(--ease-in-out-quad);
-  }
-
-  .result-row.expanded {
-    border-color: var(--color-gray-400);
-  }
-
-  .row-main {
-    display: grid;
-    grid-template-columns: 40px 44px 1fr 180px 120px 40px;
-    align-items: center;
-    gap: var(--space-4);
-    width: 100%;
-    padding: var(--space-4) var(--space-5);
-    background: none;
-    border: none;
-    cursor: pointer;
-    text-align: left;
-    font-family: inherit;
-    transition: background var(--duration-base) var(--ease-in-out-quad);
-  }
-
-  .row-flower {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .row-main:hover {
-    background: var(--color-bg-secondary);
-  }
-
-  .row-rank {
-    font-size: var(--font-size-lg);
-    font-weight: 500;
-    color: var(--color-text-tertiary);
-    text-align: center;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .row-info {
-    min-width: 0;
-  }
-
-  .row-name {
-    font-size: var(--font-size-lg);
-    font-weight: 500;
-    color: var(--color-text-primary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .row-country {
-    font-size: var(--font-size-body);
-    color: var(--color-text-tertiary);
-    margin-top: 2px;
-  }
-
-  .row-stats {
-    display: flex;
-    gap: var(--space-6);
-  }
-
-  .row-stat {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-  }
-
-  .stat-num {
-    font-size: var(--font-size-lg);
-    font-weight: 500;
-    color: var(--color-text-primary);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .stat-text {
-    font-size: var(--font-size-base);
-    color: var(--color-text-tertiary);
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-wide);
-  }
-
-  .row-status-bar {
-    display: flex;
-    height: 6px;
-    overflow: hidden;
-    background: var(--color-gray-100);
-    gap: 1px;
-  }
-
-  .mini-segment {
-    min-width: 2px;
-  }
-
-  .row-expand {
-    font-size: var(--font-size-xl);
-    color: var(--color-text-tertiary);
-    text-align: center;
-    font-weight: 300;
-    transition: transform var(--duration-slow) var(--ease-in-out-quad);
-  }
-
-  .result-row.expanded .row-expand {
-    transform: rotate(90deg);
-  }
-
-  /* Expanded Row Details - smooth height animation */
-  .row-details-wrapper {
-    display: grid;
-    grid-template-rows: 0fr;
-    transition: grid-template-rows var(--duration-slow) var(--ease-in-out-quad);
-  }
-
-  .row-details-wrapper.expanded {
-    grid-template-rows: 1fr;
-  }
-
-  .row-details {
-    overflow: hidden;
-    min-height: 0;
-  }
-
-  .row-details-wrapper.expanded .row-details {
-    padding: var(--space-5) var(--space-5) var(--space-6) 76px;
-    background: var(--color-bg-secondary);
-    border-top: var(--border-width) solid var(--color-border-light);
-  }
-
-  .details-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: var(--space-4);
-  }
-
-  .details-header h4 {
-    font-size: var(--font-size-body);
-    font-weight: 500;
-    color: var(--color-text-secondary);
-    margin: 0;
-  }
-
-  .visualize-btn {
-    font-size: var(--font-size-body);
-    color: var(--color-text-secondary);
-    background: none;
-    border: none;
-    text-decoration: underline;
-    cursor: pointer;
-    padding: 0;
-  }
-
-  .visualize-btn:hover {
-    color: var(--color-text-primary);
-  }
-
-  .owner-breakdown {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-4);
-    margin-bottom: var(--space-4);
-  }
-
-  .owner-stat {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: var(--font-size-body);
-    color: var(--color-text-secondary);
-  }
-
-  .asset-list {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-1);
-  }
-
-  .asset-item {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    padding: var(--space-2) var(--space-3);
-    background: var(--color-bg-primary);
-    border: var(--border-width) solid var(--color-border-light);
-    text-decoration: none;
-    color: inherit;
-    transition: border-color var(--transition-fast);
-  }
-
-  .asset-item:hover {
-    border-color: var(--color-gray-300);
-  }
-
-  .asset-name {
-    font-size: var(--font-size-body);
-    color: var(--color-text-primary);
-    flex: 1;
-    min-width: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .asset-meta {
-    font-size: var(--font-size-md);
-    color: var(--color-text-tertiary);
-    flex-shrink: 0;
-  }
-
-  /* Continue Section */
-  .continue-section {
-    display: flex;
-    justify-content: center;
-    padding: var(--space-8) 0;
-    border-top: var(--border-width) solid var(--color-border);
-    margin-top: var(--space-4);
-  }
-
-  .continue-btn {
-    padding: var(--space-5) 56px;
-    font-size: var(--font-size-xl);
-    font-weight: 600;
-    background: var(--color-text-primary);
-    color: var(--color-white);
-    border: none;
-    cursor: pointer;
-    transition: background var(--duration-slow) var(--ease-in-out-quad);
-    letter-spacing: var(--tracking-wide);
-  }
-
-  .continue-btn:hover {
-    background: var(--color-black);
-  }
-
-  /* Navigation */
-  .nav-buttons {
-    padding-top: var(--space-6);
-  }
-
-  .back-btn {
-    padding: var(--space-2) var(--space-4);
-    font-size: var(--font-size-body);
-    background: transparent;
-    color: var(--color-text-secondary);
-    border: var(--border-width) solid var(--color-gray-300);
-    cursor: pointer;
-    transition: all var(--transition-fast);
-  }
-
-  .back-btn:hover {
-    color: var(--color-text-primary);
-    border-color: var(--color-gray-400);
-  }
-
-  /* Stats Hero Layout */
-  .stats-hero {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    gap: var(--space-6);
-    flex-wrap: wrap;
-    margin-bottom: var(--space-6);
-  }
-
-  /* Status Donut Chart */
-  .status-donut {
-    display: flex;
-    align-items: center;
-    gap: var(--space-4);
-  }
-
-  .donut-svg {
-    width: 100px;
-    height: 100px;
-    flex-shrink: 0;
-  }
-
-  .donut-svg path {
-    transition: opacity var(--transition-base);
-  }
-
-  .donut-svg path:hover {
-    opacity: 0.8;
-  }
-
-  .donut-total {
-    font-size: var(--font-size-body);
-    font-weight: 600;
-    fill: var(--color-text-primary);
-  }
-
-  .donut-legend {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .donut-legend-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: var(--font-size-body);
-  }
-
-  .donut-label {
-    text-transform: capitalize;
-    color: var(--color-text-secondary);
-    min-width: 70px;
-  }
-
-  .donut-count {
-    color: var(--color-text-tertiary);
-    font-variant-numeric: tabular-nums;
-  }
-
-  /* Tracker Breakdown */
-  .tracker-section {
-    border-top: none;
-    padding-top: 0;
-    margin-top: var(--space-6);
-  }
-
-  .tracker-breakdown {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: var(--space-2);
-  }
-
-  .tracker-badge {
-    position: relative;
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    padding: var(--space-2) var(--space-3);
-    background: var(--color-bg-primary);
-    border: var(--border-width) solid var(--color-border);
-    overflow: hidden;
-  }
-
-  .tracker-badge .tracker-bar {
-    position: absolute;
-    left: 0;
-    bottom: 0;
-    height: 3px;
-    background: var(--tracker-color, var(--color-text-tertiary));
-    transition: width var(--transition-slow);
-  }
-
-  .tracker-name {
-    font-size: var(--font-size-body);
-    font-weight: 500;
-    color: var(--color-text-primary);
-    flex: 1;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .tracker-count {
-    font-size: var(--font-size-body);
-    color: var(--color-text-secondary);
-    font-variant-numeric: tabular-nums;
-  }
-
-  /* Country Breakdown */
-  .country-breakdown {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    gap: 6px;
-  }
-
-  .country-badge {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-2);
-    padding: var(--space-2) var(--space-3);
-    background: var(--color-bg-primary);
-    border: var(--border-width) solid var(--color-border);
-    overflow: hidden;
-  }
-
-  .country-badge .country-bar {
-    position: absolute;
-    left: 0;
-    bottom: 0;
-    height: 2px;
-    background: var(--color-text-tertiary);
-  }
-
-  .country-name {
-    font-size: var(--font-size-body);
-    color: var(--color-text-primary);
-    flex: 1;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .country-badge .country-count {
-    font-size: var(--font-size-md);
-    color: var(--color-text-tertiary);
-    font-variant-numeric: tabular-nums;
-    margin-left: 0;
-  }
-
-  /* Legend with icons */
-  .legend-text {
-    text-transform: capitalize;
-  }
-
-  /* Owner tracker breakdown in expanded row */
-  .owner-tracker-breakdown {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-3);
-    margin-bottom: var(--space-3);
-    padding-bottom: var(--space-3);
-    border-bottom: var(--border-width) solid var(--color-border-light);
-  }
-
-  .owner-tracker {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: var(--space-1) var(--space-2);
-    background: var(--color-bg-primary);
-    border: var(--border-width) solid var(--color-border);
-  }
-
-  .owner-tracker-count {
-    font-size: var(--font-size-body);
-    color: var(--color-text-secondary);
-    font-variant-numeric: tabular-nums;
-  }
-
-  /* Owner status breakdown */
-  .owner-status-name {
-    font-size: var(--font-size-md);
-    text-transform: capitalize;
-    color: var(--color-text-secondary);
-  }
-
-  .owner-status-count {
-    font-size: var(--font-size-md);
-    color: var(--color-text-tertiary);
-    font-variant-numeric: tabular-nums;
-  }
-
-  /* Asset country/capacity meta */
-  .asset-country {
-    color: var(--color-text-secondary);
-  }
-
-  .asset-capacity {
-    color: var(--color-text-tertiary);
-    margin-left: var(--space-1);
-  }
-
-  .asset-capacity::before {
-    content: '·';
-    margin-right: var(--space-1);
-    color: var(--color-gray-300);
-  }
-
-  /* More assets link */
-  .more-assets {
-    font-size: var(--font-size-body);
-    color: var(--color-text-secondary);
-    padding: var(--space-2) var(--space-3);
-    font-style: normal;
-    text-decoration: none;
-    background: var(--color-bg-tertiary);
-    border: var(--border-width) solid var(--color-border);
-    text-align: center;
-    display: block;
-  }
-
-  .more-assets:hover {
-    background: var(--color-border);
-    color: var(--color-text-primary);
-  }
-
-  /* Asset Table Wrapper */
-  .asset-table-wrapper {
+    gap: var(--space-8);
     margin-bottom: var(--space-8);
   }
 
-  .asset-link {
-    color: var(--color-accent);
-    text-decoration: none;
-    transition: color var(--duration-base);
+  .header-left {
+    flex: 1;
   }
 
-  .asset-link:hover {
-    color: var(--color-text-primary);
-    text-decoration: underline;
+  h1 {
+    font-size: 2.5rem;
+    font-weight: 400;
+    margin: 0 0 var(--space-3);
+    color: #1d4961;
+    letter-spacing: -0.02em;
   }
 
-  .tracker-cell,
-  .status-cell {
+  .subtitle {
+    color: #4a5568;
+    margin: 0;
+    font-size: var(--font-size-md);
+    line-height: 1.6;
+    max-width: 500px;
+  }
+
+  /* Selected classes panel */
+  .selected-classes {
+    background: #e8f4f4;
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+    min-width: 280px;
+    max-width: 320px;
+  }
+
+  .panel-toggle {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    font-weight: 600;
+    font-size: var(--font-size-md);
+    color: #1d4961;
+    cursor: pointer;
+    margin-bottom: var(--space-3);
+  }
+
+  .panel-content {
     display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .selected-class {
+    display: flex;
+    justify-content: space-between;
     align-items: center;
     gap: var(--space-2);
   }
 
-  .capacity-cell {
-    font-variant-numeric: tabular-nums;
+  .class-name {
+    font-size: var(--font-size-sm);
+    color: #2d3748;
   }
 
-  /* Pagination */
-  .pagination {
+  .remove-btn {
+    padding: 2px 8px;
+    font-size: 11px;
+    background: white;
+    border: 1px solid #cbd5e0;
+    border-radius: 3px;
+    cursor: pointer;
+    color: #4a5568;
+  }
+
+  .remove-btn:hover {
+    background: #f7fafc;
+  }
+
+  .no-selection {
+    font-size: var(--font-size-sm);
+    color: #718096;
+    margin: 0;
+  }
+
+  .add-link {
+    display: inline-block;
+    padding: var(--space-2) var(--space-3);
+    background: white;
+    border: 1px solid #cbd5e0;
+    border-radius: var(--radius-sm);
+    text-decoration: none;
+    font-size: var(--font-size-sm);
+    color: #2d3748;
+    text-align: center;
+  }
+
+  .add-link:hover {
+    background: #f7fafc;
+  }
+
+  /* Results section */
+  .results-section {
+    margin-top: var(--space-6);
+  }
+
+  .results-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: var(--space-4);
+  }
+
+  .results-title-row {
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: var(--space-6);
-    padding: var(--space-6);
-    margin: var(--space-8) 0;
-    border-top: var(--border-width) solid var(--color-border);
-    border-bottom: var(--border-width) solid var(--color-border);
+    gap: var(--space-3);
   }
 
-  .pagination-btn {
+  h2 {
+    font-size: 1.5rem;
+    font-weight: 400;
+    color: #1d4961;
+    margin: 0;
+  }
+
+  .result-count {
+    font-size: var(--font-size-sm);
+    color: #718096;
+  }
+
+  /* Search toolbar */
+  .search-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+    margin-bottom: var(--space-4);
+    padding: var(--space-4);
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: var(--radius-md);
+  }
+
+  .search-input-wrapper {
+    position: relative;
+    flex: 1;
+    min-width: 250px;
+  }
+
+  .search-input {
+    width: 100%;
     padding: var(--space-3) var(--space-4);
-    font-size: var(--font-size-body);
-    background: var(--color-bg-primary);
-    color: var(--color-text-primary);
-    border: var(--border-width) solid var(--color-border);
+    padding-right: 36px;
+    font-size: var(--font-size-sm);
+    border: 1px solid #cbd5e0;
+    border-radius: var(--radius-sm);
+  }
+
+  .search-input:focus {
+    outline: none;
+    border-color: #1d4961;
+    box-shadow: 0 0 0 2px rgba(29, 73, 97, 0.1);
+  }
+
+  .clear-search {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    font-size: 18px;
+    color: #a0aec0;
     cursor: pointer;
-    transition: all var(--duration-base) var(--ease-in-out-quad);
-    border-radius: 4px;
+    padding: 4px;
   }
 
-  .pagination-btn:hover:not(:disabled) {
-    background: var(--color-bg-secondary);
-    border-color: var(--color-gray-400);
+  .clear-search:hover {
+    color: #4a5568;
   }
 
-  .pagination-btn:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
+  .toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    flex-wrap: wrap;
   }
 
-  .pagination-info {
-    font-size: var(--font-size-body);
-    color: var(--color-text-secondary);
-    font-variant-numeric: tabular-nums;
+  .filter-toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--font-size-sm);
+    color: #4a5568;
+    cursor: pointer;
+  }
+
+  .filter-toggle input {
+    accent-color: #1d4961;
+  }
+
+  .add-all-btn {
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--font-size-sm);
+    background: #1d4961;
+    color: white;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
     white-space: nowrap;
   }
 
-  /* Reduced motion */
-  @media (prefers-reduced-motion: reduce) {
-    .row-details-wrapper,
-    .row-expand {
-      transition: none;
-    }
+  .add-all-btn:hover {
+    background: #2d5a75;
   }
 
+  /* Investigation summary */
+  .investigation-summary {
+    padding: var(--space-3) var(--space-4);
+    margin-bottom: var(--space-4);
+    background: linear-gradient(135deg, #e6fffa 0%, #b2f5ea 100%);
+    border: 1px solid #38b2ac;
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    color: #234e52;
+  }
+
+  .report-link {
+    margin-left: var(--space-4);
+    color: #1d4961;
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .report-link:hover {
+    text-decoration: underline;
+  }
+
+  /* Select column */
+  .col-select {
+    width: 40px;
+    text-align: center;
+  }
+
+  .select-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid #cbd5e0;
+    background: white;
+    color: #a0aec0;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .select-btn:hover {
+    border-color: #1d4961;
+    color: #1d4961;
+  }
+
+  .select-btn.selected {
+    background: #1d4961;
+    border-color: #1d4961;
+    color: white;
+  }
+
+  tr.in-investigation {
+    background: rgba(29, 73, 97, 0.04);
+  }
+
+  .country-hint {
+    display: block;
+    font-size: 11px;
+    color: #a0aec0;
+    margin-top: 2px;
+  }
+
+  .results-box {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: var(--radius-md);
+    padding: var(--space-5);
+  }
+
+  .unmatched-notice {
+    padding: var(--space-3);
+    margin-bottom: var(--space-4);
+    font-size: var(--font-size-sm);
+    color: #4a5568;
+  }
+
+  .unmatched-notice strong {
+    color: #1d4961;
+  }
+
+  .link-btn {
+    background: none;
+    border: none;
+    color: #1d4961;
+    text-decoration: underline;
+    cursor: pointer;
+    font-size: inherit;
+    padding: 0;
+  }
+
+  .matched-intro {
+    padding: var(--space-2) var(--space-3);
+    margin-bottom: var(--space-4);
+    font-size: var(--font-size-sm);
+    color: #4a5568;
+  }
+
+  .matched-intro strong {
+    color: #1d4961;
+  }
+
+  /* Results table */
+  .results-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--font-size-sm);
+  }
+
+  .results-table th {
+    text-align: left;
+    padding: var(--space-3);
+    color: #1d4961;
+    font-weight: 600;
+    border-bottom: 2px solid #e2e8f0;
+  }
+
+  .results-table td {
+    padding: var(--space-4) var(--space-3);
+    vertical-align: top;
+    border-bottom: 1px solid #edf2f7;
+    color: #4a5568;
+    line-height: 1.5;
+  }
+
+  .results-table tr:hover td {
+    background: #f7fafc;
+  }
+
+  .col-company {
+    width: 22%;
+  }
+
+  .col-total {
+    width: 35%;
+  }
+
+  .col-filtered {
+    width: 35%;
+  }
+
+  .company-link {
+    color: #1d4961;
+    text-decoration: none;
+    font-weight: 500;
+  }
+
+  .company-link:hover {
+    text-decoration: underline;
+  }
+
+  .empty-row {
+    text-align: center;
+    color: #a0aec0;
+    padding: var(--space-8) !important;
+  }
+
+  /* Responsive */
   @media (max-width: 768px) {
-    .screener-layout {
-      padding: var(--space-8) var(--space-5) 100px;
-    }
-
-    .stats-hero {
+    .screener-header {
       flex-direction: column;
-      gap: var(--space-5);
     }
 
-    .stat-group {
-      flex-wrap: wrap;
-      gap: var(--space-6);
-    }
-
-    .status-donut {
-      flex-direction: column;
-      align-items: flex-start;
-    }
-
-    .tracker-breakdown {
-      grid-template-columns: 1fr;
-    }
-
-    .country-breakdown {
-      grid-template-columns: 1fr 1fr;
-    }
-
-    .row-main {
-      grid-template-columns: 32px 40px 1fr 40px;
-      gap: var(--space-3);
-      padding: var(--space-3) var(--space-4);
-    }
-
-    .row-stats,
-    .row-status-bar {
-      display: none;
-    }
-
-    .row-flower {
-      display: flex;
-    }
-
-    .row-details {
-      padding: var(--space-4);
-    }
-
-    .owner-tracker-breakdown {
-      flex-direction: column;
-      gap: var(--space-2);
-    }
-
-
-    .pagination {
-      gap: var(--space-4);
-      padding: var(--space-4);
-      flex-wrap: wrap;
-    }
-
-    .pagination-info {
+    .selected-classes {
       width: 100%;
-      text-align: center;
-      order: 3;
+      max-width: none;
+    }
+
+    h1 {
+      font-size: 1.75rem;
+    }
+
+    .results-table {
+      font-size: 13px;
+    }
+
+    .col-company {
+      width: 30%;
+    }
+
+    .col-total,
+    .col-filtered {
+      width: 35%;
     }
   }
 </style>

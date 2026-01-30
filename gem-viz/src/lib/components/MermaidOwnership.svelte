@@ -59,48 +59,23 @@
   }
 
   async function renderMermaid() {
-    if (typeof window === 'undefined') return;
-    loading = true;
-    error = null;
-
-    try {
-      const mermaid = (await import('mermaid')).default;
-      mermaid.initialize({
-        startOnLoad: false,
-        theme: 'base',
-        themeVariables: {
-          primaryColor: colors.navy,
-          primaryTextColor: '#fff',
-          primaryBorderColor: colors.navy,
-          lineColor: colors.navy,
-          secondaryColor: colors.warmWhite,
-          tertiaryColor: colors.mint,
-          fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif',
-          fontSize: '12px',
-        },
-        flowchart: { curve: 'basis', padding: 15, nodeSpacing: 50, rankSpacing: 50 },
-      });
-
-      const syntax = generateMermaidSyntax();
-      if (!syntax) {
-        mermaidSvg = '';
-        loading = false;
-        return;
-      }
-
-      const { svg } = await mermaid.render('mermaid-ownership', syntax);
-      // Sanitize SVG to prevent XSS from malicious entity/asset names
-      mermaidSvg = DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } });
-
-      // After svelte updates the DOM, attach click handlers to nodes
-      await tick();
-      attachNodeClickHandlers();
-    } catch (err) {
-      console.error('Mermaid render error:', err);
-      error = err.message;
-    } finally {
-      loading = false;
-    }
+    // DISABLED: mermaid causes __name is not a function errors in production
+    // TODO: Fix mermaid bundling or replace with different diagram library
+    loading = false;
+    error = 'Diagram temporarily unavailable';
+    // Original implementation commented out due to bundling issues:
+    // if (typeof window === 'undefined') return;
+    // loading = true;
+    // error = null;
+    // try {
+    //   const mermaid = (await import('mermaid')).default;
+    //   mermaid.initialize({ ... });
+    //   const syntax = generateMermaidSyntax();
+    //   const { svg } = await mermaid.render('mermaid-ownership', syntax);
+    //   mermaidSvg = DOMPurify.sanitize(svg);
+    //   await tick();
+    //   attachNodeClickHandlers();
+    // } catch (err) { ... }
   }
 
   // Build a reverse lookup map from sanitized IDs to original IDs

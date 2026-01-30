@@ -5,48 +5,42 @@
    * Matches mockup layout with asset classes panel + owner search.
    */
 
-  import { link, assetPath } from '$lib/links';
+  import { link } from '$lib/links';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import { listEntities, getEntity } from '$lib/ownership-api';
-  import { onMount } from 'svelte';
   import EntityMicroCard from '$lib/components/EntityMicroCard.svelte';
   import ScreenerStepNav from '$lib/components/ScreenerStepNav.svelte';
-
-  // DuckDB utilities (loaded dynamically)
-  let loadParquetFromPath;
-  let query;
-  let duckdbReady = $state(false);
-  let duckdbError = $state(null);
-
-  // Initialize DuckDB on mount
-  onMount(async () => {
-    try {
-      const duckdbUtils = await import('$lib/duckdb-utils');
-      loadParquetFromPath = duckdbUtils.loadParquetFromPath;
-      query = duckdbUtils.query;
-
-      // Load the ownership parquet
-      const ownershipPath = assetPath('all_trackers_ownership@1.parquet');
-      await loadParquetFromPath(ownershipPath, 'ownership');
-      duckdbReady = true;
-    } catch (err) {
-      console.error('Failed to initialize DuckDB:', err);
-      duckdbError = err?.message || 'Failed to load data engine';
-    }
-  });
+  import DataSourceBadge from '$lib/components/DataSourceBadge.svelte';
 
   // Get selected classes from URL params
   const classesParam = $derived($page.url.searchParams.get('classes') || '');
 
   // Parse selected classes for display
-  const selectedClasses = $derived(() => {
+  // Note: URLSearchParams.get() already decodes the value, so don't double-decode
+  const selectedClasses = $derived.by(() => {
     if (!classesParam) return [];
     try {
-      return JSON.parse(decodeURIComponent(classesParam));
-    } catch {
-      // Handle legacy comma-separated format
-      return classesParam.split(',').map((c) => ({ name: c.trim() }));
+      const parsed = JSON.parse(classesParam);
+      // Validate it's an array of objects with at least a name
+      if (Array.isArray(parsed)) {
+        return parsed.map((item) => ({
+          id: item.id || '',
+          name: item.name || item.id || 'Unknown',
+          description: item.description || '',
+          tracker: item.tracker || '',
+          filters: item.filters || null,
+        }));
+      }
+      return [];
+    } catch (e) {
+      console.warn('[Screener] Failed to parse classes param:', e);
+      // Legacy format: comma-separated simple names like "Coal Plant, Steel Plant"
+      // Only use this fallback if the param doesn't look like JSON
+      if (!classesParam.startsWith('[')) {
+        return classesParam.split(',').map((c) => ({ name: c.trim() }));
+      }
+      return [];
     }
   });
 
@@ -200,192 +194,9 @@
     }
   }
 
-  /**
-   * Build SQL WHERE clause from asset class filter
-   */
-  function buildFilterCondition(filter) {
-    if (!filter || !filter.field || !filter.operator) return null;
-
-    const field = filter.field;
-    const op = filter.operator;
-    const value = filter.value;
-
-    // Map common field names to parquet columns
-    const fieldMap = {
-      'Capacity (MW)': '"Capacity (MW)"',
-      Status: 'Status',
-      Captive: 'Captive',
-      'Start Year': '"Start Year"',
-      Country: 'Country',
-      'Main production equipment': '"Main production equipment"',
-      'Water Depth (m)': '"Water Depth (m)"',
-      'Capacity (Mtpa)': '"Capacity (Mtpa)"',
-      'Mine Type': '"Mine Type"',
-      'Capacity (ttpa)': '"Capacity (ttpa)"',
-      'Capacity (Bcm/y)': '"Capacity (Bcm/y)"',
-      Feedstock: 'Feedstock',
-    };
-
-    const sqlField = fieldMap[field] || `"${field}"`;
-
-    switch (op) {
-      case '>':
-      case '<':
-      case '>=':
-      case '<=':
-        return `${sqlField} ${op} ${Number(value) || 0}`;
-      case '=':
-        return `${sqlField} = '${String(value).replace(/'/g, "''")}'`;
-      case 'contains':
-        return `${sqlField} ILIKE '%${String(value).replace(/'/g, "''")}%'`;
-      case 'not_empty':
-        return `${sqlField} IS NOT NULL AND ${sqlField} != ''`;
-      case 'in': {
-        const vals = String(value)
-          .split(',')
-          .map((v) => `'${v.trim().replace(/'/g, "''")}'`)
-          .join(',');
-        return `${sqlField} IN (${vals})`;
-      }
-      default:
-        return null;
-    }
-  }
-
-  /**
-   * Build SQL query from selected asset classes
-   */
-  function buildAssetClassQuery(classes) {
-    if (!classes || classes.length === 0) {
-      // No filters - return all owners
-      return `
-        SELECT DISTINCT
-          "Owner GEM Entity ID" as id,
-          "Owner" as name,
-          "Owner Headquarters Country" as headquartersCountry,
-          COUNT(*) as assetCount
-        FROM ownership
-        WHERE "Owner GEM Entity ID" IS NOT NULL
-          AND "Owner GEM Entity ID" != ''
-        GROUP BY "Owner GEM Entity ID", "Owner", "Owner Headquarters Country"
-        ORDER BY assetCount DESC
-        LIMIT 100
-      `;
-    }
-
-    // Build conditions for each asset class
-    const classConditions = classes
-      .map((cls) => {
-        const conditions = [];
-
-        // Filter by tracker
-        if (cls.tracker) {
-          conditions.push(`Tracker = '${cls.tracker.replace(/'/g, "''")}'`);
-        }
-
-        // Filter by field conditions
-        if (cls.filters) {
-          const filterCond = buildFilterCondition(cls.filters);
-          if (filterCond) conditions.push(filterCond);
-
-          // Additional geo filter
-          if (cls.filters.geography) {
-            conditions.push(`Country = '${cls.filters.geography.replace(/'/g, "''")}'`);
-          }
-
-          // Additional status filter
-          if (cls.filters.status) {
-            conditions.push(`Status = '${cls.filters.status.replace(/'/g, "''")}'`);
-          }
-        }
-
-        return conditions.length > 0 ? `(${conditions.join(' AND ')})` : null;
-      })
-      .filter(Boolean);
-
-    const whereClause = classConditions.length > 0 ? `AND (${classConditions.join(' OR ')})` : '';
-
-    return `
-      SELECT DISTINCT
-        "Owner GEM Entity ID" as id,
-        "Owner" as name,
-        "Owner Headquarters Country" as headquartersCountry,
-        COUNT(*) as assetCount
-      FROM ownership
-      WHERE "Owner GEM Entity ID" IS NOT NULL
-        AND "Owner GEM Entity ID" != ''
-        ${whereClause}
-      GROUP BY "Owner GEM Entity ID", "Owner", "Owner Headquarters Country"
-      ORDER BY assetCount DESC
-      LIMIT 100
-    `;
-  }
-
   // Show all companies with ownership in selected asset classes
-  async function showAllCompanies() {
-    searchLoading = true;
-    searchError = null;
-    searchResultGroups = [];
-
-    try {
-      let results = [];
-
-      if (!duckdbReady) {
-        // Fall back to API if DuckDB not ready
-        const response = await listEntities({ limit: 100 });
-        results = response.results || [];
-      } else {
-        // Build and execute query based on selected asset classes
-        const classes = selectedClasses();
-        const sql = buildAssetClassQuery(classes);
-
-        console.log('[Screener] Executing query:', sql);
-        const result = await query(sql);
-
-        if (!result.success) {
-          throw new Error(result.error || 'Query failed');
-        }
-
-        // Transform results to match expected format
-        results = (result.data || []).map((row) => ({
-          id: row.id,
-          name: row.name || row.id,
-          headquartersCountry: row.headquartersCountry,
-          assetCount: row.assetCount,
-        }));
-      }
-
-      // Create a single group for "all companies"
-      searchResultGroups = [
-        {
-          term: 'All companies',
-          results,
-          matchCount: results.length,
-        },
-      ];
-
-      console.log(`[Screener] Found ${results.length} owners`);
-    } catch (err) {
-      console.error('[Screener] Query error:', err);
-      searchError = err?.message || 'Failed to load companies';
-
-      // Fall back to API
-      try {
-        const response = await listEntities({ limit: 100 });
-        searchResultGroups = [
-          {
-            term: 'All companies',
-            results: response.results || [],
-            matchCount: response.results?.length || 0,
-          },
-        ];
-        searchError = null; // Clear error if fallback worked
-      } catch {
-        // Keep original error
-      }
-    } finally {
-      searchLoading = false;
-    }
+  function showAllAssets() {
+    goto(link(`screener/results?classes=${encodeURIComponent(classesParam)}&mode=assets`));
   }
 
   // Toggle or add owner selection (O(1) with Map)
@@ -404,7 +215,7 @@
 
   // Remove a selected class
   function removeClass(classToRemove) {
-    const updated = selectedClasses().filter((c) => c.name !== classToRemove.name);
+    const updated = selectedClasses.filter((c) => c.name !== classToRemove.name);
     const newParam = encodeURIComponent(JSON.stringify(updated));
     goto(link(`screener/owners?classes=${newParam}`), { replaceState: true });
   }
@@ -450,13 +261,12 @@
   };
 
   // Get relevant example companies based on selected asset classes
-  const exampleCompanies = $derived(() => {
-    const classes = selectedClasses();
-    if (classes.length === 0) return exampleCompaniesByTracker.default;
+  const exampleCompanies = $derived.by(() => {
+    if (selectedClasses.length === 0) return exampleCompaniesByTracker.default;
 
     // Get unique trackers from selected classes
     const trackers = new Set();
-    classes.forEach((c) => {
+    selectedClasses.forEach((c) => {
       if (c.tracker) trackers.add(c.tracker);
     });
 
@@ -498,7 +308,8 @@
 </script>
 
 <svelte:head>
-  <title>Find Owners — Asset-Class Screener — GEM Viz</title>
+  <title>Find Owners — Global Energy Monitor</title>
+  <meta name="description" content="Search for companies by name, GEM Entity ID, LEI, or Perm ID to analyze their ownership of energy assets." />
 </svelte:head>
 
 <main>
@@ -523,10 +334,10 @@
         </button>
         {#if classesExpanded}
           <div class="panel-content">
-            {#if selectedClasses().length === 0}
+            {#if selectedClasses.length === 0}
               <p class="no-classes">No asset classes selected. Add classes to filter results.</p>
             {:else}
-              {#each selectedClasses() as assetClass}
+              {#each selectedClasses as assetClass}
                 <span class="class-tag">
                   {assetClass.name}
                   <button class="remove-btn" onclick={() => removeClass(assetClass)}>Remove</button>
@@ -567,7 +378,7 @@
         <div class="search-help">
           <div class="example-companies">
             <span class="example-label">Try:</span>
-            {#each exampleCompanies() as example, i}
+            {#each exampleCompanies as example, i}
               {#if i > 0}<span class="example-sep">,</span>{/if}
               <button class="example-btn" onclick={() => useExample(example)}>
                 {example.name}
@@ -636,6 +447,9 @@
       <!-- Results with disambiguation -->
       {#if searchResultGroups.length > 0}
         <div class="search-results">
+          <div class="results-source-row">
+            <DataSourceBadge source="api" label="Entity Search" />
+          </div>
           {#each searchResultGroups as group}
             <div class="result-group">
               <div class="group-header">
@@ -683,31 +497,19 @@
 
     <!-- Browse all companies section -->
     <section class="show-all-section">
-      <h2>Don't have a company in mind?</h2>
+      <h2>Want every asset instead?</h2>
       <p class="section-subtitle">
-        {#if selectedClasses().length > 0}
-          Browse all <strong
-            >{selectedClasses().length > 1
-              ? selectedClasses()
-                  .map((c) => c.name)
-                  .join(' & ')
-              : selectedClasses()[0]?.name}</strong
-          > owners to discover key players and find leads.
+        {#if selectedClasses.length > 0}
+          Show every <strong
+            >{selectedClasses.length > 1
+              ? selectedClasses.map((c) => c.name).join(' & ')
+              : selectedClasses[0]?.name}</strong
+          > asset worldwide — no ownership filter.
         {:else}
-          Explore all companies in the database to find investigative leads.
+          Show every asset in the database — no ownership filter.
         {/if}
       </p>
-      {#if !duckdbReady && !duckdbError}
-        <div class="loading-indicator">
-          <span class="spinner"></span>
-          Initializing data engine...
-        </div>
-      {:else if duckdbError}
-        <div class="duckdb-error">Data engine unavailable. Results will load from the API.</div>
-      {/if}
-      <button class="show-all-btn" onclick={showAllCompanies} disabled={searchLoading}>
-        {searchLoading ? 'Loading...' : 'Browse All Owners'}
-      </button>
+      <button class="show-all-btn" onclick={showAllAssets}> Show all assets </button>
     </section>
 
     <!-- Selected owners footer -->
@@ -767,19 +569,9 @@
     flex: 1;
   }
 
-  h1 {
-    font-size: var(--font-size-3xl);
-    font-weight: 400;
-    margin: 0 0 var(--space-3) 0;
-    color: var(--color-text-primary);
-    letter-spacing: var(--tracking-tight);
-  }
+  /* h1 uses global styles from app.css */
 
   .subtitle {
-    font-size: var(--font-size-lg);
-    color: var(--color-text-secondary);
-    margin: 0;
-    line-height: var(--line-height-relaxed);
     max-width: 400px;
   }
 
@@ -877,23 +669,10 @@
     margin-bottom: 56px;
   }
 
-  h2 {
-    font-size: var(--font-size-2xl);
-    font-weight: 400;
-    margin: 0 0 6px 0;
-    color: var(--color-text-primary);
-  }
+  /* h2 uses global styles from app.css */
 
   .section-subtitle {
-    font-size: var(--font-size-lg);
-    color: var(--color-text-secondary);
-    margin: 0 0 var(--space-6) 0;
-    line-height: var(--line-height-normal);
-  }
-
-  .section-subtitle strong {
-    color: var(--color-text-primary);
-    font-weight: 500;
+    margin-bottom: var(--space-6);
   }
 
   /* Primary search - bigger, more prominent */
@@ -1188,6 +967,12 @@
     border-top: var(--border-width) solid var(--color-border);
   }
 
+  .results-source-row {
+    margin-bottom: var(--space-4);
+    display: flex;
+    justify-content: flex-end;
+  }
+
   /* Result groups for disambiguation */
   .result-group {
     margin-bottom: var(--space-10);
@@ -1323,38 +1108,6 @@
   .show-all-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
-  }
-
-  .loading-indicator {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    font-size: var(--font-size-body);
-    color: var(--color-text-tertiary);
-    margin-bottom: var(--space-3);
-  }
-
-  .spinner {
-    width: 14px;
-    height: 14px;
-    border: 1.5px solid var(--color-gray-300);
-    border-top-color: var(--color-text-secondary);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-
-  .duckdb-error {
-    font-size: var(--font-size-body);
-    color: var(--color-warning);
-    padding: 0;
-    margin-bottom: var(--space-3);
-    font-style: italic;
   }
 
   /* Selected footer - simplified */

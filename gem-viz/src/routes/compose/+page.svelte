@@ -22,6 +22,7 @@
   import RangeSlider from '$lib/components/RangeSlider.svelte';
   import FilterBreadcrumbs from '$lib/components/FilterBreadcrumbs.svelte';
   import ProjectCard from '$lib/components/ProjectCard.svelte';
+  import DataSourceBadge from '$lib/components/DataSourceBadge.svelte';
   import { statusColorsGranular } from '$lib/design-tokens';
 
   import {
@@ -51,6 +52,7 @@
     fetchResults,
     fetchTrackerColumnInfo,
   } from '$lib/compose-queries';
+  import { ASSET_ID_COALESCE_O } from '$lib/duckdb-queries';
 
   // ---------------------------------------------------------------------------
   // State
@@ -783,7 +785,7 @@
     )`;
 
     const result = await widgetQuery(`
-      SELECT DISTINCT o."GEM unit ID" as asset_id, o."Project" as name
+      SELECT DISTINCT ${ASSET_ID_COALESCE_O} as asset_id, o."Project" as name
       FROM ownership o
       LEFT JOIN ${LOCATIONS_DEDUP} l ON o."GEM location ID" = l."GEM.location.ID"
       WHERE ${whereClause}
@@ -864,7 +866,7 @@
 
     const result = await widgetQuery(`
       SELECT DISTINCT
-        o."GEM unit ID" as asset_id,
+        ${ASSET_ID_COALESCE_O} as asset_id,
         o."Project" as name,
         o."Tracker" as tracker,
         o."Status" as status,
@@ -1013,7 +1015,8 @@
 </script>
 
 <svelte:head>
-  <title>Filter Composer — GEM Viz</title>
+  <title>Asset Filter — Global Energy Monitor</title>
+  <meta name="description" content="Build custom filtered views of energy assets by tracker type, status, country, and ownership to analyze specific segments of the global energy infrastructure." />
 </svelte:head>
 
 <main>
@@ -1030,8 +1033,6 @@
           <button class="clear-btn" onclick={clearFilters}>Clear all</button>
         {/if}
       </div>
-
-      <a href="{base}/coal-tracker" class="asset-classes-link"> Browse Coal Tracker queries → </a>
 
       {#if loadingOptions}
         <div class="loading-options">Loading filter options...</div>
@@ -1147,9 +1148,7 @@
       {#if showSaveAssetClass}
         <div class="save-class-panel">
           {#if assetClassSaved}
-            <p class="save-success">
-              Saved! View in <a href="{base}/coal-tracker">Coal Tracker</a>
-            </p>
+            <p class="save-success">Saved!</p>
           {:else}
             <input
               type="text"
@@ -1216,10 +1215,34 @@
     <!-- Main: Results -->
     <section class="results-panel">
       <div class="results-header">
-        <h1>Filtered Assets</h1>
+        <div class="results-header-top">
+          <div class="results-title-group">
+            <h1>Filtered Assets</h1>
+            <div class="results-meta">
+              {#if loading}
+                <span class="loading-text">Loading...</span>
+              {:else}
+                <span class="result-count">{formatCount(totalCount)} results</span>
+                <DataSourceBadge source="motherduck" queryTime={queryTime} />
+              {/if}
+            </div>
+          </div>
+          <div class="results-export-group">
+            <span class="export-label">Export all {formatCount(totalCount)}:</span>
+            <button class="export-btn" onclick={exportCSV} disabled={exporting || totalCount === 0}>
+              {exporting ? 'Exporting...' : 'CSV'}
+            </button>
+            <button
+              class="export-btn"
+              onclick={exportJSON}
+              disabled={exporting || totalCount === 0}
+            >
+              JSON
+            </button>
+          </div>
+        </div>
         <div class="results-actions">
           {#if allMatchingSelected}
-            <!-- All matching selected mode -->
             <span class="selection-count">{allMatchingIds.length.toLocaleString()} selected</span>
             {#if allMatchingNotInCart > 0}
               <button class="cart-btn add" onclick={addAllMatchingToCart}>
@@ -1231,7 +1254,7 @@
                 Remove {allMatchingInCart.toLocaleString()} from investigation
               </button>
             {/if}
-            <button class="cart-btn text" onclick={clearAllMatchingSelection}> Cancel </button>
+            <button class="cart-btn text" onclick={clearAllMatchingSelection}>Cancel</button>
           {:else if selectedRows.length > 0}
             <span class="selection-count">{selectedRows.length} selected</span>
             {#if selectedNotInCart > 0}
@@ -1259,23 +1282,6 @@
               </button>
             {/if}
           {/if}
-        </div>
-        <div class="results-meta">
-          {#if loading}
-            <span class="loading-text">Loading...</span>
-          {:else}
-            <span class="result-count">{formatCount(totalCount)} results</span>
-            <span class="query-time">{queryTime}ms</span>
-          {/if}
-        </div>
-        <div class="export-actions">
-          <span class="export-label">Export all {formatCount(totalCount)}:</span>
-          <button class="export-btn" onclick={exportCSV} disabled={exporting || totalCount === 0}>
-            {exporting ? 'Exporting...' : 'CSV'}
-          </button>
-          <button class="export-btn" onclick={exportJSON} disabled={exporting || totalCount === 0}>
-            JSON
-          </button>
         </div>
       </div>
 
@@ -1926,44 +1932,95 @@
 
   .results-header {
     display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+    padding-bottom: var(--space-3);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .results-header-top {
+    display: flex;
     justify-content: space-between;
-    align-items: center;
-    margin-bottom: 0;
+    align-items: flex-start;
+    gap: var(--space-4);
+    flex-wrap: wrap;
+  }
+
+  .results-title-group {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-3);
   }
 
   .results-header h1 {
     margin: 0;
-    font-size: var(--font-size-lg);
-    font-weight: 600;
+    font-size: var(--font-size-xl);
+    font-weight: 700;
+  }
+
+  .results-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .result-count {
+    font-family: var(--font-family-data);
+    font-weight: 700;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+  }
+
+  .query-time {
+    font-family: var(--font-family-data);
+    font-weight: 700;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+  }
+
+  .results-export-group {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .export-label {
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    color: var(--color-text-secondary);
   }
 
   .results-actions {
     display: flex;
     gap: var(--space-2);
     align-items: center;
+    flex-wrap: wrap;
   }
 
   .selection-count {
     font-size: var(--font-size-sm);
-    font-weight: 600;
+    font-weight: 700;
     color: var(--color-black);
-    background: var(--color-info-bg);
+    background: var(--gem-orange-10);
     padding: var(--space-1) var(--space-2);
-    border-radius: var(--radius-sm);
+    border-radius: 4px;
   }
 
   .selection-hint {
-    font-size: var(--font-size-base);
+    font-size: var(--font-size-sm);
+    font-weight: 700;
     color: var(--color-text-secondary);
   }
 
   .cart-btn {
-    padding: 5px var(--space-3);
+    padding: 6px var(--space-3);
     font-size: var(--font-size-sm);
-    font-weight: 500;
+    font-weight: 700;
     background: transparent;
     color: var(--color-black);
-    border: var(--border-width) solid var(--color-gray-300);
+    border: 2px solid var(--color-gray-300);
+    border-radius: 4px;
     cursor: pointer;
     transition: var(--transition-fast);
   }
@@ -2055,28 +2112,20 @@
     color: var(--color-link-hover);
   }
 
-  .export-actions {
-    display: flex;
-    gap: var(--space-1);
-    align-items: center;
-  }
-
-  .export-label {
-    font-size: var(--font-size-base);
-    color: var(--color-text-secondary);
-  }
-
   .export-btn {
-    padding: var(--space-1) var(--space-2);
-    font-size: var(--font-size-base);
-    background: transparent;
-    border: var(--border-width) solid var(--color-gray-300);
+    padding: 6px var(--space-3);
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    background: var(--color-black);
+    color: var(--color-white);
+    border: 2px solid var(--color-black);
+    border-radius: 4px;
     cursor: pointer;
     transition: var(--transition-fast);
   }
 
   .export-btn:hover:not(:disabled) {
-    background: var(--color-gray-100);
+    background: var(--color-gray-800);
   }
 
   .export-btn:disabled {
@@ -2084,18 +2133,9 @@
     cursor: not-allowed;
   }
 
-  .results-meta {
-    display: flex;
-    gap: var(--space-1);
-    font-size: var(--font-size-base);
-    color: var(--color-text-secondary);
-  }
-
   .loading-text {
-    color: var(--color-text-tertiary);
-  }
-
-  .query-time {
+    font-family: var(--font-family-data);
+    font-weight: 700;
     color: var(--color-text-tertiary);
   }
 

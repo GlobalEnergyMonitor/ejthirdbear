@@ -112,10 +112,10 @@
 </script>
 
 <svelte:head>
-  <title>About — GEM Viz</title>
+  <title>About — Global Energy Monitor</title>
   <meta
     name="description"
-    content="About GEM Viz: methodology, data sources, and version history for the Global Energy Monitor data visualization tool."
+    content="About the Global Energy Monitor ownership visualization platform: methodology, data sources, and how to explore energy asset ownership structures."
   />
 </svelte:head>
 

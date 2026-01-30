@@ -6,65 +6,21 @@
 
   import { link } from '$lib/links';
   import { goto } from '$app/navigation';
-  import { allAssetClasses } from '$lib/data-config/asset-classes';
+  import { page } from '$app/stores';
   import ScreenerStepNav from '$lib/components/ScreenerStepNav.svelte';
+  import {
+    TRACKERS,
+    SCREENER_PRESETS,
+    STATUS_VALUES,
+    COUNTRIES,
+    NUMERIC_OPERATORS,
+    TEXT_OPERATORS,
+    getFieldsForTracker,
+    getFieldConfig,
+  } from '$lib/data-config/tracker-schema';
 
   // Track which preset is active (for highlighting)
   let activePresetId = $state(null);
-
-  /**
-   * @typedef {Object} QuickAddClass
-   * @property {string} id
-   * @property {string} name
-   * @property {string} description
-   * @property {string} tracker
-   * @property {{field: string, operator: string, value?: string|number}} filters
-   * @property {string} [subLabel]
-   */
-
-  /**
-   * Transform asset class definitions into quick-add card format.
-   * Uses the canonical definitions from asset-classes.ts plus some additional
-   * status-specific variants for common use cases.
-   * @type {QuickAddClass[]}
-   */
-  const quickAddClasses = [
-    // Canonical asset classes from asset-classes.ts
-    ...allAssetClasses.map((ac) => ({
-      id: ac.name.toLowerCase().replace(/\s+/g, '-'),
-      name: ac.name,
-      description: ac.description,
-      tracker: ac.applicableTrackers[0], // Primary tracker
-      filters: {
-        // Convert matcher logic to filter representation
-        field: ac.relevantFields.identifyingFields[0],
-        operator: ac.name.includes('Coal-Based')
-          ? 'contains'
-          : ac.name.includes('Captive')
-            ? 'not_empty'
-            : ac.name.includes('Deep')
-              ? '>='
-              : 'not_empty',
-        value: ac.name.includes('Coal-Based') ? 'BF' : ac.name.includes('Deep') ? 200 : undefined,
-      },
-    })),
-    // Additional status variants for common queries
-    {
-      id: 'retiring-coal',
-      name: 'Retiring Coal',
-      description: 'Coal plants announced for retirement.',
-      tracker: 'Coal Plant',
-      filters: { field: 'Status', operator: '=', value: 'retired' },
-    },
-    {
-      id: 'pipeline-construction',
-      name: 'Gas Pipeline',
-      description: 'Gas pipelines under construction.',
-      tracker: 'Gas Pipeline',
-      filters: { field: 'Status', operator: '=', value: 'construction' },
-      subLabel: 'construction',
-    },
-  ];
 
   // Custom query builder state
   let customTracker = $state('');
@@ -76,214 +32,18 @@
   let showGeoFilter = $state(false);
   let showStatusFilter = $state(false);
 
-  // Tracker options (from parquet data)
-  const trackerOptions = [
-    'Bioenergy Power',
-    'Coal Mine',
-    'Coal Plant',
-    'Gas Pipeline',
-    'Gas Plant',
-    'Iron Mine',
-    'Steel Plant',
-  ];
+  // Get field config for current selection
+  const fieldConfig = $derived(
+    customTracker && customField ? getFieldConfig(customTracker, customField) : null
+  );
 
-  // Field options per tracker (based on actual parquet schema)
-  const fieldsByTracker = {
-    'Coal Plant': ['Capacity (MW)', 'Status', 'Owner Headquarters Country'],
-    'Gas Plant': ['Capacity (MW)', 'Status', 'Owner Headquarters Country'],
-    'Coal Mine': ['Capacity (Mtpa)', 'Status', 'Owner Headquarters Country'],
-    'Steel Plant': ['Nominal crude steel capacity (ttpa)', 'Status', 'Owner Headquarters Country'],
-    'Iron Mine': ['Nominal iron capacity (ttpa)', 'Status', 'Owner Headquarters Country'],
-    'Gas Pipeline': ['CapacityBcm/y', 'Status', 'Owner Headquarters Country'],
-    'Bioenergy Power': ['Capacity (MW)', 'Status', 'Owner Headquarters Country'],
-  };
+  // Get operators for current field
+  const currentOperators = $derived(
+    fieldConfig ? (fieldConfig.type === 'numeric' ? NUMERIC_OPERATORS : TEXT_OPERATORS) : []
+  );
 
-  // Operators by field type
-  const numericOperators = [
-    { value: '>', label: 'greater than' },
-    { value: '<', label: 'less than' },
-    { value: '>=', label: 'at least' },
-    { value: '<=', label: 'at most' },
-    { value: '=', label: 'equals' },
-  ];
-
-  const textOperators = [
-    { value: '=', label: 'is exactly' },
-    { value: 'contains', label: 'contains' },
-    { value: 'in', label: 'is one of' },
-    { value: 'not_empty', label: 'has a value' },
-  ];
-
-  // Status values (from parquet - normalized to lowercase)
-  const statusOptions = [
-    'announced',
-    'cancelled',
-    'construction',
-    'idle',
-    'mothballed',
-    'operating',
-    'permitted',
-    'pre-construction',
-    'pre-permit',
-    'proposed',
-    'retired',
-    'shelved',
-  ];
-
-  // Countries (from parquet)
-  const countryOptions = [
-    'Afghanistan',
-    'Albania',
-    'Algeria',
-    'Angola',
-    'Argentina',
-    'Armenia',
-    'Australia',
-    'Austria',
-    'Azerbaijan',
-    'Bahamas',
-    'Bahrain',
-    'Bangladesh',
-    'Barbados',
-    'Belarus',
-    'Belgium',
-    'Bermuda',
-    'Bhutan',
-    'Bolivia',
-    'Bosnia and Herzegovina',
-    'Botswana',
-    'Brazil',
-    'Brunei',
-    'Bulgaria',
-    'Cambodia',
-    'Cameroon',
-    'Canada',
-    'Cayman Islands',
-    'Chile',
-    'China',
-    'Colombia',
-    'Congo',
-    'Costa Rica',
-    'Croatia',
-    'Cuba',
-    'Cyprus',
-    'Czech Republic',
-    'Denmark',
-    'Dominican Republic',
-    'Ecuador',
-    'Egypt',
-    'El Salvador',
-    'Estonia',
-    'Ethiopia',
-    'Finland',
-    'France',
-    'Gabon',
-    'Georgia',
-    'Germany',
-    'Ghana',
-    'Greece',
-    'Guatemala',
-    'Guinea',
-    'Honduras',
-    'Hong Kong',
-    'Hungary',
-    'Iceland',
-    'India',
-    'Indonesia',
-    'Iran',
-    'Iraq',
-    'Ireland',
-    'Israel',
-    'Italy',
-    'Ivory Coast',
-    'Jamaica',
-    'Japan',
-    'Jordan',
-    'Kazakhstan',
-    'Kenya',
-    'Kuwait',
-    'Kyrgyzstan',
-    'Laos',
-    'Latvia',
-    'Lebanon',
-    'Liberia',
-    'Libya',
-    'Lithuania',
-    'Luxembourg',
-    'Macau',
-    'Madagascar',
-    'Malawi',
-    'Malaysia',
-    'Mali',
-    'Malta',
-    'Mauritius',
-    'Mexico',
-    'Moldova',
-    'Mongolia',
-    'Montenegro',
-    'Morocco',
-    'Mozambique',
-    'Myanmar',
-    'Namibia',
-    'Nepal',
-    'Netherlands',
-    'New Zealand',
-    'Nicaragua',
-    'Niger',
-    'Nigeria',
-    'North Korea',
-    'North Macedonia',
-    'Norway',
-    'Oman',
-    'Pakistan',
-    'Panama',
-    'Papua New Guinea',
-    'Paraguay',
-    'Peru',
-    'Philippines',
-    'Poland',
-    'Portugal',
-    'Puerto Rico',
-    'Qatar',
-    'Romania',
-    'Russia',
-    'Saudi Arabia',
-    'Senegal',
-    'Serbia',
-    'Sierra Leone',
-    'Singapore',
-    'Slovakia',
-    'Slovenia',
-    'South Africa',
-    'South Korea',
-    'Spain',
-    'Sri Lanka',
-    'Sudan',
-    'Sweden',
-    'Switzerland',
-    'Syria',
-    'Taiwan',
-    'Tajikistan',
-    'Tanzania',
-    'Thailand',
-    'Timor-Leste',
-    'Trinidad and Tobago',
-    'Tunisia',
-    'Turkmenistan',
-    'Türkiye',
-    'Uganda',
-    'Ukraine',
-    'United Arab Emirates',
-    'United Kingdom',
-    'United States',
-    'Uruguay',
-    'Uzbekistan',
-    'Venezuela',
-    'Vietnam',
-    'Yemen',
-    'Zambia',
-    'Zimbabwe',
-  ];
+  // Get available fields for selected tracker
+  const availableFields = $derived(customTracker ? getFieldsForTracker(customTracker) : []);
 
   // Check if field has enum values
   function isEnumField(field) {
@@ -292,30 +52,10 @@
 
   // Get enum options for a field
   function getEnumOptions(field) {
-    if (field === 'Status') return statusOptions;
-    if (field === 'Owner Headquarters Country') return countryOptions;
+    if (field === 'Status') return STATUS_VALUES;
+    if (field === 'Owner Headquarters Country') return COUNTRIES;
     return [];
   }
-
-  // Determine if field is numeric
-  function isNumericField(field) {
-    return (
-      field.includes('(MW)') ||
-      field.includes('(m)') ||
-      field.includes('(Mt') ||
-      field.includes('(Bcm') ||
-      field.includes('(ttpa)') ||
-      field.includes('Year')
-    );
-  }
-
-  // Get operators for current field
-  const currentOperators = $derived(
-    customField ? (isNumericField(customField) ? numericOperators : textOperators) : []
-  );
-
-  // Get available fields for selected tracker
-  const availableFields = $derived(customTracker ? fieldsByTracker[customTracker] || [] : []);
 
   // Apply preset to fill the form
   function applyPreset(preset) {
@@ -355,7 +95,7 @@
     let desc = customTracker;
     if (customField && customOperator) {
       const opLabel =
-        [...numericOperators, ...textOperators].find((o) => o.value === customOperator)?.label ||
+        [...NUMERIC_OPERATORS, ...TEXT_OPERATORS].find((o) => o.value === customOperator)?.label ||
         customOperator;
       desc += ` where ${customField} ${opLabel}`;
       if (customValue && customOperator !== 'not_empty') desc += ` ${customValue}`;
@@ -382,8 +122,9 @@
         },
       },
     ];
-    const basePath = link('screener/owners').replace(/\/$/, '');
-    goto(`${basePath}?classes=${encodeURIComponent(JSON.stringify(classData))}`);
+    const url = new URL('/screener/results', $page.url.origin);
+    url.searchParams.set('classes', JSON.stringify(classData));
+    goto(url.pathname + url.search);
   }
 
   // Check if preset is active
@@ -393,7 +134,8 @@
 </script>
 
 <svelte:head>
-  <title>Asset Class Screener — GEM Viz</title>
+  <title>Asset Class Screener — Global Energy Monitor</title>
+  <meta name="description" content="Screen and analyze corporate ownership exposure to specific classes of energy assets such as coal plants, gas infrastructure, and steel facilities." />
 </svelte:head>
 
 <main>
@@ -404,31 +146,35 @@
     <!-- Header -->
     <header class="screener-header">
       <div class="header-content">
-        <h1>Asset Class Screener</h1>
         <p class="subtitle">
-          Choose a preset or build a custom query. Customize the filters below, then continue.
+          Evaluate companies' ownership stakes in classes of fossil fuel assets. Start by selecting
+          asset-classes below, or building your own query.
         </p>
       </div>
 
       <!-- Current selection summary -->
-      {#if customTracker}
-        <div class="current-config">
-          <div class="config-label">Current selection</div>
-          <div class="config-value">{currentConfigDescription()}</div>
-          <button class="clear-btn" onclick={clearForm}>Clear</button>
-        </div>
-      {/if}
+      <div class="selection-badge" class:has-selection={customTracker}>
+        {#if customTracker}
+          <span class="selection-text">{currentConfigDescription()}</span>
+          <button class="clear-btn" onclick={clearForm}>×</button>
+        {:else}
+          <span class="selection-text">None selected yet</span>
+        {/if}
+      </div>
     </header>
 
     <!-- Presets section -->
     <section class="quick-add">
       <h2>
-        Presets
-        <span class="refine-hint"> Click to load settings, then customize below </span>
+        Quick add classes of assets
+        <span class="refine-hint"
+          >Refine by <strong>geography</strong> or <strong>status</strong> (operating, proposed, etc)
+          after making selections</span
+        >
       </h2>
 
       <div class="quick-cards">
-        {#each quickAddClasses as card}
+        {#each SCREENER_PRESETS as card}
           <button
             class="quick-card"
             class:active={isActivePreset(card)}
@@ -451,8 +197,6 @@
 
     <!-- Custom query builder -->
     <section class="query-builder">
-      <h2>Create Custom Asset Class</h2>
-
       <div class="builder-form">
         <div class="form-row main-row">
           <label class="form-field">
@@ -465,7 +209,7 @@
               }}
             >
               <option value="">Select...</option>
-              {#each trackerOptions as tracker}
+              {#each TRACKERS as tracker}
                 <option value={tracker}>{tracker}</option>
               {/each}
             </select>
@@ -505,7 +249,7 @@
                     </select>
                   {:else}
                     <input
-                      type={isNumericField(customField) ? 'number' : 'text'}
+                      type={fieldConfig?.type === 'numeric' ? 'number' : 'text'}
                       bind:value={customValue}
                       placeholder="Enter value"
                     />
@@ -539,7 +283,7 @@
                 <div class="filter-input-row">
                   <select bind:value={customGeoFilter}>
                     <option value="">All countries</option>
-                    {#each countryOptions as country}
+                    {#each COUNTRIES as country}
                       <option value={country}>{country}</option>
                     {/each}
                   </select>
@@ -567,7 +311,7 @@
                 <div class="filter-input-row">
                   <select bind:value={customStatusFilter}>
                     <option value="">All statuses</option>
-                    {#each statusOptions as status}
+                    {#each STATUS_VALUES as status}
                       <option value={status}>{status}</option>
                     {/each}
                   </select>
@@ -616,20 +360,12 @@
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    gap: var(--space-12);
-    margin-bottom: var(--space-12);
+    gap: var(--space-8);
+    margin-bottom: var(--space-10);
   }
 
   .header-content {
     flex: 1;
-  }
-
-  h1 {
-    font-size: var(--font-size-2xl);
-    font-weight: 400;
-    margin: 0 0 var(--space-3) 0;
-    color: var(--color-text-primary);
-    letter-spacing: var(--tracking-tight);
   }
 
   .subtitle {
@@ -637,43 +373,43 @@
     color: var(--color-text-secondary);
     margin: 0;
     line-height: var(--line-height-relaxed);
-    max-width: 480px;
+    max-width: 560px;
   }
 
-  /* Current config summary */
-  .current-config {
+  /* Selection badge */
+  .selection-badge {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: var(--space-3);
-    padding: var(--space-3) var(--space-4);
-    background: var(--color-bg-secondary);
-    border-left: 2px solid var(--color-accent);
-  }
-
-  .config-label {
-    font-size: var(--font-size-base);
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-wide);
-    color: var(--color-text-tertiary);
-  }
-
-  .config-value {
+    padding: var(--space-4) var(--space-6);
+    background: var(--gem-teal);
+    color: white;
+    border-radius: var(--radius-sm);
     font-size: var(--font-size-lg);
-    color: var(--color-text-primary);
+    white-space: nowrap;
+    min-width: 200px;
+  }
+
+  .selection-badge.has-selection {
+    background: var(--gem-primary-blue);
+  }
+
+  .selection-text {
     flex: 1;
   }
 
   .clear-btn {
-    font-size: var(--font-size-md);
-    color: var(--color-text-tertiary);
+    font-size: var(--font-size-xl);
+    color: rgba(255, 255, 255, 0.7);
     background: none;
     border: none;
     cursor: pointer;
-    text-decoration: underline;
+    line-height: 1;
+    padding: 0;
   }
 
   .clear-btn:hover {
-    color: var(--color-text-primary);
+    color: white;
   }
 
   /* Sections - whitespace instead of boxes */
@@ -789,16 +525,17 @@
   }
 
   .form-row {
-    display: flex;
-    align-items: flex-end;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    align-items: end;
     gap: var(--space-4);
-    flex-wrap: wrap;
   }
 
   .form-field {
     display: flex;
     flex-direction: column;
     gap: 6px;
+    min-width: 0;
   }
 
   .field-label {
@@ -828,7 +565,7 @@
     border-bottom: var(--border-width) solid var(--color-gray-300);
     border-radius: 0;
     background: transparent;
-    min-width: 160px;
+    width: 100%;
     color: var(--color-text-primary);
   }
 
@@ -848,11 +585,11 @@
   }
 
   .operator-field select {
-    min-width: 120px;
+    width: 100%;
   }
 
   .value-field input {
-    min-width: 100px;
+    width: 100%;
   }
 
   .builder-hint {
@@ -882,8 +619,8 @@
   }
 
   .filter-row {
-    display: flex;
-    align-items: flex-end;
+    display: grid;
+    align-items: end;
   }
 
   .filter-input-row {
@@ -971,7 +708,6 @@
     }
 
     .screener-header {
-      flex-direction: column;
       gap: var(--space-8);
     }
 
@@ -981,8 +717,7 @@
     }
 
     .form-row {
-      flex-direction: column;
-      align-items: stretch;
+      grid-template-columns: 1fr;
     }
 
     .form-field select,

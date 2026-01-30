@@ -3,33 +3,56 @@
   import { goto } from '$app/navigation';
   import { link, assetLink } from '$lib/links';
   import { page } from '$app/stores';
+
+  // Import ALL available entity/ownership visualizations
   import OwnershipExplorerD3 from '$lib/components/OwnershipExplorerD3.svelte';
   import AssetScreener from '$lib/components/AssetScreener.svelte';
   import TrackerIcon from '$lib/components/TrackerIcon.svelte';
   import StatusIcon from '$lib/components/StatusIcon.svelte';
-  import { EntityPortfolioFilters, EntityPortfolioHeader } from '$lib/components/ownership';
+  import OwnershipFlower from '$lib/components/OwnershipFlower.svelte';
+  import MiniNetworkGraph from '$lib/components/MiniNetworkGraph.svelte';
+  import UltimateOwners from '$lib/components/UltimateOwners.svelte';
+  import MermaidOwnership from '$lib/components/MermaidOwnership.svelte';
+  import DataSourceBadge from '$lib/components/DataSourceBadge.svelte';
+  import {
+    EntityPortfolioFilters,
+    EntityPortfolioHeader,
+    DagreOwnershipGraph,
+    OwnershipSummaryTables,
+    AssetRingVisualization,
+  } from '$lib/components/ownership';
   import { streamOwnerPortfolio } from '$lib/ownership-data';
+  import { getEntityGraphUp, getEntityGraphDown } from '$lib/ownership-api';
+  import { trackerColors } from '$lib/design-tokens';
 
-  // Server data from +page.server.js (API-based)
   /** @type {{ data: any }} */
   let { data } = $props();
 
-  // Check if this looks like an asset ID (starts with G) instead of entity ID (starts with E)
   function isLikelyAssetId(id) {
     return id && /^G\d+$/.test(id);
   }
 
   // Progressive loading states
-  let loadingPhase = $state('init'); // 'init' | 'direct' | 'subsidiaries' | 'done' | 'error'
-  let loadingMessage = $state('Initializing DuckDB...');
+  let loadingPhase = $state('init');
+  let loadingMessage = $state('Initializing...');
   let error = $state(null);
 
   let entityId = $state(data?.entityId || '');
   let entityName = $state(data?.entityName || '');
-  let _entity = $state(data?.entity || null); // Available from server if needed
-  let portfolio = $state(null); // Fetched client-side from DuckDB - progressively updated
+  let _entity = $state(data?.entity || null);
+  let portfolio = $state(null);
 
-  // Derived data from portfolio (client-fetched)
+  // Graph data for visualizations
+  let graphUp = $state(null);
+  let graphDown = $state(null);
+  let graphLoading = $state(true);
+  let _graphError = $state(null);
+
+  // Data source tracking for transparency
+  let graphQueryTime = $state(null);
+  let portfolioQueryTime = $state(null);
+
+  // Derived data
   const trackerBreakdown = $derived.by(() => {
     const counts = new Map();
     (portfolio?.assets || []).forEach((a) => {
@@ -52,12 +75,28 @@
     );
   });
 
+  const countryBreakdown = $derived.by(() => {
+    const counts = new Map();
+    (portfolio?.assets || []).forEach((a) => {
+      const key = a.country || 'Unknown';
+      counts.set(key, (counts.get(key) || 0) + 1);
+    });
+    return Array.from(counts, ([country, count]) => ({ country, count })).sort(
+      (a, b) => b.count - a.count
+    );
+  });
+
+  // Build node map for Mermaid from graph data
+  const upstreamNodeMap = $derived.by(() => {
+    if (!graphUp?.nodes) return new Map();
+    return new Map(graphUp.nodes.map((n) => [n.id, { Name: n.Name }]));
+  });
+
   // Filter state
   let selectedCountries = $state(new Set());
   let selectedTrackers = $state(new Set());
   let selectedStatuses = $state(new Set());
 
-  // Filtered assets based on selections
   const filteredAssets = $derived.by(() => {
     const assets = portfolio?.assets || [];
     if (
@@ -68,20 +107,16 @@
       return assets;
     }
     return assets.filter((asset) => {
-      if (selectedCountries.size > 0 && !selectedCountries.has(asset.country || 'Unknown')) {
+      if (selectedCountries.size > 0 && !selectedCountries.has(asset.country || 'Unknown'))
         return false;
-      }
-      if (selectedTrackers.size > 0 && !selectedTrackers.has(asset.tracker || 'Unknown')) {
+      if (selectedTrackers.size > 0 && !selectedTrackers.has(asset.tracker || 'Unknown'))
         return false;
-      }
-      if (selectedStatuses.size > 0 && !selectedStatuses.has(asset.status || 'Unknown')) {
+      if (selectedStatuses.size > 0 && !selectedStatuses.has(asset.status || 'Unknown'))
         return false;
-      }
       return true;
     });
   });
 
-  // Build a filtered portfolio for AssetScreener when filters are active
   const filteredPortfolio = $derived.by(() => {
     if (!portfolio) return null;
     if (
@@ -91,41 +126,28 @@
     ) {
       return portfolio;
     }
-
-    // Filter the subsidiariesMatched map
     const filteredSubsidiaries = new Map();
     for (const [subId, assets] of portfolio.subsidiariesMatched || []) {
       const filtered = assets.filter((asset) => {
-        if (selectedCountries.size > 0 && !selectedCountries.has(asset.country || 'Unknown')) {
+        if (selectedCountries.size > 0 && !selectedCountries.has(asset.country || 'Unknown'))
           return false;
-        }
-        if (selectedTrackers.size > 0 && !selectedTrackers.has(asset.tracker || 'Unknown')) {
+        if (selectedTrackers.size > 0 && !selectedTrackers.has(asset.tracker || 'Unknown'))
           return false;
-        }
-        if (selectedStatuses.size > 0 && !selectedStatuses.has(asset.status || 'Unknown')) {
+        if (selectedStatuses.size > 0 && !selectedStatuses.has(asset.status || 'Unknown'))
           return false;
-        }
         return true;
       });
-      if (filtered.length > 0) {
-        filteredSubsidiaries.set(subId, filtered);
-      }
+      if (filtered.length > 0) filteredSubsidiaries.set(subId, filtered);
     }
-
-    // Filter directlyOwned
     const filteredDirect = (portfolio.directlyOwned || []).filter((asset) => {
-      if (selectedCountries.size > 0 && !selectedCountries.has(asset.country || 'Unknown')) {
+      if (selectedCountries.size > 0 && !selectedCountries.has(asset.country || 'Unknown'))
         return false;
-      }
-      if (selectedTrackers.size > 0 && !selectedTrackers.has(asset.tracker || 'Unknown')) {
+      if (selectedTrackers.size > 0 && !selectedTrackers.has(asset.tracker || 'Unknown'))
         return false;
-      }
-      if (selectedStatuses.size > 0 && !selectedStatuses.has(asset.status || 'Unknown')) {
+      if (selectedStatuses.size > 0 && !selectedStatuses.has(asset.status || 'Unknown'))
         return false;
-      }
       return true;
     });
-
     return {
       ...portfolio,
       subsidiariesMatched: filteredSubsidiaries,
@@ -134,65 +156,89 @@
     };
   });
 
-  const summaryAssets = $derived(filteredAssets.slice(0, 20));
   const hasActiveFilters = $derived(
     selectedCountries.size > 0 || selectedTrackers.size > 0 || selectedStatuses.size > 0
   );
 
-  // Client-side fetch for portfolio data with PROGRESSIVE STREAMING
+  // Load graph data (upstream/downstream ownership chains)
+  async function loadGraphData(id) {
+    graphLoading = true;
+    _graphError = null;
+    const startTime = performance.now();
+    try {
+      const [upResult, downResult] = await Promise.all([
+        getEntityGraphUp(id).catch((e) => {
+          console.warn('Failed to fetch upstream graph:', e);
+          return null;
+        }),
+        getEntityGraphDown(id).catch((e) => {
+          console.warn('Failed to fetch downstream graph:', e);
+          return null;
+        }),
+      ]);
+      graphUp = upResult;
+      graphDown = downResult;
+      graphQueryTime = performance.now() - startTime;
+      if (upResult?.rootEntityName && !entityName) {
+        entityName = upResult.rootEntityName;
+      }
+    } catch (err) {
+      console.error('Graph data load error:', err);
+      _graphError = err?.message || 'Failed to load ownership graph';
+    } finally {
+      graphLoading = false;
+    }
+  }
+
+  // Stream portfolio data
   onMount(async () => {
     const paramsId = $page.params?.id;
-
-    // Redirect if this looks like an asset ID instead of entity ID
     if (isLikelyAssetId(paramsId)) {
-      console.log(`[Entity] Redirecting ${paramsId} to asset page (G-prefix = asset ID)`);
       goto(assetLink(paramsId), { replaceState: true });
       return;
     }
+    if (data?.entity?.name) entityName = data.entity.name;
 
-    // Use entity name from API if available
-    if (data?.entity?.name) {
-      entityName = data.entity.name;
+    if (!paramsId) {
+      error = 'Missing entity ID';
+      loadingPhase = 'error';
+      return;
     }
 
-    // Stream portfolio data progressively from DuckDB
+    entityId = paramsId;
+
+    // Start both data fetches in parallel
+    loadGraphData(paramsId);
+
+    const portfolioStartTime = performance.now();
     try {
       error = null;
-      if (!paramsId) throw new Error('Missing entity ID');
-      entityId = paramsId;
 
-      // Use streaming fetch - updates portfolio as data arrives
       for await (const update of streamOwnerPortfolio(paramsId)) {
         loadingPhase = update.phase;
         loadingMessage = update.message;
-
-        // Update portfolio progressively
         if (update.portfolio) {
           portfolio = update.portfolio;
-
-          // Use portfolio name if we don't have one from API
           if (!entityName && portfolio?.spotlightOwner?.Name) {
             entityName = portfolio.spotlightOwner.Name;
           }
         }
-
-        if (update.phase === 'error') {
-          error = update.error;
+        if (update.phase === 'error') error = update.error;
+        if (update.phase === 'done') {
+          portfolioQueryTime = performance.now() - portfolioStartTime;
         }
       }
     } catch (err) {
       console.error('Entity portfolio load error:', err);
       loadingPhase = 'error';
-      // Don't set error if we have basic entity data from API
-      if (!data?.entity) {
-        error = err?.message || 'Failed to load entity';
-      }
+      if (!data?.entity) error = err?.message || 'Failed to load entity';
     }
   });
 </script>
 
 <svelte:head>
-  <title>{entityName || entityId || 'Entity'} — GEM Viz</title>
+  <title>{entityName || entityId || 'Entity'} — Global Energy Monitor</title>
+  <meta name="description" content="Corporate ownership profile for {entityName || entityId} including subsidiary structure, asset portfolio, and ownership hierarchy." />
 </svelte:head>
 
 <main>
@@ -230,59 +276,333 @@
     </div>
   {:else}
     <article class="entity-detail">
-      <!-- Show loading banner if still streaming data -->
       {#if loadingPhase !== 'done' && loadingPhase !== 'error'}
         <div class="streaming-banner">
           <span class="streaming-dot"></span>
           {loadingMessage}
           {#if portfolio?.assets?.length}
-            — {portfolio.assets.length} assets loaded
-          {/if}
+            — {portfolio.assets.length} assets loaded{/if}
         </div>
       {/if}
 
-      <!-- Unified header component with stats and flower -->
+      {#if portfolio?.truncated}
+        <div class="truncation-banner">
+          <strong>Large Entity:</strong> Showing {portfolio.assets?.length?.toLocaleString() || 0} assets
+          {#if portfolio.totalCount}(of {portfolio.totalCount.toLocaleString()} total){/if}
+          for performance. Use filters or export to access all data.
+        </div>
+      {/if}
+
+      <!-- ═══════════════════════════════════════════════════════════════════════
+           HERO SECTION: Entity Name + Key Metrics
+           ═══════════════════════════════════════════════════════════════════════ -->
       <EntityPortfolioHeader
         {portfolio}
         {entityId}
         {entityName}
         sticky={false}
         showFlower={true}
-        flowerSize="medium"
+        flowerSize="large"
       />
 
-      {#if trackerBreakdown.length > 0}
-        <section class="breakdown-section">
-          <h2>Tracker Mix</h2>
-          <ul class="tracker-list">
-            {#each trackerBreakdown as row}
-              <li class="tracker-row">
-                <TrackerIcon tracker={row.tracker} size={14} showLabel variant="pill" />
-                <span class="tracker-count">{row.count.toLocaleString()} assets</span>
-              </li>
-            {/each}
-          </ul>
-        </section>
+      <!-- ═══════════════════════════════════════════════════════════════════════
+           SECTION 1: OWNERSHIP FLOWER + QUICK STATS
+           ═══════════════════════════════════════════════════════════════════════ -->
+      <section class="section-divider">
+        <div class="section-header-row">
+          <h2 class="section-title">Portfolio Overview</h2>
+          <div class="source-badges">
+            <DataSourceBadge source="motherduck" label="Assets" queryTime={portfolioQueryTime} />
+          </div>
+        </div>
+      </section>
+
+      <div class="split-row">
+        <div class="split-col viz-container hero-viz">
+          <h3>
+            Ownership Flower
+            <a
+              href="/embed/ownership-flower?entityId={entityId}"
+              class="embed-btn"
+              target="_blank"
+              rel="noopener"
+              title="Embed this visualization">↗</a
+            >
+          </h3>
+          <div class="flower-wrapper">
+            <OwnershipFlower ownerId={entityId} size="large" />
+          </div>
+        </div>
+        <div class="split-col">
+          <div class="stats-hero">
+            {#if portfolio?.assets?.length}
+              <div class="stat-big">
+                <span class="stat-number">{portfolio.assets.length.toLocaleString()}</span>
+                <span class="stat-unit">Assets</span>
+              </div>
+              <div class="stat-row">
+                <div class="stat-item">
+                  <span class="stat-value">{trackerBreakdown.length}</span>
+                  <span class="stat-label">Trackers</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-value">{countryBreakdown.length}</span>
+                  <span class="stat-label">Countries</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-value">{portfolio.subsidiariesMatched?.size || 0}</span>
+                  <span class="stat-label">Subsidiaries</span>
+                </div>
+              </div>
+            {:else}
+              <p class="placeholder">Loading portfolio data...</p>
+            {/if}
+          </div>
+
+          <!-- Tracker breakdown as visual bars -->
+          {#if trackerBreakdown.length > 0}
+            <div class="tracker-bars">
+              {#each trackerBreakdown.slice(0, 5) as row}
+                {@const maxCount = trackerBreakdown[0]?.count || 1}
+                {@const pct = (row.count / maxCount) * 100}
+                {@const barColor = trackerColors[row.tracker] || '#6e8c91'}
+                <div class="tracker-bar-row">
+                  <TrackerIcon tracker={row.tracker} size={14} showLabel variant="pill" />
+                  <div class="bar-container">
+                    <div class="bar-fill" style="width: {pct}%; background: {barColor}"></div>
+                  </div>
+                  <span class="bar-count">{row.count.toLocaleString()}</span>
+                </div>
+              {/each}
+            </div>
+          {/if}
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════════════
+           SECTION 2: OWNERSHIP HIERARCHY - WHO OWNS THIS ENTITY
+           ═══════════════════════════════════════════════════════════════════════ -->
+      <section class="section-divider">
+        <div class="section-header-row">
+          <h2 class="section-title">Ownership Hierarchy</h2>
+          <div class="source-badges">
+            <DataSourceBadge source="api" label="Graph" queryTime={graphQueryTime} />
+          </div>
+        </div>
+        <p class="section-subtitle">Who owns this entity and their ownership structure</p>
+      </section>
+
+      <div class="split-row">
+        <div class="split-col viz-container tall-viz">
+          <h3>
+            Upstream Ownership Graph
+            <a
+              href="/embed/ownership-graph?entityId={entityId}&direction=up"
+              class="embed-btn"
+              target="_blank"
+              rel="noopener"
+              title="Embed this visualization">↗</a
+            >
+          </h3>
+          {#if graphLoading}
+            <p class="placeholder">Loading ownership graph...</p>
+          {:else if graphUp?.nodes?.length > 1}
+            <DagreOwnershipGraph
+              nodes={graphUp.nodes}
+              edges={graphUp.edges}
+              rootId={entityId}
+              direction="BT"
+              showPies={true}
+            />
+          {:else}
+            <p class="placeholder">No upstream owners found (terminal entity)</p>
+          {/if}
+        </div>
+        <div class="split-col viz-container tall-viz">
+          <h3>
+            Ultimate Owners
+            <a
+              href="/embed/ultimate-owners?entityId={entityId}"
+              class="embed-btn"
+              target="_blank"
+              rel="noopener"
+              title="Embed this visualization">↗</a
+            >
+          </h3>
+          <UltimateOwners {entityId} />
+        </div>
+      </div>
+
+      <!-- Ownership Summary Tables -->
+      {#if graphUp?.nodes?.length > 1}
+        <div class="full-width-section viz-container">
+          <h3>Ownership Breakdown</h3>
+          <OwnershipSummaryTables nodes={graphUp.nodes} edges={graphUp.edges} rootId={entityId} />
+        </div>
       {/if}
 
-      {#if statusBreakdown.length > 0}
-        <section class="breakdown-section">
-          <h2>Status Breakdown</h2>
-          <ul class="status-list">
-            {#each statusBreakdown as row}
-              <li class="status-row">
-                <StatusIcon status={row.status} size={12} />
-                <span class="status-label">{row.status}</span>
-                <span class="status-count">{row.count.toLocaleString()}</span>
-              </li>
-            {/each}
-          </ul>
-        </section>
+      <!-- Mermaid Flow Diagram -->
+      {#if graphUp?.edges?.length > 0}
+        <div class="full-width-section viz-container">
+          <h3>
+            Ownership Flow Diagram
+            <a
+              href="/embed/ownership-mermaid?entityId={entityId}"
+              class="embed-btn"
+              target="_blank"
+              rel="noopener"
+              title="Embed this visualization">↗</a
+            >
+          </h3>
+          <MermaidOwnership
+            edges={graphUp.edges}
+            nodeMap={upstreamNodeMap}
+            zoom={0.7}
+            direction="BT"
+          />
+        </div>
       {/if}
 
+      <!-- ═══════════════════════════════════════════════════════════════════════
+           SECTION 3: WHAT THIS ENTITY OWNS (DOWNSTREAM)
+           ═══════════════════════════════════════════════════════════════════════ -->
+      {#if graphDown?.nodes?.length > 1}
+        <section class="section-divider">
+          <h2 class="section-title">Subsidiaries & Holdings</h2>
+          <p class="section-subtitle">Entities and assets owned by {entityName || entityId}</p>
+        </section>
+
+        <div class="full-width-section viz-container tall-viz">
+          <h3>
+            Downstream Ownership Graph
+            <a
+              href="/embed/ownership-graph?entityId={entityId}&direction=down"
+              class="embed-btn"
+              target="_blank"
+              rel="noopener"
+              title="Embed this visualization">↗</a
+            >
+          </h3>
+          <DagreOwnershipGraph
+            nodes={graphDown.nodes}
+            edges={graphDown.edges}
+            rootId={entityId}
+            direction="TB"
+            showPies={true}
+          />
+        </div>
+      {/if}
+
+      <!-- ═══════════════════════════════════════════════════════════════════════
+           SECTION 4: NETWORK VISUALIZATIONS
+           ═══════════════════════════════════════════════════════════════════════ -->
+      <section class="section-divider">
+        <h2 class="section-title">Network Analysis</h2>
+        <p class="section-subtitle">Interactive 3D ownership network exploration</p>
+      </section>
+
+      <div class="full-width-section viz-container mega-viz">
+        <h3>
+          3D Ownership Network
+          <a
+            href="/embed/network-3d?entityId={entityId}"
+            class="embed-btn"
+            target="_blank"
+            rel="noopener"
+            title="Embed this visualization">↗</a
+          >
+        </h3>
+        <MiniNetworkGraph {entityId} height={500} maxHops={3} />
+      </div>
+
+      <div class="full-width-section viz-container mega-viz">
+        <h3>
+          Full Network Explorer
+          <a
+            href="/embed/network-explorer?entityId={entityId}"
+            class="embed-btn"
+            target="_blank"
+            rel="noopener"
+            title="Embed this visualization">↗</a
+          >
+        </h3>
+        <OwnershipExplorerD3 ownerEntityId={entityId} prebakedData={data?.ownerExplorerData} />
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════════════
+           SECTION 5: ASSET DISTRIBUTION
+           ═══════════════════════════════════════════════════════════════════════ -->
+      {#if filteredAssets.length > 0}
+        <section class="section-divider">
+          <h2 class="section-title">Asset Distribution</h2>
+          <p class="section-subtitle">
+            {filteredAssets.length.toLocaleString()} assets across {countryBreakdown.length} countries
+          </p>
+        </section>
+
+        <div class="full-width-section viz-container">
+          <h3>
+            Asset Ring Visualization
+            <a
+              href="/embed/asset-ring?entityId={entityId}"
+              class="embed-btn"
+              target="_blank"
+              rel="noopener"
+              title="Embed this visualization">↗</a
+            >
+          </h3>
+          <AssetRingVisualization assets={filteredAssets.slice(0, 150)} />
+        </div>
+
+        <!-- Status breakdown as visual grid -->
+        <div class="split-row">
+          <div class="split-col viz-container">
+            <h3>Status Distribution</h3>
+            <div class="status-grid">
+              {#each statusBreakdown as row}
+                {@const total = portfolio?.assets?.length || 1}
+                {@const pct = ((row.count / total) * 100).toFixed(1)}
+                <div class="status-card">
+                  <StatusIcon status={row.status} size={24} />
+                  <div class="status-info">
+                    <span class="status-name">{row.status}</span>
+                    <span class="status-stats">{row.count.toLocaleString()} ({pct}%)</span>
+                  </div>
+                </div>
+              {/each}
+            </div>
+          </div>
+          <div class="split-col viz-container">
+            <h3>Geographic Distribution</h3>
+            <div class="country-grid">
+              {#each countryBreakdown.slice(0, 12) as row}
+                {@const total = portfolio?.assets?.length || 1}
+                {@const pct = ((row.count / total) * 100).toFixed(1)}
+                <div class="country-card">
+                  <span class="country-name">{row.country}</span>
+                  <span class="country-count">{row.count.toLocaleString()} ({pct}%)</span>
+                </div>
+              {/each}
+            </div>
+          </div>
+        </div>
+      {/if}
+
+      <!-- ═══════════════════════════════════════════════════════════════════════
+           SECTION 6: ASSET SCREENER
+           ═══════════════════════════════════════════════════════════════════════ -->
       {#if portfolio?.assets?.length > 0}
-        <section class="filter-section">
-          <h2>Filter Assets</h2>
+        <section class="section-divider">
+          <div class="section-header-row">
+            <h2 class="section-title">Asset Screener</h2>
+            <div class="source-badges">
+              <DataSourceBadge source="motherduck" label="Assets" queryTime={portfolioQueryTime} />
+            </div>
+          </div>
+          <p class="section-subtitle">Filter and explore all assets in this portfolio</p>
+        </section>
+
+        <div class="full-width-section">
           <EntityPortfolioFilters
             assets={portfolio.assets}
             {selectedCountries}
@@ -292,78 +612,29 @@
             onTrackerChange={(t) => (selectedTrackers = t)}
             onStatusChange={(s) => (selectedStatuses = s)}
           />
-        </section>
-      {/if}
+        </div>
 
-      {#if summaryAssets.length > 0}
-        <section class="properties">
-          <h2>
+        <div class="full-width-section">
+          <h3>
+            Assets
             {#if hasActiveFilters}
-              Filtered Assets ({filteredAssets.length} of {portfolio?.assets?.length})
-            {:else}
-              Representative Assets
+              <span class="filter-indicator">
+                ({filteredAssets.length} of {portfolio.assets.length})
+              </span>
             {/if}
-          </h2>
-          <div class="asset-list">
-            {#each summaryAssets as asset}
-              <div class="asset-card">
-                <div class="asset-header">
-                  {#if asset.tracker}
-                    <TrackerIcon tracker={asset.tracker} size={10} />
-                  {/if}
-                  <a href={assetLink(asset.id)} class="asset-link">
-                    {asset.name || asset.id}
-                  </a>
-                  {#if asset.status}
-                    <StatusIcon status={asset.status} size={10} />
-                  {/if}
-                </div>
-                <div class="asset-meta">
-                  {#if asset.status}
-                    <span class="chip">{asset.status}</span>
-                  {/if}
-                  {#if asset.capacityMw}
-                    <span class="chip">{Number(asset.capacityMw).toLocaleString()} MW</span>
-                  {/if}
-                </div>
-              </div>
-            {/each}
-          </div>
-        </section>
+          </h3>
+          <AssetScreener {entityId} portfolio={filteredPortfolio} />
+        </div>
       {/if}
-
-      <section class="ownership-explorer">
-        <h2>Owner Explorer (3D Network)</h2>
-        <OwnershipExplorerD3 ownerEntityId={entityId} prebakedData={data?.ownerExplorerData} />
-      </section>
-
-      <section class="asset-screener-section">
-        <h2>
-          Asset Screener
-          {#if hasActiveFilters}
-            <span class="filter-indicator"
-              >({filteredAssets.length} of {portfolio?.assets?.length || 0} assets)</span
-            >
-          {/if}
-        </h2>
-        <p class="section-subtitle">
-          Full portfolio breakdown with subsidiary paths, mini bar charts, and status icons
-          {#if hasActiveFilters}
-            — filtered by your selections above
-          {/if}
-        </p>
-        <AssetScreener {entityId} portfolio={filteredPortfolio} />
-      </section>
     </article>
   {/if}
 
-  <!-- Embed Link -->
   <a
     href="/embed/entity?id={entityId}"
     class="embed-link"
     target="_blank"
     rel="noopener"
-    title="Open embeddable version"
+    title="Embeddable version"
   >
     Embed ↗
   </a>
@@ -372,66 +643,393 @@
 <style>
   main {
     width: 100%;
-    margin: 0;
-    padding: var(--space-10);
-    max-width: 1200px;
+    padding: var(--space-6);
+    max-width: 1800px;
     margin: 0 auto;
   }
 
-  .loading {
-    padding: var(--space-8) 0 var(--space-2) 0;
+  header {
+    border-bottom: var(--border-width) solid var(--color-black);
+    padding-bottom: var(--space-4);
+    margin-bottom: var(--space-6);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+
+  .back-link {
+    color: var(--color-black);
+    text-decoration: underline;
+    font-size: var(--font-size-md);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
+  }
+
+  .entity-type {
+    font-size: var(--font-size-base);
+    color: var(--color-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
+  }
+
+  /* Section Dividers */
+  .section-divider {
+    margin: var(--space-10) 0 var(--space-6) 0;
+    padding-top: var(--space-6);
+    border-top: 3px solid var(--color-black);
+  }
+
+  .section-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    flex-wrap: wrap;
+  }
+
+  .source-badges {
+    display: flex;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+  }
+
+  .section-title {
+    font-size: var(--font-size-2xl);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
+    margin: 0 0 var(--space-2) 0;
+  }
+
+  .section-subtitle {
+    font-size: var(--font-size-base);
     color: var(--color-text-secondary);
+    margin: 0;
+  }
+
+  /* Split Row Layout */
+  .split-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-6);
+    margin-bottom: var(--space-6);
+  }
+
+  .split-col {
+    min-width: 0;
+  }
+
+  .viz-container {
+    border: 2px solid var(--color-black);
+    background: var(--color-bg-secondary);
+    padding: var(--space-4);
+    overflow: auto;
+  }
+
+  .hero-viz {
+    min-height: 400px;
+    max-height: 500px;
+  }
+
+  .tall-viz {
+    min-height: 500px;
+    max-height: 80vh;
+    overflow: auto;
+  }
+
+  .mega-viz {
+    min-height: 600px;
+    max-height: 90vh;
+    overflow: auto;
+  }
+
+  .flower-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 350px;
+  }
+
+  .full-width-section {
+    margin-bottom: var(--space-6);
+    border: 2px solid var(--color-black);
+    background: var(--color-bg-secondary);
+    padding: var(--space-4);
+  }
+
+  h3 {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: var(--font-size-lg);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
+    margin: 0 0 var(--space-4) 0;
+    padding-bottom: var(--space-2);
+    border-bottom: 1px solid var(--color-gray-300);
+  }
+
+  .embed-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    background: var(--gem-mint);
+    color: var(--gem-navy);
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    text-decoration: none;
+    border-radius: 4px;
+    opacity: 0.6;
+    transition: all 0.15s ease;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  .embed-btn:hover {
+    opacity: 1;
+    background: var(--gem-teal);
+    color: var(--gem-warm-white);
+  }
+
+  .placeholder {
+    color: var(--color-text-tertiary);
+    font-style: italic;
+    padding: var(--space-4);
+  }
+
+  /* Hero Stats */
+  .stats-hero {
+    padding: var(--space-4);
+    background: var(--gem-primary-blue, #1d4961);
+    color: white;
+    margin-bottom: var(--space-4);
+  }
+
+  .stat-big {
+    text-align: center;
+    margin-bottom: var(--space-4);
+  }
+
+  .stat-number {
+    font-size: 4rem;
+    font-weight: 900;
+    font-family: var(--font-family-data);
+    font-weight: 700;
+    line-height: 1;
+    display: block;
+  }
+
+  .stat-unit {
+    font-size: var(--font-size-lg);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
+    opacity: 0.7;
+  }
+
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-4);
+    text-align: center;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    padding-top: var(--space-4);
+  }
+
+  .stat-item .stat-value {
+    display: block;
+    font-size: var(--font-size-2xl);
+    font-weight: 700;
+    font-family: var(--font-family-data);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
+  }
+
+  .stat-item .stat-label {
+    font-size: var(--font-size-xs);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
+    opacity: 0.7;
+  }
+
+  /* Tracker Bars */
+  .tracker-bars {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .tracker-bar-row {
+    display: grid;
+    grid-template-columns: 140px 1fr 60px;
+    gap: var(--space-2);
+    align-items: center;
+  }
+
+  .bar-container {
+    height: 24px;
+    background: var(--color-gray-200);
+    position: relative;
+  }
+
+  .bar-fill {
+    height: 100%;
+    /* Color set inline via tracker color */
+    transition: width 0.5s ease-out;
+  }
+
+  .bar-count {
+    font-size: var(--font-size-sm);
+    font-family: var(--font-family-data);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
+    text-align: right;
+  }
+
+  /* Status Grid */
+  .status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: var(--space-3);
+  }
+
+  .status-card {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    background: var(--color-bg-primary);
+    border: 1px solid var(--color-gray-200);
+  }
+
+  .status-info {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .status-name {
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: var(--font-size-sm);
+  }
+
+  .status-stats {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    font-family: var(--font-family-data);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
+  }
+
+  /* Country Grid */
+  .country-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: var(--space-2);
+  }
+
+  .country-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-2) var(--space-3);
+    background: var(--color-bg-primary);
+    border: 1px solid var(--color-gray-200);
+  }
+
+  .country-name {
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+  }
+
+  .country-count {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    font-family: var(--font-family-data);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
+  }
+
+  /* Filter indicator */
+  .filter-indicator {
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    color: var(--color-text-secondary);
+  }
+
+  /* Loading States */
+  .loading {
+    padding: 0;
+    margin: 0;
+    color: var(--gem-navy);
+    font-size: var(--font-size-lg);
+    font-weight: 700;
   }
 
   .loading.error {
     color: var(--color-error);
+    font-weight: 700;
   }
 
   .loading-progress {
-    padding: var(--space-8) 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 300px;
+    padding: var(--space-12) var(--space-6);
   }
 
   .progress-phases {
     display: flex;
     align-items: center;
-    gap: var(--space-2);
-    margin-top: var(--space-4);
+    gap: var(--space-3);
+    margin-top: var(--space-6);
     font-size: var(--font-size-sm);
-    font-family: var(--font-family-sans);
   }
 
   .phase {
-    padding: var(--space-1) var(--space-2);
+    padding: 8px 14px;
     background: var(--color-gray-100);
-    border: 1px solid var(--color-gray-300);
+    border: none;
+    border-radius: 5px;
     color: var(--color-text-tertiary);
+    font-weight: 700;
     transition: all 0.2s ease;
   }
 
   .phase.active {
-    background: var(--color-accent, #f59e0b);
-    border-color: var(--color-accent, #f59e0b);
-    color: white;
-    animation: pulse 1s ease-in-out infinite;
+    background: var(--gem-teal);
+    color: var(--gem-warm-white);
+    animation: pulse 1.5s ease-in-out infinite;
   }
 
   .phase.done {
-    background: var(--color-success, #10b981);
-    border-color: var(--color-success, #10b981);
-    color: white;
+    background: var(--gem-mint);
+    color: var(--gem-navy);
+    font-weight: 700;
   }
 
   .phase-arrow {
-    color: var(--color-gray-400);
+    color: var(--color-gray-300);
+    font-size: var(--font-size-lg);
   }
 
   @keyframes pulse {
     0%,
     100% {
       opacity: 1;
+      transform: scale(1);
     }
     50% {
-      opacity: 0.7;
+      opacity: 0.85;
+      transform: scale(1.02);
     }
   }
 
@@ -440,11 +1038,22 @@
     align-items: center;
     gap: var(--space-2);
     padding: var(--space-3) var(--space-4);
-    background: var(--color-accent, #f59e0b);
+    background: var(--gem-teal);
+    color: var(--gem-warm-white);
+    font-size: var(--font-size-sm);
+    margin-bottom: var(--space-6);
+  }
+
+  .truncation-banner {
+    padding: var(--space-3) var(--space-4);
+    background: var(--gem-orange);
     color: white;
     font-size: var(--font-size-sm);
-    font-family: var(--font-family-sans);
     margin-bottom: var(--space-6);
+  }
+
+  .truncation-banner strong {
+    font-weight: 700;
   }
 
   .streaming-dot {
@@ -465,213 +1074,49 @@
     }
   }
 
-  header {
-    border-bottom: var(--border-width) solid var(--color-black);
-    padding-bottom: var(--space-4);
-    margin-bottom: var(--space-8);
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-  }
-
-  .back-link {
-    color: var(--color-black);
-    text-decoration: underline;
-    font-size: var(--font-size-md);
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-wide);
-  }
-
-  .back-link:hover {
-    text-decoration: none;
-  }
-
-  .entity-type {
-    font-size: var(--font-size-base);
-    color: var(--color-text-tertiary);
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-wide);
-  }
-
-  .entity-detail {
-    font-family: var(--font-family);
-  }
-
-  h2 {
-    font-size: var(--font-size-xl);
-    font-weight: normal;
-    margin: var(--space-10) 0 var(--space-5) 0;
-    border-bottom: var(--border-width) solid var(--color-gray-300);
-    padding-bottom: var(--space-2);
-  }
-
-  .filter-indicator {
-    font-size: var(--font-size-body);
-    font-weight: normal;
-    color: var(--color-text-secondary);
-    margin-left: var(--space-2);
-  }
-
-  .breakdown-section {
-    margin: var(--space-8) 0;
-    padding: var(--space-5);
-    background: var(--color-bg-secondary);
-    border: var(--border-width) solid var(--color-border);
-  }
-
-  .breakdown-section h2 {
-    margin-top: 0;
-    margin-bottom: var(--space-4);
-    border-bottom: none;
-    padding-bottom: 0;
-  }
-
-  .tracker-list,
-  .status-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-3);
-  }
-
-  .tracker-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-  }
-
-  .tracker-count {
-    font-size: var(--font-size-body);
-    color: var(--color-text-secondary);
-    font-family: var(--font-family-sans);
-  }
-
-  .status-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: var(--space-1) var(--space-2);
-    background: var(--color-bg-primary);
-    border: var(--border-width) solid var(--color-gray-300);
-  }
-
-  .status-label {
-    font-size: var(--font-size-md);
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-wide);
-    font-family: var(--font-family-sans);
-  }
-
-  .status-count {
-    font-size: var(--font-size-body);
-    color: var(--color-text-secondary);
-    font-family: var(--font-family-sans);
-    margin-left: var(--space-1);
-  }
-
-  .chip {
-    font-size: var(--font-size-base);
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-wide);
-    padding: 2px 6px;
-    background: var(--color-gray-100);
-    border: var(--border-width) solid var(--color-gray-300);
-    font-family: var(--font-family-sans);
-  }
-
-  .filter-section {
-    margin: var(--space-8) 0;
-  }
-
-  .filter-section h2 {
-    margin-top: 0;
-    margin-bottom: var(--space-4);
-  }
-
-  .properties {
-    margin: var(--space-10) 0;
-  }
-
-  .asset-list {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap: var(--space-3);
-  }
-
-  .asset-card {
-    border: var(--border-width) solid var(--color-gray-300);
-    padding: var(--space-3);
-    background: var(--color-bg-secondary);
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-  }
-
-  .asset-header {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    justify-content: space-between;
-  }
-
-  .asset-link {
-    color: var(--color-black);
-    text-decoration: underline;
-    font-weight: 600;
-  }
-
-  .asset-link:hover {
-    text-decoration: none;
-  }
-
-  .asset-meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-
-  .ownership-explorer {
-    margin-top: var(--space-8);
-  }
-
-  .asset-screener-section {
-    margin-top: var(--space-10);
-    padding-top: var(--space-8);
-    border-top: var(--border-width) solid var(--color-gray-300);
-  }
-
-  .section-subtitle {
-    font-size: var(--font-size-body);
-    color: var(--color-text-secondary);
-    margin: calc(-1 * var(--space-4)) 0 var(--space-5) 0;
-    font-family: var(--font-family-sans);
-  }
-
-  @media (max-width: 768px) {
-    .asset-list {
-      grid-template-columns: 1fr;
-    }
-  }
-
-  /* Embed Link */
   .embed-link {
     position: fixed;
     bottom: var(--space-4);
     right: var(--space-4);
     padding: var(--space-2) var(--space-3);
     background: var(--color-bg-secondary);
-    border: var(--border-width) solid var(--color-border);
-    color: var(--color-text-secondary);
+    border: 2px solid var(--color-black);
+    color: var(--color-black);
     font-size: var(--font-size-sm);
+    font-weight: 700;
     text-decoration: none;
-    opacity: 0.7;
-    transition: opacity 0.2s;
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
+    transition: all 0.2s;
   }
 
   .embed-link:hover {
-    opacity: 1;
-    color: var(--color-black);
+    background: var(--color-black);
+    color: white;
+  }
+
+  /* Responsive */
+  @media (max-width: 1200px) {
+    .split-row {
+      gap: var(--space-4);
+    }
+  }
+
+  @media (max-width: 900px) {
+    .split-row {
+      grid-template-columns: 1fr;
+    }
+
+    .viz-container {
+      max-height: 70vh;
+    }
+
+    .mega-viz {
+      min-height: 400px;
+    }
+
+    .stat-number {
+      font-size: 3rem;
+    }
   }
 </style>

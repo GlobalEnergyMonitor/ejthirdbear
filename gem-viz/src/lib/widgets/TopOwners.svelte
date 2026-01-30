@@ -7,6 +7,7 @@
   import { onMount } from 'svelte';
   import { getTopOwners } from '$lib/duckdb-queries';
   import { entityLink } from '$lib/links';
+  import DataSourceBadge from '$lib/components/DataSourceBadge.svelte';
 
   // Props
   /** @type {{ limit?: number; metric?: 'assets' | 'capacity'; tracker?: string | null; title?: string }} */
@@ -53,7 +54,7 @@
 <div class="widget top-owners">
   <header>
     <h3>{title}</h3>
-    <span class="query-time">{queryTime}ms</span>
+    <DataSourceBadge source="motherduck" queryTime={queryTime} size="sm" />
   </header>
 
   {#if loading}
@@ -102,7 +103,7 @@
   .query-time {
     font-size: 10px;
     color: var(--color-text-tertiary);
-    font-family: monospace;
+    font-family: var(--font-family-data);
   }
 
   .loading,
@@ -150,7 +151,7 @@
     text-decoration: underline;
   }
   .value {
-    font-family: monospace;
+    font-family: var(--font-family-data);
     font-size: 12px;
     color: var(--color-gray-700);
     white-space: nowrap;

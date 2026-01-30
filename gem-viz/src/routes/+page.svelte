@@ -6,7 +6,7 @@
 
   // --- IMPORTS ---
   import { assetLink, entityLink } from '$lib/links';
-  import SimpleMap from '$lib/SimpleMap.svelte';
+  import TrackerGlobeGrid from '$lib/components/TrackerGlobeGrid.svelte';
   import TrackerIcon from '$lib/components/TrackerIcon.svelte';
 
   // --- DATA ---
@@ -67,64 +67,71 @@
      ============================================================================ -->
 
 <svelte:head>
-  <title>GEM Viz — Global Energy Monitor Data Visualization</title>
+  <title>Global Energy Monitor — Ownership Data Explorer</title>
+  <meta name="description" content="Explore ownership structures, corporate relationships, and asset portfolios across global energy infrastructure with interactive visualizations." />
 </svelte:head>
 
-<main>
-  <!-- Featured Entities -->
-  <section class="asset-links">
-    <p>Featured entities</p>
-    <div class="link-list">
-      {#each featuredEntities as entity}
-        <a href={entityLink(entity.id)} class="entity-link" title={entity.note}>
-          <span class="entity-icon">E</span>
-          {entity.name}
-        </a>
-      {/each}
-    </div>
-  </section>
+<main class="home">
+  <div class="home-layout">
+    <aside class="home-sidebar">
+      <!-- Featured Entities -->
+      <section class="asset-links">
+        <p>Featured entities</p>
+        <div class="link-list">
+          {#each featuredEntities as entity}
+            <a href={entityLink(entity.id)} class="entity-link" title={entity.note}>
+              <span class="entity-icon">E</span>
+              {entity.name}
+            </a>
+          {/each}
+        </div>
+      </section>
 
-  <!-- Coal Plants -->
-  <section class="asset-links">
-    <p>Coal plants</p>
-    <div class="link-list">
-      {#each coalPlants as asset}
-        <a href={assetLink(asset.id)} class="asset-link" title={asset.note}>
-          <TrackerIcon tracker={asset.tracker} size={10} />
-          {asset.name}
-        </a>
-      {/each}
-    </div>
-  </section>
+      <!-- Coal Plants -->
+      <section class="asset-links">
+        <p>Coal plants</p>
+        <div class="link-list">
+          {#each coalPlants as asset}
+            <a href={assetLink(asset.id)} class="asset-link" title={asset.note}>
+              <TrackerIcon tracker={asset.tracker} size={10} />
+              {asset.name}
+            </a>
+          {/each}
+        </div>
+      </section>
 
-  <!-- Steel & Mining -->
-  <section class="asset-links">
-    <p>Steel & Mining</p>
-    <div class="link-list">
-      {#each steelMining as asset}
-        <a href={assetLink(asset.id)} class="asset-link" title={asset.note}>
-          <TrackerIcon tracker={asset.tracker} size={10} />
-          {asset.name}
-        </a>
-      {/each}
-    </div>
-  </section>
+      <!-- Steel & Mining -->
+      <section class="asset-links">
+        <p>Steel & Mining</p>
+        <div class="link-list">
+          {#each steelMining as asset}
+            <a href={assetLink(asset.id)} class="asset-link" title={asset.note}>
+              <TrackerIcon tracker={asset.tracker} size={10} />
+              {asset.name}
+            </a>
+          {/each}
+        </div>
+      </section>
 
-  <!-- Oil & Gas -->
-  <section class="asset-links">
-    <p>Oil & Gas</p>
-    <div class="link-list">
-      {#each oilGas as asset}
-        <a href={assetLink(asset.id)} class="asset-link" title={asset.note}>
-          <TrackerIcon tracker={asset.tracker} size={10} />
-          {asset.name}
-        </a>
-      {/each}
-    </div>
-  </section>
+      <!-- Oil & Gas -->
+      <section class="asset-links">
+        <p>Oil & Gas</p>
+        <div class="link-list">
+          {#each oilGas as asset}
+            <a href={assetLink(asset.id)} class="asset-link" title={asset.note}>
+              <TrackerIcon tracker={asset.tracker} size={10} />
+              {asset.name}
+            </a>
+          {/each}
+        </div>
+      </section>
+    </aside>
 
-  <!-- Interactive Map -->
-  <SimpleMap />
+    <!-- Tracker Globe Grid -->
+    <section class="home-globe">
+      <TrackerGlobeGrid />
+    </section>
+  </div>
 </main>
 
 <!-- ============================================================================
@@ -132,10 +139,36 @@
      ============================================================================ -->
 <style>
   /* Layout */
-  main {
+  main.home {
     width: 100%;
     margin: 0;
-    padding: var(--space-5) var(--space-10);
+    padding: var(--space-5) var(--space-10) var(--space-8);
+  }
+
+  .home-layout {
+    display: grid;
+    grid-template-columns: minmax(240px, 360px) minmax(0, 1.35fr);
+    gap: var(--space-8);
+    align-items: stretch;
+  }
+
+  .home-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+  }
+
+  .home-globe {
+    min-height: 0;
+    max-height: 100vh;
+    overflow: hidden;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+  }
+
+  .home-globe :global(.globe-grid) {
+    max-width: 500px;
   }
 
   /* Featured Sections */
@@ -177,5 +210,34 @@
     font-weight: 600;
     color: var(--color-text-secondary);
     flex-shrink: 0;
+  }
+
+  @media (max-width: 1024px) {
+    .home-layout {
+      grid-template-columns: minmax(200px, 280px) minmax(0, 1fr);
+      gap: var(--space-5);
+    }
+
+    .home-globe :global(.globe-grid) {
+      max-width: 420px;
+    }
+  }
+
+  @media (max-width: 900px) {
+    main.home {
+      padding: var(--space-4) var(--space-5) var(--space-6);
+    }
+
+    .home-layout {
+      grid-template-columns: 1fr;
+    }
+
+    .home-globe {
+      order: -1;
+    }
+
+    .home-globe :global(.globe-grid) {
+      max-width: 100%;
+    }
   }
 </style>

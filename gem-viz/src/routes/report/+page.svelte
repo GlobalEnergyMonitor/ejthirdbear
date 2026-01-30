@@ -19,6 +19,7 @@
   import InvestigationStatusChart from '$lib/components/InvestigationStatusChart.svelte';
   import InvestigationNetwork from '$lib/components/InvestigationNetwork.svelte';
   import InvestigationMap from '$lib/components/InvestigationMap.svelte';
+  import { ASSET_ID_COALESCE_O } from '$lib/duckdb-queries';
 
   // State
   let loading = $state(true);
@@ -63,7 +64,7 @@
       ),
       entity_assets AS (
         SELECT
-          o."GEM unit ID" as asset_id,
+          ${ASSET_ID_COALESCE_O} as asset_id,
           o."Project" as asset_name,
           o."Tracker" as tracker,
           o."Status" as status,
@@ -75,7 +76,7 @@
         FROM ownership o
         LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
         INNER JOIN cart_entities c ON o."Owner GEM Entity ID" = c.entity_id
-        WHERE o."GEM unit ID" IS NOT NULL
+        WHERE ${ASSET_ID_COALESCE_O} IS NOT NULL
       ),
       shared AS (
         SELECT
@@ -118,13 +119,13 @@
           o."Owner" as entity_name,
           o."Owner Registration Country" as registration_country,
           o."Owner Headquarters Country" as hq_country,
-          o."GEM unit ID" as asset_id,
+          ${ASSET_ID_COALESCE_O} as asset_id,
           o."Project" as project_name,
           o."Tracker" as tracker,
           COALESCE(CAST(o."Share" AS DOUBLE), 0) as share_pct,
           COALESCE(CAST(o."Capacity (MW)" AS DOUBLE), 0) as capacity_mw
         FROM ownership o
-        INNER JOIN cart_assets c ON o."GEM unit ID" = c.asset_id
+        INNER JOIN cart_assets c ON ${ASSET_ID_COALESCE_O} = c.asset_id
         WHERE o."Owner" IS NOT NULL AND o."Owner" != ''
       ),
       common AS (
@@ -160,14 +161,14 @@
     const sql = `
       SELECT
         COALESCE(l."Country.Area", 'Unknown') as country,
-        COUNT(DISTINCT o."GEM unit ID") as asset_count,
+        COUNT(DISTINCT ${ASSET_ID_COALESCE_O}) as asset_count,
         COALESCE(SUM(CAST(o."Capacity (MW)" AS DOUBLE)), 0) as total_capacity,
         COUNT(DISTINCT o."Owner GEM Entity ID") as entity_count,
         STRING_AGG(DISTINCT o."Tracker", ', ' ORDER BY o."Tracker") as trackers
       FROM ownership o
       LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
       WHERE o."Owner GEM Entity ID" IN (${entityList})
-         OR o."GEM unit ID" IN (${assetList})
+         OR ${ASSET_ID_COALESCE_O} IN (${assetList})
       GROUP BY 1
       ORDER BY asset_count DESC
       LIMIT 30
@@ -189,7 +190,7 @@
         o."Owner" as entity_name,
         MAX(o."Owner Registration Country") as registration_country,
         MAX(o."Owner Headquarters Country") as hq_country,
-        COUNT(DISTINCT o."GEM unit ID") as asset_count,
+        COUNT(DISTINCT ${ASSET_ID_COALESCE_O}) as asset_count,
         COALESCE(SUM(CAST(o."Capacity (MW)" AS DOUBLE)), 0) as total_capacity_mw,
         AVG(CAST(o."Share" AS DOUBLE)) as avg_ownership_pct,
         COUNT(DISTINCT COALESCE(l."Country.Area", 'Unknown')) as country_count,
@@ -199,9 +200,9 @@
           ', '
           ORDER BY COALESCE(l."Country.Area", 'Unknown')
         ) as countries,
-        COUNT(DISTINCT CASE WHEN o."Status" = 'operating' THEN o."GEM unit ID" END) as operating_count,
-        COUNT(DISTINCT CASE WHEN o."Status" = 'proposed' THEN o."GEM unit ID" END) as proposed_count,
-        COUNT(DISTINCT CASE WHEN o."Status" = 'retired' THEN o."GEM unit ID" END) as retired_count
+        COUNT(DISTINCT CASE WHEN o."Status" = 'operating' THEN ${ASSET_ID_COALESCE_O} END) as operating_count,
+        COUNT(DISTINCT CASE WHEN o."Status" = 'proposed' THEN ${ASSET_ID_COALESCE_O} END) as proposed_count,
+        COUNT(DISTINCT CASE WHEN o."Status" = 'retired' THEN ${ASSET_ID_COALESCE_O} END) as retired_count
       FROM ownership o
       LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
       WHERE o."Owner GEM Entity ID" IN (${idList})
@@ -222,7 +223,7 @@
 
     const sql = `
       SELECT
-        o."GEM unit ID" as asset_id,
+        ${ASSET_ID_COALESCE_O} as asset_id,
         o."Project" as asset_name,
         o."Tracker" as tracker,
         o."Status" as status,
@@ -238,7 +239,7 @@
         o."Immediate Project Owner GEM Entity ID" as immediate_owner_id
       FROM ownership o
       LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
-      WHERE o."GEM unit ID" IN (${idList})
+      WHERE ${ASSET_ID_COALESCE_O} IN (${idList})
       ORDER BY o."Project"
     `;
 
@@ -253,7 +254,7 @@
 
     const sql = `
       SELECT
-        COUNT(DISTINCT o."GEM unit ID") as total_assets,
+        COUNT(DISTINCT ${ASSET_ID_COALESCE_O}) as total_assets,
         COALESCE(SUM(CAST(o."Capacity (MW)" AS DOUBLE)), 0) as total_capacity,
         COUNT(DISTINCT COALESCE(l."Country.Area", 'Unknown')) as countries,
         COUNT(DISTINCT o."Tracker") as tracker_count,
@@ -262,7 +263,7 @@
       FROM ownership o
       LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
       WHERE o."Owner GEM Entity ID" IN (${entityList})
-         OR o."GEM unit ID" IN (${assetList})
+         OR ${ASSET_ID_COALESCE_O} IN (${assetList})
     `;
 
     const result = await widgetQuery(sql);
@@ -623,7 +624,8 @@
 </script>
 
 <svelte:head>
-  <title>Investigation Report — GEM Viz</title>
+  <title>Investigation Report — Global Energy Monitor</title>
+  <meta name="description" content="Generate detailed ownership investigation reports for selected entities and assets from the Global Energy Monitor database." />
 </svelte:head>
 
 <main class="report-container">

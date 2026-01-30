@@ -24,7 +24,8 @@
 </script>
 
 <svelte:head>
-  <title>Explore — GEM Viz</title>
+  <title>Explore Data — Global Energy Monitor</title>
+  <meta name="description" content="Browse and explore Global Energy Monitor's ownership database by entity, asset, tracker type, and ownership structure." />
 </svelte:head>
 
 <main>
