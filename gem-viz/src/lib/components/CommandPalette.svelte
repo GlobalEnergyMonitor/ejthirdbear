@@ -437,7 +437,8 @@
     }
 
     // Direct shortcuts (single key, no modifier)
-    if (!isInputFocused() && !open) {
+    // Skip if any modifier key is held (allow CMD+C, CMD+V, etc.)
+    if (!isInputFocused() && !open && !e.metaKey && !e.ctrlKey && !e.altKey) {
       switch (e.key) {
         case 'a': // Add to cart
           e.preventDefault();
@@ -1079,19 +1080,19 @@
     border-radius: 2px;
     font-size: 10px;
     font-weight: normal;
-    font-family: monospace;
+    font-family: var(--font-family-data);
     color: var(--color-text-secondary);
     flex-shrink: 0;
   }
 
   .result-icon.entity {
-    background: var(--color-entity-bg, #e8d5f0);
-    color: var(--color-entity-text, #7b1fa2);
+    background: var(--gem-teal-10);
+    color: var(--gem-teal);
   }
 
   .result-icon.asset {
-    background: var(--color-asset-bg, #d5e5f5);
-    color: var(--color-asset-text, #1565c0);
+    background: var(--gem-navy-10);
+    color: var(--gem-navy);
   }
 
   .result-content {
@@ -1121,7 +1122,7 @@
   .result-shortcut {
     font-size: 10px;
     color: var(--color-gray-400);
-    font-family: monospace;
+    font-family: var(--font-family-data);
     padding: 1px 4px;
     background: var(--color-gray-100);
     border: 1px solid var(--color-border);
@@ -1144,7 +1145,7 @@
   .hint kbd {
     display: inline-block;
     padding: 1px 4px;
-    font-family: monospace;
+    font-family: var(--font-family-data);
     font-size: 9px;
     background: var(--color-gray-50);
     border: 1px solid var(--color-gray-200);
@@ -1163,7 +1164,7 @@
     border: 1px solid transparent;
     border-radius: 3px;
     cursor: pointer;
-    font-family: monospace;
+    font-family: var(--font-family-data);
     font-size: 10px;
     opacity: 0;
     transition:
@@ -1222,7 +1223,7 @@
     background: color-mix(in srgb, var(--color-black) 70%, transparent);
     color: color-mix(in srgb, var(--color-white) 90%, transparent);
     font-size: 11px;
-    font-family: monospace;
+    font-family: var(--font-family-data);
     border-radius: 3px;
     z-index: 10000;
     animation:
@@ -1337,7 +1338,7 @@
     display: inline-block;
     min-width: 16px;
     padding: 1px 4px;
-    font-family: monospace;
+    font-family: var(--font-family-data);
     font-size: 10px;
     text-align: center;
     background: var(--color-gray-50);
@@ -1363,7 +1364,7 @@
   .help-footer kbd {
     display: inline-block;
     padding: 1px 4px;
-    font-family: monospace;
+    font-family: var(--font-family-data);
     font-size: 10px;
     background: var(--color-gray-50);
     border: 1px solid var(--color-gray-200);

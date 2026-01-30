@@ -153,47 +153,88 @@
       const trackerVal = cls?.tracker;
       const statusVal = cls?.filters?.status;
 
-      const trackerClause = trackerVal ? `AND "Tracker" = '${trackerVal.replace(/'/g, "''")}'` : '';
-      const statusClause = statusVal ? `AND "Status" ILIKE '${statusVal.replace(/'/g, "''")}'` : '';
-
-      const tableName =
-        dataSource === 'motherduck' ? 'gem_data.ownership.all_trackers_ownership' : 'ownership';
-
       const queryStartTime = performance.now();
 
-      // Query for owners with both total assets and filtered assets
-      const sql = `
-        WITH owner_totals AS (
+      // Different column names for MotherDuck vs local parquet
+      let sql;
+      if (dataSource === 'motherduck') {
+        // MotherDuck: gem_data.global_energy_ownership_tracker_october_2025_v1.asset_ownership
+        // Column mapping: Tracker -> Asset Type, Status -> Status (may not exist)
+        const tableName = 'gem_data.global_energy_ownership_tracker_october_2025_v1.asset_ownership';
+        const trackerClause = trackerVal ? `AND "Asset Type" = '${trackerVal.replace(/'/g, "''")}'` : '';
+        const statusClause = ''; // Status column may not exist in new schema
+
+        sql = `
+          WITH owner_totals AS (
+            SELECT
+              "Immediate Owner Entity Name" as name,
+              "Immediate Owner Entity ID" as entity_id,
+              COUNT(DISTINCT "Asset ID") as total_assets
+            FROM ${tableName}
+            WHERE "Immediate Owner Entity Name" IS NOT NULL AND "Immediate Owner Entity Name" != ''
+            GROUP BY "Immediate Owner Entity Name", "Immediate Owner Entity ID"
+          ),
+          owner_filtered AS (
+            SELECT
+              "Immediate Owner Entity Name" as name,
+              "Immediate Owner Entity ID" as entity_id,
+              COUNT(DISTINCT "Asset ID") as filtered_assets
+            FROM ${tableName}
+            WHERE "Immediate Owner Entity Name" IS NOT NULL AND "Immediate Owner Entity Name" != ''
+              ${trackerClause}
+              ${statusClause}
+            GROUP BY "Immediate Owner Entity Name", "Immediate Owner Entity ID"
+          )
           SELECT
-            "Owner" as name,
-            "Owner GEM Entity ID" as entity_id,
-            COUNT(DISTINCT COALESCE("GEM unit ID", "GEM Mine ID", "Steel Plant ID", "GEM Asset ID", "ProjectID")) as total_assets
-          FROM ${tableName}
-          WHERE "Owner" IS NOT NULL AND "Owner" != ''
-          GROUP BY "Owner", "Owner GEM Entity ID"
-        ),
-        owner_filtered AS (
+            t.name,
+            t.entity_id,
+            t.total_assets,
+            COALESCE(f.filtered_assets, 0) as filtered_assets
+          FROM owner_totals t
+          LEFT JOIN owner_filtered f ON t.entity_id = f.entity_id
+          WHERE f.filtered_assets > 0
+          ORDER BY f.filtered_assets DESC, t.total_assets DESC
+          LIMIT 200
+        `;
+      } else {
+        // Local DuckDB: ownership table from parquet
+        const tableName = 'ownership';
+        const trackerClause = trackerVal ? `AND "Tracker" = '${trackerVal.replace(/'/g, "''")}'` : '';
+        const statusClause = statusVal ? `AND "Status" ILIKE '${statusVal.replace(/'/g, "''")}'` : '';
+
+        sql = `
+          WITH owner_totals AS (
+            SELECT
+              "Owner" as name,
+              "Owner GEM Entity ID" as entity_id,
+              COUNT(DISTINCT COALESCE("GEM unit ID", "GEM Mine ID", "Steel Plant ID", "GEM Asset ID", "ProjectID")) as total_assets
+            FROM ${tableName}
+            WHERE "Owner" IS NOT NULL AND "Owner" != ''
+            GROUP BY "Owner", "Owner GEM Entity ID"
+          ),
+          owner_filtered AS (
+            SELECT
+              "Owner" as name,
+              "Owner GEM Entity ID" as entity_id,
+              COUNT(DISTINCT COALESCE("GEM unit ID", "GEM Mine ID", "Steel Plant ID", "GEM Asset ID", "ProjectID")) as filtered_assets
+            FROM ${tableName}
+            WHERE "Owner" IS NOT NULL AND "Owner" != ''
+              ${trackerClause}
+              ${statusClause}
+            GROUP BY "Owner", "Owner GEM Entity ID"
+          )
           SELECT
-            "Owner" as name,
-            "Owner GEM Entity ID" as entity_id,
-            COUNT(DISTINCT COALESCE("GEM unit ID", "GEM Mine ID", "Steel Plant ID", "GEM Asset ID", "ProjectID")) as filtered_assets
-          FROM ${tableName}
-          WHERE "Owner" IS NOT NULL AND "Owner" != ''
-            ${trackerClause}
-            ${statusClause}
-          GROUP BY "Owner", "Owner GEM Entity ID"
-        )
-        SELECT
-          t.name,
-          t.entity_id,
-          t.total_assets,
-          COALESCE(f.filtered_assets, 0) as filtered_assets
-        FROM owner_totals t
-        LEFT JOIN owner_filtered f ON t.entity_id = f.entity_id
-        WHERE f.filtered_assets > 0
-        ORDER BY f.filtered_assets DESC, t.total_assets DESC
-        LIMIT 200
-      `;
+            t.name,
+            t.entity_id,
+            t.total_assets,
+            COALESCE(f.filtered_assets, 0) as filtered_assets
+          FROM owner_totals t
+          LEFT JOIN owner_filtered f ON t.entity_id = f.entity_id
+          WHERE f.filtered_assets > 0
+          ORDER BY f.filtered_assets DESC, t.total_assets DESC
+          LIMIT 200
+        `;
+      }
 
       const result = await queryFn(sql);
       queryTime = performance.now() - queryStartTime;

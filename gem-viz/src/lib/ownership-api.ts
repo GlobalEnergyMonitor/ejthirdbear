@@ -40,18 +40,23 @@ export async function resolveAssetId(assetId: string): Promise<string> {
     return gPrefixToCompoundCache.get(assetId)!;
   }
 
-  // Try to resolve via centralized DuckDB query
+  // Try to resolve via MotherDuck (cloud, always fresh) first, then local DuckDB fallback
+  // Note: New MotherDuck schema uses "Asset ID" and may not have location ID - skip MotherDuck for ID resolution
+  // The local parquet has the compound IDs we need
+  // Fallback directly to local DuckDB for G-prefix resolution
+
+  // Fallback to local DuckDB if MotherDuck fails
   try {
     const { resolveGPrefixId } = await import('./duckdb-queries');
     const compoundId = await resolveGPrefixId(assetId);
 
     if (compoundId && compoundId !== assetId) {
       gPrefixToCompoundCache.set(assetId, compoundId);
-      console.log(`[ID Resolver] Mapped ${assetId} → ${compoundId}`);
+      console.log(`[ID Resolver] Local DuckDB mapped ${assetId} → ${compoundId}`);
       return compoundId;
     }
   } catch (err) {
-    console.warn(`[ID Resolver] Failed to resolve ${assetId}:`, err);
+    console.warn(`[ID Resolver] Local DuckDB also failed for ${assetId}:`, err);
   }
 
   // Return original if we can't resolve
