@@ -1501,9 +1501,18 @@ export const POST: RequestHandler = async ({ request }) => {
           assistantMessage = result.choices[0].message;
         }
 
+        // Debug logging
+        console.log('Post-tool-loop state:', {
+          hasContent: !!assistantMessage?.content,
+          contentLength: assistantMessage?.content?.length,
+          hasToolCalls: !!assistantMessage?.tool_calls,
+          toolCallResultsCount: toolCallResults.length,
+          iterations,
+        });
+
         // If we have content already (no tool calls on last iteration), stream it
         // Otherwise, make a final streaming request for the response
-        if (assistantMessage?.content) {
+        if (assistantMessage?.content && assistantMessage.content.trim()) {
           send('status', { stage: 'writing', message: 'Writing response...' });
 
           // Stream the text we already have
@@ -1601,13 +1610,24 @@ export const POST: RequestHandler = async ({ request }) => {
               console.error('Stream reading error:', err);
             }
 
+            // If we got no content, provide a fallback
+            if (!fullContent.trim()) {
+              console.warn('Empty response from final streaming request');
+              fullContent = 'I found the information above but encountered an issue generating a summary. Please review the tool results.';
+            }
+
             send('done', {
               message: fullContent,
               toolCalls: toolCallResults,
               usage: null,
             });
           } else {
-            send('error', { message: 'Failed to stream final response' });
+            console.error('Final streaming request failed:', streamResponse.status, await streamResponse.text().catch(() => ''));
+            send('done', {
+              message: 'I gathered the information above but had trouble generating a summary. Please review the results.',
+              toolCalls: toolCallResults,
+              usage: null,
+            });
           }
         } else {
           // No tools, no content - something went wrong
