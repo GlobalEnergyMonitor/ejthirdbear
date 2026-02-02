@@ -495,8 +495,8 @@
             <EntityMicroCard
               name={entity.entity_name}
               location={entity.hq_country}
-              assetCount={entity.asset_count}
-              totalCapacity={Math.round(entity.total_capacity_mw || 0)}
+              assetCount={Math.round(Number(entity.asset_count) || 0)}
+              totalCapacity={Math.round(Number(entity.total_capacity_mw) || 0)}
               href={entityLink(entity.entity_id)}
             />
           {/each}
