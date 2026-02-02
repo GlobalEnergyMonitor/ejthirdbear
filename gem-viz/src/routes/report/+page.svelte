@@ -32,6 +32,34 @@
   let queryTime = $state(0);
   let debugLogs = $state<string[]>([]);
 
+  // Loading progress state
+  type QueryStatus = 'pending' | 'running' | 'done' | 'skipped' | 'error';
+  type QueryStep = {
+    id: string;
+    label: string;
+    status: QueryStatus;
+    rows?: number;
+    ms?: number;
+  };
+
+  let loadingSteps = $state<QueryStep[]>([
+    { id: 'init', label: 'Initializing DuckDB connection', status: 'pending' },
+    { id: 'portfolios', label: 'Querying entity portfolios', status: 'pending' },
+    { id: 'shared', label: 'Finding co-owned assets', status: 'pending' },
+    { id: 'owners', label: 'Identifying common owners', status: 'pending' },
+    { id: 'geo', label: 'Analyzing geographic distribution', status: 'pending' },
+    { id: 'trackers', label: 'Breaking down by asset type', status: 'pending' },
+    { id: 'summary', label: 'Computing summary statistics', status: 'pending' },
+  ]);
+
+  let loadingStartTime = $state(0);
+  let loadingElapsed = $state(0);
+  let loadingInterval: ReturnType<typeof setInterval> | null = null;
+
+  function updateStep(id: string, update: Partial<QueryStep>) {
+    loadingSteps = loadingSteps.map((s) => (s.id === id ? { ...s, ...update } : s));
+  }
+
   // Derived cart data
   const cartItems = $derived($investigationCart);
   const entityIds = $derived(cartItems.filter((i) => i.type === 'entity').map((i) => i.id));
@@ -232,6 +260,30 @@
     return { totalAssets: 0, totalCapacity: 0, countries: 0, totalOwners: 0, trackers: [] };
   }
 
+  // Wrap a query with timing and step updates
+  async function runStep<T>(
+    stepId: string,
+    queryFn: () => Promise<T>,
+    skip = false
+  ): Promise<T | null> {
+    if (skip) {
+      updateStep(stepId, { status: 'skipped' });
+      return null;
+    }
+    updateStep(stepId, { status: 'running' });
+    const start = Date.now();
+    try {
+      const result = await queryFn();
+      const ms = Date.now() - start;
+      const rows = Array.isArray(result) ? result.length : 1;
+      updateStep(stepId, { status: 'done', rows, ms });
+      return result;
+    } catch (err) {
+      updateStep(stepId, { status: 'error' });
+      throw err;
+    }
+  }
+
   // Load all report data
   async function loadReport() {
     if (isEmpty) {
@@ -243,24 +295,48 @@
     log(`Loading report for ${cartItems.length} items`);
     loading = true;
     error = null;
+
+    // Reset steps
+    loadingSteps = [
+      { id: 'init', label: 'Initializing DuckDB connection', status: 'pending' },
+      { id: 'portfolios', label: 'Querying entity portfolios', status: 'pending' },
+      { id: 'shared', label: 'Finding co-owned assets', status: 'pending' },
+      { id: 'owners', label: 'Identifying common owners', status: 'pending' },
+      { id: 'geo', label: 'Analyzing geographic distribution', status: 'pending' },
+      { id: 'trackers', label: 'Breaking down by asset type', status: 'pending' },
+      { id: 'summary', label: 'Computing summary statistics', status: 'pending' },
+    ];
+
+    // Start elapsed timer
+    loadingStartTime = Date.now();
+    loadingElapsed = 0;
+    loadingInterval = setInterval(() => {
+      loadingElapsed = Date.now() - loadingStartTime;
+    }, 50);
+
     const startTime = Date.now();
 
     try {
-      const [portfolios, shared, common, geo, trackers, stats] = await Promise.all([
-        queryEntityPortfolios(),
-        querySharedAssets(),
-        queryCommonOwners(),
-        queryGeoBreakdown(),
-        queryTrackerBreakdown(),
-        querySummary(),
-      ]);
+      // Init step (simulates DuckDB warmup)
+      updateStep('init', { status: 'running' });
+      await new Promise((r) => setTimeout(r, 100)); // Small delay for visual
+      updateStep('init', { status: 'done', ms: Date.now() - startTime });
 
-      entityPortfolios = portfolios;
-      sharedAssets = shared;
-      commonOwners = common;
-      geoBreakdown = geo;
-      trackerBreakdown = trackers;
-      summary = stats;
+      // Run queries sequentially for better loading UX (shows progress)
+      const portfolios = await runStep('portfolios', queryEntityPortfolios, entityIds.length < 1);
+      const shared = await runStep('shared', querySharedAssets, entityIds.length < 2);
+      const common = await runStep('owners', queryCommonOwners, assetIds.length < 1);
+      const geo = await runStep('geo', queryGeoBreakdown);
+      const trackers = await runStep('trackers', queryTrackerBreakdown);
+      const stats = await runStep('summary', querySummary);
+
+      entityPortfolios = portfolios || [];
+      sharedAssets = shared || [];
+      commonOwners = common || [];
+      geoBreakdown = geo || [];
+      trackerBreakdown = trackers || [];
+      summary = stats || { totalAssets: 0, totalCapacity: 0, countries: 0, totalOwners: 0, trackers: [] };
+
       queryTime = Date.now() - startTime;
       log(`Report loaded in ${queryTime}ms`);
     } catch (err) {
@@ -268,6 +344,7 @@
       error = err instanceof Error ? err.message : 'Failed to generate report';
       log(`Error: ${error}`);
     } finally {
+      if (loadingInterval) clearInterval(loadingInterval);
       loading = false;
     }
   }
@@ -338,9 +415,47 @@
       <a href={link('explore')} class="btn">Go to Explore</a>
     </section>
   {:else if loading}
-    <section class="loading-state">
-      <p>Generating report...</p>
-      <p class="loading-detail">Analyzing {cartItems.length} items</p>
+    <section class="loading-terminal">
+      <div class="terminal-header">
+        <span class="terminal-title">Generating Report</span>
+        <span class="terminal-timer">{(loadingElapsed / 1000).toFixed(1)}s</span>
+      </div>
+      <div class="terminal-body">
+        <div class="terminal-meta">
+          <span>Investigating {cartItems.length} items</span>
+          <span>{entityIds.length} entities · {assetIds.length} assets</span>
+        </div>
+        <ul class="query-steps">
+          {#each loadingSteps as step}
+            <li class="query-step {step.status}">
+              <span class="step-indicator">
+                {#if step.status === 'pending'}
+                  <span class="dot">○</span>
+                {:else if step.status === 'running'}
+                  <span class="dot spinning">◐</span>
+                {:else if step.status === 'done'}
+                  <span class="dot done">●</span>
+                {:else if step.status === 'skipped'}
+                  <span class="dot skipped">–</span>
+                {:else}
+                  <span class="dot error">✕</span>
+                {/if}
+              </span>
+              <span class="step-label">{step.label}</span>
+              {#if step.status === 'done' && step.ms !== undefined}
+                <span class="step-result">
+                  {#if step.rows !== undefined && step.rows > 0}
+                    {step.rows} rows ·
+                  {/if}
+                  {step.ms}ms
+                </span>
+              {:else if step.status === 'skipped'}
+                <span class="step-result">skipped</span>
+              {/if}
+            </li>
+          {/each}
+        </ul>
+      </div>
     </section>
   {:else if error}
     <section class="error-state">
@@ -664,7 +779,6 @@
 
   /* States */
   .empty-state,
-  .loading-state,
   .error-state {
     padding: var(--space-16) 0;
   }
@@ -675,9 +789,130 @@
     font-size: 18px;
   }
 
-  .loading-detail {
+  /* ═══════════════════════════════════════════════════════════════════
+     LOADING TERMINAL
+     ═══════════════════════════════════════════════════════════════════ */
+
+  .loading-terminal {
+    margin: var(--space-8) 0;
+    border: 1px solid var(--color-gray-200);
+    font-family: var(--font-family-mono);
+    font-size: 12px;
+  }
+
+  .terminal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-2) var(--space-3);
+    background: var(--color-gray-100);
+    border-bottom: 1px solid var(--color-gray-200);
+  }
+
+  .terminal-title {
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 10px;
+  }
+
+  .terminal-timer {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .terminal-body {
+    padding: var(--space-4);
+    background: var(--color-white);
+  }
+
+  .terminal-meta {
+    display: flex;
+    justify-content: space-between;
     color: var(--color-text-tertiary);
-    font-size: 13px;
+    font-size: 11px;
+    margin-bottom: var(--space-4);
+    padding-bottom: var(--space-3);
+    border-bottom: 1px dashed var(--color-gray-200);
+  }
+
+  .query-steps {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .query-step {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    padding: var(--space-1) 0;
+    color: var(--color-text-secondary);
+  }
+
+  .query-step.running {
+    color: var(--color-black);
+  }
+
+  .query-step.done {
+    color: var(--color-text-secondary);
+  }
+
+  .query-step.skipped {
+    color: var(--color-text-tertiary);
+    opacity: 0.6;
+  }
+
+  .query-step.error {
+    color: var(--color-error);
+  }
+
+  .step-indicator {
+    width: 14px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+
+  .dot {
+    display: inline-block;
+    font-size: 10px;
+  }
+
+  .dot.spinning {
+    animation: spin 0.6s linear infinite;
+    color: var(--gem-primary-blue);
+  }
+
+  .dot.done {
+    color: var(--color-status-operating, #2d6a4f);
+  }
+
+  .dot.skipped {
+    color: var(--color-text-tertiary);
+  }
+
+  .dot.error {
+    color: var(--color-error);
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  .step-label {
+    flex: 1;
+  }
+
+  .step-result {
+    font-size: 10px;
+    color: var(--color-text-tertiary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .query-step.done .step-result {
+    color: var(--color-status-operating, #2d6a4f);
   }
 
   /* Toolbar */
