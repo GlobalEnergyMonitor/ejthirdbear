@@ -325,8 +325,10 @@
       <a href={link('index')}>Home</a> /
       <a href={link('explore')}>Explore</a> / Report
     </nav>
-    <h1>Investigation Report</h1>
-    <p class="report-date">{reportDate}</p>
+    <div class="title-block">
+      <h1>Investigation Report</h1>
+      <time class="report-date">{reportDate}</time>
+    </div>
   </header>
 
   {#if isEmpty}
@@ -348,14 +350,14 @@
     </section>
   {:else}
     <!-- Toolbar -->
-    <section class="toolbar">
-      <span class="query-time">Query time: {queryTime}ms</span>
+    <aside class="toolbar">
+      <span class="meta-datum">Query: {queryTime}ms</span>
       <div class="toolbar-actions">
-        <button class="btn btn-outline" onclick={exportJSON}>Export JSON</button>
-        <button class="btn btn-outline" onclick={() => window.print()}>Print</button>
-        <button class="btn btn-danger" onclick={clearCart}>Clear Cart</button>
+        <button class="btn-text" onclick={exportJSON}>Export</button>
+        <button class="btn-text" onclick={() => window.print()}>Print</button>
+        <button class="btn-text danger" onclick={clearCart}>Clear</button>
       </div>
-    </section>
+    </aside>
 
     <!-- ═══════════════════════════════════════════════════════════════════
          SECTION 1: THE SUBJECTS (WHO)
@@ -363,176 +365,119 @@
          ═══════════════════════════════════════════════════════════════════ -->
 
     {#if hasEntities}
-      <section class="primary-section">
-        <div class="section-header">
-          <span class="section-number">1</span>
-          <div>
-            <h2>The Subjects</h2>
-            <p class="section-subtitle">Who is under investigation</p>
-          </div>
-        </div>
+      <section class="report-section">
+        <header class="section-head">
+          <span class="section-num">1.</span>
+          <h2>Subjects</h2>
+        </header>
+        <p class="section-lede">{entityIds.length} {entityIds.length === 1 ? 'entity' : 'entities'} under investigation</p>
 
-        <div class="entity-grid">
+        <div class="entity-list">
           {#each entityPortfolios as entity}
-            <div class="entity-card">
-              <div class="entity-header">
-                <a href={entityLink(entity.entity_id)} class="entity-name">
-                  {entity.entity_name}
-                </a>
-                <span class="entity-id">{entity.entity_id}</span>
+            <article class="entity-row">
+              <div class="entity-primary">
+                <a href={entityLink(entity.entity_id)} class="entity-name">{entity.entity_name}</a>
+                {#if entity.hq_country}<span class="entity-hq">{entity.hq_country}</span>{/if}
               </div>
-              {#if entity.hq_country}
-                <div class="entity-hq">Headquarters: {entity.hq_country}</div>
-              {/if}
-              <div class="entity-stats">
-                <div class="entity-stat">
-                  <span class="entity-value">{entity.asset_count}</span>
-                  <span class="entity-label">assets</span>
-                </div>
-                <div class="entity-stat">
-                  <span class="entity-value">{Math.round(entity.total_capacity_mw || 0).toLocaleString()}</span>
-                  <span class="entity-label">MW</span>
-                </div>
-                <div class="entity-stat">
-                  <span class="entity-value">{entity.avg_share_pct?.toFixed(0) || '-'}%</span>
-                  <span class="entity-label">avg stake</span>
-                </div>
+              <div class="entity-figures">
+                <span class="figure"><strong>{entity.asset_count}</strong> assets</span>
+                <span class="figure"><strong>{Math.round(entity.total_capacity_mw || 0).toLocaleString()}</strong> MW</span>
+                <span class="figure"><strong>{entity.avg_share_pct?.toFixed(0) || '—'}%</strong> avg stake</span>
               </div>
-              <div class="entity-status">
-                {#if entity.operating > 0}
-                  <span class="status-pill operating">{entity.operating} operating</span>
-                {/if}
-                {#if entity.construction > 0}
-                  <span class="status-pill construction">{entity.construction} construction</span>
-                {/if}
-                {#if entity.proposed > 0}
-                  <span class="status-pill proposed">{entity.proposed} proposed</span>
-                {/if}
+              <div class="entity-status-line">
+                {#if entity.operating > 0}<span>{entity.operating} operating</span>{/if}
+                {#if entity.construction > 0}<span>{entity.construction} construction</span>{/if}
+                {#if entity.proposed > 0}<span>{entity.proposed} proposed</span>{/if}
               </div>
-              {#if entity.trackers}
-                <div class="entity-trackers">
-                  {#each entity.trackers.split(', ') as tracker}
-                    <span class="mini-tracker">
-                      <TrackerIcon {tracker} size={10} />
-                      {tracker}
-                    </span>
-                  {/each}
-                </div>
-              {/if}
-            </div>
+            </article>
           {/each}
         </div>
       </section>
     {/if}
 
-    <!-- ═══════════════════════════════════════════════════════════════════
-         SECTION 2: THE PORTFOLIO (WHAT)
-         What do they own? How much?
-         ═══════════════════════════════════════════════════════════════════ -->
+    <!-- SECTION 2: PORTFOLIO -->
+    <section class="report-section">
+      <header class="section-head">
+        <span class="section-num">2.</span>
+        <h2>Portfolio</h2>
+      </header>
+      <p class="section-lede">Combined holdings{#if entityIds.length > 0} across {entityIds.length} {entityIds.length === 1 ? 'entity' : 'entities'}{/if}</p>
 
-    <section class="primary-section">
-      <div class="section-header">
-        <span class="section-number">2</span>
-        <div>
-          <h2>The Portfolio</h2>
-          <p class="section-subtitle">Combined holdings across all {entityIds.length} entities</p>
+      <!-- Key Figures -->
+      <div class="key-figures">
+        <div class="kf">
+          <span class="kf-value">{summary.totalAssets.toLocaleString()}</span>
+          <span class="kf-label">Assets</span>
         </div>
-      </div>
-
-      <!-- Aggregate Stats -->
-      <div class="stats-row">
-        <div class="stat-card primary">
-          <span class="stat-value">{summary.totalAssets.toLocaleString()}</span>
-          <span class="stat-label">Total Assets</span>
+        <div class="kf">
+          <span class="kf-value">{summary.totalCapacity.toLocaleString()}</span>
+          <span class="kf-label">MW</span>
         </div>
-        <div class="stat-card">
-          <span class="stat-value">{summary.totalCapacity.toLocaleString()}</span>
-          <span class="stat-label">MW Capacity</span>
+        <div class="kf">
+          <span class="kf-value">{summary.trackers.length}</span>
+          <span class="kf-label">Types</span>
         </div>
-        <div class="stat-card">
-          <span class="stat-value">{summary.trackers.length}</span>
-          <span class="stat-label">Asset Types</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-value">{summary.countries}</span>
-          <span class="stat-label">Countries</span>
+        <div class="kf">
+          <span class="kf-value">{summary.countries}</span>
+          <span class="kf-label">Countries</span>
         </div>
       </div>
 
       <!-- Asset Type Breakdown -->
       {#if trackerBreakdown.length > 0}
-        <h3 class="subsection-title">By Asset Type</h3>
-        <div class="tracker-grid">
-          {#each trackerBreakdown as t}
-            <div class="tracker-card">
-              <div class="tracker-header">
-                <TrackerIcon tracker={t.tracker} size={16} />
-                <span class="tracker-name">{t.tracker}</span>
-              </div>
-              <div class="tracker-stats">
-                <div class="tracker-stat">
-                  <span class="tracker-value">{t.asset_count?.toLocaleString()}</span>
-                  <span class="tracker-label">assets</span>
-                </div>
-                <div class="tracker-stat">
-                  <span class="tracker-value">{Math.round(t.total_capacity || 0).toLocaleString()}</span>
-                  <span class="tracker-label">MW</span>
-                </div>
-                {#if t.operating > 0}
-                  <div class="tracker-stat">
-                    <span class="tracker-value operating">{t.operating}</span>
-                    <span class="tracker-label">operating</span>
-                  </div>
-                {/if}
-                {#if t.proposed > 0}
-                  <div class="tracker-stat">
-                    <span class="tracker-value proposed">{t.proposed}</span>
-                    <span class="tracker-label">proposed</span>
-                  </div>
-                {/if}
-              </div>
-            </div>
-          {/each}
-        </div>
+        <h3 class="subsection-head">By Asset Type</h3>
+        <table class="data-table tufte">
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th class="num">Assets</th>
+              <th class="num">Capacity</th>
+              <th class="num">Operating</th>
+              <th class="num">Proposed</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each trackerBreakdown as t}
+              <tr>
+                <td><TrackerIcon tracker={t.tracker} size={12} /> {t.tracker}</td>
+                <td class="num">{t.asset_count?.toLocaleString()}</td>
+                <td class="num">{Math.round(t.total_capacity || 0).toLocaleString()} MW</td>
+                <td class="num">{t.operating || '—'}</td>
+                <td class="num">{t.proposed || '—'}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
       {/if}
     </section>
 
-    <!-- ═══════════════════════════════════════════════════════════════════
-         SECTION 3: THE GEOGRAPHY (WHERE)
-         Where are these assets located?
-         ═══════════════════════════════════════════════════════════════════ -->
-
+    <!-- SECTION 3: GEOGRAPHY -->
     {#if geoBreakdown.length > 0}
-      <section class="primary-section">
-        <div class="section-header">
-          <span class="section-number">3</span>
-          <div>
-            <h2>The Geography</h2>
-            <p class="section-subtitle">
-              Asset locations across {geoBreakdown.length} {geoBreakdown.length === 1 ? 'country' : 'countries'}
-              {#if geoBreakdown[0]?.country}
-                — largest presence in <strong>{geoBreakdown[0].country}</strong>
-              {/if}
-            </p>
-          </div>
-        </div>
+      <section class="report-section">
+        <header class="section-head">
+          <span class="section-num">3.</span>
+          <h2>Geography</h2>
+        </header>
+        <p class="section-lede">
+          {geoBreakdown.length} {geoBreakdown.length === 1 ? 'country' : 'countries'}{#if geoBreakdown[0]?.country}, largest presence in {geoBreakdown[0].country}{/if}
+        </p>
 
-        <table class="data-table">
+        <table class="data-table tufte">
           <thead>
             <tr>
               <th>Country</th>
-              <th class="numeric"># Assets</th>
-              <th class="numeric">Capacity (MW)</th>
-              <th class="numeric"># Entities Active</th>
+              <th class="num">Assets</th>
+              <th class="num">Capacity</th>
+              <th class="num">Entities</th>
             </tr>
           </thead>
           <tbody>
             {#each geoBreakdown as row, i}
-              <tr class:highlight={i === 0}>
-                <td><strong>{row.country}</strong></td>
-                <td class="numeric">{row.asset_count?.toLocaleString()}</td>
-                <td class="numeric">{row.total_capacity?.toLocaleString() || '-'}</td>
-                <td class="numeric">{row.entity_count}</td>
+              <tr class:top-row={i === 0}>
+                <td>{row.country}</td>
+                <td class="num">{row.asset_count?.toLocaleString()}</td>
+                <td class="num">{row.total_capacity?.toLocaleString() || '—'} MW</td>
+                <td class="num">{row.entity_count}</td>
               </tr>
             {/each}
           </tbody>
@@ -540,170 +485,117 @@
       </section>
     {/if}
 
-    <!-- ═══════════════════════════════════════════════════════════════════
-         SECTION 4: THE CONNECTIONS (HOW)
-         How are these entities connected?
-         ═══════════════════════════════════════════════════════════════════ -->
-
+    <!-- SECTION 4: CONNECTIONS -->
     {#if hasEntities && entityIds.length >= 2}
-      <section class="primary-section">
-        <div class="section-header">
-          <span class="section-number">4</span>
-          <div>
-            <h2>The Connections</h2>
-            <p class="section-subtitle">
-              {#if sharedAssets.length > 0}
-                {sharedAssets.length} assets are co-owned by multiple entities in this investigation
-              {:else}
-                Analyzing co-ownership patterns between the {entityIds.length} entities
-              {/if}
-            </p>
-          </div>
-        </div>
+      <section class="report-section">
+        <header class="section-head">
+          <span class="section-num">4.</span>
+          <h2>Connections</h2>
+        </header>
+        <p class="section-lede">
+          {#if sharedAssets.length > 0}
+            {sharedAssets.length} co-owned assets between {entityIds.length} entities
+          {:else}
+            Co-ownership analysis of {entityIds.length} entities
+          {/if}
+        </p>
 
         {#if sharedAssets.length > 0}
-          <p class="connection-insight">
-            These {sharedAssets.length} co-owned assets may indicate joint ventures, partnerships,
-            or coordinated investments between the entities under investigation.
-          </p>
-          <table class="data-table">
+          <table class="data-table tufte">
             <thead>
               <tr>
-                <th>Asset Name</th>
+                <th>Asset</th>
                 <th>Type</th>
                 <th>Status</th>
-                <th class="numeric">Capacity</th>
-                <th class="numeric"># Co-Owners</th>
-                <th>Shared By</th>
+                <th class="num">Capacity</th>
+                <th class="num">Co-owners</th>
+                <th>Shared by</th>
               </tr>
             </thead>
             <tbody>
               {#each sharedAssets as asset}
                 <tr>
-                  <td>
-                    <a href={assetLink(asset.asset_id)}>{asset.asset_name || asset.asset_id}</a>
-                  </td>
-                  <td>
-                    {#if asset.tracker}<TrackerIcon tracker={asset.tracker} size={12} />{/if}
-                    {asset.tracker || '-'}
-                  </td>
-                  <td>{asset.status || '-'}</td>
-                  <td class="numeric">{asset.capacity_mw?.toLocaleString() || '-'} MW</td>
-                  <td class="numeric"><strong>{asset.co_owner_count}</strong></td>
-                  <td class="co-owners">{asset.co_owners}</td>
+                  <td><a href={assetLink(asset.asset_id)}>{asset.asset_name || asset.asset_id}</a></td>
+                  <td><TrackerIcon tracker={asset.tracker} size={12} /> {asset.tracker || '—'}</td>
+                  <td>{asset.status || '—'}</td>
+                  <td class="num">{asset.capacity_mw?.toLocaleString() || '—'} MW</td>
+                  <td class="num">{asset.co_owner_count}</td>
+                  <td class="secondary">{asset.co_owners}</td>
                 </tr>
               {/each}
             </tbody>
           </table>
         {:else}
-          <div class="no-connection-box">
-            <div class="no-connection-icon">∅</div>
-            <p class="no-connection-title">No Direct Connections Found</p>
-            <p class="no-connection-text">
-              The {entityIds.length} entities in this investigation do not appear to co-own any assets together
-              in the GEM database. This could mean they operate independently, or their connections
-              exist through other corporate structures not captured in direct ownership data.
-            </p>
-          </div>
+          <p class="null-state">No co-owned assets found. The {entityIds.length} entities do not share direct ownership of any assets in the GEM database.</p>
         {/if}
       </section>
     {:else if hasEntities && entityIds.length === 1}
-      <section class="primary-section muted-section">
-        <div class="section-header">
-          <span class="section-number">4</span>
-          <div>
-            <h2>The Connections</h2>
-            <p class="section-subtitle">Add more entities to analyze co-ownership patterns</p>
-          </div>
-        </div>
-        <p class="muted-message">
-          Co-ownership analysis requires at least 2 entities. Add more entities to your
-          investigation cart to discover shared assets and potential connections.
-        </p>
+      <section class="report-section muted">
+        <header class="section-head">
+          <span class="section-num">4.</span>
+          <h2>Connections</h2>
+        </header>
+        <p class="section-lede">Add ≥2 entities to analyze co-ownership</p>
       </section>
     {/if}
 
-    <!-- Common Owners (only shown when assets are in cart) -->
+    <!-- SECTION: ASSET OWNERSHIP (when assets in cart) -->
     {#if hasAssets}
-      <section class="primary-section">
-        <div class="section-header">
-          <span class="section-number">{hasEntities ? '5' : '4'}</span>
-          <div>
-            <h2>Asset Ownership</h2>
-            <p class="section-subtitle">Who owns the {assetIds.length} assets in your cart</p>
-          </div>
-        </div>
+      <section class="report-section">
+        <header class="section-head">
+          <span class="section-num">{hasEntities ? '5' : '4'}.</span>
+          <h2>Ownership</h2>
+        </header>
+        <p class="section-lede">Owners of {assetIds.length} selected {assetIds.length === 1 ? 'asset' : 'assets'}</p>
 
         {#if commonOwners.length > 0}
-          <table class="data-table">
+          <table class="data-table tufte">
             <thead>
               <tr>
-                <th>Owner Entity</th>
-                <th>HQ Country</th>
-                <th class="numeric"># Assets</th>
-                <th class="numeric">Total Capacity</th>
-                <th class="numeric">Avg Stake</th>
+                <th>Owner</th>
+                <th>HQ</th>
+                <th class="num">Assets</th>
+                <th class="num">Capacity</th>
+                <th class="num">Avg Stake</th>
               </tr>
             </thead>
             <tbody>
               {#each commonOwners as owner}
                 <tr>
-                  <td>
-                    <a href={entityLink(owner.entity_id)}>
-                      {owner.entity_name || owner.entity_id}
-                    </a>
-                  </td>
-                  <td>{owner.hq_country || '-'}</td>
-                  <td class="numeric">{owner.asset_count}</td>
-                  <td class="numeric">{owner.total_capacity_mw?.toLocaleString() || '-'} MW</td>
-                  <td class="numeric">{owner.avg_share_pct?.toFixed(1) || '-'}%</td>
+                  <td><a href={entityLink(owner.entity_id)}>{owner.entity_name || owner.entity_id}</a></td>
+                  <td>{owner.hq_country || '—'}</td>
+                  <td class="num">{owner.asset_count}</td>
+                  <td class="num">{owner.total_capacity_mw?.toLocaleString() || '—'} MW</td>
+                  <td class="num">{owner.avg_share_pct?.toFixed(1) || '—'}%</td>
                 </tr>
               {/each}
             </tbody>
           </table>
         {:else}
-          <p class="no-data">No ownership data found for the selected assets.</p>
+          <p class="null-state">No ownership data found.</p>
         {/if}
       </section>
     {/if}
 
-    <!-- ═══════════════════════════════════════════════════════════════════
-         APPENDIX: Reference Information
-         ═══════════════════════════════════════════════════════════════════ -->
+    <!-- APPENDIX -->
+    <footer class="appendix">
+      <h2>Appendix</h2>
+      <p class="appendix-lede">{cartItems.length} items · {entityIds.length} entities · {assetIds.length} assets</p>
 
-    <section class="appendix-section">
-      <h2>Appendix: Investigation Cart</h2>
-      <p class="section-desc">
-        {cartItems.length} items analyzed in this report
-        {#if entityIds.length > 0 && assetIds.length > 0}
-          ({entityIds.length} entities, {assetIds.length} assets)
-        {:else if entityIds.length > 0}
-          ({entityIds.length} entities)
-        {:else}
-          ({assetIds.length} assets)
-        {/if}
-      </p>
-      <div class="cart-grid">
+      <ul class="cart-list">
         {#each cartItems as item}
-          <div class="cart-item">
+          <li>
             {#if item.type === 'asset'}
-              <a href={assetLink(item.id)}>
-                {#if item.tracker}<TrackerIcon tracker={item.tracker} size={12} />{/if}
-                {item.name}
-              </a>
-              <span class="item-type">Asset</span>
+              <a href={assetLink(item.id)}>{item.name}</a>
+              <span class="item-meta">{item.tracker} · {item.id}</span>
             {:else}
-              <a href={entityLink(item.id)}>
-                <span class="entity-badge">E</span>
-                {item.name}
-              </a>
-              <span class="item-type">Entity</span>
+              <a href={entityLink(item.id)}>{item.name}</a>
+              <span class="item-meta">Entity · {item.id}</span>
             {/if}
-            <span class="item-id">{item.id}</span>
-          </div>
+          </li>
         {/each}
-      </div>
-    </section>
+      </ul>
+    </footer>
 
     <!-- Citation -->
     <Citation variant="full" trackers={summary.trackers} />
@@ -717,50 +609,75 @@
 </main>
 
 <style>
+  /* ═══════════════════════════════════════════════════════════════════
+     TUFTE / SWISS DESIGN SYSTEM
+     High data-ink ratio · Grid-based · Typography-driven
+     ═══════════════════════════════════════════════════════════════════ */
+
   .report-page {
-    max-width: 1200px;
+    max-width: 960px;
     margin: 0 auto;
-    padding: var(--space-6);
+    padding: var(--space-8) var(--space-6);
+    font-feature-settings: 'tnum' 1; /* tabular numbers */
   }
 
+  /* Header */
   header {
-    margin-bottom: var(--space-6);
+    margin-bottom: var(--space-10);
   }
 
   .breadcrumb {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
-    margin-bottom: var(--space-2);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-text-tertiary);
+    margin-bottom: var(--space-4);
   }
+
   .breadcrumb a {
     color: inherit;
+    text-decoration: none;
+  }
+
+  .breadcrumb a:hover {
+    text-decoration: underline;
+  }
+
+  .title-block {
+    border-top: 2px solid var(--color-black);
+    padding-top: var(--space-4);
   }
 
   h1 {
-    font-size: var(--font-size-3xl);
+    font-size: 32px;
+    font-weight: 400;
     margin: 0;
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-wide);
+    letter-spacing: -0.02em;
   }
 
   .report-date {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-tertiary);
-    margin: var(--space-1) 0 0 0;
+    display: block;
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    margin-top: var(--space-1);
   }
 
   /* States */
   .empty-state,
   .loading-state,
   .error-state {
-    text-align: center;
-    padding: var(--space-16) var(--space-6);
+    padding: var(--space-16) 0;
   }
+
+  .empty-state h2,
+  .error-state h2 {
+    font-weight: 400;
+    font-size: 18px;
+  }
+
   .loading-detail {
     color: var(--color-text-tertiary);
-  }
-  .error-state {
-    color: var(--color-error);
+    font-size: 13px;
   }
 
   /* Toolbar */
@@ -768,163 +685,171 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: var(--space-8);
-    padding: var(--space-3) 0;
+    margin-bottom: var(--space-10);
+    padding-bottom: var(--space-3);
     border-bottom: 1px solid var(--color-gray-200);
   }
+
   .toolbar-actions {
     display: flex;
-    gap: var(--space-2);
+    gap: var(--space-4);
   }
-  .query-time {
+
+  .meta-datum {
+    font-size: 11px;
     font-family: var(--font-family-mono);
-    font-size: var(--font-size-sm);
+    color: var(--color-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .btn-text {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    background: none;
+    border: none;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    padding: 0;
+  }
+
+  .btn-text:hover {
+    color: var(--color-black);
+  }
+
+  .btn-text.danger {
     color: var(--color-text-tertiary);
   }
 
-  /* Buttons */
-  .btn {
-    padding: var(--space-2) var(--space-4);
-    font-size: var(--font-size-sm);
-    font-weight: 600;
-    border: 1px solid var(--color-gray-300);
-    background: var(--color-white);
-    cursor: pointer;
-  }
-  .btn:hover {
-    background: var(--color-gray-100);
-  }
-  .btn-outline {
-    background: transparent;
-  }
-  .btn-danger {
+  .btn-text.danger:hover {
     color: var(--color-error);
-    border-color: var(--color-error);
+  }
+
+  .btn {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: var(--space-2) var(--space-4);
+    border: 1px solid var(--color-gray-300);
+    background: transparent;
+    cursor: pointer;
   }
 
   /* ═══════════════════════════════════════════════════════════════════
-     PRIMARY SECTIONS - The main numbered sections
+     SECTIONS
      ═══════════════════════════════════════════════════════════════════ */
 
-  .primary-section {
+  .report-section {
     margin-bottom: var(--space-12);
-    padding-bottom: var(--space-8);
-    border-bottom: 1px solid var(--color-gray-200);
   }
 
-  .primary-section:last-of-type {
-    border-bottom: none;
-  }
-
-  .section-header {
+  .section-head {
     display: flex;
-    align-items: flex-start;
-    gap: var(--space-4);
+    align-items: baseline;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+    border-bottom: 1px solid var(--color-gray-200);
+    padding-bottom: var(--space-2);
+  }
+
+  .section-num {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-text-tertiary);
+    font-family: var(--font-family-mono);
+  }
+
+  .section-head h2 {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+
+  .section-lede {
+    font-size: 14px;
+    color: var(--color-text-secondary);
+    margin: 0 0 var(--space-6) 0;
+  }
+
+  .subsection-head {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-text-tertiary);
+    margin: var(--space-8) 0 var(--space-3) 0;
+  }
+
+  .muted {
+    opacity: 0.5;
+  }
+
+  .null-state {
+    font-size: 14px;
+    color: var(--color-text-tertiary);
+    padding: var(--space-6) 0;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     KEY FIGURES (replaces stat cards)
+     ═══════════════════════════════════════════════════════════════════ */
+
+  .key-figures {
+    display: flex;
+    gap: var(--space-8);
     margin-bottom: var(--space-6);
   }
 
-  .section-number {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    background: var(--gem-primary-blue);
-    color: white;
-    font-size: var(--font-size-xl);
-    font-weight: bold;
-    font-family: var(--font-family-data);
-    flex-shrink: 0;
+  .kf {
+    text-align: left;
   }
 
-  .section-header h2 {
-    font-size: var(--font-size-2xl);
-    margin: 0;
-    letter-spacing: var(--tracking-tight);
-  }
-
-  .section-subtitle {
-    font-size: var(--font-size-md);
-    color: var(--color-text-secondary);
-    margin: var(--space-1) 0 0 0;
-  }
-
-  .subsection-title {
-    font-size: var(--font-size-lg);
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-wide);
-    margin: var(--space-8) 0 var(--space-4) 0;
-    color: var(--color-text-secondary);
-  }
-
-  .muted-section {
-    opacity: 0.6;
-  }
-
-  .muted-message {
-    color: var(--color-text-tertiary);
-    font-size: var(--font-size-md);
-    padding: var(--space-6);
-    background: var(--color-gray-50);
-    text-align: center;
-  }
-
-  /* Stats Row */
-  .stats-row {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: var(--space-4);
-  }
-
-  .stat-card {
-    text-align: center;
-    padding: var(--space-5);
-    background: var(--color-gray-50);
-  }
-
-  .stat-card.primary {
-    background: var(--gem-primary-blue);
-    color: white;
-  }
-
-  .stat-card .stat-value {
+  .kf-value {
     display: block;
-    font-size: var(--font-size-3xl);
-    font-weight: bold;
+    font-size: 32px;
+    font-weight: 300;
     font-family: var(--font-family-data);
     line-height: 1;
+    letter-spacing: -0.02em;
   }
 
-  .stat-card .stat-label {
+  .kf-label {
     display: block;
-    font-size: var(--font-size-sm);
+    font-size: 11px;
     text-transform: uppercase;
-    letter-spacing: var(--tracking-wide);
-    margin-top: var(--space-2);
-    opacity: 0.8;
+    letter-spacing: 0.1em;
+    color: var(--color-text-tertiary);
+    margin-top: var(--space-1);
   }
 
-  /* Entity Grid */
-  .entity-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  /* ═══════════════════════════════════════════════════════════════════
+     ENTITY LIST (replaces entity cards)
+     ═══════════════════════════════════════════════════════════════════ */
+
+  .entity-list {
+    display: flex;
+    flex-direction: column;
     gap: var(--space-4);
   }
 
-  .entity-card {
-    padding: var(--space-4);
-    background: var(--color-gray-50);
-    border-left: 3px solid var(--gem-primary-blue);
+  .entity-row {
+    padding-bottom: var(--space-4);
+    border-bottom: 1px solid var(--color-gray-100);
   }
 
-  .entity-header {
+  .entity-row:last-child {
+    border-bottom: none;
+  }
+
+  .entity-primary {
     margin-bottom: var(--space-2);
   }
 
   .entity-name {
-    display: block;
+    font-size: 16px;
     font-weight: 600;
-    font-size: var(--font-size-md);
     color: var(--color-black);
     text-decoration: none;
   }
@@ -933,334 +858,220 @@
     text-decoration: underline;
   }
 
-  .entity-id {
-    font-size: var(--font-size-xs);
-    font-family: var(--font-family-mono);
-    color: var(--color-text-tertiary);
-  }
-
   .entity-hq {
-    font-size: var(--font-size-sm);
+    font-size: 13px;
     color: var(--color-text-secondary);
-    margin-bottom: var(--space-3);
+    margin-left: var(--space-2);
   }
 
-  .entity-stats {
+  .entity-hq::before {
+    content: '·';
+    margin-right: var(--space-2);
+  }
+
+  .entity-figures {
     display: flex;
     gap: var(--space-4);
-    margin-bottom: var(--space-3);
+    font-size: 14px;
+    margin-bottom: var(--space-1);
   }
 
-  .entity-stat {
-    text-align: center;
-  }
-
-  .entity-value {
-    display: block;
-    font-size: var(--font-size-xl);
-    font-weight: bold;
+  .figure strong {
     font-family: var(--font-family-data);
-  }
-
-  .entity-label {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-tertiary);
-    text-transform: uppercase;
-  }
-
-  .entity-status {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-1);
-    margin-bottom: var(--space-2);
-  }
-
-  .status-pill {
-    font-size: var(--font-size-xs);
-    padding: 2px var(--space-2);
-    border-radius: 99px;
-  }
-
-  .status-pill.operating {
-    background: rgba(45, 106, 79, 0.1);
-    color: var(--color-status-operating, #2d6a4f);
-  }
-
-  .status-pill.construction {
-    background: rgba(234, 179, 8, 0.1);
-    color: #b45309;
-  }
-
-  .status-pill.proposed {
-    background: rgba(124, 58, 237, 0.1);
-    color: var(--color-status-prospective, #7c3aed);
-  }
-
-  .entity-trackers {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-1);
-  }
-
-  .mini-tracker {
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-    font-size: var(--font-size-xs);
-    color: var(--color-text-secondary);
-  }
-
-  /* Tracker Grid */
-  .tracker-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: var(--space-3);
-  }
-
-  .tracker-card {
-    padding: var(--space-3);
-    background: var(--color-white);
-    border: 1px solid var(--color-gray-200);
-  }
-
-  .tracker-header {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    margin-bottom: var(--space-2);
-  }
-
-  .tracker-name {
     font-weight: 600;
-    font-size: var(--font-size-sm);
   }
 
-  .tracker-stats {
+  .entity-status-line {
     display: flex;
     gap: var(--space-3);
-  }
-
-  .tracker-stat {
-    text-align: center;
-  }
-
-  .tracker-value {
-    display: block;
-    font-size: var(--font-size-lg);
-    font-weight: bold;
-    font-family: var(--font-family-data);
-  }
-
-  .tracker-value.operating {
-    color: var(--color-status-operating, #2d6a4f);
-  }
-
-  .tracker-value.proposed {
-    color: var(--color-status-prospective, #7c3aed);
-  }
-
-  .tracker-label {
-    font-size: var(--font-size-xs);
+    font-size: 12px;
     color: var(--color-text-tertiary);
-    text-transform: uppercase;
   }
 
-  /* Connection States */
-  .connection-insight {
-    font-size: var(--font-size-md);
-    color: var(--color-text-secondary);
-    margin-bottom: var(--space-4);
-    padding: var(--space-3);
-    background: rgba(45, 106, 79, 0.05);
-    border-left: 3px solid var(--color-status-operating, #2d6a4f);
-  }
+  /* ═══════════════════════════════════════════════════════════════════
+     TABLES — Tufte-style minimal rules
+     ═══════════════════════════════════════════════════════════════════ */
 
-  .no-connection-box {
-    padding: var(--space-8);
-    text-align: center;
-    background: var(--color-gray-50);
-  }
-
-  .no-connection-icon {
-    font-size: 48px;
-    color: var(--color-gray-300);
-    margin-bottom: var(--space-3);
-  }
-
-  .no-connection-title {
-    font-size: var(--font-size-lg);
-    font-weight: 600;
-    margin: 0 0 var(--space-2) 0;
-  }
-
-  .no-connection-text {
-    color: var(--color-text-secondary);
-    max-width: 500px;
-    margin: 0 auto;
-    line-height: 1.6;
-  }
-
-  /* Tables */
   .data-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: var(--font-size-sm);
+    font-size: 13px;
   }
 
-  .data-table th {
-    text-align: left;
-    padding: var(--space-2) var(--space-3);
-    font-size: var(--font-size-xs);
+  .data-table.tufte thead {
+    border-bottom: 1px solid var(--color-black);
+  }
+
+  .data-table.tufte th {
+    font-size: 11px;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: var(--tracking-wide);
-    border-bottom: 2px solid var(--color-gray-300);
-    background: var(--color-gray-50);
+    letter-spacing: 0.08em;
+    text-align: left;
+    padding: var(--space-2) var(--space-3) var(--space-2) 0;
+    background: transparent;
+    border: none;
+    color: var(--color-text-secondary);
   }
 
-  .data-table th.numeric {
+  .data-table.tufte th.num {
     text-align: right;
+    padding-right: 0;
+    padding-left: var(--space-3);
   }
 
-  .data-table td {
-    padding: var(--space-2) var(--space-3);
+  .data-table.tufte td {
+    padding: var(--space-2) var(--space-3) var(--space-2) 0;
+    border: none;
     border-bottom: 1px solid var(--color-gray-100);
-    vertical-align: top;
+    vertical-align: baseline;
   }
 
-  .data-table tr.highlight td {
-    background: rgba(29, 73, 97, 0.05);
-  }
-
-  .data-table .numeric {
+  .data-table.tufte td.num {
     text-align: right;
     font-family: var(--font-family-mono);
+    font-size: 12px;
+    padding-right: 0;
+    padding-left: var(--space-3);
+  }
+
+  .data-table.tufte tr.top-row td {
+    font-weight: 600;
+  }
+
+  .data-table.tufte td.secondary {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    max-width: 200px;
   }
 
   .data-table a {
     color: var(--color-black);
+    text-decoration: none;
   }
 
-  .co-owners {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-secondary);
-    max-width: 250px;
+  .data-table a:hover {
+    text-decoration: underline;
   }
 
-  .no-data {
-    color: var(--color-text-tertiary);
-    padding: var(--space-6);
-    text-align: center;
-    background: var(--color-gray-50);
-  }
+  /* ═══════════════════════════════════════════════════════════════════
+     APPENDIX
+     ═══════════════════════════════════════════════════════════════════ */
 
-  /* Appendix Section */
-  .appendix-section {
-    margin-top: var(--space-8);
+  .appendix {
+    margin-top: var(--space-12);
     padding-top: var(--space-6);
-    border-top: 2px solid var(--color-gray-200);
+    border-top: 1px solid var(--color-gray-200);
   }
 
-  .appendix-section h2 {
-    font-size: var(--font-size-lg);
+  .appendix h2 {
+    font-size: 12px;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: var(--tracking-wide);
-    color: var(--color-text-secondary);
-    margin: 0 0 var(--space-2) 0;
+    letter-spacing: 0.1em;
+    color: var(--color-text-tertiary);
+    margin: 0 0 var(--space-1) 0;
   }
 
-  .section-desc {
+  .appendix-lede {
+    font-size: 13px;
     color: var(--color-text-secondary);
     margin: 0 0 var(--space-4) 0;
   }
 
-  .cart-grid {
+  .cart-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: var(--space-2);
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: var(--space-1) var(--space-6);
   }
 
-  .cart-item {
-    padding: var(--space-2) var(--space-3);
-    background: var(--color-gray-50);
+  .cart-list li {
+    font-size: 13px;
+    padding: var(--space-1) 0;
   }
 
-  .cart-item a {
-    display: flex;
-    align-items: center;
-    gap: var(--space-1);
+  .cart-list a {
     color: var(--color-black);
     text-decoration: none;
     font-weight: 500;
   }
 
-  .cart-item a:hover {
+  .cart-list a:hover {
     text-decoration: underline;
   }
 
-  .item-type {
+  .item-meta {
     display: block;
-    font-size: var(--font-size-xs);
+    font-size: 11px;
     color: var(--color-text-tertiary);
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-wide);
-  }
-
-  .item-id {
-    display: block;
-    font-size: var(--font-size-xs);
     font-family: var(--font-family-mono);
-    color: var(--color-text-tertiary);
   }
 
-  .entity-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 16px;
-    height: 16px;
-    font-size: 10px;
-    font-weight: bold;
-    background: var(--color-gray-200);
-    border-radius: 2px;
-  }
+  /* ═══════════════════════════════════════════════════════════════════
+     RESPONSIVE
+     ═══════════════════════════════════════════════════════════════════ */
 
-  /* Responsive */
-  @media (max-width: 768px) {
-    .stats-row {
-      grid-template-columns: repeat(2, 1fr);
+  @media (max-width: 640px) {
+    .report-page {
+      padding: var(--space-4);
     }
-    .toolbar {
-      flex-direction: column;
-      gap: var(--space-3);
+
+    h1 {
+      font-size: 24px;
     }
-    .entity-grid,
-    .tracker-grid {
-      grid-template-columns: 1fr;
+
+    .key-figures {
+      flex-wrap: wrap;
+      gap: var(--space-4);
     }
-    .section-header {
-      flex-direction: column;
+
+    .kf-value {
+      font-size: 24px;
+    }
+
+    .entity-figures {
+      flex-wrap: wrap;
       gap: var(--space-2);
     }
-    .section-number {
-      width: 32px;
-      height: 32px;
-      font-size: var(--font-size-lg);
+
+    .toolbar {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: var(--space-2);
+    }
+
+    .data-table.tufte {
+      font-size: 12px;
+    }
+
+    .cart-list {
+      grid-template-columns: 1fr;
     }
   }
 
-  /* Print */
+  /* ═══════════════════════════════════════════════════════════════════
+     PRINT
+     ═══════════════════════════════════════════════════════════════════ */
+
   @media print {
-    .toolbar,
-    .btn-danger {
+    .toolbar {
       display: none;
     }
-    .primary-section {
+
+    .report-page {
+      max-width: none;
+      padding: 0;
+    }
+
+    .report-section {
       page-break-inside: avoid;
     }
-    .section-number {
-      background: #000 !important;
-      -webkit-print-color-adjust: exact;
-      print-color-adjust: exact;
+
+    .title-block {
+      border-top-width: 1px;
     }
   }
 </style>
