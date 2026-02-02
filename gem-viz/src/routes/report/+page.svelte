@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
   /**
    * INVESTIGATION REPORT PAGE
    * Shows co-ownership patterns for items in the investigation cart.
