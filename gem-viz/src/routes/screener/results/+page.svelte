@@ -26,16 +26,16 @@
   const ownersParam = $derived($page.url.searchParams.get('owners') || '');
 
   // Parse selected owner IDs (comma-separated entity IDs)
-  const selectedOwnerIds = $derived(() => {
+  const selectedOwnerIds = $derived.by(() => {
     if (!ownersParam) return [];
-    return ownersParam.split(',').filter(id => id.trim());
+    return ownersParam.split(',').filter((id) => id.trim());
   });
 
   // Mode: 'all' = show all owners, 'filtered' = show only selected owners
-  const viewMode = $derived(selectedOwnerIds().length > 0 ? 'filtered' : 'all');
+  const viewMode = $derived(selectedOwnerIds.length > 0 ? 'filtered' : 'all');
 
   // Parse selected classes
-  const selectedClasses = $derived(() => {
+  const selectedClasses = $derived.by(() => {
     if (!classesParam) return [];
     try {
       return JSON.parse(decodeURIComponent(classesParam));
@@ -45,11 +45,10 @@
   });
 
   // Build human-readable description of selected class
-  const classDescription = $derived(() => {
-    const classes = selectedClasses();
-    if (classes.length === 0) return 'selected assets';
+  const classDescription = $derived.by(() => {
+    if (selectedClasses.length === 0) return 'selected assets';
 
-    const cls = classes[0];
+    const cls = selectedClasses[0];
     const parts = [];
 
     if (cls.filters?.status) {
@@ -93,7 +92,7 @@
   const investigationEntities = $derived(cartItems.filter((item) => item.type === 'entity'));
 
   // Filtered owners based on search
-  const filteredOwners = $derived(() => {
+  const filteredOwners = $derived.by(() => {
     let result = owners;
 
     // Filter by search query
@@ -130,7 +129,7 @@
 
   // Add all visible results to investigation
   function addAllToInvestigation() {
-    const toAdd = filteredOwners()
+    const toAdd = filteredOwners
       .filter((o) => o.entityId && !isInInvestigation(o.entityId))
       .map((o) => ({
         id: o.entityId?.startsWith('E') ? o.entityId : `E${o.entityId}`,
@@ -143,7 +142,7 @@
   // Load owners data
   onMount(async () => {
     try {
-      const classes = selectedClasses();
+      const classes = selectedClasses;
       if (classes.length === 0) {
         error = 'No asset class selected. Go back and select one.';
         loading = false;
@@ -155,8 +154,8 @@
 
       const cls = classes[0];
       const trackerVal = cls?.tracker;
-      const statusVal = cls?.filters?.status;
-      const ownerIds = selectedOwnerIds();
+      const _statusVal = cls?.filters?.status; // TODO: Add status filtering to SQL query
+      const ownerIds = selectedOwnerIds;
       const hasOwnerFilter = ownerIds.length > 0;
 
       const queryStartTime = performance.now();
@@ -171,7 +170,7 @@
         'Iron Mine': 'Iron Ore Mine',
         'Cement Plant': 'Cement or Concrete Plant',
       };
-      const assetTypeVal = trackerVal ? (trackerToAssetType[trackerVal] || trackerVal) : null;
+      const assetTypeVal = trackerVal ? trackerToAssetType[trackerVal] || trackerVal : null;
 
       // Build filter clauses
       // MotherDuck columns: "Immediate Owner Entity Name", "Immediate Owner Entity ID", "Asset Type", "Asset ID"
@@ -179,7 +178,7 @@
         ? `AND "Asset Type" = '${assetTypeVal.replace(/'/g, "''")}'`
         : '';
       const ownerClause = hasOwnerFilter
-        ? `AND "Immediate Owner Entity ID" IN (${ownerIds.map(id => `'${id.replace(/'/g, "''")}'`).join(', ')})`
+        ? `AND "Immediate Owner Entity ID" IN (${ownerIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(', ')})`
         : '';
 
       // Debug: Check what Asset Types exist
@@ -267,7 +266,7 @@
   }
 
   function removeAssetClass(index) {
-    const classes = selectedClasses();
+    const classes = selectedClasses;
     classes.splice(index, 1);
     if (classes.length === 0) {
       goto('/screener/');
@@ -289,15 +288,15 @@
   currentStep={3}
   showStepNav={false}
   subtitle={viewMode === 'filtered'
-    ? `Showing ${selectedOwnerIds().length} selected companies and their ownership in ${classDescription()}.`
-    : `Showing all companies with ownership stakes in ${classDescription()}.`}
+    ? `Showing ${selectedOwnerIds.length} selected companies and their ownership in ${classDescription}.`
+    : `Showing all companies with ownership stakes in ${classDescription}.`}
   {classesParam}
   maxWidth="wide"
 >
   {#snippet headerRight()}
     <AssetClassesPanel
       {classesParam}
-      onRemove={(cls) => removeAssetClass(selectedClasses().findIndex((c) => c.name === cls.name))}
+      onRemove={(cls) => removeAssetClass(selectedClasses.findIndex((c) => c.name === cls.name))}
     />
   {/snippet}
 
@@ -305,7 +304,7 @@
   <section class="filters-summary">
     <h3>Active Filters</h3>
     <div class="filter-tags">
-      {#each selectedClasses() as cls}
+      {#each selectedClasses as cls}
         <div class="filter-tag asset-class">
           <span class="tag-label">Asset:</span>
           <span class="tag-value">{cls.tracker || cls.name}</span>
@@ -326,7 +325,7 @@
       {#if viewMode === 'filtered'}
         <div class="filter-tag owners">
           <span class="tag-label">Owners:</span>
-          <span class="tag-value">{selectedOwnerIds().length} selected</span>
+          <span class="tag-value">{selectedOwnerIds.length} selected</span>
         </div>
       {/if}
     </div>
@@ -343,9 +342,9 @@
         </div>
         <span class="result-count">
           {#if viewMode === 'filtered'}
-            {owners.length} of {selectedOwnerIds().length} selected found
+            {owners.length} of {selectedOwnerIds.length} selected found
           {:else}
-            {filteredOwners().length} of {owners.length} owners
+            {filteredOwners.length} of {owners.length} owners
           {/if}
         </span>
       </div>
@@ -371,9 +370,9 @@
             </button>
           {/if}
 
-          {#if filteredOwners().length > 0}
+          {#if filteredOwners.length > 0}
             <button class="add-all-btn" onclick={addAllToInvestigation}>
-              + Add all {filteredOwners().length} to investigation
+              + Add all {filteredOwners.length} to investigation
             </button>
           {/if}
         </div>
@@ -412,11 +411,11 @@
               <th class="col-select"></th>
               <th class="col-company">Company name:</th>
               <th class="col-total">Total Portfolio:</th>
-              <th class="col-filtered">Exposure to {classDescription()}:</th>
+              <th class="col-filtered">Ownership in {classDescription}:</th>
             </tr>
           </thead>
           <tbody>
-            {#each filteredOwners() as owner (owner.entityId || owner.name)}
+            {#each filteredOwners as owner (owner.entityId || owner.name)}
               {@const inInvestigation = isInInvestigation(owner.entityId)}
               <tr class:in-investigation={inInvestigation}>
                 <td class="col-select">
@@ -438,7 +437,7 @@
                   {describeTotal(owner.totalAssets)}
                 </td>
                 <td class="col-filtered">
-                  {describeFiltered(owner.filteredAssets, classDescription())}
+                  {describeFiltered(owner.filteredAssets, classDescription)}
                 </td>
               </tr>
             {:else}
@@ -478,15 +477,27 @@
       <div class="debug-content">
         <div class="debug-meta">
           <span class="debug-label">View mode:</span>
-          <span class="debug-value">{viewMode} ({viewMode === 'filtered' ? selectedOwnerIds().length + ' owners selected' : 'showing all'})</span>
+          <span class="debug-value"
+            >{viewMode} ({viewMode === 'filtered'
+              ? selectedOwnerIds.length + ' owners selected'
+              : 'showing all'})</span
+          >
         </div>
         <div class="debug-meta">
           <span class="debug-label">Asset Type filter:</span>
-          <span class="debug-value">{selectedClasses()[0]?.tracker || 'none'} → {(() => {
-            const t = selectedClasses()[0]?.tracker;
-            const map = {'Steel Plant': 'Iron & Steel Plant', 'Gas Pipeline': 'Natural Gas Transmission Pipeline', 'Oil & NGL Pipeline': 'Oil or NGL Pipeline', 'Iron Mine': 'Iron Ore Mine', 'Cement Plant': 'Cement or Concrete Plant'};
-            return t ? (map[t] || t) : 'none';
-          })()}</span>
+          <span class="debug-value"
+            >{selectedClasses[0]?.tracker || 'none'} → {(() => {
+              const t = selectedClasses[0]?.tracker;
+              const map = {
+                'Steel Plant': 'Iron & Steel Plant',
+                'Gas Pipeline': 'Natural Gas Transmission Pipeline',
+                'Oil & NGL Pipeline': 'Oil or NGL Pipeline',
+                'Iron Mine': 'Iron Ore Mine',
+                'Cement Plant': 'Cement or Concrete Plant',
+              };
+              return t ? map[t] || t : 'none';
+            })()}</span
+          >
         </div>
         <div class="debug-meta">
           <span class="debug-label">Data source:</span>
@@ -501,7 +512,10 @@
             <span class="debug-label">Available Trackers in DB:</span>
             <div class="asset-type-list">
               {#each availableAssetTypes as at}
-                <span class="asset-type-item" class:match={at.asset_type === selectedClasses()[0]?.tracker}>
+                <span
+                  class="asset-type-item"
+                  class:match={at.asset_type === selectedClasses[0]?.tracker}
+                >
                   {at.asset_type || '(empty)'} ({at.cnt})
                 </span>
               {/each}

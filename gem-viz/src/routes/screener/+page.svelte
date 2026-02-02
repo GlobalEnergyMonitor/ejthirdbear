@@ -4,6 +4,7 @@
    * Presets fill the query form. User can customize. One asset class at a time.
    */
 
+  import { tick } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import ScreenerLayout from '$lib/components/ScreenerLayout.svelte';
@@ -55,19 +56,16 @@
   }
 
   // Apply preset to fill the form
-  function applyPreset(preset) {
+  async function applyPreset(preset) {
     activePresetId = preset.id;
     customTracker = preset.tracker || '';
 
-    // Need to wait for availableFields to update, then set field
-    // Use setTimeout to let reactive update happen
-    setTimeout(() => {
-      customField = preset.filters?.field || '';
-      setTimeout(() => {
-        customOperator = preset.filters?.operator || '';
-        customValue = preset.filters?.value ?? '';
-      }, 0);
-    }, 0);
+    // Wait for reactive updates (availableFields depends on customTracker)
+    await tick();
+
+    customField = preset.filters?.field || '';
+    customOperator = preset.filters?.operator || '';
+    customValue = preset.filters?.value ?? '';
   }
 
   // Clear the form
@@ -335,7 +333,9 @@
         {#if !canContinue}
           <span class="filter-hint">Complete the steps above to continue</span>
         {:else}
-          <span class="filter-hint">Choose how you want to view ownership data for {customTracker}</span>
+          <span class="filter-hint"
+            >Choose how you want to view ownership data for {customTracker}</span
+          >
         {/if}
 
         <div class="continue-options">
@@ -344,7 +344,11 @@
             Show All Owners
             <span class="btn-sublabel">See every company with stakes</span>
           </button>
-          <button class="continue-btn secondary" onclick={searchSpecificOwners} disabled={!canContinue}>
+          <button
+            class="continue-btn secondary"
+            onclick={searchSpecificOwners}
+            disabled={!canContinue}
+          >
             <span class="btn-icon">⌕</span>
             Search Specific Owners
             <span class="btn-sublabel">Find companies from a list</span>
@@ -386,7 +390,10 @@
         {/if}
         <div class="debug-json">
           <span class="debug-label">Class Data JSON:</span>
-          <button class="copy-btn" onclick={() => navigator.clipboard.writeText(JSON.stringify(buildClassData(), null, 2))}>
+          <button
+            class="copy-btn"
+            onclick={() => navigator.clipboard.writeText(JSON.stringify(buildClassData(), null, 2))}
+          >
             Copy
           </button>
           <pre class="debug-code">{JSON.stringify(buildClassData(), null, 2)}</pre>
@@ -542,12 +549,6 @@
   }
 
   /* Query builder - clean form design */
-  .builder-form {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-5);
-  }
-
   .form-row {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -568,17 +569,6 @@
     letter-spacing: var(--tracking-wide);
     color: var(--color-text-tertiary);
     font-weight: 500;
-  }
-
-  .required {
-    color: var(--color-error);
-  }
-
-  .optional {
-    font-weight: 400;
-    text-transform: none;
-    letter-spacing: 0;
-    color: var(--color-text-tertiary);
   }
 
   .form-field select,
@@ -606,14 +596,6 @@
     background-repeat: no-repeat;
     background-position: right var(--space-1) center;
     padding-right: var(--space-5);
-  }
-
-  .operator-field select {
-    width: 100%;
-  }
-
-  .value-field input {
-    width: 100%;
   }
 
   /* Filter section - wizard-style */

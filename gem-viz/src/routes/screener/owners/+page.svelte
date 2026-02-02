@@ -86,12 +86,14 @@
    */
   async function searchSingleEntity(input) {
     const parsed = parseSearchInput(input);
-    const startTime = performance.now();
 
     if (parsed.type === 'gem_entity_id') {
       // Direct lookup by GEM Entity ID
       try {
-        debugApiCalls = [...debugApiCalls, { type: 'getEntity', params: { id: parsed.value }, time: Date.now() }];
+        debugApiCalls = [
+          ...debugApiCalls,
+          { type: 'getEntity', params: { id: parsed.value }, time: Date.now() },
+        ];
         const entity = await getEntity(parsed.value);
         return entity ? [entity] : [];
       } catch {
@@ -502,11 +504,13 @@
         </div>
         <div class="debug-meta">
           <span class="debug-label">Results:</span>
-          <span class="debug-value">{searchResultGroups.reduce((sum, g) => sum + g.results.length, 0)} entities</span>
+          <span class="debug-value"
+            >{searchResultGroups.reduce((sum, g) => sum + g.results.length, 0)} entities</span
+          >
         </div>
         <div class="debug-calls">
           <span class="debug-label">Requests:</span>
-          {#each debugApiCalls as call, i}
+          {#each debugApiCalls as call}
             <div class="debug-call">
               <span class="call-type">{call.type}</span>
               <code class="call-params">{JSON.stringify(call.params)}</code>
