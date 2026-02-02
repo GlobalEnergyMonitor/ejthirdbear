@@ -1,10 +1,10 @@
 {
-  "version": "8ffcf59",
-  "commit": "8ffcf59",
-  "message": "feat: add ownership tree graph matching Observable notebook behavior",
+  "version": "6735de9",
+  "commit": "6735de9",
+  "message": "fix: use dynamic env import for motherduck token in production",
   "author": "EJ Fox",
-  "timestamp": "2026-02-02T20:25:11.875Z",
-  "deployed": "2026-02-02T20:25:11.875Z",
-  "buildTime": "2/2/2026, 3:25:11 PM",
+  "timestamp": "2026-02-02T20:29:13.519Z",
+  "deployed": "2026-02-02T20:29:13.519Z",
+  "buildTime": "2/2/2026, 3:29:13 PM",
   "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.1.29"
 }

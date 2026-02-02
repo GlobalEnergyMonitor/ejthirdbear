@@ -6,7 +6,10 @@
  */
 
 import type { RequestHandler } from './$types';
-import { OPENROUTER_API_KEY } from '$env/static/private';
+import { env } from '$env/dynamic/private';
+
+// Get API key at runtime
+const getOpenRouterKey = () => env.OPENROUTER_API_KEY || '';
 import {
   listEntities,
   getEntity,
@@ -37,7 +40,7 @@ async function quickModel(prompt: string): Promise<string> {
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+        Authorization: `Bearer ${getOpenRouterKey()}`,
         'Content-Type': 'application/json',
         'HTTP-Referer': 'https://gem-viz.fly.dev',
       },
@@ -1350,7 +1353,7 @@ function createSSEStream() {
 }
 
 export const POST: RequestHandler = async ({ request }) => {
-  if (!OPENROUTER_API_KEY) {
+  if (!getOpenRouterKey()) {
     return new Response(JSON.stringify({ error: 'OpenRouter API key not configured' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
@@ -1391,7 +1394,7 @@ export const POST: RequestHandler = async ({ request }) => {
         let response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+            Authorization: `Bearer ${getOpenRouterKey()}`,
             'Content-Type': 'application/json',
             'HTTP-Referer': 'https://gem-viz.fly.dev',
             'X-Title': 'GEM Gembot',
@@ -1475,7 +1478,7 @@ export const POST: RequestHandler = async ({ request }) => {
           response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
             headers: {
-              Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+              Authorization: `Bearer ${getOpenRouterKey()}`,
               'Content-Type': 'application/json',
               'HTTP-Referer': 'https://gem-viz.fly.dev',
               'X-Title': 'GEM Gembot',
@@ -1538,7 +1541,7 @@ export const POST: RequestHandler = async ({ request }) => {
           const streamResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
             headers: {
-              Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+              Authorization: `Bearer ${getOpenRouterKey()}`,
               'Content-Type': 'application/json',
               'HTTP-Referer': 'https://gem-viz.fly.dev',
               'X-Title': 'GEM Gembot',
