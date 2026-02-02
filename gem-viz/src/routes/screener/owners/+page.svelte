@@ -8,13 +8,17 @@
   import { link } from '$lib/links';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
-  import { listEntities, getEntity } from '$lib/ownership-api';
   import EntityMicroCard from '$lib/components/EntityMicroCard.svelte';
   import ScreenerLayout from '$lib/components/ScreenerLayout.svelte';
   import AssetClassesPanel from '$lib/components/AssetClassesPanel.svelte';
   import DataSourceBadge from '$lib/components/DataSourceBadge.svelte';
   import DebugPanel from '$lib/components/DebugPanel.svelte';
   import { getExampleCompanies } from '$lib/data-config/screener-config';
+  import {
+    searchEntities,
+    searchEntitiesBulk,
+    getQueryLogs,
+  } from '$lib/data-config/screener-api';
 
   // Get selected classes from URL params
   const classesParam = $derived($page.url.searchParams.get('classes') || '');
@@ -55,64 +59,16 @@
   const selectedOwners = $derived([...selectedOwnerMap.values()]);
 
   /**
-   * Parse input to detect ID type:
-   * - GEM Entity ID: starts with E followed by numbers (e.g., E100001000348)
-   * - LEI: exactly 20 alphanumeric characters
-   * - Perm ID: numeric string, typically 10 digits
-   * - Otherwise: treat as company name
+   * Search for a single entity using centralized screener API.
+   * The API handles ID detection (GEM Entity ID, LEI, etc.) internally.
    */
-  function parseSearchInput(input) {
-    const trimmed = input.trim();
-
-    // GEM Entity ID pattern: E followed by digits
-    if (/^E\d+$/i.test(trimmed)) {
-      return { type: 'gem_entity_id', value: trimmed.toUpperCase() };
-    }
-
-    // LEI pattern: exactly 20 alphanumeric characters
-    if (/^[A-Z0-9]{20}$/i.test(trimmed)) {
-      return { type: 'lei', value: trimmed.toUpperCase() };
-    }
-
-    // Perm ID pattern: 10 digit number
-    if (/^\d{10}$/.test(trimmed)) {
-      return { type: 'perm_id', value: trimmed };
-    }
-
-    // Default: company name
-    return { type: 'name', value: trimmed };
-  }
-
-  /**
-   * Search for a single entity by parsed input
-   */
-  async function searchSingleEntity(input) {
-    const parsed = parseSearchInput(input);
-
-    if (parsed.type === 'gem_entity_id') {
-      // Direct lookup by GEM Entity ID
-      try {
-        debugApiCalls = [
-          ...debugApiCalls,
-          { type: 'getEntity', params: { id: parsed.value }, time: Date.now() },
-        ];
-        const entity = await getEntity(parsed.value);
-        return entity ? [entity] : [];
-      } catch {
-        // If not found, fall back to search
-        const params = { q: parsed.value, limit: 10 };
-        debugApiCalls = [...debugApiCalls, { type: 'listEntities', params, time: Date.now() }];
-        const response = await listEntities(params);
-        return response.results || [];
-      }
-    }
-
-    // For other types, use text search
-    // (API would need to support LEI/Perm ID fields for proper lookup)
-    const params = { q: parsed.value, limit: 20 };
-    debugApiCalls = [...debugApiCalls, { type: 'listEntities', params, time: Date.now() }];
-    const response = await listEntities(params);
-    return response.results || [];
+  async function searchSingleEntity(input: string) {
+    debugApiCalls = [
+      ...debugApiCalls,
+      { type: 'searchEntities', params: { query: input }, time: Date.now() },
+    ];
+    const results = await searchEntities(input, { limit: 20 });
+    return results;
   }
 
   // Search for single owner
@@ -138,7 +94,8 @@
     }
   }
 
-  // Bulk search for multiple owners
+  // Bulk search for multiple owners using centralized API
+  // Currently fires parallel requests, will use batch endpoint when available
   async function searchBulk() {
     if (!bulkSearchText.trim()) return;
 
@@ -146,35 +103,49 @@
     searchError = null;
     searchResultGroups = [];
     debugApiCalls = [];
-    const startTime = performance.now();
 
     try {
       // Parse lines - handle both newlines and commas
       const inputs = bulkSearchText
         .split(/[\n,]/)
         .map((s) => s.trim())
-        .filter((s) => s.length > 0);
+        .filter((s) => s.length > 0)
+        .slice(0, 30); // Limit to 30 terms
 
-      // Search each input (limit to 30 to avoid overloading)
-      const searchPromises = inputs.slice(0, 30).map(async (term) => {
-        const results = await searchSingleEntity(term);
-        return { term, results, matchCount: results.length };
+      debugApiCalls = [
+        { type: 'searchEntitiesBulk', params: { queryCount: inputs.length }, time: Date.now() },
+      ];
+
+      // Use centralized bulk search (will switch to batch API when available)
+      const bulkResult = await searchEntitiesBulk(inputs, {
+        limitPerQuery: 10,
+        maxConcurrent: 10,
       });
-      const groups = await Promise.all(searchPromises);
 
-      // Filter out groups with no results, keep groups for disambiguation
+      debugLastSearchTime = bulkResult.queryTimeMs;
+
+      // Convert to search result groups format
+      const groups = Object.entries(bulkResult.results).map(([term, results]) => ({
+        term,
+        results,
+        matchCount: results.length,
+      }));
+
+      // Filter out groups with no results
       searchResultGroups = groups.filter((g) => g.results.length > 0);
-      debugLastSearchTime = performance.now() - startTime;
 
-      // Also track terms with no matches
+      // Track terms with no matches
       const noMatches = groups.filter((g) => g.results.length === 0);
       if (noMatches.length > 0) {
         const noMatchTerms = noMatches.map((g) => g.term).join(', ');
         searchError = `No matches found for: ${noMatchTerms}`;
       }
+
+      // Log API stats for debugging
+      console.log(`Bulk search: ${bulkResult.apiCallCount} API calls, ${bulkResult.queryTimeMs.toFixed(0)}ms`);
     } catch (err) {
       searchError = err?.message || 'Bulk search failed';
-      debugLastSearchTime = performance.now() - startTime;
+      console.error('Bulk search failed:', err, getQueryLogs());
     } finally {
       searchLoading = false;
     }

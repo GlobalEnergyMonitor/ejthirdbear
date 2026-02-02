@@ -23,6 +23,12 @@
   import { investigationCart } from '$lib/investigationCart';
   import { getAssetTypeForTracker } from '$lib/data-config/tracker-schema';
   import { describePortfolio, describeOwnership } from '$lib/data-config/screener-config';
+  import {
+    getOwnersByAssetType,
+    getAssetTypeCounts,
+    getQueryLogs,
+    type ScreenerFilters,
+  } from '$lib/data-config/screener-api';
 
   // URL params
   const classesParam = $derived($page.url.searchParams.get('classes') || '');
@@ -142,7 +148,8 @@
     investigationCart.addMany(toAdd);
   }
 
-  // Load owners data
+  // Load owners data using centralized screener API
+  // This makes it easy to swap MotherDuck -> REST API when backend provides endpoint
   onMount(async () => {
     try {
       const classes = selectedClasses;
@@ -152,92 +159,38 @@
         return;
       }
 
-      // Use unified query layer (MotherDuck with automatic table mapping)
-      const { unifiedQuery } = await import('$lib/data/unified-query');
-
       const cls = classes[0];
-      const trackerVal = cls?.tracker;
-      const _statusVal = cls?.filters?.status; // TODO: Add status filtering to SQL query
-      const ownerIds = selectedOwnerIds;
-      const hasOwnerFilter = ownerIds.length > 0;
 
-      const queryStartTime = performance.now();
+      // Build filters for the screener API
+      const filters: ScreenerFilters = {
+        tracker: cls?.tracker || '',
+        status: cls?.filters?.status,
+        country: cls?.filters?.geography,
+        ownerIds: selectedOwnerIds.length > 0 ? selectedOwnerIds : undefined,
+      };
 
-      // Get the MotherDuck asset type for this tracker
-      const assetTypeVal = trackerVal ? getAssetTypeForTracker(trackerVal) : null;
+      // Fetch asset type counts (cached, for debug panel)
+      // This replaces the inline debug query
+      getAssetTypeCounts().then((counts) => {
+        availableAssetTypes = Object.entries(counts).map(([asset_type, cnt]) => ({
+          asset_type,
+          cnt,
+        }));
+      });
 
-      // Build filter clauses
-      // MotherDuck columns: "Immediate Owner Entity Name", "Immediate Owner Entity ID", "Asset Type", "Asset ID"
-      const trackerClause = assetTypeVal
-        ? `AND "Asset Type" = '${assetTypeVal.replace(/'/g, "''")}'`
-        : '';
-      const ownerClause = hasOwnerFilter
-        ? `AND "Immediate Owner Entity ID" IN (${ownerIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(', ')})`
-        : '';
+      // Main query: get owners by asset type
+      // Currently uses MotherDuck, will switch to REST API when available
+      const result = await getOwnersByAssetType(filters, { limit: 200 });
 
-      // Debug: Check what Asset Types exist
-      try {
-        const debugResult = await unifiedQuery(`
-          SELECT DISTINCT "Asset Type" as asset_type, COUNT(*) as cnt
-          FROM ownership
-          GROUP BY "Asset Type"
-          ORDER BY cnt DESC
-          LIMIT 20
-        `);
-        console.log('Available Asset Types:', debugResult.data);
-        availableAssetTypes = debugResult.data || [];
-      } catch (debugErr) {
-        console.warn('Debug query failed:', debugErr);
-      }
+      queryTime = result.queryTimeMs;
+      dataSource = /** @type {'motherduck' | 'local'} */ (result.source);
+      executedQuery = `[Centralized API] source=${result.source}, filters=${JSON.stringify(filters)}`;
 
-      const sql = `
-        WITH owner_totals AS (
-          SELECT
-            "Immediate Owner Entity Name" as name,
-            "Immediate Owner Entity ID" as entity_id,
-            COUNT(DISTINCT "Asset ID") as total_assets
-          FROM ownership
-          WHERE "Immediate Owner Entity Name" IS NOT NULL AND "Immediate Owner Entity Name" != ''
-            ${ownerClause}
-          GROUP BY "Immediate Owner Entity Name", "Immediate Owner Entity ID"
-        ),
-        owner_filtered AS (
-          SELECT
-            "Immediate Owner Entity Name" as name,
-            "Immediate Owner Entity ID" as entity_id,
-            COUNT(DISTINCT "Asset ID") as filtered_assets
-          FROM ownership
-          WHERE "Immediate Owner Entity Name" IS NOT NULL AND "Immediate Owner Entity Name" != ''
-            ${ownerClause}
-            ${trackerClause}
-          GROUP BY "Immediate Owner Entity Name", "Immediate Owner Entity ID"
-        )
-        SELECT
-          t.name,
-          t.entity_id,
-          t.total_assets,
-          COALESCE(f.filtered_assets, 0) as filtered_assets
-        FROM owner_totals t
-        LEFT JOIN owner_filtered f ON t.entity_id = f.entity_id
-        WHERE f.filtered_assets > 0 OR ${hasOwnerFilter ? 'TRUE' : 'FALSE'}
-        ORDER BY f.filtered_assets DESC, t.total_assets DESC
-        LIMIT 200
-      `;
-
-      executedQuery = sql.trim();
-      const result = await unifiedQuery(sql);
-      queryTime = performance.now() - queryStartTime;
-      dataSource = /** @type {'motherduck' | 'local'} */ (result.source || 'motherduck');
-
-      if (!result.success) {
-        throw new Error(result.error || 'Query failed');
-      }
-
-      owners = (result.data || []).map((row) => ({
-        name: row.name || 'Unknown',
-        entityId: row.entity_id || null,
-        totalAssets: Number(row.total_assets) || 0,
-        filteredAssets: Number(row.filtered_assets) || 0,
+      owners = result.owners.map((o) => ({
+        name: o.name,
+        entityId: o.entityId,
+        totalAssets: o.totalAssets,
+        filteredAssets: o.filteredAssets,
       }));
 
       loading = false;
@@ -245,6 +198,9 @@
       console.error('Failed to load owners:', err);
       error = err?.message || 'Failed to load data';
       loading = false;
+
+      // Log query history for debugging
+      console.log('Query logs:', getQueryLogs());
     }
   });
 
