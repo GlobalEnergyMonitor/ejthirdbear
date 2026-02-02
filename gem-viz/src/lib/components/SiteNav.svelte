@@ -68,8 +68,9 @@
 
       <!-- Desktop navigation -->
       <div class="nav-links desktop-only">
-        {#each navLinks as { path, label, showBadge }}
+        {#each navLinks as { path, label, showBadge, icon }}
           <a href={link(path)} class:active={isActive(path)}>
+            {#if icon}<span class="nav-icon">{icon}</span>{/if}
             {label}
             {#if showBadge && cartCount > 0}
               <span class="badge">{cartCount}</span>
@@ -122,8 +123,9 @@
     <!-- Mobile menu dropdown -->
     {#if menuOpen}
       <div class="mobile-menu">
-        {#each navLinks as { path, label, showBadge }}
+        {#each navLinks as { path, label, showBadge, icon }}
           <a href={link(path)} class:active={isActive(path)} onclick={() => (menuOpen = false)}>
+            {#if icon}<span class="nav-icon">{icon}</span>{/if}
             {label}
             {#if showBadge && cartCount > 0}
               <span class="badge">{cartCount}</span>
@@ -287,6 +289,12 @@
     border-color: #1d4961;
     color: #1d4961;
     background: rgba(29, 73, 97, 0.05);
+  }
+
+  /* Nav icon (for Gembot) */
+  .nav-icon {
+    font-size: 1em;
+    line-height: 1;
   }
 
   /* Badge */
