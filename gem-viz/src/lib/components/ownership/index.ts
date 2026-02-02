@@ -2,7 +2,9 @@
  * Ownership Components - Barrel Export
  *
  * Components for visualizing ownership structures:
- * - DagreOwnershipGraph: Hierarchical ownership tree (walks UP)
+ * - OwnershipTreeGraph: Hierarchical ownership tree using dagre layout + Svelte SVG (recommended)
+ * - OwnershipMiniTree: Compact horizontal tree for screener results (entity → assets)
+ * - DagreOwnershipGraph: Legacy dagre-d3 version (disabled, crashes in production)
  * - OwnershipSummaryTables: Tabular breakdowns by entity/country/type
  * - EntityPortfolioHeader: Sticky header with stats and flower
  * - EntityPortfolioFilters: Multi-select filter chips
@@ -10,6 +12,8 @@
  * - IntermediaryMiniGraph: Compact subsidiary graph
  */
 
+export { default as OwnershipTreeGraph } from './OwnershipTreeGraph.svelte';
+export { default as OwnershipMiniTree } from './OwnershipMiniTree.svelte';
 export { default as DagreOwnershipGraph } from './DagreOwnershipGraph.svelte';
 export { default as OwnershipSummaryTables } from './OwnershipSummaryTables.svelte';
 export { default as EntityPortfolioHeader } from './EntityPortfolioHeader.svelte';

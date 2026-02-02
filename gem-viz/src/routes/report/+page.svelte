@@ -15,6 +15,8 @@
   import EntityMicroCard from '$lib/components/EntityMicroCard.svelte';
   import AssetMicroCard from '$lib/components/AssetMicroCard.svelte';
   import DataTable from '$lib/components/DataTable.svelte';
+  import { OwnershipTreeGraph } from '$lib/components/ownership';
+  import { getEntityGraphUp } from '$lib/ownership-api';
   import { ASSET_ID_COALESCE_O } from '$lib/duckdb-queries';
 
   // State
@@ -35,6 +37,10 @@
   let queryTime = $state(0);
   let debugLogs = $state<string[]>([]);
 
+  // Ownership graph data for entities
+  let entityOwnershipGraphs = $state<Map<string, { nodes: any[]; edges: any[]; paths?: any }>>(new Map());
+  let selectedEntityForGraph = $state<string | null>(null);
+
   // Loading progress state
   type QueryStatus = 'pending' | 'running' | 'done' | 'skipped' | 'error';
   type QueryStep = {
@@ -48,6 +54,7 @@
   let loadingSteps = $state<QueryStep[]>([
     { id: 'init', label: 'Initializing DuckDB connection', status: 'pending' },
     { id: 'portfolios', label: 'Querying entity portfolios', status: 'pending' },
+    { id: 'ownership', label: 'Fetching ownership graphs', status: 'pending' },
     { id: 'shared', label: 'Finding co-owned assets', status: 'pending' },
     { id: 'owners', label: 'Identifying common owners', status: 'pending' },
     { id: 'geo', label: 'Analyzing geographic distribution', status: 'pending' },
@@ -110,6 +117,44 @@
     const result = await widgetQuery(sql);
     log(`Entity portfolios: ${result.success ? result.data?.length : 'error'}`);
     return result.success ? result.data || [] : [];
+  }
+
+  // Fetch ownership graphs for all entities (via API)
+  async function fetchOwnershipGraphs() {
+    if (entityIds.length < 1) return new Map();
+    log(`Fetching ownership graphs for ${entityIds.length} entities`);
+
+    const graphs = new Map<string, { nodes: any[]; edges: any[]; paths?: any }>();
+
+    // Fetch graphs in parallel (limit to 5 concurrent)
+    const batchSize = 5;
+    for (let i = 0; i < entityIds.length; i += batchSize) {
+      const batch = entityIds.slice(i, i + batchSize);
+      const results = await Promise.allSettled(
+        batch.map(async (id) => {
+          try {
+            const graph = await getEntityGraphUp(id);
+            return { id, graph };
+          } catch (err) {
+            console.warn(`Failed to fetch ownership graph for ${id}:`, err);
+            return { id, graph: null };
+          }
+        })
+      );
+
+      for (const result of results) {
+        if (result.status === 'fulfilled' && result.value.graph) {
+          const { id, graph } = result.value;
+          graphs.set(id, {
+            nodes: graph.nodes || [],
+            edges: graph.edges || [],
+          });
+        }
+      }
+    }
+
+    log(`Fetched ${graphs.size} ownership graphs`);
+    return graphs;
   }
 
   // Query for shared assets (when entities in cart)
@@ -303,6 +348,7 @@
     loadingSteps = [
       { id: 'init', label: 'Initializing DuckDB connection', status: 'pending' },
       { id: 'portfolios', label: 'Querying entity portfolios', status: 'pending' },
+      { id: 'ownership', label: 'Fetching ownership graphs', status: 'pending' },
       { id: 'shared', label: 'Finding co-owned assets', status: 'pending' },
       { id: 'owners', label: 'Identifying common owners', status: 'pending' },
       { id: 'geo', label: 'Analyzing geographic distribution', status: 'pending' },
@@ -327,6 +373,7 @@
 
       // Run queries sequentially for better loading UX (shows progress)
       const portfolios = await runStep('portfolios', queryEntityPortfolios, entityIds.length < 1);
+      const ownershipGraphs = await runStep('ownership', fetchOwnershipGraphs, entityIds.length < 1);
       const shared = await runStep('shared', querySharedAssets, entityIds.length < 2);
       const common = await runStep('owners', queryCommonOwners, assetIds.length < 1);
       const geo = await runStep('geo', queryGeoBreakdown);
@@ -334,6 +381,9 @@
       const stats = await runStep('summary', querySummary);
 
       entityPortfolios = portfolios || [];
+      entityOwnershipGraphs = ownershipGraphs || new Map();
+      // Select first entity by default for graph view
+      if (entityIds.length > 0) selectedEntityForGraph = entityIds[0];
       sharedAssets = shared || [];
       commonOwners = common || [];
       geoBreakdown = geo || [];
@@ -555,11 +605,59 @@
       {/if}
     </section>
 
-    <!-- SECTION 3: GEOGRAPHY -->
-    {#if geoBreakdown.length > 0}
+    <!-- SECTION 3: OWNERSHIP STRUCTURE -->
+    {#if hasEntities && entityOwnershipGraphs.size > 0}
       <section class="report-section">
         <header class="section-head">
           <span class="section-num">3.</span>
+          <h2>Ownership Structure</h2>
+        </header>
+        <p class="section-lede">
+          Who owns the {entityIds.length === 1 ? 'entity' : 'entities'} in this investigation
+        </p>
+
+        <!-- Entity selector tabs -->
+        {#if entityIds.length > 1}
+          <div class="entity-tabs">
+            {#each entityIds as id}
+              {@const portfolio = entityPortfolios.find((e) => e.entity_id === id)}
+              <button
+                class="entity-tab"
+                class:active={selectedEntityForGraph === id}
+                onclick={() => (selectedEntityForGraph = id)}
+              >
+                {portfolio?.entity_name || id}
+              </button>
+            {/each}
+          </div>
+        {/if}
+
+        <!-- Ownership graph for selected entity -->
+        {#if selectedEntityForGraph}
+          {@const graphData = entityOwnershipGraphs.get(selectedEntityForGraph)}
+          {@const portfolio = entityPortfolios.find((e) => e.entity_id === selectedEntityForGraph)}
+          {#if graphData && graphData.nodes.length > 1}
+            <div class="ownership-graph-container">
+              <OwnershipTreeGraph
+                nodes={graphData.nodes}
+                edges={graphData.edges}
+                paths={graphData.paths || {}}
+                rootId={selectedEntityForGraph}
+                assetName={portfolio?.entity_name || selectedEntityForGraph}
+              />
+            </div>
+          {:else}
+            <p class="null-state">No upstream ownership data found for {portfolio?.entity_name || selectedEntityForGraph}. This may be a terminal entity with no recorded owners.</p>
+          {/if}
+        {/if}
+      </section>
+    {/if}
+
+    <!-- SECTION 4: GEOGRAPHY -->
+    {#if geoBreakdown.length > 0}
+      <section class="report-section">
+        <header class="section-head">
+          <span class="section-num">{hasEntities && entityOwnershipGraphs.size > 0 ? '4' : '3'}.</span>
           <h2>Geography</h2>
         </header>
         <p class="section-lede">
@@ -585,11 +683,11 @@
       </section>
     {/if}
 
-    <!-- SECTION 4: CONNECTIONS -->
+    <!-- SECTION 5: CONNECTIONS -->
     {#if hasEntities && entityIds.length >= 2}
       <section class="report-section">
         <header class="section-head">
-          <span class="section-num">4.</span>
+          <span class="section-num">{hasEntities && entityOwnershipGraphs.size > 0 ? '5' : '4'}.</span>
           <h2>Connections</h2>
         </header>
         <p class="section-lede">
@@ -626,7 +724,7 @@
     {:else if hasEntities && entityIds.length === 1}
       <section class="report-section muted">
         <header class="section-head">
-          <span class="section-num">4.</span>
+          <span class="section-num">{hasEntities && entityOwnershipGraphs.size > 0 ? '5' : '4'}.</span>
           <h2>Connections</h2>
         </header>
         <p class="section-lede">Add ≥2 entities to analyze co-ownership</p>
@@ -637,8 +735,8 @@
     {#if hasAssets}
       <section class="report-section">
         <header class="section-head">
-          <span class="section-num">{hasEntities ? '5' : '4'}.</span>
-          <h2>Ownership</h2>
+          <span class="section-num">{hasEntities ? (entityOwnershipGraphs.size > 0 ? '6' : '5') : '4'}.</span>
+          <h2>Asset Owners</h2>
         </header>
         <p class="section-lede">Owners of {assetIds.length} selected {assetIds.length === 1 ? 'asset' : 'assets'}</p>
 
@@ -1004,6 +1102,46 @@
     font-size: 14px;
     color: var(--color-text-tertiary);
     padding: var(--space-6) 0;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     OWNERSHIP GRAPH SECTION
+     ═══════════════════════════════════════════════════════════════════ */
+
+  .entity-tabs {
+    display: flex;
+    gap: var(--space-2);
+    margin-bottom: var(--space-4);
+    flex-wrap: wrap;
+  }
+
+  .entity-tab {
+    padding: var(--space-2) var(--space-4);
+    font-size: 12px;
+    font-weight: 500;
+    border: 1px solid var(--color-gray-300);
+    background: var(--color-white);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .entity-tab:hover {
+    border-color: var(--gem-primary-blue);
+    color: var(--gem-primary-blue);
+  }
+
+  .entity-tab.active {
+    background: var(--gem-primary-blue);
+    border-color: var(--gem-primary-blue);
+    color: white;
+  }
+
+  .ownership-graph-container {
+    border: 1px solid var(--color-gray-200);
+    background: var(--color-gray-50);
+    padding: var(--space-4);
+    min-height: 300px;
   }
 
   /* ═══════════════════════════════════════════════════════════════════

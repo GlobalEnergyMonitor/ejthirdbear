@@ -1,10 +1,10 @@
 {
-  "version": "1552374",
-  "commit": "1552374",
-  "message": "chore: update build artifacts",
+  "version": "2c8549c",
+  "commit": "2c8549c",
+  "message": "style: redesign MicroCards with Tufte/Swiss principles",
   "author": "EJ Fox",
-  "timestamp": "2026-01-31T17:30:23.510Z",
-  "deployed": "2026-01-31T17:30:23.510Z",
-  "buildTime": "1/31/2026, 12:30:23 PM",
-  "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.1.28"
+  "timestamp": "2026-02-02T20:20:03.880Z",
+  "deployed": "2026-02-02T20:20:03.880Z",
+  "buildTime": "2/2/2026, 3:20:03 PM",
+  "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.1.29"
 }

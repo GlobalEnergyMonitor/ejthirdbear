@@ -22,7 +22,7 @@
   import AddToCartButton from '$lib/components/AddToCartButton.svelte';
   import Citation from '$lib/components/Citation.svelte';
   import DataSourceBadge from '$lib/components/DataSourceBadge.svelte';
-  import { DagreOwnershipGraph, OwnershipSummaryTables } from '$lib/components/ownership';
+  import { OwnershipTreeGraph, OwnershipSummaryTables } from '$lib/components/ownership';
 
   /**
    * @typedef {Object} AssetData
@@ -61,6 +61,7 @@
    * @typedef {Object} GraphData
    * @property {GraphNode[]} nodes
    * @property {GraphEdge[]} edges
+   * @property {Record<string, any[]>} [paths]
    */
 
   /**
@@ -93,6 +94,7 @@
   // --- DATA TRANSFORMS ---
   const graphEdges = $derived(graph?.edges || []);
   const graphNodes = $derived(graph?.nodes || []);
+  const graphPaths = $derived(graph?.paths || {});
   const nodeMap = $derived(new Map(graphNodes.map((n) => [n.id, n])));
   const ownerEdges = $derived(graphEdges.filter((e) => e.target === assetId));
   const ownerRows = $derived(
@@ -299,20 +301,26 @@
       <!-- Ownership Visualizations (only if we have edges) -->
       {#if graphEdges.length > 0}
         <section class="viz-section">
-          <h2>Ownership Structure</h2>
+          <div class="section-header-row">
+            <h2>Ownership Structure</h2>
+            <a
+              href="/embed/ownership-graph?assetId={assetId}"
+              class="embed-btn"
+              target="_blank"
+              rel="noopener"
+              title="Embed this visualization">↗</a
+            >
+          </div>
           <div class="viz-tabs">
             <p class="viz-description">
               Interactive graph showing ownership hierarchy. Hover over nodes to highlight paths.
             </p>
-            <DagreOwnershipGraph
+            <OwnershipTreeGraph
               nodes={graphNodes}
               edges={graphEdges}
+              paths={graphPaths}
               rootId={assetId}
-              direction="TB"
-              showPies={true}
-              maxDepth={10}
-              width={800}
-              height={500}
+              assetName={assetName}
             />
           </div>
         </section>
@@ -554,6 +562,38 @@
   }
   .viz-section h2 {
     margin-top: 0;
+  }
+  .section-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    margin-bottom: var(--space-4);
+  }
+  .section-header-row h2 {
+    margin: 0;
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+  .embed-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: var(--gem-mint, #97E6DE);
+    color: var(--gem-navy, #1a3a4a);
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    text-decoration: none;
+    border-radius: 4px;
+    opacity: 0.6;
+    transition: all 0.15s ease;
+  }
+  .embed-btn:hover {
+    opacity: 1;
+    background: var(--gem-teal, #2a7f8f);
+    color: white;
   }
   .viz-description {
     font-size: var(--font-size-body);

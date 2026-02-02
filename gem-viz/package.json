@@ -1,7 +1,7 @@
 {
   "name": "gem-viz",
   "private": true,
-  "version": "0.1.28",
+  "version": "0.1.29",
   "type": "module",
   "scripts": {
     "dev": "NODE_ENV=development vite dev",
@@ -35,8 +35,10 @@
     "@testing-library/svelte": "^5.2.9",
     "@tsconfig/svelte": "^5.0.6",
     "@types/chroma-js": "^3.1.2",
+    "@types/dagre": "^0.7.53",
     "@typescript-eslint/eslint-plugin": "^8.47.0",
     "@typescript-eslint/parser": "^8.47.0",
+    "dagre": "^0.8.5",
     "eslint": "^9.39.1",
     "eslint-plugin-svelte": "^2.46.1",
     "globals": "^16.5.0",

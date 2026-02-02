@@ -17,7 +17,7 @@
   import {
     EntityPortfolioFilters,
     EntityPortfolioHeader,
-    DagreOwnershipGraph,
+    OwnershipTreeGraph,
     OwnershipSummaryTables,
     AssetRingVisualization,
   } from '$lib/components/ownership';
@@ -411,12 +411,11 @@
           {#if graphLoading}
             <p class="placeholder">Loading ownership graph...</p>
           {:else if graphUp?.nodes?.length > 1}
-            <DagreOwnershipGraph
+            <OwnershipTreeGraph
               nodes={graphUp.nodes}
               edges={graphUp.edges}
+              paths={graphUp.paths || {}}
               rootId={entityId}
-              direction="BT"
-              showPies={true}
             />
           {:else}
             <p class="placeholder">No upstream owners found (terminal entity)</p>
@@ -487,12 +486,11 @@
               title="Embed this visualization">↗</a
             >
           </h3>
-          <DagreOwnershipGraph
+          <OwnershipTreeGraph
             nodes={graphDown.nodes}
             edges={graphDown.edges}
+            paths={graphDown.paths || {}}
             rootId={entityId}
-            direction="TB"
-            showPies={true}
           />
         </div>
       {/if}

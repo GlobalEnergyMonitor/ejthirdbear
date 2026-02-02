@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
   /**
    * ASSET-CLASS SCREENER - Step 2: Search Owners
    * Search for companies by name, GEM Entity ID, LEI, or Perm ID.

@@ -52,6 +52,25 @@ export const TRACKER_TO_ASSET_TYPE: Record<TrackerName, string> = {
 };
 
 /**
+ * Trackers that have ownership data available in MotherDuck for aggregation queries.
+ * Other trackers are available in the REST API but not yet loaded into MotherDuck.
+ * This is used to show appropriate warnings in the screener UI.
+ */
+export const TRACKERS_WITH_MOTHERDUCK_DATA: TrackerName[] = [
+  'Bioenergy Power',
+  'Coal Plant',
+  'Gas Plant',
+  'Steel Plant',
+];
+
+/**
+ * Check if a tracker has aggregation data in MotherDuck
+ */
+export function hasMotherDuckData(tracker: string): boolean {
+  return TRACKERS_WITH_MOTHERDUCK_DATA.includes(tracker as TrackerName);
+}
+
+/**
  * Get the MotherDuck asset type for a tracker
  */
 export function getAssetTypeForTracker(tracker: string): string | null {

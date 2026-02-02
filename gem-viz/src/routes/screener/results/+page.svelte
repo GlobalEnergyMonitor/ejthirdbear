@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
   /**
    * ASSET-CLASS SCREENER - Results
    *
@@ -19,10 +19,10 @@
   import ScreenerLayout from '$lib/components/ScreenerLayout.svelte';
   import AssetClassesPanel from '$lib/components/AssetClassesPanel.svelte';
   import DebugPanel from '$lib/components/DebugPanel.svelte';
-  import { entityLink } from '$lib/links';
   import { investigationCart } from '$lib/investigationCart';
   import { getAssetTypeForTracker } from '$lib/data-config/tracker-schema';
   import { describePortfolio, describeOwnership } from '$lib/data-config/screener-config';
+  import OwnershipMiniTree from '$lib/components/ownership/OwnershipMiniTree.svelte';
   import {
     getOwnersByAssetType,
     getAssetTypeCounts,
@@ -90,6 +90,24 @@
   // Search/filter for journalists with watchlists
   let searchQuery = $state('');
   let showOnlyInvestigation = $state(false);
+
+  // Expanded row state - tracks which owner's ownership tree is visible
+  let expandedOwnerId = $state<string | null>(null);
+
+  function toggleExpanded(ownerId: string) {
+    expandedOwnerId = expandedOwnerId === ownerId ? null : ownerId;
+  }
+
+  // Get asset filter for mini tree based on selected classes
+  const assetFilterForTree = $derived.by(() => {
+    if (selectedClasses.length === 0) return {};
+    const cls = selectedClasses[0];
+    return {
+      tracker: getAssetTypeForTracker(cls?.tracker),
+      status: cls?.filters?.status,
+      country: cls?.filters?.geography,
+    };
+  });
 
   // Investigation cart state (reactive)
   let cartItems = $state([]);
@@ -347,6 +365,7 @@
         <table class="results-table">
           <thead>
             <tr>
+              <th class="col-expand"></th>
               <th class="col-select"></th>
               <th class="col-company">Company name:</th>
               <th class="col-total">Total Portfolio:</th>
@@ -356,7 +375,21 @@
           <tbody>
             {#each filteredOwners as owner (owner.entityId || owner.name)}
               {@const inInvestigation = isInInvestigation(owner.entityId)}
-              <tr class:in-investigation={inInvestigation}>
+              {@const isExpanded = expandedOwnerId === owner.entityId}
+              <tr
+                class:in-investigation={inInvestigation}
+                class:expanded={isExpanded}
+              >
+                <td class="col-expand">
+                  <button
+                    class="expand-btn"
+                    class:expanded={isExpanded}
+                    onclick={() => toggleExpanded(owner.entityId)}
+                    title={isExpanded ? 'Hide ownership tree' : 'Show ownership tree'}
+                  >
+                    {isExpanded ? '▼' : '▶'}
+                  </button>
+                </td>
                 <td class="col-select">
                   <button
                     class="select-btn"
@@ -368,9 +401,9 @@
                   </button>
                 </td>
                 <td class="col-company">
-                  <a href={entityLink(owner.entityId)} class="company-link">
+                  <button class="company-btn" onclick={() => toggleExpanded(owner.entityId)}>
                     {owner.name}
-                  </a>
+                  </button>
                 </td>
                 <td class="col-total">
                   {describePortfolio(owner.totalAssets)}
@@ -379,9 +412,21 @@
                   {describeOwnership(owner.filteredAssets, classDescription)}
                 </td>
               </tr>
+              <!-- Expanded ownership tree row -->
+              {#if isExpanded}
+                <tr class="tree-row">
+                  <td colspan="5" class="tree-cell">
+                    <OwnershipMiniTree
+                      entityId={owner.entityId}
+                      entityName={owner.name}
+                      assetFilter={assetFilterForTree}
+                    />
+                  </td>
+                </tr>
+              {/if}
             {:else}
               <tr>
-                <td colspan="4" class="empty-row">
+                <td colspan="5" class="empty-row">
                   {#if searchQuery}
                     No owners matching "{searchQuery}" found.
                     <button class="link-btn" onclick={() => (searchQuery = '')}>Clear search</button
@@ -392,7 +437,15 @@
                       >Show all</button
                     >
                   {:else}
-                    No owners found for this asset class.
+                    <div class="no-data-notice">
+                      <strong>No ownership data available for {classDescription}.</strong>
+                      <p>
+                        The ownership aggregation database currently includes Coal Plants, Gas Plants, Steel Plants, and Bioenergy.
+                        Coal Mines, Iron Mines, and Gas Pipelines are available in the
+                        <a href="https://gem-api.thirdbear.net/assets?asset_type=Coal%20Mine" target="_blank" rel="noopener">REST API</a>
+                        but not yet in the aggregation layer.
+                      </p>
+                    </div>
                   {/if}
                 </td>
               </tr>
@@ -681,6 +734,34 @@
     text-decoration: underline;
   }
 
+  /* Expand column */
+  .col-expand {
+    width: 32px;
+    text-align: center;
+  }
+
+  .expand-btn {
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: none;
+    color: #a0aec0;
+    font-size: 10px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    border-radius: 4px;
+  }
+
+  .expand-btn:hover {
+    background: #edf2f7;
+    color: #1d4961;
+  }
+
+  .expand-btn.expanded {
+    color: #1d4961;
+    background: #e8f4f4;
+  }
+
   /* Select column */
   .col-select {
     width: 40px;
@@ -713,6 +794,44 @@
 
   tr.in-investigation {
     background: rgba(29, 73, 97, 0.04);
+  }
+
+  tr.expanded {
+    background: #f0f7f9;
+  }
+
+  tr.expanded td {
+    border-bottom-color: transparent;
+  }
+
+  /* Tree row */
+  .tree-row {
+    background: #f7fafc;
+  }
+
+  .tree-row:hover td {
+    background: #f7fafc;
+  }
+
+  .tree-cell {
+    padding: 0 !important;
+    border-bottom: 2px solid #e2e8f0;
+  }
+
+  /* Company button (clickable to expand) */
+  .company-btn {
+    background: none;
+    border: none;
+    color: #1d4961;
+    font-weight: 500;
+    font-size: inherit;
+    text-align: left;
+    cursor: pointer;
+    padding: 0;
+  }
+
+  .company-btn:hover {
+    text-decoration: underline;
   }
 
   .results-box {
@@ -807,6 +926,35 @@
     text-align: center;
     color: #a0aec0;
     padding: var(--space-8) !important;
+  }
+
+  .no-data-notice {
+    text-align: left;
+    max-width: 500px;
+    margin: 0 auto;
+    padding: var(--space-4);
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    border-radius: var(--radius-sm);
+    color: #9a3412;
+  }
+
+  .no-data-notice strong {
+    display: block;
+    margin-bottom: var(--space-2);
+    color: #7c2d12;
+  }
+
+  .no-data-notice p {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+    color: #c2410c;
+  }
+
+  .no-data-notice a {
+    color: #1d4961;
+    text-decoration: underline;
   }
 
   /* Responsive */

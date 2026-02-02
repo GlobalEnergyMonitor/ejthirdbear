@@ -18,6 +18,7 @@
     TEXT_OPERATORS,
     getFieldsForTracker,
     getFieldConfig,
+    hasMotherDuckData,
   } from '$lib/data-config/tracker-schema';
 
   // Track which preset is active (for highlighting)
@@ -67,6 +68,9 @@
     customField = preset.filters?.field || '';
     customOperator = preset.filters?.operator || '';
     customValue = preset.filters?.value ?? '';
+    // Also apply status and geography filters from preset
+    customStatusFilter = preset.filters?.status || '';
+    customGeoFilter = preset.filters?.geography || '';
   }
 
   // Clear the form
@@ -169,8 +173,7 @@
     <h2>
       Quick add classes of assets
       <span class="refine-hint"
-        >Refine by <strong>geography</strong> or <strong>status</strong> (operating, proposed, etc) after
-        making selections</span
+        >Click a preset to populate the query builder below. Badges show included filters.</span
       >
     </h2>
 
@@ -179,6 +182,7 @@
         <button
           class="quick-card"
           class:active={isActivePreset(card)}
+          class:has-filters={card.filters?.status || card.filters?.geography}
           onclick={() => applyPreset(card)}
         >
           <div class="card-header">
@@ -188,6 +192,16 @@
             {/if}
           </div>
           <p class="card-description">{card.description}</p>
+          {#if card.filters?.status || card.filters?.geography}
+            <div class="filter-badges">
+              {#if card.filters.status}
+                <span class="filter-badge status">{card.filters.status}</span>
+              {/if}
+              {#if card.filters.geography}
+                <span class="filter-badge geo">{card.filters.geography}</span>
+              {/if}
+            </div>
+          {/if}
           {#if isActivePreset(card)}
             <div class="card-active-indicator">●</div>
           {/if}
@@ -217,6 +231,14 @@
         {/if}
       </span>
     </div>
+
+    <!-- Warning for trackers without aggregation data -->
+    {#if customTracker && !hasMotherDuckData(customTracker)}
+      <div class="data-warning">
+        <strong>Note:</strong> {customTracker} data is available in the API but not yet in the ownership aggregation database.
+        Results may be limited. Individual assets can be explored via the <a href="/asset/search">Asset Search</a>.
+      </div>
+    {/if}
 
     <div class="filter-grid">
       <!-- Step 1: Asset Type -->
@@ -540,6 +562,41 @@
     line-height: var(--line-height-normal);
   }
 
+  /* Filter badges - show when preset has built-in filters */
+  .filter-badges {
+    display: flex;
+    gap: var(--space-1);
+    margin-top: var(--space-2);
+  }
+
+  .filter-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    font-size: 10px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    border-radius: 3px;
+    background: var(--color-gray-100);
+    color: var(--color-text-tertiary);
+  }
+
+  .filter-badge.status {
+    background: rgba(29, 73, 97, 0.1);
+    color: var(--gem-primary-blue, #1d4961);
+  }
+
+  .filter-badge.geo {
+    background: rgba(107, 114, 128, 0.1);
+    color: #4b5563;
+  }
+
+  .quick-card.has-filters:not(.active) {
+    border-left: 2px solid var(--gem-teal, #2a7f8f);
+    margin-left: calc(-2px - var(--space-4));
+    padding-left: calc(var(--space-4) + 2px);
+  }
+
   /* Query builder - clean form design */
   .form-row {
     display: grid;
@@ -618,6 +675,26 @@
   .query-summary.has-selection {
     background: var(--gem-teal-light, #e8f4f4);
     border-left-color: var(--gem-teal, #1d4961);
+  }
+
+  /* Data availability warning */
+  .data-warning {
+    padding: var(--space-3) var(--space-4);
+    margin-bottom: var(--space-6);
+    background: #fef3c7;
+    border: 1px solid #fbbf24;
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-sm);
+    color: #92400e;
+  }
+
+  .data-warning strong {
+    color: #78350f;
+  }
+
+  .data-warning a {
+    color: #1d4961;
+    text-decoration: underline;
   }
 
   .summary-label {

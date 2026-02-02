@@ -26,7 +26,7 @@
  *
  * STEP 2: Owner Search (/screener/owners)
  * ---------------------------------------
- * Data: REST API (gem-ownership-api.fly.dev)
+ * Data: REST API (gem-api.thirdbear.net - Cloudflare cached)
  * Endpoints used:
  *   - GET /entities?q={search} (single search)
  *   - GET /entities/{id} (direct ID lookup)
@@ -145,7 +145,7 @@ export interface ScreenerFilters {
 const OWNERSHIP_API_BASE =
   import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL ||
   import.meta.env.PUBLIC_OWNERSHIP_API_URL ||
-  'https://gem-ownership-api.fly.dev';
+  'https://gem-api.thirdbear.net';
 
 /** Enable detailed console logging */
 const DEBUG = true;
@@ -274,17 +274,17 @@ async function getOwnersByAssetTypeMotherDuck(
       ? `AND "Immediate Owner Entity ID" IN (${filters.ownerIds!.map((id) => `'${id.replace(/'/g, "''")}'`).join(', ')})`
       : '';
 
-    // TODO: Add status filter when backend supports it
-    // const statusClause = filters.status
-    //   ? `AND "Status" = '${filters.status.replace(/'/g, "''")}'`
-    //   : '';
+    // Status filter (e.g., operating, retired, proposed)
+    const statusClause = filters.status
+      ? `AND "Status" ILIKE '${filters.status.replace(/'/g, "''")}'`
+      : '';
 
     /*
      * THIS IS THE EXPENSIVE QUERY WE WANT TO REPLACE
      *
      * It does TWO full table scans:
      * 1. owner_totals: COUNT all assets per owner (no filter)
-     * 2. owner_filtered: COUNT assets per owner (with asset type filter)
+     * 2. owner_filtered: COUNT assets per owner (with asset type + status filter)
      *
      * Then JOINs them together.
      *
@@ -312,6 +312,7 @@ async function getOwnersByAssetTypeMotherDuck(
           AND "Immediate Owner Entity Name" != ''
           ${ownerClause}
           ${trackerClause}
+          ${statusClause}
         GROUP BY "Immediate Owner Entity Name", "Immediate Owner Entity ID"
       )
       SELECT

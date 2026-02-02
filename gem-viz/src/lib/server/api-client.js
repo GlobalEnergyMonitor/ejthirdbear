@@ -6,7 +6,7 @@
 
 import idMap from './id-map.json';
 
-const API_BASE = 'https://gem-ownership-api.fly.dev';
+const API_BASE = 'https://gem-api.thirdbear.net';
 
 /**
  * Resolve G-prefix ID to compound ID using pre-built mapping
@@ -53,23 +53,35 @@ function normalizeAsset(raw) {
 
 /**
  * Normalize ownership graph response to match client-side expected format
- * API returns: { nodes: [{asset_id, asset_name, ...}, {entity_id, name, ...}], edges: [...] }
- * Client expects: { nodes: [{id, Name, type}], edges: [{source, target, value}] }
+ * API returns: { nodes: [{asset_id, asset_name, ...}, {entity_id, name, ...}], edges: [...], paths: {...} }
+ * Client expects: { nodes: [{id, Name, type, ...fullEntityData}], edges: [{source, target, value}], paths: {...} }
  * @param {Object} raw - Raw API graph response
  * @returns {Object} Normalized graph object
  */
 function normalizeGraph(raw) {
-  if (!raw) return { nodes: [], edges: [] };
+  if (!raw) return { nodes: [], edges: [], paths: {} };
 
   const nodes = (raw.nodes || []).map((node) => {
     const isAsset = node.node_type === 'asset' || node.asset_id;
     return {
+      // Core identifiers
       id: node.asset_id || node.entity_id || node.id || '',
+      entity_id: node.entity_id || null,
       Name: node.asset_name || node.name || node.full_name || '',
       name: node.asset_name || node.name || node.full_name || '',
+      full_name: node.full_name || node.name || '',
+      // Type info
       type: isAsset ? 'asset' : 'entity',
+      node_type: node.node_type || (isAsset ? 'asset' : 'entity'),
+      entity_type: node.entity_type || null,
+      // Graph position
       is_root: node.is_root,
       is_terminal: node.is_terminal,
+      // Entity metadata (for summary tables)
+      headquarters_country: node.headquarters_country || node.hq_country || null,
+      registration_country: node.registration_country || null,
+      publiclylisted: node.publiclylisted || node.publicly_listed || false,
+      legal_entity_type: node.legal_entity_type || null,
     };
   });
 
@@ -79,10 +91,14 @@ function normalizeGraph(raw) {
     value: edge.value ?? edge.ownership_percentage ?? null,
     type: edge.type,
     depth: edge.depth,
-    imputedShare: edge.imputed_share,
+    imputed_share: edge.imputed_share || false,
   }));
 
-  return { nodes, edges, root: raw.root };
+  // Pass through paths data for cumulative ownership calculations
+  // API returns: { "E123": [{ cumulative_pct: 20.5, route: [...] }, ...], ... }
+  const paths = raw.paths || {};
+
+  return { nodes, edges, paths, root: raw.root };
 }
 
 async function fetchJSON(path, timeout = 30000) {
