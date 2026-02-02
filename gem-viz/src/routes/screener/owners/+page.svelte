@@ -13,6 +13,8 @@
   import ScreenerLayout from '$lib/components/ScreenerLayout.svelte';
   import AssetClassesPanel from '$lib/components/AssetClassesPanel.svelte';
   import DataSourceBadge from '$lib/components/DataSourceBadge.svelte';
+  import DebugPanel from '$lib/components/DebugPanel.svelte';
+  import { getExampleCompanies } from '$lib/data-config/screener-config';
 
   // Get selected classes from URL params
   const classesParam = $derived($page.url.searchParams.get('classes') || '');
@@ -220,70 +222,10 @@
   // Check if owner is selected (O(1))
   const isSelected = (owner) => selectedOwnerMap.has(owner.id);
 
-  // Example companies by tracker type - real major owners
-  const exampleCompaniesByTracker = {
-    'Coal Plant': [
-      { name: 'China Energy Investment', id: 'E100001000348' },
-      { name: 'NTPC Limited', id: 'E100001000001' },
-      { name: 'Mitsubishi Corporation', id: 'E100001000500' },
-      { name: 'Adani Power', id: 'E100001000003' },
-    ],
-    'Steel Plant': [
-      { name: 'ArcelorMittal', id: 'E100001000100' },
-      { name: 'Nippon Steel', id: 'E100001000101' },
-      { name: 'Mitsubishi Corporation', id: 'E100001000500' },
-      { name: 'POSCO', id: 'E100001000103' },
-    ],
-    'Oil & NGL Pipeline': [
-      { name: 'ExxonMobil', id: 'E100001000200' },
-      { name: 'Shell', id: 'E100001000201' },
-      { name: 'TotalEnergies', id: 'E100001000202' },
-      { name: 'Mitsubishi Corporation', id: 'E100001000500' },
-    ],
-    'Gas Pipeline': [
-      { name: 'Gazprom', id: 'E100001000300' },
-      { name: 'Mitsubishi Corporation', id: 'E100001000500' },
-      { name: 'Enterprise Products', id: 'E100001000302' },
-      { name: 'Enbridge', id: 'E100001000303' },
-    ],
-    LNG: [
-      { name: 'Mitsubishi Corporation', id: 'E100001000500' },
-      { name: 'Qatar Energy', id: 'E100001000400' },
-      { name: 'Cheniere Energy', id: 'E100001000401' },
-      { name: 'Woodside Energy', id: 'E100001000402' },
-    ],
-    default: [
-      { name: 'Mitsubishi Corporation', id: 'E100001000500' },
-      { name: 'ExxonMobil', id: 'E100001000200' },
-      { name: 'Shell', id: 'E100001000201' },
-      { name: 'TotalEnergies', id: 'E100001000202' },
-    ],
-  };
-
   // Get relevant example companies based on selected asset classes
   const exampleCompanies = $derived.by(() => {
-    if (selectedClasses.length === 0) return exampleCompaniesByTracker.default;
-
-    // Get unique trackers from selected classes
-    const trackers = new Set();
-    selectedClasses.forEach((c) => {
-      if (c.tracker) trackers.add(c.tracker);
-    });
-
-    // Collect examples from relevant trackers
-    const examples = [];
-    const seen = new Set();
-    trackers.forEach((tracker) => {
-      const trackerExamples = exampleCompaniesByTracker[tracker] || [];
-      trackerExamples.forEach((ex) => {
-        if (!seen.has(ex.name)) {
-          seen.add(ex.name);
-          examples.push(ex);
-        }
-      });
-    });
-
-    return examples.length > 0 ? examples.slice(0, 4) : exampleCompaniesByTracker.default;
+    const trackers = selectedClasses.map((c) => c.tracker).filter(Boolean);
+    return getExampleCompanies(trackers);
   });
 
   // Use an example company
@@ -489,36 +431,25 @@
 
   <!-- Debug panel -->
   {#if debugApiCalls.length > 0}
-    <details class="debug-panel">
-      <summary class="debug-summary">
-        <span class="debug-icon">⚙</span>
-        API Debug
-        {#if debugLastSearchTime}
-          <span class="debug-time">({debugLastSearchTime.toFixed(0)}ms)</span>
-        {/if}
-      </summary>
-      <div class="debug-content">
-        <div class="debug-meta">
-          <span class="debug-label">API calls:</span>
-          <span class="debug-value">{debugApiCalls.length}</span>
-        </div>
-        <div class="debug-meta">
-          <span class="debug-label">Results:</span>
-          <span class="debug-value"
-            >{searchResultGroups.reduce((sum, g) => sum + g.results.length, 0)} entities</span
-          >
-        </div>
-        <div class="debug-calls">
-          <span class="debug-label">Requests:</span>
-          {#each debugApiCalls as call}
-            <div class="debug-call">
-              <span class="call-type">{call.type}</span>
-              <code class="call-params">{JSON.stringify(call.params)}</code>
-            </div>
-          {/each}
-        </div>
+    <DebugPanel title="API Debug" time={debugLastSearchTime}>
+      <div class="debug-meta">
+        <span class="debug-label">API calls:</span>
+        <span class="debug-value">{debugApiCalls.length}</span>
       </div>
-    </details>
+      <div class="debug-meta">
+        <span class="debug-label">Results:</span>
+        <span class="debug-value">{searchResultGroups.reduce((sum, g) => sum + g.results.length, 0)} entities</span>
+      </div>
+      <div class="debug-calls">
+        <span class="debug-label">Requests:</span>
+        {#each debugApiCalls as call}
+          <div class="debug-call">
+            <span class="call-type">{call.type}</span>
+            <code class="call-params">{JSON.stringify(call.params)}</code>
+          </div>
+        {/each}
+      </div>
+    </DebugPanel>
   {/if}
 
   <!-- Selected owners footer -->
@@ -1122,75 +1053,7 @@
     }
   }
 
-  /* Debug panel */
-  .debug-panel {
-    margin-top: var(--space-12);
-    border-top: 1px solid var(--color-border);
-    padding-top: var(--space-4);
-  }
-
-  .debug-summary {
-    display: grid;
-    grid-template-columns: auto auto 1fr;
-    gap: var(--space-2);
-    align-items: center;
-    cursor: pointer;
-    font-size: var(--font-size-sm);
-    color: var(--color-text-tertiary);
-    padding: var(--space-2) 0;
-    list-style: none;
-  }
-
-  .debug-summary::-webkit-details-marker {
-    display: none;
-  }
-
-  .debug-summary::before {
-    content: '▶';
-    font-size: 10px;
-    transition: transform 0.2s ease;
-  }
-
-  .debug-panel[open] .debug-summary::before {
-    transform: rotate(90deg);
-  }
-
-  .debug-icon {
-    font-size: var(--font-size-body);
-  }
-
-  .debug-time {
-    color: var(--color-text-tertiary);
-    font-family: var(--font-family-mono);
-    font-size: var(--font-size-xs);
-  }
-
-  .debug-content {
-    margin-top: var(--space-4);
-    padding: var(--space-4);
-    background: var(--color-gray-50);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm);
-  }
-
-  .debug-meta {
-    display: grid;
-    grid-template-columns: 100px 1fr;
-    gap: var(--space-2);
-    margin-bottom: var(--space-2);
-    font-size: var(--font-size-sm);
-  }
-
-  .debug-label {
-    color: var(--color-text-tertiary);
-    font-weight: 500;
-  }
-
-  .debug-value {
-    color: var(--color-text-secondary);
-    font-family: var(--font-family-mono);
-  }
-
+  /* Page-specific debug styles */
   .debug-calls {
     margin-top: var(--space-4);
   }

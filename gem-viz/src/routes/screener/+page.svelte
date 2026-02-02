@@ -8,6 +8,7 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import ScreenerLayout from '$lib/components/ScreenerLayout.svelte';
+  import DebugPanel from '$lib/components/DebugPanel.svelte';
   import {
     TRACKERS,
     SCREENER_PRESETS,
@@ -360,46 +361,37 @@
 
   <!-- Debug panel -->
   {#if customTracker}
-    <details class="debug-panel">
-      <summary class="debug-summary">
-        <span class="debug-icon">⚙</span>
-        Query Config Debug
-      </summary>
-      <div class="debug-content">
-        <div class="debug-meta">
-          <span class="debug-label">Tracker:</span>
-          <span class="debug-value">{customTracker}</span>
-        </div>
-        {#if customGeoFilter}
-          <div class="debug-meta">
-            <span class="debug-label">Geography:</span>
-            <span class="debug-value">{customGeoFilter}</span>
-          </div>
-        {/if}
-        {#if customStatusFilter}
-          <div class="debug-meta">
-            <span class="debug-label">Status:</span>
-            <span class="debug-value">{customStatusFilter}</span>
-          </div>
-        {/if}
-        {#if customField && customOperator}
-          <div class="debug-meta">
-            <span class="debug-label">Filter:</span>
-            <span class="debug-value">{customField} {customOperator} {customValue || '(any)'}</span>
-          </div>
-        {/if}
-        <div class="debug-json">
-          <span class="debug-label">Class Data JSON:</span>
-          <button
-            class="copy-btn"
-            onclick={() => navigator.clipboard.writeText(JSON.stringify(buildClassData(), null, 2))}
-          >
-            Copy
-          </button>
-          <pre class="debug-code">{JSON.stringify(buildClassData(), null, 2)}</pre>
-        </div>
+    <DebugPanel title="Query Config">
+      <div class="debug-meta">
+        <span class="debug-label">Tracker:</span>
+        <span class="debug-value">{customTracker}</span>
       </div>
-    </details>
+      {#if customGeoFilter}
+        <div class="debug-meta">
+          <span class="debug-label">Geography:</span>
+          <span class="debug-value">{customGeoFilter}</span>
+        </div>
+      {/if}
+      {#if customStatusFilter}
+        <div class="debug-meta">
+          <span class="debug-label">Status:</span>
+          <span class="debug-value">{customStatusFilter}</span>
+        </div>
+      {/if}
+      {#if customField && customOperator}
+        <div class="debug-meta">
+          <span class="debug-label">Filter:</span>
+          <span class="debug-value">{customField} {customOperator} {customValue || '(any)'}</span>
+        </div>
+      {/if}
+      <div class="debug-json">
+        <span class="debug-label">Class Data JSON:</span>
+        <button class="copy-btn" onclick={() => navigator.clipboard.writeText(JSON.stringify(buildClassData(), null, 2))}>
+          Copy
+        </button>
+        <pre class="debug-code">{JSON.stringify(buildClassData(), null, 2)}</pre>
+      </div>
+    </DebugPanel>
   {/if}
 </ScreenerLayout>
 
@@ -915,104 +907,11 @@
     }
   }
 
-  /* Debug panel */
-  .debug-panel {
-    margin-top: var(--space-12);
-    border-top: 1px solid var(--color-border);
-    padding-top: var(--space-4);
-  }
-
-  .debug-summary {
-    display: grid;
-    grid-template-columns: auto auto 1fr;
-    gap: var(--space-2);
-    align-items: center;
-    cursor: pointer;
-    font-size: var(--font-size-sm);
-    color: var(--color-text-tertiary);
-    padding: var(--space-2) 0;
-    list-style: none;
-  }
-
-  .debug-summary::-webkit-details-marker {
-    display: none;
-  }
-
-  .debug-summary::before {
-    content: '▶';
-    font-size: 10px;
-    transition: transform 0.2s ease;
-  }
-
-  .debug-panel[open] .debug-summary::before {
-    transform: rotate(90deg);
-  }
-
-  .debug-icon {
-    font-size: var(--font-size-body);
-  }
-
-  .debug-content {
-    margin-top: var(--space-4);
-    padding: var(--space-4);
-    background: var(--color-gray-50);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm);
-  }
-
-  .debug-meta {
-    display: grid;
-    grid-template-columns: 100px 1fr;
-    gap: var(--space-2);
-    margin-bottom: var(--space-2);
-    font-size: var(--font-size-sm);
-  }
-
-  .debug-label {
-    color: var(--color-text-tertiary);
-    font-weight: 500;
-  }
-
-  .debug-value {
-    color: var(--color-text-secondary);
-    font-family: var(--font-family-mono);
-  }
-
+  /* Page-specific debug styles */
   .debug-json {
     margin-top: var(--space-4);
-    display: grid;
-    grid-template-columns: 1fr auto;
+    display: flex;
+    flex-direction: column;
     gap: var(--space-2);
-    align-items: start;
-  }
-
-  .copy-btn {
-    padding: var(--space-1) var(--space-3);
-    font-size: var(--font-size-xs);
-    background: white;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    color: var(--color-text-secondary);
-  }
-
-  .copy-btn:hover {
-    background: var(--color-gray-100);
-  }
-
-  .debug-code {
-    grid-column: 1 / -1;
-    margin: 0;
-    margin-top: var(--space-2);
-    padding: var(--space-4);
-    background: #1e1e1e;
-    color: #d4d4d4;
-    font-family: var(--font-family-mono);
-    font-size: var(--font-size-xs);
-    line-height: 1.5;
-    border-radius: var(--radius-sm);
-    overflow-x: auto;
-    white-space: pre-wrap;
-    word-break: break-word;
   }
 </style>

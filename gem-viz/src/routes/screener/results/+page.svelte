@@ -18,8 +18,11 @@
   import DataSourceBadge from '$lib/components/DataSourceBadge.svelte';
   import ScreenerLayout from '$lib/components/ScreenerLayout.svelte';
   import AssetClassesPanel from '$lib/components/AssetClassesPanel.svelte';
+  import DebugPanel from '$lib/components/DebugPanel.svelte';
   import { entityLink } from '$lib/links';
   import { investigationCart } from '$lib/investigationCart';
+  import { getAssetTypeForTracker } from '$lib/data-config/tracker-schema';
+  import { describePortfolio, describeOwnership } from '$lib/data-config/screener-config';
 
   // URL params
   const classesParam = $derived($page.url.searchParams.get('classes') || '');
@@ -160,17 +163,8 @@
 
       const queryStartTime = performance.now();
 
-      // Map UI tracker names to MotherDuck "Asset Type" values
-      const trackerToAssetType = {
-        'Steel Plant': 'Iron & Steel Plant',
-        'Coal Plant': 'Coal Plant',
-        'Gas Pipeline': 'Natural Gas Transmission Pipeline',
-        'Oil & NGL Pipeline': 'Oil or NGL Pipeline',
-        'Coal Mine': 'Coal Mine',
-        'Iron Mine': 'Iron Ore Mine',
-        'Cement Plant': 'Cement or Concrete Plant',
-      };
-      const assetTypeVal = trackerVal ? trackerToAssetType[trackerVal] || trackerVal : null;
+      // Get the MotherDuck asset type for this tracker
+      const assetTypeVal = trackerVal ? getAssetTypeForTracker(trackerVal) : null;
 
       // Build filter clauses
       // MotherDuck columns: "Immediate Owner Entity Name", "Immediate Owner Entity ID", "Asset Type", "Asset ID"
@@ -253,17 +247,6 @@
       loading = false;
     }
   });
-
-  // Natural language helpers
-  function describeTotal(count) {
-    if (count === 1) return 'Ownership stakes in 1 asset in Global Energy Ownership Tracker';
-    return `Ownership stakes in ${count} assets in Global Energy Ownership Tracker`;
-  }
-
-  function describeFiltered(count, description) {
-    if (count === 1) return `Ownership stakes in one ${description}`;
-    return `Ownership stakes in ${count} ${description}`;
-  }
 
   function removeAssetClass(index) {
     const classes = selectedClasses;
@@ -434,10 +417,10 @@
                   </a>
                 </td>
                 <td class="col-total">
-                  {describeTotal(owner.totalAssets)}
+                  {describePortfolio(owner.totalAssets)}
                 </td>
                 <td class="col-filtered">
-                  {describeFiltered(owner.filteredAssets, classDescription)}
+                  {describeOwnership(owner.filteredAssets, classDescription)}
                 </td>
               </tr>
             {:else}
@@ -466,73 +449,47 @@
 
   <!-- Debug panel -->
   {#if executedQuery}
-    <details class="debug-panel">
-      <summary class="debug-summary">
-        <span class="debug-icon">⚙</span>
-        Query Debug
-        {#if queryTime}
-          <span class="debug-time">({queryTime.toFixed(0)}ms)</span>
-        {/if}
-      </summary>
-      <div class="debug-content">
-        <div class="debug-meta">
-          <span class="debug-label">View mode:</span>
-          <span class="debug-value"
-            >{viewMode} ({viewMode === 'filtered'
-              ? selectedOwnerIds.length + ' owners selected'
-              : 'showing all'})</span
-          >
-        </div>
-        <div class="debug-meta">
-          <span class="debug-label">Asset Type filter:</span>
-          <span class="debug-value"
-            >{selectedClasses[0]?.tracker || 'none'} → {(() => {
-              const t = selectedClasses[0]?.tracker;
-              const map = {
-                'Steel Plant': 'Iron & Steel Plant',
-                'Gas Pipeline': 'Natural Gas Transmission Pipeline',
-                'Oil & NGL Pipeline': 'Oil or NGL Pipeline',
-                'Iron Mine': 'Iron Ore Mine',
-                'Cement Plant': 'Cement or Concrete Plant',
-              };
-              return t ? map[t] || t : 'none';
-            })()}</span
-          >
-        </div>
-        <div class="debug-meta">
-          <span class="debug-label">Data source:</span>
-          <span class="debug-value">{dataSource}</span>
-        </div>
-        <div class="debug-meta">
-          <span class="debug-label">Results:</span>
-          <span class="debug-value">{owners.length} owners returned</span>
-        </div>
-        {#if availableAssetTypes.length > 0}
-          <div class="debug-asset-types">
-            <span class="debug-label">Available Trackers in DB:</span>
-            <div class="asset-type-list">
-              {#each availableAssetTypes as at}
-                <span
-                  class="asset-type-item"
-                  class:match={at.asset_type === selectedClasses[0]?.tracker}
-                >
-                  {at.asset_type || '(empty)'} ({at.cnt})
-                </span>
-              {/each}
-            </div>
-          </div>
-        {/if}
-        <div class="debug-sql">
-          <div class="debug-sql-header">
-            <span class="debug-label">SQL Query:</span>
-            <button class="copy-btn" onclick={() => navigator.clipboard.writeText(executedQuery)}>
-              Copy
-            </button>
-          </div>
-          <pre class="debug-code">{executedQuery}</pre>
-        </div>
+    <DebugPanel title="Query Debug" time={queryTime}>
+      <div class="debug-meta">
+        <span class="debug-label">View mode:</span>
+        <span class="debug-value">
+          {viewMode} ({viewMode === 'filtered' ? selectedOwnerIds.length + ' owners selected' : 'showing all'})
+        </span>
       </div>
-    </details>
+      <div class="debug-meta">
+        <span class="debug-label">Asset Type:</span>
+        <span class="debug-value">
+          {selectedClasses[0]?.tracker || 'none'} → {getAssetTypeForTracker(selectedClasses[0]?.tracker) || 'none'}
+        </span>
+      </div>
+      <div class="debug-meta">
+        <span class="debug-label">Data source:</span>
+        <span class="debug-value">{dataSource}</span>
+      </div>
+      <div class="debug-meta">
+        <span class="debug-label">Results:</span>
+        <span class="debug-value">{owners.length} owners returned</span>
+      </div>
+      {#if availableAssetTypes.length > 0}
+        <div class="debug-asset-types">
+          <span class="debug-label">Available in DB:</span>
+          <div class="asset-type-list">
+            {#each availableAssetTypes as at}
+              <span class="asset-type-item" class:match={at.asset_type === getAssetTypeForTracker(selectedClasses[0]?.tracker)}>
+                {at.asset_type || '(empty)'} ({at.cnt})
+              </span>
+            {/each}
+          </div>
+        </div>
+      {/if}
+      <div class="debug-sql">
+        <div class="debug-sql-header">
+          <span class="debug-label">SQL Query:</span>
+          <button class="copy-btn" onclick={() => navigator.clipboard.writeText(executedQuery)}>Copy</button>
+        </div>
+        <pre class="debug-code">{executedQuery}</pre>
+      </div>
+    </DebugPanel>
   {/if}
 </ScreenerLayout>
 
@@ -927,113 +884,16 @@
     }
   }
 
-  /* Debug panel */
-  .debug-panel {
-    margin-top: var(--space-12);
-    border-top: 1px solid var(--color-border);
-    padding-top: var(--space-4);
-  }
-
-  .debug-summary {
-    display: grid;
-    grid-template-columns: auto auto 1fr;
-    gap: var(--space-2);
-    align-items: center;
-    cursor: pointer;
-    font-size: var(--font-size-sm);
-    color: var(--color-text-tertiary);
-    padding: var(--space-2) 0;
-    list-style: none;
-  }
-
-  .debug-summary::-webkit-details-marker {
-    display: none;
-  }
-
-  .debug-summary::before {
-    content: '▶';
-    font-size: 10px;
-    transition: transform 0.2s ease;
-  }
-
-  .debug-panel[open] .debug-summary::before {
-    transform: rotate(90deg);
-  }
-
-  .debug-icon {
-    font-size: var(--font-size-body);
-  }
-
-  .debug-time {
-    color: var(--color-text-tertiary);
-    font-family: var(--font-family-mono);
-    font-size: var(--font-size-xs);
-  }
-
-  .debug-content {
-    margin-top: var(--space-4);
-    padding: var(--space-4);
-    background: var(--color-gray-50);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm);
-  }
-
-  .debug-meta {
-    display: grid;
-    grid-template-columns: 100px 1fr;
-    gap: var(--space-2);
-    margin-bottom: var(--space-2);
-    font-size: var(--font-size-sm);
-  }
-
-  .debug-label {
-    color: var(--color-text-tertiary);
-    font-weight: 500;
-  }
-
-  .debug-value {
-    color: var(--color-text-secondary);
-    font-family: var(--font-family-mono);
-  }
-
+  /* Page-specific debug styles */
   .debug-sql {
     margin-top: var(--space-4);
   }
 
   .debug-sql-header {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: var(--space-2);
+    display: flex;
+    justify-content: space-between;
     align-items: center;
     margin-bottom: var(--space-2);
-  }
-
-  .copy-btn {
-    padding: var(--space-1) var(--space-3);
-    font-size: var(--font-size-xs);
-    background: white;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    color: var(--color-text-secondary);
-  }
-
-  .copy-btn:hover {
-    background: var(--color-gray-100);
-  }
-
-  .debug-code {
-    margin: 0;
-    padding: var(--space-4);
-    background: #1e1e1e;
-    color: #d4d4d4;
-    font-family: var(--font-family-mono);
-    font-size: var(--font-size-xs);
-    line-height: 1.5;
-    border-radius: var(--radius-sm);
-    overflow-x: auto;
-    white-space: pre-wrap;
-    word-break: break-word;
   }
 
   .debug-asset-types {

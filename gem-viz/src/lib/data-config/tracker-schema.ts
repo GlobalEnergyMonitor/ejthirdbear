@@ -34,6 +34,32 @@ export const TRACKERS = [
 export type TrackerName = (typeof TRACKERS)[number];
 
 // =============================================================================
+// TRACKER TO MOTHERDUCK ASSET TYPE MAPPING
+// =============================================================================
+
+/**
+ * Maps UI tracker names to MotherDuck "Asset Type" column values.
+ * Use this when querying the ownership table.
+ */
+export const TRACKER_TO_ASSET_TYPE: Record<TrackerName, string> = {
+  'Bioenergy Power': 'Bioenergy Power',
+  'Coal Mine': 'Coal Mine',
+  'Coal Plant': 'Coal Plant',
+  'Gas Pipeline': 'Natural Gas Transmission Pipeline',
+  'Gas Plant': 'Gas Plant',
+  'Iron Mine': 'Iron Ore Mine',
+  'Steel Plant': 'Iron & Steel Plant',
+};
+
+/**
+ * Get the MotherDuck asset type for a tracker
+ */
+export function getAssetTypeForTracker(tracker: string): string | null {
+  if (!isValidTracker(tracker)) return null;
+  return TRACKER_TO_ASSET_TYPE[tracker] || tracker;
+}
+
+// =============================================================================
 // FIELDS BY TRACKER (available in consolidated parquet)
 // =============================================================================
 
