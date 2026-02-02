@@ -347,22 +347,6 @@
       <button class="btn" onclick={loadReport}>Retry</button>
     </section>
   {:else}
-    <!-- Executive Summary -->
-    <section class="executive-summary">
-      <h2>Executive Summary</h2>
-      <p class="summary-text">
-        This report analyzes <strong>{entityIds.length} {entityIds.length === 1 ? 'entity' : 'entities'}</strong>
-        {#if assetIds.length > 0}
-          and <strong>{assetIds.length} {assetIds.length === 1 ? 'asset' : 'assets'}</strong>
-        {/if}
-        in your investigation cart.
-        Together, these entities have ownership stakes in <strong>{summary.totalAssets.toLocaleString()} assets</strong>
-        with a combined capacity of <strong>{summary.totalCapacity.toLocaleString()} MW</strong>,
-        spanning <strong>{summary.countries} {summary.countries === 1 ? 'country' : 'countries'}</strong>
-        across <strong>{summary.trackers.length} asset {summary.trackers.length === 1 ? 'type' : 'types'}</strong>.
-      </p>
-    </section>
-
     <!-- Toolbar -->
     <section class="toolbar">
       <span class="query-time">Query time: {queryTime}ms</span>
@@ -373,39 +357,111 @@
       </div>
     </section>
 
-    <!-- Key Metrics -->
-    <section class="metrics-section">
-      <h2>Key Metrics</h2>
-      <p class="section-desc">Aggregate statistics for all entities and assets in this investigation.</p>
-      <div class="stats-grid">
-        <div class="stat">
-          <span class="stat-value">{summary.totalAssets.toLocaleString()}</span>
-          <span class="stat-label">Total Assets</span>
-          <span class="stat-detail">owned by cart entities</span>
+    <!-- ═══════════════════════════════════════════════════════════════════
+         SECTION 1: THE SUBJECTS (WHO)
+         Who are we investigating?
+         ═══════════════════════════════════════════════════════════════════ -->
+
+    {#if hasEntities}
+      <section class="primary-section">
+        <div class="section-header">
+          <span class="section-number">1</span>
+          <div>
+            <h2>The Subjects</h2>
+            <p class="section-subtitle">Who is under investigation</p>
+          </div>
         </div>
-        <div class="stat">
-          <span class="stat-value">{summary.totalCapacity.toLocaleString()}</span>
-          <span class="stat-label">MW Capacity</span>
-          <span class="stat-detail">combined generation</span>
+
+        <div class="entity-grid">
+          {#each entityPortfolios as entity}
+            <div class="entity-card">
+              <div class="entity-header">
+                <a href={entityLink(entity.entity_id)} class="entity-name">
+                  {entity.entity_name}
+                </a>
+                <span class="entity-id">{entity.entity_id}</span>
+              </div>
+              {#if entity.hq_country}
+                <div class="entity-hq">Headquarters: {entity.hq_country}</div>
+              {/if}
+              <div class="entity-stats">
+                <div class="entity-stat">
+                  <span class="entity-value">{entity.asset_count}</span>
+                  <span class="entity-label">assets</span>
+                </div>
+                <div class="entity-stat">
+                  <span class="entity-value">{Math.round(entity.total_capacity_mw || 0).toLocaleString()}</span>
+                  <span class="entity-label">MW</span>
+                </div>
+                <div class="entity-stat">
+                  <span class="entity-value">{entity.avg_share_pct?.toFixed(0) || '-'}%</span>
+                  <span class="entity-label">avg stake</span>
+                </div>
+              </div>
+              <div class="entity-status">
+                {#if entity.operating > 0}
+                  <span class="status-pill operating">{entity.operating} operating</span>
+                {/if}
+                {#if entity.construction > 0}
+                  <span class="status-pill construction">{entity.construction} construction</span>
+                {/if}
+                {#if entity.proposed > 0}
+                  <span class="status-pill proposed">{entity.proposed} proposed</span>
+                {/if}
+              </div>
+              {#if entity.trackers}
+                <div class="entity-trackers">
+                  {#each entity.trackers.split(', ') as tracker}
+                    <span class="mini-tracker">
+                      <TrackerIcon {tracker} size={10} />
+                      {tracker}
+                    </span>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          {/each}
         </div>
-        <div class="stat">
-          <span class="stat-value">{summary.totalOwners}</span>
-          <span class="stat-label">Unique Owners</span>
-          <span class="stat-detail">in ownership chains</span>
-        </div>
-        <div class="stat">
-          <span class="stat-value">{summary.countries}</span>
-          <span class="stat-label">Countries</span>
-          <span class="stat-detail">with assets</span>
+      </section>
+    {/if}
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         SECTION 2: THE PORTFOLIO (WHAT)
+         What do they own? How much?
+         ═══════════════════════════════════════════════════════════════════ -->
+
+    <section class="primary-section">
+      <div class="section-header">
+        <span class="section-number">2</span>
+        <div>
+          <h2>The Portfolio</h2>
+          <p class="section-subtitle">Combined holdings across all {entityIds.length} entities</p>
         </div>
       </div>
-    </section>
 
-    <!-- Asset Type Breakdown -->
-    {#if trackerBreakdown.length > 0}
-      <section class="data-section">
-        <h2>Asset Type Breakdown</h2>
-        <p class="section-desc">Distribution of assets by type (tracker) across the investigation portfolio.</p>
+      <!-- Aggregate Stats -->
+      <div class="stats-row">
+        <div class="stat-card primary">
+          <span class="stat-value">{summary.totalAssets.toLocaleString()}</span>
+          <span class="stat-label">Total Assets</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">{summary.totalCapacity.toLocaleString()}</span>
+          <span class="stat-label">MW Capacity</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">{summary.trackers.length}</span>
+          <span class="stat-label">Asset Types</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">{summary.countries}</span>
+          <span class="stat-label">Countries</span>
+        </div>
+      </div>
+
+      <!-- Asset Type Breakdown -->
+      {#if trackerBreakdown.length > 0}
+        <h3 class="subsection-title">By Asset Type</h3>
         <div class="tracker-grid">
           {#each trackerBreakdown as t}
             <div class="tracker-card">
@@ -438,98 +494,87 @@
             </div>
           {/each}
         </div>
+      {/if}
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         SECTION 3: THE GEOGRAPHY (WHERE)
+         Where are these assets located?
+         ═══════════════════════════════════════════════════════════════════ -->
+
+    {#if geoBreakdown.length > 0}
+      <section class="primary-section">
+        <div class="section-header">
+          <span class="section-number">3</span>
+          <div>
+            <h2>The Geography</h2>
+            <p class="section-subtitle">
+              Asset locations across {geoBreakdown.length} {geoBreakdown.length === 1 ? 'country' : 'countries'}
+              {#if geoBreakdown[0]?.country}
+                — largest presence in <strong>{geoBreakdown[0].country}</strong>
+              {/if}
+            </p>
+          </div>
+        </div>
+
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Country</th>
+              <th class="numeric"># Assets</th>
+              <th class="numeric">Capacity (MW)</th>
+              <th class="numeric"># Entities Active</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each geoBreakdown as row, i}
+              <tr class:highlight={i === 0}>
+                <td><strong>{row.country}</strong></td>
+                <td class="numeric">{row.asset_count?.toLocaleString()}</td>
+                <td class="numeric">{row.total_capacity?.toLocaleString() || '-'}</td>
+                <td class="numeric">{row.entity_count}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
       </section>
     {/if}
 
-    <!-- Entities Under Investigation -->
-    {#if hasEntities}
-      <section class="data-section">
-        <h2>Entities Under Investigation ({entityIds.length})</h2>
-        <p class="section-desc">
-          Portfolio summary for each entity in your investigation cart.
-          Click an entity name to view its full profile.
-        </p>
+    <!-- ═══════════════════════════════════════════════════════════════════
+         SECTION 4: THE CONNECTIONS (HOW)
+         How are these entities connected?
+         ═══════════════════════════════════════════════════════════════════ -->
 
-        {#if entityPortfolios.length > 0}
-          <div class="entity-grid">
-            {#each entityPortfolios as entity}
-              <div class="entity-card">
-                <div class="entity-header">
-                  <a href={entityLink(entity.entity_id)} class="entity-name">
-                    {entity.entity_name}
-                  </a>
-                  <span class="entity-id">{entity.entity_id}</span>
-                </div>
-                {#if entity.hq_country}
-                  <div class="entity-hq">HQ: {entity.hq_country}</div>
-                {/if}
-                <div class="entity-stats">
-                  <div class="entity-stat">
-                    <span class="entity-value">{entity.asset_count}</span>
-                    <span class="entity-label">assets</span>
-                  </div>
-                  <div class="entity-stat">
-                    <span class="entity-value">{Math.round(entity.total_capacity_mw || 0).toLocaleString()}</span>
-                    <span class="entity-label">MW</span>
-                  </div>
-                  <div class="entity-stat">
-                    <span class="entity-value">{entity.avg_share_pct?.toFixed(0) || '-'}%</span>
-                    <span class="entity-label">avg share</span>
-                  </div>
-                </div>
-                <div class="entity-status">
-                  {#if entity.operating > 0}
-                    <span class="status-pill operating">{entity.operating} operating</span>
-                  {/if}
-                  {#if entity.construction > 0}
-                    <span class="status-pill construction">{entity.construction} construction</span>
-                  {/if}
-                  {#if entity.proposed > 0}
-                    <span class="status-pill proposed">{entity.proposed} proposed</span>
-                  {/if}
-                </div>
-                {#if entity.trackers}
-                  <div class="entity-trackers">
-                    {#each entity.trackers.split(', ') as tracker}
-                      <span class="mini-tracker">
-                        <TrackerIcon {tracker} size={10} />
-                        {tracker}
-                      </span>
-                    {/each}
-                  </div>
-                {/if}
-              </div>
-            {/each}
+    {#if hasEntities && entityIds.length >= 2}
+      <section class="primary-section">
+        <div class="section-header">
+          <span class="section-number">4</span>
+          <div>
+            <h2>The Connections</h2>
+            <p class="section-subtitle">
+              {#if sharedAssets.length > 0}
+                {sharedAssets.length} assets are co-owned by multiple entities in this investigation
+              {:else}
+                Analyzing co-ownership patterns between the {entityIds.length} entities
+              {/if}
+            </p>
           </div>
-        {:else}
-          <p class="no-data">No portfolio data found for selected entities.</p>
-        {/if}
-      </section>
-
-      <!-- Shared Assets -->
-      <section class="data-section">
-        <h2>Co-Owned Assets ({sharedAssets.length})</h2>
-        <p class="section-desc">
-          Assets that are owned by <strong>two or more</strong> of the entities in your investigation.
-          {#if entityIds.length < 2}
-            <em>Add more entities to find co-ownership patterns.</em>
-          {:else if sharedAssets.length === 0}
-            <em>These entities do not appear to co-own any assets together.</em>
-          {:else}
-            These connections may indicate joint ventures, partnerships, or shared investments.
-          {/if}
-        </p>
+        </div>
 
         {#if sharedAssets.length > 0}
+          <p class="connection-insight">
+            These {sharedAssets.length} co-owned assets may indicate joint ventures, partnerships,
+            or coordinated investments between the entities under investigation.
+          </p>
           <table class="data-table">
             <thead>
               <tr>
                 <th>Asset Name</th>
                 <th>Type</th>
                 <th>Status</th>
-                <th>Capacity</th>
-                <th># Co-Owners</th>
-                <th>Co-Owner Names</th>
+                <th class="numeric">Capacity</th>
+                <th class="numeric"># Co-Owners</th>
+                <th>Shared By</th>
               </tr>
             </thead>
             <tbody>
@@ -551,37 +596,53 @@
             </tbody>
           </table>
         {:else}
-          <div class="no-data-box">
-            <p>No co-owned assets found.</p>
-            <p class="no-data-hint">
-              {#if entityIds.length < 2}
-                You need at least 2 entities in your cart to analyze co-ownership patterns.
-              {:else}
-                The {entityIds.length} entities in your cart don't appear to share ownership of any assets in the GEM database.
-              {/if}
+          <div class="no-connection-box">
+            <div class="no-connection-icon">∅</div>
+            <p class="no-connection-title">No Direct Connections Found</p>
+            <p class="no-connection-text">
+              The {entityIds.length} entities in this investigation do not appear to co-own any assets together
+              in the GEM database. This could mean they operate independently, or their connections
+              exist through other corporate structures not captured in direct ownership data.
             </p>
           </div>
         {/if}
       </section>
+    {:else if hasEntities && entityIds.length === 1}
+      <section class="primary-section muted-section">
+        <div class="section-header">
+          <span class="section-number">4</span>
+          <div>
+            <h2>The Connections</h2>
+            <p class="section-subtitle">Add more entities to analyze co-ownership patterns</p>
+          </div>
+        </div>
+        <p class="muted-message">
+          Co-ownership analysis requires at least 2 entities. Add more entities to your
+          investigation cart to discover shared assets and potential connections.
+        </p>
+      </section>
     {/if}
 
-    <!-- Common Owners (for assets) -->
+    <!-- Common Owners (only shown when assets are in cart) -->
     {#if hasAssets}
-      <section class="data-section">
-        <h2>Common Owners ({commonOwners.length})</h2>
-        <p class="section-desc">
-          Entities that have ownership stakes in the assets in your cart.
-          Useful for identifying who controls the assets you're investigating.
-        </p>
+      <section class="primary-section">
+        <div class="section-header">
+          <span class="section-number">{hasEntities ? '5' : '4'}</span>
+          <div>
+            <h2>Asset Ownership</h2>
+            <p class="section-subtitle">Who owns the {assetIds.length} assets in your cart</p>
+          </div>
+        </div>
+
         {#if commonOwners.length > 0}
           <table class="data-table">
             <thead>
               <tr>
-                <th>Entity Name</th>
+                <th>Owner Entity</th>
                 <th>HQ Country</th>
-                <th># Assets</th>
-                <th>Total Capacity</th>
-                <th>Avg Ownership %</th>
+                <th class="numeric"># Assets</th>
+                <th class="numeric">Total Capacity</th>
+                <th class="numeric">Avg Stake</th>
               </tr>
             </thead>
             <tbody>
@@ -601,55 +662,25 @@
             </tbody>
           </table>
         {:else}
-          <p class="no-data">No owner data found for selected assets.</p>
+          <p class="no-data">No ownership data found for the selected assets.</p>
         {/if}
       </section>
     {/if}
 
-    <!-- Geographic Distribution -->
-    {#if geoBreakdown.length > 0}
-      <section class="data-section">
-        <h2>Geographic Distribution ({geoBreakdown.length} {geoBreakdown.length === 1 ? 'country' : 'countries'})</h2>
-        <p class="section-desc">
-          Where the assets owned by these entities are located.
-          {#if geoBreakdown[0]?.country}
-            The largest concentration is in <strong>{geoBreakdown[0].country}</strong> with {geoBreakdown[0].asset_count} assets.
-          {/if}
-        </p>
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Country</th>
-              <th># Assets</th>
-              <th>Total Capacity (MW)</th>
-              <th># Owners Active</th>
-            </tr>
-          </thead>
-          <tbody>
-            {#each geoBreakdown as row}
-              <tr>
-                <td><strong>{row.country}</strong></td>
-                <td class="numeric">{row.asset_count?.toLocaleString()}</td>
-                <td class="numeric">{row.total_capacity?.toLocaleString() || '-'}</td>
-                <td class="numeric">{row.entity_count}</td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
-      </section>
-    {/if}
+    <!-- ═══════════════════════════════════════════════════════════════════
+         APPENDIX: Reference Information
+         ═══════════════════════════════════════════════════════════════════ -->
 
-    <!-- Cart Contents -->
-    <section class="cart-section">
-      <h2>Investigation Cart Contents ({cartItems.length} items)</h2>
+    <section class="appendix-section">
+      <h2>Appendix: Investigation Cart</h2>
       <p class="section-desc">
-        The entities and assets included in this analysis.
+        {cartItems.length} items analyzed in this report
         {#if entityIds.length > 0 && assetIds.length > 0}
-          Contains {entityIds.length} entities and {assetIds.length} assets.
+          ({entityIds.length} entities, {assetIds.length} assets)
         {:else if entityIds.length > 0}
-          Contains {entityIds.length} entities.
+          ({entityIds.length} entities)
         {:else}
-          Contains {assetIds.length} assets.
+          ({assetIds.length} assets)
         {/if}
       </p>
       <div class="cart-grid">
@@ -718,25 +749,6 @@
     margin: var(--space-1) 0 0 0;
   }
 
-  /* Executive Summary */
-  .executive-summary {
-    background: var(--color-gray-50);
-    padding: var(--space-5);
-    margin-bottom: var(--space-6);
-    border-left: 4px solid var(--gem-primary-blue);
-  }
-  .executive-summary h2 {
-    font-size: var(--font-size-lg);
-    margin: 0 0 var(--space-3) 0;
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-wide);
-  }
-  .summary-text {
-    font-size: var(--font-size-md);
-    line-height: 1.6;
-    margin: 0;
-  }
-
   /* States */
   .empty-state,
   .loading-state,
@@ -756,7 +768,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: var(--space-6);
+    margin-bottom: var(--space-8);
     padding: var(--space-3) 0;
     border-bottom: 1px solid var(--color-gray-200);
   }
@@ -790,92 +802,106 @@
     border-color: var(--color-error);
   }
 
-  /* Metrics */
-  .metrics-section {
-    margin-bottom: var(--space-8);
+  /* ═══════════════════════════════════════════════════════════════════
+     PRIMARY SECTIONS - The main numbered sections
+     ═══════════════════════════════════════════════════════════════════ */
+
+  .primary-section {
+    margin-bottom: var(--space-12);
+    padding-bottom: var(--space-8);
+    border-bottom: 1px solid var(--color-gray-200);
   }
-  .metrics-section h2 {
+
+  .primary-section:last-of-type {
+    border-bottom: none;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-4);
+    margin-bottom: var(--space-6);
+  }
+
+  .section-number {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    background: var(--gem-primary-blue);
+    color: white;
+    font-size: var(--font-size-xl);
+    font-weight: bold;
+    font-family: var(--font-family-data);
+    flex-shrink: 0;
+  }
+
+  .section-header h2 {
+    font-size: var(--font-size-2xl);
+    margin: 0;
+    letter-spacing: var(--tracking-tight);
+  }
+
+  .section-subtitle {
+    font-size: var(--font-size-md);
+    color: var(--color-text-secondary);
+    margin: var(--space-1) 0 0 0;
+  }
+
+  .subsection-title {
     font-size: var(--font-size-lg);
     text-transform: uppercase;
     letter-spacing: var(--tracking-wide);
-    margin: 0 0 var(--space-2) 0;
+    margin: var(--space-8) 0 var(--space-4) 0;
+    color: var(--color-text-secondary);
   }
-  .stats-grid {
+
+  .muted-section {
+    opacity: 0.6;
+  }
+
+  .muted-message {
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-md);
+    padding: var(--space-6);
+    background: var(--color-gray-50);
+    text-align: center;
+  }
+
+  /* Stats Row */
+  .stats-row {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: var(--space-4);
-    margin-top: var(--space-4);
-  }
-  .stat {
-    text-align: center;
-    padding: var(--space-4);
-    background: var(--color-gray-50);
-  }
-  .stat-value {
-    display: block;
-    font-size: var(--font-size-2xl);
-    font-weight: bold;
-    font-family: var(--font-family-data);
-  }
-  .stat-label {
-    display: block;
-    font-size: var(--font-size-sm);
-    text-transform: uppercase;
-    color: var(--color-text-secondary);
-    letter-spacing: var(--tracking-wide);
-    margin-top: var(--space-1);
-  }
-  .stat-detail {
-    display: block;
-    font-size: var(--font-size-xs);
-    color: var(--color-text-tertiary);
-    margin-top: var(--space-1);
   }
 
-  /* Tracker Grid */
-  .tracker-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: var(--space-3);
-    margin-top: var(--space-4);
-  }
-  .tracker-card {
-    padding: var(--space-3);
+  .stat-card {
+    text-align: center;
+    padding: var(--space-5);
     background: var(--color-gray-50);
   }
-  .tracker-header {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    margin-bottom: var(--space-2);
+
+  .stat-card.primary {
+    background: var(--gem-primary-blue);
+    color: white;
   }
-  .tracker-name {
-    font-weight: 600;
-    font-size: var(--font-size-sm);
-  }
-  .tracker-stats {
-    display: flex;
-    gap: var(--space-3);
-  }
-  .tracker-stat {
-    text-align: center;
-  }
-  .tracker-value {
+
+  .stat-card .stat-value {
     display: block;
-    font-size: var(--font-size-lg);
+    font-size: var(--font-size-3xl);
     font-weight: bold;
     font-family: var(--font-family-data);
+    line-height: 1;
   }
-  .tracker-value.operating {
-    color: var(--color-status-operating, #2d6a4f);
-  }
-  .tracker-value.proposed {
-    color: var(--color-status-prospective, #7c3aed);
-  }
-  .tracker-label {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-tertiary);
+
+  .stat-card .stat-label {
+    display: block;
+    font-size: var(--font-size-sm);
     text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
+    margin-top: var(--space-2);
+    opacity: 0.8;
   }
 
   /* Entity Grid */
@@ -883,16 +909,18 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: var(--space-4);
-    margin-top: var(--space-4);
   }
+
   .entity-card {
     padding: var(--space-4);
     background: var(--color-gray-50);
     border-left: 3px solid var(--gem-primary-blue);
   }
+
   .entity-header {
     margin-bottom: var(--space-2);
   }
+
   .entity-name {
     display: block;
     font-weight: 600;
@@ -900,65 +928,80 @@
     color: var(--color-black);
     text-decoration: none;
   }
+
   .entity-name:hover {
     text-decoration: underline;
   }
+
   .entity-id {
     font-size: var(--font-size-xs);
     font-family: var(--font-family-mono);
     color: var(--color-text-tertiary);
   }
+
   .entity-hq {
     font-size: var(--font-size-sm);
     color: var(--color-text-secondary);
-    margin-bottom: var(--space-2);
+    margin-bottom: var(--space-3);
   }
+
   .entity-stats {
     display: flex;
     gap: var(--space-4);
-    margin-bottom: var(--space-2);
+    margin-bottom: var(--space-3);
   }
+
   .entity-stat {
     text-align: center;
   }
+
   .entity-value {
     display: block;
-    font-size: var(--font-size-lg);
+    font-size: var(--font-size-xl);
     font-weight: bold;
     font-family: var(--font-family-data);
   }
+
   .entity-label {
     font-size: var(--font-size-xs);
     color: var(--color-text-tertiary);
+    text-transform: uppercase;
   }
+
   .entity-status {
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-1);
     margin-bottom: var(--space-2);
   }
+
   .status-pill {
     font-size: var(--font-size-xs);
     padding: 2px var(--space-2);
     border-radius: 99px;
   }
+
   .status-pill.operating {
     background: rgba(45, 106, 79, 0.1);
     color: var(--color-status-operating, #2d6a4f);
   }
+
   .status-pill.construction {
     background: rgba(234, 179, 8, 0.1);
     color: #b45309;
   }
+
   .status-pill.proposed {
     background: rgba(124, 58, 237, 0.1);
     color: var(--color-status-prospective, #7c3aed);
   }
+
   .entity-trackers {
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-1);
   }
+
   .mini-tracker {
     display: inline-flex;
     align-items: center;
@@ -967,37 +1010,94 @@
     color: var(--color-text-secondary);
   }
 
-  /* Data Sections */
-  .data-section {
-    margin-bottom: var(--space-8);
+  /* Tracker Grid */
+  .tracker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: var(--space-3);
   }
-  .data-section h2 {
-    font-size: var(--font-size-xl);
+
+  .tracker-card {
+    padding: var(--space-3);
+    background: var(--color-white);
+    border: 1px solid var(--color-gray-200);
+  }
+
+  .tracker-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+  }
+
+  .tracker-name {
+    font-weight: 600;
+    font-size: var(--font-size-sm);
+  }
+
+  .tracker-stats {
+    display: flex;
+    gap: var(--space-3);
+  }
+
+  .tracker-stat {
+    text-align: center;
+  }
+
+  .tracker-value {
+    display: block;
+    font-size: var(--font-size-lg);
+    font-weight: bold;
+    font-family: var(--font-family-data);
+  }
+
+  .tracker-value.operating {
+    color: var(--color-status-operating, #2d6a4f);
+  }
+
+  .tracker-value.proposed {
+    color: var(--color-status-prospective, #7c3aed);
+  }
+
+  .tracker-label {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+    text-transform: uppercase;
+  }
+
+  /* Connection States */
+  .connection-insight {
+    font-size: var(--font-size-md);
+    color: var(--color-text-secondary);
+    margin-bottom: var(--space-4);
+    padding: var(--space-3);
+    background: rgba(45, 106, 79, 0.05);
+    border-left: 3px solid var(--color-status-operating, #2d6a4f);
+  }
+
+  .no-connection-box {
+    padding: var(--space-8);
+    text-align: center;
+    background: var(--color-gray-50);
+  }
+
+  .no-connection-icon {
+    font-size: 48px;
+    color: var(--color-gray-300);
+    margin-bottom: var(--space-3);
+  }
+
+  .no-connection-title {
+    font-size: var(--font-size-lg);
+    font-weight: 600;
     margin: 0 0 var(--space-2) 0;
   }
-  .section-desc {
+
+  .no-connection-text {
     color: var(--color-text-secondary);
-    margin: 0 0 var(--space-4) 0;
-    line-height: 1.5;
-  }
-  .no-data {
-    color: var(--color-text-tertiary);
-    padding: var(--space-6);
-    text-align: center;
-    background: var(--color-gray-50);
-  }
-  .no-data-box {
-    padding: var(--space-6);
-    text-align: center;
-    background: var(--color-gray-50);
-  }
-  .no-data-box p {
-    margin: 0;
-  }
-  .no-data-hint {
-    color: var(--color-text-tertiary);
-    font-size: var(--font-size-sm);
-    margin-top: var(--space-2) !important;
+    max-width: 500px;
+    margin: 0 auto;
+    line-height: 1.6;
   }
 
   /* Tables */
@@ -1006,52 +1106,84 @@
     border-collapse: collapse;
     font-size: var(--font-size-sm);
   }
+
   .data-table th {
     text-align: left;
-    padding: var(--space-2);
+    padding: var(--space-2) var(--space-3);
     font-size: var(--font-size-xs);
     text-transform: uppercase;
     letter-spacing: var(--tracking-wide);
     border-bottom: 2px solid var(--color-gray-300);
     background: var(--color-gray-50);
   }
+
+  .data-table th.numeric {
+    text-align: right;
+  }
+
   .data-table td {
-    padding: var(--space-2);
+    padding: var(--space-2) var(--space-3);
     border-bottom: 1px solid var(--color-gray-100);
     vertical-align: top;
   }
+
+  .data-table tr.highlight td {
+    background: rgba(29, 73, 97, 0.05);
+  }
+
   .data-table .numeric {
     text-align: right;
     font-family: var(--font-family-mono);
   }
+
   .data-table a {
     color: var(--color-black);
   }
+
   .co-owners {
     font-size: var(--font-size-xs);
     color: var(--color-text-secondary);
     max-width: 250px;
   }
 
-  /* Cart */
-  .cart-section {
-    margin-bottom: var(--space-8);
+  .no-data {
+    color: var(--color-text-tertiary);
+    padding: var(--space-6);
+    text-align: center;
+    background: var(--color-gray-50);
   }
-  .cart-section h2 {
+
+  /* Appendix Section */
+  .appendix-section {
+    margin-top: var(--space-8);
+    padding-top: var(--space-6);
+    border-top: 2px solid var(--color-gray-200);
+  }
+
+  .appendix-section h2 {
     font-size: var(--font-size-lg);
     text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
+    color: var(--color-text-secondary);
     margin: 0 0 var(--space-2) 0;
   }
+
+  .section-desc {
+    color: var(--color-text-secondary);
+    margin: 0 0 var(--space-4) 0;
+  }
+
   .cart-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: var(--space-2);
-    margin-top: var(--space-4);
   }
+
   .cart-item {
     padding: var(--space-2) var(--space-3);
     background: var(--color-gray-50);
   }
+
   .cart-item a {
     display: flex;
     align-items: center;
@@ -1060,9 +1192,11 @@
     text-decoration: none;
     font-weight: 500;
   }
+
   .cart-item a:hover {
     text-decoration: underline;
   }
+
   .item-type {
     display: block;
     font-size: var(--font-size-xs);
@@ -1070,12 +1204,14 @@
     text-transform: uppercase;
     letter-spacing: var(--tracking-wide);
   }
+
   .item-id {
     display: block;
     font-size: var(--font-size-xs);
     font-family: var(--font-family-mono);
     color: var(--color-text-tertiary);
   }
+
   .entity-badge {
     display: inline-flex;
     align-items: center;
@@ -1090,7 +1226,7 @@
 
   /* Responsive */
   @media (max-width: 768px) {
-    .stats-grid {
+    .stats-row {
       grid-template-columns: repeat(2, 1fr);
     }
     .toolbar {
@@ -1101,6 +1237,15 @@
     .tracker-grid {
       grid-template-columns: 1fr;
     }
+    .section-header {
+      flex-direction: column;
+      gap: var(--space-2);
+    }
+    .section-number {
+      width: 32px;
+      height: 32px;
+      font-size: var(--font-size-lg);
+    }
   }
 
   /* Print */
@@ -1109,8 +1254,13 @@
     .btn-danger {
       display: none;
     }
-    .executive-summary {
-      border-left-color: #000;
+    .primary-section {
+      page-break-inside: avoid;
+    }
+    .section-number {
+      background: #000 !important;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
   }
 </style>
