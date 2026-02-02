@@ -12,6 +12,9 @@
   import TrackerIcon from '$lib/components/TrackerIcon.svelte';
   import Citation from '$lib/components/Citation.svelte';
   import DebugPanel from '$lib/components/DebugPanel.svelte';
+  import EntityMicroCard from '$lib/components/EntityMicroCard.svelte';
+  import AssetMicroCard from '$lib/components/AssetMicroCard.svelte';
+  import DataTable from '$lib/components/DataTable.svelte';
   import { ASSET_ID_COALESCE_O } from '$lib/duckdb-queries';
 
   // State
@@ -487,24 +490,15 @@
         </header>
         <p class="section-lede">{entityIds.length} {entityIds.length === 1 ? 'entity' : 'entities'} under investigation</p>
 
-        <div class="entity-list">
+        <div class="entity-grid">
           {#each entityPortfolios as entity}
-            <article class="entity-row">
-              <div class="entity-primary">
-                <a href={entityLink(entity.entity_id)} class="entity-name">{entity.entity_name}</a>
-                {#if entity.hq_country}<span class="entity-hq">{entity.hq_country}</span>{/if}
-              </div>
-              <div class="entity-figures">
-                <span class="figure"><strong>{entity.asset_count}</strong> assets</span>
-                <span class="figure"><strong>{Math.round(entity.total_capacity_mw || 0).toLocaleString()}</strong> MW</span>
-                <span class="figure"><strong>{entity.avg_share_pct?.toFixed(0) || '—'}%</strong> avg stake</span>
-              </div>
-              <div class="entity-status-line">
-                {#if entity.operating > 0}<span>{entity.operating} operating</span>{/if}
-                {#if entity.construction > 0}<span>{entity.construction} construction</span>{/if}
-                {#if entity.proposed > 0}<span>{entity.proposed} proposed</span>{/if}
-              </div>
-            </article>
+            <EntityMicroCard
+              name={entity.entity_name}
+              location={entity.hq_country}
+              assetCount={entity.asset_count}
+              totalCapacity={Math.round(entity.total_capacity_mw || 0)}
+              href={entityLink(entity.entity_id)}
+            />
           {/each}
         </div>
       </section>
@@ -541,28 +535,23 @@
       <!-- Asset Type Breakdown -->
       {#if trackerBreakdown.length > 0}
         <h3 class="subsection-head">By Asset Type</h3>
-        <table class="data-table tufte">
-          <thead>
-            <tr>
-              <th>Type</th>
-              <th class="num">Assets</th>
-              <th class="num">Capacity</th>
-              <th class="num">Operating</th>
-              <th class="num">Proposed</th>
-            </tr>
-          </thead>
-          <tbody>
-            {#each trackerBreakdown as t}
-              <tr>
-                <td><TrackerIcon tracker={t.tracker} size={12} /> {t.tracker}</td>
-                <td class="num">{t.asset_count?.toLocaleString()}</td>
-                <td class="num">{Math.round(t.total_capacity || 0).toLocaleString()} MW</td>
-                <td class="num">{t.operating || '—'}</td>
-                <td class="num">{t.proposed || '—'}</td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
+        <DataTable
+          data={trackerBreakdown}
+          columns={[
+            { key: 'tracker', label: 'Type', sortable: true },
+            { key: 'asset_count', label: 'Assets', type: 'number', sortable: true },
+            { key: 'total_capacity', label: 'Capacity (MW)', type: 'number', sortable: true },
+            { key: 'operating', label: 'Operating', type: 'number', sortable: true },
+            { key: 'proposed', label: 'Proposed', type: 'number', sortable: true },
+          ]}
+          showGlobalSearch={false}
+          showColumnFilters={false}
+          showPagination={false}
+          showExport={false}
+          showColumnToggle={false}
+          stickyHeader={false}
+          striped={false}
+        />
       {/if}
     </section>
 
@@ -577,26 +566,22 @@
           {geoBreakdown.length} {geoBreakdown.length === 1 ? 'country' : 'countries'}{#if geoBreakdown[0]?.country}, largest presence in {geoBreakdown[0].country}{/if}
         </p>
 
-        <table class="data-table tufte">
-          <thead>
-            <tr>
-              <th>Country</th>
-              <th class="num">Assets</th>
-              <th class="num">Capacity</th>
-              <th class="num">Entities</th>
-            </tr>
-          </thead>
-          <tbody>
-            {#each geoBreakdown as row, i}
-              <tr class:top-row={i === 0}>
-                <td>{row.country}</td>
-                <td class="num">{row.asset_count?.toLocaleString()}</td>
-                <td class="num">{row.total_capacity?.toLocaleString() || '—'} MW</td>
-                <td class="num">{row.entity_count}</td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
+        <DataTable
+          data={geoBreakdown}
+          columns={[
+            { key: 'country', label: 'Country', sortable: true },
+            { key: 'asset_count', label: 'Assets', type: 'number', sortable: true },
+            { key: 'total_capacity', label: 'Capacity (MW)', type: 'number', sortable: true },
+            { key: 'entity_count', label: 'Entities', type: 'number', sortable: true },
+          ]}
+          showGlobalSearch={false}
+          showColumnFilters={false}
+          showPagination={false}
+          showExport={false}
+          showColumnToggle={false}
+          stickyHeader={false}
+          striped={false}
+        />
       </section>
     {/if}
 
@@ -616,30 +601,24 @@
         </p>
 
         {#if sharedAssets.length > 0}
-          <table class="data-table tufte">
-            <thead>
-              <tr>
-                <th>Asset</th>
-                <th>Type</th>
-                <th>Status</th>
-                <th class="num">Capacity</th>
-                <th class="num">Co-owners</th>
-                <th>Shared by</th>
-              </tr>
-            </thead>
-            <tbody>
-              {#each sharedAssets as asset}
-                <tr>
-                  <td><a href={assetLink(asset.asset_id)}>{asset.asset_name || asset.asset_id}</a></td>
-                  <td><TrackerIcon tracker={asset.tracker} size={12} /> {asset.tracker || '—'}</td>
-                  <td>{asset.status || '—'}</td>
-                  <td class="num">{asset.capacity_mw?.toLocaleString() || '—'} MW</td>
-                  <td class="num">{asset.co_owner_count}</td>
-                  <td class="secondary">{asset.co_owners}</td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
+          <DataTable
+            data={sharedAssets}
+            columns={[
+              { key: 'asset_name', label: 'Asset', sortable: true },
+              { key: 'tracker', label: 'Type', sortable: true },
+              { key: 'status', label: 'Status', sortable: true },
+              { key: 'capacity_mw', label: 'Capacity (MW)', type: 'number', sortable: true },
+              { key: 'co_owner_count', label: 'Co-owners', type: 'number', sortable: true },
+              { key: 'co_owners', label: 'Shared by' },
+            ]}
+            showGlobalSearch={sharedAssets.length > 10}
+            showColumnFilters={false}
+            showPagination={sharedAssets.length > 25}
+            showExport={true}
+            showColumnToggle={false}
+            striped={false}
+            onRowClick={(row) => window.location.href = assetLink(row.asset_id)}
+          />
         {:else}
           <p class="null-state">No co-owned assets found. The {entityIds.length} entities do not share direct ownership of any assets in the GEM database.</p>
         {/if}
@@ -664,28 +643,23 @@
         <p class="section-lede">Owners of {assetIds.length} selected {assetIds.length === 1 ? 'asset' : 'assets'}</p>
 
         {#if commonOwners.length > 0}
-          <table class="data-table tufte">
-            <thead>
-              <tr>
-                <th>Owner</th>
-                <th>HQ</th>
-                <th class="num">Assets</th>
-                <th class="num">Capacity</th>
-                <th class="num">Avg Stake</th>
-              </tr>
-            </thead>
-            <tbody>
-              {#each commonOwners as owner}
-                <tr>
-                  <td><a href={entityLink(owner.entity_id)}>{owner.entity_name || owner.entity_id}</a></td>
-                  <td>{owner.hq_country || '—'}</td>
-                  <td class="num">{owner.asset_count}</td>
-                  <td class="num">{owner.total_capacity_mw?.toLocaleString() || '—'} MW</td>
-                  <td class="num">{owner.avg_share_pct?.toFixed(1) || '—'}%</td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
+          <DataTable
+            data={commonOwners}
+            columns={[
+              { key: 'entity_name', label: 'Owner', sortable: true },
+              { key: 'hq_country', label: 'HQ', sortable: true },
+              { key: 'asset_count', label: 'Assets', type: 'number', sortable: true },
+              { key: 'total_capacity_mw', label: 'Capacity (MW)', type: 'number', sortable: true },
+              { key: 'avg_share_pct', label: 'Avg Stake (%)', type: 'number', sortable: true },
+            ]}
+            showGlobalSearch={commonOwners.length > 10}
+            showColumnFilters={false}
+            showPagination={commonOwners.length > 25}
+            showExport={true}
+            showColumnToggle={false}
+            striped={false}
+            onRowClick={(row) => window.location.href = entityLink(row.entity_id)}
+          />
         {:else}
           <p class="null-state">No ownership data found.</p>
         {/if}
@@ -697,19 +671,24 @@
       <h2>Appendix</h2>
       <p class="appendix-lede">{cartItems.length} items · {entityIds.length} entities · {assetIds.length} assets</p>
 
-      <ul class="cart-list">
+      <div class="appendix-grid">
         {#each cartItems as item}
-          <li>
-            {#if item.type === 'asset'}
-              <a href={assetLink(item.id)}>{item.name}</a>
-              <span class="item-meta">{item.tracker} · {item.id}</span>
-            {:else}
-              <a href={entityLink(item.id)}>{item.name}</a>
-              <span class="item-meta">Entity · {item.id}</span>
-            {/if}
-          </li>
+          {#if item.type === 'asset'}
+            <AssetMicroCard
+              id={item.id}
+              name={item.name}
+              tracker={item.tracker}
+              variant="compact"
+            />
+          {:else}
+            <EntityMicroCard
+              name={item.name}
+              href={entityLink(item.id)}
+              variant="compact"
+            />
+          {/if}
         {/each}
-      </ul>
+      </div>
     </footer>
 
     <!-- Citation -->
@@ -1060,134 +1039,26 @@
   }
 
   /* ═══════════════════════════════════════════════════════════════════
-     ENTITY LIST (replaces entity cards)
+     ENTITY GRID (uses EntityMicroCard)
      ═══════════════════════════════════════════════════════════════════ */
 
-  .entity-list {
-    display: flex;
-    flex-direction: column;
+  .entity-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: var(--space-4);
-  }
-
-  .entity-row {
-    padding-bottom: var(--space-4);
-    border-bottom: 1px solid var(--color-gray-100);
-  }
-
-  .entity-row:last-child {
-    border-bottom: none;
-  }
-
-  .entity-primary {
-    margin-bottom: var(--space-2);
-  }
-
-  .entity-name {
-    font-size: 16px;
-    font-weight: 600;
-    color: var(--color-black);
-    text-decoration: none;
-  }
-
-  .entity-name:hover {
-    text-decoration: underline;
-  }
-
-  .entity-hq {
-    font-size: 13px;
-    color: var(--color-text-secondary);
-    margin-left: var(--space-2);
-  }
-
-  .entity-hq::before {
-    content: '·';
-    margin-right: var(--space-2);
-  }
-
-  .entity-figures {
-    display: flex;
-    gap: var(--space-4);
-    font-size: 14px;
-    margin-bottom: var(--space-1);
-  }
-
-  .figure strong {
-    font-family: var(--font-family-data);
-    font-weight: 600;
-  }
-
-  .entity-status-line {
-    display: flex;
-    gap: var(--space-3);
-    font-size: 12px;
-    color: var(--color-text-tertiary);
   }
 
   /* ═══════════════════════════════════════════════════════════════════
-     TABLES — Tufte-style minimal rules
+     APPENDIX GRID (uses MicroCards)
      ═══════════════════════════════════════════════════════════════════ */
 
-  .data-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 13px;
+  .appendix-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: var(--space-3);
   }
 
-  .data-table.tufte thead {
-    border-bottom: 1px solid var(--color-black);
-  }
-
-  .data-table.tufte th {
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    text-align: left;
-    padding: var(--space-2) var(--space-3) var(--space-2) 0;
-    background: transparent;
-    border: none;
-    color: var(--color-text-secondary);
-  }
-
-  .data-table.tufte th.num {
-    text-align: right;
-    padding-right: 0;
-    padding-left: var(--space-3);
-  }
-
-  .data-table.tufte td {
-    padding: var(--space-2) var(--space-3) var(--space-2) 0;
-    border: none;
-    border-bottom: 1px solid var(--color-gray-100);
-    vertical-align: baseline;
-  }
-
-  .data-table.tufte td.num {
-    text-align: right;
-    font-family: var(--font-family-mono);
-    font-size: 12px;
-    padding-right: 0;
-    padding-left: var(--space-3);
-  }
-
-  .data-table.tufte tr.top-row td {
-    font-weight: 600;
-  }
-
-  .data-table.tufte td.secondary {
-    font-size: 12px;
-    color: var(--color-text-secondary);
-    max-width: 200px;
-  }
-
-  .data-table a {
-    color: var(--color-black);
-    text-decoration: none;
-  }
-
-  .data-table a:hover {
-    text-decoration: underline;
-  }
+  /* Tables now use the DataTable component */
 
   /* ═══════════════════════════════════════════════════════════════════
      APPENDIX
@@ -1214,36 +1085,7 @@
     margin: 0 0 var(--space-4) 0;
   }
 
-  .cart-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: var(--space-1) var(--space-6);
-  }
-
-  .cart-list li {
-    font-size: 13px;
-    padding: var(--space-1) 0;
-  }
-
-  .cart-list a {
-    color: var(--color-black);
-    text-decoration: none;
-    font-weight: 500;
-  }
-
-  .cart-list a:hover {
-    text-decoration: underline;
-  }
-
-  .item-meta {
-    display: block;
-    font-size: 11px;
-    color: var(--color-text-tertiary);
-    font-family: var(--font-family-mono);
-  }
+  /* appendix-grid defined in ENTITY GRID section above */
 
   /* ═══════════════════════════════════════════════════════════════════
      RESPONSIVE
@@ -1267,22 +1109,14 @@
       font-size: 24px;
     }
 
-    .entity-figures {
-      flex-wrap: wrap;
-      gap: var(--space-2);
-    }
-
     .toolbar {
       flex-direction: column;
       align-items: flex-start;
       gap: var(--space-2);
     }
 
-    .data-table.tufte {
-      font-size: 12px;
-    }
-
-    .cart-list {
+    .entity-grid,
+    .appendix-grid {
       grid-template-columns: 1fr;
     }
   }
