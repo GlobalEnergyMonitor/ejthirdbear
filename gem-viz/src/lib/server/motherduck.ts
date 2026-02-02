@@ -11,7 +11,13 @@
  * - "% Share of Ownership"
  */
 
-import { MOTHERDUCK_JWT } from '$env/static/private';
+// Use dynamic import to avoid build-time errors when token isn't set
+import { env } from '$env/dynamic/private';
+
+// Get the token - try private first, fall back to public
+const getMotherDuckToken = () => {
+  return env.MOTHERDUCK_JWT || env.PUBLIC_MOTHERDUCK_TOKEN || '';
+};
 import duckdbModule from 'duckdb';
 
 const { Database } = duckdbModule;
@@ -37,7 +43,7 @@ async function serverQuery<T = Record<string, unknown>>(
           return;
         }
 
-        conn.run(`SET motherduck_token='${MOTHERDUCK_JWT}';`, (err2) => {
+        conn.run(`SET motherduck_token='${getMotherDuckToken()}';`, (err2) => {
           if (err2) {
             db.close();
             resolve({ success: false, data: [], error: `Token: ${err2.message}` });

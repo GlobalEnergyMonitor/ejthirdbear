@@ -1,10 +1,10 @@
 {
-  "version": "2c8549c",
-  "commit": "2c8549c",
-  "message": "style: redesign MicroCards with Tufte/Swiss principles",
+  "version": "8ffcf59",
+  "commit": "8ffcf59",
+  "message": "feat: add ownership tree graph matching Observable notebook behavior",
   "author": "EJ Fox",
-  "timestamp": "2026-02-02T20:20:03.880Z",
-  "deployed": "2026-02-02T20:20:03.880Z",
-  "buildTime": "2/2/2026, 3:20:03 PM",
+  "timestamp": "2026-02-02T20:25:11.875Z",
+  "deployed": "2026-02-02T20:25:11.875Z",
+  "buildTime": "2/2/2026, 3:25:11 PM",
   "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.1.29"
 }
