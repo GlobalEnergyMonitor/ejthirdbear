@@ -1,14 +1,9 @@
 <script>
   /**
-   * EntityMicroCard - Compact entity summary for tooltips & small multiples
+   * EntityMicroCard - Tufte/Swiss-inspired entity summary
    *
-   * A tiny, information-dense card showing:
-   * - Entity name & location
-   * - Mini flower visualization
-   * - Asset count & total capacity
-   * - Tracker breakdown bar
-   *
-   * Perfect for: tooltips, hover states, grid layouts, search results
+   * Grid-based, typography-driven, high data-ink ratio.
+   * Shows entity name, location, and key metrics in a clean layout.
    *
    * @example
    * <EntityMicroCard
@@ -19,12 +14,9 @@
    *   trackers={[
    *     { tracker: 'Coal Plant', count: 140, capacity: 27000 },
    *     { tracker: 'Gas Plant', count: 70, capacity: 13500 },
-   *     { tracker: 'Solar', count: 24, capacity: 4500 }
    *   ]}
    * />
    */
-  import MiniFlower from './MiniFlower.svelte';
-  import { formatCompact } from '$lib/format';
   import { colorByTracker } from '$lib/design-tokens';
 
   let {
@@ -47,7 +39,7 @@
         tracker: t.tracker,
         count: t.count || 0,
         pct: ((t.count || 0) / total) * 100,
-        color: colorByTracker.get(t.tracker) || '#888',
+        color: colorByTracker.get(t.tracker) || 'var(--color-gray-400)',
       }))
       .filter((t) => t.pct > 0)
       .sort((a, b) => b.pct - a.pct);
@@ -55,197 +47,202 @@
 
   // Format capacity with smart units
   function formatCapacity(mw) {
+    if (!mw || mw === 0) return null;
     if (mw >= 1000) {
       return `${(mw / 1000).toFixed(1)} GW`;
     }
-    return `${formatCompact(mw)} MW`;
+    return `${Math.round(mw).toLocaleString()} MW`;
   }
 
-  // Top 3 trackers for the text summary
-  const topTrackers = $derived(
-    trackerBreakdown
-      .slice(0, 3)
-      .map((t) => `${t.tracker.replace(' Plant', '').replace(' Mine', '')} ${Math.round(t.pct)}%`)
-      .join(' · ')
-  );
+  const formattedCapacity = $derived(formatCapacity(totalCapacity));
 </script>
 
 {#if href}
-  <a class="entity-micro-card" class:clickable={true} {href}>
+  <a class="emc" class:compact={variant === 'compact'} {href}>
     {@render cardContent()}
   </a>
 {:else if onclick}
-  <button class="entity-micro-card" class:clickable={true} {onclick}>
+  <button class="emc" class:compact={variant === 'compact'} {onclick} type="button">
     {@render cardContent()}
   </button>
 {:else}
-  <div class="entity-micro-card" class:compact={variant === 'compact'}>
+  <div class="emc" class:compact={variant === 'compact'}>
     {@render cardContent()}
   </div>
 {/if}
 
 {#snippet cardContent()}
-  <div class="card-header">
-    <div class="card-info">
-      <div class="entity-name" title={name}>{name}</div>
-      {#if location}
-        <div class="entity-location">{location}</div>
-      {/if}
-    </div>
-    {#if trackers.length > 0}
-      <div class="flower-container">
-        <MiniFlower {trackers} size={32} />
+  <div class="emc-grid">
+    <!-- Row 1: Name -->
+    <div class="emc-name" title={name}>{name}</div>
+
+    <!-- Row 2: Location -->
+    {#if location}
+      <div class="emc-location">{location}</div>
+    {/if}
+
+    <!-- Row 3: Stats Grid -->
+    {#if assetCount > 0 || formattedCapacity}
+      <div class="emc-stats">
+        {#if assetCount > 0}
+          <div class="emc-stat">
+            <span class="emc-stat-value">{Math.round(assetCount).toLocaleString()}</span>
+            <span class="emc-stat-label">assets</span>
+          </div>
+        {/if}
+        {#if formattedCapacity}
+          <div class="emc-stat">
+            <span class="emc-stat-value">{formattedCapacity}</span>
+            <span class="emc-stat-label">capacity</span>
+          </div>
+        {/if}
+      </div>
+    {/if}
+
+    <!-- Row 4: Tracker breakdown bar (optional) -->
+    {#if trackerBreakdown.length > 0}
+      <div class="emc-trackers">
+        <div class="emc-tracker-bar">
+          {#each trackerBreakdown as segment}
+            <div
+              class="emc-segment"
+              style="flex: {segment.pct}; background: {segment.color}"
+              title="{segment.tracker}: {segment.count}"
+            ></div>
+          {/each}
+        </div>
       </div>
     {/if}
   </div>
-
-  {#if assetCount > 0 || totalCapacity > 0}
-    <div class="card-stats">
-      {#if assetCount > 0}
-        <span class="stat">
-          <span class="stat-value">{formatCompact(assetCount)}</span>
-          <span class="stat-label">assets</span>
-        </span>
-      {/if}
-      {#if totalCapacity > 0}
-        {#if assetCount > 0}<span class="stat-divider">·</span>{/if}
-        <span class="stat">
-          <span class="stat-value">{formatCapacity(totalCapacity)}</span>
-          <span class="stat-label">capacity</span>
-        </span>
-      {/if}
-    </div>
-  {/if}
-
-  {#if trackerBreakdown.length > 0}
-    <div class="tracker-bar" title={topTrackers}>
-      {#each trackerBreakdown as segment}
-        <div
-          class="tracker-segment"
-          style="width: {segment.pct}%; background: {segment.color}"
-          title="{segment.tracker}: {segment.count} ({Math.round(segment.pct)}%)"
-        ></div>
-      {/each}
-    </div>
-    <div class="tracker-summary">{topTrackers}</div>
-  {/if}
 {/snippet}
 
 <style>
-  .entity-micro-card {
+  /* ═══════════════════════════════════════════════════════════════════
+     ENTITY MICRO CARD — Tufte/Swiss Design
+     Grid-based · Typography-driven · High data-ink ratio
+     ═══════════════════════════════════════════════════════════════════ */
+
+  .emc {
     display: block;
-    background: var(--color-bg-primary);
-    border: var(--border-width) solid var(--color-border);
     padding: var(--space-3) var(--space-4);
-    font-size: var(--font-size-md);
-    min-width: 0; /* Allow shrinking in grid */
-    width: 100%;
+    background: transparent;
+    border: none;
+    border-left: 2px solid var(--color-gray-200);
     text-decoration: none;
     color: inherit;
     text-align: left;
     font-family: inherit;
     cursor: default;
+    width: 100%;
+    min-width: 0;
+    transition: border-color 0.15s ease;
   }
 
-  .entity-micro-card.clickable {
+  a.emc,
+  button.emc {
     cursor: pointer;
-    transition: border-color var(--duration-base) var(--ease-in-out-quad);
   }
 
-  .entity-micro-card.clickable:hover {
-    border-color: var(--color-gray-400);
+  a.emc:hover,
+  button.emc:hover {
+    border-left-color: var(--color-black);
   }
 
-  .entity-micro-card.compact {
+  .emc.compact {
     padding: var(--space-2) var(--space-3);
   }
 
-  .card-header {
+  /* Grid Layout */
+  .emc-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: var(--space-2);
-    align-items: start;
-    margin-bottom: var(--space-2);
-  }
-
-  .card-info {
-    min-width: 0; /* Essential for text-overflow in grid children */
-  }
-
-  .entity-name {
-    font-weight: 600;
-    font-size: var(--font-size-body);
-    color: var(--color-text-primary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    line-height: var(--line-height-tight);
-  }
-
-  .entity-location {
-    font-size: var(--font-size-md);
-    color: var(--color-text-tertiary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    margin-top: 1px;
-  }
-
-  .flower-container {
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .card-stats {
-    display: flex;
-    align-items: baseline;
+    grid-template-columns: 1fr;
     gap: var(--space-1);
-    margin-bottom: var(--space-2);
-    color: var(--color-text-secondary);
   }
 
-  .stat {
-    display: inline-flex;
-    align-items: baseline;
-    gap: 3px;
-  }
-
-  .stat-value {
+  /* Name - Primary element */
+  .emc-name {
+    font-size: 14px;
     font-weight: 600;
-    font-variant-numeric: tabular-nums;
-    color: var(--color-text-primary);
-  }
-
-  .stat-label {
-    font-size: var(--font-size-md);
-    color: var(--color-text-tertiary);
-  }
-
-  .stat-divider {
-    color: var(--color-gray-300);
-  }
-
-  .tracker-bar {
-    display: flex;
-    height: 4px;
+    color: var(--color-black);
+    line-height: 1.25;
+    white-space: nowrap;
     overflow: hidden;
-    background: var(--color-gray-100);
-    margin-bottom: var(--space-1);
+    text-overflow: ellipsis;
   }
 
-  .tracker-segment {
-    height: 100%;
-    min-width: 2px;
-    transition: width var(--duration-slow) var(--ease-in-out-quad);
-  }
-
-  .tracker-summary {
-    font-size: var(--font-size-xs);
+  /* Location - Secondary */
+  .emc-location {
+    font-size: 12px;
     color: var(--color-text-tertiary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  /* Stats Row - Grid of metrics */
+  .emc-stats {
+    display: flex;
+    gap: var(--space-4);
+    margin-top: var(--space-1);
+  }
+
+  .emc-stat {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+  }
+
+  .emc-stat-value {
+    font-size: 16px;
+    font-weight: 600;
+    font-family: var(--font-family-data, inherit);
+    font-variant-numeric: tabular-nums;
+    color: var(--color-black);
+    letter-spacing: -0.01em;
+  }
+
+  .emc-stat-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-tertiary);
+  }
+
+  /* Tracker breakdown bar */
+  .emc-trackers {
+    margin-top: var(--space-2);
+  }
+
+  .emc-tracker-bar {
+    display: flex;
+    height: 3px;
+    gap: 1px;
+    overflow: hidden;
+  }
+
+  .emc-segment {
+    min-width: 2px;
+    height: 100%;
+  }
+
+  /* Compact variant adjustments */
+  .emc.compact .emc-name {
+    font-size: 13px;
+  }
+
+  .emc.compact .emc-stat-value {
+    font-size: 14px;
+  }
+
+  .emc.compact .emc-stats {
+    gap: var(--space-3);
+  }
+
+  .emc.compact .emc-trackers {
+    margin-top: var(--space-1);
+  }
+
+  .emc.compact .emc-tracker-bar {
+    height: 2px;
   }
 </style>

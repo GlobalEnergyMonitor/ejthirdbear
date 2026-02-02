@@ -1,10 +1,10 @@
 {
-  "version": "55e9568",
-  "commit": "55e9568",
-  "message": "fix: change \"exposure to\" to \"ownership in\" for clarity",
+  "version": "1552374",
+  "commit": "1552374",
+  "message": "chore: update build artifacts",
   "author": "EJ Fox",
-  "timestamp": "2026-01-31T00:08:10.580Z",
-  "deployed": "2026-01-31T00:08:10.580Z",
-  "buildTime": "1/30/2026, 7:08:10 PM",
+  "timestamp": "2026-01-31T17:30:23.510Z",
+  "deployed": "2026-01-31T17:30:23.510Z",
+  "buildTime": "1/31/2026, 12:30:23 PM",
   "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.1.28"
 }

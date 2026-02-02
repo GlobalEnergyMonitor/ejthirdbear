@@ -1,21 +1,13 @@
 <script>
   /**
-   * AssetMicroCard - Compact asset summary for tooltips & map popups
+   * AssetMicroCard - Tufte/Swiss-inspired asset summary
    *
-   * A tiny, information-dense card showing:
-   * - Asset name & location
-   * - Status badge with color
-   * - Tracker type with icon
-   * - Capacity
-   * - Owner info
-   *
-   * Perfect for: map popups, tooltips, hover states, search results
+   * Grid-based, typography-driven, high data-ink ratio.
+   * Shows asset name, tracker type, status, and capacity.
    */
   import { assetLink } from '$lib/links';
-  import { formatCompact } from '$lib/format';
   import { colorByTracker, colorByStatus } from '$lib/design-tokens';
   import TrackerIcon from './TrackerIcon.svelte';
-  import StatusIcon from './StatusIcon.svelte';
 
   let {
     id = '',
@@ -30,8 +22,8 @@
     onclick = undefined,
   } = $props();
 
-  const trackerColor = $derived(colorByTracker.get(tracker) || '#888');
-  const statusColor = $derived(colorByStatus.get(status?.toLowerCase()) || '#888');
+  const trackerColor = $derived(colorByTracker.get(tracker) || 'var(--color-gray-400)');
+  const statusColor = $derived(colorByStatus.get(status?.toLowerCase()) || 'var(--color-text-tertiary)');
 
   // Format capacity with smart units
   function formatCapacity(mw) {
@@ -39,7 +31,7 @@
     if (mw >= 1000) {
       return `${(mw / 1000).toFixed(1)} GW`;
     }
-    return `${formatCompact(mw)} MW`;
+    return `${Math.round(mw).toLocaleString()} MW`;
   }
 
   const formattedCapacity = $derived(formatCapacity(capacity));
@@ -47,183 +39,180 @@
 </script>
 
 {#if onclick}
-  <button class="asset-micro-card clickable" class:compact={variant === 'compact'} {onclick}>
+  <button class="amc" class:compact={variant === 'compact'} {onclick} type="button">
     {@render cardContent()}
   </button>
 {:else}
-  <a class="asset-micro-card clickable" class:compact={variant === 'compact'} href={linkHref}>
+  <a class="amc" class:compact={variant === 'compact'} href={linkHref}>
     {@render cardContent()}
   </a>
 {/if}
 
 {#snippet cardContent()}
-  <div class="card-header">
-    <div class="tracker-badge" style="background: {trackerColor}">
-      <TrackerIcon {tracker} size={10} />
+  <div class="amc-grid">
+    <!-- Row 1: Tracker indicator + Name -->
+    <div class="amc-header">
+      <span class="amc-tracker-dot" style="background: {trackerColor}">
+        <TrackerIcon {tracker} size={8} />
+      </span>
+      <span class="amc-name" title={name}>{name || id}</span>
     </div>
-    <div class="card-info">
-      <div class="asset-name" title={name}>{name || id}</div>
-      {#if country}
-        <div class="asset-location">{country}</div>
+
+    <!-- Row 2: Metadata line -->
+    <div class="amc-meta">
+      {#if tracker}<span class="amc-tracker-name">{tracker}</span>{/if}
+      {#if country}<span class="amc-country">{country}</span>{/if}
+    </div>
+
+    <!-- Row 3: Stats -->
+    <div class="amc-stats">
+      {#if status}
+        <span class="amc-status" style="color: {statusColor}">{status}</span>
+      {/if}
+      {#if formattedCapacity}
+        <span class="amc-capacity">{formattedCapacity}</span>
       {/if}
     </div>
-  </div>
 
-  <div class="card-meta">
-    {#if status}
-      <span class="status-badge" style="--status-color: {statusColor}">
-        <StatusIcon {status} size={10} />
-        <span class="status-text">{status}</span>
-      </span>
-    {/if}
-    {#if formattedCapacity}
-      <span class="capacity">{formattedCapacity}</span>
+    <!-- Row 4: Owner (optional) -->
+    {#if owner}
+      <div class="amc-owner" title={owner}>{owner}</div>
     {/if}
   </div>
-
-  {#if tracker}
-    <div class="tracker-label">{tracker}</div>
-  {/if}
-
-  {#if owner}
-    <div class="owner-info" title={owner}>
-      <span class="owner-label">Owner:</span>
-      <span class="owner-name">{owner}</span>
-    </div>
-  {/if}
 {/snippet}
 
 <style>
-  .asset-micro-card {
+  /* ═══════════════════════════════════════════════════════════════════
+     ASSET MICRO CARD — Tufte/Swiss Design
+     Grid-based · Typography-driven · High data-ink ratio
+     ═══════════════════════════════════════════════════════════════════ */
+
+  .amc {
     display: block;
-    background: var(--color-white);
-    border: 1px solid var(--color-border);
-    border-radius: 6px;
-    padding: 10px 12px;
-    font-size: 11px;
-    min-width: 200px;
-    max-width: 280px;
-    box-shadow: var(--shadow-md);
+    padding: var(--space-3) var(--space-4);
+    background: transparent;
+    border: none;
+    border-left: 2px solid var(--color-gray-200);
     text-decoration: none;
     color: inherit;
     text-align: left;
-    width: 100%;
-    font-family:
-      system-ui,
-      -apple-system,
-      sans-serif;
+    font-family: inherit;
     cursor: pointer;
+    width: 100%;
+    min-width: 0;
+    transition: border-color 0.15s ease;
   }
 
-  .asset-micro-card.clickable {
-    transition:
-      border-color 0.15s,
-      box-shadow 0.15s,
-      transform 0.1s;
+  .amc:hover {
+    border-left-color: var(--color-black);
   }
 
-  .asset-micro-card.clickable:hover {
-    border-color: #999;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    transform: translateY(-1px);
+  .amc.compact {
+    padding: var(--space-2) var(--space-3);
   }
 
-  .asset-micro-card.compact {
-    padding: 8px 10px;
-    min-width: 160px;
+  /* Grid Layout */
+  .amc-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2px;
   }
 
-  .card-header {
+  /* Header: Tracker dot + Name */
+  .amc-header {
     display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    margin-bottom: 8px;
+    align-items: center;
+    gap: var(--space-2);
   }
 
-  .tracker-badge {
+  .amc-tracker-dot {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 22px;
-    height: 22px;
-    border-radius: 4px;
+    width: 14px;
+    height: 14px;
     flex-shrink: 0;
   }
 
-  .card-info {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .asset-name {
+  .amc-name {
+    font-size: 14px;
     font-weight: 600;
-    font-size: 13px;
-    color: #111;
-    line-height: 1.3;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-
-  .asset-location {
-    font-size: 11px;
-    color: #666;
-    margin-top: 2px;
-  }
-
-  .card-meta {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 6px;
-  }
-
-  .status-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 2px 6px;
-    background: color-mix(in srgb, var(--status-color) 15%, transparent);
-    border-radius: 3px;
-    font-size: 10px;
-    text-transform: capitalize;
-  }
-
-  .status-text {
-    color: var(--status-color);
-    font-weight: 500;
-  }
-
-  .capacity {
-    font-weight: 600;
-    font-size: 12px;
-    color: #222;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .tracker-label {
-    font-size: 10px;
-    color: #888;
-    margin-bottom: 6px;
-  }
-
-  .owner-info {
-    font-size: 10px;
-    color: #666;
-    border-top: 1px solid #eee;
-    padding-top: 6px;
-    margin-top: 4px;
+    color: var(--color-black);
+    line-height: 1.25;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  .owner-label {
-    color: #999;
+  /* Metadata line */
+  .amc-meta {
+    display: flex;
+    gap: var(--space-2);
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+    margin-left: 22px; /* Align with name after dot */
   }
 
-  .owner-name {
-    color: #444;
+  .amc-tracker-name {
+    color: var(--color-text-secondary);
+  }
+
+  .amc-country::before {
+    content: '·';
+    margin-right: var(--space-2);
+  }
+
+  /* Stats row */
+  .amc-stats {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-3);
+    margin-top: var(--space-1);
+    margin-left: 22px;
+  }
+
+  .amc-status {
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: capitalize;
+  }
+
+  .amc-capacity {
+    font-size: 13px;
+    font-weight: 600;
+    font-family: var(--font-family-data, inherit);
+    font-variant-numeric: tabular-nums;
+    color: var(--color-black);
+  }
+
+  /* Owner */
+  .amc-owner {
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+    margin-top: var(--space-1);
+    margin-left: 22px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Compact variant */
+  .amc.compact .amc-name {
+    font-size: 13px;
+  }
+
+  .amc.compact .amc-tracker-dot {
+    width: 12px;
+    height: 12px;
+  }
+
+  .amc.compact .amc-meta,
+  .amc.compact .amc-stats,
+  .amc.compact .amc-owner {
+    margin-left: 20px;
+  }
+
+  .amc.compact .amc-capacity {
+    font-size: 12px;
   }
 </style>
