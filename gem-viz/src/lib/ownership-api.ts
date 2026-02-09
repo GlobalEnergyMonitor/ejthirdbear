@@ -540,6 +540,7 @@ export async function listAssets(params?: {
   q?: string;
   status?: string;
   country?: string;
+  asset_type?: string;
   limit?: number;
   offset?: number;
 }): Promise<PaginatedResponse<AssetSummary>> {
@@ -547,6 +548,7 @@ export async function listAssets(params?: {
   if (params?.q) searchParams.set('q', params.q);
   if (params?.status) searchParams.set('status', params.status);
   if (params?.country) searchParams.set('country', params.country);
+  if (params?.asset_type) searchParams.set('asset_type', params.asset_type);
   if (params?.limit) searchParams.set('limit', String(params.limit));
   if (params?.offset) searchParams.set('offset', String(params.offset));
 

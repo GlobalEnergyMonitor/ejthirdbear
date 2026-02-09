@@ -66,6 +66,9 @@ export async function fetchAssets(options: {
       state: row.state,
       owner: row.owner,
       tracker: row.tracker,
+      startYear: row.startYear ?? undefined,
+      technology: row.technology ?? undefined,
+      mineType: row.mineType ?? undefined,
     }));
     setCache(cacheKey, assets);
     return { success: true, data: assets };

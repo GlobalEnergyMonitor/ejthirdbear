@@ -10,12 +10,19 @@
   // Filter state
   let selectedTracker = $state<string | null>('Coal Plant');
 
+  import { TRACKERS_WITH_MOTHERDUCK_DATA } from '$lib/data-config/tracker-schema';
+
   const trackers = [
     { value: 'Coal Plant', label: 'Coal Plants' },
     { value: 'Coal Mine', label: 'Coal Mines' },
     { value: 'Gas Plant', label: 'Gas Plants' },
     { value: 'Steel Plant', label: 'Steel Plants' },
+    { value: 'Gas Pipeline', label: 'Gas Pipelines' },
+    { value: 'Iron Mine', label: 'Iron Mines' },
+    { value: 'Bioenergy Power', label: 'Bioenergy' },
   ];
+
+  const hasData = $derived(TRACKERS_WITH_MOTHERDUCK_DATA.includes(selectedTracker as any));
 </script>
 
 <svelte:head>
@@ -54,6 +61,14 @@
       {/each}
     </div>
   </section>
+
+  <!-- Data source notice -->
+  {#if !hasData}
+    <div class="data-notice">
+      Note: {selectedTracker} data may be limited. Full data is available via the
+      <a href="https://gem-api.thirdbear.net/docs" target="_blank" rel="noopener">REST API</a>.
+    </div>
+  {/if}
 
   <!-- Card Lists -->
   <div class="card-grid">
@@ -136,12 +151,35 @@
       />
     {:else}
       <ProjectCardList
-        title="Largest Assets"
-        description="Top 10 assets by capacity"
+        title="Largest Proposed"
+        description="Top 5 proposed assets by capacity"
         tracker={selectedTracker}
+        statusFilter={['proposed', 'announced', 'pre-permit', 'permitted', 'construction']}
         sortBy="capacity"
         sortOrder="desc"
-        limit={10}
+        limit={5}
+        variant="compact"
+      />
+
+      <ProjectCardList
+        title="Largest Operating"
+        description="Top 5 operating assets by capacity"
+        tracker={selectedTracker}
+        statusFilter={['operating']}
+        sortBy="capacity"
+        sortOrder="desc"
+        limit={5}
+        variant="compact"
+      />
+
+      <ProjectCardList
+        title="Cancelled / Retired"
+        description="Top 5 cancelled, shelved, or retired assets"
+        tracker={selectedTracker}
+        statusFilter={['cancelled', 'shelved', 'retired', 'mothballed']}
+        sortBy="capacity"
+        sortOrder="desc"
+        limit={5}
         variant="compact"
       />
     {/if}
@@ -237,6 +275,19 @@
     background: var(--color-accent);
     color: var(--color-white);
     border-color: var(--color-accent);
+  }
+
+  .data-notice {
+    padding: var(--space-3) var(--space-4);
+    margin-bottom: var(--space-6);
+    background: var(--color-bg-secondary);
+    border-left: 3px solid var(--color-text-tertiary);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+  }
+
+  .data-notice a {
+    color: var(--color-link);
   }
 
   .card-grid {

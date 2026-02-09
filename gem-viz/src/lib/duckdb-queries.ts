@@ -468,6 +468,9 @@ export interface FactsheetAsset {
   state: string;
   owner: string;
   tracker: string;
+  startYear: number | null;
+  technology: string | null;
+  mineType: string | null;
 }
 
 /**
@@ -514,7 +517,10 @@ export async function getFactsheetAssets(options: {
       "Country" as country,
       "State" as state,
       "Owner" as owner,
-      "Asset Type" as tracker
+      "Asset Type" as tracker,
+      "Start year" as startYear,
+      "Technology" as technology,
+      "Mine type" as mineType
     FROM ownership
     ${whereClause}
     ORDER BY ${sortCol} ${orderDir} NULLS LAST
