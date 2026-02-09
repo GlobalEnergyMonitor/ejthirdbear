@@ -667,10 +667,6 @@
     opacity: 0.6;
   }
 
-  .query-stat .stat-value {
-    color: var(--color-mint);
-  }
-
   .explorer-body {
     display: flex;
     flex: 1;
