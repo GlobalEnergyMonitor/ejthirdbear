@@ -7,6 +7,7 @@
   import { link } from '$lib/links';
   import { dataVersionInfo, TrackerDatasets } from '$lib/data-config/data-sources';
   import { fallbackLog, downloadFallbackLog, clearFallbackLog } from '$lib/api-fallback-log';
+  import { changelog } from '$lib/data/changelog';
 
   /**
    * @typedef {Object} PageStats
@@ -24,83 +25,6 @@
   let { data } = $props();
   /** @type {PageStats} */
   const stats = data?.stats || {};
-
-  // Version history - add new entries at the top
-  const changelog = [
-    {
-      version: '0.1.21',
-      date: '2025-12-17',
-      changes: [
-        'Integrated new Ownership Tracing API for faster data queries',
-        'About page now shows real-time database statistics',
-        'Added progress tracking for background deployments',
-        'Improved build pipeline with status line integration',
-      ],
-    },
-    {
-      version: '0.1.14',
-      date: '2025-12-15',
-      changes: [
-        'Added investigation cart for collecting assets and entities',
-        'New /report page with co-ownership analysis and PDF export',
-        'Added persistent navigation bar across all pages',
-        'Geographic breakdown showing asset distribution by country',
-        'Shareable investigation URLs with clipboard copy',
-      ],
-    },
-    {
-      version: '0.1.13',
-      date: '2025-12-15',
-      changes: [
-        'Added custom 404 error page with helpful navigation',
-        'Refactored all route pages for improved code readability',
-        'Added unit test suite with 61 tests (vitest)',
-        'Created data manifest page for admin/debugging',
-        'Fixed version metadata synchronization',
-      ],
-    },
-    {
-      version: '0.1.12',
-      date: '2025-12-15',
-      changes: [
-        'Integrated Observable notebook visualizations (Ownership Flower, Asset Screener)',
-        'Added TrackerIcon and StatusIcon components with a warm grayscale palette',
-        'Consolidated and removed 13 zombie/duplicate components',
-        'Added RelationshipNetwork visualization to asset pages',
-      ],
-    },
-    {
-      version: '0.1.11',
-      date: '2025-12-12',
-      changes: [
-        'Fixed Digital Ocean Spaces URL routing (trailing slash handling)',
-        'Pre-baked entity portfolio data at build time',
-        'Added map color coding by tracker type with legend',
-        'Removed dead hydration code from ownership visualizations',
-        'Added smart redirects between asset and entity pages',
-      ],
-    },
-    {
-      version: '0.1.10',
-      date: '2025-12-10',
-      changes: [
-        'Switched to bare GEM Unit ID URLs (/asset/G100001057899)',
-        'Consolidated ownership records into single asset pages',
-        'Reduced page count from 62,366 to 13,472 unique assets',
-        'Added ownership table with all owners per asset',
-      ],
-    },
-    {
-      version: '0.1.0',
-      date: '2025-11-22',
-      changes: [
-        'Initial release with static site generation',
-        'Bulk fetch architecture for Ownership API data',
-        'Interactive MapLibre maps on asset pages',
-        'Digital Ocean Spaces deployment',
-      ],
-    },
-  ];
 
   // Data sources for methodology section (from data-sources.ts)
   const trackers = Object.values(TrackerDatasets).map((d) => ({
