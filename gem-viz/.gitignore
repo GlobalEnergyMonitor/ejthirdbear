@@ -28,7 +28,7 @@ build
 # Data files
 *.parquet
 *.csv
-data/
+/data/
 
 # Environment variables (CONTAINS SECRETS!)
 .env
