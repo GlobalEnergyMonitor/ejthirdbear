@@ -3,9 +3,18 @@
   import { assetLink, entityLink, assetPath } from '$lib/links';
   import { initDuckDB, loadParquetFromPath, query } from '$lib/duckdb-utils';
   import { investigationCart } from '$lib/investigationCart';
-  import { buildIdList } from '$lib/utils/sql';
   import TrackerIcon from '$lib/components/TrackerIcon.svelte';
-  import { ASSET_ID_COALESCE_O } from '$lib/duckdb-queries';
+  import {
+    formatNumber,
+    escapeCSVVal,
+    sparklinePoints,
+    buildExportManifest,
+    downloadFile,
+    runPreflight,
+    buildAssetQuery,
+    buildEntityQuery,
+    buildCombinedQuery,
+  } from './export-panel-utils';
 
   let loading = $state(false);
   let exporting = $state(false);
@@ -37,38 +46,6 @@
     if (confirm('Remove all items from cart?')) {
       investigationCart.clear();
     }
-  }
-
-  function nowIso() {
-    return new Date().toISOString();
-  }
-
-  function formatNumber(n) {
-    const num = Number(n);
-    return Number.isFinite(num) ? num.toLocaleString() : String(n ?? '');
-  }
-
-  // Utility functions kept for potential future use
-  function _formatBytes(bytes) {
-    const b = Number(bytes);
-    if (!Number.isFinite(b)) return '';
-    const units = ['B', 'KB', 'MB', 'GB'];
-    let value = b;
-    let unitIdx = 0;
-    while (value >= 1024 && unitIdx < units.length - 1) {
-      value /= 1024;
-      unitIdx += 1;
-    }
-    return `${value.toFixed(unitIdx === 0 ? 0 : 1)} ${units[unitIdx]}`;
-  }
-
-  function _hashStringFNV1a(input) {
-    let hash = 0x811c9dc5;
-    for (let i = 0; i < input.length; i += 1) {
-      hash ^= input.charCodeAt(i);
-      hash = (hash * 0x01000193) >>> 0;
-    }
-    return hash.toString(16).padStart(8, '0');
   }
 
   function addLog(message, detail = null) {
@@ -116,115 +93,6 @@
     }
   }
 
-  async function describeTable(tableName) {
-    const res = await query(`DESCRIBE SELECT * FROM ${tableName}`);
-    if (!res.success) return null;
-    return (res.data || []).map((row) => ({
-      name: row.column_name,
-      type: row.column_type,
-      nullable: row.null ? String(row.null) : undefined,
-    }));
-  }
-
-  async function getPreflightStats({ assetIds = [], entityIds = [] }) {
-    const whereParts = [];
-    if (entityIds.length > 0)
-      whereParts.push(`o."Owner GEM Entity ID" IN (${buildIdList(entityIds)})`);
-    if (assetIds.length > 0)
-      whereParts.push(`${ASSET_ID_COALESCE_O} IN (${buildIdList(assetIds)})`);
-    const whereClause = whereParts.length > 0 ? `WHERE ${whereParts.join(' OR ')}` : 'WHERE 1=0';
-
-    const summarySql = `
-      SELECT
-        COUNT(*) as ownership_rows,
-        COUNT(DISTINCT ${ASSET_ID_COALESCE_O}) as distinct_assets,
-        COUNT(DISTINCT o."Owner GEM Entity ID") as distinct_entities,
-        COUNT(DISTINCT o."Tracker") as distinct_trackers,
-        COUNT(DISTINCT o."Status") as distinct_statuses,
-        COUNT(DISTINCT COALESCE(l."Country.Area", 'Unknown')) as distinct_countries,
-        COALESCE(SUM(CAST(o."Capacity (MW)" AS DOUBLE)), 0) as total_capacity_mw,
-        SUM(CASE WHEN l."Latitude" IS NULL OR l."Longitude" IS NULL THEN 1 ELSE 0 END) as rows_missing_coords
-      FROM ownership o
-      LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
-      ${whereClause}
-    `;
-
-    const topTrackersSql = `
-      SELECT
-        COALESCE(o."Tracker", 'Unknown') as key,
-        COUNT(*) as rows
-      FROM ownership o
-      ${whereClause}
-      GROUP BY 1
-      ORDER BY rows DESC
-      LIMIT 10
-    `;
-
-    const topStatusesSql = `
-      SELECT
-        COALESCE(o."Status", 'Unknown') as key,
-        COUNT(*) as rows
-      FROM ownership o
-      ${whereClause}
-      GROUP BY 1
-      ORDER BY rows DESC
-      LIMIT 10
-    `;
-
-    const topCountriesSql = `
-      SELECT
-        COALESCE(l."Country.Area", 'Unknown') as key,
-        COUNT(*) as rows
-      FROM ownership o
-      LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
-      ${whereClause}
-      GROUP BY 1
-      ORDER BY rows DESC
-      LIMIT 10
-    `;
-
-    const [summary, topTrackers, topStatuses, topCountries] = await Promise.all([
-      query(summarySql),
-      query(topTrackersSql),
-      query(topStatusesSql),
-      query(topCountriesSql),
-    ]);
-
-    const summaryRow = summary.success && summary.data?.[0] ? summary.data[0] : null;
-    return {
-      ok: Boolean(summaryRow),
-      sql: {
-        summary: summarySql.trim(),
-        topTrackers: topTrackersSql.trim(),
-        topStatuses: topStatusesSql.trim(),
-        topCountries: topCountriesSql.trim(),
-      },
-      summary: summaryRow,
-      topTrackers: topTrackers.success ? topTrackers.data || [] : [],
-      topStatuses: topStatuses.success ? topStatuses.data || [] : [],
-      topCountries: topCountries.success ? topCountries.data || [] : [],
-    };
-  }
-
-  async function runPreflight({ assetIds, entityIds }) {
-    const [ownershipSchema, locationsSchema, combined, assets, entities] = await Promise.all([
-      describeTable('ownership'),
-      describeTable('locations'),
-      getPreflightStats({ assetIds, entityIds }),
-      assetIds.length ? getPreflightStats({ assetIds }) : Promise.resolve(null),
-      entityIds.length ? getPreflightStats({ entityIds }) : Promise.resolve(null),
-    ]);
-
-    return {
-      generatedAt: nowIso(),
-      ownershipSchema,
-      locationsSchema,
-      combined,
-      assets,
-      entities,
-    };
-  }
-
   async function runAnalysis() {
     if (!totalCount) return;
     analysisLoading = true;
@@ -258,51 +126,8 @@
     queueAnalysis();
   });
 
-  function sparklinePoints(values) {
-    const nums = values.map((v) => Number(v) || 0);
-    const max = Math.max(...nums, 1);
-    const normalized = nums.map((n) => n / max);
-    return normalized.map((v, i) => {
-      const x = (i / Math.max(1, normalized.length - 1)) * 80;
-      const y = 18 - v * 18;
-      return `${x},${y}`;
-    });
-  }
-
-  function buildExportManifest(kind, selection, result, sql) {
-    return {
-      kind,
-      selection,
-      result,
-      sql,
-      app: {
-        version: appVersion,
-        buildTime,
-        buildHash,
-      },
-    };
-  }
-
-  async function downloadFile(data, filename, mimeType) {
-    const blob = new Blob([data], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  }
-
-  function escapeCSVVal(val) {
-    if (val == null) return '';
-    const s = String(val);
-    if (/\n|\r|"|,/.test(s)) {
-      return `"${s.replace(/"/g, '""')}"`;
-    }
-    return s;
-  }
+  // App info for manifest
+  const appInfo = { version: appVersion, buildTime, buildHash };
 
   async function exportQuery(sql, filenameBase, _selection) {
     await ensureDB();
@@ -352,26 +177,6 @@
     };
   }
 
-  function buildAssetQuery(assetIds) {
-    return `
-      SELECT
-        o.*, l."Latitude", l."Longitude", l."Country.Area" as "Country"
-      FROM ownership o
-      LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
-      WHERE ${ASSET_ID_COALESCE_O} IN (${buildIdList(assetIds)})
-    `;
-  }
-
-  function buildEntityQuery(entityIds) {
-    return `
-      SELECT
-        o.*, l."Latitude", l."Longitude", l."Country.Area" as "Country"
-      FROM ownership o
-      LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
-      WHERE o."Owner GEM Entity ID" IN (${buildIdList(entityIds)})
-    `;
-  }
-
   async function exportAssetsCSV() {
     if (!assetItems.length) return;
     resetExportUI();
@@ -381,7 +186,7 @@
       const sql = buildAssetQuery(assetIds);
       const selection = { assets: assetIds, entities: [] };
       const result = await exportQuery(sql, 'gem-assets-export', selection);
-      lastExportManifest = buildExportManifest('assets', selection, result, { sql });
+      lastExportManifest = buildExportManifest('assets', selection, result, { sql }, appInfo);
       addLog('Manifest created');
       await downloadFile(
         JSON.stringify(lastExportManifest, null, 2),
@@ -406,7 +211,7 @@
       const sql = buildEntityQuery(entityIds);
       const selection = { assets: [], entities: entityIds };
       const result = await exportQuery(sql, 'gem-entities-export', selection);
-      lastExportManifest = buildExportManifest('entities', selection, result, { sql });
+      lastExportManifest = buildExportManifest('entities', selection, result, { sql }, appInfo);
       addLog('Manifest created');
       await downloadFile(
         JSON.stringify(lastExportManifest, null, 2),
@@ -429,24 +234,10 @@
     try {
       const assetIds = assetItems.map((a) => a.id);
       const entityIds = entityItems.map((e) => e.id);
-      const whereClause = [
-        assetIds.length ? `${ASSET_ID_COALESCE_O} IN (${buildIdList(assetIds)})` : null,
-        entityIds.length ? `o."Owner GEM Entity ID" IN (${buildIdList(entityIds)})` : null,
-      ]
-        .filter(Boolean)
-        .join(' OR ');
-
-      const sql = `
-        SELECT
-          o.*, l."Latitude", l."Longitude", l."Country.Area" as "Country"
-        FROM ownership o
-        LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
-        WHERE ${whereClause}
-      `;
-
+      const sql = buildCombinedQuery(assetIds, entityIds);
       const selection = { assets: assetIds, entities: entityIds };
       const result = await exportQuery(sql, 'gem-export', selection);
-      lastExportManifest = buildExportManifest('combined', selection, result, { sql });
+      lastExportManifest = buildExportManifest('combined', selection, result, { sql }, appInfo);
       addLog('Manifest created');
       await downloadFile(
         JSON.stringify(lastExportManifest, null, 2),
