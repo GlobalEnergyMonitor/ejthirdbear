@@ -65,6 +65,19 @@ export function factsheetLink(tracker: string): string {
 }
 
 /**
+ * Generate tracker page link
+ */
+export function trackerLink(tracker: string): string {
+  // Convert tracker name to URL slug
+  // Handle special case: "Bioenergy Power" -> "bioenergy"
+  let slug = tracker.toLowerCase().replace(/\s+/g, '-');
+  if (slug === 'bioenergy-power') {
+    slug = 'bioenergy';
+  }
+  return link(`tracker/${slug}`);
+}
+
+/**
  * Get the base path for static assets (parquet files, geojson, etc.)
  * Uses base path which works in both dev and production
  */
