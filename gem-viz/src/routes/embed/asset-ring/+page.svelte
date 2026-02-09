@@ -9,7 +9,7 @@
    */
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
-  import { fetchOwnerPortfolio } from '$lib/component-data/schema';
+  import { getEntityWithPortfolio, graphToExplorerData } from '$lib/ownership-api';
   import { AssetRingVisualization } from '$lib/components/ownership';
 
   const entityId = $derived($page.url.searchParams.get('entityId'));
@@ -32,8 +32,14 @@
     }
 
     try {
-      portfolio = await fetchOwnerPortfolio(entityId);
-      if (!portfolio) {
+      // Use REST API directly — no DuckDB dependency for cross-origin embeds
+      const { entity, graphDown } = await getEntityWithPortfolio(entityId);
+      const explorerData = graphToExplorerData(entityId, entity.name, graphDown);
+      portfolio = {
+        spotlightOwner: explorerData.spotlightOwner,
+        assets: explorerData.assets,
+      };
+      if (!entity) {
         error = 'Entity not found';
       }
     } catch (err) {

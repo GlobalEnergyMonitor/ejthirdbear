@@ -12,7 +12,7 @@
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
   import { assetLink } from '$lib/links';
-  import { fetchOwnerPortfolio } from '$lib/component-data/schema';
+  import { getEntityWithPortfolio, graphToExplorerData } from '$lib/ownership-api';
   import OwnershipFlower from '$lib/components/OwnershipFlower.svelte';
   import TrackerIcon from '$lib/components/TrackerIcon.svelte';
   import StatusIcon from '$lib/components/StatusIcon.svelte';
@@ -28,6 +28,7 @@
   let loading = $state(true);
   let error = $state<string | null>(null);
   let portfolio = $state<any>(null);
+  let subsidiaries = $state<Array<{ id: string; name: string; ownershipPct: number | null }>>([]);
 
   const entityName = $derived(portfolio?.spotlightOwner?.Name || entityId || '');
   const assets = $derived(portfolio?.assets || []);
@@ -52,8 +53,28 @@
     }
 
     try {
-      portfolio = await fetchOwnerPortfolio(entityId);
-      if (!portfolio) {
+      // Use REST API directly — no DuckDB dependency for embeds
+      const { entity, owned, graphDown } = await getEntityWithPortfolio(entityId);
+
+      // Convert graph to portfolio format for OwnershipFlower
+      const explorerData = graphToExplorerData(entityId, entity.name, graphDown);
+      portfolio = {
+        spotlightOwner: explorerData.spotlightOwner,
+        subsidiariesMatched: new Map(explorerData.subsidiariesMatched),
+        directlyOwned: explorerData.directlyOwned,
+        matchedEdges: new Map(explorerData.matchedEdges),
+        entityMap: new Map(explorerData.entityMap),
+        assets: explorerData.assets,
+      };
+
+      // Store subsidiaries for display
+      subsidiaries = owned.map(o => ({
+        id: o.entityId,
+        name: o.entityName,
+        ownershipPct: o.ownershipPct,
+      }));
+
+      if (!entity) {
         error = 'Entity not found';
       }
     } catch (err) {
@@ -119,6 +140,21 @@
         {/each}
         {#if assets.length > maxAssets}
           <p class="more-assets">+ {assets.length - maxAssets} more assets</p>
+        {/if}
+      </div>
+    {:else if showAssets && subsidiaries.length > 0}
+      <div class="asset-list">
+        <h2>Subsidiaries ({subsidiaries.length})</h2>
+        {#each subsidiaries.slice(0, maxAssets) as sub}
+          <div class="asset-row">
+            <span class="asset-name">{sub.name}</span>
+            {#if sub.ownershipPct != null}
+              <span class="capacity">{sub.ownershipPct.toFixed(1)}%</span>
+            {/if}
+          </div>
+        {/each}
+        {#if subsidiaries.length > maxAssets}
+          <p class="more-assets">+ {subsidiaries.length - maxAssets} more subsidiaries</p>
         {/if}
       </div>
     {/if}
