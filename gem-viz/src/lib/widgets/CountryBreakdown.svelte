@@ -93,12 +93,6 @@
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
-  .query-time {
-    font-size: 10px;
-    color: var(--color-text-tertiary);
-    font-family: var(--font-family-data);
-  }
-
   .loading,
   .error,
   .empty {
