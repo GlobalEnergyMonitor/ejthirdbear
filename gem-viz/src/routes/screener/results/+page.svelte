@@ -82,7 +82,7 @@
 
   // Data source tracking
   /** @type {'motherduck' | 'local'} */
-  let dataSource = $state('motherduck');
+  let dataSource = $state<'none' | 'motherduck' | 'local' | 'api' | 'server'>('motherduck');
   let queryTime = $state(null);
   let executedQuery = $state('');
   let availableAssetTypes = $state([]);
@@ -161,7 +161,7 @@
       .map((o) => ({
         id: o.entityId?.startsWith('E') ? o.entityId : `E${o.entityId}`,
         name: o.name,
-        type: /** @type {const} */ ('entity'),
+        type: 'entity' as const,
       }));
     investigationCart.addMany(toAdd);
   }
@@ -667,21 +667,6 @@
     align-items: center;
   }
 
-  .filter-toggle {
-    display: grid;
-    grid-template-columns: auto auto;
-    gap: var(--space-2);
-    align-items: center;
-    font-size: var(--font-size-sm);
-    color: #4a5568;
-    cursor: pointer;
-    white-space: nowrap;
-  }
-
-  .filter-toggle input {
-    accent-color: #1d4961;
-  }
-
   .add-all-btn {
     padding: var(--space-2) var(--space-3);
     font-size: var(--font-size-sm);
@@ -910,16 +895,6 @@
 
   .col-filtered {
     width: 35%;
-  }
-
-  .company-link {
-    color: #1d4961;
-    text-decoration: none;
-    font-weight: 500;
-  }
-
-  .company-link:hover {
-    text-decoration: underline;
   }
 
   .empty-row {
