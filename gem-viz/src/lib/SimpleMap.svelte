@@ -2,11 +2,20 @@
   import { onMount, onDestroy } from 'svelte';
   import maplibregl from 'maplibre-gl';
   import 'maplibre-gl/dist/maplibre-gl.css';
-  import chroma from 'chroma-js';
   import { assetPath, assetLink } from '$lib/links';
   import { trackerToMapColor, mapColors, colors } from '$lib/design-tokens';
   import ProjectCard from '$lib/components/ProjectCard.svelte';
   import { fetchAssetBasics } from '$lib/component-data/schema';
+  import {
+    trackerGroups,
+    trackerColorStops,
+    trackerGlowColorStops,
+    palette,
+    themes,
+    TOOLTIP_MIN_ZOOM,
+    SPIN_SPEED,
+    DATA_SOURCES,
+  } from '$lib/simple-map-config';
 
   let mapContainer = $state(null);
   let map;
@@ -21,20 +30,12 @@
   let isDarkMode = $state(false);
 
   // Spin control
-  const spinSpeed = 0.12;
   let userInteracting = false;
 
   // Dynamic callouts
   let visibleCallouts = $state([]);
 
-  // Layer visibility toggles - group similar trackers together
-  const trackerGroups = {
-    coal: ['Coal Plant', 'Coal Mine'],
-    gas: ['Gas Plant', 'Gas Pipeline', 'Oil & NGL Pipeline'],
-    steel: ['Steel Plant', 'Iron Mine', 'Iron Ore Mine'],
-    bioenergy: ['Bioenergy Power', 'Cement and Concrete'],
-  };
-
+  // Layer visibility state (uses imported trackerGroups)
   let visibleGroups = $state({
     coal: true,
     gas: true,
@@ -69,8 +70,7 @@
     });
   }
 
-  // Hover tooltip state - only show when zoomed in
-  const TOOLTIP_MIN_ZOOM = 3;
+  // Hover tooltip state - only show when zoomed in (uses imported TOOLTIP_MIN_ZOOM)
   let hoveredAsset = $state(null);
   let tooltipPosition = $state({ x: 0, y: 0 });
   let currentZoom = $state(0);
@@ -188,62 +188,7 @@
     });
   }
 
-  // Core point colors
-  const trackerColorStops = Object.entries(trackerToMapColor).flatMap(([tracker, color]) => [
-    tracker,
-    color,
-  ]);
-
-  // Softer glow colors: increase lightness, decrease saturation for readability
-  const trackerGlowColorStops = Object.entries(trackerToMapColor).flatMap(([tracker, color]) => [
-    tracker,
-    chroma(color).desaturate(2).brighten(0.8).hex(),
-  ]);
-
-  // GEM Core Palette
-  const palette = {
-    navy: '#004A63',
-    mintDataviz: '#A5E9E4',
-    orange: '#FE4F2D',
-    teal: '#016B83',
-    midnight: '#002430',
-    warmWhite: '#F2F2EB',
-    white: '#FFFFFF',
-  };
-
-  // Theme colors using core palette
-  const themes = {
-    dark: {
-      background: palette.midnight,
-      land: '#0a1a20',
-      landStroke: palette.navy,
-      ocean: palette.midnight,
-      text: palette.mintDataviz,
-      textMuted: '#7FA4B1', // navy-50
-      accent: palette.orange,
-      panel: 'rgba(0, 36, 48, 0.9)',
-      panelBorder: palette.teal,
-      glow: palette.mintDataviz,
-      statColor: palette.mintDataviz,
-      capacityColor: palette.orange,
-    },
-    light: {
-      background: palette.warmWhite,
-      land: palette.white,
-      landStroke: '#BFDAE0', // navy-25
-      ocean: palette.warmWhite,
-      text: palette.midnight,
-      textMuted: palette.navy,
-      accent: palette.orange,
-      panel: 'rgba(255, 255, 255, 0.94)',
-      panelBorder: palette.navy,
-      glow: palette.teal,
-      statColor: palette.navy,
-      capacityColor: palette.orange,
-    },
-  };
-
-  // Light mode is hardcoded - no system preference detection
+  // Colors imported from simple-map-config (trackerColorExpression, trackerColorLightExpression, themes, palette)
 
   function updateMapTheme() {
     if (!map) return;
@@ -264,7 +209,7 @@
       }
 
       const center = map.getCenter();
-      center.lng += spinSpeed;
+      center.lng += SPIN_SPEED;
       map.setCenter(center);
 
       spinAnimation = requestAnimationFrame(spin);
