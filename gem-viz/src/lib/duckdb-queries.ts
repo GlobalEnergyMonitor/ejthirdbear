@@ -853,24 +853,37 @@ export interface FieldEnumValue {
  * REST API equivalent needed:
  *   GET /trackers/{tracker}/fields/{field}/values
  *
- * NOTE: Only fields in the MotherDuck schema will return data.
- * Status, Country, Capacity etc. are not available.
+ * NOTE: Only fields in the ownership table schema will return data.
  */
 export async function getTrackerFieldValues(
   tracker: string,
   fieldName: string,
   limit = 20
 ): Promise<QueryResult<FieldEnumValue>> {
-  // Check if this field exists in the schema
+  // Whitelist of fields available in the ownership table
   const validFields = [
     'Asset Type',
     'Asset Name',
     'Immediate Owner Entity Name',
     '% Share of Ownership',
+    'Status',
+    'Country',
+    'Capacity (MW)',
+    'Capacity (Mtpa)',
+    'Nominal crude steel capacity (ttpa)',
+    'Nominal iron capacity (ttpa)',
+    'CapacityBcm/y',
+    'Project',
+    'Owner',
+    'Start year',
+    'Fuel type',
+    'Technology',
+    'Mine type',
+    'Feedstock',
   ];
 
   if (!validFields.includes(fieldName)) {
-    // Field doesn't exist in MotherDuck schema
+    // Field doesn't exist in ownership table schema
     return { success: true, data: [] };
   }
 

@@ -39,6 +39,57 @@
     // Add more trackers as CSVs become available
   };
 
+  // Field descriptions for generating synthetic metadata
+  const fieldDescriptions: Record<string, { category: string; definition: string }> = {
+    Status: { category: 'Main', definition: 'Current operating status of the asset.' },
+    Country: { category: 'Geography', definition: 'Country where the asset is located.' },
+    Owner: { category: 'Ownership', definition: 'Primary owner or operator.' },
+    'Immediate Owner Entity Name': { category: 'Ownership', definition: 'Direct ownership entity name.' },
+    'Start year': { category: 'Age', definition: 'Year the asset began or is planned to begin operation.' },
+    'Capacity (MW)': { category: 'Size', definition: 'Generating capacity in megawatts.' },
+    'Capacity (Mtpa)': { category: 'Size', definition: 'Production capacity in million tonnes per annum.' },
+    'Nominal crude steel capacity (ttpa)': { category: 'Size', definition: 'Nominal crude steel production capacity in thousand tonnes per annum.' },
+    'Nominal iron capacity (ttpa)': { category: 'Size', definition: 'Nominal iron production capacity in thousand tonnes per annum.' },
+    'CapacityBcm/y': { category: 'Size', definition: 'Pipeline capacity in billion cubic meters per year.' },
+    'Fuel type': { category: 'Details', definition: 'Type of fuel used by the plant.' },
+    Technology: { category: 'Details', definition: 'Technology or process type used.' },
+    'Mine type': { category: 'Details', definition: 'Type of mining operation (surface, underground, etc.).' },
+    Feedstock: { category: 'Details', definition: 'Primary feedstock material for bioenergy.' },
+    'Asset Name': { category: 'Names', definition: 'Name of the asset or project.' },
+    'Asset Type': { category: 'Main', definition: 'Type of asset tracked.' },
+    '% Share of Ownership': { category: 'Ownership', definition: 'Percentage ownership stake.' },
+  };
+
+  // Generate synthetic field metadata from tracker keyFields
+  function generateSyntheticFields(meta: TrackerMetadata): FieldInfo[] {
+    const fields: FieldInfo[] = [];
+    // Start with the tracker's key fields
+    for (const fieldName of meta.keyFields) {
+      const desc = fieldDescriptions[fieldName];
+      fields.push({
+        columnName: fieldName,
+        category: desc?.category || 'Other',
+        definition: desc?.definition || `${fieldName} field.`,
+      });
+    }
+    // Add common fields not already included
+    const included = new Set(fields.map(f => f.columnName));
+    const extras = ['Country', 'Immediate Owner Entity Name', '% Share of Ownership'];
+    for (const fieldName of extras) {
+      if (!included.has(fieldName)) {
+        const desc = fieldDescriptions[fieldName];
+        if (desc) {
+          fields.push({
+            columnName: fieldName,
+            category: desc.category,
+            definition: desc.definition,
+          });
+        }
+      }
+    }
+    return fields;
+  }
+
   // Fetch field distribution from DuckDB
   async function fetchFieldDistribution(
     fieldName: string
@@ -58,7 +109,10 @@
   async function loadFieldsMetadata() {
     const file = metadataFiles[slug];
     if (!file) {
-      console.log(`No field metadata CSV for tracker: ${slug}`);
+      // No CSV — generate from keyFields instead
+      if (metadata) {
+        fieldsMetadata = generateSyntheticFields(metadata);
+      }
       return;
     }
 
@@ -66,6 +120,8 @@
       const response = await fetch(file);
       if (!response.ok) {
         console.warn(`Failed to load ${file}: ${response.status}`);
+        // Fall back to synthetic fields
+        if (metadata) fieldsMetadata = generateSyntheticFields(metadata);
         return;
       }
       const text = await response.text();
@@ -108,6 +164,8 @@
 
     } catch (err) {
       console.error('Failed to load field metadata:', err);
+      // Fall back to synthetic fields
+      if (metadata) fieldsMetadata = generateSyntheticFields(metadata);
     }
   }
 
@@ -126,7 +184,7 @@
       }
     }, 300);
 
-    // Load field metadata CSV
+    // Load field metadata CSV (falls back to synthetic fields)
     await loadFieldsMetadata();
     loading = false;
   });
@@ -168,20 +226,20 @@
       <TrackerFactsheet
         tracker={trackerName}
         trackerTitle={metadata?.name}
+        trackerColor={metadata?.color}
         {fieldsMetadata}
         fetchDistribution={fetchFieldDistribution}
       />
     {:else}
       <div class="no-metadata">
-        <p>Field metadata CSV not yet available for {metadata?.name || trackerName}.</p>
-        <p class="hint">
-          Currently only <a href="/tracker/coal-mine">Coal Mine Tracker</a> has field definitions.
-          {#if metadata?.externalLinks?.gemPage}
-            <br />Or <a href={metadata.externalLinks.gemPage} target="_blank" rel="noopener">
-              visit the GEM project page
+        <p>No field data available for {metadata?.name || trackerName}.</p>
+        {#if metadata?.externalLinks?.gemPage}
+          <p class="hint">
+            <a href={metadata.externalLinks.gemPage} target="_blank" rel="noopener">
+              Visit the GEM project page
             </a> for documentation.
-          {/if}
-        </p>
+          </p>
+        {/if}
       </div>
     {/if}
 
