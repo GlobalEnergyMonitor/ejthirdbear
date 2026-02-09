@@ -10,10 +10,16 @@ import type { Handle } from '@sveltejs/kit';
 export const handle: Handle = async ({ event, resolve }) => {
   const response = await resolve(event);
 
-  // Add required headers for SharedArrayBuffer support
-  // 'require-corp' works in Safari (credentialless does not)
-  response.headers.set('Cross-Origin-Opener-Policy', 'same-origin');
-  response.headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
+  // Skip COEP/COOP for embed routes — they need to work in cross-origin iframes
+  // and use the REST API instead of DuckDB WASM
+  const isEmbedRoute = event.url.pathname.startsWith('/embed');
+
+  if (!isEmbedRoute) {
+    // Add required headers for SharedArrayBuffer support
+    // 'require-corp' works in Safari (credentialless does not)
+    response.headers.set('Cross-Origin-Opener-Policy', 'same-origin');
+    response.headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
+  }
 
   return response;
 };
