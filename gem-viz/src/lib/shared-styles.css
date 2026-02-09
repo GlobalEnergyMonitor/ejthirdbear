@@ -116,6 +116,13 @@
   --radius-card: 16px;
   --radius-card-lg: 24px;
 
+  /* Standard border radius scale */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
+  --radius-full: 9999px;
+
   /* ==========================================================================
      3. GEM CORE COLOR PALETTE
      Navy, Mint, Orange, Teal, Midnight, Warm White
