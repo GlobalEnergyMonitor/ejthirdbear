@@ -4,10 +4,23 @@
   import { link, entityLink } from '$lib/links';
   import EntityMicroCard from '$lib/components/EntityMicroCard.svelte';
   import AssetMicroCard from '$lib/components/AssetMicroCard.svelte';
-  import maplibregl from 'maplibre-gl';
   import 'maplibre-gl/dist/maplibre-gl.css';
-  import { colorByTracker, colors } from '$lib/design-tokens';
   import { investigationCart } from '$lib/investigationCart';
+  import { colorByTracker, colors } from '$lib/design-tokens';
+  import {
+    SUGGESTIONS,
+    QUICK_ENTITIES,
+    getToolIcon,
+    getToolSummary,
+    hasEntityResults,
+    hasAssetResults,
+    getEntityItems,
+    getAssetItems,
+    hasComparisonResults,
+    hasScreenerUrl,
+    hasMapResults,
+    createMapAction,
+  } from './gembot-utils';
 
   // Configure marked for safe inline rendering
   marked.setOptions({
@@ -114,23 +127,6 @@
     mentionedAssets = new Map(mentionedAssets);
   }
 
-  // Suggested queries for quick start
-  const SUGGESTIONS = [
-    { label: 'Who owns coal plants in India?' },
-    { label: "What's in BlackRock's energy portfolio?" },
-    { label: 'Show me retiring coal plants in Germany' },
-    { label: 'Find gas pipelines under construction' },
-    { label: 'Who are the biggest steel plant owners?' },
-  ];
-
-  // Quick entity searches
-  const QUICK_ENTITIES = [
-    { name: 'BlackRock', id: 'E100000000650' },
-    { name: 'Vanguard', id: 'E100000000651' },
-    { name: 'State Grid Corporation', id: 'E100000001234' },
-    { name: 'Adani Group', id: 'E100000002345' },
-  ];
-
   async function sendMessage(content = input.trim()) {
     if (!content || isLoading) return;
 
@@ -175,7 +171,6 @@
 
         for (const line of lines) {
           if (line.startsWith('event: ')) {
-            const eventType = line.slice(7);
             continue;
           }
           if (line.startsWith('data: ')) {
@@ -295,266 +290,15 @@
     }, 50);
   }
 
-  function formatToolName(name) {
-    return name.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-  }
-
-  function getToolIcon(_name) {
-    // Minimal indicator - no emoji
-    return '›';
-  }
-
-  // Format tool args for display
-  function formatToolArgs(args) {
-    if (!args || Object.keys(args).length === 0) return '';
-
-    const parts = [];
-    for (const [key, value] of Object.entries(args)) {
-      if (value === undefined || value === null) continue;
-      if (Array.isArray(value)) {
-        if (value.length > 0) {
-          parts.push(`${key}: [${value.length} items]`);
-        }
-      } else if (typeof value === 'object') {
-        parts.push(`${key}: {...}`);
-      } else {
-        // Truncate long strings
-        const strVal = String(value);
-        parts.push(`${key}: "${strVal.length > 30 ? strVal.slice(0, 30) + '...' : strVal}"`);
-      }
-    }
-    return parts.join(', ');
-  }
-
-  // Get a short summary of what the tool is doing
-  function getToolSummary(toolName, args) {
-    switch (toolName) {
-      case 'search_entities':
-        return args?.query ? `Search: "${args.query}"${args?.country ? ` (${args.country})` : ''}` : 'Search entities';
-      case 'search_assets':
-        return args?.tracker ? `Search ${args.tracker}${args?.country ? ` in ${args.country}` : ''}${args?.q ? `: "${args.q}"` : ''}` : 'Search assets';
-      case 'get_entity_details':
-        return args?.entity_id ? `Entity ${args.entity_id}` : 'Get entity details';
-      case 'get_entity_portfolio':
-        return args?.entity_id ? `Portfolio: ${args.entity_id}` : 'Get portfolio';
-      case 'get_entity_owners':
-        return args?.entity_id ? `Owners of ${args.entity_id}` : 'Trace owners';
-      case 'get_asset_details':
-        return args?.asset_id ? `Asset ${args.asset_id}` : 'Get asset';
-      case 'get_ownership_graph':
-        return args?.root_id ? `Graph: ${args.root_id} (${args?.direction || 'down'})` : 'Build graph';
-      case 'get_top_owners':
-        return `Top ${args?.tracker || 'energy'} owners${args?.country ? ` (${args.country})` : ''}`;
-      case 'get_top_owners_by_country':
-        return args?.country ? `Top ${args?.tracker || 'energy'} owners in ${args.country}` : 'Top owners by country';
-      case 'get_country_breakdown':
-        return args?.entity_id ? `Country breakdown: ${args.entity_id}` : 'Get country breakdown';
-      case 'generate_map':
-        return args?.title ? `Map: ${args.title}` : 'Generate map';
-      case 'get_status_breakdown':
-        return args?.entity_id ? `Status breakdown: ${args.entity_id}` : 'Get status breakdown';
-      case 'get_tracker_summary':
-        return args?.entity_id ? `Tracker summary: ${args.entity_id}` : 'Get tracker summary';
-      case 'generate_screener_url':
-        return 'Generate screener link';
-      case 'get_investigation_cart':
-        return 'Reading investigation cart';
-      case 'add_to_cart':
-        return `Adding ${args?.items?.length || 0} items to cart`;
-      case 'remove_from_cart':
-        return `Removing ${args?.ids?.length || 0} items from cart`;
-      case 'clear_cart':
-        return 'Clearing investigation cart';
-      default:
-        return toolName.replace(/_/g, ' ');
-    }
-  }
-
   // Render markdown using marked
   function renderMarkdown(text) {
     if (!text) return '';
     return marked.parse(text);
   }
 
-  // Check if tool result has entity data to render visually
-  function hasEntityResults(toolCall) {
-    const entitiesTools = ['search_entities', 'get_entity_portfolio', 'get_entity_owners'];
-    return entitiesTools.includes(toolCall.tool) && toolCall.result;
-  }
-
-  // Check if tool result has asset data to render visually
-  function hasAssetResults(toolCall) {
-    const assetTools = ['search_assets', 'get_asset_details'];
-    return assetTools.includes(toolCall.tool) && toolCall.result;
-  }
-
-  // Extract entity items from various tool result shapes
-  function getEntityItems(toolCall) {
-    const result = toolCall.result;
-    if (!result) return [];
-
-    // search_entities returns { entities: [...] }
-    if (result.entities) return result.entities;
-
-    // get_entity_portfolio returns { subsidiaries: [...] }
-    if (result.subsidiaries) return result.subsidiaries;
-
-    // get_entity_owners returns { owners: [...] }
-    if (result.owners) return result.owners;
-
-    return [];
-  }
-
-  // Extract asset items from tool results
-  function getAssetItems(toolCall) {
-    const result = toolCall.result;
-    if (!result) return [];
-
-    // search_assets returns { assets: [...] }
-    if (result.assets) return result.assets;
-
-    // get_asset_details returns a single asset
-    if (result.id && result.name) return [result];
-
-    return [];
-  }
-
-
-  // Check if tool result has analytics data (rankings, breakdowns)
-  function hasAnalyticsResults(toolCall) {
-    const analyticsTools = [
-      'get_top_owners',
-      'get_country_breakdown',
-      'get_status_breakdown',
-      'get_tracker_summary',
-      'get_owner_geographic_footprint',
-    ];
-    return analyticsTools.includes(toolCall.tool) && toolCall.result;
-  }
-
-  // Check if tool result has comparison data
-  function hasComparisonResults(toolCall) {
-    return toolCall.tool === 'compare_entities' && toolCall.result?.comparisons;
-  }
-
-  // Check if tool result has a screener URL
-  function hasScreenerUrl(toolCall) {
-    return toolCall.tool === 'generate_screener_url' && toolCall.result?.url;
-  }
-
-  // Check if tool result has map data
-  function hasMapResults(toolCall) {
-    return toolCall.tool === 'generate_map' && toolCall.result?.type === 'map';
-  }
-
-  // Map instances tracker
+  // Map instances tracker and action
   let mapInstances = new Map();
-
-  // Svelte action for initializing maps
-  function mapAction(container, { id, features }) {
-    if (mapInstances.has(id) || features.length === 0) {
-      return { destroy() {} };
-    }
-
-    // Small delay to ensure container is rendered
-    setTimeout(() => {
-      const map = new maplibregl.Map({
-        container,
-        style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
-        center: [0, 20],
-        zoom: 1,
-        maxZoom: 12,
-      });
-
-      map.addControl(new maplibregl.NavigationControl(), 'top-right');
-
-      map.on('load', () => {
-        // Add source
-        map.addSource('assets', {
-          type: 'geojson',
-          data: {
-            type: 'FeatureCollection',
-            features: features.map((f) => ({
-              type: 'Feature',
-              geometry: {
-                type: 'Point',
-                coordinates: [f.lng, f.lat],
-              },
-              properties: {
-                id: f.id,
-                name: f.name,
-                tracker: f.tracker,
-                status: f.status,
-                country: f.country,
-                capacity: f.capacity,
-                owner: f.owner,
-                color: colorByTracker.get(f.tracker) || colors.primary,
-              },
-            })),
-          },
-        });
-
-        // Add circle layer
-        map.addLayer({
-          id: 'assets-circles',
-          type: 'circle',
-          source: 'assets',
-          paint: {
-            'circle-radius': 8,
-            'circle-color': ['get', 'color'],
-            'circle-stroke-color': '#fff',
-            'circle-stroke-width': 2,
-            'circle-opacity': 0.9,
-          },
-        });
-
-        // Fit bounds
-        if (features.length > 0) {
-          const bounds = new maplibregl.LngLatBounds();
-          features.forEach((f) => bounds.extend([f.lng, f.lat]));
-          map.fitBounds(bounds, { padding: 50, maxZoom: 8 });
-        }
-
-        // Add popup on hover
-        const popup = new maplibregl.Popup({
-          closeButton: false,
-          closeOnClick: false,
-        });
-
-        map.on('mouseenter', 'assets-circles', (e) => {
-          map.getCanvas().style.cursor = 'pointer';
-          const props = e.features[0].properties;
-          popup
-            .setLngLat(e.lngLat)
-            .setHTML(`
-              <div style="font-size: 12px; line-height: 1.4;">
-                <strong>${props.name}</strong><br/>
-                ${props.tracker} • ${props.status}<br/>
-                ${props.country}${props.capacity ? ` • ${props.capacity} MW` : ''}
-              </div>
-            `)
-            .addTo(map);
-        });
-
-        map.on('mouseleave', 'assets-circles', () => {
-          map.getCanvas().style.cursor = '';
-          popup.remove();
-        });
-      });
-
-      mapInstances.set(id, map);
-    }, 100);
-
-    return {
-      destroy() {
-        const map = mapInstances.get(id);
-        if (map) {
-          map.remove();
-          mapInstances.delete(id);
-        }
-      },
-    };
-  }
+  const mapAction = createMapAction(mapInstances);
 
   onMount(() => {
     loadMessages();
@@ -581,29 +325,29 @@
           <!-- Welcome state -->
           <div class="welcome-state">
             <h2>Gembot</h2>
-            <p class="welcome-text">
+            <p class="lead text-center" style="max-width: 500px; margin: 0 auto var(--space-8);">
               Explore the Global Energy Monitor database. Ask about energy assets,
               ownership structures, or company portfolios.
             </p>
 
-            <div class="suggestions-section">
-              <h3>Try asking</h3>
+            <div class="suggestions-section mb-6">
+              <h3 class="section-header text-center">Try asking</h3>
               <div class="suggestions-grid">
                 {#each SUGGESTIONS as suggestion}
-                  <button class="suggestion-chip" onclick={() => sendMessage(suggestion.label)}>
+                  <button class="chip" onclick={() => sendMessage(suggestion.label)}>
                     {suggestion.label}
                   </button>
                 {/each}
               </div>
             </div>
 
-            <div class="capabilities-section">
-              <h3>Capabilities</h3>
-              <ul class="capabilities-list">
-                <li>Search companies and assets</li>
-                <li>Explore ownership portfolios</li>
-                <li>Trace ownership chains</li>
-                <li>Filter by country, status, capacity</li>
+            <div class="capabilities-section mb-6">
+              <h3 class="section-header text-center">Capabilities</h3>
+              <ul class="flex flex-wrap gap-3 justify-center" style="list-style: none;">
+                <li class="flex items-center gap-2 text-sm text-secondary">Search companies and assets</li>
+                <li class="flex items-center gap-2 text-sm text-secondary">Explore ownership portfolios</li>
+                <li class="flex items-center gap-2 text-sm text-secondary">Trace ownership chains</li>
+                <li class="flex items-center gap-2 text-sm text-secondary">Filter by country, status, capacity</li>
               </ul>
             </div>
           </div>
@@ -613,36 +357,36 @@
             <div class="message-wrapper {message.role}">
               <div class="message">
                 {#if message.role === 'user'}
-                  <div class="message-avatar user-avatar">You</div>
+                  <div class="avatar avatar--user">You</div>
                 {:else}
-                  <div class="message-avatar bot-avatar">G</div>
+                  <div class="avatar avatar--bot">G</div>
                 {/if}
 
                 <div class="message-content">
                   {#if message.toolCalls && message.toolCalls.length > 0}
-                    <div class="tool-calls-section">
+                    <div class="tool-calls-section flex flex-col gap-2">
                       {#each message.toolCalls as toolCall}
                         <details
-                          class="tool-call-block"
+                          class="detail-block"
                           open={hasEntityResults(toolCall) || hasAssetResults(toolCall)}
                         >
-                          <summary class="tool-call-header">
-                            <span class="tool-icon">{getToolIcon(toolCall.tool)}</span>
-                            <span class="tool-summary">{getToolSummary(toolCall.tool, toolCall.args)}</span>
+                          <summary class="detail-block__header">
+                            <span class="detail-block__icon">{getToolIcon(toolCall.tool)}</span>
+                            <span class="detail-block__title">{getToolSummary(toolCall.tool, toolCall.args)}</span>
                             {#if toolCall.result?.count !== undefined}
-                              <span class="tool-result-count">({toolCall.result.count})</span>
+                              <span class="detail-block__badge">({toolCall.result.count})</span>
                             {:else if toolCall.result?.entities?.length}
-                              <span class="tool-result-count">({toolCall.result.entities.length} found)</span>
+                              <span class="detail-block__badge">({toolCall.result.entities.length} found)</span>
                             {:else if toolCall.result?.subsidiaries?.length}
-                              <span class="tool-result-count">({toolCall.result.subsidiaries.length})</span>
+                              <span class="detail-block__badge">({toolCall.result.subsidiaries.length})</span>
                             {:else if toolCall.result?.owners?.length}
-                              <span class="tool-result-count">({toolCall.result.owners.length})</span>
+                              <span class="detail-block__badge">({toolCall.result.owners.length})</span>
                             {:else if toolCall.result?.features?.length}
-                              <span class="tool-result-count">({toolCall.result.features.length} locations)</span>
+                              <span class="detail-block__badge">({toolCall.result.features.length} locations)</span>
                             {/if}
                             <span class="tool-status">✓</span>
                           </summary>
-                          <div class="tool-call-details">
+                          <div class="detail-block__content">
                             <!-- Visual entity results -->
                             {#if hasEntityResults(toolCall)}
                               {@const entities = getEntityItems(toolCall)}
@@ -733,9 +477,9 @@
                                 <div class="ranking-list">
                                   {#each toolCall.result.owners.slice(0, 10) as owner, i}
                                     <div class="ranking-item">
-                                      <span class="rank">#{i + 1}</span>
-                                      <span class="rank-name">{owner.name}</span>
-                                      <span class="rank-value">{owner.assetCount} assets</span>
+                                      <span class="ranking-item__rank">#{i + 1}</span>
+                                      <span class="ranking-item__name">{owner.name}</span>
+                                      <span class="ranking-item__value">{owner.assetCount} assets</span>
                                     </div>
                                   {/each}
                                 </div>
@@ -751,9 +495,9 @@
                                 <div class="ranking-list">
                                   {#each toolCall.result.countries.slice(0, 10) as country, i}
                                     <div class="ranking-item">
-                                      <span class="rank">#{i + 1}</span>
-                                      <span class="rank-name">{country.country}</span>
-                                      <span class="rank-value">{country.assetCount} assets</span>
+                                      <span class="ranking-item__rank">#{i + 1}</span>
+                                      <span class="ranking-item__name">{country.country}</span>
+                                      <span class="ranking-item__value">{country.assetCount} assets</span>
                                     </div>
                                   {/each}
                                 </div>
@@ -892,7 +636,7 @@
                     </div>
                   {/if}
 
-                  <div class="message-text" class:error={message.error}>
+                  <div class="message-bubble {message.role === 'user' ? 'message-bubble--user' : 'message-bubble--assistant'}" class:message-bubble--error={message.error}>
                     {#if message.role === 'assistant'}
                       {@html renderMarkdown(message.content)}
                     {:else}
@@ -907,7 +651,7 @@
           {#if isLoading}
             <div class="message-wrapper assistant streaming">
               <div class="message">
-                <div class="message-avatar bot-avatar">G</div>
+                <div class="avatar avatar--bot">G</div>
                 <div class="message-content">
                   <!-- Phase 1: Thinking / waiting for LLM -->
                   {#if streamingStatus && !streamingText && activeTools.size === 0 && currentToolCalls.length === 0}
@@ -1003,12 +747,12 @@
             </svg>
           </button>
         </div>
-        <div class="input-actions">
-          <p class="input-hint">
+        <div class="input-actions flex justify-between items-center mt-4">
+          <p class="caption text-tertiary">
             Press Enter to send. Try asking "Who owns the most coal plants in China?"
           </p>
           {#if messages.length > 0}
-            <button class="clear-btn" onclick={clearHistory} disabled={isLoading}>
+            <button class="btn btn--ghost btn--small" onclick={clearHistory} disabled={isLoading}>
               Clear chat
             </button>
           {/if}
@@ -1020,8 +764,8 @@
     <aside class="chat-sidebar">
       <!-- Mentioned entities panel - shows when there's content -->
       {#if mentionedEntities.size > 0 || mentionedAssets.size > 0}
-        <div class="sidebar-section mentioned-panel">
-          <h4>📌 Discussed</h4>
+        <div class="sidebar-panel mentioned-panel">
+          <h4 class="sidebar-panel__title">📌 Discussed</h4>
           <div class="mentioned-scroll">
             {#if mentionedEntities.size > 0}
               <div class="mentioned-group">
@@ -1063,12 +807,12 @@
         </div>
       {/if}
 
-      <div class="sidebar-section">
-        <h4>Quick Searches</h4>
-        <div class="quick-buttons">
+      <div class="sidebar-panel">
+        <h4 class="sidebar-panel__title">Quick Searches</h4>
+        <div class="sidebar-panel__list">
           {#each SUGGESTIONS.slice(0, 3) as suggestion}
             <button
-              class="quick-btn"
+              class="chip"
               onclick={() => sendMessage(suggestion.label)}
               disabled={isLoading}
             >
@@ -1079,12 +823,12 @@
         </div>
       </div>
 
-      <div class="sidebar-section">
-        <h4>Popular Entities</h4>
-        <div class="entity-chips">
+      <div class="sidebar-panel">
+        <h4 class="sidebar-panel__title">Popular Entities</h4>
+        <div class="sidebar-panel__list">
           {#each QUICK_ENTITIES as entity}
             <button
-              class="entity-chip"
+              class="chip"
               onclick={() => sendMessage(`Tell me about ${entity.name}'s energy portfolio`)}
               disabled={isLoading}
             >
@@ -1094,35 +838,35 @@
         </div>
       </div>
 
-      <div class="sidebar-section">
-        <h4>Asset Types</h4>
-        <div class="asset-chips">
+      <div class="sidebar-panel">
+        <h4 class="sidebar-panel__title">Asset Types</h4>
+        <div class="sidebar-panel__list">
           <button
-            class="asset-chip"
+            class="chip"
             onclick={() => sendMessage('Show me coal plants')}
             disabled={isLoading}>Coal Plants</button
           >
           <button
-            class="asset-chip"
+            class="chip"
             onclick={() => sendMessage('Show me gas pipelines')}
             disabled={isLoading}>Gas Pipelines</button
           >
           <button
-            class="asset-chip"
+            class="chip"
             onclick={() => sendMessage('Show me steel plants')}
             disabled={isLoading}>Steel Plants</button
           >
           <button
-            class="asset-chip"
+            class="chip"
             onclick={() => sendMessage('Show me coal mines')}
             disabled={isLoading}>Coal Mines</button
           >
         </div>
       </div>
 
-      <div class="sidebar-section workflows-section">
-        <h4>Investigation Workflows</h4>
-        <div class="workflow-chips">
+      <div class="sidebar-panel workflows-section">
+        <h4 class="sidebar-panel__title">Investigation Workflows</h4>
+        <div class="sidebar-panel__list">
           <button
             class="workflow-chip"
             onclick={() =>
@@ -1179,13 +923,7 @@
 </div>
 
 <style>
-  /* Local radius definitions aligned with GEM design system */
-  :global(:root) {
-    --radius-sm: 2px;
-    --radius-md: 4px;
-    --radius-lg: 6px;
-    --radius-full: 9999px;
-  }
+  /* radius variables now in shared-styles.css */
 
   .gembot-container {
     min-height: 100vh;
@@ -1246,26 +984,9 @@
     margin-bottom: var(--space-3);
   }
 
-  .welcome-text {
-    color: var(--color-text-secondary);
-    max-width: 500px;
-    margin: 0 auto var(--space-8);
-    font-weight: var(--font-weight-regular);
-  }
+  /* welcome-text uses global .lead utility */
 
-  .suggestions-section,
-  .capabilities-section {
-    margin-bottom: var(--space-6);
-  }
-
-  .suggestions-section h3,
-  .capabilities-section h3 {
-    font-size: var(--font-size-sm);
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-wider);
-    color: var(--color-text-secondary);
-    margin-bottom: var(--space-3);
-  }
+  /* suggestions-section and capabilities-section use mb-6, section-header utilities */
 
   .suggestions-grid {
     display: flex;
@@ -1274,49 +995,12 @@
     justify-content: center;
   }
 
-  .suggestion-chip {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    padding: var(--space-2) var(--space-4);
-    background: var(--color-bg-secondary);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-full);
-    cursor: pointer;
-    transition: all 0.15s ease;
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
-  }
-
-  .suggestion-chip:hover {
-    background: var(--color-bg-tertiary);
-    border-color: var(--color-text-secondary);
-  }
-
+  /* chip-icon override if needed */
   .chip-icon {
     font-size: 1.1em;
   }
 
-  .capabilities-list {
-    list-style: none;
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-3);
-    justify-content: center;
-  }
-
-  .capabilities-list li {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
-    font-weight: var(--font-weight-regular);
-  }
-
-  .cap-icon {
-    font-size: 1.2em;
-  }
+  /* capabilities-list uses global flex utilities */
 
   /* Messages */
   .message-wrapper {
@@ -1334,25 +1018,8 @@
     margin-left: auto;
   }
 
-  .message-avatar {
-    width: 36px;
-    height: 36px;
-    border-radius: var(--radius-full);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-bold);
-    flex-shrink: 0;
-  }
-
-  .user-avatar {
-    background: var(--gem-navy);
-    color: white;
-  }
-
-  .bot-avatar {
-    background: var(--color-bg-secondary);
+  /* Bot avatar override for larger icon */
+  .avatar--bot {
     font-size: 1.25rem;
   }
 
@@ -1361,62 +1028,40 @@
     min-width: 0;
   }
 
-  .message-text {
-    padding: var(--space-3) var(--space-4);
-    border-radius: var(--radius-lg);
-    font-weight: var(--font-weight-regular);
-    line-height: var(--line-height-relaxed);
-  }
-
-  .message-wrapper.user .message-text {
-    background: var(--gem-navy);
-    color: white;
-    border-bottom-right-radius: var(--radius-sm);
-  }
-
-  .message-wrapper.assistant .message-text {
-    background: var(--color-bg-secondary);
-    border-bottom-left-radius: var(--radius-sm);
-  }
-
-  .message-text.error {
-    background: var(--color-error-bg, #fef2f2);
-    color: var(--color-error, #dc2626);
-  }
 
   /* Markdown styles inside messages */
-  .message-text :global(strong) {
+  .message-bubble :global(strong) {
     font-weight: var(--font-weight-bold);
   }
 
-  .message-text :global(em) {
+  .message-bubble :global(em) {
     font-style: italic;
   }
 
-  .message-text :global(a) {
+  .message-bubble :global(a) {
     color: var(--gem-navy);
     text-decoration: underline;
   }
 
-  .message-text :global(ul) {
+  .message-bubble :global(ul) {
     margin: var(--space-2) 0;
     padding-left: var(--space-4);
   }
 
-  .message-text :global(li) {
+  .message-bubble :global(li) {
     margin-bottom: var(--space-1);
     list-style: disc;
   }
 
-  .message-text :global(p) {
+  .message-bubble :global(p) {
     margin: 0 0 var(--space-2) 0;
   }
 
-  .message-text :global(p:last-child) {
+  .message-bubble :global(p:last-child) {
     margin-bottom: 0;
   }
 
-  .message-text :global(code) {
+  .message-bubble :global(code) {
     background: var(--color-bg-tertiary);
     padding: 2px 6px;
     border-radius: var(--radius-sm);
@@ -1424,7 +1069,7 @@
     font-size: 0.9em;
   }
 
-  .message-text :global(pre) {
+  .message-bubble :global(pre) {
     background: var(--color-bg-tertiary);
     padding: var(--space-3);
     border-radius: var(--radius-md);
@@ -1432,51 +1077,14 @@
     margin: var(--space-2) 0;
   }
 
-  .message-text :global(pre code) {
+  .message-bubble :global(pre code) {
     background: none;
     padding: 0;
   }
 
-  /* Tool calls */
+  /* Tool calls - page-specific overrides */
   .tool-calls-section {
     margin-bottom: var(--space-3);
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-  }
-
-  .tool-call-block {
-    background: var(--color-bg-tertiary);
-    border-radius: var(--radius-md);
-    border: 1px solid var(--color-border);
-    overflow: hidden;
-  }
-
-  .tool-call-header {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    padding: var(--space-2) var(--space-3);
-    cursor: pointer;
-    font-size: var(--font-size-sm);
-  }
-
-  .tool-call-header:hover {
-    background: var(--color-bg-secondary);
-  }
-
-  .tool-icon {
-    font-size: 1rem;
-  }
-
-  .tool-name {
-    font-weight: var(--font-weight-medium);
-  }
-
-  .tool-result-count {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-tertiary);
-    font-family: var(--font-family-mono, monospace);
   }
 
   .tool-status {
@@ -1484,13 +1092,7 @@
     color: var(--color-success, #16a34a);
   }
 
-  .tool-call-details {
-    padding: var(--space-3);
-    border-top: 1px solid var(--color-border);
-    font-size: var(--font-size-sm);
-  }
-
-  .tool-call-details pre {
+  .detail-block__content pre {
     background: var(--color-bg-primary);
     padding: var(--space-2);
     border-radius: var(--radius-sm);
@@ -1507,13 +1109,6 @@
 
   .tool-result:last-child {
     margin-bottom: 0;
-  }
-
-  .tool-summary {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-tertiary);
-    margin-left: auto;
-    margin-right: var(--space-2);
   }
 
   /* Visual results grids */
@@ -1610,41 +1205,7 @@
     color: var(--color-text-primary);
   }
 
-  .ranking-list {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-1);
-  }
-
-  .ranking-item {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    padding: var(--space-1) 0;
-    font-size: var(--font-size-sm);
-    border-bottom: 1px solid var(--color-border);
-  }
-
-  .ranking-item:last-child {
-    border-bottom: none;
-  }
-
-  .rank {
-    width: 24px;
-    color: var(--color-text-tertiary);
-    font-weight: var(--font-weight-bold);
-    font-size: var(--font-size-xs);
-  }
-
-  .rank-name {
-    flex: 1;
-    font-weight: var(--font-weight-medium);
-  }
-
-  .rank-value {
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-xs);
-  }
+  /* ranking-list and ranking-item use global utilities */
 
   .status-bars {
     display: flex;
@@ -1829,29 +1390,7 @@
     width: 100%;
   }
 
-  .map-legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-3);
-    padding: var(--space-2) var(--space-3);
-    background: var(--color-bg-secondary);
-    border-top: 1px solid var(--color-border);
-  }
-
-  .legend-item {
-    display: flex;
-    align-items: center;
-    gap: var(--space-1);
-    font-size: var(--font-size-xs);
-    color: var(--color-text-secondary);
-  }
-
-  .legend-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    border: 1px solid var(--color-bg-primary);
-  }
+  /* map-legend, legend-item, legend-dot use global utilities */
 
   .map-empty {
     padding: var(--space-4);
@@ -2075,39 +1614,9 @@
     cursor: not-allowed;
   }
 
-  .input-actions {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-top: var(--space-2);
-  }
+  /* input-actions and input-hint use global flex/caption utilities */
 
-  .input-hint {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-tertiary);
-    margin: 0;
-    font-weight: var(--font-weight-regular);
-  }
-
-  .clear-btn {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-tertiary);
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: var(--space-1) var(--space-2);
-    border-radius: var(--radius-sm);
-  }
-
-  .clear-btn:hover:not(:disabled) {
-    color: var(--color-text-secondary);
-    background: var(--color-bg-secondary);
-  }
-
-  .clear-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
+  /* clear-btn uses global btn--ghost btn--small */
 
   /* Sidebar */
   .chat-sidebar {
@@ -2116,56 +1625,7 @@
     gap: var(--space-5);
   }
 
-  .sidebar-section {
-    background: var(--color-bg-primary);
-    border-radius: var(--radius-lg);
-    border: 1px solid var(--color-border);
-    padding: var(--space-4);
-  }
-
-  .sidebar-section h4 {
-    font-size: var(--font-size-xs);
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-wider);
-    color: var(--color-text-secondary);
-    margin-bottom: var(--space-3);
-  }
-
-  .quick-buttons,
-  .entity-chips,
-  .asset-chips {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-  }
-
-  .quick-btn,
-  .entity-chip,
-  .asset-chip {
-    padding: var(--space-2) var(--space-3);
-    background: var(--color-bg-secondary);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    font-size: var(--font-size-sm);
-    text-align: left;
-    transition: all 0.15s ease;
-    font-weight: var(--font-weight-medium);
-  }
-
-  .quick-btn:hover:not(:disabled),
-  .entity-chip:hover:not(:disabled),
-  .asset-chip:hover:not(:disabled) {
-    background: var(--color-bg-tertiary);
-    border-color: var(--color-text-secondary);
-  }
-
-  .quick-btn:disabled,
-  .entity-chip:disabled,
-  .asset-chip:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
+  /* sidebar-panel and chip classes use global utilities */
 
   .sidebar-footer {
     padding: var(--space-4);
@@ -2200,11 +1660,7 @@
     color: var(--gem-navy);
   }
 
-  .workflow-chips {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-  }
+  /* workflow-chips uses sidebar-panel__list from utilities */
 
   .workflow-chip {
     display: flex;
