@@ -24,6 +24,8 @@
 
 import { unifiedQuery, type UnifiedQueryResult } from '$lib/data/unified-query';
 import type { QueryResult } from '$lib/duckdb-utils';
+import { getAssetTypeForTracker } from '$lib/data-config/tracker-schema';
+import { ASSET_ID_COALESCE, ASSET_ID_COALESCE_O } from '$lib/queries/constants';
 
 // Re-export UnifiedQueryResult for consumers who want source metadata
 export type { UnifiedQueryResult };
@@ -55,16 +57,8 @@ export type { UnifiedQueryResult };
 // Use ASSET_ID_COALESCE in queries to get the correct ID for any tracker.
 // ============================================================================
 
-/**
- * SQL fragment to get the asset ID regardless of tracker type.
- * Use this in SELECT and GROUP BY clauses.
- */
-export const ASSET_ID_COALESCE = `COALESCE("GEM unit ID", "GEM Mine ID", "Steel Plant ID", "GEM Asset ID", "ProjectID")`;
-
-/**
- * Same as ASSET_ID_COALESCE but with 'o.' table prefix for JOIN queries.
- */
-export const ASSET_ID_COALESCE_O = `COALESCE(o."GEM unit ID", o."GEM Mine ID", o."Steel Plant ID", o."GEM Asset ID", o."ProjectID")`;
+// Re-export constants for backwards compatibility
+export { ASSET_ID_COALESCE, ASSET_ID_COALESCE_O } from '$lib/queries/constants';
 
 // ============================================================================
 // TYPES
@@ -124,7 +118,7 @@ export async function getAssetGeoPoints(filters?: {
   const conditions: string[] = ['l."Latitude" IS NOT NULL'];
 
   if (filters?.tracker) {
-    conditions.push(`o."Tracker" = '${filters.tracker}'`);
+    conditions.push(`o."Asset Type" = '${filters.tracker}'`);
   }
   if (filters?.status) {
     conditions.push(`o."Status" = '${filters.status}'`);
@@ -139,7 +133,7 @@ export async function getAssetGeoPoints(filters?: {
       o."Project" as name,
       l."Latitude" as lat,
       l."Longitude" as lon,
-      o."Tracker" as tracker,
+      o."Asset Type" as tracker,
       o."Status" as status,
       o."Capacity (MW)" as capacity,
       o."Country" as country
@@ -171,7 +165,7 @@ export async function getAssetCoordinates(assetIds: string[]): Promise<QueryResu
       o."Project" as name,
       l."Latitude" as lat,
       l."Longitude" as lon,
-      o."Tracker" as tracker,
+      o."Asset Type" as tracker,
       o."Status" as status
     FROM ownership o
     LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
@@ -202,13 +196,15 @@ export async function getAssetCoordinates(assetIds: string[]): Promise<QueryResu
 export async function getFacetCounts(
   field: 'Tracker' | 'Status' | 'Country'
 ): Promise<QueryResult<FacetCount>> {
+  // Map 'Tracker' to actual column name 'Asset Type'
+  const sqlField = field === 'Tracker' ? 'Asset Type' : field;
   const sql = `
     SELECT
-      "${field}" as value,
+      "${sqlField}" as value,
       COUNT(DISTINCT ${ASSET_ID_COALESCE}) as count
     FROM ownership
-    WHERE "${field}" IS NOT NULL
-    GROUP BY "${field}"
+    WHERE "${sqlField}" IS NOT NULL
+    GROUP BY "${sqlField}"
     ORDER BY count DESC
   `;
 
@@ -230,7 +226,7 @@ export async function getFilteredCount(filters: {
 
   if (filters.trackers?.length) {
     const list = filters.trackers.map((t) => `'${t}'`).join(',');
-    conditions.push(`"Tracker" IN (${list})`);
+    conditions.push(`"Asset Type" IN (${list})`);
   }
   if (filters.statuses?.length) {
     const list = filters.statuses.map((s) => `'${s}'`).join(',');
@@ -275,7 +271,7 @@ export async function getFieldDistribution(
       "${fieldName}" as value,
       COUNT(*) as count
     FROM ownership
-    WHERE "Tracker" = '${tracker}'
+    WHERE "Asset Type" = '${tracker}'
     GROUP BY "${fieldName}"
     ORDER BY count DESC
   `;
@@ -290,10 +286,11 @@ export async function getFieldDistribution(
  *   GET /trackers/{tracker}/count
  */
 export async function getTrackerRowCount(tracker: string): Promise<number> {
+  const assetType = getAssetTypeForTracker(tracker) || tracker;
   const sql = `
     SELECT COUNT(*) as count
     FROM ownership
-    WHERE "Tracker" = '${tracker}'
+    WHERE "Asset Type" = '${assetType}'
   `;
 
   const result = await unifiedQuery<{ count: number }>(sql);
@@ -308,16 +305,18 @@ export async function getTrackerRowCount(tracker: string): Promise<number> {
  *   GET /stats/by-tracker
  */
 export async function getTrackerStats(): Promise<QueryResult<TrackerStats>> {
+  // Note: MotherDuck schema only has Asset Type, Asset ID, Asset Name, and owner info
+  // Status and Capacity are not available
   const sql = `
     SELECT
-      "Tracker" as tracker,
+      "Asset Type" as tracker,
       COUNT(DISTINCT ${ASSET_ID_COALESCE}) as assetCount,
-      SUM(COALESCE("Capacity (MW)", 0)) as totalCapacity,
-      COUNT(DISTINCT CASE WHEN "Status" = 'operating' THEN ${ASSET_ID_COALESCE} END) as operatingCount,
-      COUNT(DISTINCT CASE WHEN "Status" IN ('announced', 'construction', 'permitted', 'pre-permit') THEN ${ASSET_ID_COALESCE} END) as proposedCount
+      0 as totalCapacity,
+      0 as operatingCount,
+      0 as proposedCount
     FROM ownership
-    WHERE "Tracker" IS NOT NULL
-    GROUP BY "Tracker"
+    WHERE "Asset Type" IS NOT NULL
+    GROUP BY "Asset Type"
     ORDER BY assetCount DESC
   `;
 
@@ -356,7 +355,7 @@ export async function getOwnerAssets(
     SELECT
       ${ASSET_ID_COALESCE_O} as id,
       o."Project" as name,
-      o."Tracker" as tracker,
+      o."Asset Type" as tracker,
       o."Status" as status,
       o."Capacity (MW)" as capacity,
       COALESCE(l."Country.Area", 'Unknown') as country,
@@ -364,7 +363,7 @@ export async function getOwnerAssets(
     FROM ownership o
     LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
     WHERE o."Owner GEM Entity ID" = '${ownerEntityId}'
-    ORDER BY o."Tracker", o."Status", o."Project"
+    ORDER BY o."Asset Type", o."Status", o."Project"
     LIMIT ${safeLimit}
     OFFSET ${offset}
   `;
@@ -439,180 +438,18 @@ export async function resolveGPrefixId(gPrefixId: string): Promise<string | null
   return null;
 }
 
-// ============================================================================
-// WIDGET QUERIES
-// ============================================================================
-// REST API WISHLIST: GET /stats/top-owners, GET /stats/status-distribution
-// These power dashboard widgets with aggregated statistics
-// ============================================================================
+// Widget Queries - moved to $lib/queries/widget-queries.ts
+export {
+  getTopOwners,
+  getStatusDistribution,
+  getCountryBreakdown,
+  type TopOwnerResult,
+  type StatusCount,
+  type CountryCount,
+} from '$lib/queries/widget-queries';
 
-export interface TopOwnerResult {
-  owner_name: string;
-  entity_id: string;
-  value: number;
-  asset_count: number;
-}
-
-/**
- * Get top owners by asset count or capacity
- *
- * REST API equivalent needed:
- *   GET /stats/top-owners?metric=assets&limit=10
- *   GET /stats/top-owners?metric=capacity&tracker=Coal+Plant
- */
-export async function getTopOwners(options: {
-  limit?: number;
-  metric?: 'assets' | 'capacity';
-  tracker?: string | null;
-}): Promise<QueryResult<TopOwnerResult>> {
-  const { limit = 10, metric = 'assets', tracker = null } = options;
-  const trackerFilter = tracker ? `AND "Tracker" = '${tracker}'` : '';
-  const capacityCol = metric === 'capacity' ? 'SUM(COALESCE("Capacity (MW)", 0))' : 'COUNT(*)';
-
-  const sql = `
-    SELECT
-      "Owner" as owner_name,
-      "Owner GEM Entity ID" as entity_id,
-      ${capacityCol} as value,
-      COUNT(DISTINCT ${ASSET_ID_COALESCE}) as asset_count
-    FROM ownership
-    WHERE "Owner" IS NOT NULL AND "Owner" != ''
-    ${trackerFilter}
-    GROUP BY "Owner", "Owner GEM Entity ID"
-    ORDER BY value DESC
-    LIMIT ${limit}
-  `;
-
-  return unifiedQuery<TopOwnerResult>(sql);
-}
-
-export interface StatusCount {
-  status: string;
-  count: number;
-}
-
-/**
- * Get status distribution (raw counts before regrouping)
- *
- * REST API equivalent needed:
- *   GET /stats/status-distribution
- *   GET /stats/status-distribution?tracker=Coal+Plant
- */
-export async function getStatusDistribution(
-  tracker?: string | null
-): Promise<QueryResult<StatusCount>> {
-  const trackerFilter = tracker ? `WHERE "Tracker" = '${tracker}'` : '';
-
-  const sql = `
-    SELECT
-      "Status" as status,
-      COUNT(DISTINCT ${ASSET_ID_COALESCE}) as count
-    FROM ownership
-    ${trackerFilter}
-    GROUP BY "Status"
-    ORDER BY count DESC
-  `;
-
-  return unifiedQuery<StatusCount>(sql);
-}
-
-export interface CountryCount {
-  country: string;
-  asset_count: number;
-  total_capacity: number;
-}
-
-/**
- * Get assets by country breakdown
- *
- * REST API equivalent needed:
- *   GET /stats/by-country?limit=15
- *   GET /stats/by-country?tracker=Coal+Plant
- */
-export async function getCountryBreakdown(options: {
-  limit?: number;
-  tracker?: string | null;
-}): Promise<QueryResult<CountryCount>> {
-  const { limit = 15, tracker = null } = options;
-  const trackerFilter = tracker ? `WHERE o."Tracker" = '${tracker}'` : '';
-
-  const sql = `
-    SELECT
-      COALESCE(l."Country.Area", 'Unknown') as country,
-      COUNT(DISTINCT ${ASSET_ID_COALESCE_O}) as asset_count,
-      SUM(COALESCE(o."Capacity (MW)", 0)) as total_capacity
-    FROM ownership o
-    LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
-    ${trackerFilter}
-    GROUP BY 1
-    ORDER BY asset_count DESC
-    LIMIT ${limit}
-  `;
-
-  return unifiedQuery<CountryCount>(sql);
-}
-
-// ============================================================================
-// INVESTIGATION MAP QUERIES
-// ============================================================================
-// REST API WISHLIST: POST /assets/locations { entityIds: [...], assetIds: [...] }
-// Returns locations for assets owned by entities or specific asset IDs
-// ============================================================================
-
-export interface InvestigationLocation {
-  asset_id: string;
-  name: string;
-  tracker: string;
-  status: string;
-  lat: number;
-  lng: number;
-  country: string;
-  capacity: number | null;
-  owner: string;
-}
-
-/**
- * Get asset locations for investigation map
- *
- * REST API equivalent needed:
- *   POST /assets/locations { entityIds: [...], assetIds: [...] }
- *
- * Used by InvestigationMap to show assets for selected entities
- */
-export async function getInvestigationLocations(
-  entityIds: string[],
-  assetIds: string[]
-): Promise<QueryResult<InvestigationLocation>> {
-  if (entityIds.length === 0 && assetIds.length === 0) {
-    return { success: true, data: [] };
-  }
-
-  const entityList =
-    entityIds.length > 0 ? entityIds.map((id) => `'${id}'`).join(',') : "'__none__'";
-  const assetList = assetIds.length > 0 ? assetIds.map((id) => `'${id}'`).join(',') : "'__none__'";
-
-  const sql = `
-    SELECT DISTINCT
-      ${ASSET_ID_COALESCE_O} as asset_id,
-      o."Project" as name,
-      o."Tracker" as tracker,
-      o."Status" as status,
-      l."Latitude" as lat,
-      l."Longitude" as lng,
-      l."Country.Area" as country,
-      TRY_CAST(o."Capacity (MW)" AS DOUBLE) as capacity,
-      o."Owner" as owner
-    FROM ownership o
-    LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
-    WHERE (o."Owner GEM Entity ID" IN (${entityList})
-       OR ${ASSET_ID_COALESCE_O} IN (${assetList}))
-      AND l."Latitude" IS NOT NULL
-      AND l."Longitude" IS NOT NULL
-    LIMIT 500
-  `;
-
-  return unifiedQuery<InvestigationLocation>(sql);
-}
+// Investigation Map Queries - moved to $lib/queries/investigation-map.ts
+export { getInvestigationLocations, type InvestigationLocation } from '$lib/queries/investigation-map';
 
 // ============================================================================
 // FACTSHEET QUERIES
@@ -650,7 +487,8 @@ export async function getFactsheetAssets(options: {
 
   const conditions: string[] = [];
   if (tracker) {
-    conditions.push(`"Tracker" = '${tracker.replace(/'/g, "''")}'`);
+    const assetType = getAssetTypeForTracker(tracker) || tracker;
+    conditions.push(`"Asset Type" = '${assetType.replace(/'/g, "''")}'`);
   }
   if (statusFilter && statusFilter.length > 0) {
     const escaped = statusFilter.map((s) => `'${s.toLowerCase().replace(/'/g, "''")}'`).join(', ');
@@ -668,7 +506,7 @@ export async function getFactsheetAssets(options: {
 
   const sql = `
     SELECT DISTINCT
-      COALESCE("GEM unit ID", "GEM Mine ID", "Steel Plant ID", "GEM Asset ID", "ProjectID") as id,
+      "Asset ID" as id,
       "Project" as name,
       "Status" as status,
       COALESCE("Capacity (MW)", "Capacity (Mtpa)") as capacity,
@@ -676,7 +514,7 @@ export async function getFactsheetAssets(options: {
       "Country" as country,
       "State" as state,
       "Owner" as owner,
-      "Tracker" as tracker
+      "Asset Type" as tracker
     FROM ownership
     ${whereClause}
     ORDER BY ${sortCol} ${orderDir} NULLS LAST
@@ -698,8 +536,9 @@ export interface CapacityData {
  *   GET /trackers/{tracker}/capacities
  */
 export async function getCapacities(tracker?: string | null): Promise<QueryResult<CapacityData>> {
-  const whereClause = tracker
-    ? `WHERE "Tracker" = '${tracker.replace(/'/g, "''")}' AND COALESCE("Capacity (MW)", "Capacity (Mtpa)") IS NOT NULL`
+  const assetType = tracker ? getAssetTypeForTracker(tracker) || tracker : null;
+  const whereClause = assetType
+    ? `WHERE "Asset Type" = '${assetType.replace(/'/g, "''")}' AND COALESCE("Capacity (MW)", "Capacity (Mtpa)") IS NOT NULL`
     : `WHERE COALESCE("Capacity (MW)", "Capacity (Mtpa)") IS NOT NULL`;
 
   const sql = `
@@ -724,12 +563,13 @@ export async function getFieldStats(
   fieldName: string,
   limit = 100
 ): Promise<QueryResult<FieldDistribution>> {
+  const assetType = getAssetTypeForTracker(tracker) || tracker;
   const sql = `
     SELECT
       "${fieldName.replace(/"/g, '""')}" as value,
       COUNT(*) as count
     FROM ownership
-    WHERE "Tracker" = '${tracker.replace(/'/g, "''")}'
+    WHERE "Asset Type" = '${assetType.replace(/'/g, "''")}'
     GROUP BY "${fieldName.replace(/"/g, '""')}"
     ORDER BY count DESC
     LIMIT ${limit}
@@ -776,7 +616,7 @@ export async function getAssetFallback(assetId: string): Promise<QueryResult<Ass
     SELECT DISTINCT
       ${ASSET_ID_COALESCE} as id,
       "Project" as name,
-      "Tracker" as tracker,
+      "Asset Type" as tracker,
       "Status" as status,
       "Capacity (MW)" as capacity,
       "Owner" as owner
@@ -857,20 +697,200 @@ export async function getSampleAssets(
   tracker: string,
   limit = 5
 ): Promise<QueryResult<SampleAsset>> {
+  const assetType = getAssetTypeForTracker(tracker) || tracker;
   const sql = `
     SELECT DISTINCT
       ${ASSET_ID_COALESCE} as id,
-      "Project" as name,
+      "Asset Name" as name,
       "Status" as status,
-      "Capacity (Mtpa)" as capacity,
+      "Capacity" as capacity,
       "Country" as country,
-      "State" as state,
-      "Owner" as owner
+      "State/Province" as state,
+      "Immediate Owner Entity Name" as owner
     FROM ownership
-    WHERE "Tracker" = '${tracker.replace(/'/g, "''")}'
+    WHERE "Asset Type" = '${assetType.replace(/'/g, "''")}'
     ORDER BY capacity DESC NULLS LAST
     LIMIT ${limit}
   `;
 
   return unifiedQuery<SampleAsset>(sql);
+}
+
+// ============================================================================
+// TRACKER PAGE QUERIES
+// ============================================================================
+// REST API WISHLIST: GET /trackers/{tracker}/countries, GET /trackers/{tracker}/top-owners
+// These power the /tracker/[slug] pages with tracker-specific breakdowns
+// ============================================================================
+
+export interface TrackerCountryBreakdown {
+  country: string;
+  assetCount: number;
+  totalCapacity: number;
+}
+
+/**
+ * Get top countries for a tracker
+ *
+ * REST API equivalent needed:
+ *   GET /trackers/{tracker}/countries?limit=10
+ */
+export async function getTrackerCountryBreakdown(
+  _tracker: string,
+  _limit = 10
+): Promise<QueryResult<TrackerCountryBreakdown>> {
+  // Note: MotherDuck schema doesn't have country data
+  // Return empty result
+  return {
+    success: true,
+    data: [],
+  };
+}
+
+export interface TrackerTopOwner {
+  ownerName: string;
+  entityId: string;
+  assetCount: number;
+  totalCapacity: number;
+}
+
+/**
+ * Get top owners for a tracker
+ *
+ * REST API equivalent needed:
+ *   GET /trackers/{tracker}/top-owners?limit=5
+ */
+export async function getTrackerTopOwners(
+  tracker: string,
+  limit = 5
+): Promise<QueryResult<TrackerTopOwner>> {
+  const assetType = getAssetTypeForTracker(tracker) || tracker;
+  const sql = `
+    SELECT
+      "Immediate Owner Entity Name" as ownerName,
+      "Immediate Owner Entity ID" as entityId,
+      COUNT(DISTINCT ${ASSET_ID_COALESCE}) as assetCount,
+      0 as totalCapacity
+    FROM ownership
+    WHERE "Asset Type" = '${assetType.replace(/'/g, "''")}'
+      AND "Immediate Owner Entity Name" IS NOT NULL
+      AND "Immediate Owner Entity Name" != ''
+    GROUP BY "Immediate Owner Entity Name", "Immediate Owner Entity ID"
+    ORDER BY assetCount DESC
+    LIMIT ${limit}
+  `;
+
+  return unifiedQuery<TrackerTopOwner>(sql);
+}
+
+export interface TrackerFieldSchema {
+  fieldName: string;
+  uniqueCount: number;
+  nullCount: number;
+  totalCount: number;
+  sampleValues: string[];
+}
+
+/**
+ * Get schema information for a tracker - all fields with unique value counts
+ *
+ * REST API equivalent needed:
+ *   GET /trackers/{tracker}/schema
+ *
+ * NOTE: MotherDuck schema is limited. Only these fields exist:
+ * - Asset Type, Asset ID, Asset Unit ID, Asset Name
+ * - Immediate Owner Entity ID, Immediate Owner Entity Name
+ * - % Share of Ownership
+ */
+export async function getTrackerSchema(tracker: string): Promise<QueryResult<TrackerFieldSchema>> {
+  const assetType = getAssetTypeForTracker(tracker) || tracker;
+  // Only analyze fields that exist in the MotherDuck schema
+  const fieldsToAnalyze = [
+    'Asset Type',
+    'Asset Name',
+    'Immediate Owner Entity Name',
+    '% Share of Ownership',
+  ];
+
+  const fieldQueries = fieldsToAnalyze.map(
+    (field) => `
+    SELECT
+      '${field}' as fieldName,
+      COUNT(DISTINCT "${field}") as uniqueCount,
+      SUM(CASE WHEN "${field}" IS NULL THEN 1 ELSE 0 END) as nullCount,
+      COUNT(*) as totalCount
+    FROM ownership
+    WHERE "Asset Type" = '${assetType.replace(/'/g, "''")}'
+  `
+  );
+
+  const sql = fieldQueries.join(' UNION ALL ');
+
+  const result = await unifiedQuery<Omit<TrackerFieldSchema, 'sampleValues'>>(sql);
+
+  if (!result.success || !result.data) {
+    return { success: false, error: result.error };
+  }
+
+  // Filter to fields that actually exist (uniqueCount > 0 or have data)
+  const fieldsWithData = result.data.filter((f) => f.uniqueCount > 0 || f.nullCount < f.totalCount);
+
+  return {
+    success: true,
+    data: fieldsWithData.map((f) => ({ ...f, sampleValues: [] })),
+  };
+}
+
+export interface FieldEnumValue {
+  value: string;
+  count: number;
+  percentage: number;
+}
+
+/**
+ * Get enum values for a specific field in a tracker
+ *
+ * REST API equivalent needed:
+ *   GET /trackers/{tracker}/fields/{field}/values
+ *
+ * NOTE: Only fields in the MotherDuck schema will return data.
+ * Status, Country, Capacity etc. are not available.
+ */
+export async function getTrackerFieldValues(
+  tracker: string,
+  fieldName: string,
+  limit = 20
+): Promise<QueryResult<FieldEnumValue>> {
+  // Check if this field exists in the schema
+  const validFields = [
+    'Asset Type',
+    'Asset Name',
+    'Immediate Owner Entity Name',
+    '% Share of Ownership',
+  ];
+
+  if (!validFields.includes(fieldName)) {
+    // Field doesn't exist in MotherDuck schema
+    return { success: true, data: [] };
+  }
+
+  const assetType = getAssetTypeForTracker(tracker) || tracker;
+  const sql = `
+    WITH total AS (
+      SELECT COUNT(*) as total_rows
+      FROM ownership
+      WHERE "Asset Type" = '${assetType.replace(/'/g, "''")}'
+    )
+    SELECT
+      COALESCE(CAST("${fieldName.replace(/"/g, '""')}" AS VARCHAR), '(null)') as value,
+      COUNT(*) as count,
+      ROUND(COUNT(*) * 100.0 / MAX(total.total_rows), 1) as percentage
+    FROM ownership, total
+    WHERE "Asset Type" = '${assetType.replace(/'/g, "''")}'
+    GROUP BY "${fieldName.replace(/"/g, '""')}"
+    ORDER BY count DESC
+    LIMIT ${limit}
+  `;
+
+  return unifiedQuery<FieldEnumValue>(sql);
 }
