@@ -6,18 +6,25 @@
 
   import { onMount } from 'svelte';
   import { investigationCart } from '$lib/investigationCart';
-  import { widgetQuery } from '$lib/widgets/widget-utils';
   import { link, assetLink, entityLink } from '$lib/links';
-  import { buildIdList } from '$lib/utils/sql';
-  import TrackerIcon from '$lib/components/TrackerIcon.svelte';
   import Citation from '$lib/components/Citation.svelte';
   import DebugPanel from '$lib/components/DebugPanel.svelte';
   import EntityMicroCard from '$lib/components/EntityMicroCard.svelte';
   import AssetMicroCard from '$lib/components/AssetMicroCard.svelte';
   import DataTable from '$lib/components/DataTable.svelte';
   import { OwnershipTreeGraph } from '$lib/components/ownership';
-  import { getEntityGraphUp } from '$lib/ownership-api';
-  import { ASSET_ID_COALESCE_O } from '$lib/duckdb-queries';
+  import {
+    queryEntityPortfolios,
+    fetchOwnershipGraphs,
+    querySharedAssets,
+    queryCommonOwners,
+    queryGeoBreakdown,
+    queryTrackerBreakdown,
+    querySummary,
+    defaultLoadingSteps,
+    type ReportSummary,
+    type OwnershipGraph,
+  } from './report-queries';
 
   // State
   let loading = $state(true);
@@ -27,18 +34,18 @@
   let geoBreakdown = $state<any[]>([]);
   let entityPortfolios = $state<any[]>([]);
   let trackerBreakdown = $state<any[]>([]);
-  let summary = $state({
+  let summary = $state<ReportSummary>({
     totalAssets: 0,
     totalCapacity: 0,
     countries: 0,
-    trackers: [] as string[],
+    trackers: [],
     totalOwners: 0,
   });
   let queryTime = $state(0);
   let debugLogs = $state<string[]>([]);
 
   // Ownership graph data for entities
-  let entityOwnershipGraphs = $state<Map<string, { nodes: any[]; edges: any[]; paths?: any }>>(new Map());
+  let entityOwnershipGraphs = $state<Map<string, OwnershipGraph>>(new Map());
   let selectedEntityForGraph = $state<string | null>(null);
 
   // Loading progress state
@@ -51,16 +58,7 @@
     ms?: number;
   };
 
-  let loadingSteps = $state<QueryStep[]>([
-    { id: 'init', label: 'Initializing DuckDB connection', status: 'pending' },
-    { id: 'portfolios', label: 'Querying entity portfolios', status: 'pending' },
-    { id: 'ownership', label: 'Fetching ownership graphs', status: 'pending' },
-    { id: 'shared', label: 'Finding co-owned assets', status: 'pending' },
-    { id: 'owners', label: 'Identifying common owners', status: 'pending' },
-    { id: 'geo', label: 'Analyzing geographic distribution', status: 'pending' },
-    { id: 'trackers', label: 'Breaking down by asset type', status: 'pending' },
-    { id: 'summary', label: 'Computing summary statistics', status: 'pending' },
-  ]);
+  let loadingSteps = $state<QueryStep[]>([...defaultLoadingSteps]);
 
   let loadingStartTime = $state(0);
   let loadingElapsed = $state(0);
@@ -88,224 +86,6 @@
   function log(msg: string) {
     debugLogs = [...debugLogs, `${new Date().toISOString().slice(11, 19)} ${msg}`];
     console.log('[report]', msg);
-  }
-
-  // Query for entity portfolios (when entities in cart)
-  async function queryEntityPortfolios() {
-    if (entityIds.length < 1) return [];
-    log(`Querying portfolios for ${entityIds.length} entities`);
-
-    const idList = buildIdList(entityIds);
-    const sql = `
-      SELECT
-        o."Owner GEM Entity ID" as entity_id,
-        MAX(o."Owner") as entity_name,
-        MAX(o."Owner Headquarters Country") as hq_country,
-        COUNT(DISTINCT ${ASSET_ID_COALESCE_O}) as asset_count,
-        SUM(CAST(o."Capacity (MW)" AS DOUBLE)) as total_capacity_mw,
-        AVG(CAST(o."Share" AS DOUBLE)) as avg_share_pct,
-        COUNT(DISTINCT CASE WHEN o."Status" = 'operating' THEN ${ASSET_ID_COALESCE_O} END) as operating,
-        COUNT(DISTINCT CASE WHEN o."Status" IN ('proposed', 'announced', 'pre-permit', 'permitted') THEN ${ASSET_ID_COALESCE_O} END) as proposed,
-        COUNT(DISTINCT CASE WHEN o."Status" IN ('construction', 'under construction') THEN ${ASSET_ID_COALESCE_O} END) as construction,
-        STRING_AGG(DISTINCT o."Tracker", ', ') as trackers
-      FROM ownership o
-      WHERE o."Owner GEM Entity ID" IN (${idList})
-      GROUP BY o."Owner GEM Entity ID"
-      ORDER BY total_capacity_mw DESC
-    `;
-
-    const result = await widgetQuery(sql);
-    log(`Entity portfolios: ${result.success ? result.data?.length : 'error'}`);
-    return result.success ? result.data || [] : [];
-  }
-
-  // Fetch ownership graphs for all entities (via API)
-  async function fetchOwnershipGraphs() {
-    if (entityIds.length < 1) return new Map();
-    log(`Fetching ownership graphs for ${entityIds.length} entities`);
-
-    const graphs = new Map<string, { nodes: any[]; edges: any[]; paths?: any }>();
-
-    // Fetch graphs in parallel (limit to 5 concurrent)
-    const batchSize = 5;
-    for (let i = 0; i < entityIds.length; i += batchSize) {
-      const batch = entityIds.slice(i, i + batchSize);
-      const results = await Promise.allSettled(
-        batch.map(async (id) => {
-          try {
-            const graph = await getEntityGraphUp(id);
-            return { id, graph };
-          } catch (err) {
-            console.warn(`Failed to fetch ownership graph for ${id}:`, err);
-            return { id, graph: null };
-          }
-        })
-      );
-
-      for (const result of results) {
-        if (result.status === 'fulfilled' && result.value.graph) {
-          const { id, graph } = result.value;
-          graphs.set(id, {
-            nodes: graph.nodes || [],
-            edges: graph.edges || [],
-          });
-        }
-      }
-    }
-
-    log(`Fetched ${graphs.size} ownership graphs`);
-    return graphs;
-  }
-
-  // Query for shared assets (when entities in cart)
-  async function querySharedAssets() {
-    if (entityIds.length < 2) return []; // Need at least 2 entities to find shared assets
-    log(`Querying shared assets for ${entityIds.length} entities`);
-
-    const idList = buildIdList(entityIds);
-    const sql = `
-      WITH entity_assets AS (
-        SELECT
-          ${ASSET_ID_COALESCE_O} as asset_id,
-          o."Project" as asset_name,
-          o."Tracker" as tracker,
-          o."Status" as status,
-          COALESCE(CAST(o."Capacity (MW)" AS DOUBLE), 0) as capacity_mw,
-          o."Owner GEM Entity ID" as entity_id,
-          o."Owner" as owner_name
-        FROM ownership o
-        WHERE o."Owner GEM Entity ID" IN (${idList})
-          AND ${ASSET_ID_COALESCE_O} IS NOT NULL
-      )
-      SELECT
-        asset_id,
-        asset_name,
-        tracker,
-        status,
-        MAX(capacity_mw) as capacity_mw,
-        COUNT(DISTINCT entity_id) as co_owner_count,
-        STRING_AGG(DISTINCT owner_name, '; ') as co_owners
-      FROM entity_assets
-      GROUP BY asset_id, asset_name, tracker, status
-      HAVING COUNT(DISTINCT entity_id) > 1
-      ORDER BY co_owner_count DESC, capacity_mw DESC
-      LIMIT 100
-    `;
-
-    const result = await widgetQuery(sql);
-    log(`Shared assets: ${result.success ? result.data?.length : 'error'}`);
-    return result.success ? result.data || [] : [];
-  }
-
-  // Query for common owners (when assets in cart)
-  async function queryCommonOwners() {
-    if (assetIds.length < 1) return [];
-    log(`Querying common owners for ${assetIds.length} assets`);
-
-    const idList = buildIdList(assetIds);
-    const sql = `
-      SELECT
-        o."Owner GEM Entity ID" as entity_id,
-        MAX(o."Owner") as entity_name,
-        MAX(o."Owner Headquarters Country") as hq_country,
-        COUNT(DISTINCT ${ASSET_ID_COALESCE_O}) as asset_count,
-        SUM(CAST(o."Capacity (MW)" AS DOUBLE)) as total_capacity_mw,
-        AVG(CAST(o."Share" AS DOUBLE)) as avg_share_pct
-      FROM ownership o
-      WHERE ${ASSET_ID_COALESCE_O} IN (${idList})
-        AND o."Owner" IS NOT NULL AND o."Owner" != ''
-      GROUP BY o."Owner GEM Entity ID"
-      ORDER BY asset_count DESC, total_capacity_mw DESC
-      LIMIT 100
-    `;
-
-    const result = await widgetQuery(sql);
-    log(`Common owners: ${result.success ? result.data?.length : 'error'}`);
-    return result.success ? result.data || [] : [];
-  }
-
-  // Query for geographic breakdown
-  async function queryGeoBreakdown() {
-    log('Querying geographic breakdown');
-    const entityList = entityIds.length > 0 ? buildIdList(entityIds) : "'__none__'";
-    const assetList = assetIds.length > 0 ? buildIdList(assetIds) : "'__none__'";
-
-    const sql = `
-      SELECT
-        COALESCE(l."Country.Area", 'Unknown') as country,
-        COUNT(DISTINCT ${ASSET_ID_COALESCE_O}) as asset_count,
-        SUM(CAST(o."Capacity (MW)" AS DOUBLE)) as total_capacity,
-        COUNT(DISTINCT o."Owner GEM Entity ID") as entity_count
-      FROM ownership o
-      LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
-      WHERE o."Owner GEM Entity ID" IN (${entityList})
-         OR ${ASSET_ID_COALESCE_O} IN (${assetList})
-      GROUP BY 1
-      ORDER BY asset_count DESC
-      LIMIT 20
-    `;
-
-    const result = await widgetQuery(sql);
-    log(`Geo breakdown: ${result.success ? result.data?.length : 'error'}`);
-    return result.success ? result.data || [] : [];
-  }
-
-  // Query for tracker breakdown
-  async function queryTrackerBreakdown() {
-    log('Querying tracker breakdown');
-    const entityList = entityIds.length > 0 ? buildIdList(entityIds) : "'__none__'";
-    const assetList = assetIds.length > 0 ? buildIdList(assetIds) : "'__none__'";
-
-    const sql = `
-      SELECT
-        o."Tracker" as tracker,
-        COUNT(DISTINCT ${ASSET_ID_COALESCE_O}) as asset_count,
-        SUM(CAST(o."Capacity (MW)" AS DOUBLE)) as total_capacity,
-        COUNT(DISTINCT CASE WHEN o."Status" = 'operating' THEN ${ASSET_ID_COALESCE_O} END) as operating,
-        COUNT(DISTINCT CASE WHEN o."Status" IN ('proposed', 'announced', 'pre-permit', 'permitted') THEN ${ASSET_ID_COALESCE_O} END) as proposed
-      FROM ownership o
-      WHERE o."Owner GEM Entity ID" IN (${entityList})
-         OR ${ASSET_ID_COALESCE_O} IN (${assetList})
-      GROUP BY 1
-      ORDER BY asset_count DESC
-    `;
-
-    const result = await widgetQuery(sql);
-    log(`Tracker breakdown: ${result.success ? result.data?.length : 'error'}`);
-    return result.success ? result.data || [] : [];
-  }
-
-  // Query for summary stats
-  async function querySummary() {
-    log('Querying summary');
-    const entityList = entityIds.length > 0 ? buildIdList(entityIds) : "'__none__'";
-    const assetList = assetIds.length > 0 ? buildIdList(assetIds) : "'__none__'";
-
-    const sql = `
-      SELECT
-        COUNT(DISTINCT ${ASSET_ID_COALESCE_O}) as total_assets,
-        SUM(CAST(o."Capacity (MW)" AS DOUBLE)) as total_capacity,
-        COUNT(DISTINCT COALESCE(l."Country.Area", 'Unknown')) as countries,
-        COUNT(DISTINCT o."Owner GEM Entity ID") as total_owners,
-        STRING_AGG(DISTINCT o."Tracker", ', ') as trackers
-      FROM ownership o
-      LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
-      WHERE o."Owner GEM Entity ID" IN (${entityList})
-         OR ${ASSET_ID_COALESCE_O} IN (${assetList})
-    `;
-
-    const result = await widgetQuery(sql);
-    if (result.success && result.data?.length > 0) {
-      const row = result.data[0] as any;
-      return {
-        totalAssets: Number(row.total_assets) || 0,
-        totalCapacity: Math.round(Number(row.total_capacity) || 0),
-        countries: Number(row.countries) || 0,
-        totalOwners: Number(row.total_owners) || 0,
-        trackers: row.trackers ? String(row.trackers).split(', ') : [],
-      };
-    }
-    return { totalAssets: 0, totalCapacity: 0, countries: 0, totalOwners: 0, trackers: [] };
   }
 
   // Wrap a query with timing and step updates
@@ -345,16 +125,7 @@
     error = null;
 
     // Reset steps
-    loadingSteps = [
-      { id: 'init', label: 'Initializing DuckDB connection', status: 'pending' },
-      { id: 'portfolios', label: 'Querying entity portfolios', status: 'pending' },
-      { id: 'ownership', label: 'Fetching ownership graphs', status: 'pending' },
-      { id: 'shared', label: 'Finding co-owned assets', status: 'pending' },
-      { id: 'owners', label: 'Identifying common owners', status: 'pending' },
-      { id: 'geo', label: 'Analyzing geographic distribution', status: 'pending' },
-      { id: 'trackers', label: 'Breaking down by asset type', status: 'pending' },
-      { id: 'summary', label: 'Computing summary statistics', status: 'pending' },
-    ];
+    loadingSteps = [...defaultLoadingSteps];
 
     // Start elapsed timer
     loadingStartTime = Date.now();
@@ -372,13 +143,13 @@
       updateStep('init', { status: 'done', ms: Date.now() - startTime });
 
       // Run queries sequentially for better loading UX (shows progress)
-      const portfolios = await runStep('portfolios', queryEntityPortfolios, entityIds.length < 1);
-      const ownershipGraphs = await runStep('ownership', fetchOwnershipGraphs, entityIds.length < 1);
-      const shared = await runStep('shared', querySharedAssets, entityIds.length < 2);
-      const common = await runStep('owners', queryCommonOwners, assetIds.length < 1);
-      const geo = await runStep('geo', queryGeoBreakdown);
-      const trackers = await runStep('trackers', queryTrackerBreakdown);
-      const stats = await runStep('summary', querySummary);
+      const portfolios = await runStep('portfolios', () => queryEntityPortfolios(entityIds, log), entityIds.length < 1);
+      const ownershipGraphs = await runStep('ownership', () => fetchOwnershipGraphs(entityIds, log), entityIds.length < 1);
+      const shared = await runStep('shared', () => querySharedAssets(entityIds, log), entityIds.length < 2);
+      const common = await runStep('owners', () => queryCommonOwners(assetIds, log), assetIds.length < 1);
+      const geo = await runStep('geo', () => queryGeoBreakdown(entityIds, assetIds, log));
+      const trackers = await runStep('trackers', () => queryTrackerBreakdown(entityIds, assetIds, log));
+      const stats = await runStep('summary', () => querySummary(entityIds, assetIds, log));
 
       entityPortfolios = portfolios || [];
       entityOwnershipGraphs = ownershipGraphs || new Map();
