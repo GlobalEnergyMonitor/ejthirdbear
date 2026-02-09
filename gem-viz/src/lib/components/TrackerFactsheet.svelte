@@ -297,6 +297,8 @@
 
         <!-- Numeric range summary -->
         {#if detectedType === 'numeric' && numericStats}
+          {@const range = numericStats.max - numericStats.min || 1}
+          {@const meanPct = ((numericStats.mean - numericStats.min) / range) * 100}
           <div class="numeric-range">
             <div class="range-labels">
               <span>{formatCompact(numericStats.min)}</span>
@@ -304,8 +306,6 @@
               <span>{formatCompact(numericStats.max)}</span>
             </div>
             <div class="range-track">
-              {@const range = numericStats.max - numericStats.min || 1}
-              {@const meanPct = ((numericStats.mean - numericStats.min) / range) * 100}
               <div class="range-fill"></div>
               <div class="range-mean-tick" style="left:{meanPct}%"></div>
             </div>
