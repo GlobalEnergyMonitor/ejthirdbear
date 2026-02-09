@@ -53,6 +53,17 @@
     fetchTrackerColumnInfo,
   } from '$lib/compose-queries';
   import { ASSET_ID_COALESCE_O } from '$lib/duckdb-queries';
+  import {
+    mergeParametricCounts,
+    calculateCapacityData,
+    calculateStartYearData,
+    calculateStatusDistribution,
+    calculateCountryDistribution,
+    calculateTrackerDistribution,
+    copyToClipboard,
+    downloadJson,
+    LOCATIONS_DEDUP_SQL,
+  } from './compose-utils';
 
   // ---------------------------------------------------------------------------
   // State
@@ -248,60 +259,12 @@
   // Visualization Data (derived from results)
   // ---------------------------------------------------------------------------
 
-  // Capacity distribution for histogram
-  const capacityData = $derived(
-    results.map((r) => r.capacity_mw).filter((c) => c != null && !isNaN(c))
-  );
-
-  // Start year data for sparkline (count by year)
-  const startYearData = $derived.by(() => {
-    const years = results
-      .map((r) => r.start_year)
-      .filter((y) => y != null && !isNaN(y) && y > 1900 && y < 2100);
-
-    if (!years.length) return [];
-
-    // Count by year
-    const counts = {};
-    for (const y of years) {
-      counts[y] = (counts[y] || 0) + 1;
-    }
-
-    // Convert to array sorted by year
-    return Object.entries(counts)
-      .map(([year, count]) => ({ x: Number(year), y: count }))
-      .sort((a, b) => a.x - b.x);
-  });
-
-  // Status distribution for bar chart
-  const statusDistribution = $derived.by(() => {
-    const counts = {};
-    for (const r of results) {
-      const status = r.status || 'Unknown';
-      counts[status] = (counts[status] || 0) + 1;
-    }
-    return Object.entries(counts).map(([label, value]) => ({ label, value }));
-  });
-
-  // Country distribution for bar chart
-  const countryDistribution = $derived.by(() => {
-    const counts = {};
-    for (const r of results) {
-      const country = r.country || 'Unknown';
-      counts[country] = (counts[country] || 0) + 1;
-    }
-    return Object.entries(counts).map(([label, value]) => ({ label, value }));
-  });
-
-  // Tracker distribution for bar chart
-  const trackerDistribution = $derived.by(() => {
-    const counts = {};
-    for (const r of results) {
-      const tracker = r.tracker || 'Unknown';
-      counts[tracker] = (counts[tracker] || 0) + 1;
-    }
-    return Object.entries(counts).map(([label, value]) => ({ label, value }));
-  });
+  // Visualization data - using extracted utility functions
+  const capacityData = $derived(calculateCapacityData(results));
+  const startYearData = $derived(calculateStartYearData(results));
+  const statusDistribution = $derived(calculateStatusDistribution(results));
+  const countryDistribution = $derived(calculateCountryDistribution(results));
+  const trackerDistribution = $derived(calculateTrackerDistribution(results));
 
   // Status color map
   const statusColors = statusColorsGranular;
@@ -441,12 +404,8 @@
       // Run parametric count queries in parallel (all need locations join for country filtering)
       // Always update ALL facet counts when any filter is active
 
-      // Deduplicated locations subquery - locations table has duplicate GEM.location.ID values
-      // which causes JOIN multiplication. Use this subquery to get one row per location ID.
-      const LOCATIONS_DEDUP = `(
-        SELECT * FROM locations
-        QUALIFY ROW_NUMBER() OVER (PARTITION BY "GEM.location.ID" ORDER BY "GEM.location.ID") = 1
-      )`;
+      // Use deduplicated locations subquery from compose-utils
+      const LOCATIONS_DEDUP = LOCATIONS_DEDUP_SQL;
 
       const statusWhereClause = buildSqlWhereExcluding(filters, 'statuses', 'o');
       const trackerWhereClause = buildSqlWhereExcluding(filters, 'trackers', 'o');
@@ -520,18 +479,7 @@
     }
   }
 
-  // Merge parametric counts into base options
-  // Keeps all base options, updates counts from parametric results, sets 0 for missing
-  function mergeParametricCounts(baseOptions, parametricResults) {
-    const countMap = new Map();
-    for (const r of parametricResults) {
-      countMap.set(r.value, r.cnt);
-    }
-    return baseOptions.map((opt) => ({
-      value: opt.value,
-      count: countMap.get(opt.value) ?? 0,
-    }));
-  }
+  // mergeParametricCounts moved to compose-utils.ts
 
   // Build WHERE clause excluding a specific filter (for parametric counts)
   function buildSqlWhereExcluding(filters, excludeKey, tableAlias = '') {
@@ -600,14 +548,11 @@
 
   async function copyShareUrl() {
     if (!browser) return;
-    try {
-      const fullUrl = window.location.origin + shareUrl;
-      await navigator.clipboard.writeText(fullUrl);
+    const fullUrl = window.location.origin + shareUrl;
+    const success = await copyToClipboard(fullUrl);
+    if (success) {
       copied = true;
       setTimeout(() => (copied = false), 2000);
-    } catch {
-      // Fallback: show URL in prompt if clipboard fails
-      window.prompt('Copy this URL:', window.location.origin + shareUrl);
     }
   }
 
@@ -648,16 +593,8 @@
   }
 
   function downloadPresetFile(preset) {
-    if (!browser) return;
     const exportPreset = buildExportPreset(preset);
-    const json = JSON.stringify(exportPreset, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `${exportPreset.id}.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    downloadJson(exportPreset, `${exportPreset.id}.json`);
   }
 
   async function handleImportPreset(event) {
@@ -778,11 +715,8 @@
     const { widgetQuery } = await import('$lib/widgets/widget-utils');
     const whereClause = buildSqlWhere(filters, 'o', ownershipColumnNames);
 
-    // Deduplicated locations subquery
-    const LOCATIONS_DEDUP = `(
-      SELECT * FROM locations
-      QUALIFY ROW_NUMBER() OVER (PARTITION BY "GEM.location.ID" ORDER BY "GEM.location.ID") = 1
-    )`;
+    // Use deduplicated locations subquery from compose-utils
+    const LOCATIONS_DEDUP = LOCATIONS_DEDUP_SQL;
 
     const result = await widgetQuery(`
       SELECT DISTINCT ${ASSET_ID_COALESCE_O} as asset_id, o."Project" as name
@@ -859,11 +793,6 @@
     const { widgetQuery } = await import('$lib/widgets/widget-utils');
     const whereClause = buildSqlWhere(filters, 'o', ownershipColumnNames);
 
-    const LOCATIONS_DEDUP = `(
-      SELECT * FROM locations
-      QUALIFY ROW_NUMBER() OVER (PARTITION BY "GEM.location.ID" ORDER BY "GEM.location.ID") = 1
-    )`;
-
     const result = await widgetQuery(`
       SELECT DISTINCT
         ${ASSET_ID_COALESCE_O} as asset_id,
@@ -875,7 +804,7 @@
         o."Owner" as owner,
         o."Owner GEM Entity ID" as owner_id
       FROM ownership o
-      LEFT JOIN ${LOCATIONS_DEDUP} l ON o."GEM location ID" = l."GEM.location.ID"
+      LEFT JOIN ${LOCATIONS_DEDUP_SQL} l ON o."GEM location ID" = l."GEM.location.ID"
       WHERE ${whereClause}
       ORDER BY o."Project"
       LIMIT 50000
@@ -1651,22 +1580,6 @@
     text-decoration: underline;
   }
 
-  .asset-classes-link {
-    display: block;
-    font-size: 11px;
-    color: var(--color-gray-600);
-    text-decoration: none;
-    padding: 8px 10px;
-    margin-bottom: 12px;
-    background: var(--color-gray-50);
-    border: 1px dashed var(--color-border);
-  }
-
-  .asset-classes-link:hover {
-    background: var(--color-gray-100);
-    border-style: solid;
-  }
-
   .filter-logic-hint {
     font-size: var(--font-size-base);
     color: var(--color-text-secondary);
@@ -1789,11 +1702,6 @@
     font-size: var(--font-size-body);
     color: var(--color-success);
     margin: 0;
-  }
-
-  .save-success a {
-    color: inherit;
-    font-weight: 600;
   }
 
   /* Presets Panel */
@@ -1973,13 +1881,6 @@
     font-weight: 700;
     font-size: var(--font-size-sm);
     color: var(--color-text-secondary);
-  }
-
-  .query-time {
-    font-family: var(--font-family-data);
-    font-weight: 700;
-    font-size: var(--font-size-xs);
-    color: var(--color-text-tertiary);
   }
 
   .results-export-group {
