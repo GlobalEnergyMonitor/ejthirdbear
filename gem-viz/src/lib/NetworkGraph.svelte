@@ -4,8 +4,15 @@
   import { goto } from '$app/navigation';
   import { Deck } from '@deck.gl/core';
   import { ScatterplotLayer, LineLayer } from '@deck.gl/layers';
-  import { colors, hexToRgb } from '$lib/design-tokens';
+  import { colors } from '$lib/design-tokens';
   import { ASSET_ID_COALESCE } from '$lib/duckdb-queries';
+  import {
+    SIMULATION_PRESETS,
+    LAYOUT_TUNING,
+    DEFAULT_CONFIG,
+    toRgbArray,
+    mixHex,
+  } from '$lib/network-graph-config';
   // Use d3-force-3d for better performance (even in 2D mode)
   import {
     forceSimulation,
@@ -31,21 +38,8 @@
   let loadingPhase = $state('Initializing...');
   let fps = $state(0);
 
-  // Configuration - user adjustable
-  let config = $state({
-    maxEdges: 50000,
-    minConnections: 2,
-    edgeOpacity: 0.4,
-    sampleMode: 'top',
-    simulationSpeed: 'fast',
-    warmupTicks: 100, // Synchronous warmup ticks before animation
-    use3D: true, // Use 3D layout (z-axis)
-    autoRotate: false, // Auto-rotate in 3D mode
-    rotationSpeed: 0.15, // Degrees per frame (~9°/sec at 60fps)
-    linkDistance: 'long',
-    repulsion: 'high',
-    gravity: 'low',
-  });
+  // Configuration - user adjustable (uses imported DEFAULT_CONFIG)
+  let config = $state({ ...DEFAULT_CONFIG });
 
   // Auto-rotation state
   let rotationFrame;
@@ -62,67 +56,7 @@
   let animationFrame;
   let lastFrameTime = 0;
 
-  function toRgbArray(hex, alpha = 255) {
-    const rgb = hexToRgb(hex);
-    if (!rgb) return [0, 0, 0, alpha];
-    return [rgb.r, rgb.g, rgb.b, alpha];
-  }
-
-  function mixHex(hexA, hexB, t) {
-    const a = hexToRgb(hexA);
-    const b = hexToRgb(hexB);
-    if (!a || !b) return [0, 0, 0, 255];
-    const clamped = Math.max(0, Math.min(1, t));
-    return [
-      Math.round(a.r + (b.r - a.r) * clamped),
-      Math.round(a.g + (b.g - a.g) * clamped),
-      Math.round(a.b + (b.b - a.b) * clamped),
-      255,
-    ];
-  }
-
-  // Presets optimized for d3-force-3d
-  const SIMULATION_PRESETS = {
-    fast: {
-      alphaDecay: 0.06,
-      velocityDecay: 0.5,
-      chargeStrength: -18,
-      linkDistance: 40,
-      linkStrength: 0.4,
-      centerStrength: 0.6,
-      axisStrength: 0.01,
-      warmupTicks: 80,
-      animTicks: 60,
-    },
-    medium: {
-      alphaDecay: 0.04,
-      velocityDecay: 0.4,
-      chargeStrength: -30,
-      linkDistance: 55,
-      linkStrength: 0.35,
-      centerStrength: 0.5,
-      axisStrength: 0.008,
-      warmupTicks: 120,
-      animTicks: 100,
-    },
-    slow: {
-      alphaDecay: 0.02,
-      velocityDecay: 0.3,
-      chargeStrength: -45,
-      linkDistance: 70,
-      linkStrength: 0.3,
-      centerStrength: 0.4,
-      axisStrength: 0.006,
-      warmupTicks: 180,
-      animTicks: 150,
-    },
-  };
-
-  const LAYOUT_TUNING = {
-    linkDistance: { short: 0.9, medium: 1.1, long: 1.5 },
-    repulsion: { low: 0.9, medium: 1.1, high: 1.6 },
-    gravity: { low: 0.35, medium: 0.9, high: 1.3 },
-  };
+  // Utility functions and presets imported from network-graph-config
 
   async function loadData() {
     try {
