@@ -1,151 +1,53 @@
-/**
- * Asset Data Layer
- * =================
- *
- * Fetches asset data with automatic source selection:
- * 1. REST API (primary) - real-time ownership data
- * 2. MotherDuck (fallback) - cloud DuckDB for bulk data
- *
- * Handles ID format mismatch:
- * - REST API: Uses compound IDs (L100000104107_G100000102961)
- * - MotherDuck: Uses simple IDs (G100000109409, M7043)
- */
-
+/** Asset data layer — fetches from REST API (primary) with MotherDuck fallback */
 import type { AssetSummary } from './ownership-api';
-
-// =============================================================================
-// TYPES
-// =============================================================================
 
 export interface AssetDataResult {
   asset: AssetSummary | null;
-  graph: { nodes: GraphNode[]; edges: GraphEdge[] } | null;
+  graph: { nodes: GraphNode[]; edges: GraphEdge[]; paths?: Record<string, any[]> } | null;
   source: 'api' | 'motherduck' | 'none';
   error?: string;
 }
 
-interface GraphNode {
-  id: string;
-  Name?: string;
-  name?: string;
-  type?: string;
-}
+interface GraphNode { id: string; Name?: string; name?: string; type?: string; }
+interface GraphEdge { source: string; target: string; value?: number; type?: string; depth?: number; }
 
-interface GraphEdge {
-  source: string;
-  target: string;
-  value?: number;
-  type?: string;
-  depth?: number;
-}
+// ID format utilities (REST API uses compound L_G, app uses simple G/M prefixes)
+export const isCompoundId = (id: string) => /^L\d+_G\d+$/.test(id);
+export const isGPrefixId = (id: string) => /^G\d+$/.test(id);
+export const isMPrefixId = (id: string) => /^M\d+$/.test(id);
+export const extractUnitId = (id: string) => isCompoundId(id) ? id.split('_')[1] : id;
 
-// =============================================================================
-// ID FORMAT UTILITIES
-// =============================================================================
+// Shorthand for error results
+const fail = (error: string): AssetDataResult => ({ asset: null, graph: null, source: 'none', error });
 
-/** Check if an ID is in compound format (L{loc}_G{unit}) */
-export function isCompoundId(id: string): boolean {
-  return /^L\d+_G\d+$/.test(id);
-}
-
-/** Check if an ID is a simple G-prefix (coal plant unit) */
-export function isGPrefixId(id: string): boolean {
-  return /^G\d+$/.test(id);
-}
-
-/** Check if an ID is a simple M-prefix (coal mine) */
-export function isMPrefixId(id: string): boolean {
-  return /^M\d+$/.test(id);
-}
-
-/** Extract the G-prefix unit ID from a compound ID */
-export function extractUnitId(compoundId: string): string {
-  if (isCompoundId(compoundId)) {
-    return compoundId.split('_')[1];
-  }
-  return compoundId;
-}
-
-// =============================================================================
-// DATA FETCHING
-// =============================================================================
-
-/**
- * Fetch asset data from the best available source.
- *
- * Strategy:
- * 1. Try REST API first (with automatic ID resolution for G-prefix)
- * 2. If API fails, try MotherDuck
- * 3. If both fail, return error
- *
- * @param assetId - The asset ID (G-prefix, M-prefix, or compound L_G)
- */
+/** Fetch asset data — tries REST API first, falls back to MotherDuck */
 export async function fetchAssetData(assetId: string): Promise<AssetDataResult> {
-  // Try REST API first
   const apiResult = await tryAPI(assetId);
-  if (apiResult.source === 'api') {
-    return apiResult;
-  }
+  if (apiResult.source === 'api') return apiResult;
 
-  // API failed - try MotherDuck
-  console.log(`[asset-data] API failed for ${assetId}, trying MotherDuck`);
-  const motherDuckResult = await tryMotherDuck(assetId);
-  if (motherDuckResult.source === 'motherduck') {
-    return motherDuckResult;
-  }
+  console.warn(`[asset-data] API failed for ${assetId}, trying MotherDuck`);
+  const mdResult = await tryMotherDuck(assetId);
+  if (mdResult.source === 'motherduck') return mdResult;
 
-  // Both failed
-  return {
-    asset: null,
-    graph: null,
-    source: 'none',
-    error: `API: ${apiResult.error} | MotherDuck: ${motherDuckResult.error}`,
-  };
+  return fail(`API: ${apiResult.error} | MotherDuck: ${mdResult.error}`);
 }
-
-// =============================================================================
-// REST API
-// =============================================================================
 
 async function tryAPI(assetId: string): Promise<AssetDataResult> {
   try {
     const { getAsset, getOwnershipGraph, resolveAssetId } = await import('./ownership-api');
-
-    // Resolve G-prefix to compound ID if needed
     const resolvedId = await resolveAssetId(assetId);
-    if (resolvedId !== assetId) {
-      console.log(`[asset-data] Resolved ${assetId} → ${resolvedId}`);
-    }
 
-    // Fetch asset and graph in parallel
-    const [asset, graphResponse] = await Promise.all([
+    const [asset, graph] = await Promise.all([
       getAsset(resolvedId),
       getOwnershipGraph({ root: resolvedId, direction: 'up', max_depth: 12 }),
     ]);
-
-    return {
-      asset,
-      graph: {
-        nodes: graphResponse.nodes || [],
-        edges: graphResponse.edges || [],
-      },
-      source: 'api',
-    };
+    return { asset, graph: { nodes: graph.nodes || [], edges: graph.edges || [], paths: graph.paths }, source: 'api' };
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown API error';
-    console.warn(`[asset-data] API failed for ${assetId}:`, message);
-    return {
-      asset: null,
-      graph: null,
-      source: 'none',
-      error: message,
-    };
+    const msg = err instanceof Error ? err.message : 'Unknown API error';
+    console.warn(`[asset-data] API failed for ${assetId}:`, msg);
+    return fail(msg);
   }
 }
-
-// =============================================================================
-// MOTHERDUCK
-// =============================================================================
 
 async function tryMotherDuck(assetId: string): Promise<AssetDataResult> {
   try {
@@ -176,12 +78,7 @@ async function tryMotherDuck(assetId: string): Promise<AssetDataResult> {
     `);
 
     if (!assetResult.success || !assetResult.data?.length) {
-      return {
-        asset: null,
-        graph: null,
-        source: 'none',
-        error: `Asset '${assetId}' not found in MotherDuck`,
-      };
+      return fail(`Asset '${assetId}' not found in MotherDuck`);
     }
 
     const firstRow = assetResult.data[0];
@@ -227,13 +124,8 @@ async function tryMotherDuck(assetId: string): Promise<AssetDataResult> {
       source: 'motherduck',
     };
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown MotherDuck error';
-    console.warn(`[asset-data] MotherDuck failed for ${assetId}:`, message);
-    return {
-      asset: null,
-      graph: null,
-      source: 'none',
-      error: message,
-    };
+    const msg = err instanceof Error ? err.message : 'Unknown MotherDuck error';
+    console.warn(`[asset-data] MotherDuck failed for ${assetId}:`, msg);
+    return fail(msg);
   }
 }

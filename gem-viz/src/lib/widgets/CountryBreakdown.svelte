@@ -5,7 +5,7 @@
    */
 
   import { onMount } from 'svelte';
-  import { getCountryBreakdown } from '$lib/duckdb-queries';
+  import { listAssetsByType, listAssets } from '$lib/ownership-api';
   import DataSourceBadge from '$lib/components/DataSourceBadge.svelte';
 
   // Props
@@ -22,14 +22,30 @@
     loading = true;
     error = null;
 
-    const result = await getCountryBreakdown({ limit, tracker });
+    try {
+      const start = performance.now();
+      // Fetch assets (filtered by type if tracker specified)
+      const assets = tracker
+        ? await listAssetsByType(tracker, { limit: 2000 })
+        : (await listAssets({ limit: 500 })).results;
 
-    if (result.success) {
-      results = result.data || [];
+      // Count assets per country client-side
+      const counts = new Map();
+      for (const asset of assets) {
+        const country = asset.country || 'Unknown';
+        counts.set(country, (counts.get(country) || 0) + 1);
+      }
+
+      // Sort by count descending, take top N
+      results = Array.from(counts.entries())
+        .map(([country, asset_count]) => ({ country, asset_count }))
+        .sort((a, b) => b.asset_count - a.asset_count)
+        .slice(0, limit);
+
       maxValue = results.length > 0 ? Math.max(...results.map((r) => r.asset_count)) : 0;
-      queryTime = result.executionTime || 0;
-    } else {
-      error = result.error;
+      queryTime = Math.round(performance.now() - start);
+    } catch (err) {
+      error = err?.message || 'Failed to load country breakdown';
     }
 
     loading = false;
@@ -49,7 +65,7 @@
 <div class="widget country-breakdown">
   <header>
     <h3>{title}</h3>
-    <DataSourceBadge source="motherduck" {queryTime} size="sm" />
+    <DataSourceBadge source="api" {queryTime} size="sm" />
   </header>
 
   {#if loading}

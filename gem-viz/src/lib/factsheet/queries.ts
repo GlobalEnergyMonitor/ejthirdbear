@@ -1,16 +1,10 @@
 /**
- * Optimized query helpers for factsheet components
- * Provides parameterized queries and result caching
- *
- * Uses centralized DuckDB queries from $lib/duckdb-queries
+ * Query helpers for factsheet components
+ * Uses REST API (gem-api.thirdbear.net) exclusively.
  */
 
-import {
-  getFactsheetAssets,
-  getCapacities,
-  getFieldStats,
-  getTrackerRowCount,
-} from '$lib/duckdb-queries';
+import { listAssetsByType, resolveApiAssetType, type AssetSummary } from '$lib/ownership-api';
+import { trackerNameToSlug } from '$lib/data-config/tracker-metadata';
 import type { Asset } from './types';
 
 /** Simple in-memory cache with TTL */
@@ -30,12 +24,70 @@ function setCache(key: string, data: unknown): void {
   queryCache.set(key, { data, timestamp: Date.now() });
 }
 
-/** Escape string for SQL (prevent injection) - kept for potential future use */
-function _escapeSQL(value: string): string {
-  return value.replace(/'/g, "''");
+/** Map REST API AssetSummary to factsheet Asset type */
+function assetSummaryToAsset(a: AssetSummary): Asset {
+  const raw = a.raw || {};
+  return {
+    id: a.id,
+    name: a.name,
+    status: a.status || '',
+    capacity: a.capacity ?? undefined,
+    capacityUnit: a.capacityUnit ?? undefined,
+    country: a.country ?? undefined,
+    lat: a.latitude ?? undefined,
+    lon: a.longitude ?? undefined,
+    owner: a.ownerName ?? undefined,
+    parent: a.parentName ?? undefined,
+    tracker: a.facilityType ?? undefined,
+    // Extract additional fields from raw API data when available
+    startYear: toNum(raw['Start year'] ?? raw['start_year']),
+    technology: toStr(raw['Technology'] ?? raw['technology']),
+    mineType: toStr(raw['Mine type'] ?? raw['mine_type']),
+    miningMethod: toStr(raw['Mining method'] ?? raw['mining_method']),
+    state: toStr(raw['Subnational unit (province, state)'] ?? raw['State'] ?? raw['state'] ?? raw['state_province']),
+    wikiUrl: toStr(raw['Wiki URL'] ?? raw['wiki_url']),
+  };
 }
 
-/** Fetch assets with optional filtering */
+function toStr(v: unknown): string | undefined {
+  return v != null && v !== '' ? String(v) : undefined;
+}
+
+function toNum(v: unknown): number | undefined {
+  if (v == null || v === '') return undefined;
+  const n = Number(v);
+  return isNaN(n) ? undefined : n;
+}
+
+/** Sort comparator for assets */
+function assetComparator(sortBy: string, sortOrder: string) {
+  const dir = sortOrder === 'asc' ? 1 : -1;
+  return (a: Asset, b: Asset) => {
+    let va: number | string, vb: number | string;
+    switch (sortBy) {
+      case 'capacity':
+        va = a.capacity ?? 0;
+        vb = b.capacity ?? 0;
+        break;
+      case 'age':
+        va = a.startYear ?? 9999;
+        vb = b.startYear ?? 9999;
+        break;
+      case 'name':
+        va = a.name.toLowerCase();
+        vb = b.name.toLowerCase();
+        break;
+      default:
+        va = a.capacity ?? 0;
+        vb = b.capacity ?? 0;
+    }
+    if (va < vb) return -1 * dir;
+    if (va > vb) return 1 * dir;
+    return 0;
+  };
+}
+
+/** Fetch assets via REST API with filtering and client-side sorting */
 export async function fetchAssets(options: {
   tracker?: string | null;
   statusFilter?: string[] | null;
@@ -51,37 +103,40 @@ export async function fetchAssets(options: {
     return { success: true, data: cached };
   }
 
-  // Use centralized DuckDB query
-  const result = await getFactsheetAssets({ tracker, statusFilter, sortBy, sortOrder, limit });
+  try {
+    // Convert tracker name to API slug (e.g. "Coal Plant" → "coal-plant")
+    const assetType = tracker ? (trackerNameToSlug[tracker] || tracker.toLowerCase().replace(/\s+/g, '-')) : undefined;
 
-  if (result.success && result.data) {
-    // Map FactsheetAsset to Asset type
-    const assets: Asset[] = result.data.map((row) => ({
-      id: row.id,
-      name: row.name,
-      status: row.status,
-      capacity: row.capacity ?? undefined,
-      capacityUnit: row.capacityUnit,
-      country: row.country,
-      state: row.state,
-      owner: row.owner,
-      tracker: row.tracker,
-      startYear: row.startYear ?? undefined,
-      technology: row.technology ?? undefined,
-      mineType: row.mineType ?? undefined,
-    }));
+    // Fetch with type filtering and client-side sorting
+    const fetchLimit = Math.max(limit * 5, 200);
+    const results = assetType
+      ? await listAssetsByType(assetType, { limit: fetchLimit })
+      : (await import('$lib/ownership-api').then(m => m.listAssets({ limit: fetchLimit }))).results;
+
+    let assets = results.map(assetSummaryToAsset);
+
+    // Client-side status filtering
+    if (statusFilter && statusFilter.length > 0) {
+      const statusSet = new Set(statusFilter.map(s => s.toLowerCase()));
+      assets = assets.filter(a => statusSet.has((a.status || '').toLowerCase()));
+    }
+
+    // Client-side sorting
+    assets.sort(assetComparator(sortBy, sortOrder));
+
+    // Limit results
+    assets = assets.slice(0, limit);
+
     setCache(cacheKey, assets);
     return { success: true, data: assets };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'API request failed';
+    console.error('[fetchAssets] REST API error:', msg);
+    return { success: false, data: [], error: msg };
   }
-
-  return {
-    success: result.success,
-    data: [],
-    error: 'Query failed',
-  };
 }
 
-/** Fetch all capacities for percentile calculation (cached) */
+/** Fetch all capacities for percentile calculation via REST API */
 export async function fetchCapacities(
   tracker?: string | null
 ): Promise<{ global: number[]; byCountry: Map<string, number[]> }> {
@@ -91,31 +146,38 @@ export async function fetchCapacities(
     return cached;
   }
 
-  // Use centralized DuckDB query
-  const result = await getCapacities(tracker);
+  try {
+    const assetType = tracker ? (trackerNameToSlug[tracker] || tracker.toLowerCase().replace(/\s+/g, '-')) : undefined;
 
-  const global: number[] = [];
-  const byCountry = new Map<string, number[]>();
+    // Fetch with proper type filtering for percentile distribution
+    const results = assetType
+      ? await listAssetsByType(assetType, { limit: 5000 })
+      : (await import('$lib/ownership-api').then(m => m.listAssets({ limit: 500 }))).results;
 
-  if (result.success && result.data) {
-    for (const row of result.data) {
-      if (row.capacity != null) {
-        global.push(row.capacity);
-        if (row.country) {
-          const arr = byCountry.get(row.country) || [];
-          arr.push(row.capacity);
-          byCountry.set(row.country, arr);
+    const global: number[] = [];
+    const byCountry = new Map<string, number[]>();
+
+    for (const a of results) {
+      if (a.capacity != null) {
+        global.push(a.capacity);
+        if (a.country) {
+          const arr = byCountry.get(a.country) || [];
+          arr.push(a.capacity);
+          byCountry.set(a.country, arr);
         }
       }
     }
-  }
 
-  const data = { global, byCountry };
-  setCache(cacheKey, data);
-  return data;
+    const data = { global, byCountry };
+    setCache(cacheKey, data);
+    return data;
+  } catch (err) {
+    console.error('[fetchCapacities] REST API error:', err);
+    return { global: [], byCountry: new Map() };
+  }
 }
 
-/** Fetch field value distribution */
+/** Fetch field value distribution via REST API with client-side aggregation */
 export async function fetchFieldStats(
   tracker: string,
   fieldName: string
@@ -126,14 +188,36 @@ export async function fetchFieldStats(
     return cached;
   }
 
-  // Use centralized DuckDB query
-  const result = await getFieldStats(tracker, fieldName, 100);
-  const data = result.data || [];
-  setCache(cacheKey, data);
-  return data;
+  try {
+    const slug = trackerNameToSlug[tracker] || tracker.toLowerCase().replace(/\s+/g, '-');
+    const assets = await listAssetsByType(slug, { limit: 2000 });
+
+    // Count occurrences of each value for this field
+    const counts = new Map<string, number>();
+    for (const asset of assets) {
+      const raw = asset.raw || {};
+      const value = raw[fieldName] ?? raw[fieldName.toLowerCase()] ?? null;
+      const strValue = value != null && value !== '' ? String(value) : null;
+      if (strValue) {
+        counts.set(strValue, (counts.get(strValue) || 0) + 1);
+      }
+    }
+
+    // Sort by count descending, take top 100
+    const data = Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 100)
+      .map(([value, count]) => ({ value, count }));
+
+    setCache(cacheKey, data);
+    return data;
+  } catch (err) {
+    console.warn(`[fetchFieldStats] Failed for ${tracker}/${fieldName}:`, err);
+    return [];
+  }
 }
 
-/** Fetch row count for a tracker */
+/** Fetch row count for a tracker via REST API */
 export async function fetchRowCount(tracker: string): Promise<number> {
   const cacheKey = `rowCount:${tracker}`;
   const cached = getCached<number>(cacheKey);
@@ -141,10 +225,18 @@ export async function fetchRowCount(tracker: string): Promise<number> {
     return cached;
   }
 
-  // Use centralized DuckDB query
-  const count = await getTrackerRowCount(tracker);
-  setCache(cacheKey, count);
-  return count;
+  try {
+    // Use getAssetTypeCounts for an estimated count
+    const { getAssetTypeCounts } = await import('$lib/ownership-api');
+    const apiType = resolveApiAssetType(tracker);
+    const counts = await getAssetTypeCounts();
+    const count = counts.get(apiType) || 0;
+    setCache(cacheKey, count);
+    return count;
+  } catch (err) {
+    console.warn(`[fetchRowCount] Failed for ${tracker}:`, err);
+    return 0;
+  }
 }
 
 /** Clear the query cache */

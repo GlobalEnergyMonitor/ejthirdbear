@@ -5,7 +5,7 @@
    */
 
   import { onMount } from 'svelte';
-  import { getStatusDistribution } from '$lib/duckdb-queries';
+  import { listAssetsByType, listAssets } from '$lib/ownership-api';
   import { regroupStatus, statusColors as designStatusColors } from '$lib/design-tokens';
   import DataSourceBadge from '$lib/components/DataSourceBadge.svelte';
 
@@ -20,21 +20,24 @@
   let total = $state(0);
 
   // Use centralized status colors from design tokens
-  // Fossil assets: red scale, Retired: grey-teal, Cancelled: light grey
   const statusColors = designStatusColors;
 
   async function loadData() {
     loading = true;
     error = null;
 
-    const result = await getStatusDistribution(tracker);
+    try {
+      const start = performance.now();
+      // Fetch assets (filtered by type if tracker specified)
+      const assets = tracker
+        ? await listAssetsByType(tracker, { limit: 2000 })
+        : (await listAssets({ limit: 500 })).results;
 
-    if (result.success) {
-      // Regroup statuses
+      // Regroup statuses client-side
       const grouped = {};
-      for (const row of result.data || []) {
-        const group = regroupStatus(String(row.status));
-        grouped[group] = (grouped[group] || 0) + Number(row.count);
+      for (const asset of assets) {
+        const group = regroupStatus(asset.status || 'unknown');
+        grouped[group] = (grouped[group] || 0) + 1;
       }
 
       results = Object.entries(grouped)
@@ -42,9 +45,9 @@
         .sort((a, b) => b.count - a.count);
 
       total = results.reduce((sum, r) => sum + r.count, 0);
-      queryTime = result.executionTime || 0;
-    } else {
-      error = result.error;
+      queryTime = Math.round(performance.now() - start);
+    } catch (err) {
+      error = err?.message || 'Failed to load status distribution';
     }
 
     loading = false;
@@ -103,7 +106,7 @@
 <div class="widget status-distribution">
   <header>
     <h3>{title}</h3>
-    <DataSourceBadge source="motherduck" {queryTime} size="sm" />
+    <DataSourceBadge source="api" {queryTime} size="sm" />
   </header>
 
   {#if loading}

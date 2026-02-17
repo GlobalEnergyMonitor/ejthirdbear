@@ -1,14 +1,6 @@
-/**
- * Ownership Tracing API Client
- *
- * REST API for mapping ownership relationships between entities and assets.
- * Replaces MotherDuck queries for ownership-related data.
- *
- * API Base: Configurable via environment variable
- * Docs: /docs (Swagger UI)
- */
+/** Ownership API client — REST API for entity/asset ownership relationships */
 
-// API base URL - configured via environment variable or hardcoded default
+// API base URL (env override or production default)
 const API_BASE =
   import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL ||
   import.meta.env.PUBLIC_OWNERSHIP_API_URL ||
@@ -40,26 +32,9 @@ export async function resolveAssetId(assetId: string): Promise<string> {
     return gPrefixToCompoundCache.get(assetId)!;
   }
 
-  // Try to resolve via MotherDuck (cloud, always fresh) first, then local DuckDB fallback
-  // Note: New MotherDuck schema uses "Asset ID" and may not have location ID - skip MotherDuck for ID resolution
-  // The local parquet has the compound IDs we need
-  // Fallback directly to local DuckDB for G-prefix resolution
-
-  // Fallback to local DuckDB if MotherDuck fails
-  try {
-    const { resolveGPrefixId } = await import('./duckdb-queries');
-    const compoundId = await resolveGPrefixId(assetId);
-
-    if (compoundId && compoundId !== assetId) {
-      gPrefixToCompoundCache.set(assetId, compoundId);
-      console.log(`[ID Resolver] Local DuckDB mapped ${assetId} → ${compoundId}`);
-      return compoundId;
-    }
-  } catch (err) {
-    console.warn(`[ID Resolver] Local DuckDB also failed for ${assetId}:`, err);
-  }
-
-  // Return original if we can't resolve
+  // G-prefix IDs need compound L_G format for the API.
+  // Without DuckDB, we can't resolve them. Log a warning and return as-is.
+  console.warn(`[ID Resolver] Cannot resolve G-prefix ID ${assetId} — compound L_G ID required by API`);
   return assetId;
 }
 
@@ -134,6 +109,8 @@ export interface GraphNode {
   type: 'entity' | 'asset';
   is_terminal?: boolean;
   is_root?: boolean;
+  entity_id?: string;
+  headquarters_country?: string;
 }
 
 export interface GraphEdge {
@@ -157,10 +134,11 @@ export interface OwnershipGraphResponse {
     GraphEdge & {
       type?: 'leafEdge' | 'intermediateEdge';
       refUrl?: string | null;
-      imputedShare?: boolean;
+      imputed_share?: boolean;
       depth?: number;
     }
   >;
+  paths?: Record<string, Array<{ route: string[]; cumulative_pct: number }>>;
 }
 
 export interface PaginatedResponse<T> {
@@ -185,6 +163,21 @@ class OwnershipAPIError extends Error {
   }
 }
 
+// In-flight request deduplication cache.
+// Prevents duplicate network requests when multiple components request the same endpoint concurrently.
+const inflightRequests = new Map<string, Promise<unknown>>();
+
+function deduplicatedFetch<T>(key: string, fetchFn: () => Promise<T>): Promise<T> {
+  if (inflightRequests.has(key)) {
+    return inflightRequests.get(key) as Promise<T>;
+  }
+  const promise = fetchFn().finally(() => {
+    inflightRequests.delete(key);
+  });
+  inflightRequests.set(key, promise);
+  return promise;
+}
+
 // eslint-disable-next-line no-undef
 async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
   if (!API_BASE) {
@@ -196,6 +189,17 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
 
   const url = `${API_BASE}${endpoint}`;
 
+  // Deduplicate concurrent GET requests to the same endpoint
+  const method = options?.method?.toUpperCase() || 'GET';
+  if (method === 'GET') {
+    return deduplicatedFetch<T>(url, () => _doFetch<T>(url, options));
+  }
+
+  return _doFetch<T>(url, options);
+}
+
+// eslint-disable-next-line no-undef
+async function _doFetch<T>(url: string, options?: RequestInit): Promise<T> {
   // Add timeout via AbortController
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
@@ -229,7 +233,7 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
     if (err instanceof Error && err.name === 'AbortError') {
       throw new OwnershipAPIError(
         0,
-        `API request timed out after ${API_TIMEOUT_MS / 1000}s: ${endpoint}`
+        `API request timed out after ${API_TIMEOUT_MS / 1000}s: ${url}`
       );
     }
     throw err;
@@ -267,300 +271,258 @@ function extractEntityId(value: unknown): string | null {
 function normalizeEntity(raw: RawEntity): EntitySummary | null {
   const idRaw = pickKey(raw, ['Entity ID', 'GEM Entity ID', 'entity_id', 'id']);
   const id = extractEntityId(idRaw) || String(idRaw || '').trim();
+  if (!id) return null; // skip ghost entries with empty IDs
 
-  // Skip entities with empty IDs to prevent ghost entries
-  if (!id) {
-    console.warn('Skipping entity with empty ID:', raw);
-    return null as unknown as EntitySummary; // Will be filtered by caller
-  }
-
-  const name =
-    String(pickKey(raw, ['Name', 'Entity Name', 'entity_name', 'name']) || id || '').trim() || id;
-  const fullName = pickKey(raw, ['Full Name', 'full_name']);
-  const headquartersCountry = pickKey(raw, [
-    'Headquarters Country',
-    'Headquarters country',
-    'headquarters_country',
-  ]);
-
+  const str = (keys: string[]) => { const v = pickKey(raw, keys); return v ? String(v) : null; };
   return {
     id,
-    name,
-    fullName: fullName ? String(fullName) : null,
-    headquartersCountry: headquartersCountry ? String(headquartersCountry) : null,
+    name: String(pickKey(raw, ['Name', 'Entity Name', 'entity_name', 'name']) || id).trim() || id,
+    fullName: str(['Full Name', 'full_name']),
+    headquartersCountry: str(['Headquarters Country', 'Headquarters country', 'headquarters_country']),
     raw,
   };
 }
 
 function normalizeAsset(raw: RawAsset): AssetSummary {
-  const idRaw = pickKey(raw, [
-    'GEM Unit Phase ID',
-    'GEM Unit ID',
-    'GEM unit ID',
-    'gem_unit_id',
-    'asset_id',
-    'id',
-  ]);
-  const id = String(idRaw || '').trim();
-  const name = String(
-    pickKey(raw, ['Facility Name', 'Project', 'Unit Name', 'asset_name', 'name']) || id
-  ).trim();
-  const facilityType = pickKey(raw, ['Facility Type', 'Tracker', 'facility_type', 'asset_type']);
-  const status = pickKey(raw, ['Status', 'status', 'operating_status']);
-  const capacity = toNumber(pickKey(raw, ['Capacity', 'Capacity (MW)', 'capacity']));
-  const capacityUnit = pickKey(raw, ['Capacity Unit', 'capacity_unit']);
-  const country = pickKey(raw, ['Country Area', 'Country', 'country']);
-  const latitude = toNumber(pickKey(raw, ['Latitude', 'lat', 'latitude']));
-  const longitude = toNumber(pickKey(raw, ['Longitude', 'lon', 'longitude']));
-  const ownerName = pickKey(raw, ['Owner', 'Immediate Project Owner', 'owner']);
-  const ownerEntityRaw = pickKey(raw, [
-    'Owner GEM Entity ID',
-    'Immediate Project Owner GEM Entity ID',
-    'owner_entity_id',
-  ]);
-  const parentName = pickKey(raw, ['Parent', 'parent']);
-  const parentEntityRaw = pickKey(raw, ['Parent GEM Entity ID', 'parent_entity_id']);
+  // Helpers: pick first non-empty key as string or number
+  const str = (keys: string[]) => { const v = pickKey(raw, keys); return v ? String(v) : null; };
+  const num = (keys: string[]) => toNumber(pickKey(raw, keys));
 
+  const id = String(pickKey(raw, ['GEM Unit Phase ID', 'GEM Unit ID', 'GEM unit ID', 'gem_unit_id', 'asset_id', 'id']) || '').trim();
   return {
     id,
-    name,
-    facilityType: facilityType ? String(facilityType) : null,
-    status: status ? String(status) : null,
-    capacity,
-    capacityUnit: capacityUnit ? String(capacityUnit) : null,
-    country: country ? String(country) : null,
-    latitude,
-    longitude,
-    ownerName: ownerName ? String(ownerName) : null,
-    ownerEntityId: extractEntityId(ownerEntityRaw),
-    parentName: parentName ? String(parentName) : null,
-    parentEntityId: extractEntityId(parentEntityRaw),
+    name: String(pickKey(raw, ['Facility Name', 'Project', 'Unit Name', 'asset_name', 'name']) || id).trim(),
+    facilityType: str(['Facility Type', 'Tracker', 'facility_type', 'asset_type']),
+    status: str(['Status', 'status', 'operating_status']),
+    capacity: num(['Capacity', 'Capacity (MW)', 'capacity']),
+    capacityUnit: str(['Capacity Unit', 'capacity_unit']),
+    country: str(['Country Area', 'Country', 'country']),
+    latitude: num(['Latitude', 'lat', 'latitude']),
+    longitude: num(['Longitude', 'lon', 'longitude']),
+    ownerName: str(['Owner', 'Immediate Project Owner', 'owner']),
+    ownerEntityId: extractEntityId(pickKey(raw, ['Owner GEM Entity ID', 'Immediate Project Owner GEM Entity ID', 'owner_entity_id'])),
+    parentName: str(['Parent', 'parent']),
+    parentEntityId: extractEntityId(pickKey(raw, ['Parent GEM Entity ID', 'parent_entity_id'])),
     raw,
   };
 }
 
 function normalizePaginated<T>(raw: T[] | PaginatedResponse<T>): PaginatedResponse<T> {
-  if (Array.isArray(raw)) {
-    return {
-      total: null,
-      limit: null,
-      offset: null,
-      count: raw.length,
-      results: raw,
-    };
-  }
-
-  return {
-    total: raw.total ?? null,
-    limit: raw.limit ?? null,
-    offset: raw.offset ?? null,
-    count: raw.count ?? raw.results?.length ?? 0,
-    results: raw.results ?? [],
-  };
+  if (Array.isArray(raw)) return { total: null, limit: null, offset: null, count: raw.length, results: raw };
+  return { total: raw.total ?? null, limit: raw.limit ?? null, offset: raw.offset ?? null, count: raw.count ?? raw.results?.length ?? 0, results: raw.results ?? [] };
 }
 
 // ============================================================================
 // ENTITY ENDPOINTS
 // ============================================================================
 
-/**
- * Search and retrieve entities with optional filtering
- */
-export async function listEntities(params?: {
-  q?: string;
-  country?: string;
-  limit?: number;
-  offset?: number;
-}): Promise<PaginatedResponse<EntitySummary>> {
-  const searchParams = new URLSearchParams();
-  if (params?.q) searchParams.set('q', params.q);
-  if (params?.country) searchParams.set('country', params.country);
-  if (params?.limit) searchParams.set('limit', String(params.limit));
-  if (params?.offset) searchParams.set('offset', String(params.offset));
+// Build query string from an object, skipping nullish values
+function buildQuery(params?: Record<string, string | number | undefined | null>): string {
+  if (!params) return '';
+  const sp = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v != null && v !== '') sp.set(k, String(v));
+  }
+  const q = sp.toString();
+  return q ? `?${q}` : '';
+}
 
-  const query = searchParams.toString();
+/** Search and retrieve entities with optional filtering */
+export async function listEntities(params?: {
+  q?: string; country?: string; limit?: number; offset?: number;
+}): Promise<PaginatedResponse<EntitySummary>> {
   const raw = await fetchAPI<RawEntity[] | PaginatedResponse<RawEntity>>(
-    `/entities${query ? `?${query}` : ''}`
+    `/entities${buildQuery(params)}`
   );
   const page = normalizePaginated(raw);
-  return {
-    ...page,
-    results: page.results.map((entity) => normalizeEntity(entity)),
-  };
+  return { ...page, results: page.results.map(normalizeEntity) };
 }
 
-/**
- * Get complete details for a specific entity
- */
 export async function getEntity(entityId: string): Promise<EntitySummary> {
-  const raw = await fetchAPI<RawEntity>(`/entities/${encodeURIComponent(entityId)}`);
-  return normalizeEntity(raw);
+  return normalizeEntity(await fetchAPI<RawEntity>(`/entities/${encodeURIComponent(entityId)}`));
 }
 
-/**
- * Get all entities that directly own the specified entity
- */
+// Helper: extract ownership percentage from API row
+const pct = (v?: number) => typeof v === 'number' ? v : null;
+
 export async function getEntityOwners(entityId: string): Promise<DirectOwnership[]> {
-  const raw = await fetchAPI<
-    Array<{
-      owner_entity_id?: string;
-      owner_name?: string;
-      ownership_percentage?: number;
-    }>
-  >(`/entities/${encodeURIComponent(entityId)}/owners`);
-  return (raw || []).map((row) => ({
-    ownerEntityId: extractEntityId(row.owner_entity_id) || String(row.owner_entity_id || ''),
-    ownerName: row.owner_name || String(row.owner_entity_id || ''),
-    ownershipPct: typeof row.ownership_percentage === 'number' ? row.ownership_percentage : null,
+  const raw = await fetchAPI<Array<{ owner_entity_id?: string; owner_name?: string; ownership_percentage?: number }>>(
+    `/entities/${encodeURIComponent(entityId)}/owners`
+  );
+  return (raw || []).map((r) => ({
+    ownerEntityId: extractEntityId(r.owner_entity_id) || String(r.owner_entity_id || ''),
+    ownerName: r.owner_name || String(r.owner_entity_id || ''),
+    ownershipPct: pct(r.ownership_percentage),
   }));
 }
 
-/**
- * Get all entities directly owned by the specified entity
- */
 export async function getEntityOwned(entityId: string): Promise<DirectOwned[]> {
-  const raw = await fetchAPI<
-    Array<{
-      subject_entity_id?: string;
-      subject_entity_name?: string;
-      ownership_percentage?: number;
-    }>
-  >(`/entities/${encodeURIComponent(entityId)}/owned`);
-  return (raw || []).map((row) => ({
-    entityId: extractEntityId(row.subject_entity_id) || String(row.subject_entity_id || ''),
-    entityName: row.subject_entity_name || String(row.subject_entity_id || ''),
-    ownershipPct: typeof row.ownership_percentage === 'number' ? row.ownership_percentage : null,
+  const raw = await fetchAPI<Array<{ subject_entity_id?: string; subject_entity_name?: string; ownership_percentage?: number }>>(
+    `/entities/${encodeURIComponent(entityId)}/owned`
+  );
+  return (raw || []).map((r) => ({
+    entityId: extractEntityId(r.subject_entity_id) || String(r.subject_entity_id || ''),
+    entityName: r.subject_entity_name || String(r.subject_entity_id || ''),
+    ownershipPct: pct(r.ownership_percentage),
   }));
 }
 
-/**
- * Trace ownership upwards to all terminal ancestors
- */
-export async function traceEntityUp(entityId: string): Promise<OwnershipTraceResponse> {
-  return fetchAPI(`/entities/${encodeURIComponent(entityId)}/trace/up`);
+/** Trace ownership in given direction to all terminal nodes */
+function traceEntity(entityId: string, dir: 'up' | 'down'): Promise<OwnershipTraceResponse> {
+  return fetchAPI(`/entities/${encodeURIComponent(entityId)}/trace/${dir}`);
+}
+export const traceEntityUp = (id: string) => traceEntity(id, 'up');
+export const traceEntityDown = (id: string) => traceEntity(id, 'down');
+
+// Raw shape returned by /entities/{id}/graph/{direction}
+interface RawEntityGraph {
+  root_entity_id: string;
+  root_entity_name: string;
+  nodes: Array<{ entity_id: string; entity_name: string; is_terminal?: boolean; is_root?: boolean }>;
+  edges: Array<{ from_entity_id: string; to_entity_id: string; ownership_percentage?: number }>;
+  terminal_node_ids?: string[];
 }
 
-/**
- * Trace ownership downwards to all terminal descendants
- */
-export async function traceEntityDown(entityId: string): Promise<OwnershipTraceResponse> {
-  return fetchAPI(`/entities/${encodeURIComponent(entityId)}/trace/down`);
-}
-
-/**
- * Build complete ownership graph by traversing upwards
- */
-export async function getEntityGraphUp(entityId: string): Promise<EntityGraphResponse> {
-  const raw = await fetchAPI<{
-    root_entity_id: string;
-    root_entity_name: string;
-    nodes: Array<{
-      entity_id: string;
-      entity_name: string;
-      is_terminal?: boolean;
-      is_root?: boolean;
-    }>;
-    edges: Array<{
-      from_entity_id: string;
-      from_entity_name?: string;
-      to_entity_id: string;
-      to_entity_name?: string;
-      ownership_percentage?: number;
-    }>;
-    terminal_node_ids?: string[];
-  }>(`/entities/${encodeURIComponent(entityId)}/graph/up`);
+function normalizeEntityGraph(raw: RawEntityGraph): EntityGraphResponse {
   return {
     rootEntityId: raw.root_entity_id,
     rootEntityName: raw.root_entity_name,
-    nodes: (raw.nodes || []).map((n) => ({
-      id: n.entity_id,
-      Name: n.entity_name,
-      type: 'entity',
-      is_terminal: n.is_terminal,
-      is_root: n.is_root,
-    })),
-    edges: (raw.edges || []).map((e) => ({
-      source: e.from_entity_id,
-      target: e.to_entity_id,
-      value: typeof e.ownership_percentage === 'number' ? e.ownership_percentage : null,
-    })),
+    nodes: (raw.nodes || []).map((n) => ({ id: n.entity_id, Name: n.entity_name, type: 'entity' as const, is_terminal: n.is_terminal, is_root: n.is_root })),
+    edges: (raw.edges || []).map((e) => ({ source: e.from_entity_id, target: e.to_entity_id, value: pct(e.ownership_percentage) })),
     terminalIds: raw.terminal_node_ids || [],
   };
 }
 
+/** Build entity ownership graph in given direction (up = ancestors, down = descendants) */
+async function getEntityGraph(entityId: string, direction: 'up' | 'down'): Promise<EntityGraphResponse> {
+  const raw = await fetchAPI<RawEntityGraph>(
+    `/entities/${encodeURIComponent(entityId)}/graph/${direction}`
+  );
+  return normalizeEntityGraph(raw);
+}
+
+export const getEntityGraphUp = (id: string) => getEntityGraph(id, 'up');
+export const getEntityGraphDown = (id: string) => getEntityGraph(id, 'down');
+
+// ============================================================================
+// ASSET TYPE MAPPING
+// ============================================================================
+
 /**
- * Build complete ownership graph by traversing downwards
+ * Mapping from our URL slugs to the actual API asset_type values.
+ * The API's asset_type filter param is currently non-functional,
+ * so we filter client-side using these names.
  */
-export async function getEntityGraphDown(entityId: string): Promise<EntityGraphResponse> {
-  const raw = await fetchAPI<{
-    root_entity_id: string;
-    root_entity_name: string;
-    nodes: Array<{
-      entity_id: string;
-      entity_name: string;
-      is_terminal?: boolean;
-      is_root?: boolean;
-    }>;
-    edges: Array<{
-      from_entity_id: string;
-      from_entity_name?: string;
-      to_entity_id: string;
-      to_entity_name?: string;
-      ownership_percentage?: number;
-    }>;
-    terminal_node_ids?: string[];
-  }>(`/entities/${encodeURIComponent(entityId)}/graph/down`);
-  return {
-    rootEntityId: raw.root_entity_id,
-    rootEntityName: raw.root_entity_name,
-    nodes: (raw.nodes || []).map((n) => ({
-      id: n.entity_id,
-      Name: n.entity_name,
-      type: 'entity',
-      is_terminal: n.is_terminal,
-      is_root: n.is_root,
-    })),
-    edges: (raw.edges || []).map((e) => ({
-      source: e.from_entity_id,
-      target: e.to_entity_id,
-      value: typeof e.ownership_percentage === 'number' ? e.ownership_percentage : null,
-    })),
-    terminalIds: raw.terminal_node_ids || [],
-  };
+export const SLUG_TO_API_TYPE: Record<string, string> = {
+  'coal-plant': 'Coal Plant',
+  'coal-mine': 'Coal Mine',
+  'gas-plant': 'Oil & Gas Plant',
+  'iron-mine': 'Iron Ore Mine',
+  'steel-plant': 'Iron & Steel Plant',
+  'gas-pipeline': 'Natural Gas Transmission Pipeline',
+  bioenergy: 'Bioenergy Plant',
+};
+
+/** Reverse mapping: API type → our slug */
+export const API_TYPE_TO_SLUG: Record<string, string> = Object.fromEntries(
+  Object.entries(SLUG_TO_API_TYPE).map(([slug, apiType]) => [apiType, slug])
+);
+
+/** Also map our tracker display names to API types */
+const TRACKER_NAME_TO_API_TYPE: Record<string, string> = {
+  'Coal Plant': 'Coal Plant',
+  'Coal Mine': 'Coal Mine',
+  'Gas Plant': 'Oil & Gas Plant',
+  'Iron Mine': 'Iron Ore Mine',
+  'Steel Plant': 'Iron & Steel Plant',
+  'Gas Pipeline': 'Natural Gas Transmission Pipeline',
+  'Bioenergy Power': 'Bioenergy Plant',
+};
+
+/** Resolve any tracker identifier (slug, display name, or API type) to API type */
+export function resolveApiAssetType(tracker: string): string {
+  return SLUG_TO_API_TYPE[tracker] || TRACKER_NAME_TO_API_TYPE[tracker] || tracker;
 }
 
 // ============================================================================
 // ASSET ENDPOINTS
 // ============================================================================
 
-/**
- * Search and retrieve assets with optional filtering
- */
+/** Search and retrieve assets with optional filtering */
 export async function listAssets(params?: {
-  q?: string;
-  status?: string;
-  country?: string;
-  asset_type?: string;
-  limit?: number;
-  offset?: number;
+  q?: string; status?: string; country?: string; asset_type?: string; limit?: number; offset?: number;
 }): Promise<PaginatedResponse<AssetSummary>> {
-  const searchParams = new URLSearchParams();
-  if (params?.q) searchParams.set('q', params.q);
-  if (params?.status) searchParams.set('status', params.status);
-  if (params?.country) searchParams.set('country', params.country);
-  if (params?.asset_type) searchParams.set('asset_type', params.asset_type);
-  if (params?.limit) searchParams.set('limit', String(params.limit));
-  if (params?.offset) searchParams.set('offset', String(params.offset));
-
-  const query = searchParams.toString();
+  // NOTE: The API's asset_type filter is non-functional (always returns all types).
+  // We pass it anyway (in case it gets fixed) but also filter client-side.
   const raw = await fetchAPI<RawAsset[] | PaginatedResponse<RawAsset>>(
-    `/assets${query ? `?${query}` : ''}`
+    `/assets${buildQuery(params)}`
   );
   const page = normalizePaginated(raw);
-  return {
-    ...page,
-    results: page.results.map((asset) => normalizeAsset(asset)),
-  };
+  return { ...page, results: page.results.map(normalizeAsset) };
+}
+
+/**
+ * Fetch assets filtered by tracker type with auto-pagination.
+ * Works around the broken API asset_type filter by fetching pages
+ * and filtering client-side until we have enough results.
+ *
+ * @param assetType - Slug, display name, or API type name
+ * @param opts - limit (default 100), plus optional status/country filters
+ */
+export async function listAssetsByType(
+  assetType: string,
+  opts?: { limit?: number; status?: string; country?: string }
+): Promise<AssetSummary[]> {
+  const apiTypeName = resolveApiAssetType(assetType);
+  const limit = opts?.limit ?? 100;
+  const results: AssetSummary[] = [];
+  let offset = 0;
+  const BATCH = 500; // API max
+  const MAX_FETCH = 25000; // safety: don't fetch more than this
+
+  while (results.length < limit && offset < MAX_FETCH) {
+    const page = await listAssets({ limit: BATCH, offset, status: opts?.status, country: opts?.country });
+    const filtered = page.results.filter(a => a.facilityType === apiTypeName);
+    results.push(...filtered);
+    offset += BATCH;
+    if (page.results.length < BATCH) break; // exhausted all data
+  }
+
+  return results.slice(0, limit);
+}
+
+/**
+ * Get asset counts per tracker type.
+ * Fetches a sample and extrapolates based on proportions.
+ * Returns a Map of API type name → estimated count.
+ */
+export async function getAssetTypeCounts(): Promise<Map<string, number>> {
+  const SAMPLE_PAGES = 3; // 1500 assets = good sample for proportions
+  const BATCH = 500;
+  const counts = new Map<string, number>();
+  let totalSampled = 0;
+  let apiTotal = 0;
+
+  for (let i = 0; i < SAMPLE_PAGES; i++) {
+    const page = await listAssets({ limit: BATCH, offset: i * BATCH });
+    if (i === 0) apiTotal = page.total ?? page.count;
+    for (const asset of page.results) {
+      const t = asset.facilityType || 'Unknown';
+      counts.set(t, (counts.get(t) || 0) + 1);
+    }
+    totalSampled += page.results.length;
+    if (page.results.length < BATCH) break;
+  }
+
+  // Extrapolate to full dataset
+  if (totalSampled > 0 && apiTotal > totalSampled) {
+    const scale = apiTotal / totalSampled;
+    for (const [type, count] of counts) {
+      counts.set(type, Math.round(count * scale));
+    }
+  }
+
+  return counts;
 }
 
 /**
@@ -577,38 +539,44 @@ export async function getAsset(assetId: string): Promise<AssetSummary> {
 // UNIFIED GRAPH ENDPOINT
 // ============================================================================
 
-/**
- * Universal ownership graph - works with both entities and assets
- * Note: G-prefix IDs are automatically resolved to compound L_G format
- */
+/** Universal ownership graph — works with both entities and assets (auto-resolves G-prefix IDs) */
 export async function getOwnershipGraph(params: {
   root: string;
   direction?: 'up' | 'down';
   max_depth?: number;
 }): Promise<OwnershipGraphResponse> {
   const resolvedRoot = await resolveAssetId(params.root);
-  const searchParams = new URLSearchParams();
-  searchParams.set('root', resolvedRoot);
-  if (params.direction) searchParams.set('direction', params.direction);
-  if (params.max_depth) searchParams.set('max_depth', String(params.max_depth));
-
   const raw = await fetchAPI<{
-    root: OwnershipTraceNode;
-    nodes: GraphNode[];
-    edges: Array<{
-      source: string;
-      target: string;
-      value?: number | null;
-      type?: 'leafEdge' | 'intermediateEdge';
-      refUrl?: string | null;
-      imputedShare?: boolean;
-      depth?: number;
-    }>;
-  }>(`/ownership/graph?${searchParams.toString()}`);
+    root: Record<string, unknown>;
+    nodes: Array<Record<string, unknown>>;
+    edges: OwnershipGraphResponse['edges'];
+    paths?: OwnershipGraphResponse['paths'];
+  }>(`/ownership/graph${buildQuery({ root: resolvedRoot, direction: params.direction, max_depth: params.max_depth })}`);
+
+  // Normalize root node
+  const root: OwnershipTraceNode = {
+    id: String(raw.root.entity_id || raw.root.asset_id || ''),
+    Name: String(raw.root.name || raw.root.asset_name || ''),
+    type: (raw.root.node_type as 'entity' | 'asset') || 'asset',
+  };
+
+  // Normalize nodes: API returns entity_id/asset_id, node_type, name/asset_name
+  const nodes: GraphNode[] = (raw.nodes || []).map((n) => ({
+    id: String(n.entity_id || n.asset_id || ''),
+    Name: String(n.name || n.asset_name || ''),
+    type: (n.node_type as 'entity' | 'asset') || 'entity',
+    is_terminal: n.is_terminal as boolean | undefined,
+    is_root: n.is_root as boolean | undefined,
+    // Preserve useful raw fields for side panel
+    entity_id: n.entity_id as string | undefined,
+    headquarters_country: n.headquarters_country as string | undefined,
+  }));
+
   return {
-    root: raw.root,
-    nodes: raw.nodes || [],
+    root,
+    nodes,
     edges: raw.edges || [],
+    paths: raw.paths,
   };
 }
 
@@ -616,67 +584,28 @@ export async function getOwnershipGraph(params: {
 // CONVENIENCE FUNCTIONS
 // ============================================================================
 
-/**
- * Get entity with ownership stats (parallel fetch)
- * Replaces: fetchOwnerStats + fetchOwnerPortfolio
- */
-export async function getEntityWithPortfolio(entityId: string): Promise<{
-  entity: EntitySummary;
-  owners: DirectOwnership[];
-  owned: DirectOwned[];
-  graphDown: EntityGraphResponse;
-}> {
+/** Parallel fetch: entity details + ownership stats + downstream graph */
+export async function getEntityWithPortfolio(entityId: string) {
   const [entity, owners, owned, graphDown] = await Promise.all([
-    getEntity(entityId),
-    getEntityOwners(entityId),
-    getEntityOwned(entityId),
-    getEntityGraphDown(entityId),
+    getEntity(entityId), getEntityOwners(entityId), getEntityOwned(entityId), getEntityGraphDown(entityId),
   ]);
-
   return { entity, owners, owned, graphDown };
 }
 
-/**
- * Convert API graph response to the format expected by OwnershipExplorerD3
- * This matches the shape of ownerExplorerData in +page.server.js
- */
-export function graphToExplorerData(
-  entityId: string,
-  entityName: string,
-  graphDown: EntityGraphResponse
-): {
-  spotlightOwner: { id: string; Name: string };
-  subsidiariesMatched: [string, unknown[]][];
-  directlyOwned: unknown[];
-  matchedEdges: [string, { value: number }][];
-  entityMap: [string, { id: string; Name: string; type: string }][];
-  assets: unknown[];
-} {
-  const entities = graphDown.nodes.filter((n) => n.id !== entityId);
-  const edgeMap = new Map<string, number | null>();
-  for (const edge of graphDown.edges || []) {
-    if (edge.source === entityId) {
-      edgeMap.set(edge.target, edge.value ?? null);
-    }
-  }
-
-  const subsidiariesMatched: [string, unknown[]][] = entities.map((e) => [e.id, []]);
-  const matchedEdges: [string, { value: number | null }][] = entities.map((e) => [
-    e.id,
-    { value: edgeMap.get(e.id) ?? null },
-  ]);
-  const entityMap: [string, { id: string; Name: string; type: string }][] = entities.map((e) => [
-    e.id,
-    { id: e.id, Name: e.Name, type: 'entity' },
-  ]);
-
+/** Convert API graph to shape expected by OwnershipExplorerD3 */
+export function graphToExplorerData(entityId: string, entityName: string, graphDown: EntityGraphResponse) {
+  const subs = graphDown.nodes.filter((n) => n.id !== entityId);
+  // Build direct-edge lookup: entity → ownership %
+  const directEdges = new Map(
+    (graphDown.edges || []).filter((e) => e.source === entityId).map((e) => [e.target, e.value ?? null])
+  );
   return {
     spotlightOwner: { id: entityId, Name: entityName },
-    subsidiariesMatched,
-    directlyOwned: [],
-    matchedEdges,
-    entityMap,
-    assets: [],
+    subsidiariesMatched: subs.map((e) => [e.id, []] as [string, unknown[]]),
+    directlyOwned: [] as unknown[],
+    matchedEdges: subs.map((e) => [e.id, { value: directEdges.get(e.id) ?? null }] as [string, { value: number | null }]),
+    entityMap: subs.map((e) => [e.id, { id: e.id, Name: e.Name, type: 'entity' }] as [string, { id: string; Name: string; type: string }]),
+    assets: [] as unknown[],
   };
 }
 

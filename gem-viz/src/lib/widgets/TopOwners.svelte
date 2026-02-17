@@ -5,7 +5,7 @@
    */
 
   import { onMount } from 'svelte';
-  import { getTopOwners } from '$lib/duckdb-queries';
+  import { listAssetsByType, listAssets } from '$lib/ownership-api';
   import { entityLink } from '$lib/links';
   import DataSourceBadge from '$lib/components/DataSourceBadge.svelte';
 
@@ -19,19 +19,38 @@
   let results = $state([]);
   let queryTime = $state(0);
 
-  const _metricLabel = $derived(metric === 'capacity' ? 'Capacity (MW)' : 'Assets');
-
   async function loadData() {
     loading = true;
     error = null;
 
-    const result = await getTopOwners({ limit, metric, tracker });
+    try {
+      const start = performance.now();
+      // Fetch assets (filtered by type if tracker specified)
+      const assets = tracker
+        ? await listAssetsByType(tracker, { limit: 2000 })
+        : (await listAssets({ limit: 500 })).results;
 
-    if (result.success) {
-      results = result.data || [];
-      queryTime = result.executionTime || 0;
-    } else {
-      error = result.error;
+      // Aggregate by owner client-side
+      const ownerMap = new Map();
+      for (const asset of assets) {
+        const eid = asset.ownerEntityId || asset.ownerName || 'Unknown';
+        const name = asset.ownerName || eid;
+        if (!eid || eid === 'Unknown') continue;
+
+        const existing = ownerMap.get(eid) || { owner_name: name, entity_id: eid, asset_count: 0, value: 0 };
+        existing.asset_count += 1;
+        existing.value += metric === 'capacity' ? (asset.capacity || 0) : 1;
+        ownerMap.set(eid, existing);
+      }
+
+      // Sort by metric descending, take top N
+      results = Array.from(ownerMap.values())
+        .sort((a, b) => b.value - a.value)
+        .slice(0, limit);
+
+      queryTime = Math.round(performance.now() - start);
+    } catch (err) {
+      error = err?.message || 'Failed to load top owners';
     }
 
     loading = false;
@@ -43,7 +62,6 @@
 
   // Reload when props change
   $effect(() => {
-    // Track dependencies
     void limit;
     void metric;
     void tracker;
@@ -54,7 +72,7 @@
 <div class="widget top-owners">
   <header>
     <h3>{title}</h3>
-    <DataSourceBadge source="motherduck" {queryTime} size="sm" />
+    <DataSourceBadge source="api" {queryTime} size="sm" />
   </header>
 
   {#if loading}

@@ -9,11 +9,13 @@
 import {
   getOwnershipGraph,
   getEntityGraphDown,
+  getEntityOwned,
+  getAsset,
   listEntities,
   type GraphNode,
   type GraphEdge,
+  type AssetSummary,
 } from '$lib/ownership-api';
-import { getOwnerAssets, getOwnerAssetCount } from '$lib/duckdb-queries';
 
 // ID field mapping by tracker type (preserved for compatibility)
 const idFields = new Map([
@@ -90,6 +92,64 @@ export interface SpotlightOwnerData {
   assetClassName: string;
   truncated?: boolean; // True if results were limited for performance
   totalCount?: number; // Actual total count before limiting
+}
+
+// ============================================================================
+// REST API HELPERS (replacing DuckDB getOwnerAssets/getOwnerAssetCount)
+// ============================================================================
+
+/** Convert AssetSummary to the row shape expected by rowToAsset */
+function assetToRow(a: AssetSummary, ownershipPct?: number | null): Record<string, unknown> {
+  return {
+    id: a.id,
+    name: a.name,
+    tracker: a.facilityType || 'Unknown',
+    status: a.status || 'Unknown',
+    country: a.country || 'Unknown',
+    capacity: a.capacity,
+    ownershipShare: ownershipPct ?? null,
+  };
+}
+
+/** Fetch assets owned by an entity via REST API (replaces DuckDB getOwnerAssets) */
+async function fetchOwnerAssets(
+  entityId: string,
+  limit = 500
+): Promise<{ success: boolean; data: Record<string, unknown>[] }> {
+  try {
+    const owned = await getEntityOwned(entityId);
+    const limited = owned.slice(0, limit);
+    const results: Record<string, unknown>[] = [];
+
+    // Batch getAsset calls to avoid overwhelming the API
+    const BATCH = 15;
+    for (let i = 0; i < limited.length; i += BATCH) {
+      const batch = limited.slice(i, i + BATCH);
+      const settled = await Promise.allSettled(
+        batch.map((item) => getAsset(item.entityId))
+      );
+      for (let j = 0; j < settled.length; j++) {
+        const r = settled[j];
+        if (r.status === 'fulfilled') {
+          results.push(assetToRow(r.value, batch[j].ownershipPct));
+        }
+      }
+    }
+    return { success: true, data: results };
+  } catch (err) {
+    console.error(`[fetchOwnerAssets] Failed for ${entityId}:`, err);
+    return { success: false, data: [] };
+  }
+}
+
+/** Count assets owned by an entity via REST API (replaces DuckDB getOwnerAssetCount) */
+async function fetchOwnerAssetCount(entityId: string): Promise<number> {
+  try {
+    const owned = await getEntityOwned(entityId);
+    return owned.length;
+  } catch {
+    return 0;
+  }
 }
 
 // ============================================================================
@@ -263,12 +323,12 @@ export async function* streamOwnerPortfolio(
 
   try {
     // Phase 1: Initialize
-    yield { phase: 'init', message: 'Initializing DuckDB...', portfolio: null };
+    yield { phase: 'init', message: 'Loading ownership data...', portfolio: null };
 
     // Phase 2: First get the count to know if this is a large entity
     yield { phase: 'direct', message: 'Checking entity size...', portfolio: null };
 
-    const directCount = await getOwnerAssetCount(entityId);
+    const directCount = await fetchOwnerAssetCount(entityId);
     totalAssetCount = directCount;
 
     // Now fetch direct assets with limit
@@ -278,7 +338,7 @@ export async function* streamOwnerPortfolio(
       portfolio: null,
     };
 
-    const directResult = await getOwnerAssets(entityId, MAX_DIRECT_ASSETS);
+    const directResult = await fetchOwnerAssets(entityId, MAX_DIRECT_ASSETS);
 
     if (directResult.success && directResult.data) {
       for (const row of directResult.data) {
@@ -318,7 +378,10 @@ export async function* streamOwnerPortfolio(
     let subsidiaryIds: string[] = [];
     try {
       const graphData = await Promise.race([
-        getEntityGraphDown(entityId),
+        getEntityGraphDown(entityId).catch((err) => {
+          console.error('[streamOwnerPortfolio] API error fetching entity graph:', err);
+          return null;
+        }),
         new Promise<null>((resolve) => setTimeout(() => resolve(null), 10000)),
       ]);
 
@@ -340,7 +403,7 @@ export async function* streamOwnerPortfolio(
         }
       }
     } catch (apiErr) {
-      console.warn('[streamOwnerPortfolio] API failed, using DuckDB only:', apiErr);
+      console.warn('[streamOwnerPortfolio] Entity graph API failed:', apiErr);
     }
 
     // Limit subsidiaries for large entities
@@ -380,7 +443,7 @@ export async function* streamOwnerPortfolio(
 
       const batchResults = await Promise.all(
         batch.map(async (subId) => {
-          const subResult = await getOwnerAssets(subId, MAX_ASSETS_PER_SUBSIDIARY);
+          const subResult = await fetchOwnerAssets(subId, MAX_ASSETS_PER_SUBSIDIARY);
           if (subResult.success && subResult.data && subResult.data.length > 0) {
             return { subId, assets: subResult.data.map(rowToAsset) };
           }
@@ -433,8 +496,7 @@ export async function* streamOwnerPortfolio(
 
 /**
  * Get all subsidiaries and assets owned by an entity (walks DOWN the ownership tree)
- * Uses DuckDB directly for fast asset queries.
- * Falls back to API for entity metadata only.
+ * Uses REST API for asset queries and entity metadata.
  *
  * Performance limits for large entities:
  * - Max 500 direct assets per entity
@@ -457,8 +519,8 @@ export async function getSpotlightOwnerData(
   const MAX_TOTAL_ASSETS = 5000;
 
   try {
-    // First, get assets directly owned by this entity from DuckDB (fast)
-    const directResult = await getOwnerAssets(entityId, MAX_DIRECT_ASSETS);
+    // First, get assets directly owned by this entity via REST API
+    const directResult = await fetchOwnerAssets(entityId, MAX_DIRECT_ASSETS);
 
     // Build asset list
     const subsidiariesMatched = new Map<string, SpotlightAsset[]>();
@@ -494,7 +556,10 @@ export async function getSpotlightOwnerData(
     let effectiveEntityName = entityName || entityId;
     try {
       const graphData = await Promise.race([
-        getEntityGraphDown(entityId),
+        getEntityGraphDown(entityId).catch((err) => {
+          console.error('[getSpotlightOwnerData] API error fetching entity graph:', err);
+          return null;
+        }),
         new Promise<null>((resolve) => setTimeout(() => resolve(null), 10000)), // 10s timeout
       ]);
 
@@ -526,15 +591,20 @@ export async function getSpotlightOwnerData(
 
         // Fetch assets for each subsidiary (in parallel for speed)
         const subPromises = subsidiaryIds.map(async (subId) => {
-          const subResult = await getOwnerAssets(subId, MAX_ASSETS_PER_SUBSIDIARY);
+          const subResult = await fetchOwnerAssets(subId, MAX_ASSETS_PER_SUBSIDIARY);
           if (subResult.success && subResult.data && subResult.data.length > 0) {
             return { subId, assets: subResult.data.map(rowToAsset) };
           }
           return { subId, assets: [] };
         });
 
-        const subResults = await Promise.all(subPromises);
-        for (const { subId, assets } of subResults) {
+        const subResults = await Promise.allSettled(subPromises);
+        for (const result of subResults) {
+          if (result.status === 'rejected') {
+            console.warn('[getSpotlightOwnerData] Subsidiary asset load failed:', result.reason);
+            continue;
+          }
+          const { subId, assets } = result.value;
           if (assets.length > 0) {
             // Only add up to the remaining budget
             const remaining = MAX_TOTAL_ASSETS - allAssets.length;
@@ -552,8 +622,8 @@ export async function getSpotlightOwnerData(
         }
       }
     } catch (apiErr) {
-      console.warn('[getSpotlightOwnerData] API failed, using DuckDB only:', apiErr);
-      // Continue with just direct assets if API fails
+      console.warn('[getSpotlightOwnerData] Entity graph API failed:', apiErr);
+      // Continue with just direct assets if graph API fails
     }
 
     // Always set entity map for main entity
