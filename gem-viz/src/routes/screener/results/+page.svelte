@@ -81,7 +81,6 @@
   let showUnmatched = $state(false);
 
   // Data source tracking
-  /** @type {'motherduck' | 'local'} */
   let dataSource = $state<'none' | 'motherduck' | 'local' | 'api' | 'server'>('motherduck');
   let queryTime = $state(null);
   let executedQuery = $state('');
@@ -109,11 +108,8 @@
     };
   });
 
-  // Investigation cart state (reactive)
-  let cartItems = $state([]);
-  investigationCart.subscribe((items) => {
-    cartItems = items;
-  });
+  // Investigation cart state (reactive via auto-subscribe)
+  let cartItems = $derived($investigationCart);
 
   // Get just entities from cart
   const investigationEntities = $derived(cartItems.filter((item) => item.type === 'entity'));
@@ -187,8 +183,7 @@
         ownerIds: selectedOwnerIds.length > 0 ? selectedOwnerIds : undefined,
       };
 
-      // Fetch asset type counts (cached, for debug panel)
-      // This replaces the inline debug query
+      // Fetch asset type counts via REST API (cached, for debug panel)
       getAssetTypeCounts().then((counts) => {
         availableAssetTypes = Object.entries(counts).map(([asset_type, cnt]) => ({
           asset_type,
@@ -197,11 +192,11 @@
       });
 
       // Main query: get owners by asset type
-      // Currently uses MotherDuck, will switch to REST API when available
+      // Uses MotherDuck — REST API lacks owner fields on /assets (see screener-api.ts)
       const result = await getOwnersByAssetType(filters, { limit: 200 });
 
       queryTime = result.queryTimeMs;
-      dataSource = /** @type {'motherduck' | 'local'} */ (result.source);
+      dataSource = result.source === 'rest-api' ? 'api' : result.source === 'cache' ? 'local' : /** @type {'motherduck' | 'local'} */ (result.source);
       executedQuery = `[Centralized API] source=${result.source}, filters=${JSON.stringify(filters)}`;
 
       owners = result.owners.map((o) => ({
@@ -440,10 +435,9 @@
                     <div class="no-data-notice">
                       <strong>No ownership data available for {classDescription}.</strong>
                       <p>
-                        The ownership aggregation database currently includes Coal Plants, Gas Plants, Steel Plants, and Bioenergy.
-                        Coal Mines, Iron Mines, and Gas Pipelines are available in the
-                        <a href="https://gem-api.thirdbear.net/assets?asset_type=Coal%20Mine" target="_blank" rel="noopener">REST API</a>
-                        but not yet in the aggregation layer.
+                        Owner aggregation currently covers Coal Plants, Gas Plants, Steel Plants, and Bioenergy.
+                        Coal Mines, Iron Mines, and Gas Pipelines have asset data in the REST API
+                        but owner relationships are not yet queryable for those tracker types.
                       </p>
                     </div>
                   {/if}
@@ -925,11 +919,6 @@
     font-size: var(--font-size-sm);
     line-height: 1.5;
     color: #c2410c;
-  }
-
-  .no-data-notice a {
-    color: #1d4961;
-    text-decoration: underline;
   }
 
   /* Responsive */

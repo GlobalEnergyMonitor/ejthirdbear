@@ -16,10 +16,12 @@ export interface ReportSummary {
   trackers: string[];
 }
 
+import type { GraphNode, GraphEdge, OwnershipPathEntry } from '$lib/component-data/graph-types';
+
 export interface OwnershipGraph {
-  nodes: unknown[];
-  edges: unknown[];
-  paths?: unknown;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  paths?: Record<string, OwnershipPathEntry[]>;
 }
 
 /**

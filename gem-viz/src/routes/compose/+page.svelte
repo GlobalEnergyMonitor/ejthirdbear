@@ -4,16 +4,15 @@
    * Build custom filtered views of the GEM ownership data.
    * Filters are encoded in the URL for easy sharing.
    *
-   * See: docs/compose-api-spec.md for API migration notes
+   * State and logic extracted to $lib/stores/compose-state.svelte.ts
    */
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
-  import { goto } from '$app/navigation';
-  import { browser } from '$app/environment';
-  import { base } from '$app/paths';
 
-  import { assetLink, link } from '$lib/links';
+  import { link } from '$lib/links';
   import { formatCount } from '$lib/format';
+  import { decodeFilters } from '$lib/filter-state';
+
   import MiniHistogram from '$lib/components/MiniHistogram.svelte';
   import Sparkline from '$lib/components/Sparkline.svelte';
   import MiniBarChart from '$lib/components/MiniBarChart.svelte';
@@ -23,923 +22,14 @@
   import FilterBreadcrumbs from '$lib/components/FilterBreadcrumbs.svelte';
   import ProjectCard from '$lib/components/ProjectCard.svelte';
   import DataSourceBadge from '$lib/components/DataSourceBadge.svelte';
-  import { statusColorsGranular } from '$lib/design-tokens';
 
-  import {
-    emptyFilterState,
-    decodeFilters,
-    encodeFilters,
-    buildShareUrl,
-    hasActiveFilters,
-    buildSqlWhere,
-    getPresets,
-    savePreset,
-    deletePreset,
-    saveAssetClass,
-  } from '$lib/filter-state';
-  import { investigationCart } from '$lib/investigationCart';
-  import { buildExportPreset, importPreset } from '$lib/presets';
-  import {
-    fetchOwnershipColumns,
-    fetchCountries,
-    fetchOwnerCountries,
-    fetchOwners,
-    fetchTrackers,
-    fetchStatuses,
-    fetchCapacityRange,
-    fetchStartYearRange,
-    fetchCapacityHistogram,
-    fetchResults,
-    fetchTrackerColumnInfo,
-  } from '$lib/compose-queries';
-  import { ASSET_ID_COALESCE_O } from '$lib/duckdb-queries';
-  import {
-    mergeParametricCounts,
-    calculateCapacityData,
-    calculateStartYearData,
-    calculateStatusDistribution,
-    calculateCountryDistribution,
-    calculateTrackerDistribution,
-    copyToClipboard,
-    downloadJson,
-    LOCATIONS_DEDUP_SQL,
-  } from './compose-utils';
+  import { ComposeState } from '$lib/stores/compose-state.svelte';
 
-  // ---------------------------------------------------------------------------
-  // State
-  // ---------------------------------------------------------------------------
-  let filters = $state(emptyFilterState());
-  let results = $state([]);
-  let totalCount = $state(0);
-  let loading = $state(false);
-  let loadingOptions = $state(true);
-  let loadingCounts = $state(false);
-  let error = $state(null);
-  let initialLoadComplete = $state(false);
+  const state = new ComposeState();
 
-  // Pagination
-  let currentPage = $state(1);
-  const pageSize = 50;
-  const totalPages = $derived(Math.ceil(totalCount / pageSize));
-
-  // Asset preview panel
-  let selectedAsset = $state(null);
-
-  // Row selection for bulk cart actions
-  let selectedRows = $state([]);
-  let allMatchingSelected = $state(false); // Gmail-style "select all X matching"
-  let allMatchingIds = $state([]); // IDs of all matching assets (when selecting all)
-
-  // Base reference data (all possible options - never filtered)
-  let baseCountries = $state([]);
-  let baseOwnerCountries = $state([]);
-  let baseOwners = $state([]);
-  let baseTrackers = $state([]);
-  let baseStatuses = $state([]);
-
-  // Parametric counts (update based on current filters - merged with base)
-  let countries = $state([]);
-  let ownerCountries = $state([]);
-  let owners = $state([]);
-  let trackerOptions = $state([]);
-  let statusOptions = $state([]);
-  let ownershipColumns = $state([]);
-
-  // Tracker-specific column availability
-  // Maps tracker name -> { hasCapacity, hasStartYear, hasShare }
-  let trackerColumns = $state({});
-
-  let presets = $state([]);
-  let showPresets = $state(false);
-  let newPresetName = $state('');
-  let importError = $state('');
-  let copied = $state(false);
-  let queryTime = $state(0);
-
-  // Asset class save modal
-  let showSaveAssetClass = $state(false);
-  let newClassName = $state('');
-  let newClassDescription = $state('');
-  let assetClassSaved = $state(false);
-
-  // Data ranges for numeric filters
-  let capacityRange = $state({ min: 0, max: 10000 });
-  let startYearRange = $state({ min: 1950, max: 2035 });
-  let capacityHistogram = $state([]);
-
-  // ---------------------------------------------------------------------------
-  // Derived
-  // ---------------------------------------------------------------------------
-  const shareUrl = $derived(buildShareUrl(filters));
-  const hasFilters = $derived(hasActiveFilters(filters));
-
-  // Investigation cart - track which assets are in the user's investigation
-  const cartAssetIds = $derived(new Set($investigationCart.map((item) => item.id)));
-
-  const ownershipColumnNames = $derived.by(() => {
-    const columnSet = new Set(ownershipColumns);
-    const startYearColumn = columnSet.has('Start Year')
-      ? 'Start Year'
-      : columnSet.has('Start year')
-        ? 'Start year'
-        : null;
-
-    return {
-      tracker: columnSet.has('Tracker') ? 'Tracker' : null,
-      status: columnSet.has('Status') ? 'Status' : null,
-      country: null,
-      ownerCountry: columnSet.has('Owner Headquarters Country')
-        ? 'Owner Headquarters Country'
-        : null,
-      owner: columnSet.has('Owner') ? 'Owner' : null,
-      project: columnSet.has('Project') ? 'Project' : null,
-      capacity: columnSet.has('Capacity (MW)') ? 'Capacity (MW)' : null,
-      share: columnSet.has('Share') ? 'Share' : null,
-      startYear: startYearColumn,
-    };
-  });
-
-  // Determine which columns are available based on selected trackers
-  const availableColumns = $derived.by(() => {
-    const selectedTrackers = filters.trackers;
-    const hasCapacityGlobal = Boolean(ownershipColumnNames.capacity);
-    const hasShareGlobal = Boolean(ownershipColumnNames.share);
-    const hasStartYearGlobal = Boolean(ownershipColumnNames.startYear);
-
-    // If no trackers selected, show all possible columns
-    if (!selectedTrackers.length) {
-      return {
-        hasCapacity: hasCapacityGlobal,
-        hasShare: hasShareGlobal,
-        hasStartYear: hasStartYearGlobal,
-      };
-    }
-
-    // Check if any selected tracker has these columns
-    let hasCapacity = false;
-    let hasShare = false;
-    let hasStartYear = false;
-
-    for (const tracker of selectedTrackers) {
-      const cols = trackerColumns[tracker];
-      if (cols) {
-        if (cols.hasCapacity) hasCapacity = true;
-        if (cols.hasShare) hasShare = true;
-        if (cols.hasStartYear) hasStartYear = true;
-      } else {
-        // If we don't have info, assume it might have the columns
-        hasCapacity = hasCapacityGlobal;
-        hasShare = hasShareGlobal;
-        hasStartYear = hasStartYearGlobal;
-      }
-    }
-
-    return { hasCapacity, hasShare, hasStartYear };
-  });
-
-  /**
-   * @typedef {Object} TableColumn
-   * @property {string} key
-   * @property {string} label
-   * @property {boolean} [sortable]
-   * @property {boolean} [filterable]
-   * @property {'string' | 'number' | 'date'} [type]
-   * @property {string} [width]
-   */
-
-  const tableColumns = $derived.by(() => {
-    // All possible columns
-    /** @type {TableColumn[]} */
-    const allColumns = [
-      { key: 'name', label: 'Asset', sortable: true, filterable: true },
-      { key: 'asset_id', label: 'Asset ID', sortable: true, filterable: true },
-      { key: 'tracker', label: 'Tracker', sortable: true, filterable: true },
-      { key: 'status', label: 'Status', sortable: true, filterable: true },
-      { key: 'country', label: 'Country', sortable: true, filterable: true },
-      ...(availableColumns.hasCapacity
-        ? [
-            {
-              key: 'capacity_mw',
-              label: 'Capacity (MW)',
-              sortable: true,
-              filterable: true,
-              type: /** @type {const} */ ('number'),
-            },
-          ]
-        : []),
-      { key: 'owner', label: 'Owner', sortable: true, filterable: true },
-      { key: 'owner_id', label: 'Owner ID', sortable: true, filterable: true },
-    ];
-
-    // Find which columns have active filters
-    const activeFilterColumns = new Set();
-    if (filters.trackers?.length) activeFilterColumns.add('tracker');
-    if (filters.statuses?.length) activeFilterColumns.add('status');
-    if (filters.countries?.length) activeFilterColumns.add('country');
-    if (filters.owners?.length) activeFilterColumns.add('owner');
-
-    // Reorder: name first, then filtered columns, then the rest
-    const nameCol = allColumns.find((c) => c.key === 'name');
-    const filteredCols = allColumns.filter(
-      (c) => c.key !== 'name' && activeFilterColumns.has(c.key)
-    );
-    const otherCols = allColumns.filter((c) => c.key !== 'name' && !activeFilterColumns.has(c.key));
-
-    return [nameCol, ...filteredCols, ...otherCols];
-  });
-
-  const tableRows = $derived(
-    results.map((row) => ({
-      ...row,
-      name: row.name || row.asset_id,
-    }))
-  );
-
-  // ---------------------------------------------------------------------------
-  // Visualization Data (derived from results)
-  // ---------------------------------------------------------------------------
-
-  // Visualization data - using extracted utility functions
-  const capacityData = $derived(calculateCapacityData(results));
-  const startYearData = $derived(calculateStartYearData(results));
-  const statusDistribution = $derived(calculateStatusDistribution(results));
-  const countryDistribution = $derived(calculateCountryDistribution(results));
-  const trackerDistribution = $derived(calculateTrackerDistribution(results));
-
-  // Status color map
-  const statusColors = statusColorsGranular;
-
-  // ---------------------------------------------------------------------------
-  // URL Sync
-  // ---------------------------------------------------------------------------
-  function syncFiltersToUrl() {
-    if (!browser) return;
-    const encoded = encodeFilters(filters);
-    const newUrl = encoded ? `${base}/compose?${encoded}` : `${base}/compose`;
-    // Use replaceState to avoid polluting history
-    goto(newUrl, { replaceState: true, keepFocus: true });
-  }
-
-  // ---------------------------------------------------------------------------
-  // Data Loading
-  // ---------------------------------------------------------------------------
-  async function loadResults(resetPage = true) {
-    if (!browser) return;
-
-    // Reset to page 1 when filters change
-    if (resetPage) {
-      currentPage = 1;
-    }
-
-    loading = true;
-    error = null;
-    const startTime = Date.now();
-    const offset = (currentPage - 1) * pageSize;
-
-    try {
-      const whereClause = buildSqlWhere(filters, 'o', ownershipColumnNames);
-      const data = await fetchResults(whereClause, ownershipColumnNames, pageSize, offset);
-
-      results = data.results;
-      totalCount = data.totalCount;
-      queryTime = Date.now() - startTime;
-    } catch (err) {
-      error = err.message;
-      results = [];
-      totalCount = 0;
-    } finally {
-      loading = false;
-    }
-  }
-
-  function goToPage(page) {
-    if (page < 1 || page > totalPages || page === currentPage) return;
-    currentPage = page;
-    loadResults(false); // Don't reset page since we're setting it explicitly
-  }
-
-  async function loadReferenceData() {
-    if (!browser) return;
-    loadingOptions = true;
-
-    try {
-      // Load all reference data in parallel using extracted functions
-      const [
-        cols,
-        countryData,
-        ownerCountryData,
-        ownerData,
-        trackerData,
-        statusData,
-        capRange,
-        yearRange,
-        capHist,
-      ] = await Promise.all([
-        fetchOwnershipColumns(),
-        fetchCountries(),
-        fetchOwnerCountries(),
-        fetchOwners(),
-        fetchTrackers(),
-        fetchStatuses(),
-        fetchCapacityRange(),
-        fetchStartYearRange(),
-        fetchCapacityHistogram(),
-      ]);
-
-      ownershipColumns = cols;
-
-      // Store base options (all possible values)
-      baseCountries = countryData;
-      baseOwnerCountries = ownerCountryData;
-      baseOwners = ownerData;
-      baseTrackers = trackerData;
-      baseStatuses = statusData;
-
-      // Initialize display options with base data
-      countries = countryData;
-      ownerCountries = ownerCountryData;
-      owners = ownerData;
-      trackerOptions = trackerData;
-      statusOptions = statusData;
-
-      capacityRange = capRange;
-      startYearRange = yearRange;
-      capacityHistogram = capHist;
-
-      loadTrackerColumns();
-    } catch {
-      // Silently handle reference data load failure - UI will show empty options
-    } finally {
-      loadingOptions = false;
-    }
-  }
-
-  async function loadTrackerColumns() {
-    if (!browser) return;
-    try {
-      const trackers = trackerOptions.map((t) => t.value).filter(Boolean);
-      trackerColumns = await fetchTrackerColumnInfo(trackers, ownershipColumnNames);
-    } catch {
-      // Silently handle - column info is optional
-    }
-  }
-
-  // Update parametric counts based on current filter selection
-  async function updateParametricCounts() {
-    if (!browser) return;
-    loadingCounts = true;
-
-    try {
-      const { widgetQuery } = await import('$lib/widgets/widget-utils');
-
-      // Build base WHERE clause from current filters
-      const whereClause = buildSqlWhere(filters, 'o', ownershipColumnNames);
-      const hasActiveFilter = whereClause !== '1=1';
-
-      // If no filters, use the original counts
-      if (!hasActiveFilter) {
-        return;
-      }
-
-      // Run parametric count queries in parallel (all need locations join for country filtering)
-      // Always update ALL facet counts when any filter is active
-
-      // Use deduplicated locations subquery from compose-utils
-      const LOCATIONS_DEDUP = LOCATIONS_DEDUP_SQL;
-
-      const statusWhereClause = buildSqlWhereExcluding(filters, 'statuses', 'o');
-      const trackerWhereClause = buildSqlWhereExcluding(filters, 'trackers', 'o');
-
-      const [trackerResult, statusResult, countryResult, ownerCountryResult, ownerResult] =
-        await Promise.all([
-          // Trackers - exclude tracker filter from count
-          widgetQuery(`
-          SELECT o."Tracker" as value, COUNT(*) as cnt
-          FROM ownership o
-          LEFT JOIN ${LOCATIONS_DEDUP} l ON o."GEM location ID" = l."GEM.location.ID"
-          WHERE ${trackerWhereClause}
-          GROUP BY o."Tracker"
-          ORDER BY cnt DESC
-        `),
-          // Statuses - exclude status filter from count
-          widgetQuery(`
-          SELECT o."Status" as value, COUNT(*) as cnt
-          FROM ownership o
-          LEFT JOIN ${LOCATIONS_DEDUP} l ON o."GEM location ID" = l."GEM.location.ID"
-          WHERE ${statusWhereClause}
-          GROUP BY o."Status"
-          ORDER BY cnt DESC
-        `),
-          // Countries - exclude country filter from count
-          widgetQuery(`
-          SELECT l."Country.Area" as value, COUNT(*) as cnt
-          FROM ownership o
-          LEFT JOIN ${LOCATIONS_DEDUP} l ON o."GEM location ID" = l."GEM.location.ID"
-          WHERE ${buildSqlWhereExcluding(filters, 'countries', 'o')}
-            AND l."Country.Area" IS NOT NULL AND l."Country.Area" != ''
-          GROUP BY l."Country.Area"
-          ORDER BY cnt DESC
-        `),
-          // Owner countries - exclude owner country filter from count
-          widgetQuery(`
-          SELECT o."Owner Headquarters Country" as value, COUNT(*) as cnt
-          FROM ownership o
-          LEFT JOIN ${LOCATIONS_DEDUP} l ON o."GEM location ID" = l."GEM.location.ID"
-          WHERE ${buildSqlWhereExcluding(filters, 'ownerCountries', 'o')}
-            AND o."Owner Headquarters Country" IS NOT NULL AND o."Owner Headquarters Country" != ''
-          GROUP BY o."Owner Headquarters Country"
-          ORDER BY cnt DESC
-        `),
-          // Owners - always update when any filter is active
-          widgetQuery(`
-          SELECT o."Owner" as value, COUNT(*) as cnt
-          FROM ownership o
-          LEFT JOIN ${LOCATIONS_DEDUP} l ON o."GEM location ID" = l."GEM.location.ID"
-          WHERE ${buildSqlWhereExcluding(filters, 'owners', 'o')}
-            AND o."Owner" IS NOT NULL AND o."Owner" != ''
-          GROUP BY o."Owner"
-          ORDER BY cnt DESC
-          LIMIT 1000
-        `),
-        ]);
-
-      // Merge parametric counts into base options (keeps all options, updates counts)
-      // Query failures are handled gracefully - missing data shows as 0 counts
-      trackerOptions = mergeParametricCounts(baseTrackers, trackerResult.data || []);
-      statusOptions = mergeParametricCounts(baseStatuses, statusResult.data || []);
-      countries = mergeParametricCounts(baseCountries, countryResult.data || []);
-      ownerCountries = mergeParametricCounts(baseOwnerCountries, ownerCountryResult.data || []);
-      if (ownerResult.success) {
-        owners = mergeParametricCounts(baseOwners, ownerResult.data || []);
-      }
-    } catch {
-      // Silently handle - counts will remain unchanged
-    } finally {
-      loadingCounts = false;
-    }
-  }
-
-  // mergeParametricCounts moved to compose-utils.ts
-
-  // Build WHERE clause excluding a specific filter (for parametric counts)
-  function buildSqlWhereExcluding(filters, excludeKey, tableAlias = '') {
-    const tempFilters = { ...filters };
-
-    // Clear the excluded filter
-    if (excludeKey === 'trackers') tempFilters.trackers = [];
-    else if (excludeKey === 'statuses') tempFilters.statuses = [];
-    else if (excludeKey === 'countries') tempFilters.countries = [];
-    else if (excludeKey === 'ownerCountries') tempFilters.ownerCountries = [];
-    else if (excludeKey === 'owners') tempFilters.owners = [];
-
-    return buildSqlWhere(tempFilters, tableAlias, ownershipColumnNames);
-  }
-
-  // ---------------------------------------------------------------------------
-  // Handlers
-  // ---------------------------------------------------------------------------
-  function clearFilters() {
-    filters = emptyFilterState();
-    syncFiltersToUrl();
-    loadResults();
-    // Reset to base counts (no need to refetch)
-    trackerOptions = baseTrackers;
-    statusOptions = baseStatuses;
-    countries = baseCountries;
-    ownerCountries = baseOwnerCountries;
-    owners = baseOwners;
-  }
-
-  function removeFilter(key, value) {
-    // Handle array filters (remove single value or entire array)
-    if (key === 'trackers') {
-      filters.trackers = value ? filters.trackers.filter((v) => v !== value) : [];
-    } else if (key === 'statuses') {
-      filters.statuses = value ? filters.statuses.filter((v) => v !== value) : [];
-    } else if (key === 'countries') {
-      filters.countries = value ? filters.countries.filter((v) => v !== value) : [];
-    } else if (key === 'ownerCountries') {
-      filters.ownerCountries = value ? filters.ownerCountries.filter((v) => v !== value) : [];
-    } else if (key === 'owners') {
-      filters.owners = value ? filters.owners.filter((v) => v !== value) : [];
-    }
-    // Handle range filters (clear both min and max)
-    else if (key === 'capacity') {
-      filters.capacityMin = null;
-      filters.capacityMax = null;
-    } else if (key === 'share') {
-      filters.shareMin = null;
-      filters.shareMax = null;
-    } else if (key === 'startYear') {
-      filters.startYearMin = null;
-      filters.startYearMax = null;
-    }
-    // Handle search
-    else if (key === 'search') {
-      filters.search = '';
-    }
-  }
-
-  function applyFilters() {
-    syncFiltersToUrl();
-    loadResults();
-    updateParametricCounts();
-  }
-
-  async function copyShareUrl() {
-    if (!browser) return;
-    const fullUrl = window.location.origin + shareUrl;
-    const success = await copyToClipboard(fullUrl);
-    if (success) {
-      copied = true;
-      setTimeout(() => (copied = false), 2000);
-    }
-  }
-
-  function handleSavePreset() {
-    if (!newPresetName.trim()) return;
-    savePreset(newPresetName.trim(), { ...filters });
-    presets = getPresets();
-    newPresetName = '';
-    showPresets = false;
-  }
-
-  function handleSaveAssetClass() {
-    if (!newClassName.trim()) return;
-    saveAssetClass(
-      newClassName.trim(),
-      newClassDescription.trim(),
-      { ...filters },
-      [] // tags - could add UI for this later
-    );
-    assetClassSaved = true;
-    setTimeout(() => {
-      showSaveAssetClass = false;
-      newClassName = '';
-      newClassDescription = '';
-      assetClassSaved = false;
-    }, 1500);
-  }
-
-  function handleLoadPreset(preset) {
-    filters = { ...emptyFilterState(), ...preset.filters };
-    showPresets = false;
-    applyFilters();
-  }
-
-  function handleDeletePreset(id) {
-    deletePreset(id);
-    presets = getPresets();
-  }
-
-  function downloadPresetFile(preset) {
-    const exportPreset = buildExportPreset(preset);
-    downloadJson(exportPreset, `${exportPreset.id}.json`);
-  }
-
-  async function handleImportPreset(event) {
-    if (!browser) return;
-    importError = '';
-    const target = /** @type {HTMLInputElement} */ (event.currentTarget);
-    const file = target?.files?.[0];
-    if (!file) return;
-    try {
-      const text = await file.text();
-      const data = JSON.parse(text);
-      importPreset(data);
-      presets = getPresets();
-    } catch {
-      importError = 'Failed to import preset JSON.';
-    } finally {
-      target.value = '';
-    }
-  }
-
-  function handleRowClick(row) {
-    if (!row?.asset_id) return;
-    // Navigate on click
-    goto(assetLink(row.asset_id));
-  }
-
-  // Tooltip state
-  let tooltipPos = $state({ x: 0, y: 0 });
-
-  function handleRowHover(row, event) {
-    if (!row?.asset_id) {
-      selectedAsset = null;
-      return;
-    }
-    tooltipPos = { x: event.clientX, y: event.clientY };
-    selectedAsset = {
-      id: row.asset_id,
-      name: row.name || row.asset_id,
-      status: row.status,
-      tracker: row.tracker,
-      country: row.country,
-      capacity: row.capacity_mw,
-      owner: row.owner,
-      startYear: row.start_year,
-    };
-  }
-
-  function handleRowLeave() {
-    selectedAsset = null;
-  }
-
-  function isRowInCart(row) {
-    return row?.asset_id && cartAssetIds.has(row.asset_id);
-  }
-
-  // Add selected rows to investigation cart
-  function addSelectedToCart() {
-    if (selectedRows.length === 0) return;
-    for (const row of selectedRows) {
-      if (row.asset_id && !cartAssetIds.has(row.asset_id)) {
-        investigationCart.add({
-          id: row.asset_id,
-          name: row.name || row.asset_id,
-          type: 'asset',
-        });
-      }
-    }
-    selectedRows = [];
-  }
-
-  // Remove selected rows from investigation cart
-  function removeSelectedFromCart() {
-    if (selectedRows.length === 0) return;
-    for (const row of selectedRows) {
-      if (row.asset_id && cartAssetIds.has(row.asset_id)) {
-        investigationCart.remove(row.asset_id);
-      }
-    }
-    selectedRows = [];
-  }
-
-  // Add all results on current page to cart
-  function addPageToCart() {
-    for (const row of results) {
-      if (row.asset_id && !cartAssetIds.has(row.asset_id)) {
-        investigationCart.add({
-          id: row.asset_id,
-          name: row.name || row.asset_id,
-          type: 'asset',
-        });
-      }
-    }
-  }
-
-  // Remove all results on current page from cart
-  function removePageFromCart() {
-    for (const row of results) {
-      if (row.asset_id && cartAssetIds.has(row.asset_id)) {
-        investigationCart.remove(row.asset_id);
-      }
-    }
-  }
-
-  // Count how many selected/page items are in cart
-  const selectedInCart = $derived(
-    selectedRows.filter((r) => r.asset_id && cartAssetIds.has(r.asset_id)).length
-  );
-  const selectedNotInCart = $derived(selectedRows.length - selectedInCart);
-  const pageInCart = $derived(
-    results.filter((r) => r.asset_id && cartAssetIds.has(r.asset_id)).length
-  );
-
-  // Check if all rows on page are selected (to show "select all matching" option)
-  const allPageSelected = $derived(results.length > 0 && selectedRows.length === results.length);
-
-  // Fetch all matching asset IDs for "select all matching" feature
-  async function fetchAllMatchingIds() {
-    const { widgetQuery } = await import('$lib/widgets/widget-utils');
-    const whereClause = buildSqlWhere(filters, 'o', ownershipColumnNames);
-
-    // Use deduplicated locations subquery from compose-utils
-    const LOCATIONS_DEDUP = LOCATIONS_DEDUP_SQL;
-
-    const result = await widgetQuery(`
-      SELECT DISTINCT ${ASSET_ID_COALESCE_O} as asset_id, o."Project" as name
-      FROM ownership o
-      LEFT JOIN ${LOCATIONS_DEDUP} l ON o."GEM location ID" = l."GEM.location.ID"
-      WHERE ${whereClause}
-      LIMIT 10000
-    `);
-
-    if (result.success && result.data) {
-      return result.data;
-    }
-    return [];
-  }
-
-  // Select all matching (Gmail-style)
-  async function selectAllMatching() {
-    loading = true;
-    const allMatching = await fetchAllMatchingIds();
-    allMatchingIds = allMatching;
-    allMatchingSelected = true;
-    loading = false;
-  }
-
-  // Clear "select all matching" mode
-  function clearAllMatchingSelection() {
-    allMatchingSelected = false;
-    allMatchingIds = [];
-    selectedRows = [];
-  }
-
-  // Add all matching to cart
-  async function addAllMatchingToCart() {
-    if (!allMatchingSelected || allMatchingIds.length === 0) return;
-    for (const item of allMatchingIds) {
-      if (item.asset_id && !cartAssetIds.has(item.asset_id)) {
-        investigationCart.add({
-          id: item.asset_id,
-          name: item.name || item.asset_id,
-          type: 'asset',
-        });
-      }
-    }
-    clearAllMatchingSelection();
-  }
-
-  // Remove all matching from cart
-  async function removeAllMatchingFromCart() {
-    if (!allMatchingSelected || allMatchingIds.length === 0) return;
-    for (const item of allMatchingIds) {
-      if (item.asset_id && cartAssetIds.has(item.asset_id)) {
-        investigationCart.remove(item.asset_id);
-      }
-    }
-    clearAllMatchingSelection();
-  }
-
-  // Count matching items in cart (when all matching selected)
-  const allMatchingInCart = $derived(
-    allMatchingSelected
-      ? allMatchingIds.filter((r) => r.asset_id && cartAssetIds.has(r.asset_id)).length
-      : 0
-  );
-  const allMatchingNotInCart = $derived(
-    allMatchingSelected ? allMatchingIds.length - allMatchingInCart : 0
-  );
-
-  // ---------------------------------------------------------------------------
-  // Export Functions (fetch ALL matching, not just current page)
-  // ---------------------------------------------------------------------------
-  let exporting = $state(false);
-
-  async function fetchAllForExport() {
-    const { widgetQuery } = await import('$lib/widgets/widget-utils');
-    const whereClause = buildSqlWhere(filters, 'o', ownershipColumnNames);
-
-    const result = await widgetQuery(`
-      SELECT DISTINCT
-        ${ASSET_ID_COALESCE_O} as asset_id,
-        o."Project" as name,
-        o."Tracker" as tracker,
-        o."Status" as status,
-        l."Country.Area" as country,
-        TRY_CAST(o."Capacity (MW)" AS DOUBLE) as capacity_mw,
-        o."Owner" as owner,
-        o."Owner GEM Entity ID" as owner_id
-      FROM ownership o
-      LEFT JOIN ${LOCATIONS_DEDUP_SQL} l ON o."GEM location ID" = l."GEM.location.ID"
-      WHERE ${whereClause}
-      ORDER BY o."Project"
-      LIMIT 50000
-    `);
-
-    return result.success ? result.data : [];
-  }
-
-  async function exportCSV() {
-    exporting = true;
-    try {
-      const data = await fetchAllForExport();
-      if (data.length === 0) return;
-
-      const headers = [
-        'asset_id',
-        'name',
-        'tracker',
-        'status',
-        'country',
-        'capacity_mw',
-        'owner',
-        'owner_id',
-      ];
-      const csvRows = [headers.join(',')];
-
-      for (const row of data) {
-        const values = headers.map((h) => {
-          const val = row[h];
-          if (val == null) return '';
-          const str = String(val);
-          return str.includes(',') || str.includes('"') || str.includes('\n')
-            ? `"${str.replace(/"/g, '""')}"`
-            : str;
-        });
-        csvRows.push(values.join(','));
-      }
-
-      downloadFile(csvRows.join('\n'), `gem-export-${Date.now()}.csv`, 'text/csv');
-    } finally {
-      exporting = false;
-    }
-  }
-
-  async function exportJSON() {
-    exporting = true;
-    try {
-      const data = await fetchAllForExport();
-      if (data.length === 0) return;
-      downloadFile(
-        JSON.stringify(data, null, 2),
-        `gem-export-${Date.now()}.json`,
-        'application/json'
-      );
-    } finally {
-      exporting = false;
-    }
-  }
-
-  function downloadFile(content, filename, type) {
-    const blob = new Blob([content], { type });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  // ---------------------------------------------------------------------------
-  // Lifecycle
-  // ---------------------------------------------------------------------------
   onMount(async () => {
-    // Parse filters from URL
     const urlFilters = decodeFilters($page.url.searchParams);
-    filters = urlFilters;
-
-    // Load presets
-    presets = getPresets();
-
-    // Load reference data first (needed for column names)
-    await loadReferenceData();
-
-    // Load results
-    loadResults();
-
-    // Update parametric counts if we have URL filters
-    // (Must happen AFTER loadReferenceData so ownershipColumnNames is populated)
-    if (hasActiveFilters(urlFilters)) {
-      await updateParametricCounts();
-    }
-
-    // Mark initial load as complete - $effect will now handle subsequent changes
-    initialLoadComplete = true;
-  });
-
-  // Watch for filter changes and update results + counts in real-time.
-  // Using a debounce to avoid too many queries.
-  $effect(() => {
-    // Track filter changes by serializing filter state (triggers effect on any change)
-    // IMPORTANT: Include both OR and AND filter arrays for proper reactivity
-    const _filterKey = JSON.stringify({
-      trackers: filters.trackers,
-      trackersAnd: filters.trackersAnd,
-      statuses: filters.statuses,
-      statusesAnd: filters.statusesAnd,
-      countries: filters.countries,
-      countriesAnd: filters.countriesAnd,
-      ownerCountries: filters.ownerCountries,
-      ownerCountriesAnd: filters.ownerCountriesAnd,
-      owners: filters.owners,
-      ownersAnd: filters.ownersAnd,
-      capacityMin: filters.capacityMin,
-      capacityMax: filters.capacityMax,
-      shareMin: filters.shareMin,
-      shareMax: filters.shareMax,
-      startYearMin: filters.startYearMin,
-      startYearMax: filters.startYearMax,
-      search: filters.search,
-    });
-
-    // Skip effect during initial load (onMount handles that)
-    if (!initialLoadComplete) {
-      return;
-    }
-
-    // Debounce the update
-    const timeout = setTimeout(() => {
-      syncFiltersToUrl();
-      loadResults();
-      updateParametricCounts();
-    }, 600);
-
-    // Cleanup function to prevent memory leaks
-    return () => clearTimeout(timeout);
+    await state.init(urlFilters);
   });
 </script>
 
@@ -961,12 +51,12 @@
     <aside class="filter-panel">
       <div class="panel-header">
         <h2>Filters</h2>
-        {#if hasFilters}
-          <button class="clear-btn" onclick={clearFilters}>Clear all</button>
+        {#if state.hasFilters}
+          <button class="clear-btn" onclick={state.clearFilters}>Clear all</button>
         {/if}
       </div>
 
-      {#if loadingOptions}
+      {#if state.loadingOptions}
         <div class="loading-options">Loading filter options...</div>
       {:else}
         <div class="filter-logic-hint">
@@ -978,79 +68,79 @@
 
         <!-- Trackers -->
         <FacetedFilter
-          options={trackerOptions}
-          bind:selected={filters.trackers}
-          bind:selectedAnd={filters.trackersAnd}
+          options={state.trackerOptions}
+          bind:selected={state.filters.trackers}
+          bind:selectedAnd={state.filters.trackersAnd}
           label="Tracker Type"
           initialVisible={10}
-          loading={loadingCounts}
+          loading={state.loadingCounts}
         />
 
         <!-- Status -->
         <FacetedFilter
-          options={statusOptions}
-          bind:selected={filters.statuses}
-          bind:selectedAnd={filters.statusesAnd}
+          options={state.statusOptions}
+          bind:selected={state.filters.statuses}
+          bind:selectedAnd={state.filters.statusesAnd}
           label="Status"
           initialVisible={10}
-          loading={loadingCounts}
+          loading={state.loadingCounts}
         />
 
         <!-- Asset Country -->
         <FacetedFilter
-          options={countries}
-          bind:selected={filters.countries}
-          bind:selectedAnd={filters.countriesAnd}
+          options={state.countries}
+          bind:selected={state.filters.countries}
+          bind:selectedAnd={state.filters.countriesAnd}
           label="Asset Country"
           initialVisible={5}
           searchThreshold={10}
-          loading={loadingCounts}
+          loading={state.loadingCounts}
         />
 
         <!-- Owner HQ Country -->
         <FacetedFilter
-          options={ownerCountries}
-          bind:selected={filters.ownerCountries}
-          bind:selectedAnd={filters.ownerCountriesAnd}
+          options={state.ownerCountries}
+          bind:selected={state.filters.ownerCountries}
+          bind:selectedAnd={state.filters.ownerCountriesAnd}
           label="Owner Home Country"
           initialVisible={5}
           searchThreshold={10}
-          loading={loadingCounts}
+          loading={state.loadingCounts}
         />
 
         <!-- Owner -->
         <FacetedFilter
-          options={owners}
-          bind:selected={filters.owners}
-          bind:selectedAnd={filters.ownersAnd}
+          options={state.owners}
+          bind:selected={state.filters.owners}
+          bind:selectedAnd={state.filters.ownersAnd}
           label="Owner"
           initialVisible={5}
           searchThreshold={10}
-          loading={loadingCounts}
+          loading={state.loadingCounts}
         />
 
         <!-- Capacity Range (only show if tracker has capacity data) -->
-        {#if availableColumns.hasCapacity}
+        {#if state.availableColumns.hasCapacity}
           <RangeSlider
             label="Capacity"
-            bind:min={filters.capacityMin}
-            bind:max={filters.capacityMax}
-            dataMin={capacityRange.min}
-            dataMax={capacityRange.max}
+            bind:min={state.filters.capacityMin}
+            bind:max={state.filters.capacityMax}
+            dataMin={state.capacityRange.min}
+            dataMax={state.capacityRange.max}
             step={10}
             unit=" MW"
-            histogram={capacityHistogram}
+            histogram={state.capacityHistogram}
           />
         {/if}
 
         <!-- Start Year Range (only show if tracker has start year data) -->
-        {#if availableColumns.hasStartYear}
+        {#if state.availableColumns.hasStartYear}
           <RangeSlider
             label="Start Year"
-            bind:min={filters.startYearMin}
-            bind:max={filters.startYearMax}
-            dataMin={startYearRange.min}
-            dataMax={startYearRange.max}
+            bind:min={state.filters.startYearMin}
+            bind:max={state.filters.startYearMax}
+            dataMin={state.startYearRange.min}
+            dataMax={state.startYearRange.max}
             step={1}
           />
         {/if}
@@ -1058,63 +148,63 @@
         <!-- Search -->
         <section class="filter-section">
           <h3>Text Search</h3>
-          <input type="text" placeholder="Project or Owner name..." bind:value={filters.search} />
+          <input type="text" placeholder="Project or Owner name..." bind:value={state.filters.search} />
         </section>
       {/if}
 
       <!-- Share & Presets -->
       <div class="share-section">
-        <button class="share-btn" onclick={copyShareUrl}>
-          {copied ? 'Copied!' : 'Copy Share Link'}
+        <button class="share-btn" onclick={state.copyShareUrl}>
+          {state.copied ? 'Copied!' : 'Copy Share Link'}
         </button>
-        <button class="preset-btn" onclick={() => (showPresets = !showPresets)}>
-          {showPresets ? 'Hide Presets' : 'Presets'}
+        <button class="preset-btn" onclick={() => (state.showPresets = !state.showPresets)}>
+          {state.showPresets ? 'Hide Presets' : 'Presets'}
         </button>
-        {#if hasFilters}
-          <button class="save-class-btn" onclick={() => (showSaveAssetClass = !showSaveAssetClass)}>
+        {#if state.hasFilters}
+          <button class="save-class-btn" onclick={() => (state.showSaveAssetClass = !state.showSaveAssetClass)}>
             Save as Asset Class
           </button>
         {/if}
       </div>
 
-      {#if showSaveAssetClass}
+      {#if state.showSaveAssetClass}
         <div class="save-class-panel">
-          {#if assetClassSaved}
+          {#if state.assetClassSaved}
             <p class="save-success">Saved!</p>
           {:else}
             <input
               type="text"
               placeholder="Class name (e.g., South Asian Coal)"
-              bind:value={newClassName}
+              bind:value={state.newClassName}
             />
             <input
               type="text"
               placeholder="Description (optional)"
-              bind:value={newClassDescription}
+              bind:value={state.newClassDescription}
             />
-            <button onclick={handleSaveAssetClass} disabled={!newClassName.trim()}>
+            <button onclick={state.handleSaveAssetClass} disabled={!state.newClassName.trim()}>
               Save Asset Class
             </button>
           {/if}
         </div>
       {/if}
 
-      {#if showPresets}
+      {#if state.showPresets}
         <div class="presets-panel">
           <h4>Saved Presets</h4>
-          {#if presets.length === 0}
+          {#if state.presets.length === 0}
             <p class="no-presets">No saved presets</p>
           {:else}
             <ul class="preset-list">
-              {#each presets as preset}
+              {#each state.presets as preset}
                 <li>
-                  <button class="preset-name" onclick={() => handleLoadPreset(preset)}>
+                  <button class="preset-name" onclick={() => state.handleLoadPreset(preset)}>
                     {preset.name}
                   </button>
-                  <button class="preset-export" onclick={() => downloadPresetFile(preset)}>
+                  <button class="preset-export" onclick={() => state.downloadPresetFile(preset)}>
                     Export
                   </button>
-                  <button class="preset-delete" onclick={() => handleDeletePreset(preset.id)}>
+                  <button class="preset-delete" onclick={() => state.handleDeletePreset(preset.id)}>
                     ×
                   </button>
                 </li>
@@ -1125,20 +215,20 @@
             <input
               type="text"
               placeholder="Preset name..."
-              bind:value={newPresetName}
-              onkeydown={(e) => e.key === 'Enter' && handleSavePreset()}
+              bind:value={state.newPresetName}
+              onkeydown={(e) => e.key === 'Enter' && state.handleSavePreset()}
             />
-            <button onclick={handleSavePreset}>Save</button>
+            <button onclick={state.handleSavePreset}>Save</button>
           </div>
           <div class="preset-io">
             <label class="import-btn">
               Import JSON
-              <input type="file" accept="application/json" onchange={handleImportPreset} />
+              <input type="file" accept="application/json" onchange={state.handleImportPreset} />
             </label>
             <a class="preset-link" href={link('presets')}>View featured presets</a>
           </div>
-          {#if importError}
-            <p class="import-error">{importError}</p>
+          {#if state.importError}
+            <p class="import-error">{state.importError}</p>
           {/if}
         </div>
       {/if}
@@ -1151,86 +241,86 @@
           <div class="results-title-group">
             <h1>Filtered Assets</h1>
             <div class="results-meta">
-              {#if loading}
+              {#if state.loading}
                 <span class="loading-text">Loading...</span>
               {:else}
-                <span class="result-count">{formatCount(totalCount)} results</span>
-                <DataSourceBadge source="motherduck" {queryTime} />
+                <span class="result-count">{formatCount(state.totalCount)} results</span>
+                <DataSourceBadge source="motherduck" queryTime={state.queryTime} />
               {/if}
             </div>
           </div>
           <div class="results-export-group">
-            <span class="export-label">Export all {formatCount(totalCount)}:</span>
-            <button class="export-btn" onclick={exportCSV} disabled={exporting || totalCount === 0}>
-              {exporting ? 'Exporting...' : 'CSV'}
+            <span class="export-label">Export all {formatCount(state.totalCount)}:</span>
+            <button class="export-btn" onclick={state.exportCSV} disabled={state.exporting || state.totalCount === 0}>
+              {state.exporting ? 'Exporting...' : 'CSV'}
             </button>
             <button
               class="export-btn"
-              onclick={exportJSON}
-              disabled={exporting || totalCount === 0}
+              onclick={state.exportJSON}
+              disabled={state.exporting || state.totalCount === 0}
             >
               JSON
             </button>
           </div>
         </div>
         <div class="results-actions">
-          {#if allMatchingSelected}
-            <span class="selection-count">{allMatchingIds.length.toLocaleString()} selected</span>
-            {#if allMatchingNotInCart > 0}
-              <button class="cart-btn add" onclick={addAllMatchingToCart}>
+          {#if state.allMatchingSelected}
+            <span class="selection-count">{state.allMatchingIds.length.toLocaleString()} selected</span>
+            {#if state.allMatchingNotInCart > 0}
+              <button class="cart-btn add" onclick={state.addAllMatchingToCart}>
                 Add all to investigation
               </button>
             {/if}
-            {#if allMatchingInCart > 0}
-              <button class="cart-btn remove" onclick={removeAllMatchingFromCart}>
-                Remove {allMatchingInCart.toLocaleString()} from investigation
+            {#if state.allMatchingInCart > 0}
+              <button class="cart-btn remove" onclick={state.removeAllMatchingFromCart}>
+                Remove {state.allMatchingInCart.toLocaleString()} from investigation
               </button>
             {/if}
-            <button class="cart-btn text" onclick={clearAllMatchingSelection}>Cancel</button>
-          {:else if selectedRows.length > 0}
-            <span class="selection-count">{selectedRows.length} selected</span>
-            {#if selectedNotInCart > 0}
-              <button class="cart-btn add" onclick={addSelectedToCart}>
+            <button class="cart-btn text" onclick={state.clearAllMatchingSelection}>Cancel</button>
+          {:else if state.selectedRows.length > 0}
+            <span class="selection-count">{state.selectedRows.length} selected</span>
+            {#if state.selectedNotInCart > 0}
+              <button class="cart-btn add" onclick={state.addSelectedToCart}>
                 Add to investigation
               </button>
             {/if}
-            {#if selectedInCart > 0}
-              <button class="cart-btn remove" onclick={removeSelectedFromCart}>
+            {#if state.selectedInCart > 0}
+              <button class="cart-btn remove" onclick={state.removeSelectedFromCart}>
                 Remove from investigation
               </button>
             {/if}
-          {:else if results.length > 0 && !loading}
+          {:else if state.results.length > 0 && !state.loading}
             <span class="selection-hint">Select rows or:</span>
             <button
               class="cart-btn secondary"
-              onclick={addPageToCart}
-              disabled={pageInCart === results.length}
+              onclick={state.addPageToCart}
+              disabled={state.pageInCart === state.results.length}
             >
-              Add this page ({results.length - pageInCart} new)
+              Add this page ({state.results.length - state.pageInCart} new)
             </button>
-            {#if pageInCart > 0}
-              <button class="cart-btn text remove" onclick={removePageFromCart}>
-                Remove {pageInCart} in investigation
+            {#if state.pageInCart > 0}
+              <button class="cart-btn text remove" onclick={state.removePageFromCart}>
+                Remove {state.pageInCart} in investigation
               </button>
             {/if}
           {/if}
         </div>
       </div>
 
-      {#if hasFilters}
-        <FilterBreadcrumbs {filters} onRemove={removeFilter} />
+      {#if state.hasFilters}
+        <FilterBreadcrumbs filters={state.filters} onRemove={state.removeFilter} />
       {/if}
 
-      {#if error}
-        <div class="error-message">{error}</div>
+      {#if state.error}
+        <div class="error-message">{state.error}</div>
       {/if}
 
       <!-- Visualization Dashboard (compact) - always visible with skeleton states -->
-      <div class="viz-dashboard" class:loading>
+      <div class="viz-dashboard" class:loading={state.loading}>
         <div class="viz-row">
           <!-- Status Distribution -->
           <div class="viz-card">
-            {#if loading || !initialLoadComplete || results.length === 0}
+            {#if state.loading || !state.initialLoadComplete || state.results.length === 0}
               <div class="skeleton-chart">
                 <div class="skeleton-label"></div>
                 <div class="skeleton-bars">
@@ -1241,13 +331,13 @@
               </div>
             {:else}
               <MiniBarChart
-                data={statusDistribution}
+                data={state.statusDistribution}
                 label="Status"
                 maxItems={4}
                 width={120}
                 barHeight={10}
                 gap={2}
-                colorMap={statusColors}
+                colorMap={state.statusColors}
                 compact
               />
             {/if}
@@ -1255,7 +345,7 @@
 
           <!-- Tracker Distribution -->
           <div class="viz-card">
-            {#if loading || !initialLoadComplete || results.length === 0}
+            {#if state.loading || !state.initialLoadComplete || state.results.length === 0}
               <div class="skeleton-chart">
                 <div class="skeleton-label"></div>
                 <div class="skeleton-bars">
@@ -1266,7 +356,7 @@
               </div>
             {:else}
               <MiniBarChart
-                data={trackerDistribution}
+                data={state.trackerDistribution}
                 label="Tracker"
                 maxItems={4}
                 width={120}
@@ -1279,7 +369,7 @@
 
           <!-- Country Distribution -->
           <div class="viz-card">
-            {#if loading || !initialLoadComplete || results.length === 0}
+            {#if state.loading || !state.initialLoadComplete || state.results.length === 0}
               <div class="skeleton-chart">
                 <div class="skeleton-label"></div>
                 <div class="skeleton-bars">
@@ -1290,7 +380,7 @@
               </div>
             {:else}
               <MiniBarChart
-                data={countryDistribution}
+                data={state.countryDistribution}
                 label="Countries"
                 maxItems={4}
                 width={120}
@@ -1303,7 +393,7 @@
 
           <!-- Capacity Histogram -->
           <div class="viz-card">
-            {#if loading || !initialLoadComplete || results.length === 0}
+            {#if state.loading || !state.initialLoadComplete || state.results.length === 0}
               <div class="skeleton-chart">
                 <div class="skeleton-label"></div>
                 <div class="skeleton-histogram">
@@ -1315,9 +405,9 @@
                   <div class="skeleton-hist-bar" style="height: 30%"></div>
                 </div>
               </div>
-            {:else if capacityData.length > 0}
+            {:else if state.capacityData.length > 0}
               <MiniHistogram
-                data={capacityData}
+                data={state.capacityData}
                 label="Capacity"
                 unit="MW"
                 bins={8}
@@ -1331,20 +421,20 @@
 
           <!-- Start Year Sparkline -->
           <div class="viz-card">
-            {#if loading || !initialLoadComplete || results.length === 0}
+            {#if state.loading || !state.initialLoadComplete || state.results.length === 0}
               <div class="skeleton-chart">
                 <div class="skeleton-label"></div>
                 <div class="skeleton-sparkline"></div>
               </div>
-            {:else if startYearData.length > 1}
-              <Sparkline data={startYearData} label="Start Year" width={120} height={32} compact />
+            {:else if state.startYearData.length > 1}
+              <Sparkline data={state.startYearData} label="Start Year" width={120} height={32} compact />
             {/if}
           </div>
         </div>
       </div>
 
       <!-- Table with skeleton loading state -->
-      {#if loading || !initialLoadComplete}
+      {#if state.loading || !state.initialLoadComplete}
         <div class="skeleton-table">
           <div class="skeleton-table-header">
             <div class="skeleton-th"></div>
@@ -1363,83 +453,83 @@
             </div>
           {/each}
         </div>
-      {:else if results.length > 0}
+      {:else if state.results.length > 0}
         <!-- Gmail-style "select all matching" banner -->
-        {#if allPageSelected && !allMatchingSelected && totalCount > results.length}
+        {#if state.allPageSelected && !state.allMatchingSelected && state.totalCount > state.results.length}
           <div class="select-all-banner">
-            All {results.length} assets on this page selected.
-            <button onclick={selectAllMatching}>
-              Select all {totalCount.toLocaleString()} that match your filters?
+            All {state.results.length} assets on this page selected.
+            <button onclick={state.selectAllMatching}>
+              Select all {state.totalCount.toLocaleString()} that match your filters?
             </button>
           </div>
         {/if}
-        {#if allMatchingSelected}
+        {#if state.allMatchingSelected}
           <div class="select-all-banner selected">
-            <strong>{allMatchingIds.length.toLocaleString()} assets</strong> matching your filters
+            <strong>{state.allMatchingIds.length.toLocaleString()} assets</strong> matching your filters
             are selected.
-            <button onclick={clearAllMatchingSelection}>Clear</button>
+            <button onclick={state.clearAllMatchingSelection}>Clear</button>
           </div>
         {/if}
 
         <DataTable
-          columns={tableColumns}
-          data={tableRows}
-          {pageSize}
+          columns={state.tableColumns}
+          data={state.tableRows}
+          pageSize={state.pageSize}
           showGlobalSearch={true}
           showColumnFilters={true}
           showPagination={false}
           showExport={false}
           showColumnToggle={true}
           showSelection={true}
-          bind:selectedRows
+          bind:selectedRows={state.selectedRows}
           stickyHeader={true}
           striped={true}
-          onRowClick={handleRowClick}
-          onRowHover={handleRowHover}
-          onRowLeave={handleRowLeave}
-          highlightRow={isRowInCart}
+          onRowClick={state.handleRowClick}
+          onRowHover={state.handleRowHover}
+          onRowLeave={state.handleRowLeave}
+          highlightRow={state.isRowInCart}
         />
 
         <!-- Server-side pagination -->
         <div class="pagination">
           <div class="pagination-info">
-            Showing {((currentPage - 1) * pageSize + 1).toLocaleString()}–{Math.min(
-              currentPage * pageSize,
-              totalCount
-            ).toLocaleString()} of {totalCount.toLocaleString()} results
+            Showing {((state.currentPage - 1) * state.pageSize + 1).toLocaleString()}–{Math.min(
+              state.currentPage * state.pageSize,
+              state.totalCount
+            ).toLocaleString()} of {state.totalCount.toLocaleString()} results
           </div>
           <div class="pagination-controls">
             <button
               class="page-btn"
-              disabled={currentPage === 1 || loading}
-              onclick={() => goToPage(1)}
+              disabled={state.currentPage === 1 || state.loading}
+              onclick={() => state.goToPage(1)}
               title="First page"
             >
               ««
             </button>
             <button
               class="page-btn"
-              disabled={currentPage === 1 || loading}
-              onclick={() => goToPage(currentPage - 1)}
+              disabled={state.currentPage === 1 || state.loading}
+              onclick={() => state.goToPage(state.currentPage - 1)}
               title="Previous page"
             >
               «
             </button>
             <span class="page-indicator">
-              Page {currentPage} of {totalPages.toLocaleString()}
+              Page {state.currentPage} of {state.totalPages.toLocaleString()}
             </span>
             <button
               class="page-btn"
-              disabled={currentPage >= totalPages || loading}
-              onclick={() => goToPage(currentPage + 1)}
+              disabled={state.currentPage >= state.totalPages || state.loading}
+              onclick={() => state.goToPage(state.currentPage + 1)}
               title="Next page"
             >
               »
             </button>
             <button
               class="page-btn"
-              disabled={currentPage >= totalPages || loading}
-              onclick={() => goToPage(totalPages)}
+              disabled={state.currentPage >= state.totalPages || state.loading}
+              onclick={() => state.goToPage(state.totalPages)}
               title="Last page"
             >
               »»
@@ -1448,9 +538,9 @@
         </div>
       {:else}
         <div class="no-results">
-          {#if hasFilters}
+          {#if state.hasFilters}
             <p>No assets match your filters.</p>
-            <button onclick={clearFilters}>Clear filters</button>
+            <button onclick={state.clearFilters}>Clear filters</button>
           {:else}
             <p>Select filters to search assets.</p>
           {/if}
@@ -1460,29 +550,29 @@
   </div>
 
   <!-- Asset Tooltip -->
-  {#if selectedAsset}
+  {#if state.selectedAsset}
     <div
       class="asset-tooltip"
-      style="left: {Math.min(tooltipPos.x + 12, window.innerWidth - 340)}px; top: {Math.min(
-        tooltipPos.y - 10,
+      style="left: {Math.min(state.tooltipPos.x + 12, window.innerWidth - 340)}px; top: {Math.min(
+        state.tooltipPos.y - 10,
         window.innerHeight - 200
       )}px;"
     >
-      {#if cartAssetIds.has(selectedAsset.id)}
+      {#if state.cartAssetIds.has(state.selectedAsset.id)}
         <div class="tooltip-header">
           <span class="in-cart-badge" title="In your investigation">In Cart</span>
         </div>
       {/if}
       <ProjectCard
         asset={{
-          id: selectedAsset.id,
-          name: selectedAsset.name,
-          status: selectedAsset.status,
-          country: selectedAsset.country,
-          capacity: selectedAsset.capacity,
-          owner: selectedAsset.owner,
-          startYear: selectedAsset.startYear,
-          tracker: selectedAsset.tracker,
+          id: state.selectedAsset.id,
+          name: state.selectedAsset.name,
+          status: state.selectedAsset.status,
+          country: state.selectedAsset.country,
+          capacity: state.selectedAsset.capacity,
+          owner: state.selectedAsset.owner,
+          startYear: state.selectedAsset.startYear,
+          tracker: state.selectedAsset.tracker,
         }}
         variant="compact"
         open={true}

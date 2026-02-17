@@ -251,19 +251,11 @@
         </div>
         <ul class="query-steps">
           {#each loadingSteps as step}
+            {@const stepIcons = { pending: ['', '○'], running: ['spinning', '◐'], done: ['done', '●'], skipped: ['skipped', '–'], error: ['error', '✕'] }}
+            {@const [dotClass, dotIcon] = stepIcons[step.status] || stepIcons.error}
             <li class="query-step {step.status}">
               <span class="step-indicator">
-                {#if step.status === 'pending'}
-                  <span class="dot">○</span>
-                {:else if step.status === 'running'}
-                  <span class="dot spinning">◐</span>
-                {:else if step.status === 'done'}
-                  <span class="dot done">●</span>
-                {:else if step.status === 'skipped'}
-                  <span class="dot skipped">–</span>
-                {:else}
-                  <span class="dot error">✕</span>
-                {/if}
+                <span class="dot {dotClass}">{dotIcon}</span>
               </span>
               <span class="step-label">{step.label}</span>
               {#if step.status === 'done' && step.ms !== undefined}
@@ -335,22 +327,12 @@
 
       <!-- Key Figures -->
       <div class="key-figures">
-        <div class="kf">
-          <span class="kf-value">{summary.totalAssets.toLocaleString()}</span>
-          <span class="kf-label">Assets</span>
-        </div>
-        <div class="kf">
-          <span class="kf-value">{summary.totalCapacity.toLocaleString()}</span>
-          <span class="kf-label">MW</span>
-        </div>
-        <div class="kf">
-          <span class="kf-value">{summary.trackers.length}</span>
-          <span class="kf-label">Types</span>
-        </div>
-        <div class="kf">
-          <span class="kf-value">{summary.countries}</span>
-          <span class="kf-label">Countries</span>
-        </div>
+        {#each [[summary.totalAssets.toLocaleString(), 'Assets'], [summary.totalCapacity.toLocaleString(), 'MW'], [summary.trackers.length, 'Types'], [summary.countries, 'Countries']] as [value, label]}
+          <div class="kf">
+            <span class="kf-value">{value}</span>
+            <span class="kf-label">{label}</span>
+          </div>
+        {/each}
       </div>
 
       <!-- Asset Type Breakdown -->

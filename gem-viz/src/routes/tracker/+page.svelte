@@ -5,12 +5,12 @@
    */
   import { onMount } from 'svelte';
   import { link } from '$lib/links';
-  import { getTrackerStats, type TrackerStats } from '$lib/duckdb-queries';
+  import { getAssetTypeCounts, API_TYPE_TO_SLUG, SLUG_TO_API_TYPE } from '$lib/ownership-api';
   import { trackerMetadata } from '$lib/data-config/tracker-metadata';
   import { fetchSegments, getSegmentApiUrl, type Segment } from '$lib/segments-api';
 
   // State
-  let trackerStats = $state<TrackerStats[]>([]);
+  let trackerCounts = $state<Map<string, number>>(new Map());
   let segments = $state<Segment[]>([]);
   let loading = $state(true);
   let error = $state<string | null>(null);
@@ -25,12 +25,18 @@
       .then((result) => { segments = result; })
       .catch((err) => console.warn('Segments fetch failed:', err));
 
-    // Try to load MotherDuck stats (may be slow or fail)
-    getTrackerStats()
-      .then((result) => {
-        if (result.success && result.data) {
-          trackerStats = result.data;
+    // Fetch asset counts per tracker type from REST API (sampled + extrapolated)
+    getAssetTypeCounts()
+      .then((apiCounts) => {
+        const mapped = new Map<string, number>();
+        for (const [apiType, count] of apiCounts) {
+          // Map API type name back to our tracker display name
+          const slug = API_TYPE_TO_SLUG[apiType];
+          if (slug && trackerMetadata[slug]) {
+            mapped.set(trackerMetadata[slug].name, count);
+          }
         }
+        trackerCounts = mapped;
       })
       .catch((err) => console.warn('Tracker stats failed:', err));
   });
@@ -38,17 +44,11 @@
   // Get all tracker slugs
   const allTrackerSlugs = Object.keys(trackerMetadata);
 
-  // Build a map of tracker name -> stats (reactive)
-  const statsMap = $derived(
-    new Map(trackerStats.map(s => [s.tracker, s]))
-  );
-
-  // Format large numbers (handle BigInt from DuckDB)
-  function formatNumber(n: number | bigint): string {
-    const num = typeof n === 'bigint' ? Number(n) : n;
-    if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
-    if (num >= 1_000) return `${(num / 1_000).toFixed(1)}K`;
-    return num.toLocaleString();
+  // Format large numbers
+  function formatNumber(n: number): string {
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+    return n.toLocaleString();
   }
 </script>
 
@@ -85,17 +85,17 @@
     <div class="tracker-grid">
       {#each allTrackerSlugs as slug}
         {@const metadata = trackerMetadata[slug]}
-        {@const stats = statsMap.get(metadata.name)}
+        {@const assetCount = trackerCounts.get(metadata.name)}
         <a href={`/tracker/${slug}`} class="tracker-card" style="--tracker-color: {metadata.color}">
           <div class="card-header">
             <h2>{metadata.name}</h2>
           </div>
           <div class="card-body">
             <p class="description">{metadata.description}</p>
-            {#if stats && stats.assetCount > 0}
+            {#if assetCount && assetCount > 0}
               <div class="stats">
                 <div class="stat">
-                  <span class="stat-value">{formatNumber(stats.assetCount)}</span>
+                  <span class="stat-value">{formatNumber(assetCount)}</span>
                   <span class="stat-label">Assets</span>
                 </div>
               </div>

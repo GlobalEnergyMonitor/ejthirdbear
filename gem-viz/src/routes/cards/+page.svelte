@@ -10,8 +10,6 @@
   // Filter state
   let selectedTracker = $state<string | null>('Coal Plant');
 
-  import { TRACKERS_WITH_MOTHERDUCK_DATA } from '$lib/data-config/tracker-schema';
-
   const trackers = [
     { value: 'Coal Plant', label: 'Coal Plants' },
     { value: 'Coal Mine', label: 'Coal Mines' },
@@ -21,8 +19,6 @@
     { value: 'Iron Mine', label: 'Iron Mines' },
     { value: 'Bioenergy Power', label: 'Bioenergy' },
   ];
-
-  const hasData = $derived(TRACKERS_WITH_MOTHERDUCK_DATA.includes(selectedTracker as any));
 </script>
 
 <svelte:head>
@@ -61,14 +57,6 @@
       {/each}
     </div>
   </section>
-
-  <!-- Data source notice -->
-  {#if !hasData}
-    <div class="data-notice">
-      Note: {selectedTracker} data may be limited. Full data is available via the
-      <a href="https://gem-api.thirdbear.net/docs" target="_blank" rel="noopener">REST API</a>.
-    </div>
-  {/if}
 
   <!-- Card Lists -->
   <div class="card-grid">
@@ -275,19 +263,6 @@
     background: var(--color-accent);
     color: var(--color-white);
     border-color: var(--color-accent);
-  }
-
-  .data-notice {
-    padding: var(--space-3) var(--space-4);
-    margin-bottom: var(--space-6);
-    background: var(--color-bg-secondary);
-    border-left: 3px solid var(--color-text-tertiary);
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
-  }
-
-  .data-notice a {
-    color: var(--color-link);
   }
 
   .card-grid {

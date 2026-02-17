@@ -18,7 +18,6 @@
     TEXT_OPERATORS,
     getFieldsForTracker,
     getFieldConfig,
-    hasMotherDuckData,
   } from '$lib/data-config/tracker-schema';
 
   // Track which preset is active (for highlighting)
@@ -231,14 +230,6 @@
         {/if}
       </span>
     </div>
-
-    <!-- Warning for trackers without aggregation data -->
-    {#if customTracker && !hasMotherDuckData(customTracker)}
-      <div class="data-warning">
-        <strong>Note:</strong> {customTracker} data is available in the API but not yet in the ownership aggregation database.
-        Results may be limited. Individual assets can be explored via the <a href="/asset/search">Asset Search</a>.
-      </div>
-    {/if}
 
     <div class="filter-grid">
       <!-- Step 1: Asset Type -->
@@ -675,26 +666,6 @@
   .query-summary.has-selection {
     background: var(--gem-teal-light, #e8f4f4);
     border-left-color: var(--gem-teal, #1d4961);
-  }
-
-  /* Data availability warning */
-  .data-warning {
-    padding: var(--space-3) var(--space-4);
-    margin-bottom: var(--space-6);
-    background: #fef3c7;
-    border: 1px solid #fbbf24;
-    border-radius: var(--radius-sm);
-    font-size: var(--font-size-sm);
-    color: #92400e;
-  }
-
-  .data-warning strong {
-    color: #78350f;
-  }
-
-  .data-warning a {
-    color: #1d4961;
-    text-decoration: underline;
   }
 
   .summary-label {

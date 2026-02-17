@@ -52,39 +52,19 @@
   let graphQueryTime = $state(null);
   let portfolioQueryTime = $state(null);
 
-  // Derived data
-  const trackerBreakdown = $derived.by(() => {
+  // Derived data — count assets by field
+  function countBy(field) {
     const counts = new Map();
-    (portfolio?.assets || []).forEach((a) => {
-      const key = a.tracker || 'Unknown';
-      counts.set(key, (counts.get(key) || 0) + 1);
-    });
-    return Array.from(counts, ([tracker, count]) => ({ tracker, count })).sort(
-      (a, b) => b.count - a.count
-    );
-  });
+    for (const a of portfolio?.assets || []) {
+      const k = a[field] || 'Unknown';
+      counts.set(k, (counts.get(k) || 0) + 1);
+    }
+    return Array.from(counts, ([value, count]) => ({ key: value, count })).sort((a, b) => b.count - a.count);
+  }
 
-  const statusBreakdown = $derived.by(() => {
-    const counts = new Map();
-    (portfolio?.assets || []).forEach((a) => {
-      const key = a.status || 'Unknown';
-      counts.set(key, (counts.get(key) || 0) + 1);
-    });
-    return Array.from(counts, ([status, count]) => ({ status, count })).sort(
-      (a, b) => b.count - a.count
-    );
-  });
-
-  const countryBreakdown = $derived.by(() => {
-    const counts = new Map();
-    (portfolio?.assets || []).forEach((a) => {
-      const key = a.country || 'Unknown';
-      counts.set(key, (counts.get(key) || 0) + 1);
-    });
-    return Array.from(counts, ([country, count]) => ({ country, count })).sort(
-      (a, b) => b.count - a.count
-    );
-  });
+  const trackerBreakdown = $derived.by(() => countBy('tracker'));
+  const statusBreakdown = $derived.by(() => countBy('status'));
+  const countryBreakdown = $derived.by(() => countBy('country'));
 
   // Build node map for Mermaid from graph data
   const upstreamNodeMap = $derived.by(() => {
@@ -97,61 +77,29 @@
   let selectedTrackers = $state(new Set());
   let selectedStatuses = $state(new Set());
 
+  function passesFilters(asset) {
+    if (selectedCountries.size > 0 && !selectedCountries.has(asset.country || 'Unknown')) return false;
+    if (selectedTrackers.size > 0 && !selectedTrackers.has(asset.tracker || 'Unknown')) return false;
+    if (selectedStatuses.size > 0 && !selectedStatuses.has(asset.status || 'Unknown')) return false;
+    return true;
+  }
+
   const filteredAssets = $derived.by(() => {
     const assets = portfolio?.assets || [];
-    if (
-      selectedCountries.size === 0 &&
-      selectedTrackers.size === 0 &&
-      selectedStatuses.size === 0
-    ) {
-      return assets;
-    }
-    return assets.filter((asset) => {
-      if (selectedCountries.size > 0 && !selectedCountries.has(asset.country || 'Unknown'))
-        return false;
-      if (selectedTrackers.size > 0 && !selectedTrackers.has(asset.tracker || 'Unknown'))
-        return false;
-      if (selectedStatuses.size > 0 && !selectedStatuses.has(asset.status || 'Unknown'))
-        return false;
-      return true;
-    });
+    return hasActiveFilters ? assets.filter(passesFilters) : assets;
   });
 
   const filteredPortfolio = $derived.by(() => {
-    if (!portfolio) return null;
-    if (
-      selectedCountries.size === 0 &&
-      selectedTrackers.size === 0 &&
-      selectedStatuses.size === 0
-    ) {
-      return portfolio;
-    }
+    if (!portfolio || !hasActiveFilters) return portfolio;
     const filteredSubsidiaries = new Map();
     for (const [subId, assets] of portfolio.subsidiariesMatched || []) {
-      const filtered = assets.filter((asset) => {
-        if (selectedCountries.size > 0 && !selectedCountries.has(asset.country || 'Unknown'))
-          return false;
-        if (selectedTrackers.size > 0 && !selectedTrackers.has(asset.tracker || 'Unknown'))
-          return false;
-        if (selectedStatuses.size > 0 && !selectedStatuses.has(asset.status || 'Unknown'))
-          return false;
-        return true;
-      });
+      const filtered = assets.filter(passesFilters);
       if (filtered.length > 0) filteredSubsidiaries.set(subId, filtered);
     }
-    const filteredDirect = (portfolio.directlyOwned || []).filter((asset) => {
-      if (selectedCountries.size > 0 && !selectedCountries.has(asset.country || 'Unknown'))
-        return false;
-      if (selectedTrackers.size > 0 && !selectedTrackers.has(asset.tracker || 'Unknown'))
-        return false;
-      if (selectedStatuses.size > 0 && !selectedStatuses.has(asset.status || 'Unknown'))
-        return false;
-      return true;
-    });
     return {
       ...portfolio,
       subsidiariesMatched: filteredSubsidiaries,
-      directlyOwned: filteredDirect,
+      directlyOwned: (portfolio.directlyOwned || []).filter(passesFilters),
       assets: filteredAssets,
     };
   });
@@ -190,6 +138,13 @@
     }
   }
 
+  // Re-fetch graph data whenever entityId changes (supports same-page navigation)
+  $effect(() => {
+    if (entityId) {
+      loadGraphData(entityId);
+    }
+  });
+
   // Stream portfolio data
   onMount(async () => {
     const paramsId = $page.params?.id;
@@ -206,9 +161,6 @@
     }
 
     entityId = paramsId;
-
-    // Start both data fetches in parallel
-    loadGraphData(paramsId);
 
     const portfolioStartTime = performance.now();
     try {
@@ -244,6 +196,10 @@
       entityId} including subsidiary structure, asset portfolio, and ownership hierarchy."
   />
 </svelte:head>
+
+{#snippet embedBtn(href)}
+  <a {href} class="embed-btn" target="_blank" rel="noopener" title="Embed this visualization">↗</a>
+{/snippet}
 
 <main>
   <header>
@@ -325,13 +281,7 @@
         <div class="split-col viz-container hero-viz">
           <h3>
             Ownership Flower
-            <a
-              href="/embed/ownership-flower?entityId={entityId}"
-              class="embed-btn"
-              target="_blank"
-              rel="noopener"
-              title="Embed this visualization">↗</a
-            >
+            {@render embedBtn(`/embed/ownership-flower?entityId=${entityId}`)}
           </h3>
           <div class="flower-wrapper">
             <OwnershipFlower ownerId={entityId} size="large" />
@@ -369,9 +319,9 @@
               {#each trackerBreakdown.slice(0, 5) as row}
                 {@const maxCount = trackerBreakdown[0]?.count || 1}
                 {@const pct = (row.count / maxCount) * 100}
-                {@const barColor = trackerColors[row.tracker] || '#6e8c91'}
+                {@const barColor = trackerColors[row.key] || '#6e8c91'}
                 <div class="tracker-bar-row">
-                  <TrackerIcon tracker={row.tracker} size={14} showLabel variant="pill" />
+                  <TrackerIcon tracker={row.key} size={14} showLabel variant="pill" />
                   <div class="bar-container">
                     <div class="bar-fill" style="width: {pct}%; background: {barColor}"></div>
                   </div>
@@ -400,16 +350,12 @@
         <div class="split-col viz-container tall-viz">
           <h3>
             Upstream Ownership Graph
-            <a
-              href="/embed/ownership-graph?entityId={entityId}&direction=up"
-              class="embed-btn"
-              target="_blank"
-              rel="noopener"
-              title="Embed this visualization">↗</a
-            >
+            {@render embedBtn(`/embed/ownership-graph?entityId=${entityId}&direction=up`)}
           </h3>
           {#if graphLoading}
             <p class="placeholder">Loading ownership graph...</p>
+          {:else if _graphError}
+            <p class="placeholder error">Failed to load ownership graph: {_graphError}</p>
           {:else if graphUp?.nodes?.length > 1}
             <OwnershipTreeGraph
               nodes={graphUp.nodes}
@@ -424,13 +370,7 @@
         <div class="split-col viz-container tall-viz">
           <h3>
             Ultimate Owners
-            <a
-              href="/embed/ultimate-owners?entityId={entityId}"
-              class="embed-btn"
-              target="_blank"
-              rel="noopener"
-              title="Embed this visualization">↗</a
-            >
+            {@render embedBtn(`/embed/ultimate-owners?entityId=${entityId}`)}
           </h3>
           <UltimateOwners {entityId} />
         </div>
@@ -449,13 +389,7 @@
         <div class="full-width-section viz-container">
           <h3>
             Ownership Flow Diagram
-            <a
-              href="/embed/ownership-mermaid?entityId={entityId}"
-              class="embed-btn"
-              target="_blank"
-              rel="noopener"
-              title="Embed this visualization">↗</a
-            >
+            {@render embedBtn(`/embed/ownership-mermaid?entityId=${entityId}`)}
           </h3>
           <MermaidOwnership
             edges={graphUp.edges}
@@ -478,13 +412,7 @@
         <div class="full-width-section viz-container tall-viz">
           <h3>
             Downstream Ownership Graph
-            <a
-              href="/embed/ownership-graph?entityId={entityId}&direction=down"
-              class="embed-btn"
-              target="_blank"
-              rel="noopener"
-              title="Embed this visualization">↗</a
-            >
+            {@render embedBtn(`/embed/ownership-graph?entityId=${entityId}&direction=down`)}
           </h3>
           <OwnershipTreeGraph
             nodes={graphDown.nodes}
@@ -506,13 +434,7 @@
       <div class="full-width-section viz-container mega-viz">
         <h3>
           3D Ownership Network
-          <a
-            href="/embed/network-3d?entityId={entityId}"
-            class="embed-btn"
-            target="_blank"
-            rel="noopener"
-            title="Embed this visualization">↗</a
-          >
+          {@render embedBtn(`/embed/network-3d?entityId=${entityId}`)}
         </h3>
         <MiniNetworkGraph {entityId} height={500} maxHops={3} />
       </div>
@@ -520,13 +442,7 @@
       <div class="full-width-section viz-container mega-viz">
         <h3>
           Full Network Explorer
-          <a
-            href="/embed/network-explorer?entityId={entityId}"
-            class="embed-btn"
-            target="_blank"
-            rel="noopener"
-            title="Embed this visualization">↗</a
-          >
+          {@render embedBtn(`/embed/network-explorer?entityId=${entityId}`)}
         </h3>
         <OwnershipExplorerD3 ownerEntityId={entityId} prebakedData={data?.ownerExplorerData} />
       </div>
@@ -545,13 +461,7 @@
         <div class="full-width-section viz-container">
           <h3>
             Asset Ring Visualization
-            <a
-              href="/embed/asset-ring?entityId={entityId}"
-              class="embed-btn"
-              target="_blank"
-              rel="noopener"
-              title="Embed this visualization">↗</a
-            >
+            {@render embedBtn(`/embed/asset-ring?entityId=${entityId}`)}
           </h3>
           <AssetRingVisualization assets={filteredAssets.slice(0, 150)} />
         </div>
@@ -565,9 +475,9 @@
                 {@const total = portfolio?.assets?.length || 1}
                 {@const pct = ((row.count / total) * 100).toFixed(1)}
                 <div class="status-card">
-                  <StatusIcon status={row.status} size={24} />
+                  <StatusIcon status={row.key} size={24} />
                   <div class="status-info">
-                    <span class="status-name">{row.status}</span>
+                    <span class="status-name">{row.key}</span>
                     <span class="status-stats">{row.count.toLocaleString()} ({pct}%)</span>
                   </div>
                 </div>
@@ -581,7 +491,7 @@
                 {@const total = portfolio?.assets?.length || 1}
                 {@const pct = ((row.count / total) * 100).toFixed(1)}
                 <div class="country-card">
-                  <span class="country-name">{row.country}</span>
+                  <span class="country-name">{row.key}</span>
                   <span class="country-count">{row.count.toLocaleString()} ({pct}%)</span>
                 </div>
               {/each}

@@ -9,7 +9,8 @@
   import { link } from '$lib/links';
   import DatasetFactsheet from '$lib/widgets/DatasetFactsheet.svelte';
   import ProjectCard from '$lib/components/ProjectCard.svelte';
-  import { getSampleAssets } from '$lib/duckdb-queries';
+  import { listAssetsByType } from '$lib/ownership-api';
+  import { trackerNameToSlug } from '$lib/data-config/tracker-metadata';
 
   // Get tracker from URL param
   const trackerParam = $derived($page.params.tracker);
@@ -114,18 +115,28 @@
     }
   }
 
-  // Load sample assets for project cards
+  // Load sample assets for project cards via REST API
   async function loadSampleAssets() {
     try {
-      const result = await getSampleAssets(tracker, 5);
+      const slug = trackerNameToSlug[tracker] || tracker.toLowerCase().replace(/\s+/g, '-');
+      const assets = await listAssetsByType(slug, { limit: 50 });
 
-      if (result.success && result.data) {
-        sampleAssets = result.data.map((row) => ({
-          ...row,
-          capacityUnit: tracker.includes('Mine') ? 'Mtpa' : 'MW',
-          tracker,
-        }));
-      }
+      // Sort by capacity descending client-side, take top 5
+      const sorted = assets
+        .filter(a => a.capacity != null)
+        .sort((a, b) => (b.capacity ?? 0) - (a.capacity ?? 0))
+        .slice(0, 5);
+
+      sampleAssets = sorted.map((a) => ({
+        id: a.id,
+        name: a.name,
+        status: a.status || '',
+        capacity: a.capacity ?? undefined,
+        capacityUnit: a.capacityUnit || (tracker.includes('Mine') ? 'Mtpa' : 'MW'),
+        country: a.country ?? undefined,
+        owner: a.ownerName ?? undefined,
+        tracker,
+      }));
     } catch (err) {
       console.error('Failed to load sample assets:', err);
     }

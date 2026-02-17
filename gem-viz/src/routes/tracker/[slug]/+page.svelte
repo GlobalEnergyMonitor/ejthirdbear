@@ -6,13 +6,25 @@
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
   import { link } from '$lib/links';
-  import { getTrackerFieldValues } from '$lib/duckdb-queries';
+  import { listAssetsByType, type AssetSummary } from '$lib/ownership-api';
   import {
     slugToTrackerName,
+    trackerNameToSlug,
     trackerMetadata,
     type TrackerMetadata,
   } from '$lib/data-config/tracker-metadata';
   import TrackerFactsheet from '$lib/components/TrackerFactsheet.svelte';
+
+  // Cache for REST API asset data (avoids re-fetching for each field)
+  let cachedAssets: AssetSummary[] | null = null;
+  let cachedSlug: string | null = null;
+
+  async function getAssetsForTracker(slug: string): Promise<AssetSummary[]> {
+    if (cachedSlug === slug && cachedAssets) return cachedAssets;
+    cachedAssets = await listAssetsByType(slug, { limit: 2000 });
+    cachedSlug = slug;
+    return cachedAssets;
+  }
 
   // Get slug from URL
   const slug = $derived($page.params.slug);
@@ -90,15 +102,64 @@
     return fields;
   }
 
-  // Fetch field distribution from DuckDB
+  // Map human-readable field names to REST API keys + normalized AssetSummary keys
+  const FIELD_TO_API_KEY: Record<string, string[]> = {
+    'Status': ['operating_status', 'status', 'Status'],
+    'Country': ['country', 'Country'],
+    'Country / Area': ['country', 'Country'],
+    'Countries': ['country', 'Country'],
+    'Capacity (MW)': ['capacity_value', 'capacity', 'Capacity (MW)'],
+    'Capacity (Mtpa)': ['capacity_value', 'capacity', 'Capacity (Mtpa)'],
+    'Nominal crude steel capacity (ttpa)': ['capacity_value', 'capacity'],
+    'Nominal iron capacity (ttpa)': ['capacity_value', 'capacity'],
+    'CapacityBcm/y': ['capacity_value', 'capacity'],
+    'Design capacity (ttpa)': ['capacity_value', 'capacity'],
+    'Asset Name': ['asset_name', 'name', 'Asset Name'],
+    'Asset Type': ['asset_type', 'facilityType', 'Asset Type'],
+    'Fuel type': ['fuel_type', 'Fuel type'],
+    'Technology': ['technology', 'Technology'],
+    'Mine type': ['mine_type', 'Mine type'],
+    'Feedstock': ['feedstock', 'Feedstock'],
+    'Start year': ['start_year', 'Start year'],
+    'Immediate Owner Entity Name': ['owner_name', 'Immediate Owner Entity Name'],
+    '% Share of Ownership': ['ownership_pct', '% Share of Ownership'],
+  };
+
+  // Fetch field distribution from REST API (client-side aggregation)
   async function fetchFieldDistribution(
     fieldName: string
   ): Promise<Array<{ value: string; count: number; percentage: number }>> {
     try {
-      const result = await getTrackerFieldValues(trackerName, fieldName, 50);
-      if (result.success && result.data) {
-        return result.data;
+      const assets = await getAssetsForTracker(slug);
+
+      // Count occurrences of each value for this field
+      const counts = new Map<string, number>();
+      const apiKeys = FIELD_TO_API_KEY[fieldName] || [fieldName, fieldName.toLowerCase()];
+      for (const asset of assets) {
+        const raw = asset.raw || {};
+        // Check raw API keys first, then normalized AssetSummary properties
+        let value: unknown = null;
+        for (const k of apiKeys) {
+          const v = raw[k] ?? (asset as unknown as Record<string, unknown>)[k];
+          if (v != null && v !== '') { value = v; break; }
+        }
+        const strValue = value != null && value !== '' ? String(value) : null;
+        if (strValue) {
+          counts.set(strValue, (counts.get(strValue) || 0) + 1);
+        }
       }
+
+      const total = Array.from(counts.values()).reduce((s, c) => s + c, 0);
+
+      // Sort by count descending, take top 50
+      return Array.from(counts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 50)
+        .map(([value, count]) => ({
+          value,
+          count,
+          percentage: total > 0 ? count / total : 0,
+        }));
     } catch (err) {
       console.warn(`Failed to fetch distribution for ${fieldName}:`, err);
     }
