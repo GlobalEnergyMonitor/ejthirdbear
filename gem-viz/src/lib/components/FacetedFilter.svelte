@@ -153,13 +153,9 @@
         style="--bar-width: {proportion}%"
         animate:flip={{ duration: 200, easing: (t) => t * (2 - t) }}
         in:fade={{ duration: 150 }}
-        onclick={(e) => {
-          e.preventDefault();
-          toggle(option.value);
-        }}
       >
         <span class="facet-bar"></span>
-        <input type="checkbox" checked={isSelected} tabindex="-1" />
+        <input type="checkbox" checked={isSelected} tabindex="-1" onchange={() => toggle(option.value)} />
         <span class="facet-option-label">{option.value}</span>
         {#if option.count !== undefined}
           <span class="facet-count">({formatCompact(option.count)})</span>
@@ -371,7 +367,7 @@
     height: 14px;
     min-width: 14px;
     margin: 0;
-    pointer-events: none; /* Let clicks go through to label handler */
+    pointer-events: auto;
     accent-color: var(--gem-orange, #fe4f2d);
     border: 1px solid var(--color-text-tertiary);
     border-radius: 2px;

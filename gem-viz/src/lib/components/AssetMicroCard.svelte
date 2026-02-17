@@ -8,6 +8,7 @@
   import { assetLink } from '$lib/links';
   import { colorByTracker, colorByStatus } from '$lib/design-tokens';
   import TrackerIcon from './TrackerIcon.svelte';
+  import { formatCapacity } from '$lib/format-utils';
 
   let {
     id = '',
@@ -24,15 +25,6 @@
 
   const trackerColor = $derived(colorByTracker.get(tracker) || 'var(--color-gray-400)');
   const statusColor = $derived(colorByStatus.get(status?.toLowerCase()) || 'var(--color-text-tertiary)');
-
-  // Format capacity with smart units
-  function formatCapacity(mw) {
-    if (!mw || mw === 0) return null;
-    if (mw >= 1000) {
-      return `${(mw / 1000).toFixed(1)} GW`;
-    }
-    return `${Math.round(mw).toLocaleString()} MW`;
-  }
 
   const formattedCapacity = $derived(formatCapacity(capacity));
   const linkHref = $derived(href || assetLink(id));

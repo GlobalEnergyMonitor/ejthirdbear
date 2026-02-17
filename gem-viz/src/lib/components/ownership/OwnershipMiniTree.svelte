@@ -8,6 +8,10 @@
   import { goto } from '$app/navigation';
   import { entityLink, assetLink } from '$lib/links';
   import * as d3 from 'd3';
+  import type {
+    GraphNode, GraphEdge, LayoutPoint, MiniLayoutNode, LayoutEdge,
+    OwnershipGraphAPIResponse, RawOwnershipAPINode, RawOwnershipAPIEdge, DagreEdge,
+  } from '$lib/component-data/graph-types';
 
   interface Props {
     entityId: string;
@@ -35,12 +39,12 @@
   // State
   let loading = $state(true);
   let error = $state<string | null>(null);
-  let graphData = $state<{ nodes: any[]; edges: any[] } | null>(null);
-  let dagre: any = null;
+  let graphData = $state<{ nodes: GraphNode[]; edges: GraphEdge[] } | null>(null);
+  let dagre: typeof import('dagre') | null = null;
 
   // Layout results
-  let layoutNodes = $state<any[]>([]);
-  let layoutEdges = $state<any[]>([]);
+  let layoutNodes = $state<MiniLayoutNode[]>([]);
+  let layoutEdges = $state<LayoutEdge[]>([]);
   let gWidth = $state(600);
   let gHeight = $state(200);
 
@@ -53,11 +57,11 @@
         `https://gem-api.thirdbear.net/ownership/graph?root=E${cleanId}&direction=down&max_depth=4`
       );
       if (!res.ok) throw new Error(`API error: ${res.status}`);
-      const data = await res.json();
+      const data: OwnershipGraphAPIResponse = await res.json();
 
       // Process nodes
-      const nodes = (data.nodes || []).map((n: any) => ({
-        id: n.entity_id || n.asset_id || n.id,
+      const nodes: GraphNode[] = (data.nodes || []).map((n: RawOwnershipAPINode) => ({
+        id: n.entity_id || n.asset_id || n.id || '',
         name: n.name || n.asset_name || n.full_name || '',
         type: n.node_type || (n.asset_id ? 'asset' : 'entity'),
         isRoot: n.is_root,
@@ -67,7 +71,7 @@
       }));
 
       // Process edges
-      const edges = (data.edges || []).map((e: any) => ({
+      const edges: GraphEdge[] = (data.edges || []).map((e: RawOwnershipAPIEdge) => ({
         source: e.source,
         target: e.target,
         value: e.value ?? e.ownership_percentage,
@@ -78,9 +82,9 @@
 
       // Run layout after data loads
       if (dagre) runLayout();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to fetch ownership graph:', err);
-      error = err.message;
+      error = err instanceof Error ? err.message : String(err);
       loading = false;
     }
   }
@@ -107,7 +111,7 @@
 
   // Asset count stats
   const assetCount = $derived(filteredNodes.filter((n) => n.type === 'asset').length);
-  const totalAssets = $derived(graphData?.nodes.filter((n: any) => n.type === 'asset').length || 0);
+  const totalAssets = $derived(graphData?.nodes.filter((n: GraphNode) => n.type === 'asset').length || 0);
   const hiddenCount = $derived(totalAssets - assetCount);
 
   // Run dagre layout - horizontal left to right
@@ -144,7 +148,7 @@
     layoutNodes = g.nodes().map((id: string) => {
       const pos = g.node(id);
       const orig = filteredNodes.find((n) => n.id === id);
-      const isRoot = id === entityId || id === `E${entityId}` || orig?.isRoot;
+      const isRoot = id === entityId || id === `E${entityId}` || !!orig?.isRoot;
       return {
         id,
         x: pos.x,
@@ -159,7 +163,7 @@
     });
 
     // Extract edges with points
-    layoutEdges = g.edges().map((e: any) => {
+    layoutEdges = g.edges().map((e: DagreEdge) => {
       const ed = g.edge(e);
       const orig = filteredEdges.find((x) => x.source === e.v && x.target === e.w);
       return {
@@ -170,14 +174,15 @@
       };
     });
 
-    gWidth = Math.max((g.graph() as any).width || 400, 400);
-    gHeight = Math.max((g.graph() as any).height || 150, 150);
+    const graphMeta = g.graph();
+    gWidth = Math.max(graphMeta.width || 400, 400);
+    gHeight = Math.max(graphMeta.height || 150, 150);
   }
 
   // Edge path generator
-  function edgePath(pts: any[]): string {
+  function edgePath(pts: LayoutPoint[]): string {
     if (!pts || pts.length < 2) return '';
-    return d3.line<any>().x((d) => d.x).y((d) => d.y).curve(d3.curveBasis)(pts) || '';
+    return d3.line<LayoutPoint>().x((d) => d.x).y((d) => d.y).curve(d3.curveBasis)(pts) || '';
   }
 
   // Truncate text
@@ -186,7 +191,7 @@
   }
 
   // Click handlers
-  function clickNode(n: any) {
+  function clickNode(n: MiniLayoutNode) {
     if (n.isAsset) {
       goto(assetLink(n.id));
     } else {

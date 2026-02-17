@@ -12,7 +12,7 @@
   import { assetLink, entityLink } from '$lib/links';
   import { fetchOwnerPortfolio } from '$lib/component-data/schema';
   import { useFetch } from '$lib/component-data/use-fetch.svelte';
-  import { colors, colorByTracker, regroupStatus, statusColors } from '$lib/design-tokens';
+  import { colors, colorByTracker, regroupStatus, statusColors, statusColorLegend } from '$lib/design-tokens';
 
   // Props - can receive pre-fetched portfolio data or fetch its own
   let {
@@ -21,7 +21,12 @@
     assetClassName = 'assets',
     sortByOwnershipPct = true,
     includeUnitNames = false,
+    /** Default active status groups (operating + prospective by default) */
+    defaultStatuses = ['operating', 'prospective'],
   } = $props();
+
+  // Status filter state - which status groups are currently visible
+  let activeStatuses = $state(new Set(defaultStatuses));
 
   // ============================================================================
   // DATA FETCHING - Uses prebaked data if provided, otherwise fetches
@@ -52,9 +57,40 @@
   const spotlightOwner = $derived(portfolio?.spotlightOwner ?? null);
   const subsidiariesMatched = $derived(toMap(portfolio?.subsidiariesMatched));
   const directlyOwned = $derived(portfolio?.directlyOwned || []);
-  const assets = $derived(portfolio?.assets || []);
+  const allAssets = $derived(portfolio?.assets || []);
   const entityMap = $derived(toMap(portfolio?.entityMap));
   const matchedEdges = $derived(toMap(portfolio?.matchedEdges));
+
+  // Filter helper: check if an asset passes the status filter
+  function passesStatusFilter(asset) {
+    const group = regroupStatus(asset.status || asset.Status);
+    return activeStatuses.has(group);
+  }
+
+  // Filtered assets based on active status groups
+  const assets = $derived(allAssets.filter(passesStatusFilter));
+
+  // Toggle a status group on/off
+  function toggleStatus(group) {
+    const next = new Set(activeStatuses);
+    if (next.has(group)) {
+      // Don't allow deselecting all
+      if (next.size > 1) next.delete(group);
+    } else {
+      next.add(group);
+    }
+    activeStatuses = next;
+  }
+
+  // Status group counts (from all assets, not filtered)
+  const statusGroupCounts = $derived.by(() => {
+    const counts = { operating: 0, prospective: 0, retired: 0, cancelled: 0 };
+    for (const a of allAssets) {
+      const group = regroupStatus(a.status || a.Status);
+      if (group in counts) counts[group]++;
+    }
+    return counts;
+  });
 
   /**
    * @typedef {{ locationID: string, units: any[], y?: number, r?: number }} ProcessedLocation
@@ -85,7 +121,7 @@
   let subsidiaryGroups = $derived.by(() => {
     let groups = Array.from(subsidiariesMatched).map(([id, assetList]) => ({
       id,
-      assets: assetList,
+      assets: assetList.filter(passesStatusFilter),
       isDirect: false,
     }));
 
@@ -98,9 +134,13 @@
       });
     }
 
-    if (directlyOwned.length > 0) {
-      groups.push({ id: 'Directly owned', assets: directlyOwned, isDirect: true });
+    const filteredDirect = directlyOwned.filter(passesStatusFilter);
+    if (filteredDirect.length > 0) {
+      groups.push({ id: 'Directly owned', assets: filteredDirect, isDirect: true });
     }
+
+    // Remove empty groups (all assets filtered out)
+    groups = groups.filter(g => g.assets.length > 0);
 
     // Group assets by location within each subsidiary
     /** @type {ProcessedGroup[]} */
@@ -165,41 +205,13 @@
 
   // Calculate frequency tables for mini bar charts
   function calculateFrequencyTables(units) {
-    const total = units.length;
-    if (total === 0) return { tracker: [], status: [] };
-
-    // Tracker frequency
-    const trackerMap = new Map();
-    units.forEach((u) => {
-      const t = u.tracker || 'Unknown';
-      trackerMap.set(t, (trackerMap.get(t) || 0) + 1);
-    });
-    const trackerData = Array.from(trackerMap.entries())
-      .map(([tracker, count]) => ({ tracker, count, percentage: count / total, xPercentage: 0 }))
-      .sort((a, b) => b.count - a.count);
-    let xTracker = 0;
-    trackerData.forEach((d) => {
-      d.xPercentage = xTracker;
-      xTracker += d.percentage;
-    });
-
-    // Status frequency (grouped)
-    const statusMap = new Map();
-    units.forEach((u) => {
-      const s = regroupStatus(u.status || u.Status);
-      statusMap.set(s, (statusMap.get(s) || 0) + 1);
-    });
-    const statusOrder = ['proposed', 'operating', 'retired', 'cancelled'];
-    const statusData = Array.from(statusMap.entries())
-      .map(([status, count]) => ({ status, count, percentage: count / total, xPercentage: 0 }))
-      .sort((a, b) => statusOrder.indexOf(a.status) - statusOrder.indexOf(b.status));
-    let xStatus = 0;
-    statusData.forEach((d) => {
-      d.xPercentage = xStatus;
-      xStatus += d.percentage;
-    });
-
-    return { tracker: trackerData, status: statusData };
+    if (units.length === 0) return { tracker: [], status: [] };
+    const statusOrder = ['operating', 'prospective', 'retired', 'cancelled'];
+    return {
+      tracker: countFrequency(units, 'tracker'),
+      status: countFrequency(units, 'status', (v) => regroupStatus(v),
+        (a, b) => statusOrder.indexOf(a.status) - statusOrder.indexOf(b.status)),
+    };
   }
 
   // SVG dimensions
@@ -311,7 +323,36 @@
   // Bar chart scale
   const barWidth = 200;
   const barHeight = 8;
+
+  // Frequency counting helper (shared by tracker/status breakdowns)
+  function countFrequency(units, field, transform = (v) => v, sortFn) {
+    const counts = new Map();
+    for (const u of units) {
+      const v = transform(u[field] || 'Unknown');
+      counts.set(v, (counts.get(v) || 0) + 1);
+    }
+    const total = units.length;
+    const data = Array.from(counts, ([value, count]) => ({
+      [field]: value, count, percentage: count / total, xPercentage: 0,
+    }));
+    if (sortFn) data.sort(sortFn); else data.sort((a, b) => b.count - a.count);
+    let x = 0;
+    for (const d of data) { d.xPercentage = x; x += d.percentage; }
+    return data;
+  }
 </script>
+
+{#snippet statusIconSvg(unitStatus, cx, cy, r)}
+  {#if unitStatus === 'proposed'}
+    <circle cx={cx + r * 1.1} cy={cy - r * 1.1} r={r * 0.225} fill={colors.yellow} class="status-icon" />
+  {:else if unitStatus === 'cancelled'}
+    {@const s = r * 0.225}
+    <path transform="translate({cx + r * 1.1}, {cy - r * 1.1})" d="M {-s} {s} L {s} {-s} M {-s} {-s} L {s} {s}" fill="none" stroke={colors.grey} stroke-width="1.25" stroke-linecap="round" class="status-icon" />
+  {:else if unitStatus === 'retired'}
+    {@const s = r * 0.225}
+    <path transform="translate({cx + r * 1.1}, {cy - r * 1.1})" d="M {-s} {s} L {s} {-s} M {-s} {-s} L {s} {s}" fill="none" stroke={colors.midnightPurple} stroke-width="1.25" stroke-linecap="round" class="status-icon" />
+  {/if}
+{/snippet}
 
 <div class="asset-screener">
   {#if loading}
@@ -328,10 +369,31 @@
       <div class="details-wrapper">
         <p class="subtitle">Details</p>
         <p class="details">
-          {assets.length}
+          {assets.length}{assets.length !== allAssets.length ? ` of ${allAssets.length}` : ''}
           {assetClassName} via {subsidiariesMatched.size} direct subsidiaries
         </p>
       </div>
+    </div>
+
+    <!-- Status filter toggles -->
+    <div class="status-filter">
+      <span class="filter-label">Status</span>
+      {#each statusColorLegend as { color, label, statuses }}
+        {@const group = label.toLowerCase()}
+        {@const isActive = activeStatuses.has(group)}
+        {@const count = statusGroupCounts[group] || 0}
+        <button
+          class="status-pill"
+          class:active={isActive}
+          style:--pill-color={color}
+          onclick={() => toggleStatus(group)}
+          aria-pressed={isActive}
+        >
+          <span class="pill-dot" style:background-color={isActive ? color : 'transparent'}></span>
+          {label}
+          <span class="pill-count">{count}</span>
+        </button>
+      {/each}
     </div>
 
     <!-- Main SVG -->
@@ -507,41 +569,7 @@
                     {@const unit = loc.units[0]}
                     {@const unitStatus = regroupStatus(unit.status || unit.Status)}
                     <circle r={loc.r} fill={getAssetColor(unit)} class="asset-circle" />
-                    <!-- Status icon - positioned at r * 1.1 offset, size r * 0.225 -->
-                    {#if unitStatus === 'proposed'}
-                      <!-- Yellow circle for proposed -->
-                      <circle
-                        cx={loc.r * 1.1}
-                        cy={-loc.r * 1.1}
-                        r={loc.r * 0.225}
-                        fill={colors.yellow}
-                        class="status-icon"
-                      />
-                    {:else if unitStatus === 'cancelled'}
-                      <!-- X mark for cancelled -->
-                      {@const s = loc.r * 0.225}
-                      <path
-                        transform="translate({loc.r * 1.1}, {-loc.r * 1.1})"
-                        d="M {-s} {s} L {s} {-s} M {-s} {-s} L {s} {s}"
-                        fill="none"
-                        stroke={colors.grey}
-                        stroke-width="1.25"
-                        stroke-linecap="round"
-                        class="status-icon"
-                      />
-                    {:else if unitStatus === 'retired'}
-                      <!-- X mark for retired -->
-                      {@const s = loc.r * 0.225}
-                      <path
-                        transform="translate({loc.r * 1.1}, {-loc.r * 1.1})"
-                        d="M {-s} {s} L {s} {-s} M {-s} {-s} L {s} {s}"
-                        fill="none"
-                        stroke={colors.midnightPurple}
-                        stroke-width="1.25"
-                        stroke-linecap="round"
-                        class="status-icon"
-                      />
-                    {/if}
+                    {@render statusIconSvg(unitStatus, 0, 0, loc.r)}
                   {:else}
                     <!-- Multiple units - ring layout -->
                     {@const n = loc.units.length}
@@ -564,38 +592,7 @@
                           class="unit-circle"
                           style="mix-blend-mode: multiply;"
                         />
-                        <!-- Status icon for each unit - positioned at unitR * 1.1 offset -->
-                        {#if unitStatus === 'proposed'}
-                          <circle
-                            cx={cx + unitR * 1.1}
-                            cy={cy - unitR * 1.1}
-                            r={unitR * 0.225}
-                            fill={colors.yellow}
-                            class="status-icon"
-                          />
-                        {:else if unitStatus === 'cancelled'}
-                          {@const s = unitR * 0.225}
-                          <path
-                            transform="translate({cx + unitR * 1.1}, {cy - unitR * 1.1})"
-                            d="M {-s} {s} L {s} {-s} M {-s} {-s} L {s} {s}"
-                            fill="none"
-                            stroke={colors.grey}
-                            stroke-width="1.25"
-                            stroke-linecap="round"
-                            class="status-icon"
-                          />
-                        {:else if unitStatus === 'retired'}
-                          {@const s = unitR * 0.225}
-                          <path
-                            transform="translate({cx + unitR * 1.1}, {cy - unitR * 1.1})"
-                            d="M {-s} {s} L {s} {-s} M {-s} {-s} L {s} {s}"
-                            fill="none"
-                            stroke={colors.midnightPurple}
-                            stroke-width="1.25"
-                            stroke-linecap="round"
-                            class="status-icon"
-                          />
-                        {/if}
+                        {@render statusIconSvg(unitStatus, cx, cy, unitR)}
                       {/each}
                     </g>
                   {/if}
@@ -782,6 +779,73 @@
     font-size: var(--font-size-base);
     font-weight: var(--font-weight-regular);
     margin: 0;
+  }
+
+  /* --- Status Filter --- */
+  .status-filter {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-6);
+    background: var(--gem-white);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .filter-label {
+    font-family: var(--font-family);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-bold);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-widest);
+    color: var(--color-text-tertiary);
+    margin-right: var(--space-1);
+  }
+
+  .status-pill {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-3);
+    border: 1.5px solid var(--pill-color);
+    border-radius: 999px;
+    background: transparent;
+    font-family: var(--font-family);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: all var(--duration-fast) var(--ease-out);
+    opacity: 0.45;
+  }
+
+  .status-pill.active {
+    opacity: 1;
+    background: color-mix(in srgb, var(--pill-color) 10%, transparent);
+    color: var(--color-text-primary);
+  }
+
+  .status-pill:hover {
+    opacity: 0.85;
+  }
+
+  .status-pill.active:hover {
+    opacity: 1;
+    background: color-mix(in srgb, var(--pill-color) 18%, transparent);
+  }
+
+  .pill-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    border: 1.5px solid var(--pill-color);
+    flex-shrink: 0;
+  }
+
+  .pill-count {
+    font-family: var(--font-family-data);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+    margin-left: var(--space-1);
   }
 
   /* --- Chart Area --- */

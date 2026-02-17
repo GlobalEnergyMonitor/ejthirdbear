@@ -132,13 +132,14 @@
 
     <!-- Asset units -->
     {#each unitPositions as pos}
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
       <g
         transform="translate({pos.x}, {pos.y})"
         class="unit-group"
         class:interactive
         class:hovered={hoveredAsset?.id === pos.asset.id}
         role={interactive ? 'button' : 'img'}
-        tabindex={interactive ? 0 : -1}
+        tabindex={interactive ? 0 : undefined}
         onclick={() => handleUnitClick(pos.asset)}
         onkeydown={(e) => e.key === 'Enter' && handleUnitClick(pos.asset)}
         onmouseenter={() => handleUnitHover(pos.asset)}

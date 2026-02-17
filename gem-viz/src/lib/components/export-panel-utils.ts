@@ -88,7 +88,7 @@ export function escapeCSVVal(val: unknown): string {
 /**
  * Generate sparkline points from values
  */
-export function sparklinePoints(values: number[]): string[] {
+export function sparklinePoints(values: number[]): string {
   const nums = values.map((v) => Number(v) || 0);
   const max = Math.max(...nums, 1);
   const normalized = nums.map((n) => n / max);
@@ -96,7 +96,7 @@ export function sparklinePoints(values: number[]): string[] {
     const x = (i / Math.max(1, normalized.length - 1)) * 80;
     const y = 18 - v * 18;
     return `${x},${y}`;
-  });
+  }).join(' ');
 }
 
 /**

@@ -20,3 +20,4 @@ export { default as EntityPortfolioHeader } from './EntityPortfolioHeader.svelte
 export { default as EntityPortfolioFilters } from './EntityPortfolioFilters.svelte';
 export { default as AssetRingVisualization } from './AssetRingVisualization.svelte';
 export { default as IntermediaryMiniGraph } from './IntermediaryMiniGraph.svelte';
+export { default as AssetOwnershipTree } from './AssetOwnershipTree.svelte';

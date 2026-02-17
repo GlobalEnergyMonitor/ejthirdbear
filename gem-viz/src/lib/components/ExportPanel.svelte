@@ -177,80 +177,40 @@
     };
   }
 
-  async function exportAssetsCSV() {
+  // Shared export logic: build SQL, run query, download CSV + manifest
+  async function doExport(kind, sql, filenameBase, selection) {
+    resetExportUI();
+    exporting = true;
+    try {
+      const result = await exportQuery(sql, filenameBase, selection);
+      lastExportManifest = buildExportManifest(kind, selection, result, { sql }, appInfo);
+      addLog('Manifest created');
+      await downloadFile(JSON.stringify(lastExportManifest, null, 2), `${filenameBase}-manifest.json`, 'application/json;charset=utf-8');
+      addLog('Manifest downloaded');
+    } catch (err) {
+      error = err.message;
+      addLog('Export error', err.message);
+    } finally {
+      exporting = false;
+    }
+  }
+
+  function exportAssetsCSV() {
     if (!assetItems.length) return;
-    resetExportUI();
-    exporting = true;
-    try {
-      const assetIds = assetItems.map((a) => a.id);
-      const sql = buildAssetQuery(assetIds);
-      const selection = { assets: assetIds, entities: [] };
-      const result = await exportQuery(sql, 'gem-assets-export', selection);
-      lastExportManifest = buildExportManifest('assets', selection, result, { sql }, appInfo);
-      addLog('Manifest created');
-      await downloadFile(
-        JSON.stringify(lastExportManifest, null, 2),
-        'gem-assets-export-manifest.json',
-        'application/json;charset=utf-8'
-      );
-      addLog('Manifest downloaded');
-    } catch (err) {
-      error = err.message;
-      addLog('Export error', err.message);
-    } finally {
-      exporting = false;
-    }
+    const ids = assetItems.map((a) => a.id);
+    doExport('assets', buildAssetQuery(ids), 'gem-assets-export', { assets: ids, entities: [] });
   }
 
-  async function exportEntitiesCSV() {
+  function exportEntitiesCSV() {
     if (!entityItems.length) return;
-    resetExportUI();
-    exporting = true;
-    try {
-      const entityIds = entityItems.map((e) => e.id);
-      const sql = buildEntityQuery(entityIds);
-      const selection = { assets: [], entities: entityIds };
-      const result = await exportQuery(sql, 'gem-entities-export', selection);
-      lastExportManifest = buildExportManifest('entities', selection, result, { sql }, appInfo);
-      addLog('Manifest created');
-      await downloadFile(
-        JSON.stringify(lastExportManifest, null, 2),
-        'gem-entities-export-manifest.json',
-        'application/json;charset=utf-8'
-      );
-      addLog('Manifest downloaded');
-    } catch (err) {
-      error = err.message;
-      addLog('Export error', err.message);
-    } finally {
-      exporting = false;
-    }
+    const ids = entityItems.map((e) => e.id);
+    doExport('entities', buildEntityQuery(ids), 'gem-entities-export', { assets: [], entities: ids });
   }
 
-  async function exportAllCSV() {
+  function exportAllCSV() {
     if (!totalCount) return;
-    resetExportUI();
-    exporting = true;
-    try {
-      const assetIds = assetItems.map((a) => a.id);
-      const entityIds = entityItems.map((e) => e.id);
-      const sql = buildCombinedQuery(assetIds, entityIds);
-      const selection = { assets: assetIds, entities: entityIds };
-      const result = await exportQuery(sql, 'gem-export', selection);
-      lastExportManifest = buildExportManifest('combined', selection, result, { sql }, appInfo);
-      addLog('Manifest created');
-      await downloadFile(
-        JSON.stringify(lastExportManifest, null, 2),
-        'gem-export-manifest.json',
-        'application/json;charset=utf-8'
-      );
-      addLog('Manifest downloaded');
-    } catch (err) {
-      error = err.message;
-      addLog('Export error', err.message);
-    } finally {
-      exporting = false;
-    }
+    const aIds = assetItems.map((a) => a.id), eIds = entityItems.map((e) => e.id);
+    doExport('combined', buildCombinedQuery(aIds, eIds), 'gem-export', { assets: aIds, entities: eIds });
   }
 
   async function handleRowClick(row) {
@@ -376,21 +336,20 @@
         </div>
 
         <div class="spark-grid">
-          {#if analysis.combined?.topTrackers?.length}
+          {#each [
+            { title: 'Top Trackers', data: analysis.combined?.topTrackers },
+            { title: 'Top Statuses', data: analysis.combined?.topStatuses },
+            { title: 'Top Countries', data: analysis.combined?.topCountries },
+          ].filter(c => c.data?.length) as card}
             <div class="spark-card">
               <div class="spark-header">
-                <span class="spark-title">Top Trackers</span>
+                <span class="spark-title">{card.title}</span>
                 <svg class="sparkline" viewBox="0 0 80 18" aria-hidden="true">
-                  <polyline
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    points={sparklinePoints(analysis.combined.topTrackers.map((r) => r.rows))}
-                  />
+                  <polyline fill="none" stroke="currentColor" stroke-width="1.5" points={sparklinePoints(card.data.map((r) => r.rows))} />
                 </svg>
               </div>
               <div class="spark-rows">
-                {#each analysis.combined.topTrackers as row}
+                {#each card.data as row}
                   <div class="spark-row">
                     <span class="spark-key">{row.key}</span>
                     <span class="spark-val">{formatNumber(row.rows)}</span>
@@ -398,55 +357,7 @@
                 {/each}
               </div>
             </div>
-          {/if}
-
-          {#if analysis.combined?.topStatuses?.length}
-            <div class="spark-card">
-              <div class="spark-header">
-                <span class="spark-title">Top Statuses</span>
-                <svg class="sparkline" viewBox="0 0 80 18" aria-hidden="true">
-                  <polyline
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    points={sparklinePoints(analysis.combined.topStatuses.map((r) => r.rows))}
-                  />
-                </svg>
-              </div>
-              <div class="spark-rows">
-                {#each analysis.combined.topStatuses as row}
-                  <div class="spark-row">
-                    <span class="spark-key">{row.key}</span>
-                    <span class="spark-val">{formatNumber(row.rows)}</span>
-                  </div>
-                {/each}
-              </div>
-            </div>
-          {/if}
-
-          {#if analysis.combined?.topCountries?.length}
-            <div class="spark-card">
-              <div class="spark-header">
-                <span class="spark-title">Top Countries</span>
-                <svg class="sparkline" viewBox="0 0 80 18" aria-hidden="true">
-                  <polyline
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    points={sparklinePoints(analysis.combined.topCountries.map((r) => r.rows))}
-                  />
-                </svg>
-              </div>
-              <div class="spark-rows">
-                {#each analysis.combined.topCountries as row}
-                  <div class="spark-row">
-                    <span class="spark-key">{row.key}</span>
-                    <span class="spark-val">{formatNumber(row.rows)}</span>
-                  </div>
-                {/each}
-              </div>
-            </div>
-          {/if}
+          {/each}
         </div>
 
         <details class="details">

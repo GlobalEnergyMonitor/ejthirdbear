@@ -18,6 +18,7 @@
   } from '$lib/factsheet';
   import ProjectCard from './ProjectCard.svelte';
   import LoadingWrapper from './LoadingWrapper.svelte';
+  import { AssetOwnershipTree } from './ownership';
 
   // Props
   let {
@@ -36,6 +37,9 @@
   let loading = $state(true);
   let error = $state<string | null>(null);
   let assets = $state<Asset[]>([]);
+
+  // Track which cards are expanded (for lazy-loading ownership trees)
+  let expandedCards = $state<Set<string>>(new Set());
 
   // Memoized percentile lookups (created once per data load)
   let globalLookup = $state<((_v: number) => number) | null>(null);
@@ -121,7 +125,33 @@
   <LoadingWrapper {loading} {error} empty={assets.length === 0} loadingMessage="Loading assets...">
     <div class="project-cards">
       {#each assets as asset (asset.id)}
-        <ProjectCard {asset} percentiles={getPercentiles(asset)} {variant} />
+        <div
+          role="button"
+          tabindex="0"
+          onclick={() => {
+            if (!expandedCards.has(asset.id)) {
+              expandedCards.add(asset.id);
+              expandedCards = expandedCards;
+            }
+          }}
+          onkeydown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              if (!expandedCards.has(asset.id)) {
+                expandedCards.add(asset.id);
+                expandedCards = expandedCards;
+              }
+            }
+          }}
+        >
+          <ProjectCard {asset} percentiles={getPercentiles(asset)} {variant}>
+            {#snippet ownership()}
+              {#if expandedCards.has(asset.id)}
+                <AssetOwnershipTree assetId={asset.id} />
+              {/if}
+            {/snippet}
+          </ProjectCard>
+        </div>
       {/each}
     </div>
   </LoadingWrapper>

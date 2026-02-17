@@ -62,14 +62,7 @@
   let commands = [];
 
   /**
-   * @typedef {Object} ResultItem
-   * @property {string} type
-   * @property {string} label
-   * @property {string} [id]
-   * @property {string} [sublabel]
-   * @property {string} [shortcut]
-   * @property {string} [section]
-   * @property {() => void} [action]
+   * @typedef {{ type: string, label: string, id?: string, url?: string, sublabel?: string, action?: () => void, section?: string, shortcut?: string, [key: string]: any }} ResultItem
    */
 
   // All results combined for keyboard navigation
@@ -165,18 +158,9 @@
     }, 200);
   }
 
-  // Navigate to result
   function navigateTo(type, id, name) {
-    // Add to recent searches
     addToRecent({ type, id, label: name || id });
-
-    // Navigate
-    if (type === 'asset') {
-      goto(assetLink(id));
-    } else if (type === 'entity') {
-      goto(entityLink(id));
-    }
-
+    goto(type === 'asset' ? assetLink(id) : entityLink(id));
     close();
   }
 
@@ -289,99 +273,22 @@
     }
 
     // Direct shortcuts (single key, no modifier)
-    // Skip if any modifier key is held (allow CMD+C, CMD+V, etc.)
     if (!isInputFocused() && !open && !e.metaKey && !e.ctrlKey && !e.altKey) {
-      switch (e.key) {
-        case 'a': // Add to cart
-          e.preventDefault();
-          addCurrentToCart();
-          return;
-
-        case 'c': // Copy ID
-          e.preventDefault();
-          copyCurrentId();
-          return;
-
-        case 'u': // Copy URL
-          e.preventDefault();
-          copyUrl();
-          return;
-
-        case 'b': // Back
-          e.preventDefault();
-          history.back();
-          return;
-
-        case 'j': // Next section
-          e.preventDefault();
-          scrollToSection('next');
-          return;
-
-        case 'k': // Previous section
-          e.preventDefault();
-          scrollToSection('prev');
-          return;
-
-        case '?': // Help
-          e.preventDefault();
-          showHelp = !showHelp;
-          return;
-
-        case 'o': // Open first owner (on asset page)
-          e.preventDefault();
-          openFirstOwner();
-          return;
-
-        case 't': // Scroll to top
-          e.preventDefault();
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-          showToast('Top');
-          return;
-
-        case 's': // Jump to summary section
-          e.preventDefault();
-          scrollToElement('.summary, .portfolio-summary, h2');
-          return;
-
-        case 'e': // Toggle expand/collapse all details
-          e.preventDefault();
-          toggleAllDetails();
-          return;
-
-        case 'n': // Next asset in list (on asset pages)
-          e.preventDefault();
-          navigateRelated('next');
-          return;
-
-        case 'p': // Previous asset in list
-          e.preventDefault();
-          navigateRelated('prev');
-          return;
-
-        case 'f': // Focus search in current context
-          e.preventDefault();
-          focusLocalSearch();
-          return;
-
-        case '1':
-        case '2':
-        case '3':
-        case '4':
-        case '5':
-        case '6':
-        case '7':
-        case '8':
-        case '9':
-          e.preventDefault();
-          jumpToSection(parseInt(e.key));
-          return;
-
-        case 'Escape':
-          if (showHelp) {
-            showHelp = false;
-          }
-          return;
-      }
+      const shortcuts = {
+        a: addCurrentToCart, c: copyCurrentId, u: copyUrl,
+        b: () => history.back(), j: () => scrollToSection('next'), k: () => scrollToSection('prev'),
+        '?': () => { showHelp = !showHelp; }, o: openFirstOwner,
+        t: () => { window.scrollTo({ top: 0, behavior: 'smooth' }); showToast('Top'); },
+        s: () => scrollToElement('.summary, .portfolio-summary, h2'),
+        e: toggleAllDetails, n: () => navigateRelated('next'), p: () => navigateRelated('prev'),
+        f: focusLocalSearch,
+        '1': () => jumpToSection(1), '2': () => jumpToSection(2), '3': () => jumpToSection(3),
+        '4': () => jumpToSection(4), '5': () => jumpToSection(5), '6': () => jumpToSection(6),
+        '7': () => jumpToSection(7), '8': () => jumpToSection(8), '9': () => jumpToSection(9),
+      };
+      if (e.key === 'Escape') { if (showHelp) showHelp = false; return; }
+      const handler = shortcuts[e.key];
+      if (handler) { e.preventDefault(); handler(); return; }
     }
   }
 
@@ -597,13 +504,7 @@
     );
   }
 
-  function toggle() {
-    if (open) {
-      close();
-    } else {
-      openPalette();
-    }
-  }
+  function toggle() { open ? close() : openPalette(); }
 
   function openPalette() {
     open = true;

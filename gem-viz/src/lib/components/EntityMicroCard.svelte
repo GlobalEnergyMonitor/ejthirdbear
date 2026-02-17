@@ -18,6 +18,7 @@
    * />
    */
   import { colorByTracker } from '$lib/design-tokens';
+  import { formatCapacity } from '$lib/format-utils';
 
   let {
     name = '',
@@ -44,15 +45,6 @@
       .filter((t) => t.pct > 0)
       .sort((a, b) => b.pct - a.pct);
   });
-
-  // Format capacity with smart units
-  function formatCapacity(mw) {
-    if (!mw || mw === 0) return null;
-    if (mw >= 1000) {
-      return `${(mw / 1000).toFixed(1)} GW`;
-    }
-    return `${Math.round(mw).toLocaleString()} MW`;
-  }
 
   const formattedCapacity = $derived(formatCapacity(totalCapacity));
 </script>
