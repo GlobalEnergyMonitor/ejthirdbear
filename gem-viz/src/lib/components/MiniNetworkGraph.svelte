@@ -3,7 +3,7 @@
    * MiniNetworkGraph - Focused 3D network visualization for entity pages
    * Shows the ownership network neighborhood around a specific entity
    */
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount } from 'svelte';
   import { assetPath, assetLink, entityLink } from '$lib/links';
   import { goto } from '$app/navigation';
   import { Deck } from '@deck.gl/core';
@@ -468,60 +468,62 @@
     });
   }
 
-  onMount(async () => {
-    const { OrbitView } = await import('@deck.gl/core');
+  onMount(() => {
+    (async () => {
+      const { OrbitView } = await import('@deck.gl/core');
 
-    const orbitView = new OrbitView({
-      orbitAxis: 'Y',
-      controller: {
-        dragMode: 'pan',
-        dragPan: true,
-        dragRotate: true,
-        scrollZoom: { speed: 0.08, smooth: true },
-        touchZoom: true,
-        touchRotate: true,
-        doubleClickZoom: false,
-        keyboard: true,
-        inertia: 120,
-      },
-    });
+      const orbitView = new OrbitView({
+        orbitAxis: 'Y',
+        controller: {
+          dragMode: 'pan',
+          dragPan: true,
+          dragRotate: true,
+          scrollZoom: { speed: 0.08, smooth: true },
+          touchZoom: true,
+          touchRotate: true,
+          doubleClickZoom: false,
+          keyboard: true,
+          inertia: 120,
+        },
+      });
 
-    deck = new Deck({
-      parent: container,
-      views: orbitView,
-      initialViewState: VIEW_STATE,
-      layers: [],
-      onViewStateChange: ({ viewState }) => {
-        currentZoom = viewState.zoom;
-        updateLayers();
-      },
-      onClick: ({ object }) => {
-        if (object) {
-          const isAsset = object.id.startsWith('G');
-          goto(isAsset ? assetLink(object.id) : entityLink(object.id));
-        }
-      },
-      getTooltip: ({ object }) => {
-        if (!object) return null;
-        return {
-          html: `<div style="padding:6px;font-family:Roboto Condensed, sans-serif;font-weight:700;font-size:10px;">
-            <strong>${object.name}</strong><br/>
-            <span style="color:#888;">${object.id}</span><br/>
-            ${object.connections} connections
-          </div>`,
-          style: { backgroundColor: '#fff', border: '1px solid #000' },
-        };
-      },
-    });
+      deck = new Deck({
+        parent: container,
+        views: orbitView,
+        initialViewState: VIEW_STATE,
+        layers: [],
+        onViewStateChange: ({ viewState }) => {
+          currentZoom = viewState.zoom;
+          updateLayers();
+        },
+        onClick: ({ object }) => {
+          if (object) {
+            const isAsset = object.id.startsWith('G');
+            goto(isAsset ? assetLink(object.id) : entityLink(object.id));
+          }
+        },
+        getTooltip: ({ object }) => {
+          if (!object) return null;
+          return {
+            html: `<div style="padding:6px;font-family:Roboto Condensed, sans-serif;font-weight:700;font-size:10px;">
+              <strong>${object.name}</strong><br/>
+              <span style="color:#888;">${object.id}</span><br/>
+              ${object.connections} connections
+            </div>`,
+            style: { backgroundColor: '#fff', border: '1px solid #000' },
+          };
+        },
+      });
 
-    await loadData();
-  });
+      await loadData();
+    })();
 
-  onDestroy(() => {
-    if (simulation) simulation.stop();
-    if (hoverFrame) cancelAnimationFrame(hoverFrame);
-    if (hoverTimeout) clearTimeout(hoverTimeout);
-    if (deck) deck.finalize();
+    return () => {
+      if (simulation) simulation.stop();
+      if (hoverFrame) cancelAnimationFrame(hoverFrame);
+      if (hoverTimeout) clearTimeout(hoverTimeout);
+      if (deck) deck.finalize();
+    };
   });
 
   // Reload when entityId changes

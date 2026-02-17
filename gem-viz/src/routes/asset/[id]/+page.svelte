@@ -6,7 +6,6 @@
 
   // --- IMPORTS ---
   import { onMount } from 'svelte';
-  import { get } from 'svelte/store';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import { entityLink } from '$lib/links';
@@ -117,7 +116,7 @@
   // --- DATA FETCHING (client-side fallback) ---
   // Uses unified asset-data layer that handles both API and DuckDB sources
   onMount(async () => {
-    const paramsId = get(page)?.params?.id || data?.assetId;
+    const paramsId = $page?.params?.id || data?.assetId;
 
     // Redirect E-prefix IDs to entity page
     if (paramsId?.match(/^E\d+$/)) {

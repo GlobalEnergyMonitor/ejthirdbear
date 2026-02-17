@@ -2,7 +2,6 @@
   // D3-based Ownership Explorer — literal port of the provided Observable snippet
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
-  import { get } from 'svelte/store';
   import { goto } from '$app/navigation';
   import { assetLink, entityLink } from '$lib/links';
   import * as d3 from 'd3';
@@ -383,7 +382,7 @@
 
     // Fallback: client-side fetch from Ownership API (dev mode)
     loadingStatus = 'Connecting to database...';
-    const pageData = get(page);
+    const pageData = $page;
     const pathname = pageData.url?.pathname || '';
     const paramId = pageData.params?.id;
     let ownerId = null;

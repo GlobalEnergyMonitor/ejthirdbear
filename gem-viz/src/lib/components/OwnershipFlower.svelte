@@ -11,7 +11,6 @@
    */
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
-  import { get } from 'svelte/store';
   import { goto } from '$app/navigation';
   import { entityLink } from '$lib/links';
   import * as d3 from 'd3';
@@ -180,7 +179,7 @@
 
       let fetchOwnerId = ownerId;
       if (!fetchOwnerId) {
-        const pageStore = get(page);
+        const pageStore = $page;
         const pathname = pageStore.url?.pathname || '';
         const paramId = pageStore.params?.id;
         if (pathname.includes('/asset/')) {

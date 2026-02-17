@@ -1,5 +1,5 @@
 <script>
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount } from 'svelte';
   import { assetPath, assetLink, entityLink } from '$lib/links';
   import { goto } from '$app/navigation';
   import { Deck } from '@deck.gl/core';
@@ -56,27 +56,40 @@
   let animationFrame;
   let lastFrameTime = 0;
 
-  // Utility functions and presets imported from network-graph-config
+  // Shared SQL fragments for edge queries
+  const EDGE_SELECT = `
+    SELECT
+      ${ASSET_ID_COALESCE} as source_id,
+      "Project" as source_name,
+      "Owner GEM Entity ID" as target_id,
+      "Owner" as target_name,
+      "Share" as share
+    FROM ownership
+    WHERE ${ASSET_ID_COALESCE} IS NOT NULL
+      AND "Owner GEM Entity ID" IS NOT NULL`;
+
+  // Get or create a node in the nodeMap
+  function getOrCreateNode(id, name) {
+    if (!nodeMap.has(id)) {
+      nodeMap.set(id, { id, name: name || id, connections: 0, inDegree: 0, outDegree: 0 });
+    }
+    return nodeMap.get(id);
+  }
 
   async function loadData() {
     try {
       loading = true;
       error = null;
       loadingPhase = 'Loading parquet files...';
-      console.debug('[NetworkGraph] loadData start', {
-        config: JSON.parse(JSON.stringify(config)),
-      });
 
       // Dynamic import - only load DuckDB on client
       if (!loadParquetFromPath || !query) {
         const duckdbUtils = await import('$lib/duckdb-utils');
         loadParquetFromPath = duckdbUtils.loadParquetFromPath;
         query = duckdbUtils.query;
-        console.debug('[NetworkGraph] DuckDB utils loaded');
       }
 
       const parquetPath = assetPath('all_trackers_ownership@1.parquet');
-      console.debug('[NetworkGraph] Loading ownership parquet', { parquetPath });
       const ownershipResult = await loadParquetFromPath(parquetPath, 'ownership');
 
       if (!ownershipResult.success) {
@@ -85,7 +98,6 @@
       }
 
       loadingPhase = 'Counting total edges...';
-      console.debug('[NetworkGraph] Counting edges');
 
       // The ownership table uses various ID columns depending on tracker - use COALESCE pattern
       const countResult = await query(`
@@ -98,19 +110,11 @@
       allEdgesCount =
         countResult.success && countResult.data?.[0]?.total ? Number(countResult.data[0].total) : 0;
 
-      console.debug('[NetworkGraph] Edge count result', countResult);
-      console.log(`Total edges in dataset: ${allEdgesCount}`);
-
       loadingPhase = `Querying edges (${config.sampleMode} mode)...`;
-      console.debug('[NetworkGraph] Building edge query', {
-        sampleMode: config.sampleMode,
-        maxEdges: config.maxEdges,
-      });
 
       let edgeQuery;
 
       if (config.sampleMode === 'top') {
-        // Use COALESCE for asset ID (different columns per tracker) -> Owner GEM Entity ID (owner) relationship
         edgeQuery = `
           WITH entity_counts AS (
             SELECT entity_id, COUNT(*) as cnt FROM (
@@ -122,49 +126,17 @@
           top_entities AS (
             SELECT entity_id FROM entity_counts ORDER BY cnt DESC LIMIT ${Math.ceil(config.maxEdges / 5)}
           )
-          SELECT
-            ${ASSET_ID_COALESCE} as source_id,
-            "Project" as source_name,
-            "Owner GEM Entity ID" as target_id,
-            "Owner" as target_name,
-            "Share" as share
-          FROM ownership
-          WHERE ${ASSET_ID_COALESCE} IS NOT NULL
-            AND "Owner GEM Entity ID" IS NOT NULL
+          ${EDGE_SELECT}
             AND (${ASSET_ID_COALESCE} IN (SELECT entity_id FROM top_entities)
                  OR "Owner GEM Entity ID" IN (SELECT entity_id FROM top_entities))
           LIMIT ${config.maxEdges}
         `;
       } else if (config.sampleMode === 'random') {
-        edgeQuery = `
-          SELECT
-            ${ASSET_ID_COALESCE} as source_id,
-            "Project" as source_name,
-            "Owner GEM Entity ID" as target_id,
-            "Owner" as target_name,
-            "Share" as share
-          FROM ownership
-          WHERE ${ASSET_ID_COALESCE} IS NOT NULL
-            AND "Owner GEM Entity ID" IS NOT NULL
-          ORDER BY RANDOM()
-          LIMIT ${config.maxEdges}
-        `;
+        edgeQuery = `${EDGE_SELECT} ORDER BY RANDOM() LIMIT ${config.maxEdges}`;
       } else {
-        edgeQuery = `
-          SELECT
-            ${ASSET_ID_COALESCE} as source_id,
-            "Project" as source_name,
-            "Owner GEM Entity ID" as target_id,
-            "Owner" as target_name,
-            "Share" as share
-          FROM ownership
-          WHERE ${ASSET_ID_COALESCE} IS NOT NULL
-            AND "Owner GEM Entity ID" IS NOT NULL
-          LIMIT ${config.maxEdges}
-        `;
+        edgeQuery = `${EDGE_SELECT} LIMIT ${config.maxEdges}`;
       }
 
-      console.debug('[NetworkGraph] Running edge query', edgeQuery);
       const edgesResult = await query(edgeQuery);
 
       if (!edgesResult.success || !edgesResult.data) {
@@ -172,45 +144,21 @@
         throw new Error(`Failed to query ownership edges: ${edgesResult.error || 'unknown error'}`);
       }
 
-      console.log(`Loaded ${edgesResult.data.length} edges`);
       loadingPhase = 'Building graph structure...';
-      console.debug('[NetworkGraph] First edge sample', edgesResult.data?.[0]);
 
       nodeMap.clear();
       links = [];
 
       for (const edge of edgesResult.data) {
-        if (!nodeMap.has(edge.source_id)) {
-          nodeMap.set(edge.source_id, {
-            id: edge.source_id,
-            name: edge.source_name || edge.source_id,
-            connections: 0,
-            inDegree: 0,
-            outDegree: 0,
-          });
-        }
-        const sourceNode = nodeMap.get(edge.source_id);
+        const sourceNode = getOrCreateNode(edge.source_id, edge.source_name);
         sourceNode.connections++;
         sourceNode.outDegree++;
 
-        if (!nodeMap.has(edge.target_id)) {
-          nodeMap.set(edge.target_id, {
-            id: edge.target_id,
-            name: edge.target_name || edge.target_id,
-            connections: 0,
-            inDegree: 0,
-            outDegree: 0,
-          });
-        }
-        const targetNode = nodeMap.get(edge.target_id);
+        const targetNode = getOrCreateNode(edge.target_id, edge.target_name);
         targetNode.connections++;
         targetNode.inDegree++;
 
-        links.push({
-          source: edge.source_id,
-          target: edge.target_id,
-          share: edge.share || 0,
-        });
+        links.push({ source: edge.source_id, target: edge.target_id, share: edge.share || 0 });
       }
 
       const filteredNodes = Array.from(nodeMap.values()).filter(
@@ -230,8 +178,6 @@
         totalEdges: allEdgesCount,
       };
 
-      console.log(`Built graph: ${nodes.length} nodes, ${links.length} edges`);
-
       await runSimulation();
       loading = false;
     } catch (e) {
@@ -244,7 +190,6 @@
   function runSimulation() {
     return new Promise((resolve) => {
       loadingPhase = 'Running force simulation (d3-force-3d)...';
-      console.log('Starting d3-force-3d simulation...');
 
       const preset = SIMULATION_PRESETS[config.simulationSpeed];
       const tunedPreset = {
@@ -361,9 +306,7 @@
 
       // WARMUP: Run ticks synchronously for fast initial layout
       loadingPhase = `Warmup: computing initial layout...`;
-      console.log(`Running ${preset.warmupTicks} warmup ticks synchronously...`);
 
-      const warmupStart = performance.now();
       simulation.alpha(1);
 
       for (let i = 0; i < preset.warmupTicks; i++) {
@@ -372,9 +315,6 @@
           simulationProgress = Math.round((i / preset.warmupTicks) * 50);
         }
       }
-
-      const warmupTime = performance.now() - warmupStart;
-      console.log(`Warmup complete in ${warmupTime.toFixed(0)}ms`);
 
       stretchLayoutToCanvas();
 
@@ -389,7 +329,6 @@
 
       function animate() {
         if (!simulation || tickCount >= maxAnimTicks || simulation.alpha() < 0.01) {
-          console.log(`Animation complete after ${tickCount} ticks`);
           simulationProgress = 100;
           loadingPhase = 'Complete';
           stretchLayoutToCanvas();
@@ -518,11 +457,8 @@
     if (rotationFrame) cancelAnimationFrame(rotationFrame);
     if (!config.use3D || !config.autoRotate || !deck) return;
 
-    console.log('[NetworkGraph] Starting camera auto-rotation');
-
     function rotate() {
       if (!config.autoRotate || !config.use3D || !deck || !currentViewState) {
-        console.log('[NetworkGraph] Stopping auto-rotation');
         rotationFrame = null;
         return;
       }
@@ -572,77 +508,79 @@
     }
   }
 
-  onMount(async () => {
-    const { OrthographicView, OrbitView } = await import('@deck.gl/core');
+  onMount(() => {
+    (async () => {
+      const { OrthographicView, OrbitView } = await import('@deck.gl/core');
 
-    const view = config.use3D
-      ? new OrbitView({
-          orbitAxis: 'Y',
-          controller: {
-            dragMode: 'pan', // normal drag = pan
-            dragPan: true, // enable panning
-            dragRotate: true, // keep rotation enabled
-            scrollZoom: true,
-            touchZoom: true,
-            touchRotate: true, // two-finger rotate on touch devices
-            keyboard: true,
-            inertia: 150, // smooth momentum after drag
-          },
-        })
-      : new OrthographicView({ flipY: false, controller: true });
+      const view = config.use3D
+        ? new OrbitView({
+            orbitAxis: 'Y',
+            controller: {
+              dragMode: 'pan', // normal drag = pan
+              dragPan: true, // enable panning
+              dragRotate: true, // keep rotation enabled
+              scrollZoom: true,
+              touchZoom: true,
+              touchRotate: true, // two-finger rotate on touch devices
+              keyboard: true,
+              inertia: 150, // smooth momentum after drag
+            },
+          })
+        : new OrthographicView({ flipY: false, controller: true });
 
-    const initialViewState = config.use3D
-      ? {
-          target: /** @type {[number, number, number]} */ ([0, 0, 0]),
-          rotationX: 30,
-          rotationOrbit: -30,
-          zoom: -1,
-          minZoom: -3,
-          maxZoom: 3,
-        }
-      : { target: /** @type {[number, number, number]} */ ([0, 0, 0]), zoom: -1.5 };
+      const initialViewState = config.use3D
+        ? {
+            target: /** @type {[number, number, number]} */ ([0, 0, 0]),
+            rotationX: 30,
+            rotationOrbit: -30,
+            zoom: -1,
+            minZoom: -3,
+            maxZoom: 3,
+          }
+        : { target: /** @type {[number, number, number]} */ ([0, 0, 0]), zoom: -1.5 };
 
-    // Initialize current view state for auto-rotation
-    currentViewState = { ...initialViewState };
+      // Initialize current view state for auto-rotation
+      currentViewState = { ...initialViewState };
 
-    deck = new Deck({
-      parent: container,
-      views: view,
-      initialViewState,
-      onViewStateChange: handleViewStateChange,
-      layers: [],
-      getTooltip: ({ object }) => {
-        if (!object) return null;
-        return {
-          html: `<div style="padding: 8px; font-family: var(--font-family-data); font-size: 11px; max-width: 280px;">
-            <strong>${object.name}</strong><br/>
-            <span style="color: ${colors.gray500};">${object.id}</span><br/>
-            <span style="color: ${colors.gray600};">↑${object.inDegree}</span>
-            <span style="color: ${colors.gray600};">↓${object.outDegree}</span>
-            = ${object.connections} total
-          </div>`,
-          style: {
-            backgroundColor: colors.white,
-            border: `1px solid ${colors.black}`,
-            borderRadius: '0',
-          },
-        };
-      },
-    });
+      deck = new Deck({
+        parent: container,
+        views: view,
+        initialViewState,
+        onViewStateChange: handleViewStateChange,
+        layers: [],
+        getTooltip: ({ object }) => {
+          if (!object) return null;
+          return {
+            html: `<div style="padding: 8px; font-family: var(--font-family-data); font-size: 11px; max-width: 280px;">
+              <strong>${object.name}</strong><br/>
+              <span style="color: ${colors.gray500};">${object.id}</span><br/>
+              <span style="color: ${colors.gray600};">↑${object.inDegree}</span>
+              <span style="color: ${colors.gray600};">↓${object.outDegree}</span>
+              = ${object.connections} total
+            </div>`,
+            style: {
+              backgroundColor: colors.white,
+              border: `1px solid ${colors.black}`,
+              borderRadius: '0',
+            },
+          };
+        },
+      });
 
-    await loadData();
+      await loadData();
 
-    // Start auto-rotation after initial load if 3D mode is enabled
-    if (config.use3D && config.autoRotate) {
-      startAutoRotation();
-    }
-  });
+      // Start auto-rotation after initial load if 3D mode is enabled
+      if (config.use3D && config.autoRotate) {
+        startAutoRotation();
+      }
+    })();
 
-  onDestroy(() => {
-    if (animationFrame) cancelAnimationFrame(animationFrame);
-    if (rotationFrame) cancelAnimationFrame(rotationFrame);
-    if (simulation) simulation.stop();
-    if (deck) deck.finalize();
+    return () => {
+      if (animationFrame) cancelAnimationFrame(animationFrame);
+      if (rotationFrame) cancelAnimationFrame(rotationFrame);
+      if (simulation) simulation.stop();
+      if (deck) deck.finalize();
+    };
   });
 </script>
 

@@ -1,15 +1,15 @@
-<script>
+<script lang="ts">
   /**
    * InvestigationMap - Geographic map for investigation assets
    * Shows asset locations on a world map using MapLibre
    * Uses Svelte-based popups with AssetMicroCard
    */
 
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount } from 'svelte';
   import maplibregl from 'maplibre-gl';
   import 'maplibre-gl/dist/maplibre-gl.css';
   import { colorByTracker, colors } from '$lib/design-tokens';
-  import { getInvestigationLocations } from '$lib/duckdb-queries';
+  import { listAssets, getAsset, getEntityOwned, type AssetSummary } from '$lib/ownership-api';
   import AssetMicroCard from './AssetMicroCard.svelte';
 
   // Props
@@ -24,18 +24,61 @@
   let popupAsset = $state(null);
   let popupPosition = $state({ x: 0, y: 0 });
 
-  // Fetch asset locations with more data for cards
+  // Fetch asset locations via REST API
   async function loadLocations() {
     if (entityIds.length === 0 && assetIds.length === 0) {
       loading = false;
       return;
     }
 
-    const result = await getInvestigationLocations(entityIds, assetIds);
-    if (result.success && result.data) {
-      locations = result.data.filter(
-        (d) => d.lat && d.lng && !isNaN(Number(d.lat)) && !isNaN(Number(d.lng))
-      );
+    try {
+      const allAssets: AssetSummary[] = [];
+
+      // Fetch assets for each entity (their owned assets)
+      const entityPromises = entityIds.map(async (eid) => {
+        try {
+          const owned = await getEntityOwned(eid);
+          // Each owned item has entityId — fetch those as assets
+          for (const item of owned) {
+            try {
+              const asset = await getAsset(item.entityId);
+              allAssets.push(asset);
+            } catch { /* skip individual failures */ }
+          }
+        } catch { /* skip entity failures */ }
+      });
+
+      // Fetch specific assets directly
+      const assetPromises = assetIds.map(async (aid) => {
+        try {
+          const asset = await getAsset(aid);
+          allAssets.push(asset);
+        } catch { /* skip individual failures */ }
+      });
+
+      await Promise.all([...entityPromises, ...assetPromises]);
+
+      // Dedupe by ID and filter to those with coordinates
+      const seen = new Set();
+      locations = allAssets
+        .filter(a => {
+          if (!a.latitude || !a.longitude || seen.has(a.id)) return false;
+          seen.add(a.id);
+          return !isNaN(Number(a.latitude)) && !isNaN(Number(a.longitude));
+        })
+        .map(a => ({
+          asset_id: a.id,
+          name: a.name,
+          tracker: a.facilityType || '',
+          status: a.status || '',
+          lat: Number(a.latitude),
+          lng: Number(a.longitude),
+          country: a.country || '',
+          capacity: a.capacity,
+          owner: a.ownerName || '',
+        }));
+    } catch (err) {
+      console.error('[InvestigationMap] Failed to load locations:', err);
     }
     loading = false;
   }
@@ -146,15 +189,17 @@
     });
   }
 
-  onMount(async () => {
-    await loadLocations();
-    if (locations.length > 0) {
-      initMap();
-    }
-  });
+  onMount(() => {
+    (async () => {
+      await loadLocations();
+      if (locations.length > 0) {
+        initMap();
+      }
+    })();
 
-  onDestroy(() => {
-    if (map) map.remove();
+    return () => {
+      if (map) map.remove();
+    };
   });
 </script>
 

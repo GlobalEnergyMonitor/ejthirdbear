@@ -10,7 +10,7 @@
    * - Query timing and performance stats
    */
 
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount } from 'svelte';
   import { browser } from '$app/environment';
   import { link, assetPath } from '$lib/links';
   import { Deck, OrthographicView } from '@deck.gl/core';
@@ -263,27 +263,17 @@
       pct: count / capacities.length,
     }));
 
-    // Tracker breakdown
-    const trackerCounts = {};
-    for (const a of assets) {
-      if (a.tracker) {
-        trackerCounts[a.tracker] = (trackerCounts[a.tracker] || 0) + 1;
-      }
+    // Count-by-field helper
+    function countBy(field) {
+      const counts = {};
+      for (const a of assets) { if (a[field]) counts[a[field]] = (counts[a[field]] || 0) + 1; }
+      return Object.entries(counts)
+        .map(([value, count]) => ({ [field]: value, count, pct: count / assets.length }))
+        .sort((a, b) => b.count - a.count);
     }
-    trackerBreakdown = Object.entries(trackerCounts)
-      .map(([tracker, count]) => ({ tracker, count, pct: count / assets.length }))
-      .sort((a, b) => b.count - a.count);
 
-    // Status breakdown
-    const statusCounts = {};
-    for (const a of assets) {
-      if (a.status) {
-        statusCounts[a.status] = (statusCounts[a.status] || 0) + 1;
-      }
-    }
-    statusBreakdown = Object.entries(statusCounts)
-      .map(([status, count]) => ({ status, count, pct: count / assets.length }))
-      .sort((a, b) => b.count - a.count);
+    trackerBreakdown = countBy('tracker');
+    statusBreakdown = countBy('status');
   }
 
   // Initialize deck.gl
@@ -343,33 +333,14 @@
     deck.setProps({ layers: [scatterLayer] });
   }
 
-  // Filter handlers
-  function toggleTracker(tracker) {
-    if (selectedTrackers.includes(tracker)) {
-      selectedTrackers = selectedTrackers.filter((t) => t !== tracker);
-    } else {
-      selectedTrackers = [...selectedTrackers, tracker];
-    }
-    loadAssets();
+  // Generic filter toggle — returns new array with item added/removed
+  function toggleFilter(arr, value) {
+    return arr.includes(value) ? arr.filter((v) => v !== value) : [...arr, value];
   }
 
-  function toggleStatus(status) {
-    if (selectedStatuses.includes(status)) {
-      selectedStatuses = selectedStatuses.filter((s) => s !== status);
-    } else {
-      selectedStatuses = [...selectedStatuses, status];
-    }
-    loadAssets();
-  }
-
-  function toggleCountry(country) {
-    if (selectedCountries.includes(country)) {
-      selectedCountries = selectedCountries.filter((c) => c !== country);
-    } else {
-      selectedCountries = [...selectedCountries, country];
-    }
-    loadAssets();
-  }
+  function toggleTracker(tracker) { selectedTrackers = toggleFilter(selectedTrackers, tracker); loadAssets(); }
+  function toggleStatus(status) { selectedStatuses = toggleFilter(selectedStatuses, status); loadAssets(); }
+  function toggleCountry(country) { selectedCountries = toggleFilter(selectedCountries, country); loadAssets(); }
 
   function clearFilters() {
     selectedTrackers = [];
@@ -393,13 +364,13 @@
         initDeck();
       });
     }
-  });
 
-  onDestroy(() => {
-    if (deck) {
-      deck.finalize();
-      deck = null;
-    }
+    return () => {
+      if (deck) {
+        deck.finalize();
+        deck = null;
+      }
+    };
   });
 
   // Derived

@@ -4,7 +4,6 @@
    * Shows entities and assets as nodes, ownership relationships as edges
    */
 
-  import { onMount, onDestroy } from 'svelte';
   import { assetLink, entityLink } from '$lib/links';
   import { goto } from '$app/navigation';
   import * as d3 from 'd3';
@@ -19,7 +18,7 @@
     height = 400,
   } = $props();
 
-  let svgEl;
+  let svgEl = $state(null);
   let simulation;
 
   // Build graph data from investigation results
@@ -249,17 +248,12 @@
     }
   }
 
-  onMount(() => {
-    render();
-  });
-
   $effect(() => {
     void graphData;
     render();
-  });
-
-  onDestroy(() => {
-    if (simulation) simulation.stop();
+    return () => {
+      if (simulation) simulation.stop();
+    };
   });
 </script>
 

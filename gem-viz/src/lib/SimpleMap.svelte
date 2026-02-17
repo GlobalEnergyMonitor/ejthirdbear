@@ -1,5 +1,5 @@
 <script>
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount } from 'svelte';
   import maplibregl from 'maplibre-gl';
   import 'maplibre-gl/dist/maplibre-gl.css';
   import { assetPath, assetLink } from '$lib/links';
@@ -265,229 +265,231 @@
     });
   }
 
-  onMount(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 100));
+  onMount(() => {
+    (async () => {
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
-    // Light mode hardcoded - no system detection
+      // Light mode hardcoded - no system detection
 
-    try {
-      if (!mapContainer) {
-        loading = false;
-        return;
-      }
-
-      // Fetch total asset count from DuckDB (async, non-blocking)
-      // Wrapped in try-catch to ensure map loads even if DuckDB fails
       try {
-        import('$lib/duckdb-utils')
-          .then(async ({ loadParquetFromPath, query }) => {
-            try {
-              const ownershipPath = assetPath('all_trackers_ownership@1.parquet');
-              await loadParquetFromPath(ownershipPath, 'ownership');
-              const result = await query(`
-                SELECT COUNT(DISTINCT COALESCE("GEM unit ID", "GEM Mine ID", "Steel Plant ID", "GEM Asset ID", "ProjectID")) as cnt
-                FROM ownership
-              `);
-              if (result.success && result.data?.[0]?.cnt) {
-                totalAssetCount = Number(result.data[0].cnt);
-              }
-            } catch (e) {
-              console.warn('Could not fetch asset count:', e);
-            }
-          })
-          .catch((e) => console.warn('DuckDB import failed:', e));
-      } catch (e) {
-        console.warn('DuckDB initialization skipped:', e);
-      }
-
-      const response = await fetch(assetPath('points.geojson'));
-      if (!response.ok) throw new Error(`Failed to load GeoJSON: ${response.statusText}`);
-
-      geojsonData = await response.json();
-      console.log(`Loaded ${geojsonData.features.length.toLocaleString()} points`);
-
-      const theme = isDarkMode ? themes.dark : themes.light;
-
-      map = new maplibregl.Map({
-        container: mapContainer,
-        style: {
-          version: 8,
-          name: 'GEM Globe',
-          sources: {
-            countries: {
-              type: 'geojson',
-              data: 'https://d2ad6b4ur7yvpq.cloudfront.net/naturalearth-3.3.0/ne_110m_admin_0_countries.geojson',
-            },
-          },
-          layers: [
-            {
-              id: 'background',
-              type: 'background',
-              paint: { 'background-color': theme.background },
-            },
-            {
-              id: 'land',
-              type: 'fill',
-              source: 'countries',
-              paint: { 'fill-color': theme.land, 'fill-opacity': 1 },
-            },
-            {
-              id: 'borders',
-              type: 'line',
-              source: 'countries',
-              paint: { 'line-color': theme.landStroke, 'line-width': 0.5, 'line-opacity': 0.5 },
-            },
-          ],
-          glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
-        },
-        center: [20, 15],
-        zoom: 2.35,
-        maxZoom: 6,
-        minZoom: 1.6,
-      });
-
-      map.on('mousedown', () => {
-        userInteracting = true;
-        stopSpinning();
-      });
-
-      map.on('mouseup', () => {
-        userInteracting = false;
-      });
-
-      // Auto-pause spinning when user drags the globe
-      map.on('dragend', () => {
-        userInteracting = false;
-        isSpinning = false; // Stay paused after user interaction
-      });
-
-      map.on('style.load', () => {
-        map.setProjection({ type: 'globe' });
-      });
-
-      map.on('load', () => {
-        map.addSource('points', {
-          type: 'geojson',
-          data: geojsonData,
-        });
-
-        // Layer 1: Outer glow (large, very transparent, blurred)
-        // Uses desaturated/brightened colors for readability
-        map.addLayer({
-          id: 'points-glow-outer',
-          type: 'circle',
-          source: 'points',
-          paint: {
-            'circle-radius': ['interpolate', ['linear'], ['zoom'], 0, 4, 2, 6, 4, 10, 6, 14],
-            'circle-color': [
-              'match',
-              ['get', 'tracker'],
-              ...trackerGlowColorStops,
-              mapColors.default,
-            ],
-            'circle-opacity': 0.12,
-            'circle-blur': 1,
-            'circle-stroke-width': 0,
-          },
-        });
-
-        // Layer 2: Middle glow
-        // Uses desaturated/brightened colors for readability
-        map.addLayer({
-          id: 'points-glow-mid',
-          type: 'circle',
-          source: 'points',
-          paint: {
-            'circle-radius': ['interpolate', ['linear'], ['zoom'], 0, 2, 2, 3, 4, 5, 6, 8],
-            'circle-color': [
-              'match',
-              ['get', 'tracker'],
-              ...trackerGlowColorStops,
-              mapColors.default,
-            ],
-            'circle-opacity': 0.2,
-            'circle-blur': 0.5,
-            'circle-stroke-width': 0,
-          },
-        });
-
-        // Layer 3: Core points (small, crisp, higher opacity)
-        map.addLayer({
-          id: 'points',
-          type: 'circle',
-          source: 'points',
-          paint: {
-            'circle-radius': ['interpolate', ['linear'], ['zoom'], 0, 0.8, 2, 1.2, 4, 2, 6, 3.5],
-            'circle-color': ['match', ['get', 'tracker'], ...trackerColorStops, mapColors.default],
-            'circle-opacity': 0.9,
-            'circle-blur': 0,
-            'circle-stroke-width': 0,
-          },
-        });
-
-        // Heatmap layer for density visualization
-        map.addLayer(
-          {
-            id: 'points-heat',
-            type: 'heatmap',
-            source: 'points',
-            maxzoom: 4,
-            paint: {
-              'heatmap-weight': 0.3,
-              'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 0, 0.3, 4, 0.8],
-              'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 0, 3, 4, 8],
-              'heatmap-opacity': ['interpolate', ['linear'], ['zoom'], 0, 0.4, 3, 0.2, 4, 0],
-              'heatmap-color': [
-                'interpolate',
-                ['linear'],
-                ['heatmap-density'],
-                0,
-                'transparent',
-                0.1,
-                isDarkMode ? 'rgba(127, 20, 42, 0.1)' : 'rgba(127, 20, 42, 0.05)',
-                0.3,
-                isDarkMode ? 'rgba(202, 74, 80, 0.2)' : 'rgba(202, 74, 80, 0.1)',
-                0.5,
-                isDarkMode ? 'rgba(254, 79, 45, 0.3)' : 'rgba(254, 79, 45, 0.15)',
-                0.7,
-                isDarkMode ? 'rgba(254, 79, 45, 0.5)' : 'rgba(254, 79, 45, 0.25)',
-                1,
-                isDarkMode ? 'rgba(157, 247, 229, 0.6)' : 'rgba(254, 79, 45, 0.4)',
-              ],
-            },
-          },
-          'points-glow-outer'
-        );
-
-        loading = false;
-        currentZoom = map.getZoom();
-        startSpinning();
-        updateDynamicCallouts();
-        setupHoverInteraction();
-      });
-
-      map.on('moveend', updateDynamicCallouts);
-      map.on('move', () => {
-        if (visibleCallouts.length > 0) {
-          visibleCallouts = visibleCallouts.map((c) => {
-            const feature = geojsonData.features.find(
-              (f) => (f.properties.name || f.properties.project) === c.name
-            );
-            if (!feature) return c;
-            const point = map.project(feature.geometry.coordinates);
-            return { ...c, x: point.x, y: point.y };
-          });
+        if (!mapContainer) {
+          loading = false;
+          return;
         }
-      });
-    } catch (err) {
-      console.error('Map error:', err);
-      error = err.message;
-      loading = false;
-    }
-  });
 
-  onDestroy(() => {
-    stopSpinning();
+        // Fetch total asset count from DuckDB (async, non-blocking)
+        // Wrapped in try-catch to ensure map loads even if DuckDB fails
+        try {
+          import('$lib/duckdb-utils')
+            .then(async ({ loadParquetFromPath, query }) => {
+              try {
+                const ownershipPath = assetPath('all_trackers_ownership@1.parquet');
+                await loadParquetFromPath(ownershipPath, 'ownership');
+                const result = await query(`
+                  SELECT COUNT(DISTINCT COALESCE("GEM unit ID", "GEM Mine ID", "Steel Plant ID", "GEM Asset ID", "ProjectID")) as cnt
+                  FROM ownership
+                `);
+                if (result.success && result.data?.[0]?.cnt) {
+                  totalAssetCount = Number(result.data[0].cnt);
+                }
+              } catch (e) {
+                console.warn('Could not fetch asset count:', e);
+              }
+            })
+            .catch((e) => console.warn('DuckDB import failed:', e));
+        } catch (e) {
+          console.warn('DuckDB initialization skipped:', e);
+        }
+
+        const response = await fetch(assetPath('points.geojson'));
+        if (!response.ok) throw new Error(`Failed to load GeoJSON: ${response.statusText}`);
+
+        geojsonData = await response.json();
+        console.log(`Loaded ${geojsonData.features.length.toLocaleString()} points`);
+
+        const theme = isDarkMode ? themes.dark : themes.light;
+
+        map = new maplibregl.Map({
+          container: mapContainer,
+          style: {
+            version: 8,
+            name: 'GEM Globe',
+            sources: {
+              countries: {
+                type: 'geojson',
+                data: 'https://d2ad6b4ur7yvpq.cloudfront.net/naturalearth-3.3.0/ne_110m_admin_0_countries.geojson',
+              },
+            },
+            layers: [
+              {
+                id: 'background',
+                type: 'background',
+                paint: { 'background-color': theme.background },
+              },
+              {
+                id: 'land',
+                type: 'fill',
+                source: 'countries',
+                paint: { 'fill-color': theme.land, 'fill-opacity': 1 },
+              },
+              {
+                id: 'borders',
+                type: 'line',
+                source: 'countries',
+                paint: { 'line-color': theme.landStroke, 'line-width': 0.5, 'line-opacity': 0.5 },
+              },
+            ],
+            glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+          },
+          center: [20, 15],
+          zoom: 2.35,
+          maxZoom: 6,
+          minZoom: 1.6,
+        });
+
+        map.on('mousedown', () => {
+          userInteracting = true;
+          stopSpinning();
+        });
+
+        map.on('mouseup', () => {
+          userInteracting = false;
+        });
+
+        // Auto-pause spinning when user drags the globe
+        map.on('dragend', () => {
+          userInteracting = false;
+          isSpinning = false; // Stay paused after user interaction
+        });
+
+        map.on('style.load', () => {
+          map.setProjection({ type: 'globe' });
+        });
+
+        map.on('load', () => {
+          map.addSource('points', {
+            type: 'geojson',
+            data: geojsonData,
+          });
+
+          // Layer 1: Outer glow (large, very transparent, blurred)
+          // Uses desaturated/brightened colors for readability
+          map.addLayer({
+            id: 'points-glow-outer',
+            type: 'circle',
+            source: 'points',
+            paint: {
+              'circle-radius': ['interpolate', ['linear'], ['zoom'], 0, 4, 2, 6, 4, 10, 6, 14],
+              'circle-color': [
+                'match',
+                ['get', 'tracker'],
+                ...trackerGlowColorStops,
+                mapColors.default,
+              ],
+              'circle-opacity': 0.12,
+              'circle-blur': 1,
+              'circle-stroke-width': 0,
+            },
+          });
+
+          // Layer 2: Middle glow
+          // Uses desaturated/brightened colors for readability
+          map.addLayer({
+            id: 'points-glow-mid',
+            type: 'circle',
+            source: 'points',
+            paint: {
+              'circle-radius': ['interpolate', ['linear'], ['zoom'], 0, 2, 2, 3, 4, 5, 6, 8],
+              'circle-color': [
+                'match',
+                ['get', 'tracker'],
+                ...trackerGlowColorStops,
+                mapColors.default,
+              ],
+              'circle-opacity': 0.2,
+              'circle-blur': 0.5,
+              'circle-stroke-width': 0,
+            },
+          });
+
+          // Layer 3: Core points (small, crisp, higher opacity)
+          map.addLayer({
+            id: 'points',
+            type: 'circle',
+            source: 'points',
+            paint: {
+              'circle-radius': ['interpolate', ['linear'], ['zoom'], 0, 0.8, 2, 1.2, 4, 2, 6, 3.5],
+              'circle-color': ['match', ['get', 'tracker'], ...trackerColorStops, mapColors.default],
+              'circle-opacity': 0.9,
+              'circle-blur': 0,
+              'circle-stroke-width': 0,
+            },
+          });
+
+          // Heatmap layer for density visualization
+          map.addLayer(
+            {
+              id: 'points-heat',
+              type: 'heatmap',
+              source: 'points',
+              maxzoom: 4,
+              paint: {
+                'heatmap-weight': 0.3,
+                'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 0, 0.3, 4, 0.8],
+                'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 0, 3, 4, 8],
+                'heatmap-opacity': ['interpolate', ['linear'], ['zoom'], 0, 0.4, 3, 0.2, 4, 0],
+                'heatmap-color': [
+                  'interpolate',
+                  ['linear'],
+                  ['heatmap-density'],
+                  0,
+                  'transparent',
+                  0.1,
+                  isDarkMode ? 'rgba(127, 20, 42, 0.1)' : 'rgba(127, 20, 42, 0.05)',
+                  0.3,
+                  isDarkMode ? 'rgba(202, 74, 80, 0.2)' : 'rgba(202, 74, 80, 0.1)',
+                  0.5,
+                  isDarkMode ? 'rgba(254, 79, 45, 0.3)' : 'rgba(254, 79, 45, 0.15)',
+                  0.7,
+                  isDarkMode ? 'rgba(254, 79, 45, 0.5)' : 'rgba(254, 79, 45, 0.25)',
+                  1,
+                  isDarkMode ? 'rgba(157, 247, 229, 0.6)' : 'rgba(254, 79, 45, 0.4)',
+                ],
+              },
+            },
+            'points-glow-outer'
+          );
+
+          loading = false;
+          currentZoom = map.getZoom();
+          startSpinning();
+          updateDynamicCallouts();
+          setupHoverInteraction();
+        });
+
+        map.on('moveend', updateDynamicCallouts);
+        map.on('move', () => {
+          if (visibleCallouts.length > 0) {
+            visibleCallouts = visibleCallouts.map((c) => {
+              const feature = geojsonData.features.find(
+                (f) => (f.properties.name || f.properties.project) === c.name
+              );
+              if (!feature) return c;
+              const point = map.project(feature.geometry.coordinates);
+              return { ...c, x: point.x, y: point.y };
+            });
+          }
+        });
+      } catch (err) {
+        console.error('Map error:', err);
+        error = err.message;
+        loading = false;
+      }
+    })();
+
+    return () => {
+      stopSpinning();
+    };
   });
 
   function toggleSpin() {
@@ -613,38 +615,12 @@
   <div class="legend">
     <div class="legend-title">Asset Types</div>
     <div class="legend-items">
-      <button
-        class="legend-item"
-        class:disabled={!visibleGroups.coal}
-        onclick={() => toggleTrackerGroup('coal')}
-      >
-        <span class="legend-dot" style="--dot-color: {mapColors.coal}"></span>
-        <span>Coal</span>
-      </button>
-      <button
-        class="legend-item"
-        class:disabled={!visibleGroups.gas}
-        onclick={() => toggleTrackerGroup('gas')}
-      >
-        <span class="legend-dot" style="--dot-color: {mapColors.gas}"></span>
-        <span>Gas/Oil</span>
-      </button>
-      <button
-        class="legend-item"
-        class:disabled={!visibleGroups.steel}
-        onclick={() => toggleTrackerGroup('steel')}
-      >
-        <span class="legend-dot" style="--dot-color: {mapColors.steel}"></span>
-        <span>Steel/Iron</span>
-      </button>
-      <button
-        class="legend-item"
-        class:disabled={!visibleGroups.bioenergy}
-        onclick={() => toggleTrackerGroup('bioenergy')}
-      >
-        <span class="legend-dot" style="--dot-color: {mapColors.bioenergy}"></span>
-        <span>Bioenergy</span>
-      </button>
+      {#each [['coal', 'Coal'], ['gas', 'Gas/Oil'], ['steel', 'Steel/Iron'], ['bioenergy', 'Bioenergy']] as [group, label]}
+        <button class="legend-item" class:disabled={!visibleGroups[group]} onclick={() => toggleTrackerGroup(group)}>
+          <span class="legend-dot" style="--dot-color: {mapColors[group]}"></span>
+          <span>{label}</span>
+        </button>
+      {/each}
     </div>
   </div>
 

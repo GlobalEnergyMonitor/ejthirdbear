@@ -3,7 +3,7 @@
    * TrackerGlobeGrid - 8 spinning MapLibre globes
    * Hero "TOTAL" globe + 7 individual tracker globes
    */
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount } from 'svelte';
   import maplibregl from 'maplibre-gl';
   import 'maplibre-gl/dist/maplibre-gl.css';
   import { assetPath } from '$lib/links';
@@ -52,21 +52,23 @@
   });
 
   // Load GeoJSON once
-  onMount(async () => {
-    try {
-      const response = await fetch(assetPath('points.geojson'));
-      if (!response.ok) throw new Error('Failed to load GeoJSON');
-      geojsonData = await response.json();
-      loading = false;
-    } catch (err) {
-      error = err.message;
-      loading = false;
-    }
-  });
+  onMount(() => {
+    (async () => {
+      try {
+        const response = await fetch(assetPath('points.geojson'));
+        if (!response.ok) throw new Error('Failed to load GeoJSON');
+        geojsonData = await response.json();
+        loading = false;
+      } catch (err) {
+        error = err.message;
+        loading = false;
+      }
+    })();
 
-  onDestroy(() => {
-    if (spinAnimation) cancelAnimationFrame(spinAnimation);
-    maps.forEach((m) => m?.remove());
+    return () => {
+      if (spinAnimation) cancelAnimationFrame(spinAnimation);
+      maps.forEach((m) => m?.remove());
+    };
   });
 
   // Initialize a single globe

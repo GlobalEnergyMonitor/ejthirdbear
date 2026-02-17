@@ -1,7 +1,6 @@
 <script>
   import { page } from '$app/stores';
-  import { get } from 'svelte/store';
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount } from 'svelte';
   import maplibregl from 'maplibre-gl';
   import 'maplibre-gl/dist/maplibre-gl.css';
 
@@ -16,95 +15,97 @@
   let error = $state(null);
   let assetName = $state('');
 
-  onMount(async () => {
-    const params = get(page)?.params ?? {};
-    const url = typeof window !== 'undefined' ? new URL(window.location.href) : null;
-    const assetId = params.id || url?.searchParams.get('assetId') || null;
+  onMount(() => {
+    (async () => {
+      const params = $page?.params ?? {};
+      const url = typeof window !== 'undefined' ? new URL(window.location.href) : null;
+      const assetId = params.id || url?.searchParams.get('assetId') || null;
 
-    if (!assetId) {
-      error = 'Missing asset ID';
-      loading = false;
-      return;
-    }
+      if (!assetId) {
+        error = 'Missing asset ID';
+        loading = false;
+        return;
+      }
 
-    const basics = await fetchAssetBasics(assetId);
+      const basics = await fetchAssetBasics(assetId);
 
-    if (!basics) {
-      error = `Asset ${assetId} not found`;
-      hasLocation = false;
-      loading = false;
-      return;
-    }
+      if (!basics) {
+        error = `Asset ${assetId} not found`;
+        hasLocation = false;
+        loading = false;
+        return;
+      }
 
-    assetName = basics.name || 'Asset';
+      assetName = basics.name || 'Asset';
 
-    const parsedLat = basics.lat !== null ? Number(basics.lat) : null;
-    const parsedLon = basics.lon !== null ? Number(basics.lon) : null;
-    const hasDirectCoords =
-      typeof parsedLat === 'number' &&
-      !Number.isNaN(parsedLat) &&
-      typeof parsedLon === 'number' &&
-      !Number.isNaN(parsedLon);
+      const parsedLat = basics.lat !== null ? Number(basics.lat) : null;
+      const parsedLon = basics.lon !== null ? Number(basics.lon) : null;
+      const hasDirectCoords =
+        typeof parsedLat === 'number' &&
+        !Number.isNaN(parsedLat) &&
+        typeof parsedLon === 'number' &&
+        !Number.isNaN(parsedLon);
 
-    if (!hasDirectCoords && !basics.locationId) {
-      error = 'No coordinates or GEM location ID provided';
-      hasLocation = false;
-      loading = false;
-      return;
-    }
+      if (!hasDirectCoords && !basics.locationId) {
+        error = 'No coordinates or GEM location ID provided';
+        hasLocation = false;
+        loading = false;
+        return;
+      }
 
-    try {
-      let finalLat = parsedLat;
-      let finalLon = parsedLon;
+      try {
+        let finalLat = parsedLat;
+        let finalLon = parsedLon;
 
-      if (!hasDirectCoords) {
-        const coords = basics.locationId
-          ? await fetchCoordinatesByLocation(basics.locationId)
-          : null;
+        if (!hasDirectCoords) {
+          const coords = basics.locationId
+            ? await fetchCoordinatesByLocation(basics.locationId)
+            : null;
 
-        if (!coords || coords.lat == null || coords.lon == null) {
-          error = 'Location not found in data';
-          hasLocation = false;
-          loading = false;
-          return;
+          if (!coords || coords.lat == null || coords.lon == null) {
+            error = 'Location not found in data';
+            hasLocation = false;
+            loading = false;
+            return;
+          }
+
+          finalLat = Number(coords.lat);
+          finalLon = Number(coords.lon);
         }
 
-        finalLat = Number(coords.lat);
-        finalLon = Number(coords.lon);
-      }
+        if (hasDirectCoords) {
+          finalLat = parsedLat;
+          finalLon = parsedLon;
+        }
 
-      if (hasDirectCoords) {
-        finalLat = parsedLat;
-        finalLon = parsedLon;
-      }
+        // Initialize map
+        map = new maplibregl.Map({
+          container: mapContainer,
+          style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
+          center: [finalLon, finalLat],
+          zoom: 10,
+        });
 
-      // Initialize map
-      map = new maplibregl.Map({
-        container: mapContainer,
-        style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
-        center: [finalLon, finalLat],
-        zoom: 10,
-      });
-
-      // Add marker
-      new maplibregl.Marker({ color: '#000' })
-        .setLngLat([finalLon, finalLat])
-        .setPopup(
-          new maplibregl.Popup({ offset: 25 }).setHTML(
-            `<strong>${assetName || 'Asset'}</strong><br>${finalLat.toFixed(4)}, ${finalLon.toFixed(4)}`
+        // Add marker
+        new maplibregl.Marker({ color: '#000' })
+          .setLngLat([finalLon, finalLat])
+          .setPopup(
+            new maplibregl.Popup({ offset: 25 }).setHTML(
+              `<strong>${assetName || 'Asset'}</strong><br>${finalLat.toFixed(4)}, ${finalLon.toFixed(4)}`
+            )
           )
-        )
-        .addTo(map);
+          .addTo(map);
 
-      loading = false;
-    } catch (err) {
-      error = `${err.name || 'Error'}: ${err.message}`;
-      loading = false;
-    }
-  });
+        loading = false;
+      } catch (err) {
+        error = `${err.name || 'Error'}: ${err.message}`;
+        loading = false;
+      }
+    })();
 
-  onDestroy(() => {
-    if (map) map.remove();
+    return () => {
+      if (map) map.remove();
+    };
   });
 </script>
 

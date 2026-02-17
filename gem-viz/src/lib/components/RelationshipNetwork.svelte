@@ -2,7 +2,6 @@
   import { assetLink } from '$lib/links';
   import { formatCapacity } from '$lib/format';
   import { page } from '$app/stores';
-  import { get } from 'svelte/store';
   import { onMount } from 'svelte';
   import {
     fetchAssetBasics,
@@ -46,7 +45,7 @@
     }
 
     // Fallback: client-side fetch from Ownership API (dev mode)
-    const params = get(page)?.params ?? {};
+    const params = $page?.params ?? {};
     const assetId = params.id || null;
     if (!assetId) {
       error = 'Missing asset ID';
