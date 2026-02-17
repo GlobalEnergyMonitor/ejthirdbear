@@ -40,4 +40,43 @@
   :global(.embed-container *) {
     box-sizing: border-box;
   }
+
+  /* ── Shared embed states (loading / error / hint / empty) ── */
+  :global(.embed-loading) {
+    padding: var(--space-5);
+    text-align: center;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-body);
+  }
+
+  :global(.embed-error) {
+    padding: var(--space-5);
+    border: var(--border-width) solid var(--color-error);
+    background: var(--color-error-light);
+    text-align: center;
+  }
+
+  :global(.embed-error p) {
+    margin: 0 0 var(--space-2) 0;
+  }
+
+  :global(.embed-error code) {
+    font-family: var(--font-family-mono);
+    background: var(--color-bg-primary);
+    padding: 2px 6px;
+  }
+
+  :global(.embed-hint) {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+  }
+
+  :global(.embed-empty) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 300px;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-body);
+  }
 </style>

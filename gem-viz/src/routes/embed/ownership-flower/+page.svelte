@@ -1,39 +1,40 @@
 <script lang="ts">
   /**
    * Embeddable Ownership Flower
-   * Standalone route for embedding the ownership flower visualization
-   * Uses REST API only (no DuckDB dependency for cross-origin embeds)
+   * Radial visualization showing an entity's portfolio mix by tracker type.
    *
    * URL params:
    *   entityId - Required. Entity ID to display
-   *   size - Optional. "small", "medium", "large"
-   *   showLabels - Optional. "true" or "false"
-   *   showTitle - Optional. "true" or "false"
+   *   size - Optional. "small", "medium", "large" (default: medium)
+   *   showLabels - Optional. "true" or "false" (default: true)
+   *   showTitle - Optional. "true" or "false" (default: true)
    */
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
-  import { getEntityWithPortfolio, graphToExplorerData } from '$lib/ownership-api';
   import OwnershipFlower from '$lib/components/OwnershipFlower.svelte';
+  import {
+    loadEntityPortfolio,
+    errorMessage,
+    boolParam,
+    type EmbedPortfolio,
+  } from '../embed-utils';
 
   type FlowerSize = 'small' | 'medium' | 'large';
+  const VALID_SIZES: FlowerSize[] = ['small', 'medium', 'large'];
 
-  // Parse URL parameters
+  // URL params
   const entityId = $derived($page.url.searchParams.get('entityId'));
   const sizeParam = $derived($page.url.searchParams.get('size') || 'medium');
-  const showLabels = $derived($page.url.searchParams.get('showLabels') !== 'false');
-  const showTitle = $derived($page.url.searchParams.get('showTitle') !== 'false');
-
-  // Validate size
+  const showLabels = $derived(boolParam($page.url.searchParams.get('showLabels')));
+  const showTitle = $derived(boolParam($page.url.searchParams.get('showTitle')));
   const validSize = $derived<FlowerSize>(
-    (['small', 'medium', 'large'] as const).includes(sizeParam as FlowerSize)
-      ? (sizeParam as FlowerSize)
-      : 'medium'
+    VALID_SIZES.includes(sizeParam as FlowerSize) ? (sizeParam as FlowerSize) : 'medium'
   );
 
   // State
   let loading = $state(true);
   let error = $state<string | null>(null);
-  let portfolio = $state<any>(null);
+  let portfolio = $state<EmbedPortfolio | null>(null);
 
   onMount(async () => {
     if (!entityId) {
@@ -43,18 +44,10 @@
     }
 
     try {
-      const { entity, graphDown } = await getEntityWithPortfolio(entityId);
-      const explorerData = graphToExplorerData(entityId, entity.name, graphDown);
-      portfolio = {
-        spotlightOwner: explorerData.spotlightOwner,
-        subsidiariesMatched: new Map(explorerData.subsidiariesMatched),
-        directlyOwned: explorerData.directlyOwned,
-        matchedEdges: new Map(explorerData.matchedEdges),
-        entityMap: new Map(explorerData.entityMap),
-        assets: explorerData.assets,
-      };
+      const result = await loadEntityPortfolio(entityId);
+      portfolio = result.portfolio;
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Failed to load entity';
+      error = errorMessage(err, 'Failed to load entity');
     } finally {
       loading = false;
     }
@@ -67,48 +60,18 @@
 </svelte:head>
 
 {#if loading}
-  <div class="loading">Loading ownership flower...</div>
+  <div class="embed-loading">Loading ownership flower...</div>
 {:else if error}
-  <div class="error">
+  <div class="embed-error">
     <p>{error}</p>
     {#if !entityId}
-      <p class="hint">Example: ?entityId=YOUR_ENTITY_ID</p>
+      <p class="embed-hint">Example: ?entityId=YOUR_ENTITY_ID</p>
     {/if}
   </div>
 {:else if entityId && portfolio}
   <OwnershipFlower ownerId={entityId} {portfolio} size={validSize} {showLabels} {showTitle} />
 {:else}
-  <div class="error">
+  <div class="embed-error">
     <p>No data found for this entity</p>
   </div>
 {/if}
-
-<style>
-  .loading {
-    padding: var(--space-5);
-    text-align: center;
-    color: var(--color-text-secondary);
-  }
-
-  .error {
-    padding: var(--space-5);
-    border: var(--border-width) solid var(--color-error);
-    background: var(--color-error-light);
-    text-align: center;
-  }
-
-  .error p {
-    margin: 0 0 var(--space-2) 0;
-  }
-
-  .error code {
-    font-family: var(--font-family-mono);
-    background: var(--color-bg-primary);
-    padding: 2px 6px;
-  }
-
-  .hint {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
-  }
-</style>

@@ -1,7 +1,7 @@
-<script>
+<script lang="ts">
   /**
    * Embeddable Full Network Explorer
-   * Standalone route for embedding the full D3 ownership network explorer
+   * Complete D3 force-directed network explorer with interactive controls.
    *
    * URL params:
    *   entityId - Required. Entity ID to display
@@ -22,9 +22,9 @@
     <OwnershipExplorerD3 ownerEntityId={entityId} />
   </div>
 {:else}
-  <div class="error">
+  <div class="embed-error">
     <p>Missing required parameter: <code>entityId</code></p>
-    <p class="hint">Example: ?entityId=E12345</p>
+    <p class="embed-hint">Example: ?entityId=E12345</p>
   </div>
 {/if}
 
@@ -32,27 +32,5 @@
   .explorer-embed {
     width: 100%;
     min-height: 600px;
-  }
-
-  .error {
-    padding: var(--space-5);
-    border: var(--border-width) solid var(--color-error);
-    background: var(--color-error-light);
-    text-align: center;
-  }
-
-  .error p {
-    margin: 0 0 var(--space-2) 0;
-  }
-
-  .error code {
-    font-family: var(--font-family-mono);
-    background: var(--color-bg-primary);
-    padding: 2px 6px;
-  }
-
-  .hint {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
   }
 </style>

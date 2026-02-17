@@ -1,27 +1,25 @@
-<script>
+<script lang="ts">
   /**
    * Embeddable Asset Ring Visualization
-   * Standalone route for embedding the circular asset distribution visualization
+   * Circular visualization of asset distribution by type and status.
    *
    * URL params:
    *   entityId - Required. Entity ID to display
-   *   maxAssets - Optional. Maximum assets to show. Default: 150
+   *   maxAssets - Optional. Maximum assets to show (default: 150)
    */
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
-  import { getEntityWithPortfolio, graphToExplorerData } from '$lib/ownership-api';
   import { AssetRingVisualization } from '$lib/components/ownership';
+  import { loadEntityPortfolio, errorMessage, intParam } from '../embed-utils';
 
   const entityId = $derived($page.url.searchParams.get('entityId'));
-  const maxAssetsParam = $derived($page.url.searchParams.get('maxAssets'));
-  const maxAssets = $derived(maxAssetsParam ? parseInt(maxAssetsParam, 10) : 150);
+  const maxAssets = $derived(intParam($page.url.searchParams.get('maxAssets'), 150));
 
   // State
   let loading = $state(true);
-  let error = $state(null);
-  let portfolio = $state(null);
+  let error = $state<string | null>(null);
+  let assets = $state<any[]>([]);
 
-  const assets = $derived(portfolio?.assets || []);
   const displayAssets = $derived(assets.slice(0, maxAssets));
 
   onMount(async () => {
@@ -32,18 +30,10 @@
     }
 
     try {
-      // Use REST API directly — no DuckDB dependency for cross-origin embeds
-      const { entity, graphDown } = await getEntityWithPortfolio(entityId);
-      const explorerData = graphToExplorerData(entityId, entity.name, graphDown);
-      portfolio = {
-        spotlightOwner: explorerData.spotlightOwner,
-        assets: explorerData.assets,
-      };
-      if (!entity) {
-        error = 'Entity not found';
-      }
+      const result = await loadEntityPortfolio(entityId);
+      assets = (result.portfolio.assets as any[]) || [];
     } catch (err) {
-      error = err?.message || 'Failed to load portfolio';
+      error = errorMessage(err, 'Failed to load portfolio');
     } finally {
       loading = false;
     }
@@ -57,18 +47,18 @@
 
 <div class="ring-embed">
   {#if loading}
-    <div class="loading">Loading assets...</div>
+    <div class="embed-loading">Loading assets...</div>
   {:else if error}
-    <div class="error">
+    <div class="embed-error">
       <p>{error}</p>
       {#if !entityId}
-        <p class="hint">Example: ?entityId=E12345&maxAssets=100</p>
+        <p class="embed-hint">Example: ?entityId=E12345&maxAssets=100</p>
       {/if}
     </div>
   {:else if displayAssets.length > 0}
     <AssetRingVisualization assets={displayAssets} />
   {:else}
-    <div class="empty">No assets found for this entity</div>
+    <div class="embed-empty">No assets found for this entity</div>
   {/if}
 </div>
 
@@ -76,31 +66,5 @@
   .ring-embed {
     width: 100%;
     min-height: 400px;
-  }
-
-  .loading,
-  .empty {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 300px;
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-body);
-  }
-
-  .error {
-    padding: var(--space-5);
-    border: var(--border-width) solid var(--color-error);
-    background: var(--color-error-light);
-    text-align: center;
-  }
-
-  .error p {
-    margin: 0 0 var(--space-2) 0;
-  }
-
-  .hint {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
   }
 </style>

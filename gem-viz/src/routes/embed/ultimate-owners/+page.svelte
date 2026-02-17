@@ -1,7 +1,7 @@
-<script>
+<script lang="ts">
   /**
    * Embeddable Ultimate Owners
-   * Standalone route for embedding the ultimate owners visualization
+   * Shows the ultimate parent owners at the top of the ownership chain.
    *
    * URL params:
    *   entityId - Required. Entity ID to display
@@ -22,9 +22,9 @@
     <UltimateOwners {entityId} />
   </div>
 {:else}
-  <div class="error">
+  <div class="embed-error">
     <p>Missing required parameter: <code>entityId</code></p>
-    <p class="hint">Example: ?entityId=E12345</p>
+    <p class="embed-hint">Example: ?entityId=E12345</p>
   </div>
 {/if}
 
@@ -32,27 +32,5 @@
   .ultimate-owners-embed {
     width: 100%;
     max-width: 600px;
-  }
-
-  .error {
-    padding: var(--space-5);
-    border: var(--border-width) solid var(--color-error);
-    background: var(--color-error-light);
-    text-align: center;
-  }
-
-  .error p {
-    margin: 0 0 var(--space-2) 0;
-  }
-
-  .error code {
-    font-family: var(--font-family-mono);
-    background: var(--color-bg-primary);
-    padding: 2px 6px;
-  }
-
-  .hint {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
   }
 </style>

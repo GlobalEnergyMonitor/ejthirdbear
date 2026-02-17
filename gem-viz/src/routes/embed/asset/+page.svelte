@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
    * Embeddable Asset Card
-   * Simplified asset view for iframe embedding
+   * Compact asset profile with status, metadata, and owners.
    *
    * URL params:
    *   id - Required. Asset ID (GEM unit ID)
@@ -16,11 +16,12 @@
   import StatusIcon from '$lib/components/StatusIcon.svelte';
   import OwnershipPie from '$lib/components/OwnershipPie.svelte';
   import AssetMap from '$lib/components/AssetMap.svelte';
+  import { errorMessage, boolParam } from '../embed-utils';
 
   // URL params
   const assetId = $derived($page.url.searchParams.get('id'));
-  const showOwners = $derived($page.url.searchParams.get('showOwners') !== 'false');
-  const showMap = $derived($page.url.searchParams.get('showMap') === 'true');
+  const showOwners = $derived(boolParam($page.url.searchParams.get('showOwners')));
+  const showMap = $derived(boolParam($page.url.searchParams.get('showMap'), false));
 
   // State
   let loading = $state(true);
@@ -58,7 +59,7 @@
       asset = assetData;
       graph = graphData;
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Failed to load asset';
+      error = errorMessage(err, 'Failed to load asset');
     } finally {
       loading = false;
     }
@@ -72,12 +73,12 @@
 
 <div class="asset-embed">
   {#if loading}
-    <div class="loading">Loading asset...</div>
+    <div class="embed-loading">Loading asset...</div>
   {:else if error}
-    <div class="error">
+    <div class="embed-error">
       <p>{error}</p>
       {#if !assetId}
-        <p class="hint">Example: ?id=G12345</p>
+        <p class="embed-hint">Example: ?id=G12345</p>
       {/if}
     </div>
   {:else}
@@ -140,27 +141,6 @@
     width: 100%;
     max-width: 500px;
     font-family: var(--font-family-sans);
-  }
-
-  .loading {
-    padding: var(--space-5);
-    text-align: center;
-    color: var(--color-text-secondary);
-  }
-
-  .error {
-    padding: var(--space-5);
-    border: var(--border-width) solid var(--color-error);
-    background: var(--color-error-light);
-    text-align: center;
-  }
-
-  .error p {
-    margin: 0 0 var(--space-2) 0;
-  }
-  .hint {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
   }
 
   .asset-header {

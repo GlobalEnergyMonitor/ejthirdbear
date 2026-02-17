@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
    * Embeddable Entity Card
-   * Simplified entity view for iframe embedding
+   * Compact entity profile with ownership flower and asset list.
    *
    * URL params:
    *   id - Required. Entity ID
@@ -12,31 +12,37 @@
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
   import { assetLink } from '$lib/links';
-  import { getEntityWithPortfolio, graphToExplorerData } from '$lib/ownership-api';
   import OwnershipFlower from '$lib/components/OwnershipFlower.svelte';
   import TrackerIcon from '$lib/components/TrackerIcon.svelte';
   import StatusIcon from '$lib/components/StatusIcon.svelte';
+  import {
+    loadEntityPortfolio,
+    errorMessage,
+    intParam,
+    boolParam,
+    type EmbedPortfolio,
+    type EmbedSubsidiary,
+  } from '../embed-utils';
 
   // URL params
   const entityId = $derived($page.url.searchParams.get('id'));
-  const showFlower = $derived($page.url.searchParams.get('showFlower') !== 'false');
-  const showAssets = $derived($page.url.searchParams.get('showAssets') !== 'false');
-  const maxAssetsParam = $derived($page.url.searchParams.get('maxAssets'));
-  const maxAssets = $derived(maxAssetsParam ? parseInt(maxAssetsParam, 10) : 10);
+  const showFlower = $derived(boolParam($page.url.searchParams.get('showFlower')));
+  const showAssets = $derived(boolParam($page.url.searchParams.get('showAssets')));
+  const maxAssets = $derived(intParam($page.url.searchParams.get('maxAssets'), 10));
 
   // State
   let loading = $state(true);
   let error = $state<string | null>(null);
-  let portfolio = $state<any>(null);
-  let subsidiaries = $state<Array<{ id: string; name: string; ownershipPct: number | null }>>([]);
+  let portfolio = $state<EmbedPortfolio | null>(null);
+  let subsidiaries = $state<EmbedSubsidiary[]>([]);
 
   const entityName = $derived(portfolio?.spotlightOwner?.Name || entityId || '');
   const assets = $derived(portfolio?.assets || []);
-  const displayAssets = $derived(assets.slice(0, maxAssets));
+  const displayAssets = $derived((assets as any[]).slice(0, maxAssets));
 
   const trackerCounts = $derived.by(() => {
     const counts = new Map<string, number>();
-    assets.forEach((a: any) => {
+    (assets as any[]).forEach((a) => {
       const key = a.tracker || 'Unknown';
       counts.set(key, (counts.get(key) || 0) + 1);
     });
@@ -53,32 +59,11 @@
     }
 
     try {
-      // Use REST API directly — no DuckDB dependency for embeds
-      const { entity, owned, graphDown } = await getEntityWithPortfolio(entityId);
-
-      // Convert graph to portfolio format for OwnershipFlower
-      const explorerData = graphToExplorerData(entityId, entity.name, graphDown);
-      portfolio = {
-        spotlightOwner: explorerData.spotlightOwner,
-        subsidiariesMatched: new Map(explorerData.subsidiariesMatched),
-        directlyOwned: explorerData.directlyOwned,
-        matchedEdges: new Map(explorerData.matchedEdges),
-        entityMap: new Map(explorerData.entityMap),
-        assets: explorerData.assets,
-      };
-
-      // Store subsidiaries for display
-      subsidiaries = owned.map(o => ({
-        id: o.entityId,
-        name: o.entityName,
-        ownershipPct: o.ownershipPct,
-      }));
-
-      if (!entity) {
-        error = 'Entity not found';
-      }
+      const result = await loadEntityPortfolio(entityId);
+      portfolio = result.portfolio;
+      subsidiaries = result.subsidiaries;
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Failed to load entity';
+      error = errorMessage(err, 'Failed to load entity');
     } finally {
       loading = false;
     }
@@ -92,19 +77,19 @@
 
 <div class="entity-embed">
   {#if loading}
-    <div class="loading">Loading entity...</div>
+    <div class="embed-loading">Loading entity...</div>
   {:else if error}
-    <div class="error">
+    <div class="embed-error">
       <p>{error}</p>
       {#if !entityId}
-        <p class="hint">Example: ?id=E12345</p>
+        <p class="embed-hint">Example: ?id=E12345</p>
       {/if}
     </div>
   {:else}
     <header class="entity-header">
       <div class="header-text">
         <h1>{entityName}</h1>
-        <p class="subtitle">{assets.length.toLocaleString()} assets</p>
+        <p class="subtitle">{(assets as any[]).length.toLocaleString()} assets</p>
       </div>
       {#if showFlower && portfolio}
         <div class="header-flower">
@@ -138,8 +123,8 @@
             {/if}
           </a>
         {/each}
-        {#if assets.length > maxAssets}
-          <p class="more-assets">+ {assets.length - maxAssets} more assets</p>
+        {#if (assets as any[]).length > maxAssets}
+          <p class="more-assets">+ {(assets as any[]).length - maxAssets} more assets</p>
         {/if}
       </div>
     {:else if showAssets && subsidiaries.length > 0}
@@ -166,27 +151,6 @@
     width: 100%;
     max-width: 500px;
     font-family: var(--font-family-sans);
-  }
-
-  .loading {
-    padding: var(--space-5);
-    text-align: center;
-    color: var(--color-text-secondary);
-  }
-
-  .error {
-    padding: var(--space-5);
-    border: var(--border-width) solid var(--color-error);
-    background: var(--color-error-light);
-    text-align: center;
-  }
-
-  .error p {
-    margin: 0 0 var(--space-2) 0;
-  }
-  .hint {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
   }
 
   .entity-header {

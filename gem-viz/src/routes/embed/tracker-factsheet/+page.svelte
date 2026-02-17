@@ -170,17 +170,17 @@
 
 <div class="factsheet-embed" style="--max-height: {maxHeight}px;">
   {#if loading}
-    <div class="loading">Loading {tracker} metadata...</div>
+    <div class="embed-loading">Loading {tracker} metadata...</div>
   {:else if error}
-    <div class="error">
+    <div class="embed-error">
       <p>{error}</p>
       {#if !trackerSlug}
-        <p class="hint">Example: ?tracker=coal-mine</p>
-        <p class="hint">Available trackers: {validTrackers.join(', ')}</p>
+        <p class="embed-hint">Example: ?tracker=coal-mine</p>
+        <p class="embed-hint">Available trackers: {validTrackers.join(', ')}</p>
       {/if}
     </div>
   {:else if fieldsMetadata.length === 0}
-    <div class="error">
+    <div class="embed-error">
       <p>No metadata found for {tracker}</p>
     </div>
   {:else}
@@ -203,26 +203,16 @@
     max-height: calc(var(--max-height) - 40px);
   }
 
-  .loading {
-    padding: var(--space-8);
-    text-align: center;
-    color: var(--color-text-secondary);
-    font-style: italic;
-  }
+  /* loading/error/hint styles provided by embed layout */
 
-  .error {
-    padding: var(--space-5);
-    border: var(--border-width) solid var(--color-error);
-    background: var(--color-error-light);
-    text-align: center;
-  }
+  @media (max-width: 768px) {
+    .factsheet-embed :global(.factsheet) {
+      max-height: none;
+    }
 
-  .error p {
-    margin: 0 0 var(--space-2) 0;
-  }
-
-  .hint {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
+    .factsheet-embed :global(.dataset-fields),
+    .factsheet-embed :global(.dataset-previewer) {
+      max-height: none;
+    }
   }
 </style>
