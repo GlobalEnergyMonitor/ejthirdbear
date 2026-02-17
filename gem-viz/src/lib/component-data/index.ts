@@ -7,6 +7,7 @@
 
 // Types
 export * from './types';
+export * from './graph-types';
 
 // ID helpers (centralized ID resolution - use these!)
 export * from './id-helpers';
