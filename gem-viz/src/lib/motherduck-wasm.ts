@@ -23,10 +23,6 @@ export async function initMotherDuck(): Promise<MDConnection> {
   if (connection) return connection;
 
   try {
-    console.log('Initializing MotherDuck WASM client...');
-    console.log('Token present:', !!PUBLIC_MOTHERDUCK_TOKEN);
-    console.log('Token length:', PUBLIC_MOTHERDUCK_TOKEN?.length || 0);
-
     connection = await MDConnection.create({
       mdToken: PUBLIC_MOTHERDUCK_TOKEN,
     });
@@ -40,8 +36,6 @@ export async function initMotherDuck(): Promise<MDConnection> {
     return connection;
   } catch (error) {
     console.error('Failed to initialize MotherDuck:', error);
-    console.error('Error type:', typeof error);
-    console.error('Error keys:', error ? Object.keys(error) : 'null');
     throw error;
   }
 }
@@ -60,8 +54,6 @@ export async function query<T = Record<string, any>>(
 
     const result = await conn.evaluateQuery(sql);
     const executionTime = performance.now() - startTime;
-
-    console.log(`Query executed in ${executionTime.toFixed(2)}ms`);
 
     const data = result.data.toRows() as T[];
 

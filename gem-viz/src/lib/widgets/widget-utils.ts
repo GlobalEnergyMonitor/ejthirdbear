@@ -35,7 +35,6 @@ export async function initWidgetDB(): Promise<void> {
     // Double-check after acquiring "lock"
     if (initialized) return;
 
-    console.log('[widget-utils] Starting DuckDB initialization...');
     await initDuckDB();
 
     // Check if tables already exist (in case of HMR or race condition)
@@ -48,29 +47,24 @@ export async function initWidgetDB(): Promise<void> {
 
     // Load parquet files only if tables don't exist
     if (!existingTables.has('ownership')) {
-      console.log('[widget-utils] Loading ownership parquet...');
       const result = await loadParquetFromPath(PARQUET_FILES.ownership, 'ownership');
       if (!result.success) {
         initPromise = null; // Allow retry
         throw new Error(`Failed to load ownership parquet: ${result.error}`);
       }
     } else {
-      console.log('[widget-utils] Ownership table already exists, skipping load');
     }
 
     if (!existingTables.has('locations')) {
-      console.log('[widget-utils] Loading locations parquet...');
       const locResult = await loadParquetFromPath(PARQUET_FILES.locations, 'locations');
       if (!locResult.success) {
         initPromise = null; // Allow retry
         throw new Error(`Failed to load locations parquet: ${locResult.error}`);
       }
     } else {
-      console.log('[widget-utils] Locations table already exists, skipping load');
     }
 
     initialized = true;
-    console.log('[widget-utils] Widget DB ready');
   })();
 
   return initPromise;

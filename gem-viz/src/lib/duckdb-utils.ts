@@ -48,8 +48,6 @@ export async function initDuckDB(): Promise<DuckDBInstance> {
     if (db && conn) return { db, conn };
 
     try {
-      console.log('Initializing DuckDB-WASM...');
-
       const MANUAL_BUNDLES: duckdb.DuckDBBundles = {
         mvp: {
           mainModule: duckdb_wasm_mvp,
@@ -63,11 +61,6 @@ export async function initDuckDB(): Promise<DuckDBInstance> {
 
       // Select appropriate bundle (prefers eh when available)
       const bundle = await duckdb.selectBundle(MANUAL_BUNDLES);
-      console.debug('[duckdb-utils] Selected bundle', {
-        mainModule: bundle.mainModule,
-        mainWorker: bundle.mainWorker,
-        version: (bundle as any)?.version ?? 'unknown',
-      });
 
       // Create worker for background processing using bundled worker file
       const worker = new Worker(bundle.mainWorker);
@@ -89,10 +82,9 @@ export async function initDuckDB(): Promise<DuckDBInstance> {
       `
         )
         .catch(() => {
-          console.log('httpfs extension not available in WASM build');
+          // httpfs extension not available in WASM build — non-critical
         });
 
-      console.log('DuckDB initialized successfully');
       return { db: db!, conn: conn! };
     } catch (error) {
       console.error('Failed to initialize DuckDB:', error);
@@ -118,8 +110,7 @@ export async function loadParquetFromURL(url: string, tableName = 'data'): Promi
       SELECT * FROM parquet_metadata('${url}');
     `;
 
-    const metadata = await conn!.query(metadataQuery);
-    console.log('Parquet metadata:', metadata.toArray());
+    await conn!.query(metadataQuery);
 
     // Create table from parquet file
     await conn!.query(`
@@ -133,7 +124,6 @@ export async function loadParquetFromURL(url: string, tableName = 'data'): Promi
     `);
 
     const count = countResult.toArray()[0].total;
-    console.log(`Loaded ${count} rows from ${url}`);
 
     return { success: true, rowCount: Number(count) };
   } catch (error) {
@@ -169,7 +159,6 @@ export async function loadParquetFromFile(file: File, tableName = 'data'): Promi
     `);
 
     const count = countResult.toArray()[0].total;
-    console.log(`Loaded ${count} rows from ${file.name}`);
 
     return { success: true, rowCount: Number(count) };
   } catch (error) {
@@ -190,27 +179,16 @@ export async function loadParquetFromPath(
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      console.log(`[Attempt ${attempt + 1}/${retries + 1}] Fetching ${path}...`);
-
       const response = await fetch(path);
       if (!response.ok) {
         throw new Error(`Failed to fetch ${path}: ${response.status} ${response.statusText}`);
       }
 
-      const contentLength = response.headers.get('content-length');
-      const sizeStr = contentLength
-        ? `${(Number(contentLength) / 1024 / 1024).toFixed(2)} MB`
-        : 'unknown size';
-      console.log(`[OK] Fetched ${path} (${sizeStr})`);
-
       const blob = await response.blob();
-      console.log(`[OK] Blob created: ${(blob.size / 1024 / 1024).toFixed(2)} MB`);
-
       const fileName = path.split('/').pop()!;
 
       // Create a File object from the blob
       const file = new File([blob], fileName, { type: 'application/octet-stream' });
-      console.log(`[OK] File object created: ${fileName}`);
 
       // Register the file with DuckDB
       await db!.registerFileHandle(
@@ -219,15 +197,12 @@ export async function loadParquetFromPath(
         duckdb.DuckDBDataProtocol.BROWSER_FILEREADER,
         true
       );
-      console.log(`[OK] File registered with DuckDB: ${fileName}`);
 
       // Create table from the file
-      console.log(`Creating table ${tableName} from ${fileName}...`);
       await conn!.query(`
         CREATE OR REPLACE TABLE ${tableName} AS
         SELECT * FROM parquet_scan('${fileName}');
       `);
-      console.log(`[OK] Table ${tableName} created`);
 
       // Get row count
       const countResult = await conn!.query(`
@@ -235,14 +210,10 @@ export async function loadParquetFromPath(
       `);
 
       const count = countResult.toArray()[0].total;
-      console.log(`[OK] Successfully loaded ${Number(count).toLocaleString()} rows from ${path}`);
 
       return { success: true, rowCount: Number(count) };
     } catch (error) {
-      console.error(`[ERROR] Attempt ${attempt + 1} failed:`, error);
-
       if (attempt < retries) {
-        console.log(`Retrying in ${(attempt + 1) * 1000}ms...`);
         await new Promise((resolve) => setTimeout(resolve, (attempt + 1) * 1000));
       } else {
         console.error(`Failed to load Parquet file after ${retries + 1} attempts:`, error);
@@ -266,22 +237,12 @@ export async function loadCSVFromPath(
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      console.log(`[Attempt ${attempt + 1}/${retries + 1}] Fetching ${path}...`);
-
       const response = await fetch(path);
       if (!response.ok) {
         throw new Error(`Failed to fetch ${path}: ${response.statusText}`);
       }
 
-      const contentLength = response.headers.get('content-length');
-      const sizeStr = contentLength
-        ? `${(Number(contentLength) / 1024 / 1024).toFixed(2)} MB`
-        : 'unknown size';
-      console.log(`[OK] Fetched ${path} (${sizeStr})`);
-
       const csvText = await response.text();
-      console.log(`[OK] CSV text loaded: ${(csvText.length / 1024 / 1024).toFixed(2)} MB`);
-
       const fileName = path.split('/').pop()!;
 
       // Register the CSV as a file with DuckDB
@@ -294,15 +255,12 @@ export async function loadCSVFromPath(
         duckdb.DuckDBDataProtocol.BROWSER_FILEREADER,
         true
       );
-      console.log(`[OK] CSV registered with DuckDB: ${fileName}`);
 
       // Create table from the CSV file
-      console.log(`Creating table ${tableName} from ${fileName}...`);
       await conn!.query(`
         CREATE OR REPLACE TABLE ${tableName} AS
         SELECT * FROM read_csv_auto('${fileName}');
       `);
-      console.log(`[OK] Table ${tableName} created`);
 
       // Get row count
       const countResult = await conn!.query(`
@@ -310,14 +268,10 @@ export async function loadCSVFromPath(
       `);
 
       const count = countResult.toArray()[0].total;
-      console.log(`[OK] Successfully loaded ${Number(count).toLocaleString()} rows from ${path}`);
 
       return { success: true, rowCount: Number(count) };
     } catch (error) {
-      console.error(`[ERROR] Attempt ${attempt + 1} failed:`, error);
-
       if (attempt < retries) {
-        console.log(`Retrying in ${(attempt + 1) * 1000}ms...`);
         await new Promise((resolve) => setTimeout(resolve, (attempt + 1) * 1000));
       } else {
         console.error(`Failed to load CSV file after ${retries + 1} attempts:`, error);
@@ -340,8 +294,6 @@ export async function query<T = Record<string, any>>(sql: string): Promise<Query
     const result = await conn!.query(sql);
     const endTime = performance.now();
     const executionTime = endTime - startTime;
-
-    console.log(`Query executed in ${executionTime.toFixed(2)}ms`);
 
     // Convert BigInt to regular numbers for JSON serialization
     const data = result.toArray().map((row) => {
@@ -411,7 +363,6 @@ export async function cleanup(): Promise<void> {
     await db.terminate();
     db = null;
   }
-  console.log('DuckDB resources cleaned up');
 }
 
 // Export singleton instance methods

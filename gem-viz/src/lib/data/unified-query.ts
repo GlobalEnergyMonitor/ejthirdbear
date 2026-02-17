@@ -132,12 +132,7 @@ async function executeMotherDuckQuery<T>(
     if (!motherDuckAvailable) {
       motherDuckAvailable = true;
       lastMotherDuckError = null;
-      console.log('[unified-query] MotherDuck connection restored');
     }
-
-    console.log(
-      `[unified-query] MotherDuck: ${result.data?.length || 0} rows in ${executionTime.toFixed(0)}ms`
-    );
 
     return {
       data: result.data || [],
@@ -202,7 +197,6 @@ export function getMotherDuckStatus(): {
 export function resetMotherDuckStatus(): void {
   motherDuckAvailable = true;
   lastMotherDuckError = null;
-  console.log('[unified-query] MotherDuck status reset');
 }
 
 /**
