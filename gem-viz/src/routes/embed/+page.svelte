@@ -173,6 +173,31 @@
         <dd>Optional. Maximum assets to display (default: 150).</dd>
       </dl>
     </article>
+
+    <article class="widget-card">
+      <h2>Modular Embed (Generic)</h2>
+      <p>Render any single visualization module by name with URL params.</p>
+      <code class="example-url">{base}/embed/viz?name=ownership-flower&entityId=E12345</code>
+      <h3>Available Modules</h3>
+      <dl>
+        <dt>ownership-flower</dt>
+        <dd>Requires entityId. Optional: size, showLabels, showTitle, title.</dd>
+        <dt>ownership-graph</dt>
+        <dd>Requires entityId. Optional: direction, showPies.</dd>
+        <dt>asset-ring</dt>
+        <dd>Requires entityId. Optional: maxAssets.</dd>
+        <dt>network-explorer</dt>
+        <dd>Requires entityId.</dd>
+        <dt>asset-screener</dt>
+        <dd>Requires entityId. Optional: assetClass, statuses, sortByOwnershipPct, includeUnitNames.</dd>
+        <dt>asset-map</dt>
+        <dd>Requires assetId.</dd>
+        <dt>investigation-map</dt>
+        <dd>Requires entityId or assetId. Optional: height.</dd>
+        <dt>factsheet</dt>
+        <dd>Requires tracker. Optional: title, height.</dd>
+      </dl>
+    </article>
   </section>
 
   <section class="usage">
@@ -186,6 +211,37 @@
   frameborder="0"
 &gt;&lt;/iframe&gt;</code
       ></pre>
+
+    <p>Or use the embed script for CMS-friendly snippets:</p>
+    <pre><code
+        >&lt;div class="gem-embed" data-src="/embed/ownership-flower?entityId=E12345" data-height="520"&gt;
+&lt;script src="{base}/embed.js"&gt;&lt;/script&gt;
+&lt;/div&gt;</code
+      ></pre>
+
+    <h3>Script Parameters</h3>
+    <dl>
+      <dt>data-src</dt>
+      <dd>Required. Embed path or full URL (e.g., /embed/entity?id=E12345).</dd>
+      <dt>data-height</dt>
+      <dd>Optional. Initial iframe height in pixels (default: 600).</dd>
+      <dt>data-width</dt>
+      <dd>Optional. Width (default: 100%).</dd>
+      <dt>data-title</dt>
+      <dd>Optional. Iframe title for accessibility.</dd>
+      <dt>data-autoheight</dt>
+      <dd>Optional. "false" to disable auto-resizing (default: true).</dd>
+      <dt>data-theme</dt>
+      <dd>Optional. "light" or "dark" (passed to embed as ?theme=...).</dd>
+      <dt>data-padding</dt>
+      <dd>Optional. Padding in pixels (passed to embed as ?padding=...).</dd>
+      <dt>data-params</dt>
+      <dd>Optional. Extra params as querystring or JSON (e.g., "showMap=true" or {'{"showMap":true}'}).</dd>
+      <dt>data-allow</dt>
+      <dd>Optional. Sets iframe allow attribute (e.g., "fullscreen").</dd>
+      <dt>data-sandbox</dt>
+      <dd>Optional. Sets iframe sandbox attribute.</dd>
+    </dl>
 
     <h3>Common Parameters</h3>
     <dl>

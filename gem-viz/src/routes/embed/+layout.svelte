@@ -5,12 +5,58 @@
    */
   import '../../app.css';
   import { page } from '$app/stores';
+  import { onMount } from 'svelte';
 
   let { children } = $props();
 
   // Extract embed options from URL params
   const theme = $derived($page.url.searchParams.get('theme') || 'light');
   const padding = $derived($page.url.searchParams.get('padding') || '16');
+  const autoHeight = $derived($page.url.searchParams.get('autoHeight') !== 'false');
+  const embedId = $derived($page.url.searchParams.get('embedId') || '');
+
+  const postHeight = () => {
+    if (!autoHeight) return;
+    if (typeof window === 'undefined') return;
+    if (window.parent === window) return;
+
+    const height = Math.max(
+      document.documentElement?.scrollHeight || 0,
+      document.body?.scrollHeight || 0,
+    );
+
+    if (!height) return;
+
+    window.parent.postMessage(
+      {
+        source: 'gem-embed',
+        type: 'resize',
+        height,
+        embedId,
+      },
+      '*',
+    );
+  };
+
+  onMount(() => {
+    if (!autoHeight) return;
+    if (typeof window === 'undefined') return;
+    if (window.parent === window) return;
+
+    postHeight();
+
+    const observer = new ResizeObserver(() => postHeight());
+    observer.observe(document.documentElement);
+
+    window.addEventListener('load', postHeight);
+    const timeout = window.setTimeout(postHeight, 150);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('load', postHeight);
+      window.clearTimeout(timeout);
+    };
+  });
 </script>
 
 <div class="embed-container" class:dark={theme === 'dark'} style="padding: {padding}px;">

@@ -44,11 +44,19 @@
   const viewMode = $derived(selectedOwnerIds.length > 0 ? 'filtered' : 'all');
 
   // Parse selected classes
+  let parseError = $state<string | null>(null);
   const selectedClasses = $derived.by(() => {
     if (!classesParam) return [];
     try {
-      return JSON.parse(decodeURIComponent(classesParam));
+      parseError = null;
+      const parsed = JSON.parse(decodeURIComponent(classesParam));
+      if (!Array.isArray(parsed)) {
+        parseError = 'Invalid asset class data in URL. Please go back and re-select.';
+        return [];
+      }
+      return parsed;
     } catch {
+      parseError = 'Could not read asset class from URL. Please go back and re-select.';
       return [];
     }
   });
@@ -238,7 +246,6 @@
 
 <ScreenerLayout
   currentStep={3}
-  showStepNav={false}
   subtitle={viewMode === 'filtered'
     ? `Showing ${selectedOwnerIds.length} selected companies and their ownership in ${classDescription}.`
     : `Showing all companies with ownership stakes in ${classDescription}.`}
@@ -283,6 +290,13 @@
     </div>
     <a href="/screener/" class="edit-filters-link">← Edit filters</a>
   </section>
+
+  {#if parseError}
+    <div class="parse-error">
+      <p>{parseError}</p>
+      <a href="/screener/">← Start over</a>
+    </div>
+  {/if}
 
   <LoadingWrapper {loading} {error} loadingMessage="Finding owners...">
     <!-- Results section -->
@@ -497,6 +511,26 @@
 </ScreenerLayout>
 
 <style>
+  /* Parse error */
+  .parse-error {
+    padding: var(--space-4) var(--space-5);
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    border-radius: var(--radius-sm);
+    color: #9a3412;
+    margin-bottom: var(--space-6);
+  }
+
+  .parse-error p {
+    margin: 0 0 var(--space-2) 0;
+    font-weight: 500;
+  }
+
+  .parse-error a {
+    color: #1d4961;
+    font-size: var(--font-size-sm);
+  }
+
   /* Filters summary */
   .filters-summary {
     padding: var(--space-4) var(--space-5);

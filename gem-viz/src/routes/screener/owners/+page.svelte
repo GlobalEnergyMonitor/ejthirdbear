@@ -169,8 +169,9 @@
 
       bulkSearchText = values.join('\n');
       await searchBulk();
-    } catch {
-      searchError = 'Failed to parse CSV file';
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : 'unknown error';
+      searchError = `Failed to parse CSV: ${reason}. Ensure the file is UTF-8 encoded with company names in the first column.`;
     }
   }
 
@@ -332,8 +333,16 @@
       <div class="search-error">{searchError}</div>
     {/if}
 
+    <!-- Loading indicator for search -->
+    {#if searchLoading}
+      <div class="search-loading">
+        <span class="loading-spinner"></span>
+        Searching...
+      </div>
+    {/if}
+
     <!-- Results with disambiguation -->
-    {#if searchResultGroups.length > 0}
+    {#if !searchLoading && searchResultGroups.length > 0}
       <div class="search-results">
         <div class="results-source-row">
           <DataSourceBadge source="api" label="Entity Search" />
@@ -829,9 +838,31 @@
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: var(--space-4);
-    max-height: 480px;
+    max-height: min(480px, calc(100vh - 300px));
     overflow-y: auto;
     padding: 2px;
+  }
+
+  .search-loading {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-6) 0;
+    font-size: var(--font-size-body);
+    color: var(--color-text-tertiary);
+  }
+
+  .loading-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--color-gray-200);
+    border-top-color: var(--gem-teal, #1d4961);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
   }
 
   @media (max-width: 900px) {

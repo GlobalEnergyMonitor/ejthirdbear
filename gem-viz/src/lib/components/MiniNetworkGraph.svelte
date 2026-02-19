@@ -1,7 +1,8 @@
 <script>
   /**
    * MiniNetworkGraph - Focused 3D network visualization for entity pages
-   * Shows the ownership network neighborhood around a specific entity
+   * Shows the ownership network neighborhood around a specific entity.
+   * Uses REST API (getOwnershipGraph) — no DuckDB dependency.
    */
   import { onMount } from 'svelte';
   import { assetPath, assetLink, entityLink } from '$lib/links';
@@ -16,13 +17,10 @@
     forceX,
     forceY,
   } from 'd3-force-3d';
-  import { ASSET_ID_COALESCE } from '$lib/duckdb-queries';
+  import { getOwnershipGraph } from '$lib/ownership-api';
 
   // Props
   let { entityId = '', entityName: _entityName = '', maxHops = 2, height = 300 } = $props();
-
-  // DuckDB utilities
-  let loadParquetFromPath, query;
 
   // State
   let container;
@@ -61,117 +59,52 @@
       loading = true;
       error = null;
 
-      // Dynamic import DuckDB
-      if (!loadParquetFromPath || !query) {
-        const duckdbUtils = await import('$lib/duckdb-utils');
-        loadParquetFromPath = duckdbUtils.loadParquetFromPath;
-        query = duckdbUtils.query;
-      }
+      // Fetch ownership graph in both directions via REST API
+      const [graphDown, graphUp] = await Promise.all([
+        getOwnershipGraph({ root: entityId, direction: 'down', max_depth: maxHops }).catch(() => null),
+        getOwnershipGraph({ root: entityId, direction: 'up', max_depth: maxHops }).catch(() => null),
+      ]);
 
-      const parquetPath = assetPath('all_trackers_ownership@1.parquet');
-      const ownershipResult = await loadParquetFromPath(parquetPath, 'ownership');
-
-      if (!ownershipResult.success) {
-        throw new Error('Failed to load ownership data');
-      }
-
-      // Query edges connected to this entity (and their neighbors up to maxHops)
-      // First, get direct connections
-      const directQuery = `
-        SELECT
-          ${ASSET_ID_COALESCE} as source_id,
-          "Project" as source_name,
-          "Owner GEM Entity ID" as target_id,
-          "Owner" as target_name,
-          "Share" as share
-        FROM ownership
-        WHERE ${ASSET_ID_COALESCE} IS NOT NULL
-          AND "Owner GEM Entity ID" IS NOT NULL
-          AND "Owner GEM Entity ID" = '${entityId}'
-      `;
-
-      const directResult = await query(directQuery);
-      if (!directResult.success) throw new Error('Query failed');
-
-      // Build initial graph from direct connections
-      const seenNodes = new Set([entityId]);
-      const allEdges = [];
-
-      for (const edge of directResult.data || []) {
-        seenNodes.add(edge.source_id);
-        seenNodes.add(edge.target_id);
-        allEdges.push(edge);
-      }
-
-      // Expand to additional hops if needed
-      if (maxHops > 1 && seenNodes.size > 1) {
-        const nodeList = Array.from(seenNodes).filter((id) => id !== entityId);
-        if (nodeList.length > 0) {
-          // Get edges where these assets connect to other owners
-          const expandQuery = `
-            SELECT DISTINCT
-              ${ASSET_ID_COALESCE} as source_id,
-              "Project" as source_name,
-              "Owner GEM Entity ID" as target_id,
-              "Owner" as target_name,
-              "Share" as share
-            FROM ownership
-            WHERE ${ASSET_ID_COALESCE} IS NOT NULL
-              AND "Owner GEM Entity ID" IS NOT NULL
-              AND ${ASSET_ID_COALESCE} IN (${nodeList.map((id) => `'${id}'`).join(',')})
-            LIMIT 500
-          `;
-          const expandResult = await query(expandQuery);
-          if (expandResult.success && expandResult.data) {
-            for (const edge of expandResult.data) {
-              seenNodes.add(edge.source_id);
-              seenNodes.add(edge.target_id);
-              allEdges.push(edge);
-            }
-          }
-        }
-      }
-
-      // Build node map and links
+      // Merge nodes and edges from both directions
       nodeMap.clear();
       links = [];
+      const linkSet = new Set();
 
-      for (const edge of allEdges) {
-        if (!nodeMap.has(edge.source_id)) {
-          nodeMap.set(edge.source_id, {
-            id: edge.source_id,
-            name: edge.source_name || edge.source_id,
-            connections: 0,
-            isTarget: edge.source_id === entityId,
-          });
+      function addGraph(graph) {
+        if (!graph) return;
+        for (const n of graph.nodes || []) {
+          if (!n.id) continue;
+          if (!nodeMap.has(n.id)) {
+            nodeMap.set(n.id, {
+              id: n.id,
+              name: n.Name || n.id,
+              connections: 0,
+              isTarget: n.id === entityId,
+            });
+          }
         }
-        nodeMap.get(edge.source_id).connections++;
-
-        if (!nodeMap.has(edge.target_id)) {
-          nodeMap.set(edge.target_id, {
-            id: edge.target_id,
-            name: edge.target_name || edge.target_id,
-            connections: 0,
-            isTarget: edge.target_id === entityId,
-          });
+        for (const e of graph.edges || []) {
+          const key = `${e.source}-${e.target}`;
+          if (linkSet.has(key)) continue;
+          linkSet.add(key);
+          // Ensure source/target nodes exist
+          for (const id of [e.source, e.target]) {
+            if (!nodeMap.has(id)) {
+              nodeMap.set(id, { id, name: id, connections: 0, isTarget: id === entityId });
+            }
+            nodeMap.get(id).connections++;
+          }
+          links.push({ source: e.source, target: e.target, share: e.value || 0 });
         }
-        nodeMap.get(edge.target_id).connections++;
-
-        links.push({
-          source: edge.source_id,
-          target: edge.target_id,
-          share: edge.share || 0,
-        });
       }
 
-      // Dedupe links
-      const linkSet = new Set();
-      links = links.filter((l) => {
-        const key = `${l.source}-${l.target}`;
-        if (linkSet.has(key)) return false;
-        linkSet.add(key);
-        return true;
-      });
+      addGraph(graphDown);
+      addGraph(graphUp);
+
+      // Ensure the target entity exists in the graph
+      if (!nodeMap.has(entityId)) {
+        nodeMap.set(entityId, { id: entityId, name: _entityName || entityId, connections: 0, isTarget: true });
+      }
 
       nodes = Array.from(nodeMap.values());
 

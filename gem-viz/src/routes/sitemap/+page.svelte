@@ -99,6 +99,11 @@
         { path: '/embed/asset', name: 'Asset Embed', description: 'Embed an asset card' },
         { path: '/embed/entity', name: 'Entity Embed', description: 'Embed an entity card' },
         {
+          path: '/embed/viz',
+          name: 'Modular Embed',
+          description: 'Generic embed for modular visualizations',
+        },
+        {
           path: '/embed/asset-ring',
           name: 'Asset Ring',
           description: 'Circular asset visualization',

@@ -91,6 +91,24 @@ import { browser } from '$app/environment';
 import { getAssetTypeForTracker } from '$lib/data-config/tracker-schema';
 
 // =============================================================================
+// GEM TRACKER NAME → UI TRACKER NAME BRIDGE
+// =============================================================================
+
+/**
+ * Maps raw GEM tracker names (used in asset-class-definitions.ts) to the
+ * UI TrackerName values that getAssetTypeForTracker() understands.
+ * Most are identity; only two differ.
+ */
+const GEM_TO_UI_TRACKER: Record<string, string> = {
+  'Oil & Gas Plant': 'Gas Plant',
+  'Iron & Steel Plant': 'Steel Plant',
+};
+
+export function gemTrackerToUiTracker(gemName: string): string {
+  return GEM_TO_UI_TRACKER[gemName] ?? gemName;
+}
+
+// =============================================================================
 // TYPES
 // =============================================================================
 
@@ -144,6 +162,14 @@ const DEBUG = false;
 
 /** Cache TTL in milliseconds (5 minutes) */
 const CACHE_TTL_MS = 5 * 60 * 1000;
+
+/**
+ * Feature flags — flip these when backend ships the endpoints.
+ * Each flag has a localStorage override for testing:
+ *   localStorage.setItem('__GEM_SCREENER_REST_OWNERS__', '1')
+ */
+const ENABLE_REST_OWNERS = browser && localStorage.getItem('__GEM_SCREENER_REST_OWNERS__') === '1';
+const ENABLE_BATCH_SEARCH = browser && localStorage.getItem('__GEM_SCREENER_BATCH_SEARCH__') === '1';
 
 /** In-memory cache for results */
 const resultsCache = new Map<string, { data: ScreenerResultsResponse; timestamp: number }>();
@@ -212,8 +238,12 @@ export async function getOwnersByAssetType(
   const startTime = performance.now();
   const { limit = 200, skipCache = false } = options;
 
-  // Build cache key
-  const cacheKey = JSON.stringify({ filters, limit });
+  // Build cache key (sort filter keys for consistent caching)
+  const sortedFilters = Object.keys(filters).sort().reduce<Record<string, unknown>>((acc, k) => {
+    acc[k] = filters[k];
+    return acc;
+  }, {});
+  const cacheKey = JSON.stringify({ filters: sortedFilters, limit });
 
   // Check cache first
   if (!skipCache) {
@@ -231,10 +261,18 @@ export async function getOwnersByAssetType(
     }
   }
 
-  // TODO: When backend provides REST endpoint, use this:
-  // return await getOwnersByAssetTypeREST(filters, limit);
+  // Try REST API first (when backend ships the endpoint)
+  if (ENABLE_REST_OWNERS) {
+    try {
+      const restResult = await getOwnersByAssetTypeREST(filters, limit, startTime);
+      resultsCache.set(cacheKey, { data: restResult, timestamp: Date.now() });
+      return restResult;
+    } catch (e) {
+      console.warn('[screener-api] REST owners endpoint failed, falling back to MotherDuck:', e);
+    }
+  }
 
-  // Current implementation: MotherDuck query
+  // Fallback: MotherDuck query
   return await getOwnersByAssetTypeMotherDuck(filters, limit, startTime, cacheKey);
 }
 
@@ -378,36 +416,55 @@ async function getOwnersByAssetTypeMotherDuck(
 }
 
 /**
- * FUTURE: REST API implementation
+ * REST API implementation for screener owners.
+ * Enable via: localStorage.setItem('__GEM_SCREENER_REST_OWNERS__', '1')
  *
- * Uncomment and use when backend provides:
+ * Expects backend endpoint:
  * GET /screener/owners?asset_type=X&status=Y&country=Z&limit=N
+ * Returns: { owners: [{ entity_id, name, total_assets, filtered_assets }], total }
  */
-// async function getOwnersByAssetTypeREST(
-//   filters: ScreenerFilters,
-//   limit: number
-// ): Promise<ScreenerResultsResponse> {
-//   const startTime = performance.now();
-//
-//   const params = new URLSearchParams();
-//   if (filters.tracker) params.set('asset_type', getAssetTypeForTracker(filters.tracker) || filters.tracker);
-//   if (filters.status) params.set('status', filters.status);
-//   if (filters.country) params.set('country', filters.country);
-//   params.set('limit', String(limit));
-//
-//   const response = await fetch(`${OWNERSHIP_API_BASE}/screener/owners?${params}`);
-//   if (!response.ok) throw new Error(`API error: ${response.status}`);
-//
-//   const data = await response.json();
-//   const queryTimeMs = performance.now() - startTime;
-//
-//   return {
-//     owners: data.owners || data.results || [],
-//     source: 'rest-api',
-//     queryTimeMs,
-//     totalCount: data.total,
-//   };
-// }
+async function getOwnersByAssetTypeREST(
+  filters: ScreenerFilters,
+  limit: number,
+  startTime: number
+): Promise<ScreenerResultsResponse> {
+  const params = new URLSearchParams();
+  if (filters.tracker) {
+    params.set('asset_type', getAssetTypeForTracker(filters.tracker) || filters.tracker);
+  }
+  if (filters.status) params.set('status', filters.status);
+  if (filters.country) params.set('country', filters.country);
+  params.set('limit', String(limit));
+
+  const response = await fetch(`${OWNERSHIP_API_BASE}/screener/owners?${params}`);
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`REST /screener/owners failed: ${response.status} ${text}`);
+  }
+
+  const data = await response.json();
+  const queryTimeMs = performance.now() - startTime;
+
+  // Normalize response — backend may use different field names
+  const rawOwners: Array<Record<string, unknown>> = data.owners || data.results || [];
+  const owners: ScreenerOwner[] = rawOwners.map((o) => ({
+    entityId: String(o.entity_id || o.entityId || o.id || ''),
+    name: String(o.name || o.entity_name || 'Unknown'),
+    totalAssets: Number(o.total_assets || o.totalAssets || 0),
+    filteredAssets: Number(o.filtered_assets || o.filteredAssets || 0),
+  }));
+
+  logQuery({
+    timestamp: new Date(),
+    operation: 'getOwnersByAssetType',
+    durationMs: queryTimeMs,
+    source: 'rest-api',
+    params: filters,
+    resultCount: owners.length,
+  });
+
+  return { owners, source: 'rest-api', queryTimeMs, totalCount: data.total };
+}
 
 // =============================================================================
 // OWNERS PAGE: ENTITY SEARCH
@@ -516,10 +573,16 @@ export async function searchEntitiesBulk(
     return { results: {}, source: 'rest-api-sequential', queryTimeMs: 0, apiCallCount: 0 };
   }
 
-  // TODO: When backend provides batch endpoint, use this:
-  // return await searchEntitiesBulkREST(cleanQueries, limitPerQuery);
+  // Try batch endpoint first (when backend ships it)
+  if (ENABLE_BATCH_SEARCH) {
+    try {
+      return await searchEntitiesBulkREST(cleanQueries, limitPerQuery, startTime);
+    } catch (e) {
+      console.warn('[screener-api] Batch search endpoint failed, falling back to sequential:', e);
+    }
+  }
 
-  // Current implementation: parallel individual requests
+  // Fallback: parallel individual requests
   return await searchEntitiesBulkSequential(cleanQueries, limitPerQuery, maxConcurrent, startTime);
 }
 
@@ -578,45 +641,54 @@ async function searchEntitiesBulkSequential(
 }
 
 /**
- * FUTURE: Batch REST API implementation
+ * Batch REST API implementation for entity search.
+ * Enable via: localStorage.setItem('__GEM_SCREENER_BATCH_SEARCH__', '1')
  *
- * Uncomment and use when backend provides:
+ * Expects backend endpoint:
  * POST /entities/search/batch
  * Body: { queries: ["Shell", "BP", ...], limit_per_query: 10 }
+ * Returns: { results: { "Shell": [...], "BP": [...] } }
  */
-// async function searchEntitiesBulkREST(
-//   queries: string[],
-//   limitPerQuery: number
-// ): Promise<BulkSearchResponse> {
-//   const startTime = performance.now();
-//
-//   const response = await fetch(`${OWNERSHIP_API_BASE}/entities/search/batch`, {
-//     method: 'POST',
-//     headers: { 'Content-Type': 'application/json' },
-//     body: JSON.stringify({ queries, limit_per_query: limitPerQuery }),
-//   });
-//
-//   if (!response.ok) throw new Error(`API error: ${response.status}`);
-//
-//   const data = await response.json();
-//   const queryTimeMs = performance.now() - startTime;
-//
-//   logQuery({
-//     timestamp: new Date(),
-//     operation: 'searchEntitiesBulk',
-//     durationMs: queryTimeMs,
-//     source: 'rest-api',
-//     params: { queryCount: queries.length },
-//     resultCount: Object.values(data.results || {}).flat().length,
-//   });
-//
-//   return {
-//     results: data.results || {},
-//     source: 'rest-api',
-//     queryTimeMs,
-//     apiCallCount: 1,
-//   };
-// }
+async function searchEntitiesBulkREST(
+  queries: string[],
+  limitPerQuery: number,
+  startTime: number
+): Promise<BulkSearchResponse> {
+  const response = await fetch(`${OWNERSHIP_API_BASE}/entities/search/batch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ queries, limit_per_query: limitPerQuery }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`Batch search failed: ${response.status} ${text}`);
+  }
+
+  const data = await response.json();
+  const queryTimeMs = performance.now() - startTime;
+
+  // Normalize — each result entry should match EntitySearchResult shape
+  const results: Record<string, EntitySearchResult[]> = {};
+  for (const [term, entities] of Object.entries(data.results || {})) {
+    results[term] = (entities as Array<Record<string, unknown>>).map((e) => ({
+      id: String(e.id || e.entity_id || ''),
+      name: String(e.name || e.full_name || ''),
+      headquartersCountry: (e.headquarters_country || e.headquartersCountry || null) as string | null,
+    }));
+  }
+
+  logQuery({
+    timestamp: new Date(),
+    operation: 'searchEntitiesBulk',
+    durationMs: queryTimeMs,
+    source: 'rest-api',
+    params: { queryCount: queries.length },
+    resultCount: Object.values(results).flat().length,
+  });
+
+  return { results, source: 'rest-api', queryTimeMs, apiCallCount: 1 };
+}
 
 // =============================================================================
 // ASSET TYPE COUNTS (for preset cards)
