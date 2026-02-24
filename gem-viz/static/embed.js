@@ -6,7 +6,7 @@
     if (!script || !script.src) return '';
     try {
       const url = new URL(script.src);
-      const basePath = url.pathname.replace(/\\/embed\\.js$/, '');
+      const basePath = url.pathname.replace(/\/embed\.js$/, '');
       return `${url.origin}${basePath}`;
     } catch {
       return '';

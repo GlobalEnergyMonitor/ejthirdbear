@@ -123,6 +123,14 @@ try {
     console.log('[OK] Copied CHANGELOG.md to build directory');
   }
 
+  // Copy embed.js to build root so it's at /embed.js (not just /client/embed.js)
+  const embedSource = path.join(buildDir, 'client', 'embed.js');
+  const embedDest = path.join(buildDir, 'embed.js');
+  if (fs.existsSync(embedSource)) {
+    fs.copyFileSync(embedSource, embedDest);
+    console.log('[OK] Copied embed.js to build root');
+  }
+
   // Upload to Digital Ocean Spaces using AWS CLI
   // Note: CORS is configured via Digital Ocean dashboard, not here
   console.log('\nUploading to Digital Ocean Spaces...\n');
