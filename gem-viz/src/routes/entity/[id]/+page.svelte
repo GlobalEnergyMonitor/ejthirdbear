@@ -84,6 +84,10 @@
     return true;
   }
 
+  const hasActiveFilters = $derived(
+    selectedCountries.size > 0 || selectedTrackers.size > 0 || selectedStatuses.size > 0
+  );
+
   const filteredAssets = $derived.by(() => {
     const assets = portfolio?.assets || [];
     return hasActiveFilters ? assets.filter(passesFilters) : assets;
@@ -103,10 +107,6 @@
       assets: filteredAssets,
     };
   });
-
-  const hasActiveFilters = $derived(
-    selectedCountries.size > 0 || selectedTrackers.size > 0 || selectedStatuses.size > 0
-  );
 
   // Load graph data (upstream/downstream ownership chains)
   async function loadGraphData(id) {

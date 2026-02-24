@@ -98,10 +98,25 @@
     return spine;
   });
 
+  // Build direct edge percentage lookup as fallback when paths data unavailable
+  const edgePctMap = $derived.by(() => {
+    const m = new Map<string, number>();
+    for (const e of edges) {
+      if (e.value != null && e.target === rootId) {
+        m.set(e.source, (m.get(e.source) || 0) + e.value);
+      }
+    }
+    return m;
+  });
+
   // Owners for side panel (sorted by cumulative ownership %)
+  // Falls back to direct edge percentages when paths data is unavailable
   const ownersList = $derived(
-    nodes.filter((n) => n.type !== 'asset')
-      .map((n) => ({ id: n.id, name: n.name || n.Name || n.id, pct: pathsMap.get(n.entity_id || n.id) || 0 }))
+    nodes.filter((n) => n.type !== 'asset' && n.id !== rootId)
+      .map((n) => {
+        const nid = n.entity_id || n.id;
+        return { id: n.id, name: n.name || n.Name || n.id, pct: pathsMap.get(nid) || edgePctMap.get(nid) || 0 };
+      })
       .sort((a, b) => b.pct - a.pct)
   );
 
