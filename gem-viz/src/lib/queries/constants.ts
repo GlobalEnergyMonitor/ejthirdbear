@@ -10,9 +10,9 @@
  *
  * NOTE: New MotherDuck schema (October 2025+) uses unified "Asset ID" column.
  */
-export const ASSET_ID_COALESCE = `"Asset ID"`;
+export const ASSET_ID_COALESCE = `COALESCE("GEM unit ID", "GEM Mine ID", "Steel Plant ID", "GEM Asset ID", "ProjectID")`;
 
 /**
  * Same as ASSET_ID_COALESCE but with 'o.' table prefix for JOIN queries.
  */
-export const ASSET_ID_COALESCE_O = `o."Asset ID"`;
+export const ASSET_ID_COALESCE_O = `COALESCE(o."GEM unit ID", o."GEM Mine ID", o."Steel Plant ID", o."GEM Asset ID", o."ProjectID")`;
