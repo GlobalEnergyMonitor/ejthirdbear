@@ -332,9 +332,22 @@
   }
 
   onMount(async () => {
-    // DISABLED: dagre-d3 causes crashes in production
-    // TODO: Replace with a different graph library
-    dagreError = true;
+    try {
+      dagreD3 = await import('dagre-d3');
+      if (!dagreD3?.graphlib || !dagreD3?.render) {
+        // Some bundlers put exports under .default
+        const mod = dagreD3 as any;
+        if (mod.default?.graphlib && mod.default?.render) {
+          dagreD3 = mod.default;
+        } else {
+          console.error('dagre-d3: missing graphlib or render exports');
+          dagreError = true;
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load dagre-d3:', err);
+      dagreError = true;
+    }
   });
 
   // Re-render when data changes
