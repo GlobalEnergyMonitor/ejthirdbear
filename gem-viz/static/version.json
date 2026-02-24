@@ -1,10 +1,10 @@
 {
-  "version": "996e23c",
-  "commit": "996e23c",
-  "message": "docs: add white paper draft and eval implementation plan",
+  "version": "6a1129c",
+  "commit": "6a1129c",
+  "message": "feat: screener UX improvements, asset-class definitions, and modular embed route",
   "author": "EJ Fox",
-  "timestamp": "2026-02-06T20:29:09.321Z",
-  "deployed": "2026-02-06T20:29:09.321Z",
-  "buildTime": "2/6/2026, 3:29:09 PM",
-  "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.1.29"
+  "timestamp": "2026-02-23T23:25:40.753Z",
+  "deployed": "2026-02-23T23:25:40.753Z",
+  "buildTime": "2/23/2026, 6:25:40 PM",
+  "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.1.30"
 }
