@@ -80,6 +80,7 @@ export interface SpotlightAsset {
   tracker: string;
   status: string;
   country: string;
+  capacityMw?: number;
 }
 
 export interface SpotlightOwnerData {
@@ -90,6 +91,12 @@ export interface SpotlightOwnerData {
   entityMap: Map<string, { id: string; Name: string }>;
   matchedEdges: Map<string, { value: number | null }>;
   assetClassName: string;
+  summary?: {
+    totalAssets: number;
+    totalCapacityMw: number | null;
+    countries: number;
+    trackerTypes: number;
+  };
   truncated?: boolean; // True if results were limited for performance
   totalCount?: number; // Actual total count before limiting
 }
@@ -281,6 +288,9 @@ export async function* streamOwnerPortfolio(
   const allAssets: SpotlightAsset[] = [];
   const entityMap = new Map<string, { id: string; Name: string }>();
   const matchedEdges = new Map<string, { value: number | null }>();
+  const summaryCountries = new Set<string>();
+  const summaryTrackers = new Set<string>();
+  let summaryCapacity = 0;
   let effectiveEntityName = entityName || entityId;
   let truncated = false;
   let totalAssetCount = 0;
@@ -292,30 +302,39 @@ export async function* streamOwnerPortfolio(
     tracker: String(row.tracker || 'Unknown'),
     status: String(row.status || 'Unknown'),
     country: String(row.country || 'Unknown'),
+    capacityMw: typeof row.capacity === 'number' ? row.capacity : undefined,
   });
 
-  // Helper to build current portfolio state
-  const buildPortfolio = (): SpotlightOwnerData & { truncated?: boolean; totalCount?: number } => {
-    const trackers = new Set<string>();
-    allAssets.forEach((a) => {
-      if (a.tracker && a.tracker !== 'Unknown') trackers.add(a.tracker);
-    });
+  const addToSummary = (asset: SpotlightAsset) => {
+    if (asset.country && asset.country !== 'Unknown') summaryCountries.add(asset.country);
+    if (asset.tracker && asset.tracker !== 'Unknown') summaryTrackers.add(asset.tracker);
+    if (asset.capacityMw) summaryCapacity += Number(asset.capacityMw) || 0;
+  };
 
+  // Helper to build current portfolio state (avoid cloning large structures)
+  const buildPortfolio = (): SpotlightOwnerData & { truncated?: boolean; totalCount?: number } => {
+    const trackerList = Array.from(summaryTrackers);
     const assetClassName =
-      trackers.size === 1
-        ? Array.from(trackers)[0]
-        : trackers.size > 0
-          ? `assets (${trackers.size} types)`
+      trackerList.length === 1
+        ? trackerList[0]
+        : trackerList.length > 0
+          ? `assets (${trackerList.length} types)`
           : 'assets';
 
     return {
       spotlightOwner: { id: entityId, Name: effectiveEntityName },
-      subsidiariesMatched: new Map(subsidiariesMatched),
-      directlyOwned: [...directlyOwned],
-      assets: [...allAssets],
-      entityMap: new Map(entityMap),
-      matchedEdges: new Map(matchedEdges),
+      subsidiariesMatched,
+      directlyOwned,
+      assets: allAssets,
+      entityMap,
+      matchedEdges,
       assetClassName,
+      summary: {
+        totalAssets: allAssets.length,
+        totalCapacityMw: summaryCapacity > 0 ? summaryCapacity : null,
+        countries: summaryCountries.size,
+        trackerTypes: trackerList.length,
+      },
       truncated,
       totalCount: totalAssetCount,
     };
@@ -325,18 +344,8 @@ export async function* streamOwnerPortfolio(
     // Phase 1: Initialize
     yield { phase: 'init', message: 'Loading ownership data...', portfolio: null };
 
-    // Phase 2: First get the count to know if this is a large entity
-    yield { phase: 'direct', message: 'Checking entity size...', portfolio: null };
-
     const directCount = await fetchOwnerAssetCount(entityId);
     totalAssetCount = directCount;
-
-    // Now fetch direct assets with limit
-    yield {
-      phase: 'direct',
-      message: `Loading directly owned assets (${directCount} total)...`,
-      portfolio: null,
-    };
 
     const directResult = await fetchOwnerAssets(entityId, MAX_DIRECT_ASSETS);
 
@@ -345,6 +354,7 @@ export async function* streamOwnerPortfolio(
         const asset = rowToAsset(row);
         directlyOwned.push(asset);
         allAssets.push(asset);
+        addToSummary(asset);
       }
     }
 
@@ -364,13 +374,6 @@ export async function* streamOwnerPortfolio(
     yield {
       phase: 'direct',
       message: directMsg,
-      portfolio: buildPortfolio(),
-    };
-
-    // Phase 3: Fetch subsidiaries
-    yield {
-      phase: 'subsidiaries',
-      message: 'Loading subsidiary ownership graph...',
       portfolio: buildPortfolio(),
     };
 
@@ -460,7 +463,10 @@ export async function* streamOwnerPortfolio(
             truncated = true;
           }
           subsidiariesMatched.set(subId, toAdd);
-          allAssets.push(...toAdd);
+          for (const asset of toAdd) {
+            allAssets.push(asset);
+            addToSummary(asset);
+          }
         }
       }
 

@@ -37,9 +37,14 @@
         const name = asset.ownerName || eid;
         if (!eid || eid === 'Unknown') continue;
 
-        const existing = ownerMap.get(eid) || { owner_name: name, entity_id: eid, asset_count: 0, value: 0 };
+        const existing = ownerMap.get(eid) || {
+          owner_name: name,
+          entity_id: eid,
+          asset_count: 0,
+          value: 0,
+        };
         existing.asset_count += 1;
-        existing.value += metric === 'capacity' ? (asset.capacity || 0) : 1;
+        existing.value += metric === 'capacity' ? asset.capacity || 0 : 1;
         ownerMap.set(eid, existing);
       }
 
@@ -80,7 +85,13 @@
   {:else if error}
     <div class="error">{error}</div>
   {:else if results.length === 0}
-    <div class="empty">No data available</div>
+    <div class="empty">
+      <p>Owner data is not available for this view.</p>
+      <p class="empty-detail">
+        The asset listing endpoint does not include ownership fields. Use individual entity or asset
+        pages to explore ownership data.
+      </p>
+    </div>
   {:else}
     <ol class="rankings">
       {#each results as row, i}
@@ -125,6 +136,13 @@
     color: var(--color-text-secondary);
     padding: 20px 0;
     text-align: center;
+  }
+  .empty p {
+    margin: 0 0 4px 0;
+  }
+  .empty-detail {
+    font-size: 11px;
+    color: var(--color-text-tertiary, var(--color-gray-400));
   }
   .error {
     color: var(--color-error);

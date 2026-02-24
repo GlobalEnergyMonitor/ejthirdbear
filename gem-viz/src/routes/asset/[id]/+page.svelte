@@ -319,7 +319,7 @@
               edges={graphEdges}
               paths={graphPaths}
               rootId={assetId}
-              assetName={assetName}
+              {assetName}
             />
           </div>
         </section>
@@ -580,7 +580,7 @@
     justify-content: center;
     width: 28px;
     height: 28px;
-    background: var(--gem-mint, #97E6DE);
+    background: var(--gem-mint, #97e6de);
     color: var(--gem-navy, #1a3a4a);
     font-size: var(--font-size-sm);
     font-weight: 700;
@@ -608,33 +608,36 @@
   /* Properties */
   .properties dl {
     display: grid;
-    gap: var(--space-4);
-    overflow: hidden;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 0;
   }
   .property {
-    display: grid;
-    grid-template-columns: minmax(120px, 200px) minmax(0, 1fr);
-    gap: var(--space-5);
-    padding: var(--space-3) 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
     border-bottom: var(--border-width) solid var(--color-gray-100);
-    max-width: 100%;
   }
   .property:last-child {
     border-bottom: none;
   }
   dt {
-    font-size: var(--font-size-sm);
-    font-weight: bold;
+    font-size: var(--font-size-body);
     color: var(--color-text-secondary);
     text-transform: uppercase;
     letter-spacing: var(--tracking-tight);
+    white-space: nowrap;
+    flex-shrink: 0;
   }
   dd {
-    font-size: var(--font-size-md);
+    font-size: var(--font-size-body);
     color: var(--color-black);
     margin: 0;
-    word-break: break-word;
-    overflow-wrap: anywhere;
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   /* JSON Dump */
@@ -682,9 +685,8 @@
     .meta-grid {
       grid-template-columns: 1fr;
     }
-    .property {
+    .properties dl {
       grid-template-columns: 1fr;
-      gap: var(--space-1);
     }
   }
 

@@ -74,37 +74,60 @@
     return rgb ? [rgb.r, rgb.g, rgb.b, 200] : [128, 128, 128, 200];
   }
 
+  const INIT_TIMEOUT_MS = 15_000;
+
   // Initialize DuckDB and load data
   async function initData() {
     try {
       loading = true;
+      error = null;
       loadingPhase = 'Loading DuckDB WASM...';
 
-      // Dynamic import DuckDB
-      const duckdbUtils = await import('$lib/duckdb-utils');
-      loadParquetFromPath = duckdbUtils.loadParquetFromPath;
-      query = duckdbUtils.query;
+      let timer;
 
-      // Load ownership data
-      loadingPhase = 'Loading ownership parquet (7MB)...';
-      const ownershipPath = assetPath('all_trackers_ownership@1.parquet');
-      await loadParquetFromPath(ownershipPath, 'ownership');
+      const initWork = async () => {
+        // Dynamic import DuckDB
+        const duckdbUtils = await import('$lib/duckdb-utils');
+        loadParquetFromPath = duckdbUtils.loadParquetFromPath;
+        query = duckdbUtils.query;
 
-      // Load locations for coordinates
-      loadingPhase = 'Loading locations parquet...';
-      const locationsPath = assetPath('asset_locations.parquet');
-      await loadParquetFromPath(locationsPath, 'locations');
+        // Load ownership data
+        loadingPhase = 'Loading ownership parquet (7MB)...';
+        const ownershipPath = assetPath('all_trackers_ownership@1.parquet');
+        await loadParquetFromPath(ownershipPath, 'ownership');
 
-      // Skip to loading facets
-      loadingPhase = 'Counting assets...';
+        // Load locations for coordinates
+        loadingPhase = 'Loading locations parquet...';
+        const locationsPath = assetPath('asset_locations.parquet');
+        await loadParquetFromPath(locationsPath, 'locations');
 
-      // Load initial facets
-      loadingPhase = 'Building facets...';
-      await loadFacets();
+        // Skip to loading facets
+        loadingPhase = 'Counting assets...';
 
-      // Load initial asset data with locations
-      loadingPhase = 'Loading asset coordinates...';
-      await loadAssets();
+        // Load initial facets
+        loadingPhase = 'Building facets...';
+        await loadFacets();
+
+        // Load initial asset data with locations
+        loadingPhase = 'Loading asset coordinates...';
+        await loadAssets();
+
+        clearTimeout(timer);
+      };
+
+      const timeout = new Promise((_, reject) => {
+        timer = setTimeout(
+          () =>
+            reject(
+              new Error(
+                `DuckDB initialization timed out after ${INIT_TIMEOUT_MS / 1000}s. The data engine may be unresponsive.`
+              )
+            ),
+          INIT_TIMEOUT_MS
+        );
+      });
+
+      await Promise.race([initWork(), timeout]);
 
       loading = false;
     } catch (err) {
@@ -266,7 +289,9 @@
     // Count-by-field helper
     function countBy(field) {
       const counts = {};
-      for (const a of assets) { if (a[field]) counts[a[field]] = (counts[a[field]] || 0) + 1; }
+      for (const a of assets) {
+        if (a[field]) counts[a[field]] = (counts[a[field]] || 0) + 1;
+      }
       return Object.entries(counts)
         .map(([value, count]) => ({ [field]: value, count, pct: count / assets.length }))
         .sort((a, b) => b.count - a.count);
@@ -338,9 +363,18 @@
     return arr.includes(value) ? arr.filter((v) => v !== value) : [...arr, value];
   }
 
-  function toggleTracker(tracker) { selectedTrackers = toggleFilter(selectedTrackers, tracker); loadAssets(); }
-  function toggleStatus(status) { selectedStatuses = toggleFilter(selectedStatuses, status); loadAssets(); }
-  function toggleCountry(country) { selectedCountries = toggleFilter(selectedCountries, country); loadAssets(); }
+  function toggleTracker(tracker) {
+    selectedTrackers = toggleFilter(selectedTrackers, tracker);
+    loadAssets();
+  }
+  function toggleStatus(status) {
+    selectedStatuses = toggleFilter(selectedStatuses, status);
+    loadAssets();
+  }
+  function toggleCountry(country) {
+    selectedCountries = toggleFilter(selectedCountries, country);
+    loadAssets();
+  }
 
   function clearFilters() {
     selectedTrackers = [];

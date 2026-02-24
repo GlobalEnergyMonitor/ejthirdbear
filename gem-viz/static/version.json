@@ -1,10 +1,10 @@
 {
-  "version": "6a1129c",
-  "commit": "6a1129c",
-  "message": "feat: screener UX improvements, asset-class definitions, and modular embed route",
+  "version": "d273132",
+  "commit": "d273132",
+  "message": "fix: entity page 500 error and ownership graph percentages",
   "author": "EJ Fox",
-  "timestamp": "2026-02-23T23:25:40.753Z",
-  "deployed": "2026-02-23T23:25:40.753Z",
-  "buildTime": "2/23/2026, 6:25:40 PM",
+  "timestamp": "2026-02-24T18:58:12.740Z",
+  "deployed": "2026-02-24T18:58:12.740Z",
+  "buildTime": "2/24/2026, 1:58:12 PM",
   "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.1.30"
 }

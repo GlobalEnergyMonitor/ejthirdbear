@@ -1,8 +1,4 @@
 <script lang="ts">
-  /**
-   * EntityPortfolioHeader - Sticky header with entity stats and flower
-   * Shows summary stats and OwnershipFlower visualization
-   */
   import OwnershipFlower from '$lib/components/OwnershipFlower.svelte';
   import { entityLink } from '$lib/links';
 
@@ -19,6 +15,12 @@
       country: string;
       capacityMw?: number;
     }>;
+    summary?: {
+      totalAssets: number;
+      totalCapacityMw: number | null;
+      countries: number;
+      trackerTypes: number;
+    };
   }
 
   interface Props {
@@ -39,21 +41,74 @@
     flowerSize = 'medium',
   }: Props = $props();
 
-  // Compute stats from portfolio
+  const formatNumber = (value: number) => value.toLocaleString();
+  let statsMemo = $state<{ assetsRef: OwnerPortfolio['assets'] | null; result: any | null }>({
+    assetsRef: null,
+    result: null,
+  });
+
+  // Summary stats from the portfolio
   const stats = $derived.by(() => {
-    if (!portfolio?.assets?.length) return null;
+    if (portfolio?.summary && portfolio.summary.totalAssets > 0) {
+      const { totalAssets, totalCapacityMw, countries, trackerTypes } = portfolio.summary;
+      const items = [
+        { key: 'assets', value: formatNumber(totalAssets), label: 'assets' },
+        totalCapacityMw
+          ? { key: 'capacity', value: formatNumber(totalCapacityMw), label: 'MW' }
+          : null,
+        countries > 0
+          ? {
+              key: 'countries',
+              value: formatNumber(countries),
+              label: countries === 1 ? 'country' : 'countries',
+            }
+          : null,
+        trackerTypes > 1
+          ? { key: 'trackers', value: formatNumber(trackerTypes), label: 'tracker types' }
+          : null,
+      ].filter(Boolean) as Array<{ key: string; value: string; label: string }>;
 
-    const assets = portfolio.assets;
-    const countries = new Set(assets.map((a) => a.country).filter(Boolean));
-    const totalCapacity = assets.reduce((sum, a) => sum + (Number(a.capacityMw) || 0), 0);
-    const trackers = new Set(assets.map((a) => a.tracker).filter(Boolean));
+      return { items };
+    }
 
-    return {
-      totalAssets: assets.length,
-      totalCapacity: totalCapacity > 0 ? totalCapacity : null,
-      countries: countries.size,
-      trackerTypes: trackers.size,
-    };
+    const assets = portfolio?.assets;
+    if (!assets?.length) return null;
+    if (statsMemo.assetsRef === assets) return statsMemo.result;
+
+    const countries = new Set<string>();
+    const trackers = new Set<string>();
+    let totalCapacity = 0;
+
+    for (const asset of assets) {
+      if (asset.country) countries.add(asset.country);
+      if (asset.tracker) trackers.add(asset.tracker);
+      totalCapacity += Number(asset.capacityMw) || 0;
+    }
+
+    const totalCapacityMw = totalCapacity > 0 ? totalCapacity : null;
+    const countriesCount = countries.size;
+    const trackerTypesCount = trackers.size;
+
+    const items = [
+      { key: 'assets', value: formatNumber(assets.length), label: 'assets' },
+      totalCapacityMw
+        ? { key: 'capacity', value: formatNumber(totalCapacityMw), label: 'MW' }
+        : null,
+      countriesCount > 0
+        ? {
+            key: 'countries',
+            value: formatNumber(countriesCount),
+            label: countriesCount === 1 ? 'country' : 'countries',
+          }
+        : null,
+      trackerTypesCount > 1
+        ? { key: 'trackers', value: formatNumber(trackerTypesCount), label: 'tracker types' }
+        : null,
+    ].filter(Boolean) as Array<{ key: string; value: string; label: string }>;
+
+    const result = { items };
+    statsMemo = { assetsRef: assets, result };
+    return result;
   });
 
   const displayName = $derived(
@@ -72,36 +127,17 @@
         {/if}
       </h1>
 
-      {#if stats}
+      {#if stats?.items?.length}
         <div class="stats-row">
-          <span class="stat">
-            <strong>{stats.totalAssets.toLocaleString()}</strong>
-            <span class="stat-label">assets</span>
-          </span>
-
-          {#if stats.totalCapacity}
-            <span class="stat-divider">·</span>
+          {#each stats.items as item, idx (item.key)}
+            {#if idx > 0}
+              <span class="stat-divider">·</span>
+            {/if}
             <span class="stat">
-              <strong>{stats.totalCapacity.toLocaleString()}</strong>
-              <span class="stat-label">MW</span>
+              <strong>{item.value}</strong>
+              <span class="stat-label">{item.label}</span>
             </span>
-          {/if}
-
-          {#if stats.countries > 0}
-            <span class="stat-divider">·</span>
-            <span class="stat">
-              <strong>{stats.countries}</strong>
-              <span class="stat-label">{stats.countries === 1 ? 'country' : 'countries'}</span>
-            </span>
-          {/if}
-
-          {#if stats.trackerTypes > 1}
-            <span class="stat-divider">·</span>
-            <span class="stat">
-              <strong>{stats.trackerTypes}</strong>
-              <span class="stat-label">tracker types</span>
-            </span>
-          {/if}
+          {/each}
         </div>
       {/if}
 

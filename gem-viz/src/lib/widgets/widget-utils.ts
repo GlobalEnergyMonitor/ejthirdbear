@@ -13,6 +13,8 @@ export const PARQUET_FILES = {
   locations: `${base}/asset_locations.parquet`,
 };
 
+const QUERY_TIMEOUT_MS = 15_000;
+
 let initialized = false;
 let initPromise: Promise<void> | null = null;
 
@@ -52,7 +54,6 @@ export async function initWidgetDB(): Promise<void> {
         initPromise = null; // Allow retry
         throw new Error(`Failed to load ownership parquet: ${result.error}`);
       }
-    } else {
     }
 
     if (!existingTables.has('locations')) {
@@ -61,13 +62,21 @@ export async function initWidgetDB(): Promise<void> {
         initPromise = null; // Allow retry
         throw new Error(`Failed to load locations parquet: ${locResult.error}`);
       }
-    } else {
     }
 
     initialized = true;
   })();
 
   return initPromise;
+}
+
+/**
+ * Reset the widget DB state so the next call to initWidgetDB() starts fresh.
+ * Useful for recovering from a hung or errored DuckDB connection.
+ */
+export function resetWidgetDB(): void {
+  initialized = false;
+  initPromise = null;
 }
 
 /**
@@ -84,27 +93,41 @@ export async function widgetQuery<T = Record<string, unknown>>(
   const startTime = Date.now();
 
   try {
-    await initWidgetDB();
-    const { conn } = await initDuckDB();
+    let timer: ReturnType<typeof setTimeout>;
 
-    const result = await conn.query(sql);
-    const data = result.toArray().map((row) => {
-      const obj: Record<string, unknown> = {};
-      for (const key of Object.keys(row)) {
-        let val = row[key];
-        // Convert BigInt to number for JSON compatibility
-        if (typeof val === 'bigint') val = Number(val);
-        obj[key] = val;
-      }
-      return obj as T;
+    const queryWork = async (): Promise<QueryResult<T>> => {
+      await initWidgetDB();
+      const { conn } = await initDuckDB();
+
+      const result = await conn.query(sql);
+      const data = result.toArray().map((row) => {
+        const obj: Record<string, unknown> = {};
+        for (const key of Object.keys(row)) {
+          let val = row[key];
+          // Convert BigInt to number for JSON compatibility
+          if (typeof val === 'bigint') val = Number(val);
+          obj[key] = val;
+        }
+        return obj as T;
+      });
+
+      clearTimeout(timer);
+      return {
+        data,
+        success: true,
+        executionTime: Date.now() - startTime,
+        rowCount: data.length,
+      };
+    };
+
+    const timeout = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(
+        () => reject(new Error(`Query timed out after ${QUERY_TIMEOUT_MS / 1000}s`)),
+        QUERY_TIMEOUT_MS
+      );
     });
 
-    return {
-      data,
-      success: true,
-      executionTime: Date.now() - startTime,
-      rowCount: data.length,
-    };
+    return await Promise.race([queryWork(), timeout]);
   } catch (error) {
     console.error('Widget query error:', error);
     return {

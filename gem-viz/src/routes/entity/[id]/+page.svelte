@@ -4,7 +4,7 @@
   import { link, assetLink } from '$lib/links';
   import { page } from '$app/stores';
 
-  // Import ALL available entity/ownership visualizations
+  // Entity/ownership visualizations
   import OwnershipExplorerD3 from '$lib/components/OwnershipExplorerD3.svelte';
   import AssetScreener from '$lib/components/AssetScreener.svelte';
   import TrackerIcon from '$lib/components/TrackerIcon.svelte';
@@ -32,54 +32,66 @@
     return id && /^G\d+$/.test(id);
   }
 
-  // Progressive loading states
+  // Loading state
   let loadingPhase = $state('init');
   let loadingMessage = $state('Initializing...');
   let error = $state(null);
 
+  const loadingPhases = [
+    { key: 'init', label: 'Initialize' },
+    { key: 'direct', label: 'Direct Assets' },
+    { key: 'subsidiaries', label: 'Subsidiaries' },
+    { key: 'done', label: 'Complete' },
+  ];
+  const currentPhaseIndex = $derived(loadingPhases.findIndex((p) => p.key === loadingPhase));
+
   let entityId = $state(data?.entityId || '');
   let entityName = $state(data?.entityName || '');
-  let _entity = $state(data?.entity || null);
   let portfolio = $state(null);
+  let headerPortfolio = $state(null);
 
-  // Graph data for visualizations
+  // Graph data
   let graphUp = $state(null);
   let graphDown = $state(null);
   let graphLoading = $state(true);
-  let _graphError = $state(null);
+  let graphError = $state(null);
 
-  // Data source tracking for transparency
+  // Query timing
   let graphQueryTime = $state(null);
   let portfolioQueryTime = $state(null);
 
-  // Derived data — count assets by field
+  // Derived data
   function countBy(field) {
     const counts = new Map();
     for (const a of portfolio?.assets || []) {
       const k = a[field] || 'Unknown';
       counts.set(k, (counts.get(k) || 0) + 1);
     }
-    return Array.from(counts, ([value, count]) => ({ key: value, count })).sort((a, b) => b.count - a.count);
+    return Array.from(counts, ([value, count]) => ({ key: value, count })).sort(
+      (a, b) => b.count - a.count
+    );
   }
 
   const trackerBreakdown = $derived.by(() => countBy('tracker'));
   const statusBreakdown = $derived.by(() => countBy('status'));
   const countryBreakdown = $derived.by(() => countBy('country'));
 
-  // Build node map for Mermaid from graph data
+  // Mermaid node map
   const upstreamNodeMap = $derived.by(() => {
     if (!graphUp?.nodes) return new Map();
     return new Map(graphUp.nodes.map((n) => [n.id, { Name: n.Name }]));
   });
 
-  // Filter state
+  // Filters
   let selectedCountries = $state(new Set());
   let selectedTrackers = $state(new Set());
   let selectedStatuses = $state(new Set());
 
   function passesFilters(asset) {
-    if (selectedCountries.size > 0 && !selectedCountries.has(asset.country || 'Unknown')) return false;
-    if (selectedTrackers.size > 0 && !selectedTrackers.has(asset.tracker || 'Unknown')) return false;
+    if (selectedCountries.size > 0 && !selectedCountries.has(asset.country || 'Unknown'))
+      return false;
+    if (selectedTrackers.size > 0 && !selectedTrackers.has(asset.tracker || 'Unknown'))
+      return false;
     if (selectedStatuses.size > 0 && !selectedStatuses.has(asset.status || 'Unknown')) return false;
     return true;
   }
@@ -108,10 +120,10 @@
     };
   });
 
-  // Load graph data (upstream/downstream ownership chains)
+  // Load graphs
   async function loadGraphData(id) {
     graphLoading = true;
-    _graphError = null;
+    graphError = null;
     const startTime = performance.now();
     try {
       const [upResult, downResult] = await Promise.all([
@@ -132,20 +144,20 @@
       }
     } catch (err) {
       console.error('Graph data load error:', err);
-      _graphError = err?.message || 'Failed to load ownership graph';
+      graphError = err?.message || 'Failed to load ownership graph';
     } finally {
       graphLoading = false;
     }
   }
 
-  // Re-fetch graph data whenever entityId changes (supports same-page navigation)
+  // Refresh graph on entity change
   $effect(() => {
     if (entityId) {
       loadGraphData(entityId);
     }
   });
 
-  // Stream portfolio data
+  // Stream portfolio
   onMount(async () => {
     const paramsId = $page.params?.id;
     if (isLikelyAssetId(paramsId)) {
@@ -163,6 +175,10 @@
     entityId = paramsId;
 
     const portfolioStartTime = performance.now();
+    let lastHeaderUpdate = 0;
+    let lastHeaderPhase = 'init';
+    const HEADER_UPDATE_MS = 500;
+
     try {
       error = null;
 
@@ -171,6 +187,16 @@
         loadingMessage = update.message;
         if (update.portfolio) {
           portfolio = update.portfolio;
+          const now = performance.now();
+          const phaseChanged = update.phase !== lastHeaderPhase;
+          const timeElapsed = now - lastHeaderUpdate >= HEADER_UPDATE_MS;
+          const shouldUpdateHeader =
+            phaseChanged || timeElapsed || update.phase === 'done' || update.phase === 'error';
+          if (shouldUpdateHeader) {
+            headerPortfolio = update.portfolio;
+            lastHeaderUpdate = now;
+            lastHeaderPhase = update.phase;
+          }
           if (!entityName && portfolio?.spotlightOwner?.Name) {
             entityName = portfolio.spotlightOwner.Name;
           }
@@ -213,25 +239,18 @@
     <div class="loading-progress">
       <p class="loading">{loadingMessage}</p>
       <div class="progress-phases">
-        <span
-          class="phase"
-          class:active={loadingPhase === 'init'}
-          class:done={['direct', 'subsidiaries', 'done'].includes(loadingPhase)}>Initialize</span
-        >
-        <span class="phase-arrow">→</span>
-        <span
-          class="phase"
-          class:active={loadingPhase === 'direct'}
-          class:done={['subsidiaries', 'done'].includes(loadingPhase)}>Direct Assets</span
-        >
-        <span class="phase-arrow">→</span>
-        <span
-          class="phase"
-          class:active={loadingPhase === 'subsidiaries'}
-          class:done={loadingPhase === 'done'}>Subsidiaries</span
-        >
-        <span class="phase-arrow">→</span>
-        <span class="phase" class:active={loadingPhase === 'done'}>Complete</span>
+        {#each loadingPhases as phase, idx}
+          <span
+            class="phase"
+            class:active={idx === currentPhaseIndex}
+            class:done={idx < currentPhaseIndex}
+          >
+            {phase.label}
+          </span>
+          {#if idx < loadingPhases.length - 1}
+            <span class="phase-arrow">→</span>
+          {/if}
+        {/each}
       </div>
     </div>
   {:else}
@@ -245,51 +264,45 @@
         </div>
       {/if}
 
-      {#if portfolio?.truncated}
-        <div class="truncation-banner">
-          <strong>Large Entity:</strong> Showing {portfolio.assets?.length?.toLocaleString() || 0} assets
-          {#if portfolio.totalCount}(of {portfolio.totalCount.toLocaleString()} total){/if}
-          for performance. Use filters or export to access all data.
-        </div>
+      {#if portfolio?.truncated && loadingPhase === 'done' && portfolio.assets?.length > 0}
+        <p class="truncation-note">
+          Showing {portfolio.assets.length.toLocaleString()} of {portfolio.totalCount?.toLocaleString() ||
+            'many'} assets. Use filters or export for full data.
+        </p>
       {/if}
 
-      <!-- ═══════════════════════════════════════════════════════════════════════
-           HERO SECTION: Entity Name + Key Metrics
-           ═══════════════════════════════════════════════════════════════════════ -->
+      <!-- Hero -->
       <EntityPortfolioHeader
-        {portfolio}
+        portfolio={headerPortfolio || portfolio}
         {entityId}
         {entityName}
         sticky={false}
-        showFlower={true}
-        flowerSize="large"
+        showFlower={false}
       />
 
-      <!-- ═══════════════════════════════════════════════════════════════════════
-           SECTION 1: OWNERSHIP FLOWER + QUICK STATS
-           ═══════════════════════════════════════════════════════════════════════ -->
+      <!-- Portfolio overview -->
       <section class="section-divider">
         <div class="section-header-row">
           <h2 class="section-title">Portfolio Overview</h2>
           <div class="source-badges">
-            <DataSourceBadge source="motherduck" label="Assets" queryTime={portfolioQueryTime} />
+            <DataSourceBadge source="api" label="Assets" queryTime={portfolioQueryTime} />
           </div>
         </div>
       </section>
 
       <div class="split-row">
-        <div class="split-col viz-container hero-viz">
+        <div class="split-col panel panel--hero">
           <h3>
             Ownership Flower
             {@render embedBtn(`/embed/ownership-flower?entityId=${entityId}`)}
           </h3>
           <div class="flower-wrapper">
-            <OwnershipFlower ownerId={entityId} size="large" />
+            <OwnershipFlower ownerId={entityId} {portfolio} size="large" />
           </div>
         </div>
         <div class="split-col">
-          <div class="stats-hero">
-            {#if portfolio?.assets?.length}
+          {#if portfolio?.assets?.length}
+            <div class="stats-hero">
               <div class="stat-big">
                 <span class="stat-number">{portfolio.assets.length.toLocaleString()}</span>
                 <span class="stat-unit">Assets</span>
@@ -308,12 +321,10 @@
                   <span class="stat-label">Subsidiaries</span>
                 </div>
               </div>
-            {:else}
-              <p class="placeholder">Loading portfolio data...</p>
-            {/if}
-          </div>
+            </div>
+          {/if}
 
-          <!-- Tracker breakdown as visual bars -->
+          <!-- Tracker breakdown -->
           {#if trackerBreakdown.length > 0}
             <div class="tracker-bars">
               {#each trackerBreakdown.slice(0, 5) as row}
@@ -333,9 +344,7 @@
         </div>
       </div>
 
-      <!-- ═══════════════════════════════════════════════════════════════════════
-           SECTION 2: OWNERSHIP HIERARCHY - WHO OWNS THIS ENTITY
-           ═══════════════════════════════════════════════════════════════════════ -->
+      <!-- Ownership hierarchy -->
       <section class="section-divider">
         <div class="section-header-row">
           <h2 class="section-title">Ownership Hierarchy</h2>
@@ -347,15 +356,15 @@
       </section>
 
       <div class="split-row">
-        <div class="split-col viz-container tall-viz">
+        <div class="split-col panel panel--tall">
           <h3>
             Upstream Ownership Graph
             {@render embedBtn(`/embed/ownership-graph?entityId=${entityId}&direction=up`)}
           </h3>
           {#if graphLoading}
             <p class="placeholder">Loading ownership graph...</p>
-          {:else if _graphError}
-            <p class="placeholder error">Failed to load ownership graph: {_graphError}</p>
+          {:else if graphError}
+            <p class="placeholder error">Failed to load ownership graph: {graphError}</p>
           {:else if graphUp?.nodes?.length > 1}
             <OwnershipTreeGraph
               nodes={graphUp.nodes}
@@ -367,7 +376,7 @@
             <p class="placeholder">No upstream owners found (terminal entity)</p>
           {/if}
         </div>
-        <div class="split-col viz-container tall-viz">
+        <div class="split-col panel panel--tall">
           <h3>
             Ultimate Owners
             {@render embedBtn(`/embed/ultimate-owners?entityId=${entityId}`)}
@@ -376,17 +385,17 @@
         </div>
       </div>
 
-      <!-- Ownership Summary Tables -->
+      <!-- Ownership summary -->
       {#if graphUp?.nodes?.length > 1}
-        <div class="full-width-section viz-container">
+        <div class="section-block panel">
           <h3>Ownership Breakdown</h3>
           <OwnershipSummaryTables nodes={graphUp.nodes} edges={graphUp.edges} rootId={entityId} />
         </div>
       {/if}
 
-      <!-- Mermaid Flow Diagram -->
+      <!-- Mermaid flow -->
       {#if graphUp?.edges?.length > 0}
-        <div class="full-width-section viz-container">
+        <div class="section-block panel">
           <h3>
             Ownership Flow Diagram
             {@render embedBtn(`/embed/ownership-mermaid?entityId=${entityId}`)}
@@ -400,16 +409,14 @@
         </div>
       {/if}
 
-      <!-- ═══════════════════════════════════════════════════════════════════════
-           SECTION 3: WHAT THIS ENTITY OWNS (DOWNSTREAM)
-           ═══════════════════════════════════════════════════════════════════════ -->
+      <!-- Downstream ownership -->
       {#if graphDown?.nodes?.length > 1}
         <section class="section-divider">
           <h2 class="section-title">Subsidiaries & Holdings</h2>
           <p class="section-subtitle">Entities and assets owned by {entityName || entityId}</p>
         </section>
 
-        <div class="full-width-section viz-container tall-viz">
+        <div class="section-block panel panel--tall">
           <h3>
             Downstream Ownership Graph
             {@render embedBtn(`/embed/ownership-graph?entityId=${entityId}&direction=down`)}
@@ -423,15 +430,13 @@
         </div>
       {/if}
 
-      <!-- ═══════════════════════════════════════════════════════════════════════
-           SECTION 4: NETWORK VISUALIZATIONS
-           ═══════════════════════════════════════════════════════════════════════ -->
+      <!-- Network analysis -->
       <section class="section-divider">
         <h2 class="section-title">Network Analysis</h2>
         <p class="section-subtitle">Interactive 3D ownership network exploration</p>
       </section>
 
-      <div class="full-width-section viz-container mega-viz">
+      <div class="section-block panel panel--mega">
         <h3>
           3D Ownership Network
           {@render embedBtn(`/embed/network-3d?entityId=${entityId}`)}
@@ -439,7 +444,7 @@
         <MiniNetworkGraph {entityId} height={500} maxHops={3} />
       </div>
 
-      <div class="full-width-section viz-container mega-viz">
+      <div class="section-block panel panel--mega">
         <h3>
           Full Network Explorer
           {@render embedBtn(`/embed/network-explorer?entityId=${entityId}`)}
@@ -447,9 +452,7 @@
         <OwnershipExplorerD3 ownerEntityId={entityId} prebakedData={data?.ownerExplorerData} />
       </div>
 
-      <!-- ═══════════════════════════════════════════════════════════════════════
-           SECTION 5: ASSET DISTRIBUTION
-           ═══════════════════════════════════════════════════════════════════════ -->
+      <!-- Asset distribution -->
       {#if filteredAssets.length > 0}
         <section class="section-divider">
           <h2 class="section-title">Asset Distribution</h2>
@@ -458,7 +461,7 @@
           </p>
         </section>
 
-        <div class="full-width-section viz-container">
+        <div class="section-block panel">
           <h3>
             Asset Ring Visualization
             {@render embedBtn(`/embed/asset-ring?entityId=${entityId}`)}
@@ -466,9 +469,9 @@
           <AssetRingVisualization assets={filteredAssets.slice(0, 150)} />
         </div>
 
-        <!-- Status breakdown as visual grid -->
+        <!-- Status breakdown -->
         <div class="split-row">
-          <div class="split-col viz-container">
+          <div class="split-col panel">
             <h3>Status Distribution</h3>
             <div class="status-grid">
               {#each statusBreakdown as row}
@@ -484,7 +487,7 @@
               {/each}
             </div>
           </div>
-          <div class="split-col viz-container">
+          <div class="split-col panel">
             <h3>Geographic Distribution</h3>
             <div class="country-grid">
               {#each countryBreakdown.slice(0, 12) as row}
@@ -500,21 +503,19 @@
         </div>
       {/if}
 
-      <!-- ═══════════════════════════════════════════════════════════════════════
-           SECTION 6: ASSET SCREENER
-           ═══════════════════════════════════════════════════════════════════════ -->
+      <!-- Asset screener -->
       {#if portfolio?.assets?.length > 0}
         <section class="section-divider">
           <div class="section-header-row">
             <h2 class="section-title">Asset Screener</h2>
             <div class="source-badges">
-              <DataSourceBadge source="motherduck" label="Assets" queryTime={portfolioQueryTime} />
+              <DataSourceBadge source="api" label="Assets" queryTime={portfolioQueryTime} />
             </div>
           </div>
           <p class="section-subtitle">Filter and explore all assets in this portfolio</p>
         </section>
 
-        <div class="full-width-section">
+        <div class="section-block">
           <EntityPortfolioFilters
             assets={portfolio.assets}
             {selectedCountries}
@@ -526,7 +527,7 @@
           />
         </div>
 
-        <div class="full-width-section">
+        <div class="section-block">
           <h3>
             Assets
             {#if hasActiveFilters}
@@ -584,7 +585,7 @@
     letter-spacing: var(--tracking-wide);
   }
 
-  /* Section Dividers */
+  /* Sections */
   .section-divider {
     margin: var(--space-10) 0 var(--space-6) 0;
     padding-top: var(--space-6);
@@ -619,7 +620,7 @@
     margin: 0;
   }
 
-  /* Split Row Layout */
+  /* Layout */
   .split-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -631,25 +632,25 @@
     min-width: 0;
   }
 
-  .viz-container {
+  .panel {
     border: 2px solid var(--color-black);
     background: var(--color-bg-secondary);
     padding: var(--space-4);
     overflow: auto;
   }
 
-  .hero-viz {
+  .panel--hero {
     min-height: 400px;
     max-height: 500px;
   }
 
-  .tall-viz {
-    min-height: 500px;
+  .panel--tall {
+    min-height: 120px;
     max-height: 80vh;
     overflow: auto;
   }
 
-  .mega-viz {
+  .panel--mega {
     min-height: 600px;
     max-height: 90vh;
     overflow: auto;
@@ -662,11 +663,14 @@
     min-height: 350px;
   }
 
-  .full-width-section {
+  .section-block {
     margin-bottom: var(--space-6);
-    border: 2px solid var(--color-black);
-    background: var(--color-bg-secondary);
-    padding: var(--space-4);
+  }
+
+  .panel .panel {
+    border: none;
+    background: transparent;
+    padding: 0;
   }
 
   h3 {
@@ -712,7 +716,7 @@
     padding: var(--space-4);
   }
 
-  /* Hero Stats */
+  /* Stats */
   .stats-hero {
     padding: var(--space-4);
     background: var(--gem-primary-blue, #1d4961);
@@ -766,7 +770,7 @@
     opacity: 0.7;
   }
 
-  /* Tracker Bars */
+  /* Tracker bars */
   .tracker-bars {
     display: flex;
     flex-direction: column;
@@ -801,7 +805,7 @@
     text-align: right;
   }
 
-  /* Status Grid */
+  /* Status grid */
   .status-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -837,7 +841,7 @@
     letter-spacing: var(--tracking-wide);
   }
 
-  /* Country Grid */
+  /* Country grid */
   .country-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
@@ -867,14 +871,14 @@
     letter-spacing: var(--tracking-wide);
   }
 
-  /* Filter indicator */
+  /* Filter */
   .filter-indicator {
     font-size: var(--font-size-sm);
     font-weight: 700;
     color: var(--color-text-secondary);
   }
 
-  /* Loading States */
+  /* Loading */
   .loading {
     padding: 0;
     margin: 0;
@@ -956,16 +960,10 @@
     margin-bottom: var(--space-6);
   }
 
-  .truncation-banner {
-    padding: var(--space-3) var(--space-4);
-    background: var(--gem-orange);
-    color: white;
-    font-size: var(--font-size-sm);
-    margin-bottom: var(--space-6);
-  }
-
-  .truncation-banner strong {
-    font-weight: 700;
+  .truncation-note {
+    font-size: var(--font-size-body);
+    color: var(--color-text-secondary);
+    margin: 0 0 var(--space-4) 0;
   }
 
   .streaming-dot {
@@ -1019,11 +1017,11 @@
       grid-template-columns: 1fr;
     }
 
-    .viz-container {
+    .panel {
       max-height: 70vh;
     }
 
-    .mega-viz {
+    .panel--mega {
       min-height: 400px;
     }
 

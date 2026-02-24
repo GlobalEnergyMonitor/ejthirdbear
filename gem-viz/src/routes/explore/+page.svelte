@@ -66,6 +66,11 @@
         <StatusDistribution tracker={selectedTracker} title="Status Distribution" />
       </div>
 
+      <!-- Country Breakdown -->
+      <div class="widget-cell wide">
+        <CountryBreakdown tracker={selectedTracker} limit={20} title="Assets by Country" />
+      </div>
+
       <!-- Top Owners by Assets -->
       <div class="widget-cell">
         <TopOwners
@@ -84,11 +89,6 @@
           limit={10}
           title="Top Owners by Capacity"
         />
-      </div>
-
-      <!-- Country Breakdown -->
-      <div class="widget-cell wide">
-        <CountryBreakdown tracker={selectedTracker} limit={20} title="Assets by Country" />
       </div>
     </div>
   </section>
