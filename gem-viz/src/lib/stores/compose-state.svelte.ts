@@ -28,19 +28,19 @@ import {
 import { investigationCart } from '$lib/investigationCart';
 import { buildExportPreset, importPreset } from '$lib/presets';
 import {
-  fetchOwnershipColumns,
-  fetchCountries,
+  fetchInitialFacets,
+  fetchResults as fetchResultsRest,
+  fetchParametricCounts as fetchParametricCountsRest,
+  fetchAllMatchingIds as fetchAllMatchingIdsRest,
+  fetchAllForExport as fetchAllForExportRest,
+} from '$lib/compose-queries-rest';
+// DuckDB fallback — only used for owner, ownerCountry, and startYear
+import {
   fetchOwnerCountries,
   fetchOwners,
-  fetchTrackers,
-  fetchStatuses,
-  fetchCapacityRange,
   fetchStartYearRange,
   fetchCapacityHistogram,
-  fetchResults,
-  fetchTrackerColumnInfo,
 } from '$lib/compose-queries';
-import { ASSET_ID_COALESCE_O } from '$lib/duckdb-queries';
 import {
   mergeParametricCounts,
   calculateCapacityData,
@@ -99,7 +99,18 @@ export class ComposeState {
   owners = $state<any[]>([]);
   trackerOptions = $state<any[]>([]);
   statusOptions = $state<any[]>([]);
-  ownershipColumns = $state<string[]>([]);
+  // Static column names — no longer need to query DuckDB schema
+  ownershipColumnNames = {
+    tracker: 'Tracker',
+    status: 'Status',
+    country: null,
+    ownerCountry: 'Owner Headquarters Country',
+    owner: 'Owner',
+    project: 'Project',
+    capacity: 'Capacity (MW)',
+    share: 'Share',
+    startYear: 'Start Year',
+  };
 
   // --- Tracker-specific column availability ---
   trackerColumns = $state<Record<string, any>>({});
@@ -139,28 +150,7 @@ export class ComposeState {
 
   cartAssetIds = $derived(new Set(this._cartItems.map((item: any) => item.id)));
 
-  ownershipColumnNames = $derived.by(() => {
-    const columnSet = new Set(this.ownershipColumns);
-    const startYearColumn = columnSet.has('Start Year')
-      ? 'Start Year'
-      : columnSet.has('Start year')
-        ? 'Start year'
-        : null;
-
-    return {
-      tracker: columnSet.has('Tracker') ? 'Tracker' : null,
-      status: columnSet.has('Status') ? 'Status' : null,
-      country: null,
-      ownerCountry: columnSet.has('Owner Headquarters Country')
-        ? 'Owner Headquarters Country'
-        : null,
-      owner: columnSet.has('Owner') ? 'Owner' : null,
-      project: columnSet.has('Project') ? 'Project' : null,
-      capacity: columnSet.has('Capacity (MW)') ? 'Capacity (MW)' : null,
-      share: columnSet.has('Share') ? 'Share' : null,
-      startYear: startYearColumn,
-    };
-  });
+  // ownershipColumnNames is now a static property (declared above)
 
   availableColumns = $derived.by(() => {
     const selectedTrackers = this.filters.trackers;
@@ -362,12 +352,19 @@ export class ComposeState {
     const offset = (this.currentPage - 1) * this.pageSize;
 
     try {
-      const whereClause = buildSqlWhere(this.filters, 'o', this.ownershipColumnNames);
-      const data = await fetchResults(whereClause, this.ownershipColumnNames, this.pageSize, offset);
+      const data = await fetchResultsRest(this.filters, this.pageSize, offset);
 
       this.results = data.results;
       this.totalCount = data.totalCount;
       this.queryTime = Date.now() - startTime;
+
+      // The REST API returns updated facets with every results call —
+      // use them to update parametric counts inline (tracker/status/country).
+      if (hasActiveFilters(this.filters)) {
+        this.trackerOptions = mergeParametricCounts(this.baseTrackers, data.facets.trackers);
+        this.statusOptions = mergeParametricCounts(this.baseStatuses, data.facets.statuses);
+        this.countries = mergeParametricCounts(this.baseCountries, data.facets.countries);
+      }
     } catch (err: any) {
       this.error = err.message;
       this.results = [];
@@ -388,49 +385,33 @@ export class ComposeState {
     this.loadingOptions = true;
 
     try {
-      const [
-        cols,
-        countryData,
-        ownerCountryData,
-        ownerData,
-        trackerData,
-        statusData,
-        capRange,
-        yearRange,
-        capHist,
-      ] = await Promise.all([
-        fetchOwnershipColumns(),
-        fetchCountries(),
+      // REST API: single call for tracker/status/country facets + capacity range
+      const [restFacets, ownerCountryData, ownerData, yearRange, capHist] = await Promise.all([
+        fetchInitialFacets(),
+        // DuckDB fallback: owner-related facets + start year (not in API yet)
         fetchOwnerCountries(),
         fetchOwners(),
-        fetchTrackers(),
-        fetchStatuses(),
-        fetchCapacityRange(),
         fetchStartYearRange(),
         fetchCapacityHistogram(),
       ]);
 
-      this.ownershipColumns = cols;
-
       // Store base options (all possible values)
-      this.baseCountries = countryData;
+      this.baseTrackers = restFacets.trackers;
+      this.baseStatuses = restFacets.statuses;
+      this.baseCountries = restFacets.countries;
       this.baseOwnerCountries = ownerCountryData;
       this.baseOwners = ownerData;
-      this.baseTrackers = trackerData;
-      this.baseStatuses = statusData;
 
       // Initialize display options with base data
-      this.countries = countryData;
+      this.trackerOptions = restFacets.trackers;
+      this.statusOptions = restFacets.statuses;
+      this.countries = restFacets.countries;
       this.ownerCountries = ownerCountryData;
       this.owners = ownerData;
-      this.trackerOptions = trackerData;
-      this.statusOptions = statusData;
 
-      this.capacityRange = capRange;
+      this.capacityRange = restFacets.capacityRange;
       this.startYearRange = yearRange;
       this.capacityHistogram = capHist;
-
-      this.loadTrackerColumns();
     } catch {
       // Silently handle reference data load failure
     } finally {
@@ -438,100 +419,71 @@ export class ComposeState {
     }
   };
 
-  loadTrackerColumns = async () => {
-    if (!browser) return;
-    try {
-      const trackers = this.trackerOptions.map((t: any) => t.value).filter(Boolean);
-      this.trackerColumns = await fetchTrackerColumnInfo(trackers, this.ownershipColumnNames);
-    } catch {
-      // Silently handle - column info is optional
-    }
-  };
-
   updateParametricCounts = async () => {
     if (!browser) return;
+    if (!hasActiveFilters(this.filters)) return;
+
     this.loadingCounts = true;
 
     try {
-      const { widgetQuery } = await import('$lib/widgets/widget-utils');
+      // REST API: single call gets cross-filtered facets for tracker/status/country
+      // (API does automatic exclusion-based faceting per dimension)
+      const restCounts = await fetchParametricCountsRest(this.filters);
+      this.trackerOptions = mergeParametricCounts(this.baseTrackers, restCounts.trackers);
+      this.statusOptions = mergeParametricCounts(this.baseStatuses, restCounts.statuses);
+      this.countries = mergeParametricCounts(this.baseCountries, restCounts.countries);
 
-      const whereClause = buildSqlWhere(this.filters, 'o', this.ownershipColumnNames);
-      const hasActiveFilter = whereClause !== '1=1';
+      // DuckDB fallback: owner + ownerCountry counts
+      try {
+        const { widgetQuery } = await import('$lib/widgets/widget-utils');
+        const ownerCountryWhere = buildSqlWhere(
+          { ...this.filters, ownerCountries: [] },
+          'o',
+          this.ownershipColumnNames
+        );
+        const ownerWhere = buildSqlWhere(
+          { ...this.filters, owners: [] },
+          'o',
+          this.ownershipColumnNames
+        );
 
-      if (!hasActiveFilter) {
-        return;
-      }
-
-      const statusWhereClause = this._buildSqlWhereExcluding('statuses');
-      const trackerWhereClause = this._buildSqlWhereExcluding('trackers');
-
-      const [trackerResult, statusResult, countryResult, ownerCountryResult, ownerResult] =
-        await Promise.all([
+        const [ownerCountryResult, ownerResult] = await Promise.all([
           widgetQuery(`
-          SELECT o."Tracker" as value, COUNT(*) as cnt
-          FROM ownership o
-          LEFT JOIN ${LOCATIONS_DEDUP_SQL} l ON o."GEM location ID" = l."GEM.location.ID"
-          WHERE ${trackerWhereClause}
-          GROUP BY o."Tracker"
-          ORDER BY cnt DESC
-        `),
+            SELECT o."Owner Headquarters Country" as value, COUNT(*) as cnt
+            FROM ownership o
+            LEFT JOIN ${LOCATIONS_DEDUP_SQL} l ON o."GEM location ID" = l."GEM.location.ID"
+            WHERE ${ownerCountryWhere}
+              AND o."Owner Headquarters Country" IS NOT NULL AND o."Owner Headquarters Country" != ''
+            GROUP BY o."Owner Headquarters Country"
+            ORDER BY cnt DESC
+          `),
           widgetQuery(`
-          SELECT o."Status" as value, COUNT(*) as cnt
-          FROM ownership o
-          LEFT JOIN ${LOCATIONS_DEDUP_SQL} l ON o."GEM location ID" = l."GEM.location.ID"
-          WHERE ${statusWhereClause}
-          GROUP BY o."Status"
-          ORDER BY cnt DESC
-        `),
-          widgetQuery(`
-          SELECT l."Country.Area" as value, COUNT(*) as cnt
-          FROM ownership o
-          LEFT JOIN ${LOCATIONS_DEDUP_SQL} l ON o."GEM location ID" = l."GEM.location.ID"
-          WHERE ${this._buildSqlWhereExcluding('countries')}
-            AND l."Country.Area" IS NOT NULL AND l."Country.Area" != ''
-          GROUP BY l."Country.Area"
-          ORDER BY cnt DESC
-        `),
-          widgetQuery(`
-          SELECT o."Owner Headquarters Country" as value, COUNT(*) as cnt
-          FROM ownership o
-          LEFT JOIN ${LOCATIONS_DEDUP_SQL} l ON o."GEM location ID" = l."GEM.location.ID"
-          WHERE ${this._buildSqlWhereExcluding('ownerCountries')}
-            AND o."Owner Headquarters Country" IS NOT NULL AND o."Owner Headquarters Country" != ''
-          GROUP BY o."Owner Headquarters Country"
-          ORDER BY cnt DESC
-        `),
-          widgetQuery(`
-          SELECT o."Owner" as value, COUNT(*) as cnt
-          FROM ownership o
-          LEFT JOIN ${LOCATIONS_DEDUP_SQL} l ON o."GEM location ID" = l."GEM.location.ID"
-          WHERE ${this._buildSqlWhereExcluding('owners')}
-            AND o."Owner" IS NOT NULL AND o."Owner" != ''
-          GROUP BY o."Owner"
-          ORDER BY cnt DESC
-          LIMIT 1000
-        `),
+            SELECT o."Owner" as value, COUNT(*) as cnt
+            FROM ownership o
+            LEFT JOIN ${LOCATIONS_DEDUP_SQL} l ON o."GEM location ID" = l."GEM.location.ID"
+            WHERE ${ownerWhere}
+              AND o."Owner" IS NOT NULL AND o."Owner" != ''
+            GROUP BY o."Owner"
+            ORDER BY cnt DESC
+            LIMIT 1000
+          `),
         ]);
 
-      this.trackerOptions = mergeParametricCounts(this.baseTrackers, trackerResult.data || []);
-      this.statusOptions = mergeParametricCounts(this.baseStatuses, statusResult.data || []);
-      this.countries = mergeParametricCounts(this.baseCountries, countryResult.data || []);
-      this.ownerCountries = mergeParametricCounts(
-        this.baseOwnerCountries,
-        ownerCountryResult.data || []
-      );
-      if (ownerResult.success) {
-        this.owners = mergeParametricCounts(this.baseOwners, ownerResult.data || []);
+        this.ownerCountries = mergeParametricCounts(
+          this.baseOwnerCountries,
+          ownerCountryResult.data || []
+        );
+        if (ownerResult.success) {
+          this.owners = mergeParametricCounts(this.baseOwners, ownerResult.data || []);
+        }
+      } catch {
+        // DuckDB fallback failure — owner counts stay unchanged
       }
     } catch {
       // Silently handle - counts will remain unchanged
     } finally {
       this.loadingCounts = false;
     }
-  };
-
-  _buildSqlWhereExcluding = (excludeKey: string) => {
-    return buildSqlWhere({ ...this.filters, [excludeKey]: [] }, 'o', this.ownershipColumnNames);
   };
 
   // =========================================================================
@@ -717,21 +669,7 @@ export class ComposeState {
   };
 
   fetchAllMatchingIds = async () => {
-    const { widgetQuery } = await import('$lib/widgets/widget-utils');
-    const whereClause = buildSqlWhere(this.filters, 'o', this.ownershipColumnNames);
-
-    const result = await widgetQuery(`
-      SELECT DISTINCT ${ASSET_ID_COALESCE_O} as asset_id, o."Project" as name
-      FROM ownership o
-      LEFT JOIN ${LOCATIONS_DEDUP_SQL} l ON o."GEM location ID" = l."GEM.location.ID"
-      WHERE ${whereClause}
-      LIMIT 10000
-    `);
-
-    if (result.success && result.data) {
-      return result.data;
-    }
-    return [];
+    return fetchAllMatchingIdsRest(this.filters);
   };
 
   selectAllMatching = async () => {
@@ -767,27 +705,7 @@ export class ComposeState {
   // =========================================================================
 
   fetchAllForExport = async () => {
-    const { widgetQuery } = await import('$lib/widgets/widget-utils');
-    const whereClause = buildSqlWhere(this.filters, 'o', this.ownershipColumnNames);
-
-    const result = await widgetQuery(`
-      SELECT DISTINCT
-        ${ASSET_ID_COALESCE_O} as asset_id,
-        o."Project" as name,
-        o."Tracker" as tracker,
-        o."Status" as status,
-        l."Country.Area" as country,
-        TRY_CAST(o."Capacity (MW)" AS DOUBLE) as capacity_mw,
-        o."Owner" as owner,
-        o."Owner GEM Entity ID" as owner_id
-      FROM ownership o
-      LEFT JOIN ${LOCATIONS_DEDUP_SQL} l ON o."GEM location ID" = l."GEM.location.ID"
-      WHERE ${whereClause}
-      ORDER BY o."Project"
-      LIMIT 50000
-    `);
-
-    return result.success ? result.data : [];
+    return fetchAllForExportRest(this.filters);
   };
 
   exportCSV = async () => {

@@ -11,12 +11,14 @@ import { browser } from '$app/environment';
  */
 export function mergeParametricCounts(
   baseOptions: Array<{ value: string; count?: number }>,
-  parametricResults: Array<Record<string, unknown>>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  parametricResults: Array<any>
 ): Array<{ value: string; count: number }> {
   const countMap = new Map<string, number>();
   for (const r of parametricResults) {
     const value = r.value as string;
-    const cnt = r.cnt as number;
+    // Accept both DuckDB shape {value, cnt} and REST shape {value, count}
+    const cnt = (r.cnt ?? r.count) as number;
     if (value != null) {
       countMap.set(value, cnt ?? 0);
     }
