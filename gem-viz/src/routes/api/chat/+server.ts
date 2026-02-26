@@ -134,25 +134,43 @@ async function streamFinalResponse(
 ) {
   send('status', { stage: 'writing', message: 'Writing response...' });
 
-  const streamResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${getOpenRouterKey()}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://gem-viz.fly.dev',
-      'X-Title': 'GEM Gembot',
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      messages: conversationHistory,
-      tools: TOOLS,
-      tool_choice: 'none', // Force text response, no more tool calls
-      stream: true,
-      max_tokens: 4096,
-    }),
-  });
+  // Abort if streaming takes too long (30s)
+  const abortController = new AbortController();
+  const streamTimeout = setTimeout(() => abortController.abort(), 30000);
+
+  let streamResponse: Response;
+  try {
+    streamResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${getOpenRouterKey()}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://gem-viz.fly.dev',
+        'X-Title': 'GEM Gembot',
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        messages: conversationHistory,
+        tools: TOOLS,
+        tool_choice: 'none', // Force text response, no more tool calls
+        stream: true,
+        max_tokens: 4096,
+      }),
+      signal: abortController.signal,
+    });
+  } catch (fetchErr) {
+    clearTimeout(streamTimeout);
+    console.error('Final streaming fetch failed:', fetchErr);
+    send('done', {
+      message: 'I gathered the information above but had trouble generating a summary. Please review the results.',
+      toolCalls: toolCallResults,
+      usage: null,
+    });
+    return;
+  }
 
   if (!streamResponse.ok || !streamResponse.body) {
+    clearTimeout(streamTimeout);
     console.error('Final streaming request failed:', streamResponse.status);
     send('done', {
       message: 'I gathered the information above but had trouble generating a summary. Please review the results.',
@@ -216,6 +234,8 @@ async function streamFinalResponse(
     }
   } catch (err) {
     console.error('Stream reading error:', err);
+  } finally {
+    clearTimeout(streamTimeout);
   }
 
   // If we got no content, provide a fallback

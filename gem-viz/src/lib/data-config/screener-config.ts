@@ -125,6 +125,7 @@ export const SCREENER_STEPS: ScreenerStep[] = [
  * Describe total portfolio size in natural language
  */
 export function describePortfolio(count: number): string {
+  if (count === 0) return '--';
   if (count === 1) return 'Ownership in 1 asset in Global Energy Ownership Tracker';
   return `Ownership in ${count} assets in Global Energy Ownership Tracker`;
 }

@@ -5,7 +5,7 @@
    */
 
   import { onMount } from 'svelte';
-  import { listAssetsByType, listAssets } from '$lib/ownership-api';
+  import { listAssetsByType, listAssets, resolveApiSlug } from '$lib/ownership-api';
   import DataSourceBadge from '$lib/components/DataSourceBadge.svelte';
 
   // Props
@@ -24,23 +24,37 @@
 
     try {
       const start = performance.now();
-      // Fetch assets (filtered by type if tracker specified)
-      const assets = tracker
-        ? await listAssetsByType(tracker, { limit: 2000 })
-        : (await listAssets({ limit: 500 })).results;
+      const slug = tracker ? resolveApiSlug(tracker) : null;
 
-      // Count assets per country client-side
-      const counts = new Map();
-      for (const asset of assets) {
-        const country = asset.country || 'Unknown';
-        counts.set(country, (counts.get(country) || 0) + 1);
+      if (slug || !tracker) {
+        // Use facets for exact counts in a single request
+        const facetResult = await listAssets({
+          limit: 1,
+          facets: true,
+          asset_type: slug ?? undefined,
+        });
+
+        if (facetResult.facets?.country) {
+          results = Object.entries(facetResult.facets.country)
+            .map(([country, asset_count]) => ({ country, asset_count }))
+            .sort((a, b) => b.asset_count - a.asset_count)
+            .slice(0, limit);
+        } else {
+          results = [];
+        }
+      } else {
+        // Fallback: fetch assets and count client-side
+        const assets = await listAssetsByType(tracker, { limit: 2000 });
+        const counts = new Map();
+        for (const asset of assets) {
+          const country = asset.country || 'Unknown';
+          counts.set(country, (counts.get(country) || 0) + 1);
+        }
+        results = Array.from(counts.entries())
+          .map(([country, asset_count]) => ({ country, asset_count }))
+          .sort((a, b) => b.asset_count - a.asset_count)
+          .slice(0, limit);
       }
-
-      // Sort by count descending, take top N
-      results = Array.from(counts.entries())
-        .map(([country, asset_count]) => ({ country, asset_count }))
-        .sort((a, b) => b.asset_count - a.asset_count)
-        .slice(0, limit);
 
       maxValue = results.length > 0 ? Math.max(...results.map((r) => r.asset_count)) : 0;
       queryTime = Math.round(performance.now() - start);

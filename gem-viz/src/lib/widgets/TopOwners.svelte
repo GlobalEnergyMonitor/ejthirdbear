@@ -30,22 +30,38 @@
         ? await listAssetsByType(tracker, { limit: 2000 })
         : (await listAssets({ limit: 500 })).results;
 
-      // Aggregate by owner client-side
+      // Aggregate using owners[] array for complete multi-owner coverage
       const ownerMap = new Map();
       for (const asset of assets) {
-        const eid = asset.ownerEntityId || asset.ownerName || 'Unknown';
-        const name = asset.ownerName || eid;
-        if (!eid || eid === 'Unknown') continue;
+        if (asset.owners && asset.owners.length > 0) {
+          for (const owner of asset.owners) {
+            if (!owner.entityId) continue;
+            const existing = ownerMap.get(owner.entityId) || {
+              owner_name: owner.name,
+              entity_id: owner.entityId,
+              asset_count: 0,
+              value: 0,
+            };
+            existing.asset_count += 1;
+            existing.value += metric === 'capacity' ? asset.capacity || 0 : 1;
+            ownerMap.set(owner.entityId, existing);
+          }
+        } else {
+          // Fallback to single owner fields
+          const eid = asset.ownerEntityId || asset.ownerName || 'Unknown';
+          const name = asset.ownerName || eid;
+          if (!eid || eid === 'Unknown') continue;
 
-        const existing = ownerMap.get(eid) || {
-          owner_name: name,
-          entity_id: eid,
-          asset_count: 0,
-          value: 0,
-        };
-        existing.asset_count += 1;
-        existing.value += metric === 'capacity' ? asset.capacity || 0 : 1;
-        ownerMap.set(eid, existing);
+          const existing = ownerMap.get(eid) || {
+            owner_name: name,
+            entity_id: eid,
+            asset_count: 0,
+            value: 0,
+          };
+          existing.asset_count += 1;
+          existing.value += metric === 'capacity' ? asset.capacity || 0 : 1;
+          ownerMap.set(eid, existing);
+        }
       }
 
       // Sort by metric descending, take top N

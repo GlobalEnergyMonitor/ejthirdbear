@@ -7,82 +7,22 @@
  * All screener pages should import from here, NOT directly from
  * unified-query.ts or ownership-api.ts.
  *
- * This makes it easy to:
- * 1. Swap implementations when backend provides new endpoints
- * 2. Add caching
- * 3. Profile/debug performance
- * 4. Mock for testing
- *
  * =============================================================================
- * CURRENT DATA FLOW (as of Feb 2026)
+ * DATA FLOW (as of Feb 2026)
  * =============================================================================
  *
  * STEP 1: Asset Class Selection (/screener)
- * -----------------------------------------
- * Data: Static config from tracker-schema.ts
- * Speed: Instant (no API calls)
- * Status: ✅ Fine
- *
+ *   Data: Static config from tracker-schema.ts — instant, no API calls
  *
  * STEP 2: Owner Search (/screener/owners)
- * ---------------------------------------
- * Data: REST API (gem-api.thirdbear.net - Cloudflare cached)
- * Endpoints used:
- *   - GET /entities?q={search} (single search)
- *   - GET /entities/{id} (direct ID lookup)
- *
- * CURRENT PROBLEMS:
- *   - Bulk search fires 30 parallel requests (one per search term)
- *   - No debouncing on input
- *   - 30 second timeout suggests known slowness
- *
- * BACKEND REQUEST #1: Batch entity search
- *   POST /entities/search/batch
- *   Body: { "queries": ["Shell", "BP", "TotalEnergies"] }
- *   Returns: { "results": { "Shell": [...], "BP": [...] } }
- *
+ *   Data: REST API — GET /entities?q={search}
  *
  * STEP 3: Results (/screener/results)
- * -----------------------------------
- * Data: Mixed — REST API for counts, MotherDuck for owner aggregation
- *
- * getAssetTypeCounts(): ✅ REST API (samples /assets, extrapolates)
- * getOwnersByAssetType(): ❌ Still MotherDuck (API lacks owner fields on /assets)
- *
- * TO FULLY MIGRATE, the API needs:
- *   Option A: Add owner_name + owner_entity_id to /assets response
- *   Option B: New endpoint:
- *     GET /screener/owners?asset_type=Coal%20Plant&status=operating&limit=200
- *     Returns: [{ entity_id, name, total_assets, filtered_assets }, ...]
- *
- * =============================================================================
- * ENDPOINT WISHLIST FOR BACKEND
- * =============================================================================
- *
- * Priority 1 (Critical):
- * ----------------------
- * GET /screener/owners
- *   Params: asset_type, status?, country?, limit?, offset?
- *   Returns: { owners: [{ entity_id, name, total_assets, filtered_assets }], total }
- *   Notes: This replaces the expensive CTE query entirely
- *
- * Priority 2 (High):
- * ------------------
- * POST /entities/search/batch
- *   Body: { queries: string[], limit_per_query?: number }
- *   Returns: { results: Record<string, EntitySummary[]> }
- *   Notes: Batch multiple name searches into one request
- *
- * Priority 3 (Medium): ✅ DONE — using REST API sampling/extrapolation
- * --------------------
- * GET /screener/asset-type-counts (nice-to-have for exact counts)
- *   Returns: { "Coal Plant": 1234, "Steel Plant": 567, ... }
- *   Notes: Currently approximated via sampling /assets pages
- *
- * GET /screener/owner/{entity_id}/exposure
- *   Params: asset_type?, status?, country?
- *   Returns: { total_assets, filtered_assets, assets: [...] }
- *   Notes: Detailed breakdown for a single owner
+ *   getAssetTypeCounts(): ✅ REST API — ?facets=true (exact counts)
+ *   getOwnersByAssetType(): ✅ REST API — paginated /assets with owners[]
+ *     Paginates GET /assets?asset_type={slug}&status=X&country=Y
+ *     Aggregates owners client-side from the owners[] array per asset
+ *     MotherDuck fallback available via localStorage __GEM_SCREENER_MOTHERDUCK__
  *
  * =============================================================================
  */
@@ -164,11 +104,11 @@ const DEBUG = false;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
 /**
- * Feature flags — flip these when backend ships the endpoints.
- * Each flag has a localStorage override for testing:
- *   localStorage.setItem('__GEM_SCREENER_REST_OWNERS__', '1')
+ * Feature flags.
+ * REST API is now the default for owner aggregation.
+ * Set __GEM_SCREENER_MOTHERDUCK__=1 to opt back into MotherDuck.
  */
-const ENABLE_REST_OWNERS = browser && localStorage.getItem('__GEM_SCREENER_REST_OWNERS__') === '1';
+const USE_MOTHERDUCK = browser && localStorage.getItem('__GEM_SCREENER_MOTHERDUCK__') === '1';
 const ENABLE_BATCH_SEARCH = browser && localStorage.getItem('__GEM_SCREENER_BATCH_SEARCH__') === '1';
 
 /** In-memory cache for results */
@@ -218,18 +158,10 @@ export function clearQueryLogs(): void {
 /**
  * Get owners with stakes in a specific asset type.
  *
- * STILL ON MOTHERDUCK — REST API cannot support this yet because:
- * - /assets response doesn't include owner fields (owner_name, owner_entity_id)
- * - No bulk ownership endpoint exists (only per-asset /ownership/graph)
- * - ~14K ownership/graph calls per tracker type is not feasible
+ * Default: REST API — paginates /assets?asset_type={slug} and aggregates
+ * owners client-side from the owners[] array on each asset.
  *
- * TO UNBLOCK REST MIGRATION, the API needs ONE of:
- * 1. Add owner_name + owner_entity_id to /assets response
- * 2. New endpoint: GET /screener/owners?asset_type=Coal%20Plant
- *    Returns: [{ entity_id, name, total_assets, filtered_assets }]
- *
- * @param filters - Asset type, status, country filters
- * @param options - Limit, skip cache, etc.
+ * Fallback: MotherDuck (opt-in via localStorage __GEM_SCREENER_MOTHERDUCK__=1)
  */
 export async function getOwnersByAssetType(
   filters: ScreenerFilters,
@@ -261,19 +193,20 @@ export async function getOwnersByAssetType(
     }
   }
 
-  // Try REST API first (when backend ships the endpoint)
-  if (ENABLE_REST_OWNERS) {
-    try {
-      const restResult = await getOwnersByAssetTypeREST(filters, limit, startTime);
-      resultsCache.set(cacheKey, { data: restResult, timestamp: Date.now() });
-      return restResult;
-    } catch (e) {
-      console.warn('[screener-api] REST owners endpoint failed, falling back to MotherDuck:', e);
-    }
+  // MotherDuck opt-in fallback
+  if (USE_MOTHERDUCK) {
+    return await getOwnersByAssetTypeMotherDuck(filters, limit, startTime, cacheKey);
   }
 
-  // Fallback: MotherDuck query
-  return await getOwnersByAssetTypeMotherDuck(filters, limit, startTime, cacheKey);
+  // Default: REST API with paginated asset fetching + client-side owner aggregation
+  try {
+    const restResult = await getOwnersByAssetTypeREST(filters, limit, startTime);
+    resultsCache.set(cacheKey, { data: restResult, timestamp: Date.now() });
+    return restResult;
+  } catch (e) {
+    console.warn('[screener-api] REST owner aggregation failed, falling back to MotherDuck:', e);
+    return await getOwnersByAssetTypeMotherDuck(filters, limit, startTime, cacheKey);
+  }
 }
 
 /**
@@ -416,54 +349,74 @@ async function getOwnersByAssetTypeMotherDuck(
 }
 
 /**
- * REST API implementation for screener owners.
- * Enable via: localStorage.setItem('__GEM_SCREENER_REST_OWNERS__', '1')
- *
- * Expects backend endpoint:
- * GET /screener/owners?asset_type=X&status=Y&country=Z&limit=N
- * Returns: { owners: [{ entity_id, name, total_assets, filtered_assets }], total }
+ * REST API implementation: paginate /assets?asset_type={slug} and
+ * aggregate owners client-side from the owners[] array on each asset.
  */
 async function getOwnersByAssetTypeREST(
   filters: ScreenerFilters,
   limit: number,
   startTime: number
 ): Promise<ScreenerResultsResponse> {
-  const params = new URLSearchParams();
-  if (filters.tracker) {
-    params.set('asset_type', getAssetTypeForTracker(filters.tracker) || filters.tracker);
-  }
-  if (filters.status) params.set('status', filters.status);
-  if (filters.country) params.set('country', filters.country);
-  params.set('limit', String(limit));
+  const { resolveApiSlug, paginateAssetsByType } = await import('$lib/ownership-api');
 
-  const response = await fetch(`${OWNERSHIP_API_BASE}/screener/owners?${params}`);
-  if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    throw new Error(`REST /screener/owners failed: ${response.status} ${text}`);
+  // Resolve tracker name → API slug
+  const trackerName = filters.tracker || '';
+  const apiSlug = resolveApiSlug(trackerName);
+  if (!apiSlug) {
+    throw new Error(`Cannot resolve API slug for tracker: ${trackerName}`);
   }
 
-  const data = await response.json();
+  // Accumulate owners: entityId → { name, assetIds }
+  const ownerMap = new Map<string, { name: string; assetIds: Set<string> }>();
+  const hasOwnerFilter = filters.ownerIds && filters.ownerIds.length > 0;
+  const ownerIdSet = hasOwnerFilter ? new Set(filters.ownerIds) : null;
+
+  let pageCount = 0;
+  for await (const page of paginateAssetsByType(apiSlug, {
+    status: filters.status,
+    country: filters.country,
+  })) {
+    pageCount++;
+    for (const asset of page) {
+      if (!asset.owners || asset.owners.length === 0) continue;
+      for (const owner of asset.owners) {
+        if (!owner.entityId) continue;
+        // If ownerIds filter is active, skip non-matching owners
+        if (ownerIdSet && !ownerIdSet.has(owner.entityId)) continue;
+
+        let entry = ownerMap.get(owner.entityId);
+        if (!entry) {
+          entry = { name: owner.name, assetIds: new Set() };
+          ownerMap.set(owner.entityId, entry);
+        }
+        entry.assetIds.add(asset.id);
+      }
+    }
+  }
+
+  // Sort by filtered asset count descending, take top N
+  const sorted = [...ownerMap.entries()]
+    .map(([entityId, { name, assetIds }]) => ({
+      entityId,
+      name,
+      totalAssets: 0, // cross-type totals not available without full scan
+      filteredAssets: assetIds.size,
+    }))
+    .sort((a, b) => b.filteredAssets - a.filteredAssets)
+    .slice(0, limit);
+
   const queryTimeMs = performance.now() - startTime;
-
-  // Normalize response — backend may use different field names
-  const rawOwners: Array<Record<string, unknown>> = data.owners || data.results || [];
-  const owners: ScreenerOwner[] = rawOwners.map((o) => ({
-    entityId: String(o.entity_id || o.entityId || o.id || ''),
-    name: String(o.name || o.entity_name || 'Unknown'),
-    totalAssets: Number(o.total_assets || o.totalAssets || 0),
-    filteredAssets: Number(o.filtered_assets || o.filteredAssets || 0),
-  }));
 
   logQuery({
     timestamp: new Date(),
     operation: 'getOwnersByAssetType',
     durationMs: queryTimeMs,
     source: 'rest-api',
-    params: filters,
-    resultCount: owners.length,
+    params: { ...filters, pages: pageCount },
+    resultCount: sorted.length,
   });
 
-  return { owners, source: 'rest-api', queryTimeMs, totalCount: data.total };
+  return { owners: sorted, source: 'rest-api', queryTimeMs };
 }
 
 // =============================================================================
@@ -695,17 +648,13 @@ async function searchEntitiesBulkREST(
 // =============================================================================
 
 /**
- * Get asset counts by type.
- *
- * IMPLEMENTATION: REST API via ownership-api.ts
- * Samples pages from /assets and extrapolates proportions.
+ * Get exact asset counts by type using API facets.
  * Cached for 1 hour since counts rarely change.
  */
 export async function getAssetTypeCounts(): Promise<Record<string, number>> {
   const cacheKey = 'asset-type-counts';
   const cached = resultsCache.get(cacheKey);
 
-  // Cache for longer (1 hour) since this rarely changes
   if (cached && Date.now() - cached.timestamp < 60 * 60 * 1000) {
     return cached.data as unknown as Record<string, number>;
   }
@@ -717,13 +666,11 @@ export async function getAssetTypeCounts(): Promise<Record<string, number>> {
 
     const countsMap = await getCountsFromAPI();
 
-    // Convert Map<string, number> to Record<string, number>
     const counts: Record<string, number> = {};
     for (const [type, count] of countsMap) {
       counts[type] = count;
     }
 
-    // Cache it
     resultsCache.set(cacheKey, { data: counts as unknown as ScreenerResultsResponse, timestamp: Date.now() });
 
     logQuery({
@@ -731,7 +678,7 @@ export async function getAssetTypeCounts(): Promise<Record<string, number>> {
       operation: 'getAssetTypeCounts',
       durationMs: performance.now() - startTime,
       source: 'rest-api',
-      params: {},
+      params: { method: 'facets' },
       resultCount: Object.keys(counts).length,
     });
 
@@ -783,9 +730,7 @@ export function getConfig() {
 
 /**
  * Run a diagnostic check on data sources.
- *
- * Note: getOwnersByAssetType still uses MotherDuck (see comment above).
- * getAssetTypeCounts and entity search are fully on REST API.
+ * All screener data now flows through the REST API by default.
  */
 export async function runDiagnostics(): Promise<{
   restApi: { ok: boolean; latencyMs: number; error?: string };

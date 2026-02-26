@@ -5,7 +5,7 @@
    */
 
   import { onMount } from 'svelte';
-  import { listAssetsByType, listAssets } from '$lib/ownership-api';
+  import { listAssetsByType, listAssets, resolveApiSlug } from '$lib/ownership-api';
   import { regroupStatus, statusColors as designStatusColors } from '$lib/design-tokens';
   import DataSourceBadge from '$lib/components/DataSourceBadge.svelte';
 
@@ -28,21 +28,42 @@
 
     try {
       const start = performance.now();
-      // Fetch assets (filtered by type if tracker specified)
-      const assets = tracker
-        ? await listAssetsByType(tracker, { limit: 2000 })
-        : (await listAssets({ limit: 500 })).results;
+      const slug = tracker ? resolveApiSlug(tracker) : null;
 
-      // Regroup statuses client-side
-      const grouped = {};
-      for (const asset of assets) {
-        const group = regroupStatus(asset.status || 'unknown');
-        grouped[group] = (grouped[group] || 0) + 1;
+      if (slug || !tracker) {
+        // Use facets for exact status counts in a single request
+        const facetResult = await listAssets({
+          limit: 1,
+          facets: true,
+          asset_type: slug ?? undefined,
+        });
+
+        if (facetResult.facets?.status) {
+          // API returns pre-grouped statuses (operating/planned/retired)
+          // Run through regroupStatus for consistent naming
+          const grouped = {};
+          for (const [status, count] of Object.entries(facetResult.facets.status)) {
+            const group = regroupStatus(status);
+            grouped[group] = (grouped[group] || 0) + count;
+          }
+          results = Object.entries(grouped)
+            .map(([status, count]) => ({ status, count }))
+            .sort((a, b) => b.count - a.count);
+        } else {
+          results = [];
+        }
+      } else {
+        // Fallback: fetch assets and group client-side
+        const assets = await listAssetsByType(tracker, { limit: 2000 });
+        const grouped = {};
+        for (const asset of assets) {
+          const group = regroupStatus(asset.status || 'unknown');
+          grouped[group] = (grouped[group] || 0) + 1;
+        }
+        results = Object.entries(grouped)
+          .map(([status, count]) => ({ status, count }))
+          .sort((a, b) => b.count - a.count);
       }
-
-      results = Object.entries(grouped)
-        .map(([status, count]) => ({ status, count }))
-        .sort((a, b) => b.count - a.count);
 
       total = results.reduce((sum, r) => sum + r.count, 0);
       queryTime = Math.round(performance.now() - start);

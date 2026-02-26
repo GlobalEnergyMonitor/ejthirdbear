@@ -16,10 +16,10 @@
     { value: null, label: 'All Trackers' },
     { value: 'Coal Plant', label: 'Coal Plants' },
     { value: 'Gas Plant', label: 'Gas Plants' },
-    { value: 'Coal Mine', label: 'Coal Mines' },
     { value: 'Steel Plant', label: 'Steel Plants' },
     { value: 'Iron Mine', label: 'Iron Mines' },
     { value: 'Bioenergy Power', label: 'Bioenergy' },
+    { value: 'Gas Pipeline', label: 'Gas Pipelines' },
   ];
 </script>
 
@@ -38,7 +38,7 @@
     </nav>
     <h1>Explore the Data</h1>
     <p class="lead">
-      Interactive queries against GEM ownership data. All queries run client-side using DuckDB WASM.
+      Interactive queries against GEM ownership data via the REST API.
     </p>
   </header>
 
@@ -104,8 +104,7 @@
 
   <footer class="page-footer">
     <p>
-      Data loaded from static parquet files. Queries execute in your browser using
-      <a href="https://duckdb.org/docs/api/wasm" target="_blank" rel="noopener">DuckDB WASM</a>.
+      Data from the GEM REST API at gem-api.thirdbear.net. Exact counts via faceted queries.
     </p>
     <a href={link('manifest')}>View data manifest</a>
   </footer>

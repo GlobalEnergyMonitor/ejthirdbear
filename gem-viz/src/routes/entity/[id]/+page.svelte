@@ -449,7 +449,7 @@
           Full Network Explorer
           {@render embedBtn(`/embed/network-explorer?entityId=${entityId}`)}
         </h3>
-        <OwnershipExplorerD3 ownerEntityId={entityId} prebakedData={data?.ownerExplorerData} />
+        <OwnershipExplorerD3 ownerEntityId={entityId} prebakedData={data?.ownerExplorerData} parentPortfolio={portfolio} />
       </div>
 
       <!-- Asset distribution -->

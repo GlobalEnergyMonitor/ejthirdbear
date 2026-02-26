@@ -18,7 +18,11 @@
   import { fetchAssetBasics, fetchOwnerPortfolio } from '$lib/component-data/schema';
 
   // Accept owner entity ID and pre-baked data from parent to skip client-side fetch
-  let { ownerEntityId: propsOwnerEntityId = null, prebakedData = null } = $props();
+  let {
+    ownerEntityId: propsOwnerEntityId = null,
+    prebakedData = null,
+    parentPortfolio = null,
+  } = $props();
 
   let sectionEl;
   let loading = $state(true);
@@ -364,6 +368,13 @@
   }
 
   async function loadData() {
+    // Use parent-loaded portfolio if available (entity page already streamed this data)
+    if (parentPortfolio && parentPortfolio.assets?.length > 0) {
+      loadingStatus = 'Rendering portfolio...';
+      curCase = { assetClassName: 'assets' };
+      return parentPortfolio;
+    }
+
     // Use pre-baked data if available (production static build)
     if (prebakedData) {
       loadingStatus = 'Loading cached portfolio data...';
@@ -755,15 +766,41 @@
     return `M ${x0} ${startY} C ${x0} ${startY}, ${(x0 + x1) / 2} ${y1}, ${x1} ${y1}`;
   }
 
-  onMount(async () => {
-    try {
-      loading = true;
-      const portfolio = await loadData();
-      renderChart(portfolio);
-    } catch (err) {
-      error = err?.message || String(err);
-    } finally {
+  let hasRendered = $state(false);
+
+  // Reactively render when parentPortfolio becomes available
+  $effect(() => {
+    if (hasRendered || !sectionEl) return;
+    if (parentPortfolio && parentPortfolio.assets?.length > 0) {
+      hasRendered = true;
       loading = false;
+      try {
+        renderChart(parentPortfolio);
+      } catch (err) {
+        error = err?.message || String(err);
+      }
+    }
+  });
+
+  onMount(async () => {
+    // If parentPortfolio is already loaded (or will be via $effect), skip client-side fetch
+    if (parentPortfolio && parentPortfolio.assets?.length > 0) {
+      return; // $effect will handle rendering
+    }
+    // If no parentPortfolio, try client-side fetch
+    if (!parentPortfolio) {
+      try {
+        loading = true;
+        const portfolio = await loadData();
+        if (!hasRendered) {
+          hasRendered = true;
+          renderChart(portfolio);
+        }
+      } catch (err) {
+        error = err?.message || String(err);
+      } finally {
+        loading = false;
+      }
     }
   });
 </script>

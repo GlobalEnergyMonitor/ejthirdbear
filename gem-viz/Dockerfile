@@ -32,12 +32,13 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev
 
-# Copy built app and static files
+# Copy built app, static files, and custom server
 COPY --from=builder /app/build ./build
 COPY --from=builder /app/static ./static
+COPY --from=builder /app/server.js ./server.js
 
 ENV NODE_ENV=production
 ENV PORT=3000
 EXPOSE 3000
 
-CMD ["node", "build"]
+CMD ["node", "server.js"]
