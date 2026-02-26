@@ -2,6 +2,42 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.1] - 2026-02-25
+
+### Added
+- **Compose page migrated to REST API** — no more DuckDB/parquet loading on compose, loads in ~0.5s instead of 3-5s
+  - Multi-value server-side filters (multiple trackers, statuses, countries in one request)
+  - Hybrid fast/slow path: simple filters hit API directly, owner/capacity filters use progressive fetch + client-side cache
+  - Parametric faceted counts work correctly across all dimensions
+  - Progress indicator for progressive fetch operations
+- **Gembot database knowledge overhaul** — system prompt now includes exact asset counts, API slug mappings, field names, case-sensitivity rules, and data quirks
+- **Gembot tool enhancements** — every tool got new pro-level parameters:
+  - `search_entities`: `include_portfolio` flag to show portfolio size per result
+  - `search_assets`: `statuses[]`/`countries[]` multi-value arrays, `include_facets` for inline stats
+  - `get_entity_portfolio`: `include_assets` to show physical assets alongside subsidiaries
+  - `get_entity_owners`: `include_ultimate` to trace to ultimate parent
+  - `get_ownership_graph`: `direction: "both"` for full picture in one call
+  - `get_asset_details`: `include_ownership_chain` to trace owner hierarchy
+  - `get_top_owners`: `metric` param (assets vs capacity), capped at 2000 assets for speed
+  - `get_top_owners_by_country`: `status` cross-filter
+  - `get_country_breakdown`: `status` cross-filter
+  - `get_status_breakdown`: `country` cross-filter
+  - `get_owner_geographic_footprint`: `tracker` filter
+  - `compare_entities`: `tracker` filter, now returns asset count and capacity
+  - `find_common_owners`: `min_assets` threshold
+  - `generate_map`: `query`/`tracker`/`country` search-based mapping (no IDs needed)
+
+### Fixed
+- **Red-team security fixes** in gembot tool executor:
+  - Replaced hardcoded API URLs with env-configurable base
+  - Added `fetchApiJson()` helper with proper HTTP error handling (no more crashes on non-JSON responses)
+  - Added `clampLimit()` for all user-supplied limits (prevents negative/enormous values)
+  - Capped `get_top_owners` pagination to 2000 assets (was unbounded, could take 90s)
+  - Defensive null checks on `result.results` arrays
+  - Type-safe status lowercasing and array coercion
+- `capacity_value` field mapping in `normalizeAsset` (API returns `capacity_value` not `capacity`)
+- Status case sensitivity: all status filters now lowercase (API is case-sensitive)
+
 ## [0.1.29] - 2026-02-02
 
 ### Added

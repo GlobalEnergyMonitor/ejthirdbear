@@ -1,10 +1,10 @@
 {
-  "version": "d273132",
-  "commit": "d273132",
-  "message": "fix: entity page 500 error and ownership graph percentages",
+  "version": "0.2.1",
+  "commit": "",
+  "message": "feat: compose API migration, gembot knowledge overhaul, tool enhancements",
   "author": "EJ Fox",
-  "timestamp": "2026-02-24T18:58:12.740Z",
-  "deployed": "2026-02-24T18:58:12.740Z",
-  "buildTime": "2/24/2026, 1:58:12 PM",
-  "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.1.30"
+  "timestamp": "2026-02-25T00:00:00.000Z",
+  "deployed": "2026-02-25T00:00:00.000Z",
+  "buildTime": "2/25/2026",
+  "deployUrl": "https://gem-viz.fly.dev"
 }
