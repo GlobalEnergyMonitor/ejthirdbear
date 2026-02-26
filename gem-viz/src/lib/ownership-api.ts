@@ -58,6 +58,13 @@ export interface EntitySummary {
   raw: RawEntity;
 }
 
+export interface AssetOwner {
+  entityId: string;
+  name: string;
+  ownershipShare: number | null;
+  hqCountry?: string | null;
+}
+
 export interface AssetSummary {
   id: string;
   name: string;
@@ -72,6 +79,7 @@ export interface AssetSummary {
   ownerEntityId?: string | null;
   parentName?: string | null;
   parentEntityId?: string | null;
+  owners?: AssetOwner[];
   raw: RawAsset;
 }
 
@@ -294,7 +302,7 @@ function normalizeAsset(raw: RawAsset): AssetSummary {
     name: String(pickKey(raw, ['Facility Name', 'Project', 'Unit Name', 'asset_name', 'name']) || id).trim(),
     facilityType: str(['Facility Type', 'Tracker', 'facility_type', 'asset_type']),
     status: str(['Status', 'status', 'operating_status']),
-    capacity: num(['Capacity', 'Capacity (MW)', 'capacity']),
+    capacity: num(['Capacity', 'Capacity (MW)', 'capacity', 'capacity_value']),
     capacityUnit: str(['Capacity Unit', 'capacity_unit']),
     country: str(['Country Area', 'Country', 'country']),
     latitude: num(['Latitude', 'lat', 'latitude']),
@@ -303,8 +311,20 @@ function normalizeAsset(raw: RawAsset): AssetSummary {
     ownerEntityId: extractEntityId(pickKey(raw, ['Owner GEM Entity ID', 'Immediate Project Owner GEM Entity ID', 'owner_entity_id'])),
     parentName: str(['Parent', 'parent']),
     parentEntityId: extractEntityId(pickKey(raw, ['Parent GEM Entity ID', 'parent_entity_id'])),
+    owners: normalizeOwners(raw),
     raw,
   };
+}
+
+function normalizeOwners(raw: RawAsset): AssetOwner[] | undefined {
+  const arr = raw.owners;
+  if (!Array.isArray(arr) || arr.length === 0) return undefined;
+  return (arr as Array<Record<string, unknown>>).map((o) => ({
+    entityId: String(o.entity_id || ''),
+    name: String(o.name || ''),
+    ownershipShare: toNumber(o.ownership_share),
+    hqCountry: o.hq_country ? String(o.hq_country) : null,
+  }));
 }
 
 function normalizePaginated<T>(raw: T[] | PaginatedResponse<T>): PaginatedResponse<T> {
@@ -409,18 +429,22 @@ export const getEntityGraphDown = (id: string) => getEntityGraph(id, 'down');
 // ============================================================================
 
 /**
- * Mapping from our URL slugs to the actual API asset_type values.
- * The API's asset_type filter param is currently non-functional,
- * so we filter client-side using these names.
+ * Mapping from our URL slugs to the API display type names.
+ * These are used for client-side matching of facilityType values.
  */
 export const SLUG_TO_API_TYPE: Record<string, string> = {
   'coal-plant': 'Coal Plant',
-  'coal-mine': 'Coal Mine',
   'gas-plant': 'Oil & Gas Plant',
+  'oil-gas-plant': 'Oil & Gas Plant',
   'iron-mine': 'Iron Ore Mine',
+  'iron-ore-mine': 'Iron Ore Mine',
   'steel-plant': 'Iron & Steel Plant',
+  'iron-steel-plant': 'Iron & Steel Plant',
   'gas-pipeline': 'Natural Gas Transmission Pipeline',
+  'oil-pipeline': 'Oil or NGL Pipeline',
+  'cement-plant': 'Cement or Concrete Plant',
   bioenergy: 'Bioenergy Plant',
+  'bioenergy-plant': 'Bioenergy Plant',
 };
 
 /** Reverse mapping: API type → our slug */
@@ -431,17 +455,68 @@ export const API_TYPE_TO_SLUG: Record<string, string> = Object.fromEntries(
 /** Also map our tracker display names to API types */
 const TRACKER_NAME_TO_API_TYPE: Record<string, string> = {
   'Coal Plant': 'Coal Plant',
-  'Coal Mine': 'Coal Mine',
   'Gas Plant': 'Oil & Gas Plant',
+  'Oil & Gas Plant': 'Oil & Gas Plant',
   'Iron Mine': 'Iron Ore Mine',
+  'Iron Ore Mine': 'Iron Ore Mine',
   'Steel Plant': 'Iron & Steel Plant',
+  'Iron & Steel Plant': 'Iron & Steel Plant',
   'Gas Pipeline': 'Natural Gas Transmission Pipeline',
+  'Natural Gas Transmission Pipeline': 'Natural Gas Transmission Pipeline',
   'Bioenergy Power': 'Bioenergy Plant',
+  'Bioenergy Plant': 'Bioenergy Plant',
+  'Oil Pipeline': 'Oil or NGL Pipeline',
+  'Oil or NGL Pipeline': 'Oil or NGL Pipeline',
+  'Cement Plant': 'Cement or Concrete Plant',
+  'Cement or Concrete Plant': 'Cement or Concrete Plant',
 };
 
-/** Resolve any tracker identifier (slug, display name, or API type) to API type */
+/** Resolve any tracker identifier (slug, display name, or API type) to API display type name */
 export function resolveApiAssetType(tracker: string): string {
   return SLUG_TO_API_TYPE[tracker] || TRACKER_NAME_TO_API_TYPE[tracker] || tracker;
+}
+
+/**
+ * Map from any identifier to the API slug format used in ?asset_type= filter.
+ * Accepts: old slugs, tracker display names, API display names, or API slugs.
+ */
+const IDENTIFIER_TO_API_SLUG: Record<string, string> = {
+  // Our old URL slugs
+  'coal-plant': 'coal-plant',
+  'gas-plant': 'oil-gas-plant',
+  'iron-mine': 'iron-ore-mine',
+  'steel-plant': 'iron-steel-plant',
+  'gas-pipeline': 'gas-pipeline',
+  bioenergy: 'bioenergy-plant',
+  // API slugs (identity)
+  'oil-gas-plant': 'oil-gas-plant',
+  'iron-ore-mine': 'iron-ore-mine',
+  'iron-steel-plant': 'iron-steel-plant',
+  'bioenergy-plant': 'bioenergy-plant',
+  'cement-plant': 'cement-plant',
+  'oil-pipeline': 'oil-pipeline',
+  // Tracker display names
+  'Coal Plant': 'coal-plant',
+  'Gas Plant': 'oil-gas-plant',
+  'Iron Mine': 'iron-ore-mine',
+  'Steel Plant': 'iron-steel-plant',
+  'Gas Pipeline': 'gas-pipeline',
+  'Bioenergy Power': 'bioenergy-plant',
+  'Oil Pipeline': 'oil-pipeline',
+  'Cement Plant': 'cement-plant',
+  // API display names
+  'Oil & Gas Plant': 'oil-gas-plant',
+  'Iron Ore Mine': 'iron-ore-mine',
+  'Iron & Steel Plant': 'iron-steel-plant',
+  'Bioenergy Plant': 'bioenergy-plant',
+  'Natural Gas Transmission Pipeline': 'gas-pipeline',
+  'Oil or NGL Pipeline': 'oil-pipeline',
+  'Cement or Concrete Plant': 'cement-plant',
+};
+
+/** Resolve any tracker identifier to the API slug used in ?asset_type= filter */
+export function resolveApiSlug(tracker: string): string | null {
+  return IDENTIFIER_TO_API_SLUG[tracker] ?? null;
 }
 
 // ============================================================================
@@ -450,21 +525,30 @@ export function resolveApiAssetType(tracker: string): string {
 
 /** Search and retrieve assets with optional filtering */
 export async function listAssets(params?: {
-  q?: string; status?: string; country?: string; asset_type?: string; limit?: number; offset?: number;
-}): Promise<PaginatedResponse<AssetSummary>> {
-  // NOTE: The API's asset_type filter is non-functional (always returns all types).
-  // We pass it anyway (in case it gets fixed) but also filter client-side.
-  const raw = await fetchAPI<RawAsset[] | PaginatedResponse<RawAsset>>(
-    `/assets${buildQuery(params)}`
+  q?: string; status?: string; country?: string; asset_type?: string; limit?: number; offset?: number; facets?: boolean;
+}): Promise<PaginatedResponse<AssetSummary> & { facets?: Record<string, Record<string, number>> }> {
+  // Build query params — always request JSON format (coal-plant slug returns HTML without it)
+  const queryParams: Record<string, string | number | undefined | null> = {
+    q: params?.q,
+    status: params?.status,
+    country: params?.country,
+    asset_type: params?.asset_type,
+    limit: params?.limit,
+    offset: params?.offset,
+    format: 'json',
+  };
+  if (params?.facets) queryParams.facets = 'true';
+  const raw = await fetchAPI<PaginatedResponse<RawAsset> & { facets?: Record<string, Record<string, number>> }>(
+    `/assets${buildQuery(queryParams)}`
   );
   const page = normalizePaginated(raw);
-  return { ...page, results: page.results.map(normalizeAsset) };
+  const facets = !Array.isArray(raw) ? raw.facets : undefined;
+  return { ...page, results: page.results.map(normalizeAsset), facets };
 }
 
 /**
  * Fetch assets filtered by tracker type with auto-pagination.
- * Works around the broken API asset_type filter by fetching pages
- * and filtering client-side until we have enough results.
+ * Uses the working API asset_type slug filter for server-side filtering.
  *
  * @param assetType - Slug, display name, or API type name
  * @param opts - limit (default 100), plus optional status/country filters
@@ -473,7 +557,7 @@ export async function listAssetsByType(
   assetType: string,
   opts?: { limit?: number; status?: string; country?: string }
 ): Promise<AssetSummary[]> {
-  const apiTypeName = resolveApiAssetType(assetType);
+  const apiSlug = resolveApiSlug(assetType);
   const limit = opts?.limit ?? 100;
   const results: AssetSummary[] = [];
   let offset = 0;
@@ -481,23 +565,69 @@ export async function listAssetsByType(
   const MAX_FETCH = 25000; // safety: don't fetch more than this
 
   while (results.length < limit && offset < MAX_FETCH) {
-    const page = await listAssets({ limit: BATCH, offset, status: opts?.status, country: opts?.country });
-    const filtered = page.results.filter(a => a.facilityType === apiTypeName);
-    results.push(...filtered);
+    const page = await listAssets({
+      limit: BATCH, offset,
+      asset_type: apiSlug ?? undefined,
+      status: opts?.status,
+      country: opts?.country,
+    });
+    results.push(...page.results);
     offset += BATCH;
-    if (page.results.length < BATCH) break; // exhausted all data
+    if (page.results.length < BATCH) break;
   }
 
   return results.slice(0, limit);
 }
 
 /**
- * Get asset counts per tracker type.
- * Fetches a sample and extrapolates based on proportions.
- * Returns a Map of API type name → estimated count.
+ * Async generator that yields pages of assets filtered by type.
+ * Used by the screener to paginate through all assets for owner aggregation.
+ */
+export async function* paginateAssetsByType(
+  apiSlug: string,
+  opts?: { status?: string; country?: string; limit?: number }
+): AsyncGenerator<AssetSummary[], void, unknown> {
+  const BATCH = opts?.limit ?? 500;
+  let offset = 0;
+  const MAX_OFFSET = 50000;
+
+  while (offset < MAX_OFFSET) {
+    const page = await listAssets({
+      asset_type: apiSlug,
+      limit: BATCH,
+      offset,
+      status: opts?.status,
+      country: opts?.country,
+    });
+    if (page.results.length === 0) break;
+    yield page.results;
+    offset += BATCH;
+    if (page.results.length < BATCH) break;
+  }
+}
+
+/**
+ * Get exact asset counts per tracker type using the API facets feature.
+ * Falls back to sampling if facets are unavailable.
+ * Returns a Map of API type name → exact count.
  */
 export async function getAssetTypeCounts(): Promise<Map<string, number>> {
-  const SAMPLE_PAGES = 3; // 1500 assets = good sample for proportions
+  // Try facets first (single request, exact counts)
+  try {
+    const page = await listAssets({ limit: 1, facets: true });
+    if (page.facets?.asset_type) {
+      const counts = new Map<string, number>();
+      for (const [type, count] of Object.entries(page.facets.asset_type)) {
+        counts.set(type, count);
+      }
+      return counts;
+    }
+  } catch {
+    // Fall through to sampling
+  }
+
+  // Fallback: sample pages and extrapolate
+  const SAMPLE_PAGES = 3;
   const BATCH = 500;
   const counts = new Map<string, number>();
   let totalSampled = 0;
@@ -514,7 +644,6 @@ export async function getAssetTypeCounts(): Promise<Map<string, number>> {
     if (page.results.length < BATCH) break;
   }
 
-  // Extrapolate to full dataset
   if (totalSampled > 0 && apiTotal > totalSampled) {
     const scale = apiTotal / totalSampled;
     for (const [type, count] of counts) {

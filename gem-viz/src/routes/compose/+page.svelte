@@ -241,11 +241,13 @@
           <div class="results-title-group">
             <h1>Filtered Assets</h1>
             <div class="results-meta">
-              {#if state.loading}
+              {#if state._fetchProgress}
+                <span class="loading-text">Loading {state._fetchProgress.fetched.toLocaleString()} of {state._fetchProgress.total.toLocaleString()} assets...</span>
+              {:else if state.loading}
                 <span class="loading-text">Loading...</span>
               {:else}
                 <span class="result-count">{formatCount(state.totalCount)} results</span>
-                <DataSourceBadge source="motherduck" queryTime={state.queryTime} />
+                <DataSourceBadge source="api" queryTime={state.queryTime} />
               {/if}
             </div>
           </div>

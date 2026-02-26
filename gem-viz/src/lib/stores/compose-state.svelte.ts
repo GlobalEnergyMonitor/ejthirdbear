@@ -4,6 +4,10 @@
  * Extracted from compose/+page.svelte to reduce file size and improve organization.
  * Uses Svelte 5 runes with a class-based pattern.
  *
+ * Data source: REST API (gem-api.thirdbear.net)
+ * - Fast path: tracker/status/country filters → single API call
+ * - Slow path: owner/capacity/share filters → progressive fetch + client-side filter
+ *
  * Usage in +page.svelte:
  *   const state = new ComposeState();
  *   onMount(() => state.init(urlFilters));
@@ -19,7 +23,6 @@ import {
   encodeFilters,
   buildShareUrl,
   hasActiveFilters,
-  buildSqlWhere,
   getPresets,
   savePreset,
   deletePreset,
@@ -28,19 +31,21 @@ import {
 import { investigationCart } from '$lib/investigationCart';
 import { buildExportPreset, importPreset } from '$lib/presets';
 import {
-  fetchInitialFacets,
-  fetchResults as fetchResultsRest,
-  fetchParametricCounts as fetchParametricCountsRest,
-  fetchAllMatchingIds as fetchAllMatchingIdsRest,
-  fetchAllForExport as fetchAllForExportRest,
-} from '$lib/compose-queries-rest';
-// DuckDB fallback — only used for owner, ownerCountry, and startYear
-import {
-  fetchOwnerCountries,
-  fetchOwners,
-  fetchStartYearRange,
-  fetchCapacityHistogram,
-} from '$lib/compose-queries';
+  fetchApiFacets,
+  fetchApiResults,
+  paginateAllMatching,
+  clientSideFilter,
+  deriveOwnerFacets,
+  deriveOwnerCountryFacets,
+  deriveCapacityRange,
+  deriveAllParametricFacets,
+  hasClientSideFilters,
+  getServerCacheKey,
+  STATIC_COLUMNS,
+  STATIC_TRACKER_COLUMNS,
+  type ComposeRow,
+} from '$lib/compose-api';
+import type { AssetSummary } from '$lib/ownership-api';
 import {
   mergeParametricCounts,
   calculateCapacityData,
@@ -50,7 +55,6 @@ import {
   calculateTrackerDistribution,
   copyToClipboard,
   downloadJson,
-  LOCATIONS_DEDUP_SQL,
 } from '../../routes/compose/compose-utils';
 import { statusColorsGranular } from '$lib/design-tokens';
 
@@ -99,18 +103,7 @@ export class ComposeState {
   owners = $state<any[]>([]);
   trackerOptions = $state<any[]>([]);
   statusOptions = $state<any[]>([]);
-  // Static column names — no longer need to query DuckDB schema
-  ownershipColumnNames = {
-    tracker: 'Tracker',
-    status: 'Status',
-    country: null,
-    ownerCountry: 'Owner Headquarters Country',
-    owner: 'Owner',
-    project: 'Project',
-    capacity: 'Capacity (MW)',
-    share: 'Share',
-    startYear: 'Start Year',
-  };
+  ownershipColumns = $state<string[]>([]);
 
   // --- Tracker-specific column availability ---
   trackerColumns = $state<Record<string, any>>({});
@@ -140,6 +133,11 @@ export class ComposeState {
   // --- Cart bridge (synced from Svelte writable store) ---
   _cartItems = $state<any[]>([]);
 
+  // --- Client-side cache for progressive fetch ---
+  _cachedAssets = $state<AssetSummary[] | null>(null);
+  _cacheKey = $state<string | null>(null);
+  _fetchProgress = $state<{ fetched: number; total: number } | null>(null);
+
   // =========================================================================
   // Derived Values ($derived)
   // =========================================================================
@@ -150,7 +148,28 @@ export class ComposeState {
 
   cartAssetIds = $derived(new Set(this._cartItems.map((item: any) => item.id)));
 
-  // ownershipColumnNames is now a static property (declared above)
+  ownershipColumnNames = $derived.by(() => {
+    const columnSet = new Set(this.ownershipColumns);
+    const startYearColumn = columnSet.has('Start Year')
+      ? 'Start Year'
+      : columnSet.has('Start year')
+        ? 'Start year'
+        : null;
+
+    return {
+      tracker: columnSet.has('Tracker') ? 'Tracker' : null,
+      status: columnSet.has('Status') ? 'Status' : null,
+      country: null,
+      ownerCountry: columnSet.has('Owner Headquarters Country')
+        ? 'Owner Headquarters Country'
+        : null,
+      owner: columnSet.has('Owner') ? 'Owner' : null,
+      project: columnSet.has('Project') ? 'Project' : null,
+      capacity: columnSet.has('Capacity (MW)') ? 'Capacity (MW)' : null,
+      share: columnSet.has('Share') ? 'Share' : null,
+      startYear: startYearColumn,
+    };
+  });
 
   availableColumns = $derived.by(() => {
     const selectedTrackers = this.filters.trackers;
@@ -336,7 +355,7 @@ export class ComposeState {
   };
 
   // =========================================================================
-  // Data Loading
+  // Data Loading (REST API)
   // =========================================================================
 
   loadResults = async (resetPage = true) => {
@@ -352,19 +371,34 @@ export class ComposeState {
     const offset = (this.currentPage - 1) * this.pageSize;
 
     try {
-      const data = await fetchResultsRest(this.filters, this.pageSize, offset);
+      if (!hasClientSideFilters(this.filters)) {
+        // Fast path: API handles all filters directly
+        const data = await fetchApiResults(this.filters, this.pageSize, offset);
+        this.results = data.results;
+        this.totalCount = data.totalCount;
+      } else {
+        // Slow path: ensure cache, then filter client-side
+        await this._ensureCache();
+        const filtered = clientSideFilter(this._cachedAssets!, this.filters);
+        this.totalCount = filtered.length;
 
-      this.results = data.results;
-      this.totalCount = data.totalCount;
-      this.queryTime = Date.now() - startTime;
-
-      // The REST API returns updated facets with every results call —
-      // use them to update parametric counts inline (tracker/status/country).
-      if (hasActiveFilters(this.filters)) {
-        this.trackerOptions = mergeParametricCounts(this.baseTrackers, data.facets.trackers);
-        this.statusOptions = mergeParametricCounts(this.baseStatuses, data.facets.statuses);
-        this.countries = mergeParametricCounts(this.baseCountries, data.facets.countries);
+        // Map to ComposeRow and paginate
+        const page = filtered.slice(offset, offset + this.pageSize);
+        this.results = page.map((asset) => {
+          const firstOwner = asset.owners?.[0];
+          return {
+            asset_id: asset.id,
+            name: asset.name,
+            tracker: asset.facilityType || '',
+            status: asset.status || '',
+            country: asset.country || '',
+            capacity_mw: asset.capacity ?? null,
+            owner: firstOwner?.name || asset.ownerName || '',
+            owner_id: firstOwner?.entityId || asset.ownerEntityId || '',
+          } as ComposeRow;
+        });
       }
+      this.queryTime = Date.now() - startTime;
     } catch (err: any) {
       this.error = err.message;
       this.results = [];
@@ -385,33 +419,35 @@ export class ComposeState {
     this.loadingOptions = true;
 
     try {
-      // REST API: single call for tracker/status/country facets + capacity range
-      const [restFacets, ownerCountryData, ownerData, yearRange, capHist] = await Promise.all([
-        fetchInitialFacets(),
-        // DuckDB fallback: owner-related facets + start year (not in API yet)
-        fetchOwnerCountries(),
-        fetchOwners(),
-        fetchStartYearRange(),
-        fetchCapacityHistogram(),
-      ]);
+      // Single API call for base facets (no filters = all options)
+      const facets = await fetchApiFacets({});
 
-      // Store base options (all possible values)
-      this.baseTrackers = restFacets.trackers;
-      this.baseStatuses = restFacets.statuses;
-      this.baseCountries = restFacets.countries;
-      this.baseOwnerCountries = ownerCountryData;
-      this.baseOwners = ownerData;
+      // Set static columns (schema is stable)
+      this.ownershipColumns = STATIC_COLUMNS;
+
+      // Store base options from API facets
+      this.baseTrackers = facets.trackers;
+      this.baseStatuses = facets.statuses;
+      this.baseCountries = facets.countries;
+
+      // Owner + owner country: empty initially, populated from cache
+      this.baseOwnerCountries = [];
+      this.baseOwners = [];
 
       // Initialize display options with base data
-      this.trackerOptions = restFacets.trackers;
-      this.statusOptions = restFacets.statuses;
-      this.countries = restFacets.countries;
-      this.ownerCountries = ownerCountryData;
-      this.owners = ownerData;
+      this.trackerOptions = facets.trackers;
+      this.statusOptions = facets.statuses;
+      this.countries = facets.countries;
+      this.ownerCountries = [];
+      this.owners = [];
 
-      this.capacityRange = restFacets.capacityRange;
-      this.startYearRange = yearRange;
-      this.capacityHistogram = capHist;
+      // Capacity range: hardcoded defaults (refined from cache later)
+      this.capacityRange = { min: 0, max: 10000 };
+      this.startYearRange = { min: 1950, max: 2035 };
+      this.capacityHistogram = [];
+
+      // Static tracker column info
+      this.trackerColumns = STATIC_TRACKER_COLUMNS;
     } catch {
       // Silently handle reference data load failure
     } finally {
@@ -421,69 +457,93 @@ export class ComposeState {
 
   updateParametricCounts = async () => {
     if (!browser) return;
-    if (!hasActiveFilters(this.filters)) return;
-
     this.loadingCounts = true;
 
     try {
-      // REST API: single call gets cross-filtered facets for tracker/status/country
-      // (API does automatic exclusion-based faceting per dimension)
-      const restCounts = await fetchParametricCountsRest(this.filters);
-      this.trackerOptions = mergeParametricCounts(this.baseTrackers, restCounts.trackers);
-      this.statusOptions = mergeParametricCounts(this.baseStatuses, restCounts.statuses);
-      this.countries = mergeParametricCounts(this.baseCountries, restCounts.countries);
+      if (!hasActiveFilters(this.filters)) {
+        this.loadingCounts = false;
+        return;
+      }
 
-      // DuckDB fallback: owner + ownerCountry counts
-      try {
-        const { widgetQuery } = await import('$lib/widgets/widget-utils');
-        const ownerCountryWhere = buildSqlWhere(
-          { ...this.filters, ownerCountries: [] },
-          'o',
-          this.ownershipColumnNames
+      // If cache exists, derive ALL facet counts from cache with proper parametric exclusion.
+      // This ensures owner/capacity/share filters affect tracker/status/country counts (and vice versa).
+      if (this._cachedAssets) {
+        const facets = deriveAllParametricFacets(this._cachedAssets, this.filters);
+
+        this.trackerOptions = mergeParametricCounts(
+          this.baseTrackers,
+          facets.trackers.map((f) => ({ value: f.value, cnt: f.count }))
         );
-        const ownerWhere = buildSqlWhere(
-          { ...this.filters, owners: [] },
-          'o',
-          this.ownershipColumnNames
+        this.statusOptions = mergeParametricCounts(
+          this.baseStatuses,
+          facets.statuses.map((f) => ({ value: f.value, cnt: f.count }))
         );
-
-        const [ownerCountryResult, ownerResult] = await Promise.all([
-          widgetQuery(`
-            SELECT o."Owner Headquarters Country" as value, COUNT(*) as cnt
-            FROM ownership o
-            LEFT JOIN ${LOCATIONS_DEDUP_SQL} l ON o."GEM location ID" = l."GEM.location.ID"
-            WHERE ${ownerCountryWhere}
-              AND o."Owner Headquarters Country" IS NOT NULL AND o."Owner Headquarters Country" != ''
-            GROUP BY o."Owner Headquarters Country"
-            ORDER BY cnt DESC
-          `),
-          widgetQuery(`
-            SELECT o."Owner" as value, COUNT(*) as cnt
-            FROM ownership o
-            LEFT JOIN ${LOCATIONS_DEDUP_SQL} l ON o."GEM location ID" = l."GEM.location.ID"
-            WHERE ${ownerWhere}
-              AND o."Owner" IS NOT NULL AND o."Owner" != ''
-            GROUP BY o."Owner"
-            ORDER BY cnt DESC
-            LIMIT 1000
-          `),
-        ]);
-
+        this.countries = mergeParametricCounts(
+          this.baseCountries,
+          facets.countries.map((f) => ({ value: f.value, cnt: f.count }))
+        );
+        this.owners = mergeParametricCounts(
+          this.baseOwners,
+          facets.owners.map((f) => ({ value: f.value, cnt: f.count }))
+        );
         this.ownerCountries = mergeParametricCounts(
           this.baseOwnerCountries,
-          ownerCountryResult.data || []
+          facets.ownerCountries.map((f) => ({ value: f.value, cnt: f.count }))
         );
-        if (ownerResult.success) {
-          this.owners = mergeParametricCounts(this.baseOwners, ownerResult.data || []);
-        }
-      } catch {
-        // DuckDB fallback failure — owner counts stay unchanged
+        return;
       }
+
+      // No cache: use API facets (accurate for tracker/status/country-only filters)
+      const facets = await fetchApiFacets(this.filters);
+
+      this.trackerOptions = mergeParametricCounts(
+        this.baseTrackers,
+        facets.trackers.map((f) => ({ value: f.value, cnt: f.count }))
+      );
+      this.statusOptions = mergeParametricCounts(
+        this.baseStatuses,
+        facets.statuses.map((f) => ({ value: f.value, cnt: f.count }))
+      );
+      this.countries = mergeParametricCounts(
+        this.baseCountries,
+        facets.countries.map((f) => ({ value: f.value, cnt: f.count }))
+      );
     } catch {
       // Silently handle - counts will remain unchanged
     } finally {
       this.loadingCounts = false;
     }
+  };
+
+  /**
+   * Ensure the client-side cache is populated for the current server-side filter params.
+   * If the cache key doesn't match, performs a progressive fetch.
+   */
+  _ensureCache = async () => {
+    const key = getServerCacheKey(this.filters);
+
+    if (this._cacheKey === key && this._cachedAssets) {
+      return; // Cache is current
+    }
+
+    this._fetchProgress = { fetched: 0, total: 0 };
+
+    const assets = await paginateAllMatching(this.filters, (fetched, total) => {
+      this._fetchProgress = { fetched, total };
+    });
+
+    this._cachedAssets = assets;
+    this._cacheKey = key;
+    this._fetchProgress = null;
+
+    // Derive owner/ownerCountry base facets + capacity range from fetched data
+    this.baseOwners = deriveOwnerFacets(assets);
+    this.baseOwnerCountries = deriveOwnerCountryFacets(assets);
+    this.owners = this.baseOwners;
+    this.ownerCountries = this.baseOwnerCountries;
+
+    const capRange = deriveCapacityRange(assets);
+    this.capacityRange = capRange;
   };
 
   // =========================================================================
@@ -492,6 +552,8 @@ export class ComposeState {
 
   clearFilters = () => {
     this.filters = emptyFilterState();
+    this._cachedAssets = null;
+    this._cacheKey = null;
     this.syncFiltersToUrl();
     this.loadResults();
     // Reset to base counts
@@ -669,7 +731,28 @@ export class ComposeState {
   };
 
   fetchAllMatchingIds = async () => {
-    return fetchAllMatchingIdsRest(this.filters);
+    try {
+      // If cache exists, filter from it
+      if (this._cachedAssets) {
+        const filtered = clientSideFilter(this._cachedAssets, this.filters);
+        return filtered.slice(0, 10000).map((a) => ({
+          asset_id: a.id,
+          name: a.name,
+        }));
+      }
+
+      // Otherwise progressive fetch from API
+      const assets = await paginateAllMatching(this.filters);
+      const filtered = hasClientSideFilters(this.filters)
+        ? clientSideFilter(assets, this.filters)
+        : assets;
+      return filtered.slice(0, 10000).map((a) => ({
+        asset_id: a.id,
+        name: a.name,
+      }));
+    } catch {
+      return [];
+    }
   };
 
   selectAllMatching = async () => {
@@ -704,8 +787,52 @@ export class ComposeState {
   // Export Functions (fetch ALL matching, not just current page)
   // =========================================================================
 
-  fetchAllForExport = async () => {
-    return fetchAllForExportRest(this.filters);
+  fetchAllForExport = async (): Promise<ComposeRow[]> => {
+    try {
+      // If cache exists, use it
+      if (this._cachedAssets) {
+        const filtered = clientSideFilter(this._cachedAssets, this.filters);
+        return filtered.slice(0, 50000).map((asset) => {
+          const firstOwner = asset.owners?.[0];
+          return {
+            asset_id: asset.id,
+            name: asset.name,
+            tracker: asset.facilityType || '',
+            status: asset.status || '',
+            country: asset.country || '',
+            capacity_mw: asset.capacity ?? null,
+            owner: firstOwner?.name || asset.ownerName || '',
+            owner_id: firstOwner?.entityId || asset.ownerEntityId || '',
+          };
+        });
+      }
+
+      // Otherwise progressive fetch from API
+      const assets = await paginateAllMatching(this.filters, (fetched, total) => {
+        this._fetchProgress = { fetched, total };
+      });
+      this._fetchProgress = null;
+
+      const filtered = hasClientSideFilters(this.filters)
+        ? clientSideFilter(assets, this.filters)
+        : assets;
+
+      return filtered.slice(0, 50000).map((asset) => {
+        const firstOwner = asset.owners?.[0];
+        return {
+          asset_id: asset.id,
+          name: asset.name,
+          tracker: asset.facilityType || '',
+          status: asset.status || '',
+          country: asset.country || '',
+          capacity_mw: asset.capacity ?? null,
+          owner: firstOwner?.name || asset.ownerName || '',
+          owner_id: firstOwner?.entityId || asset.ownerEntityId || '',
+        };
+      });
+    } catch {
+      return [];
+    }
   };
 
   exportCSV = async () => {
@@ -780,7 +907,7 @@ export class ComposeState {
     // Load presets from localStorage
     this.presets = getPresets();
 
-    // Load reference data first (needed for column names)
+    // Load reference data first (single API call)
     await this.loadReferenceData();
 
     // Load results
