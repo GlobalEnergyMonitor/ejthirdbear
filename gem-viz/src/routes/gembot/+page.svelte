@@ -82,42 +82,78 @@
     mentionedAssets = new Map();
   }
 
-  // Mentioned entities accumulator - tracks everything discussed
+  // Mentioned entities accumulator - tracks everything discussed with provenance
   let mentionedEntities = $state(new Map());
   let mentionedAssets = $state(new Map());
 
-  // Extract entities/assets from tool results and add to mentioned
+  // Human-readable tool name mapping
+  const TOOL_LABELS = {
+    search_entities: 'Search',
+    get_entity_details: 'Details',
+    get_entity_portfolio: 'Portfolio',
+    get_entity_owners: 'Owners',
+    get_ownership_graph: 'Graph',
+    search_assets: 'Asset search',
+    get_asset_details: 'Asset details',
+    get_top_owners: 'Top owners',
+    get_top_owners_by_country: 'Top owners',
+    get_country_breakdown: 'Country stats',
+    get_status_breakdown: 'Status stats',
+    compare_entities: 'Comparison',
+    find_common_owners: 'Common owners',
+    get_owner_geographic_footprint: 'Footprint',
+  };
+
+  // Extract entities/assets from tool results with provenance tracking
   function trackMentioned(toolCalls) {
     for (const tc of toolCalls) {
       const result = tc.result;
       if (!result) continue;
+      const toolName = tc.tool || tc.name || 'unknown';
+      const sourceLabel = TOOL_LABELS[toolName] || toolName.replace(/_/g, ' ');
 
-      // Entities from various tools
-      const entities =
-        result.entities || result.subsidiaries || result.owners || result.comparisons || [];
+      // Entities from various tools — each source type gets a role label
+      let entities = [];
+      let role = '';
+      if (result.entities) { entities = result.entities; role = 'found via'; }
+      else if (result.subsidiaries) { entities = result.subsidiaries; role = 'subsidiary of query'; }
+      else if (result.directOwners || result.owners) { entities = result.directOwners || result.owners; role = 'owner'; }
+      else if (result.comparisons) { entities = result.comparisons; role = 'compared'; }
+      else if (result.commonOwners) { entities = result.commonOwners; role = 'common owner'; }
+      else if (result.data?.owners) { entities = result.data.owners; role = 'top owner'; }
+
       for (const e of entities) {
         const id = e.id || e.entityId || e.ownerEntityId;
         const name = e.name || e.entityName || e.ownerName;
         if (id && name) {
+          const existing = mentionedEntities.get(id);
           mentionedEntities.set(id, {
             id,
             name,
-            country: e.headquartersCountry || e.country || '',
-            ownershipPct: e.ownershipPct,
+            country: e.headquartersCountry || e.country || existing?.country || '',
+            ownershipPct: e.ownershipPct || e.pct || existing?.ownershipPct,
+            source: sourceLabel,
+            role: role || existing?.role || '',
+            assetCount: e.assetCount || e.value || existing?.assetCount,
           });
         }
       }
 
-      // Assets
-      const assets = result.assets || (result.id && result.name ? [result] : []);
+      // Assets — track which tool surfaced them
+      const assets = result.assets || (result.id && result.name && result.type ? [result] : []);
       for (const a of assets) {
         if (a.id && a.name) {
+          const existing = mentionedAssets.get(a.id);
           mentionedAssets.set(a.id, {
             id: a.id,
             name: a.name,
-            type: a.type || a.tracker,
-            status: a.status,
-            country: a.country,
+            type: a.type || a.tracker || existing?.type,
+            status: a.status || existing?.status,
+            country: a.country || existing?.country,
+            capacity: a.capacity || existing?.capacity,
+            capacityUnit: a.capacityUnit || existing?.capacityUnit,
+            owner: a.owner || a.owners?.[0]?.name || existing?.owner,
+            source: sourceLabel,
           });
         }
       }
@@ -765,20 +801,29 @@
       <!-- Mentioned entities panel - shows when there's content -->
       {#if mentionedEntities.size > 0 || mentionedAssets.size > 0}
         <div class="sidebar-panel mentioned-panel">
-          <h4 class="sidebar-panel__title">📌 Discussed</h4>
+          <h4 class="sidebar-panel__title">Discussed</h4>
           <div class="mentioned-scroll">
             {#if mentionedEntities.size > 0}
               <div class="mentioned-group">
                 <span class="mentioned-label">Entities ({mentionedEntities.size})</span>
                 {#each [...mentionedEntities.values()] as entity}
-                  <a href={entityLink(entity.id)} class="mentioned-item entity" target="_blank">
+                  <a href={entityLink(entity.id)} class="mentioned-item entity" target="_blank" title="Source: {entity.source || 'conversation'}{entity.role ? ` (${entity.role})` : ''}">
                     <span class="mentioned-name">{entity.name}</span>
-                    {#if entity.country}
-                      <span class="mentioned-meta">{entity.country}</span>
-                    {/if}
-                    {#if entity.ownershipPct}
-                      <span class="mentioned-pct">{entity.ownershipPct}%</span>
-                    {/if}
+                    <span class="mentioned-detail">
+                      {#if entity.role}
+                        <span class="mentioned-role">{entity.role}</span>
+                      {/if}
+                      {#if entity.country}
+                        <span class="mentioned-meta">{entity.country}</span>
+                      {/if}
+                      {#if entity.ownershipPct}
+                        <span class="mentioned-pct">{entity.ownershipPct}%</span>
+                      {/if}
+                      {#if entity.assetCount}
+                        <span class="mentioned-meta">{entity.assetCount} assets</span>
+                      {/if}
+                    </span>
+                    <span class="mentioned-source">via {entity.source || 'chat'}</span>
                   </a>
                 {/each}
               </div>
@@ -787,9 +832,21 @@
               <div class="mentioned-group">
                 <span class="mentioned-label">Assets ({mentionedAssets.size})</span>
                 {#each [...mentionedAssets.values()] as asset}
-                  <a href={link(`asset/${asset.id}`)} class="mentioned-item asset" target="_blank">
+                  <a href={link(`asset/${asset.id}`)} class="mentioned-item asset" target="_blank" title="Source: {asset.source || 'conversation'}">
                     <span class="mentioned-name">{asset.name}</span>
-                    <span class="mentioned-meta">{asset.type} · {asset.status}</span>
+                    <span class="mentioned-detail">
+                      <span class="mentioned-meta">{asset.type}{asset.status ? ` · ${asset.status}` : ''}</span>
+                      {#if asset.country}
+                        <span class="mentioned-meta">{asset.country}</span>
+                      {/if}
+                      {#if asset.capacity}
+                        <span class="mentioned-meta">{asset.capacity} {asset.capacityUnit || 'MW'}</span>
+                      {/if}
+                      {#if asset.owner}
+                        <span class="mentioned-meta">Owner: {asset.owner}</span>
+                      {/if}
+                    </span>
+                    <span class="mentioned-source">via {asset.source || 'chat'}</span>
                   </a>
                 {/each}
               </div>
@@ -1759,9 +1816,34 @@
     text-overflow: ellipsis;
   }
 
+  .mentioned-detail {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+  }
+
   .mentioned-meta {
     font-size: var(--font-size-xs);
     color: var(--color-text-tertiary);
+  }
+
+  .mentioned-role {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #1d4961;
+    background: #e9eef1;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-weight: 500;
+  }
+
+  .mentioned-source {
+    font-size: 10px;
+    color: var(--color-text-tertiary);
+    opacity: 0.7;
+    font-style: italic;
   }
 
   .mentioned-pct {
