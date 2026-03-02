@@ -1,12 +1,13 @@
 <script lang="ts">
-  import OwnershipMiniTree from '$lib/components/ownership/OwnershipMiniTree.svelte';
+  import AssetScreenerChart from '$lib/components/screener/AssetScreenerChart.svelte';
   import { describeOwnership } from '$lib/data-config/screener-config';
 
   export let filteredOwners = [];
   export let classDescription = '';
   export let searchQuery = '';
   export let expandedOwnerId: string | null = null;
-  export let assetFilter = {};
+  export let assetClassName = '';
+  export let trackerSlug = '';
   export let isInInvestigation: (_entityId: string) => boolean;
   export let onToggleExpanded: (_entityId: string) => void;
   export let onToggleInvestigation: (_owner: any) => void;
@@ -62,7 +63,14 @@
         {#if isExpanded}
           <tr class="tree-row">
             <td colspan="5" class="tree-cell">
-              <OwnershipMiniTree entityId={owner.entityId} entityName={owner.name} {assetFilter} />
+              <div class="expanded-viz">
+                <AssetScreenerChart
+                  entityId={owner.entityId}
+                  entityName={owner.name}
+                  {assetClassName}
+                  {trackerSlug}
+                />
+              </div>
             </td>
           </tr>
         {/if}
@@ -213,6 +221,11 @@
   .tree-cell {
     padding: 0 !important;
     border-bottom: 2px solid #e2e8f0;
+  }
+
+  .expanded-viz {
+    padding: 16px;
+    background: #fafaf7;
   }
 
   .company-btn {

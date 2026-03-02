@@ -69,6 +69,14 @@
     }
   });
 
+  // Derive chart props from selected class
+  const chartAssetClassName = $derived(
+    selectedClasses.length > 0 ? (selectedClasses[0]?.tracker || selectedClasses[0]?.name || '') : ''
+  );
+  const chartTrackerSlug = $derived(
+    selectedClasses.length > 0 ? (selectedClasses[0]?.id || '') : ''
+  );
+
   // Derive parse error separately (no state mutation inside $derived)
   const parseError = $derived.by(() => {
     if (!classesParam) return null;
@@ -127,17 +135,6 @@
   function toggleExpanded(ownerId: string) {
     expandedOwnerId = expandedOwnerId === ownerId ? null : ownerId;
   }
-
-  // Get asset filter for mini tree based on selected classes
-  const assetFilterForTree = $derived.by(() => {
-    if (selectedClasses.length === 0) return {};
-    const cls = selectedClasses[0];
-    return {
-      tracker: getAssetTypeForTracker(cls?.tracker),
-      status: cls?.filters?.status,
-      country: cls?.filters?.geography,
-    };
-  });
 
   // Investigation cart state (reactive via auto-subscribe)
   let cartItems = $derived($investigationCart);
@@ -423,7 +420,8 @@
         {classDescription}
         {searchQuery}
         {expandedOwnerId}
-        assetFilter={assetFilterForTree}
+        assetClassName={chartAssetClassName}
+        trackerSlug={chartTrackerSlug}
         {isInInvestigation}
         onToggleExpanded={toggleExpanded}
         onToggleInvestigation={toggleInvestigation}
