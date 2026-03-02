@@ -130,7 +130,7 @@
 
     {#if showMap && mapHasLocation}
       <div class="map-section">
-        <AssetMap bind:hasLocation={mapHasLocation} />
+        <AssetMap {assetId} bind:hasLocation={mapHasLocation} />
       </div>
     {/if}
   {/if}

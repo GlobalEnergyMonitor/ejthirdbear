@@ -17,8 +17,7 @@ export function mergeParametricCounts(
   const countMap = new Map<string, number>();
   for (const r of parametricResults) {
     const value = r.value as string;
-    // Accept both DuckDB shape {value, cnt} and REST shape {value, count}
-    const cnt = (r.cnt ?? r.count) as number;
+    const cnt = r.count as number;
     if (value != null) {
       countMap.set(value, cnt ?? 0);
     }
@@ -228,12 +227,3 @@ export function formatAssetForTooltip(row: {
     startYear: row.start_year ?? null,
   };
 }
-
-/**
- * Deduplicated locations subquery for SQL
- * Locations table has duplicate GEM.location.ID values which causes JOIN multiplication
- */
-export const LOCATIONS_DEDUP_SQL = `(
-  SELECT * FROM locations
-  QUALIFY ROW_NUMBER() OVER (PARTITION BY "GEM.location.ID" ORDER BY "GEM.location.ID") = 1
-)`;

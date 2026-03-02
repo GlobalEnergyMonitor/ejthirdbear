@@ -93,7 +93,13 @@
       </div>
       {#if showFlower && portfolio}
         <div class="header-flower">
-          <OwnershipFlower {portfolio} size="small" showTitle={false} showLabels={false} />
+          <OwnershipFlower
+            ownerId={entityId}
+            {portfolio}
+            size="small"
+            showTitle={false}
+            showLabels={false}
+          />
         </div>
       {/if}
     </header>

@@ -5,7 +5,7 @@
  * Based on: Ownership Data Processing and Access Plan (Dec 2025)
  *
  * IMPORTANT: This config describes the CONSOLIDATED OWNERSHIP TRACKER schema
- * (the parquet files currently in use), NOT the detailed underlying trackers.
+ * (as returned by the REST API), NOT the detailed underlying trackers.
  *
  * The Ownership Tracker is an aggregated table with:
  * - Asset identification (GEM unit ID, Project/asset name)
@@ -14,7 +14,7 @@
  * - Simplified status field (not tracker-specific variations)
  *
  * Detailed fields from underlying trackers (lat/lon, plant name, unit name, etc.)
- * are NOT available in this parquet. Those would come from:
+ * are NOT available from this API. Those would come from:
  * - Location data: stored separately in GeoJSON (static/points.geojson)
  * - Detailed tracker data: available from GEM GitHub repos (see data-sources.ts)
  *
@@ -86,15 +86,15 @@ export interface TrackerFieldMapping {
  * Complete tracker configuration mapping all asset types
  *
  * VALIDATED AGAINST ACTUAL DATA (December 2025)
- * This config matches the consolidated Ownership Tracker parquet schema.
- * Fields not listed here are not available in the current parquet (e.g., lat/lon).
+ * This config matches the consolidated Ownership Tracker REST API schema.
+ * Fields not listed here are not available in the current API (e.g., lat/lon).
  */
 export const trackerConfigs = new Map<string, TrackerFieldMapping>([
-  // All trackers currently consolidated into single Ownership Tracker parquet
+  // All trackers available via the REST API
   // They share the same schema with these fields
   //
   // NOTE: Use the short names ('Coal Plant', not 'Global Coal Plant Tracker')
-  // as they match the Tracker field values in the parquet data.
+  // as they match the Tracker field values in the API data.
 
   [
     'Coal Plant',
@@ -253,8 +253,8 @@ export const trackerConfigs = new Map<string, TrackerFieldMapping>([
     },
   ],
 
-  // NOTE: Oil & NGL Pipeline not yet in parquet - add when available
-  // NOTE: Cement and Concrete not yet in parquet - add when available
+  // NOTE: Oil & NGL Pipeline not yet in screener - add when available
+  // NOTE: Cement and Concrete not yet in screener - add when available
 
   [
     'Steel Plant',
@@ -412,7 +412,7 @@ export function constructAssetName(
 /**
  * Get the location data from a record according to tracker rules
  *
- * NOTE: Location fields are not available in the consolidated Ownership Tracker parquet.
+ * NOTE: Location fields are not available in the REST API.
  * Location data (coordinates) should be retrieved from GeoJSON file instead.
  * This function returns null for location in current setup.
  */
@@ -430,7 +430,7 @@ export function extractLocation(
 
   const { location } = config;
 
-  // Location fields are not available in consolidated parquet
+  // Location fields are not available in REST API
   if (!location.latField || !location.lonField) {
     return { lat: null, lon: null, country: null, state: null };
   }

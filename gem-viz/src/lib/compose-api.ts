@@ -1,7 +1,6 @@
 /**
  * Compose Page API Layer
  *
- * Replaces DuckDB-based compose-queries.ts with REST API calls.
  * Uses hybrid approach: server-side filters for tracker/status/country,
  * client-side filtering for owner/capacity/share after progressive fetch.
  *
@@ -14,18 +13,34 @@
 import {
   resolveApiSlug,
   resolveApiAssetType,
+  getAPIBase,
   type AssetSummary,
   type PaginatedResponse,
 } from './ownership-api';
-import type { FacetOption, RangeData, ColumnNames } from './compose-queries';
+// Shared types for compose page
+export interface FacetOption {
+  value: string;
+  count: number;
+}
 
-// API base URL (same as ownership-api)
-const API_BASE =
-  // @ts-expect-error Vite env vars
-  import.meta.env?.PUBLIC_OWNERSHIP_API_BASE_URL ||
-  // @ts-expect-error Vite env vars
-  import.meta.env?.PUBLIC_OWNERSHIP_API_URL ||
-  'https://gem-api.thirdbear.net';
+export interface RangeData {
+  min: number;
+  max: number;
+}
+
+export interface ColumnNames {
+  tracker: string | null;
+  status: string | null;
+  country: string | null;
+  ownerCountry: string | null;
+  owner: string | null;
+  project: string | null;
+  capacity: string | null;
+  share: string | null;
+  startYear: string | null;
+}
+
+const API_BASE = getAPIBase();
 
 const API_TIMEOUT_MS = 30_000;
 
@@ -59,7 +74,13 @@ async function listAssetsMulti(
     // Normalize: API returns array or paginated object
     const page = Array.isArray(raw)
       ? { total: null, limit: null, offset: null, count: raw.length, results: raw }
-      : { total: raw.total ?? null, limit: raw.limit ?? null, offset: raw.offset ?? null, count: raw.count ?? raw.results?.length ?? 0, results: raw.results ?? [] };
+      : {
+          total: raw.total ?? null,
+          limit: raw.limit ?? null,
+          offset: raw.offset ?? null,
+          count: raw.count ?? raw.results?.length ?? 0,
+          results: raw.results ?? [],
+        };
 
     // Import normalizeAsset logic — reuse listAssets for asset normalization
     // Actually, we'll use listAssets for single-value and our direct fetch for multi-value
@@ -137,8 +158,7 @@ function normalizeAssetRaw(raw: Record<string, unknown>): AssetSummary {
   };
 }
 
-// Re-export types used by compose-state
-export type { FacetOption, RangeData, ColumnNames };
+// Types are defined at the top of this file and exported from their declarations
 
 // ============================================================================
 // Filter → API param mapping
@@ -179,7 +199,10 @@ interface ApiParams {
 /**
  * Build a query string from ApiParams, supporting arrays as duplicate params.
  */
-function buildMultiQuery(params: ApiParams, extra?: Record<string, string | number | undefined | null>): string {
+function buildMultiQuery(
+  params: ApiParams,
+  extra?: Record<string, string | number | undefined | null>
+): string {
   const sp = new URLSearchParams();
   if (params.asset_type) {
     for (const v of params.asset_type) sp.append('asset_type', v);
@@ -271,9 +294,7 @@ export interface ApiFacetsResult {
  * Single API call to get parametric facet counts.
  * API facets are parametric: each dimension excludes its own filter.
  */
-export async function fetchApiFacets(
-  filters: Partial<FilterState>
-): Promise<ApiFacetsResult> {
+export async function fetchApiFacets(filters: Partial<FilterState>): Promise<ApiFacetsResult> {
   const params = filtersToApiParams(filters as FilterState);
 
   const response = await listAssetsMulti(params, { limit: 1, facets: true });
@@ -355,7 +376,7 @@ function assetToComposeRow(asset: AssetSummary): ComposeRow {
  */
 export async function paginateAllMatching(
   filters: FilterState,
-  onProgress?: (fetched: number, total: number) => void
+  onProgress?: (_fetched: number, _total: number) => void
 ): Promise<AssetSummary[]> {
   const params = filtersToApiParams(filters);
   const BATCH = 500;
@@ -393,10 +414,7 @@ export async function paginateAllMatching(
  * Filter an array of AssetSummary objects using the full filter state.
  * Used after progressive fetch for filters the API doesn't support.
  */
-export function clientSideFilter(
-  assets: AssetSummary[],
-  filters: FilterState
-): AssetSummary[] {
+export function clientSideFilter(assets: AssetSummary[], filters: FilterState): AssetSummary[] {
   return assets.filter((asset) => {
     // Multi-value tracker filter
     const allTrackers = [...(filters.trackers || []), ...(filters.trackersAnd || [])];
@@ -487,10 +505,7 @@ export function clientSideFilter(
  * Create a copy of filters with one dimension zeroed out.
  * Used for parametric faceting: each dimension's counts exclude its own filter.
  */
-function filtersExcluding(
-  filters: FilterState,
-  exclude: string
-): FilterState {
+function filtersExcluding(filters: FilterState, exclude: string): FilterState {
   const copy = { ...filters };
   switch (exclude) {
     case 'trackers':
@@ -612,7 +627,10 @@ export function deriveAllParametricFacets(
   const statusesFiltered = clientSideFilter(cachedAssets, filtersExcluding(filters, 'statuses'));
   const countriesFiltered = clientSideFilter(cachedAssets, filtersExcluding(filters, 'countries'));
   const ownersFiltered = clientSideFilter(cachedAssets, filtersExcluding(filters, 'owners'));
-  const ownerCountriesFiltered = clientSideFilter(cachedAssets, filtersExcluding(filters, 'ownerCountries'));
+  const ownerCountriesFiltered = clientSideFilter(
+    cachedAssets,
+    filtersExcluding(filters, 'ownerCountries')
+  );
 
   return {
     trackers: deriveTrackerFacets(trackersFiltered),
@@ -642,19 +660,6 @@ export function deriveCapacityRange(assets: AssetSummary[]): RangeData {
 // ============================================================================
 // Static Column/Tracker Info
 // ============================================================================
-
-/** Hardcoded column names (schema is stable across API) */
-export const STATIC_COLUMN_NAMES: ColumnNames = {
-  tracker: 'Tracker',
-  status: 'Status',
-  country: null,
-  ownerCountry: 'Owner Headquarters Country',
-  owner: 'Owner',
-  project: 'Project',
-  capacity: 'Capacity (MW)',
-  share: 'Share',
-  startYear: null, // API doesn't return start_year
-};
 
 /** Hardcoded ownership columns list */
 export const STATIC_COLUMNS = [

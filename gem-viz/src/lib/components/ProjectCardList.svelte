@@ -130,16 +130,14 @@
           tabindex="0"
           onclick={() => {
             if (!expandedCards.has(asset.id)) {
-              expandedCards.add(asset.id);
-              expandedCards = expandedCards;
+              expandedCards = new Set(expandedCards).add(asset.id);
             }
           }}
           onkeydown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
               if (!expandedCards.has(asset.id)) {
-                expandedCards.add(asset.id);
-                expandedCards = expandedCards;
+                expandedCards = new Set(expandedCards).add(asset.id);
               }
             }
           }}

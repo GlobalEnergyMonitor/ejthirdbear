@@ -4,7 +4,7 @@
    * Shared component to eliminate duplication across screener pages.
    */
 
-  import { link } from '$lib/links';
+  import { buildScreenerUrl } from '$lib/screener-url';
 
   /**
    * @type {{
@@ -23,12 +23,10 @@
   ];
 
   function getStepUrl(step) {
-    let url = link(step.path);
-    const params = [];
-    if (classesParam) params.push(`classes=${encodeURIComponent(classesParam)}`);
-    if (ownersParam && step.num >= 3) params.push(`owners=${encodeURIComponent(ownersParam)}`);
-    if (params.length > 0) url += '?' + params.join('&');
-    return url;
+    return buildScreenerUrl(step.path, {
+      classes: classesParam || undefined,
+      owners: step.num >= 3 ? ownersParam || undefined : undefined,
+    });
   }
 
   function isCompleted(stepNum) {

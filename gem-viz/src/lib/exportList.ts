@@ -43,7 +43,7 @@ function loadFromStorage(): ExportAsset[] {
 
     // Validate it's an array
     if (!Array.isArray(parsed)) {
-      console.error('Export list corrupt: not an array, clearing');
+      if (import.meta.env.DEV) console.error('Export list corrupt: not an array, clearing');
       localStorage.removeItem(STORAGE_KEY);
       return [];
     }
@@ -71,14 +71,15 @@ function loadFromStorage(): ExportAsset[] {
     });
 
     if (deduplicated.length !== parsed.length) {
-      console.warn(`Export list cleaned: ${parsed.length} → ${deduplicated.length} items`);
+      if (import.meta.env.DEV)
+        console.warn(`Export list cleaned: ${parsed.length} → ${deduplicated.length} items`);
       // Save the cleaned version
       localStorage.setItem(STORAGE_KEY, JSON.stringify(deduplicated));
     }
 
     return deduplicated;
   } catch (e) {
-    console.error('Failed to load export list:', e);
+    if (import.meta.env.DEV) console.error('Failed to load export list:', e);
     localStorage.removeItem(STORAGE_KEY);
     return [];
   }
@@ -90,7 +91,7 @@ function saveToStorage(list: ExportAsset[]) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
   } catch (e) {
-    console.error('Failed to save export list:', e);
+    if (import.meta.env.DEV) console.error('Failed to save export list:', e);
   }
 }
 
@@ -108,7 +109,7 @@ function createExportListStore() {
 
     add(asset: { id: string; name: string; tracker?: string }) {
       if (!isValidSlug(asset.id)) {
-        console.error('Invalid asset ID, skipping:', asset.id);
+        if (import.meta.env.DEV) console.error('Invalid asset ID, skipping:', asset.id);
         return;
       }
       update((list) => {
@@ -138,7 +139,7 @@ function createExportListStore() {
           }));
 
         if (newAssets.length !== assets.filter((a) => !existingIds.has(a.id)).length) {
-          console.warn('Some assets had invalid IDs and were skipped');
+          if (import.meta.env.DEV) console.warn('Some assets had invalid IDs and were skipped');
         }
 
         return [...list, ...newAssets];

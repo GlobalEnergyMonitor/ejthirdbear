@@ -57,7 +57,6 @@
       tracker?: string;
     }>
   >([]);
-  let _loading = $state(true);
   let embed = $state(false);
 
   // Check for embed mode from URL
@@ -78,7 +77,6 @@
 
       // Parse CSV manually (simple parser for this structure)
       const lines = text.split('\n');
-      const _headers = lines[0].split(',').map((h) => h.trim().replace(/^"|"$/g, ''));
 
       fieldsMetadata = lines
         .slice(1)
@@ -123,7 +121,7 @@
 
       // Sort by capacity descending client-side, take top 5
       const sorted = assets
-        .filter(a => a.capacity != null)
+        .filter((a) => a.capacity != null)
         .sort((a, b) => (b.capacity ?? 0) - (a.capacity ?? 0))
         .slice(0, 5);
 
@@ -142,10 +140,8 @@
     }
   }
 
-  onMount(async () => {
-    _loading = true;
-    await Promise.all([loadFieldsMetadata(), loadSampleAssets()]);
-    _loading = false;
+  onMount(() => {
+    Promise.all([loadFieldsMetadata(), loadSampleAssets()]);
   });
 
   // Tracker info

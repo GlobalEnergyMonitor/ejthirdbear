@@ -18,7 +18,7 @@
    - Always prefer CSS variables over hardcoded hex values
    ============================================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Roboto+Condensed:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@400;500;600;700&display=swap');
 
 :root {
   /* ==========================================================================
@@ -35,8 +35,8 @@
   /* Font families */
   --font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
   --font-family-display: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-  --font-family-data: 'Roboto Condensed', 'Arial Narrow', sans-serif;
-  --font-family-mono: var(--font-family-data); /* Use Roboto Condensed instead of monospace */
+  --font-family-data: 'Barlow Semi-Condensed', 'Arial Narrow', sans-serif;
+  --font-family-mono: var(--font-family-data); /* Use Barlow Semi-Condensed instead of monospace */
 
   /* Font weights */
   --font-weight-regular: 400;
@@ -518,7 +518,7 @@
   border-bottom: var(--border-width) solid var(--color-border);
 }
 
-/* Numeric cells in data tables use Roboto Condensed */
+/* Numeric cells in data tables use Barlow Semi-Condensed */
 .data-table td[data-numeric],
 .data-table .numeric {
   font-family: var(--font-family-data);
@@ -655,7 +655,7 @@
 
 /* ============================================================================
    GEM TYPOGRAPHY CLASSES
-   Based on GEM Type Hierarchy (Plus Jakarta Sans + Roboto Condensed)
+   Based on GEM Type Hierarchy (Plus Jakarta Sans + Barlow Semi-Condensed)
    ============================================================================ */
 
 /* --- Headlines (Plus Jakarta Sans Bold) --- */
@@ -801,7 +801,7 @@
   color: var(--color-text-secondary);
 }
 
-/* --- Data Typography (Roboto Condensed Uppercase for stats) --- */
+/* --- Data Typography (Barlow Semi-Condensed Uppercase for stats) --- */
 .data-display {
   font-family: var(--font-family-data);
   font-size: var(--font-size-3xl);
@@ -1097,7 +1097,7 @@
   font-variant-numeric: tabular-nums lining-nums;
 }
 
-/* Data typography - Roboto Condensed UPPERCASE for stats/numbers */
+/* Data typography - Barlow Semi-Condensed UPPERCASE for stats/numbers */
 .data-type,
 .stat-value,
 .stat-hero-value,

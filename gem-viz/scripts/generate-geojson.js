@@ -1,292 +1,147 @@
 #!/usr/bin/env node
 
 /**
- * Generate static GeoJSON from MotherDuck for client-side map rendering
- * No WASM required in browser - just fetch and render!
+ * Generate static GeoJSON from REST API for client-side map rendering.
+ * Paginates through all asset types and builds a points.geojson file.
+ *
+ * If static/points.geojson already exists and is less than 7 days old,
+ * skips regeneration (use --force to override).
  */
 
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import duckdb from 'duckdb';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const outputDir = path.join(__dirname, '../static');
-const assetLocationsPath = path.join(__dirname, '../public/asset_locations.parquet');
+const outputPath = path.join(__dirname, '../static/points.geojson');
 
-const { Database } = duckdb;
-let db = null;
+const API_BASE = process.env.PUBLIC_OWNERSHIP_API_BASE_URL
+  || process.env.PUBLIC_OWNERSHIP_API_URL
+  || 'https://gem-api.thirdbear.net';
 
-async function initDB() {
-  return new Promise((resolve, reject) => {
-    db = new Database(':memory:', (err) => {
-      if (err) {
-        reject(err);
-        return;
-      }
-      const token = process.env.PUBLIC_MOTHERDUCK_TOKEN;
-      db.exec(`
-        INSTALL motherduck;
-        LOAD motherduck;
-        SET motherduck_token='${token}';
-        ATTACH 'md:gem_data' AS gem;
-        USE gem;
-      `, (err) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        console.log('[OK] Connected to MotherDuck (Node.js)');
-        resolve(db);
-      });
-    });
-  });
-}
+const FORCE = process.argv.includes('--force');
+const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-async function query(sql) {
-  return new Promise((resolve, reject) => {
-    db.all(sql, (err, rows) => {
-      if (err) {
-        reject(err);
-        return;
-      }
-      resolve({ success: true, data: rows });
-    });
-  });
+// Asset type slugs to paginate
+const ASSET_SLUGS = [
+  'coal-plant',
+  'oil-gas-plant',
+  'bioenergy-plant',
+  'gas-pipeline',
+  'cement-plant',
+  'oil-pipeline',
+  'iron-steel-plant',
+  'iron-ore-mine',
+];
+
+async function fetchJSON(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}: ${url}`);
+  return res.json();
 }
 
 async function generateGeoJSON() {
-  console.log('\nGenerating GeoJSON from MotherDuck...\n');
-
-  try {
-    // Fast path: build from local asset_locations.parquet if available
-    if (fs.existsSync(assetLocationsPath)) {
-      console.log('📂 Using local asset_locations.parquet');
-      db = new Database(':memory:');
-
-      const parquetEscaped = assetLocationsPath.replace(/'/g, "''");
-      const { success, data, error: queryError } = await query(`
-        SELECT DISTINCT
-          "GEM.location.ID" AS location_id,
-          Latitude AS lat,
-          Longitude AS lon,
-          "Country.Area" AS country,
-          "State.Province" AS state,
-          tracker
-        FROM read_parquet('${parquetEscaped}')
-        WHERE Latitude IS NOT NULL AND Longitude IS NOT NULL
-      `);
-
-      if (!success) {
-        throw new Error(`Failed to load asset_locations.parquet: ${queryError}`);
-      }
-
-      console.log(`[OK] Loaded ${data.length.toLocaleString()} point rows from local parquet\n`);
-
-      const features = data.map((row) => ({
-        type: 'Feature',
-        id: row.location_id,
-        properties: {
-          id: row.location_id,
-          'GEM location ID': row.location_id,
-          lat: row.lat,
-          lon: row.lon,
-          country: row.country,
-          state: row.state,
-          tracker: row.tracker,
-        },
-        geometry: {
-          type: 'Point',
-          coordinates: [row.lon, row.lat],
-        },
-      }));
-
-      const geojson = {
-        type: 'FeatureCollection',
-        metadata: {
-          source: 'asset_locations.parquet',
-          generated: new Date().toISOString(),
-          count: features.length,
-          columns: {
-            locationId: 'GEM location ID',
-            lat: 'Latitude',
-            lon: 'Longitude',
-            country: 'Country.Area',
-            state: 'State.Province',
-            tracker: 'tracker',
-          },
-        },
-        features,
-      };
-
-      const outputPath = path.join(outputDir, 'points.geojson');
-      fs.writeFileSync(outputPath, JSON.stringify(geojson, null, 2));
-      const stats = fs.statSync(outputPath);
-      const sizeMB = (stats.size / 1024 / 1024).toFixed(2);
-      console.log('GeoJSON Statistics:');
-      console.log(`   File: static/points.geojson`);
-      console.log(`   Size: ${sizeMB} MB (uncompressed)`);
-      console.log(`   Features: ${geojson.features.length.toLocaleString()}`);
-      console.log(`   Estimated gzip size: ~${(sizeMB / 5).toFixed(2)} MB`);
-      console.log('\nGeoJSON generation complete!\n');
+  // Skip if file is fresh
+  if (!FORCE && fs.existsSync(outputPath)) {
+    const stat = fs.statSync(outputPath);
+    const age = Date.now() - stat.mtimeMs;
+    if (age < MAX_AGE_MS) {
+      const days = (age / (24 * 60 * 60 * 1000)).toFixed(1);
+      console.log(`[SKIP] points.geojson is ${days} days old (max 7). Use --force to regenerate.`);
       return;
     }
-
-    await initDB();
-
-    // Get all data tables and check for lat/lon columns
-    const catalogResult = await query(`
-      SELECT schema_name, table_name, row_count
-      FROM catalog
-      WHERE LOWER(table_name) NOT IN ('about', 'metadata', 'readme', 'catalog')
-        AND row_count > 100
-      ORDER BY row_count DESC
-    `);
-
-    if (!catalogResult.success || catalogResult.data.length === 0) {
-      throw new Error('No data tables found in catalog');
-    }
-
-    console.log(`Searching ${catalogResult.data.length} tables for geographic coordinates...\n`);
-
-    let schema_name, table_name, row_count, columns, latCol, lonCol;
-
-    // Find first table with lat/lon
-    for (const table of catalogResult.data) {
-      const schemaResult = await query(`
-        SELECT column_name
-        FROM information_schema.columns
-        WHERE table_schema = '${table.schema_name}'
-          AND table_name = '${table.table_name}'
-      `);
-
-      const cols = schemaResult.data.map(c => c.column_name);
-      const lat = cols.find(c => c.toLowerCase().includes('lat'));
-      const lon = cols.find(c => c.toLowerCase().includes('lon'));
-
-      if (lat && lon) {
-        schema_name = table.schema_name;
-        table_name = table.table_name;
-        row_count = table.row_count;
-        columns = cols;
-        latCol = lat;
-        lonCol = lon;
-        break;
-      } else {
-        console.log(`  [SKIP] ${table.schema_name}.${table.table_name} - no coordinates`);
-      }
-    }
-
-    if (!latCol || !lonCol) {
-      throw new Error('No tables with latitude/longitude columns found');
-    }
-
-    const fullTableName = `${schema_name}.${table_name}`;
-    console.log(`\n[OK] Found table with coordinates: ${fullTableName}`);
-    console.log(`Total rows: ${row_count.toLocaleString()}\n`);
-
-    // Find ID column
-    const idCol = columns.find(c => {
-      const lower = c.toLowerCase();
-      return lower === 'id' || lower === 'wiki page' || lower === 'project id' || lower.includes('_id');
-    }) || columns[0];
-
-    // Find name column
-    const nameCol = columns.find(c => {
-      const lower = c.toLowerCase();
-      return lower === 'mine' || lower === 'plant' || lower === 'project' || lower === 'facility' ||
-             lower === 'mine name' || lower === 'plant name' || lower === 'project name';
-    });
-
-    // Find other columns
-    const statusCol = columns.find(c => c.toLowerCase() === 'status');
-    const countryCol = columns.find(c => c.toLowerCase() === 'country');
-
-    console.log(`Detected columns:`);
-    console.log(`   ID: ${idCol}`);
-    console.log(`   Name: ${nameCol || 'N/A'}`);
-    console.log(`   Lat: ${latCol}`);
-    console.log(`   Lon: ${lonCol}`);
-    console.log(`   Status: ${statusCol || 'N/A'}`);
-    console.log(`   Country: ${countryCol || 'N/A'}\n`);
-
-    // Query all points with metadata
-    const selectCols = [idCol, latCol, lonCol];
-    if (nameCol) selectCols.push(nameCol);
-    if (statusCol) selectCols.push(statusCol);
-    if (countryCol) selectCols.push(countryCol);
-
-    const pointsResult = await query(`
-      SELECT ${selectCols.map(c => `"${c}"`).join(', ')}
-      FROM ${fullTableName}
-      WHERE "${latCol}" IS NOT NULL
-        AND "${lonCol}" IS NOT NULL
-    `);
-
-    if (!pointsResult.success) {
-      throw new Error(`Query failed: ${pointsResult.error}`);
-    }
-
-    console.log(`[OK] Loaded ${pointsResult.data.length.toLocaleString()} points\n`);
-
-    // Convert to GeoJSON
-    const geojson = {
-      type: 'FeatureCollection',
-      metadata: {
-        table: fullTableName,
-        generated: new Date().toISOString(),
-        count: pointsResult.data.length,
-        columns: {
-          id: idCol,
-          name: nameCol,
-          lat: latCol,
-          lon: lonCol,
-          status: statusCol,
-          country: countryCol
-        }
-      },
-      features: pointsResult.data.map(row => ({
-        type: 'Feature',
-        id: row[idCol],
-        properties: {
-          id: row[idCol],
-          name: nameCol ? row[nameCol] : null,
-          status: statusCol ? row[statusCol] : null,
-          country: countryCol ? row[countryCol] : null,
-          lat: row[latCol],
-          lon: row[lonCol]
-        },
-        geometry: {
-          type: 'Point',
-          coordinates: [row[lonCol], row[latCol]]
-        }
-      }))
-    };
-
-    // Write GeoJSON to static directory
-    const outputPath = path.join(outputDir, 'points.geojson');
-    fs.writeFileSync(outputPath, JSON.stringify(geojson, null, 2));
-
-    const stats = fs.statSync(outputPath);
-    const sizeMB = (stats.size / 1024 / 1024).toFixed(2);
-
-    console.log('GeoJSON Statistics:');
-    console.log(`   File: static/points.geojson`);
-    console.log(`   Size: ${sizeMB} MB (uncompressed)`);
-    console.log(`   Features: ${geojson.features.length.toLocaleString()}`);
-    console.log(`   Estimated gzip size: ~${(sizeMB / 5).toFixed(2)} MB`);
-    console.log('\nGeoJSON generation complete!\n');
-
-  } catch (error) {
-    console.error('\nERROR: GeoJSON generation failed:', error);
-    process.exit(1);
   }
+
+  console.log(`\nGenerating GeoJSON from REST API (${API_BASE})...\n`);
+
+  const features = [];
+  const seen = new Set();
+
+  for (const slug of ASSET_SLUGS) {
+    let offset = 0;
+    const limit = 500;
+    let pageCount = 0;
+
+    while (true) {
+      const url = `${API_BASE}/assets?asset_type=${slug}&format=json&limit=${limit}&offset=${offset}`;
+      let data;
+      try {
+        data = await fetchJSON(url);
+      } catch (err) {
+        console.warn(`  [WARN] Failed to fetch ${slug} offset=${offset}: ${err.message}`);
+        break;
+      }
+
+      const results = data.results || data;
+      if (!Array.isArray(results) || results.length === 0) break;
+
+      for (const asset of results) {
+        const lat = parseFloat(asset.latitude);
+        const lon = parseFloat(asset.longitude);
+        if (isNaN(lat) || isNaN(lon)) continue;
+
+        const id = asset.id || asset.gem_id || `${lat}_${lon}`;
+        if (seen.has(id)) continue;
+        seen.add(id);
+
+        features.push({
+          type: 'Feature',
+          id,
+          properties: {
+            id,
+            'GEM location ID': id,
+            lat,
+            lon,
+            country: asset.country || null,
+            state: asset.state || asset.subnational_unit || null,
+            tracker: asset.asset_type || slug,
+          },
+          geometry: {
+            type: 'Point',
+            coordinates: [lon, lat],
+          },
+        });
+      }
+
+      pageCount++;
+      offset += limit;
+
+      if (results.length < limit) break;
+    }
+
+    console.log(`  [OK] ${slug}: ${pageCount} pages fetched`);
+  }
+
+  const geojson = {
+    type: 'FeatureCollection',
+    metadata: {
+      source: 'REST API',
+      generated: new Date().toISOString(),
+      count: features.length,
+    },
+    features,
+  };
+
+  fs.writeFileSync(outputPath, JSON.stringify(geojson, null, 2));
+  const stats = fs.statSync(outputPath);
+  const sizeMB = (stats.size / 1024 / 1024).toFixed(2);
+
+  console.log('\nGeoJSON Statistics:');
+  console.log(`   File: static/points.geojson`);
+  console.log(`   Size: ${sizeMB} MB (uncompressed)`);
+  console.log(`   Features: ${features.length.toLocaleString()}`);
+  console.log('\nGeoJSON generation complete!\n');
 }
 
 generateGeoJSON().catch((err) => {
-  console.error('Unhandled error in generateGeoJSON:', err);
-  process.exit(1);
+  console.error('ERROR: GeoJSON generation failed:', err);
+  // Don't exit with error if file already exists — build can continue
+  if (fs.existsSync(outputPath)) {
+    console.log('[WARN] Using existing points.geojson despite generation failure');
+  } else {
+    process.exit(1);
+  }
 });

@@ -15,9 +15,21 @@ export const TOOLS = [
       parameters: {
         type: 'object',
         properties: {
-          query: { type: 'string', description: 'Search term (company name or partial name). Also accepts entity IDs like E100000000650.' },
-          country: { type: 'string', description: 'Filter by headquarters country', enum: COUNTRIES },
-          include_portfolio: { type: 'boolean', description: 'If true, also fetch how many subsidiaries/holdings each result has (slower but more useful for investigation)' },
+          query: {
+            type: 'string',
+            description:
+              'Search term (company name or partial name). Also accepts entity IDs like E100000000650.',
+          },
+          country: {
+            type: 'string',
+            description: 'Filter by headquarters country',
+            enum: COUNTRIES,
+          },
+          include_portfolio: {
+            type: 'boolean',
+            description:
+              'If true, also fetch how many subsidiaries/holdings each result has (slower but more useful for investigation)',
+          },
           limit: { type: 'number', description: 'Max results to return (default 10)' },
         },
         required: ['query'],
@@ -42,12 +54,17 @@ export const TOOLS = [
     type: 'function',
     function: {
       name: 'get_entity_portfolio',
-      description: "Get what an entity owns - its subsidiaries and direct holdings. Use include_assets to also search for physical assets (plants, mines, pipelines) associated with this entity.",
+      description:
+        'Get what an entity owns - its subsidiaries and direct holdings. Use include_assets to also search for physical assets (plants, mines, pipelines) associated with this entity.',
       parameters: {
         type: 'object',
         properties: {
           entity_id: { type: 'string', description: 'The entity ID to look up' },
-          include_assets: { type: 'boolean', description: 'If true, also search for physical assets owned by this entity (default: false)' },
+          include_assets: {
+            type: 'boolean',
+            description:
+              'If true, also search for physical assets owned by this entity (default: false)',
+          },
         },
         required: ['entity_id'],
       },
@@ -57,12 +74,17 @@ export const TOOLS = [
     type: 'function',
     function: {
       name: 'get_entity_owners',
-      description: 'Get who owns an entity - trace ownership upward. Returns direct parent owners with ownership percentages.',
+      description:
+        'Get who owns an entity - trace ownership upward. Returns direct parent owners with ownership percentages.',
       parameters: {
         type: 'object',
         properties: {
           entity_id: { type: 'string', description: 'The entity ID to trace owners for' },
-          include_ultimate: { type: 'boolean', description: 'If true, also trace the full ownership chain upward to find ultimate parent(s) (default: false)' },
+          include_ultimate: {
+            type: 'boolean',
+            description:
+              'If true, also trace the full ownership chain upward to find ultimate parent(s) (default: false)',
+          },
         },
         required: ['entity_id'],
       },
@@ -72,13 +94,23 @@ export const TOOLS = [
     type: 'function',
     function: {
       name: 'get_ownership_graph',
-      description: 'Get the full ownership graph for an entity or asset. Direction "up" traces to ultimate owners, "down" traces to subsidiaries/assets. Returns nodes and edges with ownership percentages.',
+      description:
+        'Get the full ownership graph for an entity or asset. Direction "up" traces to ultimate owners, "down" traces to subsidiaries/assets. Returns nodes and edges with ownership percentages.',
       parameters: {
         type: 'object',
         properties: {
           root_id: { type: 'string', description: 'The entity or asset ID to start from' },
-          direction: { type: 'string', enum: ['up', 'down', 'both'], description: 'Direction to traverse: "up" for owners, "down" for holdings, "both" for full picture' },
-          max_depth: { type: 'number', description: 'Maximum depth to traverse (default 5, max 10). Higher depth = more complete but slower.' },
+          direction: {
+            type: 'string',
+            enum: ['up', 'down', 'both'],
+            description:
+              'Direction to traverse: "up" for owners, "down" for holdings, "both" for full picture',
+          },
+          max_depth: {
+            type: 'number',
+            description:
+              'Maximum depth to traverse (default 5, max 10). Higher depth = more complete but slower.',
+          },
         },
         required: ['root_id', 'direction'],
       },
@@ -88,17 +120,45 @@ export const TOOLS = [
     type: 'function',
     function: {
       name: 'search_assets',
-      description: 'Search for energy assets (plants, mines, pipelines). Geographic filtering is COUNTRY-level only. Returns owners[] for each asset with entity_id, name, and ownership_share. Supports multi-value filters (e.g., multiple statuses or countries).',
+      description:
+        'Search for energy assets (plants, mines, pipelines). Geographic filtering is COUNTRY-level only. Returns owners[] for each asset with entity_id, name, and ownership_share. Supports multi-value filters (e.g., multiple statuses or countries).',
       parameters: {
         type: 'object',
         properties: {
-          query: { type: 'string', description: 'Search term - matches asset names (e.g., "adani", "bowline point")' },
-          tracker: { type: 'string', enum: TRACKERS as unknown as string[], description: 'Filter by asset type (single value)' },
-          statuses: { type: 'array', items: { type: 'string', enum: STATUS_VALUES as unknown as string[] }, description: 'Filter by one or more statuses (e.g., ["operating", "retired"]). All lowercase.' },
-          status: { type: 'string', description: 'Filter by single status (DEPRECATED: use statuses[] instead)', enum: STATUS_VALUES as unknown as string[] },
-          countries: { type: 'array', items: { type: 'string' }, description: 'Filter by one or more countries (e.g., ["China", "India"])' },
-          country: { type: 'string', description: 'Filter by single country (DEPRECATED: use countries[] instead)' },
-          include_facets: { type: 'boolean', description: 'If true, also return faceted counts (status breakdown, country breakdown, type breakdown) for the current filters. Useful for understanding the full picture beyond the returned page.' },
+          query: {
+            type: 'string',
+            description: 'Search term - matches asset names (e.g., "adani", "bowline point")',
+          },
+          tracker: {
+            type: 'string',
+            enum: TRACKERS as unknown as string[],
+            description: 'Filter by asset type (single value)',
+          },
+          statuses: {
+            type: 'array',
+            items: { type: 'string', enum: STATUS_VALUES as unknown as string[] },
+            description:
+              'Filter by one or more statuses (e.g., ["operating", "retired"]). All lowercase.',
+          },
+          status: {
+            type: 'string',
+            description: 'Filter by single status (DEPRECATED: use statuses[] instead)',
+            enum: STATUS_VALUES as unknown as string[],
+          },
+          countries: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Filter by one or more countries (e.g., ["China", "India"])',
+          },
+          country: {
+            type: 'string',
+            description: 'Filter by single country (DEPRECATED: use countries[] instead)',
+          },
+          include_facets: {
+            type: 'boolean',
+            description:
+              'If true, also return faceted counts (status breakdown, country breakdown, type breakdown) for the current filters. Useful for understanding the full picture beyond the returned page.',
+          },
           limit: { type: 'number', description: 'Max results (default 20, max 500)' },
         },
         required: [],
@@ -109,12 +169,20 @@ export const TOOLS = [
     type: 'function',
     function: {
       name: 'get_asset_details',
-      description: 'Get detailed information about a specific asset by its ID. Returns location, capacity, status, owner info, and coordinates.',
+      description:
+        'Get detailed information about a specific asset by its ID. Returns location, capacity, status, owner info, and coordinates.',
       parameters: {
         type: 'object',
         properties: {
-          asset_id: { type: 'string', description: 'The asset ID (e.g., G12345 for plants, P0061 for pipelines)' },
-          include_ownership_chain: { type: 'boolean', description: 'If true, also trace the ownership chain upward from the direct owner to ultimate parent (default: false)' },
+          asset_id: {
+            type: 'string',
+            description: 'The asset ID (e.g., G12345 for plants, P0061 for pipelines)',
+          },
+          include_ownership_chain: {
+            type: 'boolean',
+            description:
+              'If true, also trace the ownership chain upward from the direct owner to ultimate parent (default: false)',
+          },
         },
         required: ['asset_id'],
       },
@@ -124,13 +192,25 @@ export const TOOLS = [
     type: 'function',
     function: {
       name: 'get_top_owners',
-      description: 'Get the biggest owners ranked by asset count or capacity. Samples up to 2000 assets for speed. For country-specific queries, use get_top_owners_by_country instead.',
+      description:
+        'Get the biggest owners ranked by asset count or capacity. Samples up to 2000 assets for speed. For country-specific queries, use get_top_owners_by_country instead.',
       parameters: {
         type: 'object',
         properties: {
-          tracker: { type: 'string', enum: TRACKERS as unknown as string[], description: 'Filter to a specific asset type' },
-          metric: { type: 'string', enum: ['assets', 'capacity'], description: 'Rank by asset count or total capacity (default: assets)' },
-          limit: { type: 'number', description: 'How many top owners to return (default 10, max 50)' },
+          tracker: {
+            type: 'string',
+            enum: TRACKERS as unknown as string[],
+            description: 'Filter to a specific asset type',
+          },
+          metric: {
+            type: 'string',
+            enum: ['assets', 'capacity'],
+            description: 'Rank by asset count or total capacity (default: assets)',
+          },
+          limit: {
+            type: 'number',
+            description: 'How many top owners to return (default 10, max 50)',
+          },
         },
         required: [],
       },
@@ -140,14 +220,29 @@ export const TOOLS = [
     type: 'function',
     function: {
       name: 'get_top_owners_by_country',
-      description: 'Get the biggest owners of assets IN A SPECIFIC COUNTRY. Returns entity names, IDs, and asset counts ranked by holdings.',
+      description:
+        'Get the biggest owners of assets IN A SPECIFIC COUNTRY. Returns entity names, IDs, and asset counts ranked by holdings.',
       parameters: {
         type: 'object',
         properties: {
-          country: { type: 'string', description: 'The country to search in (e.g., "India", "United States")' },
-          tracker: { type: 'string', enum: TRACKERS as unknown as string[], description: 'Filter to a specific asset type' },
-          status: { type: 'string', enum: STATUS_VALUES as unknown as string[], description: 'Filter by status (e.g., "operating" for active assets only)' },
-          limit: { type: 'number', description: 'How many top owners to return (default 10, max 50)' },
+          country: {
+            type: 'string',
+            description: 'The country to search in (e.g., "India", "United States")',
+          },
+          tracker: {
+            type: 'string',
+            enum: TRACKERS as unknown as string[],
+            description: 'Filter to a specific asset type',
+          },
+          status: {
+            type: 'string',
+            enum: STATUS_VALUES as unknown as string[],
+            description: 'Filter by status (e.g., "operating" for active assets only)',
+          },
+          limit: {
+            type: 'number',
+            description: 'How many top owners to return (default 10, max 50)',
+          },
         },
         required: ['country'],
       },
@@ -157,12 +252,22 @@ export const TOOLS = [
     type: 'function',
     function: {
       name: 'get_country_breakdown',
-      description: 'Get exact asset counts by country using API facets. Shows geographic distribution ranked by count. Use for "where are X located?" or "which countries have the most Y?" Supports cross-filtering by status.',
+      description:
+        'Get exact asset counts by country using API facets. Shows geographic distribution ranked by count. Use for "where are X located?" or "which countries have the most Y?" Supports cross-filtering by status.',
       parameters: {
         type: 'object',
         properties: {
-          tracker: { type: 'string', enum: TRACKERS as unknown as string[], description: 'Filter to a specific asset type' },
-          status: { type: 'string', enum: STATUS_VALUES as unknown as string[], description: 'Cross-filter by status (e.g., "operating" to see countries with operating assets only)' },
+          tracker: {
+            type: 'string',
+            enum: TRACKERS as unknown as string[],
+            description: 'Filter to a specific asset type',
+          },
+          status: {
+            type: 'string',
+            enum: STATUS_VALUES as unknown as string[],
+            description:
+              'Cross-filter by status (e.g., "operating" to see countries with operating assets only)',
+          },
           limit: { type: 'number', description: 'How many top countries to return (default 15)' },
         },
         required: [],
@@ -173,12 +278,21 @@ export const TOOLS = [
     type: 'function',
     function: {
       name: 'get_status_breakdown',
-      description: 'Get exact counts by asset status (operating, proposed, construction, retired, etc) using API facets. Returns all status values with their counts. Perfect for "how many X are operating?" or "what is the pipeline of new Y?" Supports cross-filtering by country.',
+      description:
+        'Get exact counts by asset status (operating, proposed, construction, retired, etc) using API facets. Returns all status values with their counts. Perfect for "how many X are operating?" or "what is the pipeline of new Y?" Supports cross-filtering by country.',
       parameters: {
         type: 'object',
         properties: {
-          tracker: { type: 'string', enum: TRACKERS as unknown as string[], description: 'Filter to a specific asset type' },
-          country: { type: 'string', description: 'Cross-filter by country (e.g., "China" to see status breakdown for China only)' },
+          tracker: {
+            type: 'string',
+            enum: TRACKERS as unknown as string[],
+            description: 'Filter to a specific asset type',
+          },
+          country: {
+            type: 'string',
+            description:
+              'Cross-filter by country (e.g., "China" to see status breakdown for China only)',
+          },
         },
         required: [],
       },
@@ -188,7 +302,8 @@ export const TOOLS = [
     type: 'function',
     function: {
       name: 'get_tracker_summary',
-      description: 'Get high-level statistics for all 8 asset types in a single API call. Returns exact asset counts per type and overall status breakdown. Use for "overview of the database" or "how many assets does GEM track?"',
+      description:
+        'Get high-level statistics for all 8 asset types in a single API call. Returns exact asset counts per type and overall status breakdown. Use for "overview of the database" or "how many assets does GEM track?"',
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
@@ -196,12 +311,18 @@ export const TOOLS = [
     type: 'function',
     function: {
       name: 'get_owner_geographic_footprint',
-      description: "Get which countries an owner has assets in, with asset counts per country. Searches up to 500 assets associated with the entity name.",
+      description:
+        'Get which countries an owner has assets in, with asset counts per country. Searches up to 500 assets associated with the entity name.',
       parameters: {
         type: 'object',
         properties: {
           entity_id: { type: 'string', description: 'The entity ID to analyze' },
-          tracker: { type: 'string', enum: TRACKERS as unknown as string[], description: 'Filter to a specific asset type (e.g., only show countries where entity has coal plants)' },
+          tracker: {
+            type: 'string',
+            enum: TRACKERS as unknown as string[],
+            description:
+              'Filter to a specific asset type (e.g., only show countries where entity has coal plants)',
+          },
         },
         required: ['entity_id'],
       },
@@ -211,12 +332,22 @@ export const TOOLS = [
     type: 'function',
     function: {
       name: 'compare_entities',
-      description: 'Compare two or more entities side by side on subsidiaries, geographic reach, and top countries. Returns a structured comparison for easy analysis.',
+      description:
+        'Compare two or more entities side by side on subsidiaries, geographic reach, and top countries. Returns a structured comparison for easy analysis.',
       parameters: {
         type: 'object',
         properties: {
-          entity_ids: { type: 'array', items: { type: 'string' }, description: 'Array of entity IDs to compare (2-4)' },
-          tracker: { type: 'string', enum: TRACKERS as unknown as string[], description: 'Focus comparison on a specific asset type (e.g., compare coal holdings only)' },
+          entity_ids: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Array of entity IDs to compare (2-4)',
+          },
+          tracker: {
+            type: 'string',
+            enum: TRACKERS as unknown as string[],
+            description:
+              'Focus comparison on a specific asset type (e.g., compare coal holdings only)',
+          },
         },
         required: ['entity_ids'],
       },
@@ -226,13 +357,26 @@ export const TOOLS = [
     type: 'function',
     function: {
       name: 'find_common_owners',
-      description: 'Find entities that own assets in ALL of the specified countries. Great for identifying multinational operators or investors with cross-border portfolios.',
+      description:
+        'Find entities that own assets in ALL of the specified countries. Great for identifying multinational operators or investors with cross-border portfolios.',
       parameters: {
         type: 'object',
         properties: {
-          countries: { type: 'array', items: { type: 'string' }, description: 'Countries to find common owners across (2-4 countries)' },
-          tracker: { type: 'string', enum: TRACKERS as unknown as string[], description: 'Filter to a specific asset type' },
-          min_assets: { type: 'number', description: 'Minimum total assets an owner must have across all countries to be included (default: 2). Higher = more significant players only.' },
+          countries: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Countries to find common owners across (2-4 countries)',
+          },
+          tracker: {
+            type: 'string',
+            enum: TRACKERS as unknown as string[],
+            description: 'Filter to a specific asset type',
+          },
+          min_assets: {
+            type: 'number',
+            description:
+              'Minimum total assets an owner must have across all countries to be included (default: 2). Higher = more significant players only.',
+          },
         },
         required: ['countries'],
       },
@@ -242,14 +386,26 @@ export const TOOLS = [
     type: 'function',
     function: {
       name: 'generate_screener_url',
-      description: 'Generate a URL to the visual screener tool with pre-filled filters. The screener shows ownership stakes across asset classes with interactive filtering.',
+      description:
+        'Generate a URL to the visual screener tool with pre-filled filters. The screener shows ownership stakes across asset classes with interactive filtering.',
       parameters: {
         type: 'object',
         properties: {
-          tracker: { type: 'string', enum: TRACKERS as unknown as string[], description: 'Asset type to screen' },
-          status: { type: 'string', enum: STATUS_VALUES as unknown as string[], description: 'Filter by status' },
+          tracker: {
+            type: 'string',
+            enum: TRACKERS as unknown as string[],
+            description: 'Asset type to screen',
+          },
+          status: {
+            type: 'string',
+            enum: STATUS_VALUES as unknown as string[],
+            description: 'Filter by status',
+          },
           country: { type: 'string', description: 'Filter by country' },
-          description: { type: 'string', description: 'Brief description of what this screener link shows (displayed to user)' },
+          description: {
+            type: 'string',
+            description: 'Brief description of what this screener link shows (displayed to user)',
+          },
         },
         required: ['tracker'],
       },
@@ -259,14 +415,31 @@ export const TOOLS = [
     type: 'function',
     function: {
       name: 'generate_map',
-      description: 'Generate an interactive map showing asset locations. Can map by entity (all their assets), by specific asset IDs, or by search query.',
+      description:
+        'Generate an interactive map showing asset locations. Can map by entity (all their assets), by specific asset IDs, or by search query.',
       parameters: {
         type: 'object',
         properties: {
-          entity_ids: { type: 'array', items: { type: 'string' }, description: 'Entity IDs — maps all assets they own' },
-          asset_ids: { type: 'array', items: { type: 'string' }, description: 'Specific asset IDs from search_assets' },
-          query: { type: 'string', description: 'Search term to find and map assets (e.g., "adani coal"). Alternative to providing IDs.' },
-          tracker: { type: 'string', enum: TRACKERS as unknown as string[], description: 'Filter mapped assets to a specific type' },
+          entity_ids: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Entity IDs — maps all assets they own',
+          },
+          asset_ids: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Specific asset IDs from search_assets',
+          },
+          query: {
+            type: 'string',
+            description:
+              'Search term to find and map assets (e.g., "adani coal"). Alternative to providing IDs.',
+          },
+          tracker: {
+            type: 'string',
+            enum: TRACKERS as unknown as string[],
+            description: 'Filter mapped assets to a specific type',
+          },
           country: { type: 'string', description: 'Filter mapped assets to a specific country' },
           title: { type: 'string', description: 'Title for the map' },
         },
@@ -299,7 +472,14 @@ export const TOOLS = [
                 name: { type: 'string', description: 'Name of the item' },
                 type: { type: 'string', enum: ['asset', 'entity'], description: 'Type of item' },
                 tracker: { type: 'string', description: 'For assets: the tracker type' },
-                metadata: { type: 'object', properties: { country: { type: 'string' }, status: { type: 'string' }, capacity: { type: 'number' } } },
+                metadata: {
+                  type: 'object',
+                  properties: {
+                    country: { type: 'string' },
+                    status: { type: 'string' },
+                    capacity: { type: 'number' },
+                  },
+                },
               },
               required: ['id', 'name', 'type'],
             },

@@ -1,3 +1,4 @@
+/* eslint-env node */
 const duckdb = require('duckdb');
 require('dotenv').config();
 

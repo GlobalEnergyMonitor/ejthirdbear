@@ -1,25 +1,23 @@
 <script>
   import { goto } from '$app/navigation';
-  import { assetLink, entityLink, assetPath } from '$lib/links';
-  import { initDuckDB, loadParquetFromPath, query } from '$lib/duckdb-utils';
+  import { assetLink, entityLink } from '$lib/links';
   import { investigationCart } from '$lib/investigationCart';
   import TrackerIcon from '$lib/components/TrackerIcon.svelte';
+  import { Download, Trash2, Building2, Factory } from 'lucide-svelte';
   import {
     formatNumber,
-    escapeCSVVal,
     sparklinePoints,
     buildExportManifest,
     downloadFile,
     runPreflight,
-    buildAssetQuery,
-    buildEntityQuery,
-    buildCombinedQuery,
+    fetchAssetsAsCSV,
+    fetchEntityAssetsAsCSV,
+    fetchCombinedCSV,
   } from './export-panel-utils';
 
   let loading = $state(false);
   let exporting = $state(false);
   let error = $state(null);
-  let dbReady = $state(false);
   let exportProgress = $state('');
   let exportLog = $state([]);
   let lastExportManifest = $state(null);
@@ -41,7 +39,6 @@
   const buildHash = __BUILD_HASH__;
   const appVersion = __APP_VERSION__;
 
-  // Clear entire list
   function clearAll() {
     if (confirm('Remove all items from cart?')) {
       investigationCart.clear();
@@ -49,14 +46,7 @@
   }
 
   function addLog(message, detail = null) {
-    exportLog = [
-      ...exportLog,
-      {
-        t: new Date().toLocaleTimeString(),
-        message,
-        detail,
-      },
-    ];
+    exportLog = [...exportLog, { t: new Date().toLocaleTimeString(), message, detail }];
   }
 
   function resetExportUI() {
@@ -65,40 +55,11 @@
     lastExportManifest = null;
   }
 
-  // Initialize DuckDB for export
-  async function ensureDB() {
-    if (dbReady) return;
-
-    loading = true;
-    try {
-      await initDuckDB();
-
-      const ownershipResult = await loadParquetFromPath(
-        assetPath('all_trackers_ownership@1.parquet'),
-        'ownership'
-      );
-      if (!ownershipResult.success) throw new Error(ownershipResult.error);
-
-      const locResult = await loadParquetFromPath(
-        assetPath('asset_locations.parquet'),
-        'locations'
-      );
-      if (!locResult.success) throw new Error(locResult.error);
-
-      dbReady = true;
-    } catch (err) {
-      error = err.message;
-    } finally {
-      loading = false;
-    }
-  }
-
   async function runAnalysis() {
     if (!totalCount) return;
     analysisLoading = true;
     analysisError = null;
     try {
-      await ensureDB();
       const assetIds = assetItems.map((a) => a.id);
       const entityIds = entityItems.map((e) => e.id);
       analysis = await runPreflight({ assetIds, entityIds });
@@ -126,66 +87,44 @@
     queueAnalysis();
   });
 
-  // App info for manifest
   const appInfo = { version: appVersion, buildTime, buildHash };
 
-  async function exportQuery(sql, filenameBase, _selection) {
-    await ensureDB();
-    const startTime = Date.now();
-    exportProgress = `Running SQL...`;
-    addLog('SQL query started');
-
-    const res = await query(sql);
-    if (!res.success) {
-      throw new Error(res.error || 'Query failed');
-    }
-
-    exportProgress = `Formatting CSV...`;
-    const rows = res.data || [];
-    if (!rows.length) {
-      exportProgress = '';
-      addLog('No rows returned');
-      return {
-        file: { name: `${filenameBase}.csv` },
-        rowCount: 0,
-        bytes: 0,
-        seconds: ((Date.now() - startTime) / 1000).toFixed(1),
-      };
-    }
-
-    const columns = Object.keys(rows[0]);
-    const lines = [];
-    lines.push(columns.map((col) => escapeCSVVal(col)).join(','));
-    for (let i = 0; i < rows.length; i += 1) {
-      lines.push(columns.map((col) => escapeCSVVal(rows[i][col])).join(','));
-    }
-
-    const csv = lines.join('\n');
-    await downloadFile(csv, `${filenameBase}.csv`, 'text/csv;charset=utf-8');
-
-    const elapsed = (Date.now() - startTime) / 1000;
-    const bytes = new Blob([csv]).size;
-    addLog('CSV download complete', { rows: rows.length, bytes });
-
-    exportProgress = `Exported ${rows.length.toLocaleString()} rows`;
-
-    return {
-      file: { name: `${filenameBase}.csv` },
-      rowCount: rows.length,
-      bytes,
-      seconds: elapsed.toFixed(1),
-    };
-  }
-
-  // Shared export logic: build SQL, run query, download CSV + manifest
-  async function doExport(kind, sql, filenameBase, selection) {
+  async function doExport(kind, fetchFn, filenameBase, selection) {
     resetExportUI();
     exporting = true;
+    const startTime = Date.now();
     try {
-      const result = await exportQuery(sql, filenameBase, selection);
-      lastExportManifest = buildExportManifest(kind, selection, result, { sql }, appInfo);
+      addLog('Fetching data from API...');
+      const { csv, rowCount } = await fetchFn((msg) => {
+        exportProgress = msg;
+      });
+
+      if (rowCount === 0) {
+        exportProgress = '';
+        addLog('No rows returned');
+        return;
+      }
+
+      await downloadFile(csv, `${filenameBase}.csv`, 'text/csv;charset=utf-8');
+      const bytes = new Blob([csv]).size;
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      addLog('CSV download complete', { rows: rowCount, bytes });
+      exportProgress = `Exported ${rowCount.toLocaleString()} rows`;
+
+      const result = { file: { name: `${filenameBase}.csv` }, rowCount, bytes, seconds: elapsed };
+      lastExportManifest = buildExportManifest(
+        kind,
+        selection,
+        result,
+        { sql: 'REST API' },
+        appInfo
+      );
       addLog('Manifest created');
-      await downloadFile(JSON.stringify(lastExportManifest, null, 2), `${filenameBase}-manifest.json`, 'application/json;charset=utf-8');
+      await downloadFile(
+        JSON.stringify(lastExportManifest, null, 2),
+        `${filenameBase}-manifest.json`,
+        'application/json;charset=utf-8'
+      );
       addLog('Manifest downloaded');
     } catch (err) {
       error = err.message;
@@ -198,19 +137,29 @@
   function exportAssetsCSV() {
     if (!assetItems.length) return;
     const ids = assetItems.map((a) => a.id);
-    doExport('assets', buildAssetQuery(ids), 'gem-assets-export', { assets: ids, entities: [] });
+    doExport('assets', (p) => fetchAssetsAsCSV(ids, p), 'gem-assets-export', {
+      assets: ids,
+      entities: [],
+    });
   }
 
   function exportEntitiesCSV() {
     if (!entityItems.length) return;
     const ids = entityItems.map((e) => e.id);
-    doExport('entities', buildEntityQuery(ids), 'gem-entities-export', { assets: [], entities: ids });
+    doExport('entities', (p) => fetchEntityAssetsAsCSV(ids, p), 'gem-entities-export', {
+      assets: [],
+      entities: ids,
+    });
   }
 
   function exportAllCSV() {
     if (!totalCount) return;
-    const aIds = assetItems.map((a) => a.id), eIds = entityItems.map((e) => e.id);
-    doExport('combined', buildCombinedQuery(aIds, eIds), 'gem-export', { assets: aIds, entities: eIds });
+    const aIds = assetItems.map((a) => a.id),
+      eIds = entityItems.map((e) => e.id);
+    doExport('combined', (p) => fetchCombinedCSV(aIds, eIds, p), 'gem-export', {
+      assets: aIds,
+      entities: eIds,
+    });
   }
 
   async function handleRowClick(row) {
@@ -245,19 +194,24 @@
   {:else}
     <div class="export-actions">
       <button class="btn btn-primary" onclick={exportAllCSV} disabled={exporting || loading}>
+        <Download size={14} />
         {exporting ? 'Exporting...' : `Export All (${totalCount} items)`}
       </button>
       {#if assetCount > 0}
         <button class="btn" onclick={exportAssetsCSV} disabled={exporting || loading}>
+          <Factory size={14} />
           Assets Only ({assetCount})
         </button>
       {/if}
       {#if entityCount > 0}
         <button class="btn" onclick={exportEntitiesCSV} disabled={exporting || loading}>
+          <Building2 size={14} />
           Entities Only ({entityCount})
         </button>
       {/if}
-      <button class="btn btn-danger" onclick={clearAll} disabled={exporting}>Clear All</button>
+      <button class="btn btn-danger" onclick={clearAll} disabled={exporting}
+        ><Trash2 size={14} /> Clear All</button
+      >
       {#if exportProgress}
         <span class="progress">{exportProgress}</span>
       {/if}
@@ -336,16 +290,17 @@
         </div>
 
         <div class="spark-grid">
-          {#each [
-            { title: 'Top Trackers', data: analysis.combined?.topTrackers },
-            { title: 'Top Statuses', data: analysis.combined?.topStatuses },
-            { title: 'Top Countries', data: analysis.combined?.topCountries },
-          ].filter(c => c.data?.length) as card}
+          {#each [{ title: 'Top Trackers', data: analysis.combined?.topTrackers }, { title: 'Top Statuses', data: analysis.combined?.topStatuses }, { title: 'Top Countries', data: analysis.combined?.topCountries }].filter((c) => c.data?.length) as card}
             <div class="spark-card">
               <div class="spark-header">
                 <span class="spark-title">{card.title}</span>
                 <svg class="sparkline" viewBox="0 0 80 18" aria-hidden="true">
-                  <polyline fill="none" stroke="currentColor" stroke-width="1.5" points={sparklinePoints(card.data.map((r) => r.rows))} />
+                  <polyline
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    points={sparklinePoints(card.data.map((r) => r.rows))}
+                  />
                 </svg>
               </div>
               <div class="spark-rows">

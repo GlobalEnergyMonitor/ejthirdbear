@@ -9,7 +9,7 @@
   import maplibregl from 'maplibre-gl';
   import 'maplibre-gl/dist/maplibre-gl.css';
   import { colorByTracker, colors } from '$lib/design-tokens';
-  import { listAssets, getAsset, getEntityOwned, type AssetSummary } from '$lib/ownership-api';
+  import { getAsset, getEntityOwned, type AssetSummary } from '$lib/ownership-api';
   import AssetMicroCard from './AssetMicroCard.svelte';
 
   // Props
@@ -43,9 +43,13 @@
             try {
               const asset = await getAsset(item.entityId);
               allAssets.push(asset);
-            } catch { /* skip individual failures */ }
+            } catch {
+              /* skip individual failures */
+            }
           }
-        } catch { /* skip entity failures */ }
+        } catch {
+          /* skip entity failures */
+        }
       });
 
       // Fetch specific assets directly
@@ -53,7 +57,9 @@
         try {
           const asset = await getAsset(aid);
           allAssets.push(asset);
-        } catch { /* skip individual failures */ }
+        } catch {
+          /* skip individual failures */
+        }
       });
 
       await Promise.all([...entityPromises, ...assetPromises]);
@@ -61,12 +67,12 @@
       // Dedupe by ID and filter to those with coordinates
       const seen = new Set();
       locations = allAssets
-        .filter(a => {
+        .filter((a) => {
           if (!a.latitude || !a.longitude || seen.has(a.id)) return false;
           seen.add(a.id);
           return !isNaN(Number(a.latitude)) && !isNaN(Number(a.longitude));
         })
-        .map(a => ({
+        .map((a) => ({
           asset_id: a.id,
           name: a.name,
           tracker: a.facilityType || '',
@@ -78,7 +84,7 @@
           owner: a.ownerName || '',
         }));
     } catch (err) {
-      console.error('[InvestigationMap] Failed to load locations:', err);
+      if (import.meta.env.DEV) console.error('[InvestigationMap] Failed to load locations:', err);
     }
     loading = false;
   }

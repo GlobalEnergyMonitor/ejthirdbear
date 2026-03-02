@@ -10,7 +10,7 @@
    * @type {{
    *   variant?: 'footer' | 'compact' | 'full',
    *   trackers?: string[],
-   *   dataSource?: 'api' | 'motherduck' | 'duckdb' | 'local' | 'server' | null,
+   *   dataSource?: 'api' | 'local' | 'server' | null,
    *   queryTime?: number | null,
    *   freshness?: 'fresh' | 'cached' | 'stale' | null,
    * }}
@@ -20,15 +20,13 @@
     trackers = [],
     dataSource = null,
     queryTime = null,
-    freshness = null,
+    freshness: _freshness = null,
   } = $props();
 
   // Data source display info
   const sourceInfo = {
     api: { label: 'Live API', desc: 'Fetched from ownership API (real-time)', icon: '⚡' },
-    motherduck: { label: 'MotherDuck', desc: 'Cloud database (always fresh)', icon: '🦆' },
-    duckdb: { label: 'Local Cache', desc: 'Loaded from local DuckDB/Parquet', icon: '💾' },
-    local: { label: 'Local Cache', desc: 'Loaded from local Parquet (may be stale)', icon: '💾' },
+    local: { label: 'Local Cache', desc: 'Loaded from local cache', icon: '💾' },
     server: { label: 'Server', desc: 'Pre-rendered via API', icon: '🖥' },
   };
   const source = $derived(
@@ -93,7 +91,7 @@
       copied = true;
       setTimeout(() => (copied = false), 2000);
     } catch (err) {
-      console.error('Failed to copy:', err);
+      if (import.meta.env.DEV) console.error('Failed to copy:', err);
     }
   }
 </script>
@@ -275,13 +273,6 @@
     color: #065f46;
   }
 
-  .data-source-badge.motherduck {
-    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-    border: 1px solid #f59e0b;
-    color: #78350f;
-  }
-
-  .data-source-badge.duckdb,
   .data-source-badge.local {
     background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
     border: 1px solid #d1d5db;

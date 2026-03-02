@@ -84,7 +84,7 @@
   />
 </svelte:head>
 
-<main>
+<div class="page">
   <header>
     <a href={link('index')} class="back-link">Back to Overview</a>
     <span class="title">All Assets</span>
@@ -114,14 +114,14 @@
   {:else}
     <p class="no-data">No assets found</p>
   {/if}
-</main>
+</div>
 
 <!-- ============================================================================
      STYLES
      ============================================================================ -->
 <style>
   /* Layout */
-  main {
+  .page {
     width: 100%;
     padding: var(--space-5) var(--space-10);
   }
@@ -173,7 +173,7 @@
 
   /* Responsive */
   @media (max-width: 768px) {
-    main {
+    .page {
       padding: var(--space-4);
     }
   }

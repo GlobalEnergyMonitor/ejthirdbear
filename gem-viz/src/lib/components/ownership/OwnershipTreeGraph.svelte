@@ -7,10 +7,16 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { entityLink, assetLink } from '$lib/links';
-  import * as d3 from 'd3';
+  import { sum } from 'd3-array';
+  import { line, curveBasis } from 'd3-shape';
   import type {
-    GraphNode, GraphEdge, OwnershipPathEntry, LayoutPoint,
-    LayoutNode, LayoutEdge, DagreEdge,
+    GraphNode,
+    GraphEdge,
+    OwnershipPathEntry,
+    LayoutPoint,
+    LayoutNode,
+    LayoutEdge,
+    DagreEdge,
   } from '$lib/component-data/graph-types';
 
   interface Props {
@@ -27,8 +33,13 @@
 
   // Design tokens (from Observable notebook)
   const C = {
-    navy: '#1a3a4a', teal: '#2a7f8f', mint: '#97E6DE', warmWhite: '#fafaf7',
-    nodeFill: '#cce1e6', edge: '#9fc6d0', edgeImputed: '#cdcdcd',
+    navy: '#1a3a4a',
+    teal: '#2a7f8f',
+    mint: '#97E6DE',
+    warmWhite: '#fafaf7',
+    nodeFill: '#cce1e6',
+    edge: '#9fc6d0',
+    edgeImputed: '#cdcdcd',
   };
 
   let dagre: typeof import('dagre') | null = null;
@@ -41,8 +52,13 @@
   let gHeight = $state(300);
   let nodeRanks = $state<Map<string, number>>(new Map());
 
-  // Node radius
-  const nodeR = $derived(compact ? 10 : nodes.length < 10 ? 17 : nodes.length > 25 ? 11 : 14);
+  // Large graph threshold — enables scrollable mode with explicit SVG dimensions
+  const isLargeGraph = $derived(!compact && nodes.length > 30);
+
+  // Node radius — scale down for large graphs
+  const nodeR = $derived(
+    compact ? 10 : nodes.length < 10 ? 17 : nodes.length < 25 ? 14 : nodes.length < 80 ? 11 : 8
+  );
 
   // Process paths: compute cumulative ownership % and track which nodes/edges
   // each terminal entity touches (for hover-based path highlighting)
@@ -59,7 +75,7 @@
       if (!Array.isArray(arr)) continue;
 
       // Sum all path cumulative percentages for this terminal
-      pctMap.set(id, d3.sum(arr.map((p: OwnershipPathEntry) => p.cumulative_pct || 0)));
+      pctMap.set(id, sum(arr.map((p: OwnershipPathEntry) => p.cumulative_pct || 0)));
 
       // Collect every node and edge on any route to this terminal
       const nodesTouched = new Set<string>();
@@ -88,7 +104,7 @@
     const startId = nodes.find((n) => n.type === 'asset' || n.id === rootId)?.id || rootId;
     const spine = new Set<string>([startId]);
     let cur = startId;
-    // eslint-disable-next-line no-constant-condition
+
     while (true) {
       const parents = edges.filter((e) => e.target === cur && !spine.has(e.source));
       if (parents.length !== 1) break; // stop at fork or dead end
@@ -99,11 +115,17 @@
   });
 
   // Build direct edge percentage lookup as fallback when paths data unavailable
+  // Handles both upstream (edges → rootId) and downstream (rootId → edges) directions
   const edgePctMap = $derived.by(() => {
     const m = new Map<string, number>();
     for (const e of edges) {
-      if (e.value != null && e.target === rootId) {
+      if (e.value == null) continue;
+      if (e.target === rootId) {
+        // Upstream: who owns the root
         m.set(e.source, (m.get(e.source) || 0) + e.value);
+      } else if (e.source === rootId) {
+        // Downstream: what the root owns
+        m.set(e.target, (m.get(e.target) || 0) + e.value);
       }
     }
     return m;
@@ -112,10 +134,15 @@
   // Owners for side panel (sorted by cumulative ownership %)
   // Falls back to direct edge percentages when paths data is unavailable
   const ownersList = $derived(
-    nodes.filter((n) => n.type !== 'asset' && n.id !== rootId)
+    nodes
+      .filter((n) => n.type !== 'asset' && n.id !== rootId)
       .map((n) => {
         const nid = n.entity_id || n.id;
-        return { id: n.id, name: n.name || n.Name || n.id, pct: pathsMap.get(nid) || edgePctMap.get(nid) || 0 };
+        return {
+          id: n.id,
+          name: n.name || n.Name || n.id,
+          pct: pathsMap.get(nid) || edgePctMap.get(nid) || 0,
+        };
       })
       .sort((a, b) => b.pct - a.pct)
   );
@@ -153,11 +180,13 @@
       }
 
       // Check if all adjacent nodes have enough horizontal space for centered labels
-      const allClear = nodesAtRank.every((_: LayoutNode, i: number) =>
-        i === 0 || (nodesAtRank[i].x - nodesAtRank[i - 1].x) >= minGap
+      const allClear = nodesAtRank.every(
+        (_: LayoutNode, i: number) => i === 0 || nodesAtRank[i].x - nodesAtRank[i - 1].x >= minGap
       );
       if (allClear) {
-        nodesAtRank.forEach((n: LayoutNode) => { n.labelPos = { dx: 0, dy: n.r + 12, below: false }; });
+        nodesAtRank.forEach((n: LayoutNode) => {
+          n.labelPos = { dx: 0, dy: n.r + 12, below: false };
+        });
         continue;
       }
 
@@ -188,7 +217,12 @@
   // Edge path generator
   function edgePath(pts: LayoutPoint[]): string {
     if (!pts || pts.length < 2) return '';
-    return d3.line<LayoutPoint>().x((d) => d.x).y((d) => d.y).curve(d3.curveBasis)(pts) || '';
+    return (
+      line<LayoutPoint>()
+        .x((d) => d.x)
+        .y((d) => d.y)
+        .curve(curveBasis)(pts) || ''
+    );
   }
 
   // Run layout
@@ -196,10 +230,11 @@
     if (!dagre || nodes.length === 0) return;
 
     const g = new dagre.graphlib.Graph();
+    const isLarge = nodes.length > 30;
     g.setGraph({
       rankdir: 'BT',
-      nodesep: compact ? nodeR * 2.5 : nodeR * 3,
-      ranksep: compact ? 35 : 60,
+      nodesep: compact ? nodeR * 2.5 : isLarge ? nodeR * 4 : nodeR * 3,
+      ranksep: compact ? 35 : isLarge ? 80 : 60,
       marginx: compact ? 25 : 50,
       marginy: compact ? 20 : 50,
     });
@@ -217,7 +252,9 @@
 
     // Convert dagre y-positions to discrete rank indices (bottom = rank 0)
     const yPos = new Map(g.nodes().map((id: string) => [id, Math.round(g.node(id).y)] as const));
-    const yToRank = new Map([...new Set(yPos.values())].sort((a, b) => b - a).map((y, i) => [y, i]));
+    const yToRank = new Map(
+      [...new Set(yPos.values())].sort((a, b) => b - a).map((y, i) => [y, i])
+    );
     nodeRanks = new Map([...yPos].map(([id, y]) => [id, yToRank.get(y) ?? 0]));
 
     // O(1) lookups instead of O(n) find per node/edge
@@ -229,7 +266,12 @@
       const orig = nodeById.get(id);
       const isAsset = orig?.type === 'asset' || id === rootId;
       return {
-        id, x: pos.x, y: pos.y, w: pos.width, h: pos.height, isAsset,
+        id,
+        x: pos.x,
+        y: pos.y,
+        w: pos.width,
+        h: pos.height,
+        isAsset,
         label: orig?.name || orig?.Name || id,
         pct: pathsMap.get(orig?.entity_id || id) || 0,
         r: isAsset ? 0 : nodeR,
@@ -243,8 +285,11 @@
     layoutEdges = g.edges().map((e: DagreEdge) => {
       const orig = edgeByKey.get(`${e.v}->${e.w}`);
       return {
-        source: e.v, target: e.w, points: g.edge(e).points,
-        value: orig?.value || 0, imputed_share: orig?.imputed_share || false,
+        source: e.v,
+        target: e.w,
+        points: g.edge(e).points,
+        value: orig?.value || 0,
+        imputed_share: orig?.imputed_share || false,
       };
     });
 
@@ -253,11 +298,15 @@
     gHeight = graphMeta.height || 300;
   }
 
-  // Label visibility: asset always, hovered always, spine always, small graphs always
+  // Label visibility: asset always, hovered always, spine always, small/medium graphs always
   function shouldShowLabel(n: LayoutNode): boolean {
     if (n.isAsset || hoveredId === n.id || nodesToShowText.has(n.id)) return true;
     if (compact && layoutNodes.length < 10) return true;
-    return layoutNodes.length < 6;
+    // Show all labels for small/medium graphs
+    if (layoutNodes.length < 25) return true;
+    // For large graphs in scrollable mode, show all labels since user can scroll
+    if (isLargeGraph) return true;
+    return false;
   }
 
   // Navigation: assets go to asset page, entities to entity page
@@ -271,21 +320,35 @@
     const entityId = nodes.find((node) => node.id === n.id)?.entity_id || n.id;
     hoveredNodeData = pathsTouchedMap.get(entityId) || null;
   }
-  function handleNodeLeave() { hoveredId = null; hoveredNodeData = null; }
+  function handleNodeLeave() {
+    hoveredId = null;
+    hoveredNodeData = null;
+  }
 
   // Hover-aware opacity: nodes/edges not on the active path fade to 0.1
   function getNodeOpacity(n: LayoutNode): number {
     if (!hoveredNodeData) return 1;
-    return (n.isAsset || n.id === hoveredId || hoveredNodeData.nodesTouched.includes(n.id)) ? 1 : 0.1;
+    return n.isAsset || n.id === hoveredId || hoveredNodeData.nodesTouched.includes(n.id) ? 1 : 0.1;
   }
   function getEdgeOpacity(idx: number): number {
     if (!hoveredNodeData) return 1;
     return hoveredNodeData.edgeIndices.includes(idx) ? 0.7 : 0.1;
   }
-  // Edge labels: always visible in compact mode, otherwise only on hover path
+  // Edge labels: always visible in compact/large mode, otherwise only on hover path
   function shouldShowEdgeLabel(idx: number): boolean {
-    if (compact) return true;
+    if (compact || isLargeGraph) return true;
     return !!hoveredNodeData?.edgeIndices.includes(idx);
+  }
+
+  let graphWrapEl = $state<HTMLDivElement | null>(null);
+
+  function scrollToRoot() {
+    if (!graphWrapEl || !isLargeGraph) return;
+    // Find the root node's x position and scroll so it's roughly centered
+    const rootNode = layoutNodes.find((n) => n.isAsset || n.id === rootId);
+    if (!rootNode) return;
+    const scrollX = Math.max(0, rootNode.x - graphWrapEl.clientWidth / 2);
+    graphWrapEl.scrollLeft = scrollX;
   }
 
   onMount(async () => {
@@ -293,8 +356,10 @@
       dagre = await import('dagre');
       runLayout();
       ready = true;
+      // Auto-scroll to root after first render
+      requestAnimationFrame(scrollToRoot);
     } catch (e) {
-      console.error('Failed to load dagre:', e);
+      if (import.meta.env.DEV) console.error('Failed to load dagre:', e);
     }
   });
 
@@ -311,8 +376,14 @@
     <div class="msg">No graph data</div>
   {:else}
     <div class="container">
-      <div class="graph-wrap">
-        <svg viewBox="0 0 {gWidth} {gHeight}" preserveAspectRatio="xMidYMid meet">
+      <div class="graph-wrap" bind:this={graphWrapEl}>
+        <svg
+          viewBox="0 0 {gWidth} {gHeight}"
+          preserveAspectRatio="xMidYMid meet"
+          style={isLargeGraph
+            ? `width: ${Math.max(gWidth, 800)}px; min-height: ${Math.max(gHeight, 600)}px;`
+            : ''}
+        >
           <defs>
             <marker id="arr" markerWidth="8" markerHeight="6" refX="6" refY="3" orient="auto">
               <polygon points="0 0, 8 3, 0 6" fill={C.edge} />
@@ -325,7 +396,13 @@
             {@const showLabel = shouldShowEdgeLabel(idx)}
             {@const opacity = getEdgeOpacity(idx)}
             <g class="edge" style="opacity: {opacity}">
-              <path d={edgePath(e.points)} stroke={e.imputed_share ? C.edgeImputed : C.edge} stroke-width="1.5" fill="none" marker-end="url(#arr)" />
+              <path
+                d={edgePath(e.points)}
+                stroke={e.imputed_share ? C.edgeImputed : C.edge}
+                stroke-width="1.5"
+                fill="none"
+                marker-end="url(#arr)"
+              />
               {#if e.value && mid && showLabel}
                 <text x={mid.x} y={mid.y - 5} class="edge-lbl">{e.value.toFixed(1)}%</text>
               {/if}
@@ -352,20 +429,26 @@
               onmouseleave={handleNodeLeave}
             >
               {#if n.isAsset}
-                <rect x={-n.w / 2} y={-n.h / 2} width={n.w} height={n.h} rx="4" fill={C.navy} stroke="white" stroke-width="1.5" />
-                <text class="asset-lbl" fill={C.warmWhite}>{n.label.slice(0, compact ? 18 : 28)}</text>
+                <rect
+                  x={-n.w / 2}
+                  y={-n.h / 2}
+                  width={n.w}
+                  height={n.h}
+                  rx="4"
+                  fill={C.navy}
+                  stroke="white"
+                  stroke-width="1.5"
+                />
+                <text class="asset-lbl" fill={C.warmWhite}
+                  >{n.label.slice(0, compact ? 18 : 28)}</text
+                >
               {:else}
                 <circle r={n.r} fill={C.nodeFill} stroke="white" stroke-width="1.5" />
                 {#if n.pct > 0}
                   <path d={pieArc(n.pct, n.r - 1)} fill={C.teal} />
                 {/if}
                 {#if showLabel}
-                  <text
-                    class="node-lbl"
-                    class:small={pos.small}
-                    x={pos.dx}
-                    y={pos.dy}
-                  >
+                  <text class="node-lbl" class:small={pos.small} x={pos.dx} y={pos.dy}>
                     <tspan x={pos.dx} dy={wrapped.line2 ? '-0.3em' : '0'}>{wrapped.line1}</tspan>
                     {#if wrapped.line2}
                       <tspan x={pos.dx} dy="1.1em">{wrapped.line2}</tspan>
@@ -429,13 +512,14 @@
     flex: 1;
     background: #fafaf7;
     border: 1px solid #e5e5e5;
+    overflow: auto;
+    max-height: 700px;
   }
   svg {
     display: block;
     width: 100%;
     height: auto;
     min-height: 350px;
-    max-height: 550px;
   }
   .compact svg {
     min-height: 120px;
@@ -448,22 +532,29 @@
   .compact .container {
     gap: 0;
   }
-  .compact .asset-lbl, .compact .node-lbl {
+  .compact .asset-lbl,
+  .compact .node-lbl {
     font-size: 9px;
   }
   .compact .edge-lbl {
     font-size: 8px;
   }
-  .node, .edge { transition: opacity 0.2s ease-out; }
-  .node { cursor: pointer; }
+  .node,
+  .edge {
+    transition: opacity 0.2s ease-out;
+  }
+  .node {
+    cursor: pointer;
+  }
   .node.in-chain circle {
     stroke-width: 2;
   }
   .node.hovered circle {
-    stroke: #97E6DE;
+    stroke: #97e6de;
     stroke-width: 3;
   }
-  .asset-lbl, .node-lbl {
+  .asset-lbl,
+  .node-lbl {
     font-size: 11px;
     text-anchor: middle;
     dominant-baseline: middle;
@@ -508,7 +599,8 @@
     padding: 3px 0;
     cursor: pointer;
   }
-  .row:hover, .row.active {
+  .row:hover,
+  .row.active {
     color: #2a7f8f;
     text-decoration: underline;
   }

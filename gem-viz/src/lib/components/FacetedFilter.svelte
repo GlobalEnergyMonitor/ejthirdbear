@@ -13,6 +13,7 @@
 
   import { formatCompact } from '$lib/format';
   import { flip } from 'svelte/animate';
+  import { ChevronDown, ChevronRight } from 'lucide-svelte';
   import { fade } from 'svelte/transition';
 
   /**
@@ -155,7 +156,12 @@
         in:fade={{ duration: 150 }}
       >
         <span class="facet-bar"></span>
-        <input type="checkbox" checked={isSelected} tabindex="-1" onchange={() => toggle(option.value)} />
+        <input
+          type="checkbox"
+          checked={isSelected}
+          tabindex="-1"
+          onchange={() => toggle(option.value)}
+        />
         <span class="facet-option-label">{option.value}</span>
         {#if option.count !== undefined}
           <span class="facet-count">({formatCompact(option.count)})</span>
@@ -187,9 +193,9 @@
   {#if hiddenCount > 0 || expanded}
     <button class="facet-toggle" onclick={toggleExpand}>
       {#if expanded}
-        <span class="toggle-icon">&#9662;</span> See less
+        <span class="toggle-icon"><ChevronDown size={12} /></span> See less
       {:else}
-        <span class="toggle-icon">&#9656;</span> See {hiddenCount} more
+        <span class="toggle-icon"><ChevronRight size={12} /></span> See {hiddenCount} more
       {/if}
     </button>
   {/if}

@@ -102,11 +102,7 @@ export function toRgbArray(hex: string, alpha = 255): [number, number, number, n
 /**
  * Mix two hex colors and return RGBA array
  */
-export function mixHex(
-  hexA: string,
-  hexB: string,
-  t: number
-): [number, number, number, number] {
+export function mixHex(hexA: string, hexB: string, t: number): [number, number, number, number] {
   const a = hexToRgb(hexA);
   const b = hexToRgb(hexB);
   if (!a || !b) return [0, 0, 0, 255];

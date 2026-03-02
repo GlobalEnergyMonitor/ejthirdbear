@@ -1,11 +1,9 @@
 /**
  * Export Panel utility functions
- * Extracted from ExportPanel.svelte to reduce file size
+ * Fetches asset/entity data via ownership-api.ts
  */
 
-import { query } from '$lib/duckdb-utils';
-import { buildIdList } from '$lib/utils/sql';
-import { ASSET_ID_COALESCE_O } from '$lib/duckdb-queries';
+import { getAsset, getEntityGraphDown, type AssetSummary } from '$lib/ownership-api';
 
 export interface PreflightStats {
   ok: boolean;
@@ -42,24 +40,15 @@ export interface ExportManifest {
   };
 }
 
-/**
- * Get current ISO timestamp
- */
 export function nowIso(): string {
   return new Date().toISOString();
 }
 
-/**
- * Format number with locale formatting
- */
 export function formatNumber(n: unknown): string {
   const num = Number(n);
   return Number.isFinite(num) ? num.toLocaleString() : String(n ?? '');
 }
 
-/**
- * Format bytes to human-readable string
- */
 export function formatBytes(bytes: unknown): string {
   const b = Number(bytes);
   if (!Number.isFinite(b)) return '';
@@ -73,9 +62,6 @@ export function formatBytes(bytes: unknown): string {
   return `${value.toFixed(unitIdx === 0 ? 0 : 1)} ${units[unitIdx]}`;
 }
 
-/**
- * Escape a value for CSV format
- */
 export function escapeCSVVal(val: unknown): string {
   if (val == null) return '';
   const s = String(val);
@@ -85,23 +71,19 @@ export function escapeCSVVal(val: unknown): string {
   return s;
 }
 
-/**
- * Generate sparkline points from values
- */
 export function sparklinePoints(values: number[]): string {
   const nums = values.map((v) => Number(v) || 0);
   const max = Math.max(...nums, 1);
   const normalized = nums.map((n) => n / max);
-  return normalized.map((v, i) => {
-    const x = (i / Math.max(1, normalized.length - 1)) * 80;
-    const y = 18 - v * 18;
-    return `${x},${y}`;
-  }).join(' ');
+  return normalized
+    .map((v, i) => {
+      const x = (i / Math.max(1, normalized.length - 1)) * 80;
+      const y = 18 - v * 18;
+      return `${x},${y}`;
+    })
+    .join(' ');
 }
 
-/**
- * Build export manifest object
- */
 export function buildExportManifest(
   kind: string,
   selection: { assets: string[]; entities: string[] },
@@ -109,18 +91,9 @@ export function buildExportManifest(
   sql: { sql: string },
   app: { version: string; buildTime: string; buildHash: string }
 ): ExportManifest {
-  return {
-    kind,
-    selection,
-    result,
-    sql,
-    app,
-  };
+  return { kind, selection, result, sql, app };
 }
 
-/**
- * Download file to browser
- */
 export async function downloadFile(
   data: string,
   filename: string,
@@ -137,112 +110,92 @@ export async function downloadFile(
   URL.revokeObjectURL(url);
 }
 
-/**
- * Describe a table schema
- */
-export async function describeTable(tableName: string): Promise<unknown[] | null> {
-  const res = await query(`DESCRIBE SELECT * FROM ${tableName}`);
-  if (!res.success) return null;
-  return (res.data || []).map((row: Record<string, unknown>) => ({
-    name: row.column_name,
-    type: row.column_type,
-    nullable: row.null ? String(row.null) : undefined,
-  }));
+// Batch-fetch assets with concurrency limit
+async function batchGetAssets(ids: string[], concurrency = 5): Promise<AssetSummary[]> {
+  const results: AssetSummary[] = [];
+  const unique = [...new Set(ids)];
+
+  for (let i = 0; i < unique.length; i += concurrency) {
+    const batch = unique.slice(i, i + concurrency);
+    const settled = await Promise.allSettled(batch.map((id) => getAsset(id)));
+    for (const r of settled) {
+      if (r.status === 'fulfilled') results.push(r.value);
+    }
+  }
+
+  return results;
 }
 
-/**
- * Get preflight statistics for a selection
- */
-export async function getPreflightStats({
-  assetIds = [],
-  entityIds = [],
-}: {
-  assetIds?: string[];
-  entityIds?: string[];
-}): Promise<PreflightStats> {
-  const whereParts: string[] = [];
-  if (entityIds.length > 0)
-    whereParts.push(`o."Owner GEM Entity ID" IN (${buildIdList(entityIds)})`);
-  if (assetIds.length > 0)
-    whereParts.push(`${ASSET_ID_COALESCE_O} IN (${buildIdList(assetIds)})`);
-  const whereClause = whereParts.length > 0 ? `WHERE ${whereParts.join(' OR ')}` : 'WHERE 1=0';
+// Resolve entity IDs to their terminal asset IDs via graph
+async function resolveEntityAssetIds(entityIds: string[]): Promise<string[]> {
+  const assetIds: string[] = [];
+  const settled = await Promise.allSettled(entityIds.map((id) => getEntityGraphDown(id)));
 
-  const summarySql = `
-    SELECT
-      COUNT(*) as ownership_rows,
-      COUNT(DISTINCT ${ASSET_ID_COALESCE_O}) as distinct_assets,
-      COUNT(DISTINCT o."Owner GEM Entity ID") as distinct_entities,
-      COUNT(DISTINCT o."Tracker") as distinct_trackers,
-      COUNT(DISTINCT o."Status") as distinct_statuses,
-      COUNT(DISTINCT COALESCE(l."Country.Area", 'Unknown')) as distinct_countries,
-      COALESCE(SUM(CAST(o."Capacity (MW)" AS DOUBLE)), 0) as total_capacity_mw,
-      SUM(CASE WHEN l."Latitude" IS NULL OR l."Longitude" IS NULL THEN 1 ELSE 0 END) as rows_missing_coords
-    FROM ownership o
-    LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
-    ${whereClause}
-  `;
+  for (const result of settled) {
+    if (result.status !== 'fulfilled') continue;
+    const graph = result.value;
+    const terminalSet = new Set(graph.terminalIds || []);
+    for (const node of graph.nodes) {
+      if (terminalSet.has(node.id) || node.is_terminal) {
+        assetIds.push(node.id);
+      }
+    }
+  }
 
-  const topTrackersSql = `
-    SELECT
-      COALESCE(o."Tracker", 'Unknown') as key,
-      COUNT(*) as rows
-    FROM ownership o
-    ${whereClause}
-    GROUP BY 1
-    ORDER BY rows DESC
-    LIMIT 10
-  `;
+  return assetIds;
+}
 
-  const topStatusesSql = `
-    SELECT
-      COALESCE(o."Status", 'Unknown') as key,
-      COUNT(*) as rows
-    FROM ownership o
-    ${whereClause}
-    GROUP BY 1
-    ORDER BY rows DESC
-    LIMIT 10
-  `;
+// Build preflight stats from asset data
+function buildPreflightFromAssets(assets: AssetSummary[]): PreflightStats {
+  const trackerCounts = new Map<string, number>();
+  const statusCounts = new Map<string, number>();
+  const countryCounts = new Map<string, number>();
+  const entitySet = new Set<string>();
+  let totalCapacity = 0;
 
-  const topCountriesSql = `
-    SELECT
-      COALESCE(l."Country.Area", 'Unknown') as key,
-      COUNT(*) as rows
-    FROM ownership o
-    LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
-    ${whereClause}
-    GROUP BY 1
-    ORDER BY rows DESC
-    LIMIT 10
-  `;
+  for (const asset of assets) {
+    const tracker = asset.facilityType || 'Unknown';
+    const status = asset.status || 'Unknown';
+    const country = asset.country || 'Unknown';
+    trackerCounts.set(tracker, (trackerCounts.get(tracker) || 0) + 1);
+    statusCounts.set(status, (statusCounts.get(status) || 0) + 1);
+    countryCounts.set(country, (countryCounts.get(country) || 0) + 1);
+    totalCapacity += asset.capacity || 0;
+    for (const o of asset.owners || []) {
+      if (o.entityId) entitySet.add(o.entityId);
+    }
+  }
 
-  const [summary, topTrackers, topStatuses, topCountries] = await Promise.all([
-    query(summarySql),
-    query(topTrackersSql),
-    query(topStatusesSql),
-    query(topCountriesSql),
-  ]);
+  const sortedEntries = (m: Map<string, number>) =>
+    [...m.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([key, rows]) => ({ key, rows }));
 
-  const summaryRow =
-    summary.success && summary.data?.[0] ? (summary.data[0] as Record<string, unknown>) : null;
   return {
-    ok: Boolean(summaryRow),
+    ok: true,
     sql: {
-      summary: summarySql.trim(),
-      topTrackers: topTrackersSql.trim(),
-      topStatuses: topStatusesSql.trim(),
-      topCountries: topCountriesSql.trim(),
+      summary: 'REST API',
+      topTrackers: 'REST API',
+      topStatuses: 'REST API',
+      topCountries: 'REST API',
     },
-    summary: summaryRow,
-    topTrackers: topTrackers.success ? topTrackers.data || [] : [],
-    topStatuses: topStatuses.success ? topStatuses.data || [] : [],
-    topCountries: topCountries.success ? topCountries.data || [] : [],
+    summary: {
+      ownership_rows: assets.length,
+      distinct_assets: assets.length,
+      distinct_entities: entitySet.size,
+      distinct_trackers: trackerCounts.size,
+      distinct_statuses: statusCounts.size,
+      distinct_countries: countryCounts.size,
+      total_capacity_mw: Math.round(totalCapacity),
+      rows_missing_coords: assets.filter((a) => a.latitude == null || a.longitude == null).length,
+    },
+    topTrackers: sortedEntries(trackerCounts),
+    topStatuses: sortedEntries(statusCounts),
+    topCountries: sortedEntries(countryCounts),
   };
 }
 
-/**
- * Run preflight analysis for export
- */
 export async function runPreflight({
   assetIds,
   entityIds,
@@ -250,66 +203,128 @@ export async function runPreflight({
   assetIds: string[];
   entityIds: string[];
 }): Promise<PreflightResult> {
-  const [ownershipSchema, locationsSchema, combined, assets, entities] = await Promise.all([
-    describeTable('ownership'),
-    describeTable('locations'),
-    getPreflightStats({ assetIds, entityIds }),
-    assetIds.length ? getPreflightStats({ assetIds }) : Promise.resolve(null),
-    entityIds.length ? getPreflightStats({ entityIds }) : Promise.resolve(null),
-  ]);
+  // Resolve entity → asset IDs
+  const entityAssetIds = entityIds.length > 0 ? await resolveEntityAssetIds(entityIds) : [];
+  const allIds = [...new Set([...assetIds, ...entityAssetIds])];
+
+  // Fetch asset details (sample for performance)
+  const sampleIds = allIds.slice(0, 100);
+  const allAssets = await batchGetAssets(sampleIds);
+
+  const assetOnlyAssets =
+    assetIds.length > 0 ? allAssets.filter((a) => assetIds.includes(a.id)) : [];
+  const entityOnlyAssets =
+    entityAssetIds.length > 0 ? allAssets.filter((a) => entityAssetIds.includes(a.id)) : [];
 
   return {
     generatedAt: nowIso(),
-    ownershipSchema,
-    locationsSchema,
-    combined,
-    assets,
-    entities,
+    ownershipSchema: null,
+    locationsSchema: null,
+    combined: buildPreflightFromAssets(allAssets),
+    assets: assetIds.length ? buildPreflightFromAssets(assetOnlyAssets) : null,
+    entities: entityIds.length ? buildPreflightFromAssets(entityOnlyAssets) : null,
   };
 }
 
-/**
- * Build SQL query for asset export
- */
-export function buildAssetQuery(assetIds: string[]): string {
-  return `
-    SELECT
-      o.*, l."Latitude", l."Longitude", l."Country.Area" as "Country"
-    FROM ownership o
-    LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
-    WHERE ${ASSET_ID_COALESCE_O} IN (${buildIdList(assetIds)})
-  `;
+// CSV column definitions for export
+const CSV_COLUMNS = [
+  'asset_id',
+  'asset_name',
+  'asset_type',
+  'status',
+  'country',
+  'latitude',
+  'longitude',
+  'capacity',
+  'capacity_unit',
+  'owner_name',
+  'owner_entity_id',
+  'ownership_share',
+];
+
+function assetToCSVRows(asset: AssetSummary): string[][] {
+  const owners = asset.owners || [];
+  if (owners.length === 0) {
+    return [
+      [
+        asset.id,
+        asset.name,
+        asset.facilityType || '',
+        asset.status || '',
+        asset.country || '',
+        String(asset.latitude ?? ''),
+        String(asset.longitude ?? ''),
+        String(asset.capacity ?? ''),
+        asset.capacityUnit || '',
+        asset.ownerName || '',
+        asset.ownerEntityId || '',
+        '',
+      ],
+    ];
+  }
+  return owners.map((o) => [
+    asset.id,
+    asset.name,
+    asset.facilityType || '',
+    asset.status || '',
+    asset.country || '',
+    String(asset.latitude ?? ''),
+    String(asset.longitude ?? ''),
+    String(asset.capacity ?? ''),
+    asset.capacityUnit || '',
+    o.name,
+    o.entityId,
+    String(o.ownershipShare ?? ''),
+  ]);
 }
 
 /**
- * Build SQL query for entity export
+ * Fetch and format assets as CSV string
  */
-export function buildEntityQuery(entityIds: string[]): string {
-  return `
-    SELECT
-      o.*, l."Latitude", l."Longitude", l."Country.Area" as "Country"
-    FROM ownership o
-    LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
-    WHERE o."Owner GEM Entity ID" IN (${buildIdList(entityIds)})
-  `;
+export async function fetchAssetsAsCSV(
+  assetIds: string[],
+  onProgress?: (_msg: string) => void
+): Promise<{ csv: string; rowCount: number }> {
+  onProgress?.(`Fetching ${assetIds.length} assets...`);
+  const assets = await batchGetAssets(assetIds);
+
+  onProgress?.('Formatting CSV...');
+  const lines: string[] = [CSV_COLUMNS.map(escapeCSVVal).join(',')];
+  let rowCount = 0;
+
+  for (const asset of assets) {
+    for (const row of assetToCSVRows(asset)) {
+      lines.push(row.map(escapeCSVVal).join(','));
+      rowCount++;
+    }
+  }
+
+  return { csv: lines.join('\n'), rowCount };
 }
 
 /**
- * Build SQL query for combined export
+ * Fetch entity portfolio assets and format as CSV
  */
-export function buildCombinedQuery(assetIds: string[], entityIds: string[]): string {
-  const whereClause = [
-    assetIds.length ? `${ASSET_ID_COALESCE_O} IN (${buildIdList(assetIds)})` : null,
-    entityIds.length ? `o."Owner GEM Entity ID" IN (${buildIdList(entityIds)})` : null,
-  ]
-    .filter(Boolean)
-    .join(' OR ');
+export async function fetchEntityAssetsAsCSV(
+  entityIds: string[],
+  onProgress?: (_msg: string) => void
+): Promise<{ csv: string; rowCount: number }> {
+  onProgress?.(`Resolving ${entityIds.length} entity portfolios...`);
+  const assetIds = await resolveEntityAssetIds(entityIds);
+  onProgress?.(`Found ${assetIds.length} assets, fetching details...`);
+  return fetchAssetsAsCSV(assetIds, onProgress);
+}
 
-  return `
-    SELECT
-      o.*, l."Latitude", l."Longitude", l."Country.Area" as "Country"
-    FROM ownership o
-    LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"
-    WHERE ${whereClause}
-  `;
+/**
+ * Fetch combined (asset + entity) data as CSV
+ */
+export async function fetchCombinedCSV(
+  assetIds: string[],
+  entityIds: string[],
+  onProgress?: (_msg: string) => void
+): Promise<{ csv: string; rowCount: number }> {
+  const entityAssetIds = entityIds.length > 0 ? await resolveEntityAssetIds(entityIds) : [];
+  const allIds = [...new Set([...assetIds, ...entityAssetIds])];
+  onProgress?.(`Fetching ${allIds.length} total assets...`);
+  return fetchAssetsAsCSV(allIds, onProgress);
 }

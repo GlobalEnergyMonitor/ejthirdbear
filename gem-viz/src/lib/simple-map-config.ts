@@ -87,6 +87,7 @@ export const SPIN_SPEED = 0.12;
 
 // External data sources
 export const DATA_SOURCES = {
-  countriesGeoJson: 'https://d2ad6b4ur7yvpq.cloudfront.net/naturalearth-3.3.0/ne_110m_admin_0_countries.geojson',
+  countriesGeoJson:
+    'https://d2ad6b4ur7yvpq.cloudfront.net/naturalearth-3.3.0/ne_110m_admin_0_countries.geojson',
   glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
 };

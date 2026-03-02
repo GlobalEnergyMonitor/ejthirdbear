@@ -60,7 +60,7 @@ export function createHydration<T>() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       error = msg;
-      console.error('[Hydration]', msg);
+      if (import.meta.env.DEV) console.error('[Hydration]', msg);
       return null;
     } finally {
       loading = false;

@@ -11,7 +11,7 @@ The design tokens and CSS variables are **already well-structured** but several 
 ### What's Already Done (Good Foundation)
 - `design-tokens.ts` - Comprehensive with GEM brand colors, tracker colors, status colors
 - `shared-styles.css` - CSS variables mirror design tokens perfectly
-- Typography system - Plus Jakarta Sans + Roboto Condensed already set up
+- Typography system - Plus Jakarta Sans + Barlow Semi-Condensed already set up
 - Container/layout utilities - Already implemented
 
 ### What Needs Fixing (74 files use colors, ~15 have issues)

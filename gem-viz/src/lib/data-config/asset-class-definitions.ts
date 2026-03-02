@@ -17,16 +17,16 @@
 
 /** Operators for matching field values */
 export type FieldOp =
-  | 'not_null'      // field has any non-empty value
-  | 'is_null'       // field is null/empty
-  | 'eq'            // field == value
-  | 'neq'           // field != value
-  | 'gt'            // field > value (numeric)
-  | 'gte'           // field >= value (numeric)
-  | 'lt'            // field < value (numeric)
-  | 'includes_any'  // array field contains at least one of values[]
-  | 'includes'      // array field contains value
-  | 'between';      // numeric field between min and max
+  | 'not_null' // field has any non-empty value
+  | 'is_null' // field is null/empty
+  | 'eq' // field == value
+  | 'neq' // field != value
+  | 'gt' // field > value (numeric)
+  | 'gte' // field >= value (numeric)
+  | 'lt' // field < value (numeric)
+  | 'includes_any' // array field contains at least one of values[]
+  | 'includes' // array field contains value
+  | 'between'; // numeric field between min and max
 
 /** A single filter condition on a tracker field */
 export interface FieldFilter {
@@ -173,9 +173,7 @@ export const CAPTIVE_INDUSTRY_GROUPS = {
 } as const;
 
 /** All known captive industry values (flat) */
-export const ALL_CAPTIVE_VALUES = Object.values(CAPTIVE_INDUSTRY_GROUPS).flatMap(
-  (g) => g.values
-);
+export const ALL_CAPTIVE_VALUES = Object.values(CAPTIVE_INDUSTRY_GROUPS).flatMap((g) => g.values);
 
 // =============================================================================
 // COAL PLANT CLASSES
@@ -188,66 +186,95 @@ export const CaptiveCoalPlants: AssetClass = {
   description: 'Coal plants whose power goes to a specific private user, not the grid.',
   category: 'coal-plant',
   trackers: ['Coal Plant'],
-  baseFilters: [
-    { field: 'Captive', op: 'not_null' },
-  ],
-  subClasses: [
+  baseFilters: [{ field: 'Captive', op: 'not_null' }],
+  subClassGroups: [
     {
       id: 'captive-metals',
       label: 'Metals',
       description: 'Iron & steel, aluminum, nickel, other metals & mining',
-      defaultChecked: false,
-      filters: [{
-        field: 'Captive',
-        op: 'includes_any',
-        values: [...CAPTIVE_INDUSTRY_GROUPS.metals.values],
-        isArray: true,
-      }],
+      options: [
+        {
+          id: 'captive-metals-iron-steel',
+          label: 'Iron and Steel',
+          defaultChecked: false,
+          filters: [{ field: 'Captive', op: 'includes', value: 'iron & steel', isArray: true }],
+        },
+        {
+          id: 'captive-metals-aluminum',
+          label: 'Aluminum',
+          defaultChecked: false,
+          filters: [{ field: 'Captive', op: 'includes', value: 'aluminum', isArray: true }],
+        },
+        {
+          id: 'captive-metals-nickel',
+          label: 'Nickel',
+          defaultChecked: false,
+          filters: [{ field: 'Captive', op: 'includes', value: 'nickel', isArray: true }],
+        },
+        {
+          id: 'captive-metals-other',
+          label: 'Other metals and mining',
+          defaultChecked: false,
+          filters: [
+            { field: 'Captive', op: 'includes', value: 'other metals & mining', isArray: true },
+          ],
+        },
+      ],
     },
     {
       id: 'captive-coal-mining',
       label: 'Coal mining and products',
-      defaultChecked: false,
-      filters: [{
-        field: 'Captive',
-        op: 'includes',
-        value: 'coal mining & coal products',
-        isArray: true,
-      }],
+      options: [
+        {
+          id: 'captive-coal-mining-val',
+          label: 'Coal mining & coal products',
+          defaultChecked: false,
+          filters: [
+            {
+              field: 'Captive',
+              op: 'includes',
+              value: 'coal mining & coal products',
+              isArray: true,
+            },
+          ],
+        },
+      ],
     },
     {
       id: 'captive-chemicals',
       label: 'Chemicals',
-      defaultChecked: false,
-      filters: [{
-        field: 'Captive',
-        op: 'includes',
-        value: 'chemicals',
-        isArray: true,
-      }],
+      options: [
+        {
+          id: 'captive-chemicals-val',
+          label: 'Chemicals',
+          defaultChecked: false,
+          filters: [{ field: 'Captive', op: 'includes', value: 'chemicals', isArray: true }],
+        },
+      ],
     },
     {
       id: 'captive-pulp-paper',
       label: 'Pulp & Paper',
-      defaultChecked: false,
-      filters: [{
-        field: 'Captive',
-        op: 'includes',
-        value: 'pulp & paper',
-        isArray: true,
-      }],
+      options: [
+        {
+          id: 'captive-pulp-paper-val',
+          label: 'Pulp & paper',
+          defaultChecked: false,
+          filters: [{ field: 'Captive', op: 'includes', value: 'pulp & paper', isArray: true }],
+        },
+      ],
     },
     {
       id: 'captive-other',
       label: 'Other',
-      description: 'Machinery, cement, oil & refining, industrial park, agriculture, textiles, automobiles, sugar, rubber, electronics, cryptocurrency, data center, etc.',
-      defaultChecked: false,
-      filters: [{
-        field: 'Captive',
-        op: 'includes_any',
-        values: [...CAPTIVE_INDUSTRY_GROUPS.other.values],
-        isArray: true,
-      }],
+      description:
+        'Machinery, cement, oil & refining, industrial park, agriculture, textiles, automobiles, sugar, rubber, electronics, cryptocurrency, data center, etc.',
+      options: CAPTIVE_INDUSTRY_GROUPS.other.values.map((v) => ({
+        id: `captive-other-${v.replace(/[^a-z0-9]+/g, '-')}`,
+        label: v.charAt(0).toUpperCase() + v.slice(1),
+        defaultChecked: false,
+        filters: [{ field: 'Captive', op: 'includes' as FieldOp, value: v, isArray: true }],
+      })),
     },
   ],
   availableFilters: {
@@ -269,20 +296,24 @@ export const CoalPlantsByRetirement: AssetClass = {
       id: 'no-retirement-date',
       label: 'No planned/expected retirement date',
       defaultChecked: true,
-      filters: [{
-        field: 'Planned retirement',
-        op: 'is_null',
-      }],
+      filters: [
+        {
+          field: 'Planned retirement',
+          op: 'is_null',
+        },
+      ],
     },
     {
       id: 'has-retirement-date',
       label: 'Planned/expected retirement date',
       description: 'Can further filter by year',
       defaultChecked: true,
-      filters: [{
-        field: 'Planned retirement',
-        op: 'not_null',
-      }],
+      filters: [
+        {
+          field: 'Planned retirement',
+          op: 'not_null',
+        },
+      ],
     },
   ],
   availableFilters: {
@@ -303,32 +334,35 @@ export const CoalPlantConversions: AssetClass = {
   description: 'Coal plants being converted to other fuel types.',
   category: 'coal-plant',
   trackers: ['Coal Plant'],
-  baseFilters: [
-    { field: 'Conversion to (fuel)', op: 'not_null' },
-  ],
+  baseFilters: [{ field: 'Conversion to (fuel)', op: 'not_null' }],
   subClasses: [
     {
       id: 'converting-oil-gas',
       label: 'Converting to oil/gas',
-      description: 'Includes fossil gas (natural gas, LNG) and fossil liquids (fuel oil, diesel, petroleum coke)',
+      description:
+        'Includes fossil gas (natural gas, LNG) and fossil liquids (fuel oil, diesel, petroleum coke)',
       defaultChecked: true,
-      filters: [{
-        // "Conversion to (fuel)" values contain prefixes like "fossil gas:" or "fossil liquids:"
-        field: 'Conversion to (fuel)',
-        op: 'includes_any',
-        values: ['fossil gas:', 'fossil liquids:'],
-      }],
+      filters: [
+        {
+          // "Conversion to (fuel)" values contain prefixes like "fossil gas:" or "fossil liquids:"
+          field: 'Conversion to (fuel)',
+          op: 'includes_any',
+          values: ['fossil gas:', 'fossil liquids:'],
+        },
+      ],
     },
     {
       id: 'converting-bioenergy',
       label: 'Converting to bioenergy',
       description: 'Includes wood/biomass, agricultural waste, biocoal, refuse, paper mill wastes',
       defaultChecked: true,
-      filters: [{
-        field: 'Conversion to (fuel)',
-        op: 'includes',
-        value: 'bioenergy:',
-      }],
+      filters: [
+        {
+          field: 'Conversion to (fuel)',
+          op: 'includes',
+          value: 'bioenergy:',
+        },
+      ],
     },
   ],
   availableFilters: {
@@ -355,22 +389,26 @@ export const CoalMinesByUse: AssetClass = {
       label: 'Metallurgical coal',
       description: 'Mines producing coking coal for steel production (Percentage of Met Coal > 0)',
       defaultChecked: true,
-      filters: [{
-        field: 'Percentage of Met Coal',
-        op: 'gt',
-        value: 0,
-      }],
+      filters: [
+        {
+          field: 'Percentage of Met Coal',
+          op: 'gt',
+          value: 0,
+        },
+      ],
     },
     {
       id: 'thermal-coal',
       label: 'Thermal coal',
       description: 'Mines producing coal for heat/electricity (Percentage of Thermal Coal > 0)',
       defaultChecked: true,
-      filters: [{
-        field: 'Percentage of Thermal Coal',
-        op: 'gt',
-        value: 0,
-      }],
+      filters: [
+        {
+          field: 'Percentage of Thermal Coal',
+          op: 'gt',
+          value: 0,
+        },
+      ],
     },
   ],
   availableFilters: {
@@ -392,32 +430,38 @@ export const CoalMinesByClosure: AssetClass = {
       id: 'no-closure-date',
       label: 'No planned/expected closure date',
       defaultChecked: true,
-      filters: [{
-        field: 'Closing Year',
-        op: 'is_null',
-      }],
+      filters: [
+        {
+          field: 'Closing Year',
+          op: 'is_null',
+        },
+      ],
     },
     {
       id: 'has-closure-date',
       label: 'Planned/expected closure date',
       description: 'Can further filter by year',
       defaultChecked: true,
-      filters: [{
-        field: 'Closing Year',
-        op: 'not_null',
-      }],
+      filters: [
+        {
+          field: 'Closing Year',
+          op: 'not_null',
+        },
+      ],
     },
     {
       id: 'recently-closed',
       label: 'Recently closed',
       description: 'Can further filter by year',
       defaultChecked: false,
-      filters: [{
-        // Recently closed = status is retired/closed AND closure date is recent
-        field: 'Status',
-        op: 'eq',
-        value: 'retired',
-      }],
+      filters: [
+        {
+          // Recently closed = status is retired/closed AND closure date is recent
+          field: 'Status',
+          op: 'eq',
+          value: 'retired',
+        },
+      ],
     },
   ],
   availableFilters: {
@@ -448,36 +492,42 @@ export const FossilBasedSteelPlants: AssetClass = {
       label: 'Blast Furnaces (coal-based)',
       description: 'Plants with nominal BF capacity > 0',
       defaultChecked: true,
-      filters: [{
-        // Plant-level field: "Nominal BF capacity (ttpa)" > 0
-        field: 'Nominal BF capacity (ttpa)',
-        op: 'gt',
-        value: 0,
-      }],
+      filters: [
+        {
+          // Plant-level field: "Nominal BF capacity (ttpa)" > 0
+          field: 'Nominal BF capacity (ttpa)',
+          op: 'gt',
+          value: 0,
+        },
+      ],
     },
     {
       id: 'coal-dri',
       label: 'Coal-based DRI units',
       description: 'DRI furnaces using coal as reductant',
       defaultChecked: true,
-      filters: [{
-        field: 'Reductant',
-        op: 'eq',
-        value: 'coal',
-        subUnitContext: 'Iron unit data > DRI furnaces',
-      }],
+      filters: [
+        {
+          field: 'Reductant',
+          op: 'eq',
+          value: 'coal',
+          subUnitContext: 'Iron unit data > DRI furnaces',
+        },
+      ],
     },
     {
       id: 'other-fossil-dri',
       label: 'Other fossil DRI units',
       description: 'DRI furnaces using methane or syngas',
       defaultChecked: true,
-      filters: [{
-        field: 'Reductant',
-        op: 'includes_any',
-        values: ['methane', 'syngas'],
-        subUnitContext: 'Iron unit data > DRI furnaces',
-      }],
+      filters: [
+        {
+          field: 'Reductant',
+          op: 'includes_any',
+          values: ['methane', 'syngas'],
+          subUnitContext: 'Iron unit data > DRI furnaces',
+        },
+      ],
       // NOTE: "Unknown reductant" DRI units are intentionally excluded
       // by default. They could be shown unchecked as a separate option.
     },
@@ -506,35 +556,41 @@ export const BlastFurnaceRelinings: AssetClass = {
       id: 'relining-planned',
       label: 'Planned relinings',
       defaultChecked: true,
-      filters: [{
-        field: 'Relining Status',
-        op: 'eq',
-        value: 'planned',
-        subUnitContext: 'Iron unit data > Blast furnace relinings',
-      }],
+      filters: [
+        {
+          field: 'Relining Status',
+          op: 'eq',
+          value: 'planned',
+          subUnitContext: 'Iron unit data > Blast furnace relinings',
+        },
+      ],
     },
     {
       id: 'relining-completed',
       label: 'Completed relinings',
       defaultChecked: true,
-      filters: [{
-        field: 'Relining Status',
-        op: 'eq',
-        value: 'completed',
-        subUnitContext: 'Iron unit data > Blast furnace relinings',
-      }],
+      filters: [
+        {
+          field: 'Relining Status',
+          op: 'eq',
+          value: 'completed',
+          subUnitContext: 'Iron unit data > Blast furnace relinings',
+        },
+      ],
     },
     {
       id: 'relining-other',
       label: 'Other relinings',
       description: 'In progress, cancelled, or unknown status',
       defaultChecked: false,
-      filters: [{
-        field: 'Relining Status',
-        op: 'includes_any',
-        values: ['in progress', 'cancelled', 'unknown'],
-        subUnitContext: 'Iron unit data > Blast furnace relinings',
-      }],
+      filters: [
+        {
+          field: 'Relining Status',
+          op: 'includes_any',
+          values: ['in progress', 'cancelled', 'unknown'],
+          subUnitContext: 'Iron unit data > Blast furnace relinings',
+        },
+      ],
     },
   ],
   availableFilters: {
@@ -545,7 +601,8 @@ export const BlastFurnaceRelinings: AssetClass = {
       label: 'Relining date',
     },
   },
-  notes: 'Relining data is in a sub-table, not a flat plant field. Filter by "Relining Start Date BETWEEN _ AND _".',
+  notes:
+    'Relining data is in a sub-table, not a flat plant field. Filter by "Relining Start Date BETWEEN _ AND _".',
 };
 
 // =============================================================================
@@ -558,7 +615,7 @@ export const ChemicalPlants: AssetClass = {
   label: 'Chemical Plants',
   description: 'Chemical plant asset classes. Definitions TBD.',
   category: 'chemical',
-  trackers: [],  // TODO: which tracker? May need new tracker
+  trackers: [], // TODO: which tracker? May need new tracker
   subClasses: [],
   availableFilters: {
     geography: true,
@@ -589,7 +646,7 @@ export const CementPlants: AssetClass = {
   label: 'Concrete and Cement Plants',
   description: 'Cement and concrete plant asset classes. Definitions TBD.',
   category: 'cement',
-  trackers: ['Cement or Concrete Plant'],  // Not yet in app TRACKERS config
+  trackers: ['Cement or Concrete Plant'], // Not yet in app TRACKERS config
   subClasses: [],
   availableFilters: {
     geography: true,
@@ -616,24 +673,28 @@ export const CaptivePowerDataCenters: AssetClass = {
       label: 'Captive Oil & Gas Plants for data centers',
       description: 'Can further filter by fuel type: Gas only, Oil only, LNG only, Multi fuel',
       defaultChecked: true,
-      filters: [{
-        // O&G Plants use unit-level "Captive Industry" field
-        field: 'Captive Industry',
-        op: 'eq',
-        value: 'data center',
-        subUnitContext: 'Oil & Gas Plant > Units',
-      }],
+      filters: [
+        {
+          // O&G Plants use unit-level "Captive Industry" field
+          field: 'Captive Industry',
+          op: 'eq',
+          value: 'data center',
+          subUnitContext: 'Oil & Gas Plant > Units',
+        },
+      ],
     },
     {
       id: 'captive-coal-data-center',
       label: 'Captive Coal Plants for data centers',
       defaultChecked: true,
-      filters: [{
-        field: 'Captive',
-        op: 'includes',
-        value: 'data center',
-        isArray: true,
-      }],
+      filters: [
+        {
+          field: 'Captive',
+          op: 'includes',
+          value: 'data center',
+          isArray: true,
+        },
+      ],
     },
     // Future: bioenergy, nuclear if data becomes available
   ],
@@ -642,7 +703,8 @@ export const CaptivePowerDataCenters: AssetClass = {
     status: true,
     capacity: true,
   },
-  notes: 'Gas plant fuel classification filter ("Gas only", "Oil only", "LNG only", "Multi fuel") is an additional narrowing option within the gas sub-class.',
+  notes:
+    'Gas plant fuel classification filter ("Gas only", "Oil only", "LNG only", "Multi fuel") is an additional narrowing option within the gas sub-class.',
 };
 
 /** Coal-Related Assets — multi-tracker cross-cutting class */
@@ -658,22 +720,26 @@ export const CoalRelatedAssets: AssetClass = {
       id: 'coal-related-coal-plants',
       label: 'Coal Plants',
       defaultChecked: true,
-      filters: [{
-        // All Coal Plant tracker assets are coal-related by definition
-        field: '_tracker',
-        op: 'eq',
-        value: 'Coal Plant',
-      }],
+      filters: [
+        {
+          // All Coal Plant tracker assets are coal-related by definition
+          field: '_tracker',
+          op: 'eq',
+          value: 'Coal Plant',
+        },
+      ],
     },
     {
       id: 'coal-related-coal-mines',
       label: 'Coal Mines',
       defaultChecked: true,
-      filters: [{
-        field: '_tracker',
-        op: 'eq',
-        value: 'Coal Mine',
-      }],
+      filters: [
+        {
+          field: '_tracker',
+          op: 'eq',
+          value: 'Coal Mine',
+        },
+      ],
     },
     {
       id: 'coal-related-steel',
@@ -696,14 +762,14 @@ export const CoalRelatedAssets: AssetClass = {
       label: 'Coal-based chemical plants',
       description: 'TBD — pending chemical tracker class definitions',
       defaultChecked: true,
-      filters: [],  // TODO: define when chemical classes are ready
+      filters: [], // TODO: define when chemical classes are ready
     },
     {
       id: 'coal-related-cement',
       label: 'Coal-based concrete & cement plants',
       description: 'TBD — pending cement tracker integration',
       defaultChecked: true,
-      filters: [],  // TODO: define when cement tracker is added
+      filters: [], // TODO: define when cement tracker is added
     },
   ],
   availableFilters: {
@@ -722,23 +788,72 @@ function makeBaseClass(
   label: string,
   description: string,
   category: AssetClassCategory,
-  tracker: string,
+  tracker: string
 ): AssetClass {
-  return { id, label, description, category, trackers: [tracker], availableFilters: { geography: true, status: true, capacity: true } };
+  return {
+    id,
+    label,
+    description,
+    category,
+    trackers: [tracker],
+    availableFilters: { geography: true, status: true, capacity: true },
+  };
 }
 
-export const CoalPlants = makeBaseClass('coal-plants', 'Coal Plants', 'All coal-fired power plants.', 'coal-plant', 'Coal Plant');
+export const CoalPlants = makeBaseClass(
+  'coal-plants',
+  'Coal Plants',
+  'All coal-fired power plants.',
+  'coal-plant',
+  'Coal Plant'
+);
 
 export const CoalMines: AssetClass = {
-  ...makeBaseClass('coal-mines', 'Coal Mines', 'All coal extraction operations.', 'coal-mine', 'Coal Mine'),
+  ...makeBaseClass(
+    'coal-mines',
+    'Coal Mines',
+    'All coal extraction operations.',
+    'coal-mine',
+    'Coal Mine'
+  ),
   subClasses: CoalMinesByUse.subClasses,
 };
 
-export const GasPlants = makeBaseClass('gas-plants', 'Gas Plants', 'Oil & gas power plants.', 'multi-tracker', 'Oil & Gas Plant');
-export const GasPipelines = makeBaseClass('gas-pipelines', 'Gas Pipelines', 'Natural gas transmission pipelines.', 'multi-tracker', 'Gas Pipeline');
-export const IronMines = makeBaseClass('iron-mines', 'Iron Mines', 'Iron ore extraction operations.', 'steel-iron', 'Iron Mine');
-export const SteelPlants = makeBaseClass('steel-plants', 'Iron & Steel Plants', 'All iron and steel production facilities.', 'steel-iron', 'Iron & Steel Plant');
-export const BioenergyPower = makeBaseClass('bioenergy-power', 'Bioenergy Power', 'All bioenergy power plants.', 'bioenergy', 'Bioenergy Power');
+export const GasPlants = makeBaseClass(
+  'gas-plants',
+  'Gas Plants',
+  'Oil & gas power plants.',
+  'multi-tracker',
+  'Oil & Gas Plant'
+);
+export const GasPipelines = makeBaseClass(
+  'gas-pipelines',
+  'Gas Pipelines',
+  'Natural gas transmission pipelines.',
+  'multi-tracker',
+  'Gas Pipeline'
+);
+export const IronMines = makeBaseClass(
+  'iron-mines',
+  'Iron Mines',
+  'Iron ore extraction operations.',
+  'steel-iron',
+  'Iron Mine'
+);
+export const SteelPlants = makeBaseClass(
+  'steel-plants',
+  'Iron & Steel Plants',
+  'All iron and steel production facilities.',
+  'steel-iron',
+  'Iron & Steel Plant'
+);
+export const BioenergyPower = makeBaseClass(
+  'bioenergy-power',
+  'Bioenergy Power',
+  'All bioenergy power plants.',
+  'bioenergy',
+  'Bioenergy Power'
+);
 
 // =============================================================================
 // REGISTRY
@@ -830,16 +945,11 @@ export function getBaseClasses(): AssetClass[] {
  * must handle the sub-unit lookup externally — this function only
  * handles flat record fields.
  */
-export function evaluateFilter(
-  filter: FieldFilter,
-  record: Record<string, unknown>
-): boolean {
-  // Sub-unit filters can't be evaluated on a flat record
+export function evaluateFilter(filter: FieldFilter, record: Record<string, unknown>): boolean {
+  // Sub-unit filters can't be evaluated on a flat record — pass through
+  // rather than rejecting, since the REST API doesn't expose sub-unit data.
   if (filter.subUnitContext) {
-    console.warn(
-      `[asset-class] Filter on "${filter.field}" requires sub-unit context "${filter.subUnitContext}". Skipping.`
-    );
-    return false;
+    return true;
   }
 
   // Special pseudo-field: _tracker matches the record's tracker/asset type
@@ -902,9 +1012,7 @@ export function evaluateFilter(
     case 'includes':
       return strVal.toLowerCase().includes(String(filter.value ?? '').toLowerCase());
     case 'includes_any':
-      return (filter.values ?? []).some((v) =>
-        strVal.toLowerCase().includes(v.toLowerCase())
-      );
+      return (filter.values ?? []).some((v) => strVal.toLowerCase().includes(v.toLowerCase()));
     default:
       return false;
   }
@@ -923,10 +1031,7 @@ export function matchesAllFilters(
 /**
  * Test if a record matches ANY filter in a list (OR logic).
  */
-export function matchesAnyFilter(
-  filters: FieldFilter[],
-  record: Record<string, unknown>
-): boolean {
+export function matchesAnyFilter(filters: FieldFilter[], record: Record<string, unknown>): boolean {
   return filters.some((f) => evaluateFilter(f, record));
 }
 
@@ -940,25 +1045,36 @@ export function matchesAnyFilter(
  * 3. Within each sub-class, ALL filters must match (AND)
  *
  * If no sub-classes are selected, only baseFilters apply.
+ * Supports both flat `subClasses` and grouped `subClassGroups`.
  */
 export function buildClassMatcher(
   assetClass: AssetClass,
   selectedSubClassIds?: string[]
-): (record: Record<string, unknown>) => boolean {
+): (_record: Record<string, unknown>) => boolean {
   return (record: Record<string, unknown>) => {
     // Step 1: base filters
     if (assetClass.baseFilters && assetClass.baseFilters.length > 0) {
       if (!matchesAllFilters(assetClass.baseFilters, record)) return false;
     }
 
-    // Step 2: sub-class filters (OR logic across selected sub-classes)
-    if (selectedSubClassIds && selectedSubClassIds.length > 0 && assetClass.subClasses) {
-      const selectedSubs = assetClass.subClasses.filter((sc) =>
-        selectedSubClassIds.includes(sc.id)
-      );
-      if (selectedSubs.length > 0) {
-        return selectedSubs.some((sc) => matchesAllFilters(sc.filters, record));
+    if (!selectedSubClassIds || selectedSubClassIds.length === 0) return true;
+
+    // Step 2: collect all matchable sub-class options
+    const allOptions: SubClassOption[] = [];
+
+    if (assetClass.subClasses) {
+      allOptions.push(...assetClass.subClasses);
+    }
+    if (assetClass.subClassGroups) {
+      for (const group of assetClass.subClassGroups) {
+        allOptions.push(...group.options);
       }
+    }
+
+    // Step 3: sub-class filters (OR logic across selected sub-classes)
+    const selectedSubs = allOptions.filter((sc) => selectedSubClassIds.includes(sc.id));
+    if (selectedSubs.length > 0) {
+      return selectedSubs.some((sc) => matchesAllFilters(sc.filters, record));
     }
 
     return true;

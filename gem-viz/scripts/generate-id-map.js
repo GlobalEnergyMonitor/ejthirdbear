@@ -7,13 +7,11 @@
  * Output: src/lib/server/id-map.json
  */
 
-import { createRequire } from 'module';
-import { writeFileSync, existsSync } from 'fs';
+import { writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const require = createRequire(import.meta.url);
 
 async function generateIdMap() {
   console.log('[id-map] Generating G-prefix to compound ID mapping...');

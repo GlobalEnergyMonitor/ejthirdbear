@@ -104,8 +104,6 @@
         <dd>
           Optional. "up" (who owns this entity) or "down" (what this entity owns). Default: "up".
         </dd>
-        <dt>showPies</dt>
-        <dd>Optional. Show ownership percentage pies (default: true).</dd>
       </dl>
     </article>
 
@@ -121,21 +119,6 @@
     </article>
 
     <article class="widget-card">
-      <h2>Ownership Flow Diagram</h2>
-      <p>Mermaid-based flowchart visualization of ownership relationships.</p>
-      <code class="example-url">{base}/embed/ownership-mermaid?entityId=E12345</code>
-      <h3>Parameters</h3>
-      <dl>
-        <dt>entityId</dt>
-        <dd>Required. The entity ID to display.</dd>
-        <dt>direction</dt>
-        <dd>Optional. "BT" (bottom-to-top) or "TB" (top-to-bottom). Default: "BT".</dd>
-        <dt>zoom</dt>
-        <dd>Optional. Zoom level (default: 0.7).</dd>
-      </dl>
-    </article>
-
-    <article class="widget-card">
       <h2>3D Network Graph</h2>
       <p>Interactive 3D force-directed ownership network visualization.</p>
       <code class="example-url">{base}/embed/network-3d?entityId=E12345&height=600</code>
@@ -147,17 +130,6 @@
         <dd>Optional. Height in pixels (default: 500).</dd>
         <dt>maxHops</dt>
         <dd>Optional. Maximum relationship hops to show (default: 3).</dd>
-      </dl>
-    </article>
-
-    <article class="widget-card">
-      <h2>Full Network Explorer</h2>
-      <p>Complete D3 force-directed network explorer with interactive controls.</p>
-      <code class="example-url">{base}/embed/network-explorer?entityId=E12345</code>
-      <h3>Parameters</h3>
-      <dl>
-        <dt>entityId</dt>
-        <dd>Required. The entity ID to display.</dd>
       </dl>
     </article>
 
@@ -183,13 +155,13 @@
         <dt>ownership-flower</dt>
         <dd>Requires entityId. Optional: size, showLabels, showTitle, title.</dd>
         <dt>ownership-graph</dt>
-        <dd>Requires entityId. Optional: direction, showPies.</dd>
+        <dd>Requires entityId. Optional: direction.</dd>
         <dt>asset-ring</dt>
         <dd>Requires entityId. Optional: maxAssets.</dd>
-        <dt>network-explorer</dt>
-        <dd>Requires entityId.</dd>
         <dt>asset-screener</dt>
-        <dd>Requires entityId. Optional: assetClass, statuses, sortByOwnershipPct, includeUnitNames.</dd>
+        <dd>
+          Requires entityId. Optional: assetClass, statuses, sortByOwnershipPct, includeUnitNames.
+        </dd>
         <dt>asset-map</dt>
         <dd>Requires assetId.</dd>
         <dt>investigation-map</dt>
@@ -236,7 +208,9 @@
       <dt>data-padding</dt>
       <dd>Optional. Padding in pixels (passed to embed as ?padding=...).</dd>
       <dt>data-params</dt>
-      <dd>Optional. Extra params as querystring or JSON (e.g., "showMap=true" or {'{"showMap":true}'}).</dd>
+      <dd>
+        Optional. Extra params as querystring or JSON (e.g., "showMap=true" or {'{"showMap":true}'}).
+      </dd>
       <dt>data-allow</dt>
       <dd>Optional. Sets iframe allow attribute (e.g., "fullscreen").</dd>
       <dt>data-sandbox</dt>

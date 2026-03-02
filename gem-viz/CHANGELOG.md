@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.2] - 2026-03-02
+
+### Added
+- **Asset Screener Chart** — new D3 ownership visualization ported from Observable notebook, showing subsidiary lanes with ownership % pie charts, tracker/status mini bar charts, circular asset clusters with status icons, and shared-asset bezier curves
+- **Screener Visualize step** (`/screener/visualize`) now uses AssetScreenerChart instead of the 3D MiniNetworkGraph for a more structured, information-dense ownership view
+- **Entity profile** (`/entity/[id]`) gains an "Ownership Structure" panel showing the full subsidiary → asset breakdown alongside the existing 3D network
+
+### New files
+- `src/lib/components/screener/AssetScreenerChart.svelte` — Svelte wrapper with loading/progress states
+- `src/lib/components/screener/screener-chart-data.ts` — data adapter (ownership graph → chart layout)
+- `src/lib/components/screener/screener-chart-render.ts` — imperative D3 rendering (~500 lines)
+
+## [0.3.1] - 2026-03-02
+
+### Changed
+- **Screener asset class picker redesign** — replaced native `<select>` dropdown with a card-based tile grid grouped by category (Coal Plant, Gas, Steel & Iron, etc.). Each tile shows the class label, description, and multi-tracker badge. Selected tiles highlight with teal accent border.
+- **Fill-width layout in AssetClassExpansion** — subclass/status checkbox rows now use CSS grid (`auto-fill`) to stretch across full panel width instead of huddling left. Continue buttons also span full width.
+
+### Fixed
+- **lucide-svelte SSR crash** — added `lucide-svelte` to Vite `ssr.noExternal` to work around broken ESM exports in v0.576.0 that caused `ERR_MODULE_NOT_FOUND` during server-side rendering.
+- Layout shift on tile selection (default border-left now matches selected width so content doesn't jump).
+
 ## [0.2.1] - 2026-02-25
 
 ### Added

@@ -44,7 +44,12 @@ function assetSummaryToAsset(a: AssetSummary): Asset {
     technology: toStr(raw['Technology'] ?? raw['technology']),
     mineType: toStr(raw['Mine type'] ?? raw['mine_type']),
     miningMethod: toStr(raw['Mining method'] ?? raw['mining_method']),
-    state: toStr(raw['Subnational unit (province, state)'] ?? raw['State'] ?? raw['state'] ?? raw['state_province']),
+    state: toStr(
+      raw['Subnational unit (province, state)'] ??
+        raw['State'] ??
+        raw['state'] ??
+        raw['state_province']
+    ),
     wikiUrl: toStr(raw['Wiki URL'] ?? raw['wiki_url']),
   };
 }
@@ -105,20 +110,23 @@ export async function fetchAssets(options: {
 
   try {
     // Convert tracker name to API slug (e.g. "Coal Plant" → "coal-plant")
-    const assetType = tracker ? (trackerNameToSlug[tracker] || tracker.toLowerCase().replace(/\s+/g, '-')) : undefined;
+    const assetType = tracker
+      ? trackerNameToSlug[tracker] || tracker.toLowerCase().replace(/\s+/g, '-')
+      : undefined;
 
     // Fetch with type filtering and client-side sorting
     const fetchLimit = Math.max(limit * 5, 200);
     const results = assetType
       ? await listAssetsByType(assetType, { limit: fetchLimit })
-      : (await import('$lib/ownership-api').then(m => m.listAssets({ limit: fetchLimit }))).results;
+      : (await import('$lib/ownership-api').then((m) => m.listAssets({ limit: fetchLimit })))
+          .results;
 
     let assets = results.map(assetSummaryToAsset);
 
     // Client-side status filtering
     if (statusFilter && statusFilter.length > 0) {
-      const statusSet = new Set(statusFilter.map(s => s.toLowerCase()));
-      assets = assets.filter(a => statusSet.has((a.status || '').toLowerCase()));
+      const statusSet = new Set(statusFilter.map((s) => s.toLowerCase()));
+      assets = assets.filter((a) => statusSet.has((a.status || '').toLowerCase()));
     }
 
     // Client-side sorting
@@ -131,7 +139,7 @@ export async function fetchAssets(options: {
     return { success: true, data: assets };
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'API request failed';
-    console.error('[fetchAssets] REST API error:', msg);
+    if (import.meta.env.DEV) console.error('[fetchAssets] REST API error:', msg);
     return { success: false, data: [], error: msg };
   }
 }
@@ -147,12 +155,14 @@ export async function fetchCapacities(
   }
 
   try {
-    const assetType = tracker ? (trackerNameToSlug[tracker] || tracker.toLowerCase().replace(/\s+/g, '-')) : undefined;
+    const assetType = tracker
+      ? trackerNameToSlug[tracker] || tracker.toLowerCase().replace(/\s+/g, '-')
+      : undefined;
 
     // Fetch with proper type filtering for percentile distribution
     const results = assetType
       ? await listAssetsByType(assetType, { limit: 5000 })
-      : (await import('$lib/ownership-api').then(m => m.listAssets({ limit: 500 }))).results;
+      : (await import('$lib/ownership-api').then((m) => m.listAssets({ limit: 500 }))).results;
 
     const global: number[] = [];
     const byCountry = new Map<string, number[]>();
@@ -172,7 +182,7 @@ export async function fetchCapacities(
     setCache(cacheKey, data);
     return data;
   } catch (err) {
-    console.error('[fetchCapacities] REST API error:', err);
+    if (import.meta.env.DEV) console.error('[fetchCapacities] REST API error:', err);
     return { global: [], byCountry: new Map() };
   }
 }
@@ -212,7 +222,8 @@ export async function fetchFieldStats(
     setCache(cacheKey, data);
     return data;
   } catch (err) {
-    console.warn(`[fetchFieldStats] Failed for ${tracker}/${fieldName}:`, err);
+    if (import.meta.env.DEV)
+      console.warn(`[fetchFieldStats] Failed for ${tracker}/${fieldName}:`, err);
     return [];
   }
 }
@@ -234,7 +245,7 @@ export async function fetchRowCount(tracker: string): Promise<number> {
     setCache(cacheKey, count);
     return count;
   } catch (err) {
-    console.warn(`[fetchRowCount] Failed for ${tracker}:`, err);
+    if (import.meta.env.DEV) console.warn(`[fetchRowCount] Failed for ${tracker}:`, err);
     return 0;
   }
 }

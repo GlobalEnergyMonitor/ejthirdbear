@@ -9,7 +9,9 @@
   import OwnershipTreeGraph from './OwnershipTreeGraph.svelte';
   import type { GraphNode, GraphEdge, OwnershipPathEntry } from '$lib/component-data/graph-types';
 
-  interface Props { assetId: string; }
+  interface Props {
+    assetId: string;
+  }
   let { assetId }: Props = $props();
 
   let loading = $state(true);
@@ -40,7 +42,7 @@
       }
     } catch (err) {
       error = err instanceof Error ? err.message : 'Failed to load ownership data';
-      console.warn(`[AssetOwnershipTree] Failed for ${assetId}:`, error);
+      if (import.meta.env.DEV) console.warn(`[AssetOwnershipTree] Failed for ${assetId}:`, error);
     } finally {
       loading = false;
     }
@@ -88,9 +90,12 @@
     animation: spin 0.6s linear infinite;
   }
   @keyframes spin {
-    to { transform: rotate(360deg); }
+    to {
+      transform: rotate(360deg);
+    }
   }
-  .tree-empty, .tree-error {
+  .tree-empty,
+  .tree-error {
     font-size: 0.7rem;
     color: var(--gem-teal, #6e8c91);
     padding: 0.5rem 0;

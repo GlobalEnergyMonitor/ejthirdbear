@@ -1,9 +1,9 @@
+/* eslint-env node */
 /**
  * Custom Node server for GEM Viz
  *
  * Wraps the SvelteKit handler to add COEP/COOP headers to ALL responses
  * (including static assets served by sirv, which bypass hooks.server.ts).
- * This is required for DuckDB WASM workers to load with SharedArrayBuffer.
  */
 import { createServer } from 'node:http';
 import { handler } from './build/handler.js';

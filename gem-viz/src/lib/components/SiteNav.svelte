@@ -8,6 +8,7 @@
   import { link } from '$lib/links';
   import { investigationCart } from '$lib/investigationCart';
   import { openCommandPalette } from '$lib/stores/commandPalette';
+  import { Search, Menu, X } from 'lucide-svelte';
 
   // Cart count for badge
   const cartCount = $derived($investigationCart.length);
@@ -78,44 +79,16 @@
           </a>
         {/each}
         <button class="search-btn" onclick={openSearch} title="Search (⌘K)">
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <circle cx="11" cy="11" r="8" />
-            <path d="m21 21-4.35-4.35" />
-          </svg>
+          <Search size={18} />
         </button>
       </div>
 
       <!-- Mobile hamburger -->
       <button class="menu-btn mobile-only" onclick={toggleMenu} aria-label="Toggle menu">
         {#if menuOpen}
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <path d="M18 6L6 18M6 6l12 12" />
-          </svg>
+          <X size={24} />
         {:else}
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <path d="M3 12h18M3 6h18M3 18h18" />
-          </svg>
+          <Menu size={24} />
         {/if}
       </button>
     </div>
@@ -133,17 +106,7 @@
           </a>
         {/each}
         <button class="search-btn-mobile" onclick={openSearch}>
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <circle cx="11" cy="11" r="8" />
-            <path d="m21 21-4.35-4.35" />
-          </svg>
+          <Search size={18} />
           Search
         </button>
       </div>

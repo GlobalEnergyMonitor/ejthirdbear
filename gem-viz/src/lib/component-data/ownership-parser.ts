@@ -24,7 +24,6 @@
  *
  * CONSUMERS:
  * ----------
- * - MermaidOwnership.svelte
  * - AssetScreener.svelte
  * - asset/[id]/+page.svelte
  * - schema.ts (fetchOwnershipChain)

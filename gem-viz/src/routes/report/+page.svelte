@@ -12,6 +12,7 @@
   import EntityMicroCard from '$lib/components/EntityMicroCard.svelte';
   import AssetMicroCard from '$lib/components/AssetMicroCard.svelte';
   import DataTable from '$lib/components/DataTable.svelte';
+  import ReportLoadingTerminal from '$lib/components/ReportLoadingTerminal.svelte';
   import { OwnershipTreeGraph } from '$lib/components/ownership';
   import {
     queryEntityPortfolios,
@@ -85,7 +86,7 @@
 
   function log(msg: string) {
     debugLogs = [...debugLogs, `${new Date().toISOString().slice(11, 19)} ${msg}`];
-    console.log('[report]', msg);
+    if (import.meta.env.DEV) console.log('[report]', msg);
   }
 
   // Wrap a query with timing and step updates
@@ -137,18 +138,34 @@
     const startTime = Date.now();
 
     try {
-      // Init step (simulates DuckDB warmup)
-      updateStep('init', { status: 'running' });
-      await new Promise((r) => setTimeout(r, 100)); // Small delay for visual
-      updateStep('init', { status: 'done', ms: Date.now() - startTime });
+      // Init step
+      updateStep('init', { status: 'done', ms: 0 });
 
       // Run queries sequentially for better loading UX (shows progress)
-      const portfolios = await runStep('portfolios', () => queryEntityPortfolios(entityIds, log), entityIds.length < 1);
-      const ownershipGraphs = await runStep('ownership', () => fetchOwnershipGraphs(entityIds, log), entityIds.length < 1);
-      const shared = await runStep('shared', () => querySharedAssets(entityIds, log), entityIds.length < 2);
-      const common = await runStep('owners', () => queryCommonOwners(assetIds, log), assetIds.length < 1);
+      const portfolios = await runStep(
+        'portfolios',
+        () => queryEntityPortfolios(entityIds, log),
+        entityIds.length < 1
+      );
+      const ownershipGraphs = await runStep(
+        'ownership',
+        () => fetchOwnershipGraphs(entityIds, log),
+        entityIds.length < 1
+      );
+      const shared = await runStep(
+        'shared',
+        () => querySharedAssets(entityIds, log),
+        entityIds.length < 2
+      );
+      const common = await runStep(
+        'owners',
+        () => queryCommonOwners(assetIds, log),
+        assetIds.length < 1
+      );
       const geo = await runStep('geo', () => queryGeoBreakdown(entityIds, assetIds, log));
-      const trackers = await runStep('trackers', () => queryTrackerBreakdown(entityIds, assetIds, log));
+      const trackers = await runStep('trackers', () =>
+        queryTrackerBreakdown(entityIds, assetIds, log)
+      );
       const stats = await runStep('summary', () => querySummary(entityIds, assetIds, log));
 
       entityPortfolios = portfolios || [];
@@ -159,12 +176,18 @@
       commonOwners = common || [];
       geoBreakdown = geo || [];
       trackerBreakdown = trackers || [];
-      summary = stats || { totalAssets: 0, totalCapacity: 0, countries: 0, totalOwners: 0, trackers: [] };
+      summary = stats || {
+        totalAssets: 0,
+        totalCapacity: 0,
+        countries: 0,
+        totalOwners: 0,
+        trackers: [],
+      };
 
       queryTime = Date.now() - startTime;
       log(`Report loaded in ${queryTime}ms`);
     } catch (err) {
-      console.error('Report query error:', err);
+      if (import.meta.env.DEV) console.error('Report query error:', err);
       error = err instanceof Error ? err.message : 'Failed to generate report';
       log(`Error: ${error}`);
     } finally {
@@ -220,7 +243,7 @@
   <title>Investigation Report — Global Energy Monitor</title>
 </svelte:head>
 
-<main class="report-page">
+<div class="page report-page">
   <header>
     <nav class="breadcrumb">
       <a href={link('index')}>Home</a> /
@@ -239,40 +262,13 @@
       <a href={link('explore')} class="btn">Go to Explore</a>
     </section>
   {:else if loading}
-    <section class="loading-terminal">
-      <div class="terminal-header">
-        <span class="terminal-title">Generating Report</span>
-        <span class="terminal-timer">{(loadingElapsed / 1000).toFixed(1)}s</span>
-      </div>
-      <div class="terminal-body">
-        <div class="terminal-meta">
-          <span>Investigating {cartItems.length} items</span>
-          <span>{entityIds.length} entities · {assetIds.length} assets</span>
-        </div>
-        <ul class="query-steps">
-          {#each loadingSteps as step}
-            {@const stepIcons = { pending: ['', '○'], running: ['spinning', '◐'], done: ['done', '●'], skipped: ['skipped', '–'], error: ['error', '✕'] }}
-            {@const [dotClass, dotIcon] = stepIcons[step.status] || stepIcons.error}
-            <li class="query-step {step.status}">
-              <span class="step-indicator">
-                <span class="dot {dotClass}">{dotIcon}</span>
-              </span>
-              <span class="step-label">{step.label}</span>
-              {#if step.status === 'done' && step.ms !== undefined}
-                <span class="step-result">
-                  {#if step.rows !== undefined && step.rows > 0}
-                    {step.rows} rows ·
-                  {/if}
-                  {step.ms}ms
-                </span>
-              {:else if step.status === 'skipped'}
-                <span class="step-result">skipped</span>
-              {/if}
-            </li>
-          {/each}
-        </ul>
-      </div>
-    </section>
+    <ReportLoadingTerminal
+      elapsedMs={loadingElapsed}
+      cartCount={cartItems.length}
+      entityCount={entityIds.length}
+      assetCount={assetIds.length}
+      steps={loadingSteps}
+    />
   {:else if error}
     <section class="error-state">
       <h2>Error</h2>
@@ -301,7 +297,10 @@
           <span class="section-num">1.</span>
           <h2>Subjects</h2>
         </header>
-        <p class="section-lede">{entityIds.length} {entityIds.length === 1 ? 'entity' : 'entities'} under investigation</p>
+        <p class="section-lede">
+          {entityIds.length}
+          {entityIds.length === 1 ? 'entity' : 'entities'} under investigation
+        </p>
 
         <div class="entity-grid">
           {#each entityPortfolios as entity}
@@ -323,7 +322,10 @@
         <span class="section-num">2.</span>
         <h2>Portfolio</h2>
       </header>
-      <p class="section-lede">Combined holdings{#if entityIds.length > 0} across {entityIds.length} {entityIds.length === 1 ? 'entity' : 'entities'}{/if}</p>
+      <p class="section-lede">
+        Combined holdings{#if entityIds.length > 0}
+          across {entityIds.length} {entityIds.length === 1 ? 'entity' : 'entities'}{/if}
+      </p>
 
       <!-- Key Figures -->
       <div class="key-figures">
@@ -400,7 +402,10 @@
               />
             </div>
           {:else}
-            <p class="null-state">No upstream ownership data found for {portfolio?.entity_name || selectedEntityForGraph}. This may be a terminal entity with no recorded owners.</p>
+            <p class="null-state">
+              No upstream ownership data found for {portfolio?.entity_name ||
+                selectedEntityForGraph}. This may be a terminal entity with no recorded owners.
+            </p>
           {/if}
         {/if}
       </section>
@@ -410,11 +415,15 @@
     {#if geoBreakdown.length > 0}
       <section class="report-section">
         <header class="section-head">
-          <span class="section-num">{hasEntities && entityOwnershipGraphs.size > 0 ? '4' : '3'}.</span>
+          <span class="section-num"
+            >{hasEntities && entityOwnershipGraphs.size > 0 ? '4' : '3'}.</span
+          >
           <h2>Geography</h2>
         </header>
         <p class="section-lede">
-          {geoBreakdown.length} {geoBreakdown.length === 1 ? 'country' : 'countries'}{#if geoBreakdown[0]?.country}, largest presence in {geoBreakdown[0].country}{/if}
+          {geoBreakdown.length}
+          {geoBreakdown.length === 1 ? 'country' : 'countries'}{#if geoBreakdown[0]?.country},
+            largest presence in {geoBreakdown[0].country}{/if}
         </p>
 
         <DataTable
@@ -440,7 +449,9 @@
     {#if hasEntities && entityIds.length >= 2}
       <section class="report-section">
         <header class="section-head">
-          <span class="section-num">{hasEntities && entityOwnershipGraphs.size > 0 ? '5' : '4'}.</span>
+          <span class="section-num"
+            >{hasEntities && entityOwnershipGraphs.size > 0 ? '5' : '4'}.</span
+          >
           <h2>Connections</h2>
         </header>
         <p class="section-lede">
@@ -468,16 +479,21 @@
             showExport={true}
             showColumnToggle={false}
             striped={false}
-            onRowClick={(row) => window.location.href = assetLink(row.asset_id)}
+            onRowClick={(row) => (window.location.href = assetLink(row.asset_id))}
           />
         {:else}
-          <p class="null-state">No co-owned assets found. The {entityIds.length} entities do not share direct ownership of any assets in the GEM database.</p>
+          <p class="null-state">
+            No co-owned assets found. The {entityIds.length} entities do not share direct ownership of
+            any assets in the GEM database.
+          </p>
         {/if}
       </section>
     {:else if hasEntities && entityIds.length === 1}
       <section class="report-section muted">
         <header class="section-head">
-          <span class="section-num">{hasEntities && entityOwnershipGraphs.size > 0 ? '5' : '4'}.</span>
+          <span class="section-num"
+            >{hasEntities && entityOwnershipGraphs.size > 0 ? '5' : '4'}.</span
+          >
           <h2>Connections</h2>
         </header>
         <p class="section-lede">Add ≥2 entities to analyze co-ownership</p>
@@ -488,10 +504,14 @@
     {#if hasAssets}
       <section class="report-section">
         <header class="section-head">
-          <span class="section-num">{hasEntities ? (entityOwnershipGraphs.size > 0 ? '6' : '5') : '4'}.</span>
+          <span class="section-num"
+            >{hasEntities ? (entityOwnershipGraphs.size > 0 ? '6' : '5') : '4'}.</span
+          >
           <h2>Asset Owners</h2>
         </header>
-        <p class="section-lede">Owners of {assetIds.length} selected {assetIds.length === 1 ? 'asset' : 'assets'}</p>
+        <p class="section-lede">
+          Owners of {assetIds.length} selected {assetIds.length === 1 ? 'asset' : 'assets'}
+        </p>
 
         {#if commonOwners.length > 0}
           <DataTable
@@ -509,7 +529,7 @@
             showExport={true}
             showColumnToggle={false}
             striped={false}
-            onRowClick={(row) => window.location.href = entityLink(row.entity_id)}
+            onRowClick={(row) => (window.location.href = entityLink(row.entity_id))}
           />
         {:else}
           <p class="null-state">No ownership data found.</p>
@@ -520,7 +540,9 @@
     <!-- APPENDIX -->
     <footer class="appendix">
       <h2>Appendix</h2>
-      <p class="appendix-lede">{cartItems.length} items · {entityIds.length} entities · {assetIds.length} assets</p>
+      <p class="appendix-lede">
+        {cartItems.length} items · {entityIds.length} entities · {assetIds.length} assets
+      </p>
 
       <div class="appendix-grid">
         {#each cartItems as item}
@@ -532,11 +554,7 @@
               variant="compact"
             />
           {:else}
-            <EntityMicroCard
-              name={item.name}
-              href={entityLink(item.id)}
-              variant="compact"
-            />
+            <EntityMicroCard name={item.name} href={entityLink(item.id)} variant="compact" />
           {/if}
         {/each}
       </div>
@@ -551,7 +569,7 @@
       <p>Entities in cart: {entityIds.length}, Assets in cart: {assetIds.length}</p>
     </DebugPanel>
   {/if}
-</main>
+</div>
 
 <style>
   /* ═══════════════════════════════════════════════════════════════════
@@ -617,132 +635,6 @@
   .error-state h2 {
     font-weight: 400;
     font-size: 18px;
-  }
-
-  /* ═══════════════════════════════════════════════════════════════════
-     LOADING TERMINAL
-     ═══════════════════════════════════════════════════════════════════ */
-
-  .loading-terminal {
-    margin: var(--space-8) 0;
-    border: 1px solid var(--color-gray-200);
-    font-family: var(--font-family-mono);
-    font-size: 12px;
-  }
-
-  .terminal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: var(--space-2) var(--space-3);
-    background: var(--color-gray-100);
-    border-bottom: 1px solid var(--color-gray-200);
-  }
-
-  .terminal-title {
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    font-size: 10px;
-  }
-
-  .terminal-timer {
-    font-size: 11px;
-    color: var(--color-text-secondary);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .terminal-body {
-    padding: var(--space-4);
-    background: var(--color-white);
-  }
-
-  .terminal-meta {
-    display: flex;
-    justify-content: space-between;
-    color: var(--color-text-tertiary);
-    font-size: 11px;
-    margin-bottom: var(--space-4);
-    padding-bottom: var(--space-3);
-    border-bottom: 1px dashed var(--color-gray-200);
-  }
-
-  .query-steps {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-  }
-
-  .query-step {
-    display: flex;
-    align-items: baseline;
-    gap: var(--space-2);
-    padding: var(--space-1) 0;
-    color: var(--color-text-secondary);
-  }
-
-  .query-step.running {
-    color: var(--color-black);
-  }
-
-  .query-step.done {
-    color: var(--color-text-secondary);
-  }
-
-  .query-step.skipped {
-    color: var(--color-text-tertiary);
-    opacity: 0.6;
-  }
-
-  .query-step.error {
-    color: var(--color-error);
-  }
-
-  .step-indicator {
-    width: 14px;
-    text-align: center;
-    flex-shrink: 0;
-  }
-
-  .dot {
-    display: inline-block;
-    font-size: 10px;
-  }
-
-  .dot.spinning {
-    animation: spin 0.6s linear infinite;
-    color: var(--gem-primary-blue);
-  }
-
-  .dot.done {
-    color: var(--color-status-operating, #2d6a4f);
-  }
-
-  .dot.skipped {
-    color: var(--color-text-tertiary);
-  }
-
-  .dot.error {
-    color: var(--color-error);
-  }
-
-  @keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-  }
-
-  .step-label {
-    flex: 1;
-  }
-
-  .step-result {
-    font-size: 10px;
-    color: var(--color-text-tertiary);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .query-step.done .step-result {
-    color: var(--color-status-operating, #2d6a4f);
   }
 
   /* Toolbar */

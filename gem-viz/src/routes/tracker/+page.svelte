@@ -5,7 +5,7 @@
    */
   import { onMount } from 'svelte';
   import { link } from '$lib/links';
-  import { getAssetTypeCounts, API_TYPE_TO_SLUG, SLUG_TO_API_TYPE } from '$lib/ownership-api';
+  import { getAssetTypeCounts, API_TYPE_TO_SLUG } from '$lib/ownership-api';
   import { trackerMetadata } from '$lib/data-config/tracker-metadata';
   import { fetchSegments, getSegmentApiUrl, type Segment } from '$lib/segments-api';
 
@@ -22,7 +22,9 @@
 
     // Try to load segments
     fetchSegments()
-      .then((result) => { segments = result; })
+      .then((result) => {
+        segments = result;
+      })
       .catch((err) => console.warn('Segments fetch failed:', err));
 
     // Fetch asset counts per tracker type from REST API (sampled + extrapolated)
@@ -60,7 +62,7 @@
   />
 </svelte:head>
 
-<main>
+<div class="page">
   <header>
     <nav class="breadcrumb">
       <a href={link('index')}>Home</a> / Trackers
@@ -112,17 +114,10 @@
     {#if segments.length > 0}
       <section class="segments-section">
         <h2>Asset Classes</h2>
-        <p class="section-intro">
-          Pre-defined segments for focused analysis across trackers
-        </p>
+        <p class="section-intro">Pre-defined segments for focused analysis across trackers</p>
         <div class="segments-grid">
           {#each segments as segment}
-            <a
-              href={getSegmentApiUrl(segment)}
-              target="_blank"
-              rel="noopener"
-              class="segment-card"
-            >
+            <a href={getSegmentApiUrl(segment)} target="_blank" rel="noopener" class="segment-card">
               <div class="segment-header">
                 <span class="segment-name">{segment.name}</span>
                 <span class="segment-count">{formatNumber(segment.count)}</span>
@@ -134,12 +129,11 @@
         </div>
       </section>
     {/if}
-
   {/if}
-</main>
+</div>
 
 <style>
-  main {
+  .page {
     width: 100%;
     max-width: 1100px;
     margin: 0 auto;
@@ -295,7 +289,6 @@
     letter-spacing: 0.05em;
   }
 
-
   .card-footer {
     padding: var(--space-3) var(--space-4);
     border-top: 1px solid var(--color-border);
@@ -397,6 +390,4 @@
     text-transform: uppercase;
     letter-spacing: 0.05em;
   }
-
-
 </style>

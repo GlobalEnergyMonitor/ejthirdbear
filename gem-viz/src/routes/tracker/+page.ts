@@ -1,2 +1,2 @@
-// Client-side only - DuckDB WASM
+// Client-side only
 export const ssr = false;

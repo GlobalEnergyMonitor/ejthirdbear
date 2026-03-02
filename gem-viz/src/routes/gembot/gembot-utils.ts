@@ -8,11 +8,11 @@ import { colorByTracker, colors } from '$lib/design-tokens';
 
 // Suggested queries for quick start
 export const SUGGESTIONS = [
-  { label: 'Who owns coal plants in India?' },
-  { label: "What's in BlackRock's energy portfolio?" },
-  { label: 'Show me retiring coal plants in Germany' },
-  { label: 'Find gas pipelines under construction' },
-  { label: 'Who are the biggest steel plant owners?' },
+  { icon: '›', label: 'Who owns coal plants in India?' },
+  { icon: '›', label: "What's in BlackRock's energy portfolio?" },
+  { icon: '›', label: 'Show me retiring coal plants in Germany' },
+  { icon: '›', label: 'Find gas pipelines under construction' },
+  { icon: '›', label: 'Who are the biggest steel plant owners?' },
 ];
 
 // Quick entity searches
@@ -58,9 +58,13 @@ export function formatToolArgs(args: Record<string, unknown> | undefined): strin
 export function getToolSummary(toolName: string, args?: Record<string, unknown>): string {
   switch (toolName) {
     case 'search_entities':
-      return args?.query ? `Search: "${args.query}"${args?.country ? ` (${args.country})` : ''}` : 'Search entities';
+      return args?.query
+        ? `Search: "${args.query}"${args?.country ? ` (${args.country})` : ''}`
+        : 'Search entities';
     case 'search_assets':
-      return args?.tracker ? `Search ${args.tracker}${args?.country ? ` in ${args.country}` : ''}${args?.q ? `: "${args.q}"` : ''}` : 'Search assets';
+      return args?.tracker
+        ? `Search ${args.tracker}${args?.country ? ` in ${args.country}` : ''}${args?.q ? `: "${args.q}"` : ''}`
+        : 'Search assets';
     case 'get_entity_details':
       return args?.entity_id ? `Entity ${args.entity_id}` : 'Get entity details';
     case 'get_entity_portfolio':
@@ -70,11 +74,15 @@ export function getToolSummary(toolName: string, args?: Record<string, unknown>)
     case 'get_asset_details':
       return args?.asset_id ? `Asset ${args.asset_id}` : 'Get asset';
     case 'get_ownership_graph':
-      return args?.root_id ? `Graph: ${args.root_id} (${args?.direction || 'down'})` : 'Build graph';
+      return args?.root_id
+        ? `Graph: ${args.root_id} (${args?.direction || 'down'})`
+        : 'Build graph';
     case 'get_top_owners':
       return `Top ${args?.tracker || 'energy'} owners${args?.country ? ` (${args.country})` : ''}`;
     case 'get_top_owners_by_country':
-      return args?.country ? `Top ${args?.tracker || 'energy'} owners in ${args.country}` : 'Top owners by country';
+      return args?.country
+        ? `Top ${args?.tracker || 'energy'} owners in ${args.country}`
+        : 'Top owners by country';
     case 'get_country_breakdown':
       return args?.entity_id ? `Country breakdown: ${args.entity_id}` : 'Get country breakdown';
     case 'generate_map':
@@ -161,17 +169,24 @@ export function hasAnalyticsResults(toolCall: ToolCall): boolean {
 
 // Check if tool result has comparison data
 export function hasComparisonResults(toolCall: ToolCall): boolean {
-  return toolCall.tool === 'compare_entities' && !!(toolCall.result as Record<string, unknown>)?.comparisons;
+  return (
+    toolCall.tool === 'compare_entities' &&
+    !!(toolCall.result as Record<string, unknown>)?.comparisons
+  );
 }
 
 // Check if tool result has a screener URL
 export function hasScreenerUrl(toolCall: ToolCall): boolean {
-  return toolCall.tool === 'generate_screener_url' && !!(toolCall.result as Record<string, unknown>)?.url;
+  return (
+    toolCall.tool === 'generate_screener_url' && !!(toolCall.result as Record<string, unknown>)?.url
+  );
 }
 
 // Check if tool result has map data
 export function hasMapResults(toolCall: ToolCall): boolean {
-  return toolCall.tool === 'generate_map' && (toolCall.result as Record<string, unknown>)?.type === 'map';
+  return (
+    toolCall.tool === 'generate_map' && (toolCall.result as Record<string, unknown>)?.type === 'map'
+  );
 }
 
 export interface MapFeature {
@@ -271,13 +286,15 @@ export function createMapAction(mapInstances: Map<string, maplibregl.Map>) {
           if (props) {
             popup
               .setLngLat(e.lngLat)
-              .setHTML(`
+              .setHTML(
+                `
                 <div style="font-size: 12px; line-height: 1.4;">
                   <strong>${props.name}</strong><br/>
                   ${props.tracker} • ${props.status}<br/>
                   ${props.country}${props.capacity ? ` • ${props.capacity} MW` : ''}
                 </div>
-              `)
+              `
+              )
               .addTo(map);
           }
         });

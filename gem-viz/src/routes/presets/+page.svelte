@@ -50,7 +50,7 @@
   />
 </svelte:head>
 
-<main>
+<div class="page">
   <header class="page-header">
     <span class="page-type">Tool</span>
     <h1>Preset Gallery</h1>
@@ -126,10 +126,10 @@
       </div>
     {/if}
   </section>
-</main>
+</div>
 
 <style>
-  main {
+  .page {
     padding: var(--space-7) var(--space-10) var(--space-16);
   }
 
@@ -268,7 +268,7 @@
   }
 
   @media (max-width: 720px) {
-    main {
+    .page {
       padding: var(--space-6) var(--space-5) var(--space-12);
     }
 

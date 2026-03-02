@@ -26,19 +26,24 @@ const isStaticBuild = building;
 export function link(path: string): string {
   // Remove leading slash if present
   const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+  const [pathAndQuery, hash = ''] = cleanPath.split('#', 2);
+  const [pathname, query = ''] = pathAndQuery.split('?', 2);
 
   // SSR/dynamic mode: use clean URLs with trailing slash
   // Static builds (DO Spaces): use /index.html
   const useStaticPaths = isStaticBuild;
+  const suffix = `${query ? `?${query}` : ''}${hash ? `#${hash}` : ''}`;
 
   // Handle index/home
-  if (cleanPath === '' || cleanPath === 'index') {
-    return useStaticPaths ? `${base}/index.html` : `${base}/`;
+  if (pathname === '' || pathname === 'index') {
+    return useStaticPaths ? `${base}/index.html${suffix}` : `${base}/${suffix}`;
   }
 
   // SSR mode: trailing slash (SvelteKit/Node handles routing)
   // Static builds: explicit /index.html (DO Spaces requires it)
-  return useStaticPaths ? `${base}/${cleanPath}/index.html` : `${base}/${cleanPath}/`;
+  return useStaticPaths
+    ? `${base}/${pathname}/index.html${suffix}`
+    : `${base}/${pathname}/${suffix}`;
 }
 
 /**
@@ -78,7 +83,7 @@ export function trackerLink(tracker: string): string {
 }
 
 /**
- * Get the base path for static assets (parquet files, geojson, etc.)
+ * Get the base path for static assets (geojson, etc.)
  * Uses base path which works in both dev and production
  */
 export function assetPath(filename: string): string {

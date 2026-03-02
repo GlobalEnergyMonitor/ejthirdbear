@@ -49,7 +49,7 @@ export async function fetchSegments(): Promise<Segment[]> {
     cachedSegments = data.segments;
     return cachedSegments;
   } catch (err) {
-    console.error('Error fetching segments:', err);
+    if (import.meta.env.DEV) console.error('Error fetching segments:', err);
     return [];
   }
 }

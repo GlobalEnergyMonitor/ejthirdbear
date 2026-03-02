@@ -2,19 +2,31 @@
   import type { Snippet } from 'svelte';
   import { assetLink } from '$lib/links';
   import {
-    getStatusGroup, isMineAsset, formatMtCO2, formatValueWithUnit,
-    type Asset, type PercentileData,
+    getStatusGroup,
+    isMineAsset,
+    formatMtCO2,
+    formatValueWithUnit,
+    type Asset,
+    type PercentileData,
   } from '$lib/factsheet';
   import { formatRatioAsPct } from '$lib/format-utils';
 
   let {
-    asset, percentiles = null as PercentileData | null,
-    open = false, variant = 'full' as 'compact' | 'full', showLink = true,
-    ownership, map,
+    asset,
+    percentiles = null as PercentileData | null,
+    open = false,
+    variant = 'full' as 'compact' | 'full',
+    showLink = true,
+    ownership,
+    map,
   } = $props<{
-    asset: Asset; percentiles?: PercentileData | null;
-    open?: boolean; variant?: 'compact' | 'full'; showLink?: boolean;
-    ownership?: Snippet; map?: Snippet;
+    asset: Asset;
+    percentiles?: PercentileData | null;
+    open?: boolean;
+    variant?: 'compact' | 'full';
+    showLink?: boolean;
+    ownership?: Snippet;
+    map?: Snippet;
   }>();
 
   const statusGroup = $derived(getStatusGroup(asset.status));
@@ -23,16 +35,20 @@
 
   const hasOwnership = $derived(asset.owner || asset.parent);
   const hasCapacity = $derived(asset.capacity || asset.capacityFactor || percentiles);
-  const hasAge = $derived(asset.startYear || asset.plannedRetirement || asset.remainingLifetime || asset.plantAge);
+  const hasAge = $derived(
+    asset.startYear || asset.plannedRetirement || asset.remainingLifetime || asset.plantAge
+  );
   const hasEmissions = $derived(asset.annualCO2 || asset.lifetimeCO2 || asset.heatRate);
-  const hasDetails = $derived(asset.technology || asset.coalType || asset.mineType || asset.miningMethod);
+  const hasDetails = $derived(
+    asset.technology || asset.coalType || asset.mineType || asset.miningMethod
+  );
 
   // Build location string from available fields
   const locationStr = $derived.by(() => {
     const parts: string[] = [];
     if (asset.location) parts.push(asset.location);
-    if (asset.state && !parts.some(p => p.includes(asset.state!))) parts.push(asset.state);
-    if (asset.country && !parts.some(p => p.includes(asset.country!))) parts.push(asset.country);
+    if (asset.state && !parts.some((p) => p.includes(asset.state!))) parts.push(asset.state);
+    if (asset.country && !parts.some((p) => p.includes(asset.country!))) parts.push(asset.country);
     return parts.join(', ') || undefined;
   });
 </script>
@@ -62,8 +78,10 @@
     <div class="summary-left">
       <h3 class="project-title">{asset.name}</h3>
       <div class="project-subtitle">
-        {#if asset.unitName}{asset.unitName} &middot; {/if}
-        {#if asset.state}{asset.state}, {/if}
+        {#if asset.unitName}{asset.unitName} &middot;
+        {/if}
+        {#if asset.state}{asset.state},
+        {/if}
         {asset.country || ''}
       </div>
     </div>
@@ -83,7 +101,10 @@
       <div class="details-section">
         <div class="section-title">Details</div>
         {@render detail('Owner', asset.owner)}
-        {@render detail(isMine ? 'Production capacity' : 'Capacity', asset.capacity && formatValueWithUnit(asset.capacity, asset.capacityUnit))}
+        {@render detail(
+          isMine ? 'Production capacity' : 'Capacity',
+          asset.capacity && formatValueWithUnit(asset.capacity, asset.capacityUnit)
+        )}
         {#if percentiles}
           <div class="detail percentile-block">
             <span class="detail-label">Percentile</span>
@@ -94,7 +115,6 @@
         {@render detail('Location', locationStr)}
         {#if ownership}{@render ownership()}{/if}
       </div>
-
     {:else}
       {#if hasOwnership}
         <div class="details-section">
@@ -108,9 +128,18 @@
       {#if hasCapacity}
         <div class="details-section">
           <div class="section-title">{isMine ? 'Size & Production' : 'Capacity'}</div>
-          {@render detail('Capacity', asset.capacity && formatValueWithUnit(asset.capacity, asset.capacityUnit))}
-          {@render detail('Production', asset.production && formatValueWithUnit(asset.production, asset.productionUnit))}
-          {@render detail('Capacity factor', asset.capacityFactor && formatPct(asset.capacityFactor))}
+          {@render detail(
+            'Capacity',
+            asset.capacity && formatValueWithUnit(asset.capacity, asset.capacityUnit)
+          )}
+          {@render detail(
+            'Production',
+            asset.production && formatValueWithUnit(asset.production, asset.productionUnit)
+          )}
+          {@render detail(
+            'Capacity factor',
+            asset.capacityFactor && formatPct(asset.capacityFactor)
+          )}
           {#if percentiles}
             <div class="detail percentile-block">
               <span class="detail-label">Capacity percentile</span>
@@ -127,9 +156,15 @@
         <div class="details-section">
           <div class="section-title">Age</div>
           {@render detail(isMine ? 'Opening year' : 'Start year', asset.startYear)}
-          {@render detail(isMine ? 'Mine age' : 'Plant age', asset.plantAge && `${asset.plantAge} years`)}
+          {@render detail(
+            isMine ? 'Mine age' : 'Plant age',
+            asset.plantAge && `${asset.plantAge} years`
+          )}
           {@render detail('Planned retirement', asset.plannedRetirement)}
-          {@render detail('Remaining lifetime', asset.remainingLifetime && `${asset.remainingLifetime} years`)}
+          {@render detail(
+            'Remaining lifetime',
+            asset.remainingLifetime && `${asset.remainingLifetime} years`
+          )}
         </div>
       {/if}
 
@@ -194,9 +229,13 @@
     cursor: pointer;
     list-style: none;
   }
-  .project-card summary::-webkit-details-marker { display: none; }
+  .project-card summary::-webkit-details-marker {
+    display: none;
+  }
 
-  .summary-left { max-width: 60%; }
+  .summary-left {
+    max-width: 60%;
+  }
 
   .project-title {
     margin: 0;
@@ -228,13 +267,32 @@
     background: var(--gem-mint);
     color: var(--gem-midnight);
   }
-  .status-operating { background: var(--gem-navy); color: var(--gem-mint); }
-  .status-cancelled { background: var(--color-gray-200, #dce3e5); color: var(--gem-navy); }
-  .status-retired { background: var(--color-text-secondary, #6e8c91); color: var(--color-white, white); }
-  .status-unknown { background: var(--color-gray-200, #ddd); color: var(--color-text-secondary, #666); }
+  .status-operating {
+    background: var(--gem-navy);
+    color: var(--gem-mint);
+  }
+  .status-cancelled {
+    background: var(--color-gray-200, #dce3e5);
+    color: var(--gem-navy);
+  }
+  .status-retired {
+    background: var(--color-text-secondary, #6e8c91);
+    color: var(--color-white, white);
+  }
+  .status-unknown {
+    background: var(--color-gray-200, #ddd);
+    color: var(--color-text-secondary, #666);
+  }
 
-  .metric strong { font-size: 1.1rem; color: var(--gem-navy); }
-  .metric small { display: block; font-size: 0.65rem; color: var(--gem-teal); }
+  .metric strong {
+    font-size: 1.1rem;
+    color: var(--gem-navy);
+  }
+  .metric small {
+    display: block;
+    font-size: 0.65rem;
+    color: var(--gem-teal);
+  }
 
   .project-details {
     background: var(--gem-warm-white);
@@ -280,7 +338,8 @@
     color: var(--gem-teal);
   }
 
-  .detail span, .detail a {
+  .detail span,
+  .detail a {
     font-size: 0.85rem;
     color: var(--gem-midnight);
     text-decoration: none;
@@ -305,12 +364,24 @@
     font-size: 0.75rem;
     font-weight: 600;
     text-decoration: none;
-    transition: background 0.15s ease, transform 0.15s ease;
+    transition:
+      background 0.15s ease,
+      transform 0.15s ease;
   }
-  a.gem-link:hover { background: var(--gem-orange); transform: translateY(-1px); }
-  a.gem-link::after { content: '\2197'; font-size: 0.7rem; }
-  a.gem-link.secondary { background: var(--gem-teal); }
-  a.gem-link.secondary::after { content: '\2192'; }
+  a.gem-link:hover {
+    background: var(--gem-orange);
+    transform: translateY(-1px);
+  }
+  a.gem-link::after {
+    content: '\2197';
+    font-size: 0.7rem;
+  }
+  a.gem-link.secondary {
+    background: var(--gem-teal);
+  }
+  a.gem-link.secondary::after {
+    content: '\2192';
+  }
 
   .percentile-block {
     display: flex;
@@ -365,7 +436,9 @@
   .project-card.compact .details-section {
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   }
-  .project-card.compact .project-details { padding: 1rem 1.25rem; }
+  .project-card.compact .project-details {
+    padding: 1rem 1.25rem;
+  }
 
   /* =============================================
      RESPONSIVE: Mobile layout

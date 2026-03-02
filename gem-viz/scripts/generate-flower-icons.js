@@ -1,13 +1,10 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { dirname, join } from 'path';
-import duckdb from 'duckdb';
 
 const ENTITY_CACHE_PATH = process.env.ENTITY_CACHE_PATH || '.svelte-kit/.entity-cache.json';
 const OUTPUT_DIR = process.env.FLOWER_OUTPUT_DIR || 'static/flowers';
 const LIMIT = Number(process.env.FLOWER_LIMIT || 0);
 const SIZE = Number(process.env.FLOWER_SIZE || 64);
-const PARQUET_PATH =
-  process.env.FLOWER_PARQUET_PATH || 'static/all_trackers_ownership@1.parquet';
 
 const trackerColors = new Map([
   ['Coal Plant', '#7F142A'],
@@ -171,76 +168,14 @@ function writeFile(path, contents) {
   writeFileSync(path, contents);
 }
 
-function runQuery(conn, sql) {
-  return new Promise((resolve, reject) => {
-    conn.all(sql, (err, rows) => {
-      if (err) reject(err);
-      else resolve(rows || []);
-    });
-  });
-}
-
-async function loadTrackerCountsFromParquet() {
-  if (!existsSync(PARQUET_PATH)) {
-    throw new Error(`Parquet file not found at ${PARQUET_PATH}`);
-  }
-
-  const db = new duckdb.Database(':memory:');
-  const conn = db.connect();
-
-  const sql = `
-    SELECT
-      "Owner GEM Entity ID" AS entity_id,
-      "Tracker" AS tracker,
-      COUNT(*) AS asset_count,
-      SUM(CAST("Capacity (MW)" AS DOUBLE)) AS total_capacity
-    FROM read_parquet('${PARQUET_PATH}')
-    WHERE "Owner GEM Entity ID" IS NOT NULL
-      AND "Owner GEM Entity ID" != ''
-      AND "Tracker" IS NOT NULL
-    GROUP BY entity_id, tracker
-  `;
-
-  const rows = await runQuery(conn, sql);
-  conn.close();
-  db.close();
-
-  const map = new Map();
-  for (const row of rows) {
-    const entityId = String(row.entity_id || '').trim();
-    if (!entityId) continue;
-    const tracker = normalizeTrackerName(row.tracker);
-    const count = Number(row.asset_count || 0);
-    const capacity = Number(row.total_capacity || 0);
-    if (!map.has(entityId)) map.set(entityId, []);
-    map.get(entityId).push({ tracker, count, capacity });
-  }
-  return map;
-}
-
 async function generateFlowers() {
-  let trackerMap = null;
-  try {
-    trackerMap = await loadTrackerCountsFromParquet();
-    console.log(`[flowers] Loaded tracker counts from ${PARQUET_PATH}`);
-  } catch (err) {
-    console.warn(`[flowers] Parquet load failed, falling back to entity cache: ${err.message}`);
+  const cache = loadJson(ENTITY_CACHE_PATH);
+  if (!cache || !cache.entities) {
+    console.warn(`[flowers] Entity cache not found at ${ENTITY_CACHE_PATH}.`);
+    return 0;
   }
-
-  let entityIds = [];
-  let portfolioLookup = null;
-
-  if (trackerMap) {
-    entityIds = Array.from(trackerMap.keys());
-  } else {
-    const cache = loadJson(ENTITY_CACHE_PATH);
-    if (!cache || !cache.entities) {
-      console.warn(`[flowers] Entity cache not found at ${ENTITY_CACHE_PATH}.`);
-      return 0;
-    }
-    portfolioLookup = cache.entities;
-    entityIds = Object.keys(portfolioLookup);
-  }
+  const portfolioLookup = cache.entities;
+  const entityIds = Object.keys(portfolioLookup);
 
   const limit = LIMIT > 0 ? Math.min(LIMIT, entityIds.length) : entityIds.length;
   const manifest = { size: SIZE, icons: {} };
@@ -249,9 +184,7 @@ async function generateFlowers() {
 
   for (let i = 0; i < limit; i++) {
     const entityId = entityIds[i];
-    const trackerStats = trackerMap
-      ? trackerMap.get(entityId) || []
-      : buildTrackerStats(portfolioLookup[entityId]?.portfolioData);
+    const trackerStats = buildTrackerStats(portfolioLookup[entityId]?.portfolioData);
 
     const svg = renderFlowerSvg(trackerStats);
     const filename = `${safeFilename(entityId)}.svg`;

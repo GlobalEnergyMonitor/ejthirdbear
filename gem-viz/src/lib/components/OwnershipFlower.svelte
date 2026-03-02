@@ -13,7 +13,9 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { entityLink } from '$lib/links';
-  import * as d3 from 'd3';
+  import { group, sum, max } from 'd3-array';
+  import { select } from 'd3-selection';
+  import { arc } from 'd3-shape';
   import { colorByTracker, colors } from '$lib/design-tokens';
   import { fetchAssetBasics, fetchOwnerPortfolio } from '$lib/component-data/schema';
 
@@ -35,11 +37,12 @@
   };
 
   let svgEl = $state(null);
-  let loading = $state(!prebakedPortfolio);
+  let loading = $state(true);
   /** @type {string | null} */
   let error = $state(null);
   let title = $state(propsTitle);
   let resolvedOwnerId = $state(ownerId);
+  let rendered = $state(false);
 
   // Navigate to entity page when clicked
   function handleFlowerClick() {
@@ -49,16 +52,16 @@
   }
 
   function buildPetals(portfolio, sizeConfig) {
-    const trackerGroups = d3.group(portfolio.assets, (d) => d.tracker || 'Unknown');
+    const trackerGroups = group(portfolio.assets, (d) => d.tracker || 'Unknown');
     const entries = Array.from(trackerGroups, ([tracker, list]) => {
       const count = list.length;
-      const capacity = d3.sum(list, (d) => d.capacityMw || 0);
+      const capacity = sum(list, (d) => d.capacityMw || 0);
       return { tracker, count, capacity };
     }).sort((a, b) => b.count - a.count);
 
-    const totalCount = d3.sum(entries, (d) => d.count) || 1;
+    const totalCount = sum(entries, (d) => d.count) || 1;
     let angleAcc = 0;
-    const maxCapacity = d3.max(entries, (d) => d.capacity) || 1;
+    const maxCapacity = max(entries, (d) => d.capacity) || 1;
 
     const baseLen = sizeConfig.baseRadius;
     const maxLen = sizeConfig.maxRadius;
@@ -88,14 +91,13 @@
     const innerRadius = size === 'small' ? 4 : 8;
     const centerRadius = size === 'small' ? 6 : 12;
 
-    const svg = d3.select(svgEl);
+    const svg = select(svgEl);
     svg.selectAll('*').remove();
     svg.attr('width', width).attr('height', height);
 
     const g = svg.append('g').attr('transform', `translate(${cx}, ${cy})`);
 
-    const petal = d3
-      .arc()
+    const petal = arc()
       .innerRadius(innerRadius)
       .cornerRadius(size === 'small' ? 4 : 8);
 
@@ -126,7 +128,7 @@
     // Labels (only if showLabels is true and not small size)
     // Only show labels for slices >= 10% to avoid clutter
     if (showLabels && size !== 'small') {
-      const totalCount = d3.sum(petalsData, (d) => d.count) || 1;
+      const totalCount = sum(petalsData, (d) => d.count) || 1;
       const labelThreshold = 0.1; // 10% minimum to show label
       const labelData = petalsData.filter((d) => d.count / totalCount >= labelThreshold);
 
@@ -149,30 +151,53 @@
     }
   }
 
-  onMount(async () => {
+  // Reactively render when portfolio prop arrives (streaming-friendly)
+  $effect(() => {
     const sizeConfig = sizes[size] || sizes.medium;
+    const portfolioData = prebakedPortfolio;
 
-    // If we have prebaked portfolio data, use it immediately
-    if (prebakedPortfolio) {
-      try {
-        if (!title && prebakedPortfolio.spotlightOwner?.Name) {
-          title = prebakedPortfolio.spotlightOwner.Name;
-        }
-        // Extract owner ID from portfolio if not provided
-        if (!resolvedOwnerId && prebakedPortfolio.spotlightOwner?.id) {
-          resolvedOwnerId = prebakedPortfolio.spotlightOwner.id;
-        }
-        const petalsData = buildPetals(prebakedPortfolio, sizeConfig);
-        render(petalsData, sizeConfig);
+    if (!portfolioData || !svgEl) return;
+
+    // Extract name/id even if no assets
+    if (!title && portfolioData.spotlightOwner?.Name) {
+      title = portfolioData.spotlightOwner.Name;
+    }
+    if (!resolvedOwnerId && portfolioData.spotlightOwner?.id) {
+      resolvedOwnerId = portfolioData.spotlightOwner.id;
+    }
+
+    // No assets to render petals from
+    if (!portfolioData.assets?.length) {
+      // Only show "no data" once streaming is done (portfolio has summary)
+      if (portfolioData.summary) {
         loading = false;
-      } catch (err) {
-        error = err?.message || String(err);
-        loading = false;
+        error = 'No assets in portfolio';
       }
       return;
     }
 
-    // Otherwise fetch from Ownership API (dev mode)
+    try {
+      const petalsData = buildPetals(portfolioData, sizeConfig);
+      render(petalsData, sizeConfig);
+      loading = false;
+      rendered = true;
+      error = null;
+    } catch (err) {
+      error = err?.message || String(err);
+      loading = false;
+    }
+  });
+
+  // Fallback: fetch from API when no portfolio is provided (embed/standalone mode)
+  onMount(async () => {
+    if (prebakedPortfolio?.assets?.length) return; // Already have data, $effect handles it
+
+    // Wait a tick to let streaming portfolio arrive via $effect
+    await new Promise((r) => setTimeout(r, 100));
+    if (rendered || prebakedPortfolio?.assets?.length) return; // Portfolio arrived from parent
+
+    const sizeConfig = sizes[size] || sizes.medium;
+
     try {
       loading = true;
       error = null;
@@ -201,6 +226,7 @@
       title = portfolio.spotlightOwner.Name;
       const petalsData = buildPetals(portfolio, sizeConfig);
       render(petalsData, sizeConfig);
+      rendered = true;
     } catch (err) {
       error = err?.message || String(err);
     } finally {

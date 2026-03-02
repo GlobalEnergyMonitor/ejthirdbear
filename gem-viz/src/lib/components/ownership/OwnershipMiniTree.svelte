@@ -7,10 +7,17 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { entityLink, assetLink } from '$lib/links';
-  import * as d3 from 'd3';
+  import { line, curveBasis } from 'd3-shape';
   import type {
-    GraphNode, GraphEdge, LayoutPoint, MiniLayoutNode, LayoutEdge,
-    OwnershipGraphAPIResponse, RawOwnershipAPINode, RawOwnershipAPIEdge, DagreEdge,
+    GraphNode,
+    GraphEdge,
+    LayoutPoint,
+    MiniLayoutNode,
+    LayoutEdge,
+    OwnershipGraphAPIResponse,
+    RawOwnershipAPINode,
+    RawOwnershipAPIEdge,
+    DagreEdge,
   } from '$lib/component-data/graph-types';
 
   interface Props {
@@ -83,7 +90,7 @@
       // Run layout after data loads
       if (dagre) runLayout();
     } catch (err: unknown) {
-      console.error('Failed to fetch ownership graph:', err);
+      if (import.meta.env.DEV) console.error('Failed to fetch ownership graph:', err);
       error = err instanceof Error ? err.message : String(err);
       loading = false;
     }
@@ -111,7 +118,9 @@
 
   // Asset count stats
   const assetCount = $derived(filteredNodes.filter((n) => n.type === 'asset').length);
-  const totalAssets = $derived(graphData?.nodes.filter((n: GraphNode) => n.type === 'asset').length || 0);
+  const totalAssets = $derived(
+    graphData?.nodes.filter((n: GraphNode) => n.type === 'asset').length || 0
+  );
   const hiddenCount = $derived(totalAssets - assetCount);
 
   // Run dagre layout - horizontal left to right
@@ -182,7 +191,12 @@
   // Edge path generator
   function edgePath(pts: LayoutPoint[]): string {
     if (!pts || pts.length < 2) return '';
-    return d3.line<LayoutPoint>().x((d) => d.x).y((d) => d.y).curve(d3.curveBasis)(pts) || '';
+    return (
+      line<LayoutPoint>()
+        .x((d) => d.x)
+        .y((d) => d.y)
+        .curve(curveBasis)(pts) || ''
+    );
   }
 
   // Truncate text
@@ -204,7 +218,7 @@
       dagre = await import('dagre');
       await fetchOwnershipGraph();
     } catch (e) {
-      console.error('Failed to load dagre:', e);
+      if (import.meta.env.DEV) console.error('Failed to load dagre:', e);
       error = 'Failed to load graph library';
       loading = false;
     }
@@ -265,14 +279,7 @@
           >
             {#if n.isRoot}
               <!-- Root entity: larger rounded rect -->
-              <rect
-                x={-n.w / 2}
-                y={-n.h / 2}
-                width={n.w}
-                height={n.h}
-                rx="4"
-                fill={colors.navy}
-              />
+              <rect x={-n.w / 2} y={-n.h / 2} width={n.w} height={n.h} rx="4" fill={colors.navy} />
               <text fill={colors.warmWhite} class="root-label">{truncate(n.label, 14)}</text>
             {:else if n.isAsset}
               <!-- Asset: small pill -->

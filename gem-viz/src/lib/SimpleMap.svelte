@@ -3,18 +3,17 @@
   import maplibregl from 'maplibre-gl';
   import 'maplibre-gl/dist/maplibre-gl.css';
   import { assetPath, assetLink } from '$lib/links';
-  import { trackerToMapColor, mapColors, colors } from '$lib/design-tokens';
+  import { mapColors } from '$lib/design-tokens';
   import ProjectCard from '$lib/components/ProjectCard.svelte';
   import { fetchAssetBasics } from '$lib/component-data/schema';
+  import { Pause, Play } from 'lucide-svelte';
   import {
     trackerGroups,
     trackerColorStops,
     trackerGlowColorStops,
-    palette,
     themes,
     TOOLTIP_MIN_ZOOM,
     SPIN_SPEED,
-    DATA_SOURCES,
   } from '$lib/simple-map-config';
 
   let mapContainer = $state(null);
@@ -150,7 +149,7 @@
           }
         }
       } catch (err) {
-        console.warn(`Failed to fetch asset data for ${assetId}:`, err);
+        if (import.meta.env.DEV) console.warn(`Failed to fetch asset data for ${assetId}:`, err);
       } finally {
         tooltipLoading = false;
       }
@@ -189,15 +188,6 @@
   }
 
   // Colors imported from simple-map-config (trackerColorExpression, trackerColorLightExpression, themes, palette)
-
-  function updateMapTheme() {
-    if (!map) return;
-    const theme = isDarkMode ? themes.dark : themes.light;
-
-    map.setPaintProperty('background', 'background-color', theme.background);
-    map.setPaintProperty('land', 'fill-color', theme.land);
-    map.setPaintProperty('borders', 'line-color', theme.landStroke);
-  }
 
   function startSpinning() {
     if (spinAnimation) return;
@@ -277,35 +267,23 @@
           return;
         }
 
-        // Fetch total asset count from DuckDB (async, non-blocking)
-        // Wrapped in try-catch to ensure map loads even if DuckDB fails
-        try {
-          import('$lib/duckdb-utils')
-            .then(async ({ loadParquetFromPath, query }) => {
-              try {
-                const ownershipPath = assetPath('all_trackers_ownership@1.parquet');
-                await loadParquetFromPath(ownershipPath, 'ownership');
-                const result = await query(`
-                  SELECT COUNT(DISTINCT COALESCE("GEM unit ID", "GEM Mine ID", "Steel Plant ID", "GEM Asset ID", "ProjectID")) as cnt
-                  FROM ownership
-                `);
-                if (result.success && result.data?.[0]?.cnt) {
-                  totalAssetCount = Number(result.data[0].cnt);
-                }
-              } catch (e) {
-                console.warn('Could not fetch asset count:', e);
-              }
-            })
-            .catch((e) => console.warn('DuckDB import failed:', e));
-        } catch (e) {
-          console.warn('DuckDB initialization skipped:', e);
-        }
+        // Fetch total asset count from REST API (async, non-blocking)
+        import('$lib/ownership-api')
+          .then(({ getAssetTypeCounts }) => getAssetTypeCounts())
+          .then((counts) => {
+            const total = Array.from(counts.values()).reduce((a, b) => a + b, 0);
+            if (total > 0) totalAssetCount = total;
+          })
+          .catch((e) => {
+            if (import.meta.env.DEV) console.warn('Could not fetch asset count:', e);
+          });
 
         const response = await fetch(assetPath('points.geojson'));
         if (!response.ok) throw new Error(`Failed to load GeoJSON: ${response.statusText}`);
 
         geojsonData = await response.json();
-        console.log(`Loaded ${geojsonData.features.length.toLocaleString()} points`);
+        if (import.meta.env.DEV)
+          console.log(`Loaded ${geojsonData.features.length.toLocaleString()} points`);
 
         const theme = isDarkMode ? themes.dark : themes.light;
 
@@ -419,7 +397,12 @@
             source: 'points',
             paint: {
               'circle-radius': ['interpolate', ['linear'], ['zoom'], 0, 0.8, 2, 1.2, 4, 2, 6, 3.5],
-              'circle-color': ['match', ['get', 'tracker'], ...trackerColorStops, mapColors.default],
+              'circle-color': [
+                'match',
+                ['get', 'tracker'],
+                ...trackerColorStops,
+                mapColors.default,
+              ],
               'circle-opacity': 0.9,
               'circle-blur': 0,
               'circle-stroke-width': 0,
@@ -481,7 +464,7 @@
           }
         });
       } catch (err) {
-        console.error('Map error:', err);
+        if (import.meta.env.DEV) console.error('Map error:', err);
         error = err.message;
         loading = false;
       }
@@ -567,7 +550,7 @@
     onclick={toggleSpin}
     aria-label={isSpinning ? 'Pause rotation' : 'Resume rotation'}
   >
-    <span class="spin-icon">{isSpinning ? '⏸' : '▶'}</span>
+    <span class="spin-icon">{#if isSpinning}<Pause size={12} />{:else}<Play size={12} />{/if}</span>
   </button>
 
   <!-- Stats -->
@@ -616,7 +599,11 @@
     <div class="legend-title">Asset Types</div>
     <div class="legend-items">
       {#each [['coal', 'Coal'], ['gas', 'Gas/Oil'], ['steel', 'Steel/Iron'], ['bioenergy', 'Bioenergy']] as [group, label]}
-        <button class="legend-item" class:disabled={!visibleGroups[group]} onclick={() => toggleTrackerGroup(group)}>
+        <button
+          class="legend-item"
+          class:disabled={!visibleGroups[group]}
+          onclick={() => toggleTrackerGroup(group)}
+        >
           <span class="legend-dot" style="--dot-color: {mapColors[group]}"></span>
           <span>{label}</span>
         </button>
@@ -745,7 +732,7 @@
   }
 
   .callout-name {
-    font-family: var(--font-family-data, 'Roboto Condensed', sans-serif);
+    font-family: var(--font-family-data, 'Barlow Semi-Condensed', sans-serif);
     font-size: 11px;
     font-weight: 600;
     color: var(--text-color);
@@ -767,7 +754,7 @@
   }
 
   .callout-capacity {
-    font-family: var(--font-family-data, 'Roboto Condensed', sans-serif);
+    font-family: var(--font-family-data, 'Barlow Semi-Condensed', sans-serif);
     font-size: 10px;
     font-weight: 700;
     color: var(--accent);
@@ -830,7 +817,7 @@
   }
 
   .stat-value {
-    font-family: var(--font-family-data, 'Roboto Condensed', sans-serif);
+    font-family: var(--font-family-data, 'Barlow Semi-Condensed', sans-serif);
     font-size: 32px;
     font-weight: 700;
     color: var(--stat-color);
@@ -847,7 +834,7 @@
   }
 
   .stat-label {
-    font-family: var(--font-family-data, 'Roboto Condensed', sans-serif);
+    font-family: var(--font-family-data, 'Barlow Semi-Condensed', sans-serif);
     font-size: 10px;
     font-weight: 500;
     color: var(--text-muted);
@@ -871,7 +858,7 @@
   }
 
   .legend-title {
-    font-family: var(--font-family-data, 'Roboto Condensed', sans-serif);
+    font-family: var(--font-family-data, 'Barlow Semi-Condensed', sans-serif);
     font-size: 9px;
     font-weight: 600;
     color: var(--teal);
@@ -1022,7 +1009,7 @@
   }
 
   .loading-text {
-    font-family: var(--font-family-data, 'Roboto Condensed', sans-serif);
+    font-family: var(--font-family-data, 'Barlow Semi-Condensed', sans-serif);
     font-size: 11px;
     color: var(--teal);
     text-transform: uppercase;

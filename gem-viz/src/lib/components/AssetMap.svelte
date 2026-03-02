@@ -7,7 +7,7 @@
   import { fetchAssetBasics, fetchCoordinatesByLocation } from '$lib/component-data/schema';
 
   // Bindable prop so parent can hide section when no location found
-  let { hasLocation = $bindable(true) } = $props();
+  let { hasLocation = $bindable(true), assetId: propAssetId = null } = $props();
 
   let mapContainer = $state(null);
   let map = $state(null);
@@ -19,7 +19,7 @@
     (async () => {
       const params = $page?.params ?? {};
       const url = typeof window !== 'undefined' ? new URL(window.location.href) : null;
-      const assetId = params.id || url?.searchParams.get('assetId') || null;
+      const assetId = propAssetId || params.id || url?.searchParams.get('assetId') || null;
 
       if (!assetId) {
         error = 'Missing asset ID';

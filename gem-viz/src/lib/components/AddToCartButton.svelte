@@ -8,6 +8,7 @@
    */
 
   import { investigationCart, detectType } from '$lib/investigationCart';
+  import { Check, Plus, Minus } from 'lucide-svelte';
 
   // Props
   let {
@@ -85,10 +86,18 @@
   title={ariaLabel}
   {disabled}
 >
-  {#if inCart}
-    <span class="check">✓</span>
+  {#if variant === 'icon'}
+    {#if inCart}
+      <Minus size={14} />
+    {:else}
+      <Plus size={14} />
+    {/if}
+  {:else}
+    {#if inCart}
+      <span class="check"><Check size={14} /></span>
+    {/if}
+    {buttonText}
   {/if}
-  {buttonText}
 </button>
 
 <style>

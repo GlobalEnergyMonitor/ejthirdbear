@@ -2,7 +2,7 @@
   // ============================================================================
   // SPATIAL SEARCH PAGE
   // Shows assets within a geographic bounds/polygon filter
-  // Uses client-side GeoJSON filtering (no DuckDB WASM - works on static hosting)
+  // Uses client-side GeoJSON filtering
   // ============================================================================
 
   // --- IMPORTS ---
@@ -97,7 +97,7 @@
     return lat >= bounds.south && lat <= bounds.north && lon >= bounds.west && lon <= bounds.east;
   }
 
-  // --- MAIN DATA LOADER (GeoJSON-based, no DuckDB) ---
+  // --- MAIN DATA LOADER (GeoJSON-based) ---
   async function loadData() {
     const filter = parseFilter();
     filterDescription = describeFilter(filter);
@@ -197,7 +197,7 @@
   />
 </svelte:head>
 
-<main>
+<div class="page">
   <!-- Header -->
   <header>
     <a href={link('index')} class="back-link">Back to Map</a>
@@ -267,14 +267,14 @@
       <p class="limit-notice">Showing first 500 results. Zoom in for more specific results.</p>
     {/if}
   {/if}
-</main>
+</div>
 
 <!-- ============================================================================
      STYLES
      ============================================================================ -->
 <style>
   /* Layout */
-  main {
+  .page {
     width: 100%;
     padding: var(--space-5) var(--space-10);
   }
@@ -414,7 +414,7 @@
 
   /* Responsive */
   @media (max-width: 768px) {
-    main {
+    .page {
       padding: var(--space-4);
     }
   }

@@ -9,7 +9,6 @@
   import { listAssetsByType, type AssetSummary } from '$lib/ownership-api';
   import {
     slugToTrackerName,
-    trackerNameToSlug,
     trackerMetadata,
     type TrackerMetadata,
   } from '$lib/data-config/tracker-metadata';
@@ -56,16 +55,37 @@
     Status: { category: 'Main', definition: 'Current operating status of the asset.' },
     Country: { category: 'Geography', definition: 'Country where the asset is located.' },
     Owner: { category: 'Ownership', definition: 'Primary owner or operator.' },
-    'Immediate Owner Entity Name': { category: 'Ownership', definition: 'Direct ownership entity name.' },
-    'Start year': { category: 'Age', definition: 'Year the asset began or is planned to begin operation.' },
+    'Immediate Owner Entity Name': {
+      category: 'Ownership',
+      definition: 'Direct ownership entity name.',
+    },
+    'Start year': {
+      category: 'Age',
+      definition: 'Year the asset began or is planned to begin operation.',
+    },
     'Capacity (MW)': { category: 'Size', definition: 'Generating capacity in megawatts.' },
-    'Capacity (Mtpa)': { category: 'Size', definition: 'Production capacity in million tonnes per annum.' },
-    'Nominal crude steel capacity (ttpa)': { category: 'Size', definition: 'Nominal crude steel production capacity in thousand tonnes per annum.' },
-    'Nominal iron capacity (ttpa)': { category: 'Size', definition: 'Nominal iron production capacity in thousand tonnes per annum.' },
-    'CapacityBcm/y': { category: 'Size', definition: 'Pipeline capacity in billion cubic meters per year.' },
+    'Capacity (Mtpa)': {
+      category: 'Size',
+      definition: 'Production capacity in million tonnes per annum.',
+    },
+    'Nominal crude steel capacity (ttpa)': {
+      category: 'Size',
+      definition: 'Nominal crude steel production capacity in thousand tonnes per annum.',
+    },
+    'Nominal iron capacity (ttpa)': {
+      category: 'Size',
+      definition: 'Nominal iron production capacity in thousand tonnes per annum.',
+    },
+    'CapacityBcm/y': {
+      category: 'Size',
+      definition: 'Pipeline capacity in billion cubic meters per year.',
+    },
     'Fuel type': { category: 'Details', definition: 'Type of fuel used by the plant.' },
     Technology: { category: 'Details', definition: 'Technology or process type used.' },
-    'Mine type': { category: 'Details', definition: 'Type of mining operation (surface, underground, etc.).' },
+    'Mine type': {
+      category: 'Details',
+      definition: 'Type of mining operation (surface, underground, etc.).',
+    },
     Feedstock: { category: 'Details', definition: 'Primary feedstock material for bioenergy.' },
     'Asset Name': { category: 'Names', definition: 'Name of the asset or project.' },
     'Asset Type': { category: 'Main', definition: 'Type of asset tracked.' },
@@ -85,7 +105,7 @@
       });
     }
     // Add common fields not already included
-    const included = new Set(fields.map(f => f.columnName));
+    const included = new Set(fields.map((f) => f.columnName));
     const extras = ['Country', 'Immediate Owner Entity Name', '% Share of Ownership'];
     for (const fieldName of extras) {
       if (!included.has(fieldName)) {
@@ -104,10 +124,10 @@
 
   // Map human-readable field names to REST API keys + normalized AssetSummary keys
   const FIELD_TO_API_KEY: Record<string, string[]> = {
-    'Status': ['operating_status', 'status', 'Status'],
-    'Country': ['country', 'Country'],
+    Status: ['operating_status', 'status', 'Status'],
+    Country: ['country', 'Country'],
     'Country / Area': ['country', 'Country'],
-    'Countries': ['country', 'Country'],
+    Countries: ['country', 'Country'],
     'Capacity (MW)': ['capacity_value', 'capacity', 'Capacity (MW)'],
     'Capacity (Mtpa)': ['capacity_value', 'capacity', 'Capacity (Mtpa)'],
     'Nominal crude steel capacity (ttpa)': ['capacity_value', 'capacity'],
@@ -117,9 +137,9 @@
     'Asset Name': ['asset_name', 'name', 'Asset Name'],
     'Asset Type': ['asset_type', 'facilityType', 'Asset Type'],
     'Fuel type': ['fuel_type', 'Fuel type'],
-    'Technology': ['technology', 'Technology'],
+    Technology: ['technology', 'Technology'],
     'Mine type': ['mine_type', 'Mine type'],
-    'Feedstock': ['feedstock', 'Feedstock'],
+    Feedstock: ['feedstock', 'Feedstock'],
     'Start year': ['start_year', 'Start year'],
     'Immediate Owner Entity Name': ['owner_name', 'Immediate Owner Entity Name'],
     '% Share of Ownership': ['ownership_pct', '% Share of Ownership'],
@@ -141,7 +161,10 @@
         let value: unknown = null;
         for (const k of apiKeys) {
           const v = raw[k] ?? (asset as unknown as Record<string, unknown>)[k];
-          if (v != null && v !== '') { value = v; break; }
+          if (v != null && v !== '') {
+            value = v;
+            break;
+          }
         }
         const strValue = value != null && value !== '' ? String(value) : null;
         if (strValue) {
@@ -222,7 +245,6 @@
           };
           return result;
         });
-
     } catch (err) {
       console.error('Failed to load field metadata:', err);
       // Fall back to synthetic fields
@@ -256,7 +278,7 @@
   <meta name="description" content={metadata?.description || `Data overview for ${trackerName}`} />
 </svelte:head>
 
-<main>
+<div class="page">
   <header>
     <nav class="breadcrumb">
       <a href={link('index')}>Home</a> /
@@ -312,10 +334,10 @@
       </footer>
     {/if}
   {/if}
-</main>
+</div>
 
 <style>
-  main {
+  .page {
     width: 100%;
     max-width: 1200px;
     margin: 0 auto;

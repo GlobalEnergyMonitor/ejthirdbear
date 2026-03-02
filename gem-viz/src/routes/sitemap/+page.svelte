@@ -110,11 +110,6 @@
         },
         { path: '/embed/network-3d', name: '3D Network', description: '3D ownership network' },
         {
-          path: '/embed/network-explorer',
-          name: 'Network Explorer',
-          description: 'Interactive network explorer',
-        },
-        {
           path: '/embed/ownership-flower',
           name: 'Ownership Flower',
           description: 'Radial ownership diagram',
@@ -123,11 +118,6 @@
           path: '/embed/ownership-graph',
           name: 'Ownership Graph',
           description: 'Hierarchical ownership graph',
-        },
-        {
-          path: '/embed/ownership-mermaid',
-          name: 'Ownership Mermaid',
-          description: 'Mermaid diagram of ownership',
         },
         {
           path: '/embed/tracker-factsheet',
@@ -151,7 +141,7 @@
   <meta name="description" content="Complete directory of all pages in GEM Viz" />
 </svelte:head>
 
-<main>
+<div class="page">
   <header>
     <p class="label">Directory</p>
     <h1>Sitemap</h1>
@@ -179,10 +169,10 @@
       </section>
     {/each}
   </div>
-</main>
+</div>
 
 <style>
-  main {
+  .page {
     max-width: 800px;
     margin: 0 auto;
     padding: var(--space-10) var(--space-5);

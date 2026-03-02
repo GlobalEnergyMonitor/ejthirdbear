@@ -1,12 +1,24 @@
 <script>
+  /**
+   * GEMBOT — AI Chat Interface
+   * Conversational assistant for querying GEM ownership data.
+   * Streams responses from /api/chat, renders tool calls inline,
+   * and persists chat history in localStorage.
+   */
+
+  // --- Imports ---
   import { onMount } from 'svelte';
   import { marked } from 'marked';
   import { link, entityLink } from '$lib/links';
-  import EntityMicroCard from '$lib/components/EntityMicroCard.svelte';
-  import AssetMicroCard from '$lib/components/AssetMicroCard.svelte';
   import 'maplibre-gl/dist/maplibre-gl.css';
   import { investigationCart } from '$lib/investigationCart';
   import { colorByTracker, colors } from '$lib/design-tokens';
+
+  // Components
+  import EntityMicroCard from '$lib/components/EntityMicroCard.svelte';
+  import AssetMicroCard from '$lib/components/AssetMicroCard.svelte';
+
+  // Gembot utilities
   import {
     SUGGESTIONS,
     QUICK_ENTITIES,
@@ -22,16 +34,11 @@
     createMapAction,
   } from './gembot-utils';
 
-  // Configure marked for safe inline rendering
-  marked.setOptions({
-    breaks: true,
-    gfm: true,
-  });
-
-  // LocalStorage key for chat history
+  // --- Config ---
+  marked.setOptions({ breaks: true, gfm: true });
   const CHAT_STORAGE_KEY = 'gembot-chat-history';
 
-  // State
+  // --- State ---
   let messages = $state([]);
   let input = $state('');
   let isLoading = $state(false);
@@ -39,12 +46,12 @@
   let chatContainer = $state(null);
   let inputElement = $state(null);
 
-  // Streaming state
+  // Streaming
   let streamingText = $state('');
   let streamingStatus = $state('');
   let activeTools = $state(new Map());
 
-  // Save messages to localStorage
+  // --- Storage ---
   function saveMessages() {
     if (typeof localStorage !== 'undefined') {
       try {
@@ -86,6 +93,19 @@
   let mentionedEntities = $state(new Map());
   let mentionedAssets = $state(new Map());
 
+  const asString = (value, fallback = '') =>
+    typeof value === 'string' ? value : value == null ? fallback : String(value);
+  const asNumber = (value, fallback = 0) => {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+  };
+  const asOptionalNumber = (value) => {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : undefined;
+  };
+
   // Human-readable tool name mapping
   const TOOL_LABELS = {
     search_entities: 'Search',
@@ -115,12 +135,25 @@
       // Entities from various tools — each source type gets a role label
       let entities = [];
       let role = '';
-      if (result.entities) { entities = result.entities; role = 'found via'; }
-      else if (result.subsidiaries) { entities = result.subsidiaries; role = 'subsidiary of query'; }
-      else if (result.directOwners || result.owners) { entities = result.directOwners || result.owners; role = 'owner'; }
-      else if (result.comparisons) { entities = result.comparisons; role = 'compared'; }
-      else if (result.commonOwners) { entities = result.commonOwners; role = 'common owner'; }
-      else if (result.data?.owners) { entities = result.data.owners; role = 'top owner'; }
+      if (result.entities) {
+        entities = result.entities;
+        role = 'found via';
+      } else if (result.subsidiaries) {
+        entities = result.subsidiaries;
+        role = 'subsidiary of query';
+      } else if (result.directOwners || result.owners) {
+        entities = result.directOwners || result.owners;
+        role = 'owner';
+      } else if (result.comparisons) {
+        entities = result.comparisons;
+        role = 'compared';
+      } else if (result.commonOwners) {
+        entities = result.commonOwners;
+        role = 'common owner';
+      } else if (result.data?.owners) {
+        entities = result.data.owners;
+        role = 'top owner';
+      }
 
       for (const e of entities) {
         const id = e.id || e.entityId || e.ownerEntityId;
@@ -294,19 +327,16 @@
     switch (result.action) {
       case 'add':
         if (result.items?.length > 0) {
-          const added = investigationCart.addMany(result.items);
-          console.log(`Added ${added} items to cart`);
+          investigationCart.addMany(result.items);
         }
         break;
       case 'remove':
         if (result.ids?.length > 0) {
           investigationCart.removeMany(result.ids);
-          console.log(`Removed ${result.ids.length} items from cart`);
         }
         break;
       case 'clear':
         investigationCart.clear();
-        console.log('Cleared cart');
         break;
     }
   }
@@ -362,8 +392,8 @@
           <div class="welcome-state">
             <h2>Gembot</h2>
             <p class="lead text-center" style="max-width: 500px; margin: 0 auto var(--space-8);">
-              Explore the Global Energy Monitor database. Ask about energy assets,
-              ownership structures, or company portfolios.
+              Explore the Global Energy Monitor database. Ask about energy assets, ownership
+              structures, or company portfolios.
             </p>
 
             <div class="suggestions-section mb-6">
@@ -380,10 +410,18 @@
             <div class="capabilities-section mb-6">
               <h3 class="section-header text-center">Capabilities</h3>
               <ul class="flex flex-wrap gap-3 justify-center" style="list-style: none;">
-                <li class="flex items-center gap-2 text-sm text-secondary">Search companies and assets</li>
-                <li class="flex items-center gap-2 text-sm text-secondary">Explore ownership portfolios</li>
-                <li class="flex items-center gap-2 text-sm text-secondary">Trace ownership chains</li>
-                <li class="flex items-center gap-2 text-sm text-secondary">Filter by country, status, capacity</li>
+                <li class="flex items-center gap-2 text-sm text-secondary">
+                  Search companies and assets
+                </li>
+                <li class="flex items-center gap-2 text-sm text-secondary">
+                  Explore ownership portfolios
+                </li>
+                <li class="flex items-center gap-2 text-sm text-secondary">
+                  Trace ownership chains
+                </li>
+                <li class="flex items-center gap-2 text-sm text-secondary">
+                  Filter by country, status, capacity
+                </li>
               </ul>
             </div>
           </div>
@@ -408,17 +446,27 @@
                         >
                           <summary class="detail-block__header">
                             <span class="detail-block__icon">{getToolIcon(toolCall.tool)}</span>
-                            <span class="detail-block__title">{getToolSummary(toolCall.tool, toolCall.args)}</span>
+                            <span class="detail-block__title"
+                              >{getToolSummary(toolCall.tool, toolCall.args)}</span
+                            >
                             {#if toolCall.result?.count !== undefined}
                               <span class="detail-block__badge">({toolCall.result.count})</span>
                             {:else if toolCall.result?.entities?.length}
-                              <span class="detail-block__badge">({toolCall.result.entities.length} found)</span>
+                              <span class="detail-block__badge"
+                                >({toolCall.result.entities.length} found)</span
+                              >
                             {:else if toolCall.result?.subsidiaries?.length}
-                              <span class="detail-block__badge">({toolCall.result.subsidiaries.length})</span>
+                              <span class="detail-block__badge"
+                                >({toolCall.result.subsidiaries.length})</span
+                              >
                             {:else if toolCall.result?.owners?.length}
-                              <span class="detail-block__badge">({toolCall.result.owners.length})</span>
+                              <span class="detail-block__badge"
+                                >({toolCall.result.owners.length})</span
+                              >
                             {:else if toolCall.result?.features?.length}
-                              <span class="detail-block__badge">({toolCall.result.features.length} locations)</span>
+                              <span class="detail-block__badge"
+                                >({toolCall.result.features.length} locations)</span
+                              >
                             {/if}
                             <span class="tool-status">✓</span>
                           </summary>
@@ -430,13 +478,15 @@
                                 <div class="visual-results entity-grid">
                                   {#each entities.slice(0, 8) as entity}
                                     <EntityMicroCard
-                                      name={entity.name ||
-                                        entity.entityName ||
-                                        entity.ownerName ||
-                                        'Unknown'}
-                                      location={entity.headquartersCountry || ''}
+                                      name={asString(
+                                        entity.name || entity.entityName || entity.ownerName,
+                                        'Unknown'
+                                      )}
+                                      location={asString(entity.headquartersCountry, '')}
                                       href={entityLink(
-                                        entity.id || entity.entityId || entity.ownerEntityId
+                                        asString(
+                                          entity.id || entity.entityId || entity.ownerEntityId
+                                        )
                                       )}
                                       variant="compact"
                                     />
@@ -453,13 +503,15 @@
                                 <div class="visual-results asset-grid">
                                   {#each assets.slice(0, 6) as asset}
                                     <AssetMicroCard
-                                      id={asset.id}
-                                      name={asset.name}
-                                      tracker={asset.type || asset.tracker}
-                                      status={asset.status}
-                                      country={asset.country}
-                                      capacity={asset.capacity}
-                                      owner={asset.owner}
+                                      id={asString(asset.id)}
+                                      name={asString(asset.name)}
+                                      tracker={asString(asset.type || asset.tracker)}
+                                      status={asString(asset.status)}
+                                      country={asString(asset.country)}
+                                      capacity={asNumber(asset.capacity)}
+                                      owner={asString(asset.owner)}
+                                      latitude={asOptionalNumber(asset.latitude)}
+                                      longitude={asOptionalNumber(asset.longitude)}
                                       variant="compact"
                                     />
                                   {/each}
@@ -515,7 +567,9 @@
                                     <div class="ranking-item">
                                       <span class="ranking-item__rank">#{i + 1}</span>
                                       <span class="ranking-item__name">{owner.name}</span>
-                                      <span class="ranking-item__value">{owner.assetCount} assets</span>
+                                      <span class="ranking-item__value"
+                                        >{owner.assetCount} assets</span
+                                      >
                                     </div>
                                   {/each}
                                 </div>
@@ -533,7 +587,9 @@
                                     <div class="ranking-item">
                                       <span class="ranking-item__rank">#{i + 1}</span>
                                       <span class="ranking-item__name">{country.country}</span>
-                                      <span class="ranking-item__value">{country.assetCount} assets</span>
+                                      <span class="ranking-item__value"
+                                        >{country.assetCount} assets</span
+                                      >
                                     </div>
                                   {/each}
                                 </div>
@@ -629,28 +685,36 @@
                               <div class="map-result">
                                 <div class="map-header">
                                   <span class="map-title">{toolCall.result.title}</span>
-                                  <span class="map-count">{toolCall.result.features?.length || 0} locations</span>
+                                  <span class="map-count"
+                                    >{toolCall.result.features?.length || 0} locations</span
+                                  >
                                 </div>
                                 {#if toolCall.result.features?.length > 0}
                                   {@const mapId = `map-${i}-${toolCall.tool}`}
                                   <div
                                     class="map-container"
                                     id={mapId}
-                                    use:mapAction={{ id: mapId, features: toolCall.result.features }}
+                                    use:mapAction={{
+                                      id: mapId,
+                                      features: toolCall.result.features,
+                                    }}
                                   ></div>
                                   <div class="map-legend">
-                                    {#each [...new Set(toolCall.result.features.map(f => f.tracker))] as tracker}
+                                    {#each [...new Set(toolCall.result.features.map((f) => f.tracker))] as tracker}
                                       <span class="legend-item">
                                         <span
                                           class="legend-dot"
-                                          style="background: {colorByTracker.get(tracker) || colors.primary}"
+                                          style="background: {colorByTracker.get(tracker) ||
+                                            colors.primaryBlue}"
                                         ></span>
                                         {tracker}
                                       </span>
                                     {/each}
                                   </div>
                                 {:else}
-                                  <div class="map-empty">{toolCall.result.message || 'No locations found'}</div>
+                                  <div class="map-empty">
+                                    {toolCall.result.message || 'No locations found'}
+                                  </div>
                                 {/if}
                               </div>
                               <!-- Fallback to JSON for other tools -->
@@ -672,7 +736,12 @@
                     </div>
                   {/if}
 
-                  <div class="message-bubble {message.role === 'user' ? 'message-bubble--user' : 'message-bubble--assistant'}" class:message-bubble--error={message.error}>
+                  <div
+                    class="message-bubble {message.role === 'user'
+                      ? 'message-bubble--user'
+                      : 'message-bubble--assistant'}"
+                    class:message-bubble--error={message.error}
+                  >
                     {#if message.role === 'assistant'}
                       {@html renderMarkdown(message.content)}
                     {:else}
@@ -715,17 +784,27 @@
                           {#each currentToolCalls as toolCall}
                             <div class="tool-completed">
                               <span class="tool-check">✓</span>
-                              <span class="tool-summary">{getToolSummary(toolCall.tool, toolCall.args)}</span>
+                              <span class="tool-summary"
+                                >{getToolSummary(toolCall.tool, toolCall.args)}</span
+                              >
                               {#if toolCall.result?.count !== undefined}
                                 <span class="tool-count">({toolCall.result.count} results)</span>
                               {:else if toolCall.result?.entities?.length}
-                                <span class="tool-count">({toolCall.result.entities.length} found)</span>
+                                <span class="tool-count"
+                                  >({toolCall.result.entities.length} found)</span
+                                >
                               {:else if toolCall.result?.subsidiaries?.length}
-                                <span class="tool-count">({toolCall.result.subsidiaries.length} subsidiaries)</span>
+                                <span class="tool-count"
+                                  >({toolCall.result.subsidiaries.length} subsidiaries)</span
+                                >
                               {:else if toolCall.result?.owners?.length}
-                                <span class="tool-count">({toolCall.result.owners.length} owners)</span>
+                                <span class="tool-count"
+                                  >({toolCall.result.owners.length} owners)</span
+                                >
                               {:else if toolCall.result?.features?.length}
-                                <span class="tool-count">({toolCall.result.features.length} locations)</span>
+                                <span class="tool-count"
+                                  >({toolCall.result.features.length} locations)</span
+                                >
                               {:else if toolCall.result?.total !== undefined}
                                 <span class="tool-count">({toolCall.result.total} items)</span>
                               {/if}
@@ -807,7 +886,14 @@
               <div class="mentioned-group">
                 <span class="mentioned-label">Entities ({mentionedEntities.size})</span>
                 {#each [...mentionedEntities.values()] as entity}
-                  <a href={entityLink(entity.id)} class="mentioned-item entity" target="_blank" title="Source: {entity.source || 'conversation'}{entity.role ? ` (${entity.role})` : ''}">
+                  <a
+                    href={entityLink(entity.id)}
+                    class="mentioned-item entity"
+                    target="_blank"
+                    title="Source: {entity.source || 'conversation'}{entity.role
+                      ? ` (${entity.role})`
+                      : ''}"
+                  >
                     <span class="mentioned-name">{entity.name}</span>
                     <span class="mentioned-detail">
                       {#if entity.role}
@@ -832,15 +918,24 @@
               <div class="mentioned-group">
                 <span class="mentioned-label">Assets ({mentionedAssets.size})</span>
                 {#each [...mentionedAssets.values()] as asset}
-                  <a href={link(`asset/${asset.id}`)} class="mentioned-item asset" target="_blank" title="Source: {asset.source || 'conversation'}">
+                  <a
+                    href={link(`asset/${asset.id}`)}
+                    class="mentioned-item asset"
+                    target="_blank"
+                    title="Source: {asset.source || 'conversation'}"
+                  >
                     <span class="mentioned-name">{asset.name}</span>
                     <span class="mentioned-detail">
-                      <span class="mentioned-meta">{asset.type}{asset.status ? ` · ${asset.status}` : ''}</span>
+                      <span class="mentioned-meta"
+                        >{asset.type}{asset.status ? ` · ${asset.status}` : ''}</span
+                      >
                       {#if asset.country}
                         <span class="mentioned-meta">{asset.country}</span>
                       {/if}
                       {#if asset.capacity}
-                        <span class="mentioned-meta">{asset.capacity} {asset.capacityUnit || 'MW'}</span>
+                        <span class="mentioned-meta"
+                          >{asset.capacity} {asset.capacityUnit || 'MW'}</span
+                        >
                       {/if}
                       {#if asset.owner}
                         <span class="mentioned-meta">Owner: {asset.owner}</span>
@@ -868,11 +963,7 @@
         <h4 class="sidebar-panel__title">Quick Searches</h4>
         <div class="sidebar-panel__list">
           {#each SUGGESTIONS.slice(0, 3) as suggestion}
-            <button
-              class="chip"
-              onclick={() => sendMessage(suggestion.label)}
-              disabled={isLoading}
-            >
+            <button class="chip" onclick={() => sendMessage(suggestion.label)} disabled={isLoading}>
               {suggestion.icon}
               {suggestion.label.split(' ').slice(0, 4).join(' ')}...
             </button>
@@ -983,10 +1074,12 @@
   /* radius variables now in shared-styles.css */
 
   .gembot-container {
-    min-height: 100vh;
+    /* Fill available space: viewport minus nav (64px) minus layout main padding (~2rem top+bottom) minus footer */
+    height: calc(100dvh - 64px - 4rem);
     display: flex;
     flex-direction: column;
     background: var(--color-bg-secondary);
+    overflow: hidden;
   }
 
   .chat-layout {
@@ -998,6 +1091,8 @@
     width: 100%;
     gap: var(--space-6);
     padding: var(--space-6);
+    min-height: 0; /* allow grid children to shrink */
+    overflow: hidden;
   }
 
   @media (max-width: 900px) {
@@ -1016,13 +1111,14 @@
     border-radius: var(--radius-lg);
     border: 1px solid var(--color-border);
     overflow: hidden;
-    min-height: 600px;
+    min-height: 0; /* critical: allow flex child to shrink */
   }
 
   .chat-messages {
     flex: 1;
     overflow-y: auto;
     padding: var(--space-6);
+    min-height: 0; /* allow scrolling within flex container */
   }
 
   /* Welcome state */
@@ -1084,7 +1180,6 @@
     flex: 1;
     min-width: 0;
   }
-
 
   /* Markdown styles inside messages */
   .message-bubble :global(strong) {
@@ -1571,7 +1666,9 @@
   }
 
   @keyframes spin {
-    to { transform: rotate(360deg); }
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .completed-tools {
@@ -1680,6 +1777,8 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-5);
+    overflow-y: auto;
+    min-height: 0;
   }
 
   /* sidebar-panel and chip classes use global utilities */

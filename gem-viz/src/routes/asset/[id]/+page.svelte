@@ -11,12 +11,10 @@
   import { entityLink } from '$lib/links';
   import { colors, colorByStatus } from '$lib/design-tokens';
   import { fetchAssetData } from '$lib/asset-data';
-  import { logApiFallback } from '$lib/api-fallback-log';
 
   // Components
   import AssetMap from '$lib/components/AssetMap.svelte';
   import OwnershipPie from '$lib/components/OwnershipPie.svelte';
-  import RelationshipNetwork from '$lib/components/RelationshipNetwork.svelte';
   import StatusIcon from '$lib/components/StatusIcon.svelte';
   import AddToCartButton from '$lib/components/AddToCartButton.svelte';
   import Citation from '$lib/components/Citation.svelte';
@@ -84,7 +82,7 @@
   let asset = $state(data?.asset || null);
   let graph = $state(data?.graph || null);
 
-  /** @type {'api' | 'motherduck' | 'local' | 'server' | null} */
+  /** @type {'api' | 'server' | null} */
   let dataSource = $state(data?.asset ? 'server' : null);
 
   const assetId = $derived(asset?.id || '');
@@ -114,7 +112,6 @@
   );
 
   // --- DATA FETCHING (client-side fallback) ---
-  // Uses unified asset-data layer that handles both API and DuckDB sources
   onMount(async () => {
     const paramsId = $page?.params?.id || data?.assetId;
 
@@ -134,7 +131,7 @@
       loading = true;
       if (!paramsId) throw new Error('Missing asset ID');
 
-      // Use unified data layer - tries API first, falls back to DuckDB
+      // Fetch from REST API
       const result = await fetchAssetData(paramsId);
 
       if (result.source === 'none' || !result.asset) {
@@ -144,18 +141,8 @@
       asset = result.asset;
       graph = result.graph;
       dataSource = result.source;
-      console.log(`[${result.source.toUpperCase()}] Loaded asset ${paramsId}`);
-
-      // Log fallback usage for API team reporting
-      if (result.source === 'motherduck') {
-        logApiFallback({
-          assetId: paramsId,
-          assetName: result.asset?.name || '',
-          apiError: 'API returned 404 (ID format mismatch)',
-          fallbackSource: 'motherduck',
-          fallbackSuccess: true,
-        });
-      }
+      if (import.meta.env.DEV)
+        console.log(`[${result.source.toUpperCase()}] Loaded asset ${paramsId}`);
     } catch (err) {
       error = err?.message || 'Failed to load asset';
     } finally {
@@ -177,7 +164,7 @@
   />
 </svelte:head>
 
-<main>
+<div class="page">
   {#if loading}
     <p class="loading">Fetching asset from Ownership API…</p>
   {:else if error}
@@ -328,11 +315,6 @@
           <h2>Ownership Summary</h2>
           <OwnershipSummaryTables nodes={graphNodes} edges={graphEdges} rootId={assetId} />
         </section>
-
-        <section class="viz-section">
-          <h2>Related Assets</h2>
-          <RelationshipNetwork />
-        </section>
       {/if}
 
       <!-- Location Map -->
@@ -399,7 +381,7 @@
   >
     Embed ↗
   </a>
-</main>
+</div>
 
 <!-- ============================================================================
      STYLES
@@ -407,7 +389,7 @@
 
 <style>
   /* Layout */
-  main {
+  .page {
     width: 100%;
     max-width: 100%;
     padding: var(--space-10);

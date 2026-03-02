@@ -49,7 +49,7 @@ export function useFetch<T>(
     try {
       data = await fetcher();
     } catch (e) {
-      console.error(`[useFetch] ${cacheKey} failed:`, e);
+      if (import.meta.env.DEV) console.error(`[useFetch] ${cacheKey} failed:`, e);
       error = e instanceof Error ? e.message : String(e);
     } finally {
       loading = false;

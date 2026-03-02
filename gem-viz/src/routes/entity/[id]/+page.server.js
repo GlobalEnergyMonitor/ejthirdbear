@@ -15,7 +15,7 @@ export async function load({ params }) {
   if (cached?.success) {
     return {
       entityId,
-      entityName: cached.entity?.name,
+      entityName: cached.entity?.Name || cached.entity?.name,
       entity: cached.entity,
       owners: cached.owners,
       owned: cached.owned,
@@ -28,7 +28,7 @@ export async function load({ params }) {
   if (data.success) {
     return {
       entityId,
-      entityName: data.entity?.name,
+      entityName: data.entity?.Name || data.entity?.name,
       entity: data.entity,
       owners: data.owners,
       owned: data.owned,

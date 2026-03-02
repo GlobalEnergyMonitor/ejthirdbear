@@ -6,7 +6,6 @@
 
   import { link } from '$lib/links';
   import { dataVersionInfo, TrackerDatasets } from '$lib/data-config/data-sources';
-  import { fallbackLog, downloadFallbackLog, clearFallbackLog } from '$lib/api-fallback-log';
   import { changelog } from '$lib/data/changelog';
 
   /**
@@ -43,7 +42,7 @@
   />
 </svelte:head>
 
-<main>
+<div class="page">
   <header class="page-header">
     <nav class="breadcrumb">
       <a href={link('index')}>Home</a> / About
@@ -287,7 +286,7 @@
       </li>
       <li>Click owner names to navigate to their entity profile</li>
       <li>Entity pages show portfolio breakdown by tracker and status</li>
-      <li>Use the 3D network view to explore relationship graphs</li>
+      <li>Use the ownership network view to explore relationship graphs</li>
     </ol>
 
     <h3>Understanding Visualizations</h3>
@@ -433,97 +432,18 @@
   <section id="dev-tools">
     <h2>Developer Tools</h2>
     <p class="section-intro">
-      Diagnostic tools for developers and support. These help track issues for the API team.
+      All data is now fetched from the REST API. Coal plant G-prefix IDs are resolved server-side
+      via the <code>/api/resolve-id</code> endpoint.
     </p>
-
-    <h3>API Fallback Log</h3>
-    <p>
-      When the Ownership API fails to find a coal plant, the app falls back to local DuckDB queries.
-      This log tracks those fallbacks to help identify API issues.
-    </p>
-    <p class="known-issue">
-      <strong>Known Issue:</strong> Coal plant API uses compound IDs (L{'{'}location{'}'}_G{'{'}unit{'}'})
-      but this app queries with just G{'{'}unit{'}'} prefix IDs. Coal mines (M-prefix) work fine.
-    </p>
-
-    <div class="fallback-log-box">
-      <div class="log-header">
-        <h4>Session Fallback Events ({$fallbackLog.length})</h4>
-        <div class="log-actions">
-          <button onclick={downloadFallbackLog} disabled={$fallbackLog.length === 0}>
-            Download Report
-          </button>
-          <button onclick={clearFallbackLog} disabled={$fallbackLog.length === 0} class="secondary">
-            Clear Log
-          </button>
-        </div>
-      </div>
-
-      {#if $fallbackLog.length === 0}
-        <p class="empty-log">
-          No fallback events logged this session. Browse asset pages to generate data.
-        </p>
-      {:else}
-        <div class="log-summary">
-          <div class="summary-stat">
-            <span class="stat-num">{$fallbackLog.filter((e) => e.fallbackSuccess).length}</span>
-            <span class="stat-label">Successful Fallbacks</span>
-          </div>
-          <div class="summary-stat">
-            <span class="stat-num">{$fallbackLog.filter((e) => !e.fallbackSuccess).length}</span>
-            <span class="stat-label">Failed Fallbacks</span>
-          </div>
-          <div class="summary-stat">
-            <span class="stat-num">{[...new Set($fallbackLog.map((e) => e.assetId))].length}</span>
-            <span class="stat-label">Unique Assets</span>
-          </div>
-        </div>
-
-        <table class="fallback-table">
-          <thead>
-            <tr>
-              <th>Asset ID</th>
-              <th>Error</th>
-              <th>Fallback</th>
-              <th>Success</th>
-              <th>Time</th>
-            </tr>
-          </thead>
-          <tbody>
-            {#each $fallbackLog.slice(-10).reverse() as event}
-              <tr>
-                <td>
-                  <a href={link(`asset/${event.assetId}`)}>{event.assetId}</a>
-                  {#if event.assetName}
-                    <span class="asset-name">{event.assetName}</span>
-                  {/if}
-                </td>
-                <td class="error-cell">{event.apiError}</td>
-                <td>{event.fallbackSource}</td>
-                <td class={event.fallbackSuccess ? 'success' : 'failure'}>
-                  {event.fallbackSuccess ? 'Yes' : 'No'}
-                </td>
-                <td class="time-cell">{new Date(event.timestamp).toLocaleTimeString()}</td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
-        {#if $fallbackLog.length > 10}
-          <p class="log-note">
-            Showing last 10 of {$fallbackLog.length} events. Download full report for complete data.
-          </p>
-        {/if}
-      {/if}
-    </div>
   </section>
 
   <footer class="page-footer">
     <a href={link('index')}>Back to Homepage</a>
   </footer>
-</main>
+</div>
 
 <style>
-  main {
+  .page {
     width: 100%;
     padding: var(--space-10) var(--space-5) var(--space-20);
     font-family: var(--font-family-sans);
@@ -531,8 +451,8 @@
   }
 
   /* Keep prose sections readable */
-  main p,
-  main li {
+  .page p,
+  .page li {
     max-width: 65ch;
   }
 
@@ -837,163 +757,6 @@
     text-decoration: underline;
   }
 
-  /* Developer Tools Section */
-  .known-issue {
-    background: var(--color-warning-bg);
-    border: var(--border-width) solid var(--color-warning);
-    padding: var(--space-3) var(--space-4);
-    border-radius: var(--radius-md);
-    font-size: var(--font-size-lg);
-    margin: var(--space-4) 0;
-  }
-
-  .fallback-log-box {
-    background: var(--color-gray-50);
-    border: var(--border-width) solid var(--color-border);
-    padding: var(--space-5);
-    margin-top: var(--space-4);
-  }
-
-  .log-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: var(--space-4);
-    flex-wrap: wrap;
-    gap: var(--space-3);
-  }
-
-  .log-header h4 {
-    margin: 0;
-    font-size: var(--font-size-lg);
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-wide);
-  }
-
-  .log-actions {
-    display: flex;
-    gap: var(--space-2);
-  }
-
-  .log-actions button {
-    padding: var(--space-2) var(--space-4);
-    font-size: var(--font-size-md);
-    background: var(--color-black);
-    color: var(--color-white);
-    border: none;
-    cursor: pointer;
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-wide);
-  }
-
-  .log-actions button:hover:not(:disabled) {
-    opacity: 0.85;
-  }
-
-  .log-actions button:disabled {
-    background: var(--color-gray-300);
-    cursor: not-allowed;
-  }
-
-  .log-actions button.secondary {
-    background: var(--color-white);
-    color: var(--color-gray-700);
-    border: var(--border-width) solid var(--color-border);
-  }
-
-  .log-actions button.secondary:hover:not(:disabled) {
-    background: var(--color-gray-100);
-  }
-
-  .empty-log {
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-lg);
-    font-style: italic;
-    margin: 0;
-  }
-
-  .log-summary {
-    display: flex;
-    gap: var(--space-6);
-    margin-bottom: var(--space-4);
-    padding-bottom: var(--space-4);
-    border-bottom: var(--border-width) solid var(--color-border);
-  }
-
-  .summary-stat {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .summary-stat .stat-num {
-    font-size: var(--font-size-2xl);
-    font-weight: 700;
-    font-family: var(--font-family-mono);
-  }
-
-  .summary-stat .stat-label {
-    font-size: var(--font-size-sm);
-    text-transform: uppercase;
-    color: var(--color-text-secondary);
-    letter-spacing: var(--tracking-wide);
-  }
-
-  .fallback-table {
-    width: 100%;
-    font-size: var(--font-size-md);
-    border-collapse: collapse;
-  }
-
-  .fallback-table th,
-  .fallback-table td {
-    text-align: left;
-    padding: var(--space-2) var(--space-2);
-    border-bottom: var(--border-width) solid var(--color-border);
-  }
-
-  .fallback-table th {
-    background: var(--color-gray-100);
-    font-weight: 600;
-    font-size: var(--font-size-sm);
-    text-transform: uppercase;
-  }
-
-  .fallback-table .asset-name {
-    display: block;
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
-    max-width: 200px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .fallback-table .error-cell {
-    color: var(--color-error);
-    font-family: var(--font-family-mono);
-  }
-
-  .fallback-table .time-cell {
-    font-family: var(--font-family-mono);
-    color: var(--color-text-secondary);
-  }
-
-  .fallback-table .success {
-    color: var(--color-success);
-  }
-
-  .fallback-table .failure {
-    color: var(--color-error);
-  }
-
-  .log-note {
-    font-size: var(--font-size-body);
-    color: var(--color-text-secondary);
-    margin: var(--space-3) 0 0 0;
-    font-style: italic;
-  }
-
   @media (max-width: 600px) {
     .toc ul {
       flex-direction: column;
@@ -1015,13 +778,6 @@
     .version-meta {
       flex-direction: column;
       gap: var(--space-1);
-    }
-    .log-header {
-      flex-direction: column;
-      align-items: flex-start;
-    }
-    .log-summary {
-      flex-wrap: wrap;
     }
   }
 </style>

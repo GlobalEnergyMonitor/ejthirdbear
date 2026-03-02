@@ -24,16 +24,37 @@
     Country: { category: 'Geography', definition: 'Country where the asset is located.' },
     Countries: { category: 'Geography', definition: 'Countries the pipeline passes through.' },
     Owner: { category: 'Ownership', definition: 'Primary owner or operator.' },
-    'Immediate Owner Entity Name': { category: 'Ownership', definition: 'Direct ownership entity name.' },
-    'Start year': { category: 'Age', definition: 'Year the asset began or is planned to begin operation.' },
+    'Immediate Owner Entity Name': {
+      category: 'Ownership',
+      definition: 'Direct ownership entity name.',
+    },
+    'Start year': {
+      category: 'Age',
+      definition: 'Year the asset began or is planned to begin operation.',
+    },
     'Capacity (MW)': { category: 'Size', definition: 'Generating capacity in megawatts.' },
-    'Capacity (Mtpa)': { category: 'Size', definition: 'Production capacity in million tonnes per annum.' },
-    'Design capacity (ttpa)': { category: 'Size', definition: 'Design production capacity in thousand tonnes per annum.' },
-    'Nominal crude steel capacity (ttpa)': { category: 'Size', definition: 'Nominal crude steel production capacity in thousand tonnes per annum.' },
-    'CapacityBcm/y': { category: 'Size', definition: 'Pipeline capacity in billion cubic meters per year.' },
+    'Capacity (Mtpa)': {
+      category: 'Size',
+      definition: 'Production capacity in million tonnes per annum.',
+    },
+    'Design capacity (ttpa)': {
+      category: 'Size',
+      definition: 'Design production capacity in thousand tonnes per annum.',
+    },
+    'Nominal crude steel capacity (ttpa)': {
+      category: 'Size',
+      definition: 'Nominal crude steel production capacity in thousand tonnes per annum.',
+    },
+    'CapacityBcm/y': {
+      category: 'Size',
+      definition: 'Pipeline capacity in billion cubic meters per year.',
+    },
     'Fuel type': { category: 'Details', definition: 'Type of fuel used by the plant.' },
     Technology: { category: 'Details', definition: 'Technology or process type used.' },
-    'Mine type': { category: 'Details', definition: 'Type of mining operation (surface, underground, etc.).' },
+    'Mine type': {
+      category: 'Details',
+      definition: 'Type of mining operation (surface, underground, etc.).',
+    },
     Feedstock: { category: 'Details', definition: 'Primary feedstock material for bioenergy.' },
     'Asset Name': { category: 'Names', definition: 'Name of the asset or project.' },
     '% Share of Ownership': { category: 'Ownership', definition: 'Percentage ownership stake.' },
@@ -51,13 +72,17 @@
       });
     }
     // Add common fields not already included
-    const included = new Set(fields.map(f => f.columnName));
+    const included = new Set(fields.map((f) => f.columnName));
     const extras = ['Country', 'Immediate Owner Entity Name', '% Share of Ownership'];
     for (const fieldName of extras) {
       if (!included.has(fieldName)) {
         const desc = fieldDescriptions[fieldName];
         if (desc) {
-          fields.push({ columnName: fieldName, category: desc.category, definition: desc.definition });
+          fields.push({
+            columnName: fieldName,
+            category: desc.category,
+            definition: desc.definition,
+          });
         }
       }
     }
@@ -137,7 +162,8 @@
           return;
         }
       } catch (err) {
-        console.warn('CSV load failed, falling back to synthetic fields:', err);
+        if (import.meta.env.DEV)
+          console.warn('CSV load failed, falling back to synthetic fields:', err);
       }
     }
 

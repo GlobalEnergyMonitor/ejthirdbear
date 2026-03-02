@@ -172,7 +172,7 @@ p:last-child {
   color: var(--color-text-secondary);
 }
 
-/* Data display text (Roboto Condensed) */
+/* Data display text (Barlow Semi-Condensed) */
 .data-text {
   font-family: var(--font-family-data);
   font-weight: var(--font-weight-bold);

@@ -7,12 +7,11 @@
   import { base } from '$app/paths';
 
   import OwnershipFlower from '$lib/components/OwnershipFlower.svelte';
-  import OwnershipExplorerD3 from '$lib/components/OwnershipExplorerD3.svelte';
   import AssetScreener from '$lib/components/AssetScreener.svelte';
   import AssetMap from '$lib/components/AssetMap.svelte';
   import InvestigationMap from '$lib/components/InvestigationMap.svelte';
   import DatasetFactsheet from '$lib/widgets/DatasetFactsheet.svelte';
-  import { DagreOwnershipGraph, AssetRingVisualization } from '$lib/components/ownership';
+  import { OwnershipTreeGraph, AssetRingVisualization } from '$lib/components/ownership';
 
   import { getEntityGraphUp, getEntityGraphDown } from '$lib/ownership-api';
   import { loadEntityPortfolio, errorMessage, boolParam, intParam } from '../embed-utils';
@@ -38,7 +37,6 @@
     'ownership-flower',
     'ownership-graph',
     'asset-ring',
-    'network-explorer',
     'asset-screener',
     'asset-map',
     'investigation-map',
@@ -50,16 +48,37 @@
     Country: { category: 'Geography', definition: 'Country where the asset is located.' },
     Countries: { category: 'Geography', definition: 'Countries the pipeline passes through.' },
     Owner: { category: 'Ownership', definition: 'Primary owner or operator.' },
-    'Immediate Owner Entity Name': { category: 'Ownership', definition: 'Direct ownership entity name.' },
-    'Start year': { category: 'Age', definition: 'Year the asset began or is planned to begin operation.' },
+    'Immediate Owner Entity Name': {
+      category: 'Ownership',
+      definition: 'Direct ownership entity name.',
+    },
+    'Start year': {
+      category: 'Age',
+      definition: 'Year the asset began or is planned to begin operation.',
+    },
     'Capacity (MW)': { category: 'Size', definition: 'Generating capacity in megawatts.' },
-    'Capacity (Mtpa)': { category: 'Size', definition: 'Production capacity in million tonnes per annum.' },
-    'Design capacity (ttpa)': { category: 'Size', definition: 'Design production capacity in thousand tonnes per annum.' },
-    'Nominal crude steel capacity (ttpa)': { category: 'Size', definition: 'Nominal crude steel production capacity in thousand tonnes per annum.' },
-    'CapacityBcm/y': { category: 'Size', definition: 'Pipeline capacity in billion cubic meters per year.' },
+    'Capacity (Mtpa)': {
+      category: 'Size',
+      definition: 'Production capacity in million tonnes per annum.',
+    },
+    'Design capacity (ttpa)': {
+      category: 'Size',
+      definition: 'Design production capacity in thousand tonnes per annum.',
+    },
+    'Nominal crude steel capacity (ttpa)': {
+      category: 'Size',
+      definition: 'Nominal crude steel production capacity in thousand tonnes per annum.',
+    },
+    'CapacityBcm/y': {
+      category: 'Size',
+      definition: 'Pipeline capacity in billion cubic meters per year.',
+    },
     'Fuel type': { category: 'Details', definition: 'Type of fuel used by the plant.' },
     Technology: { category: 'Details', definition: 'Technology or process type used.' },
-    'Mine type': { category: 'Details', definition: 'Type of mining operation (surface, underground, etc.).' },
+    'Mine type': {
+      category: 'Details',
+      definition: 'Type of mining operation (surface, underground, etc.).',
+    },
     Feedstock: { category: 'Details', definition: 'Primary feedstock material for bioenergy.' },
     'Asset Name': { category: 'Names', definition: 'Name of the asset or project.' },
     '% Share of Ownership': { category: 'Ownership', definition: 'Percentage ownership stake.' },
@@ -81,7 +100,11 @@
       if (!included.has(fieldName)) {
         const desc = fieldDescriptions[fieldName];
         if (desc) {
-          fields.push({ columnName: fieldName, category: desc.category, definition: desc.definition });
+          fields.push({
+            columnName: fieldName,
+            category: desc.category,
+            definition: desc.definition,
+          });
         }
       }
     }
@@ -143,7 +166,6 @@
         if (!entityId) throw new Error('Missing required parameter: entityId');
 
         const direction = params.get('direction') || 'up';
-        const showPies = boolParam(params.get('showPies'));
         const fetchFn = direction === 'down' ? getEntityGraphDown : getEntityGraphUp;
         const graphData = await fetchFn(entityId);
 
@@ -153,13 +175,12 @@
           return;
         }
 
-        component = DagreOwnershipGraph;
+        component = OwnershipTreeGraph;
         componentProps = {
           nodes: graphData.nodes,
           edges: graphData.edges,
+          paths: (graphData as any).paths || {},
           rootId: entityId,
-          direction: direction === 'down' ? 'TB' : 'BT',
-          showPies,
         };
         loading = false;
         return;
@@ -181,16 +202,6 @@
 
         component = AssetRingVisualization;
         componentProps = { assets };
-        loading = false;
-        return;
-      }
-
-      if (vizName === 'network-explorer') {
-        const ownerEntityId = params.get('entityId') || params.get('ownerEntityId');
-        if (!ownerEntityId) throw new Error('Missing required parameter: entityId');
-
-        component = OwnershipExplorerD3;
-        componentProps = { ownerEntityId };
         loading = false;
         return;
       }
@@ -218,7 +229,7 @@
         if (!assetId) throw new Error('Missing required parameter: assetId');
 
         component = AssetMap;
-        componentProps = {};
+        componentProps = { assetId };
         loading = false;
         return;
       }
@@ -297,7 +308,8 @@
                 });
             }
           } catch (err) {
-            console.warn('CSV load failed, falling back to synthetic fields:', err);
+            if (import.meta.env.DEV)
+              console.warn('CSV load failed, falling back to synthetic fields:', err);
           }
         }
 
@@ -333,7 +345,11 @@
   <meta name="robots" content="noindex" />
 </svelte:head>
 
-<div class="viz-embed" class:factsheet={vizName === 'factsheet'} style="--max-height: {maxHeight}px;">
+<div
+  class="viz-embed"
+  class:factsheet={vizName === 'factsheet'}
+  style="--max-height: {maxHeight}px;"
+>
   {#if loading}
     <div class="embed-loading">Loading visualization...</div>
   {:else if error}
@@ -347,7 +363,8 @@
   {:else if emptyMessage}
     <div class="embed-empty">{emptyMessage}</div>
   {:else if component}
-    <svelte:component this={component} {...componentProps} />
+    {@const DynamicComponent = component}
+    <DynamicComponent {...componentProps} />
   {/if}
 </div>
 

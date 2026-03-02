@@ -12,7 +12,13 @@
   import { assetLink, entityLink } from '$lib/links';
   import { fetchOwnerPortfolio } from '$lib/component-data/schema';
   import { useFetch } from '$lib/component-data/use-fetch.svelte';
-  import { colors, colorByTracker, regroupStatus, statusColors, statusColorLegend } from '$lib/design-tokens';
+  import {
+    colors,
+    colorByTracker,
+    regroupStatus,
+    statusColors,
+    statusColorLegend,
+  } from '$lib/design-tokens';
 
   // Props - can receive pre-fetched portfolio data or fetch its own
   let {
@@ -140,7 +146,7 @@
     }
 
     // Remove empty groups (all assets filtered out)
-    groups = groups.filter(g => g.assets.length > 0);
+    groups = groups.filter((g) => g.assets.length > 0);
 
     // Group assets by location within each subsidiary
     /** @type {ProcessedGroup[]} */
@@ -209,8 +215,12 @@
     const statusOrder = ['operating', 'prospective', 'retired', 'cancelled'];
     return {
       tracker: countFrequency(units, 'tracker'),
-      status: countFrequency(units, 'status', (v) => regroupStatus(v),
-        (a, b) => statusOrder.indexOf(a.status) - statusOrder.indexOf(b.status)),
+      status: countFrequency(
+        units,
+        'status',
+        (v) => regroupStatus(v),
+        (a, b) => statusOrder.indexOf(a.status) - statusOrder.indexOf(b.status)
+      ),
     };
   }
 
@@ -333,24 +343,53 @@
     }
     const total = units.length;
     const data = Array.from(counts, ([value, count]) => ({
-      [field]: value, count, percentage: count / total, xPercentage: 0,
+      [field]: value,
+      count,
+      percentage: count / total,
+      xPercentage: 0,
     }));
-    if (sortFn) data.sort(sortFn); else data.sort((a, b) => b.count - a.count);
+    if (sortFn) data.sort(sortFn);
+    else data.sort((a, b) => b.count - a.count);
     let x = 0;
-    for (const d of data) { d.xPercentage = x; x += d.percentage; }
+    for (const d of data) {
+      d.xPercentage = x;
+      x += d.percentage;
+    }
     return data;
   }
 </script>
 
 {#snippet statusIconSvg(unitStatus, cx, cy, r)}
   {#if unitStatus === 'proposed'}
-    <circle cx={cx + r * 1.1} cy={cy - r * 1.1} r={r * 0.225} fill={colors.yellow} class="status-icon" />
+    <circle
+      cx={cx + r * 1.1}
+      cy={cy - r * 1.1}
+      r={r * 0.225}
+      fill={colors.yellow}
+      class="status-icon"
+    />
   {:else if unitStatus === 'cancelled'}
     {@const s = r * 0.225}
-    <path transform="translate({cx + r * 1.1}, {cy - r * 1.1})" d="M {-s} {s} L {s} {-s} M {-s} {-s} L {s} {s}" fill="none" stroke={colors.grey} stroke-width="1.25" stroke-linecap="round" class="status-icon" />
+    <path
+      transform="translate({cx + r * 1.1}, {cy - r * 1.1})"
+      d="M {-s} {s} L {s} {-s} M {-s} {-s} L {s} {s}"
+      fill="none"
+      stroke={colors.grey}
+      stroke-width="1.25"
+      stroke-linecap="round"
+      class="status-icon"
+    />
   {:else if unitStatus === 'retired'}
     {@const s = r * 0.225}
-    <path transform="translate({cx + r * 1.1}, {cy - r * 1.1})" d="M {-s} {s} L {s} {-s} M {-s} {-s} L {s} {s}" fill="none" stroke={colors.midnightPurple} stroke-width="1.25" stroke-linecap="round" class="status-icon" />
+    <path
+      transform="translate({cx + r * 1.1}, {cy - r * 1.1})"
+      d="M {-s} {s} L {s} {-s} M {-s} {-s} L {s} {s}"
+      fill="none"
+      stroke={colors.midnightPurple}
+      stroke-width="1.25"
+      stroke-linecap="round"
+      class="status-icon"
+    />
   {/if}
 {/snippet}
 
@@ -378,7 +417,7 @@
     <!-- Status filter toggles -->
     <div class="status-filter">
       <span class="filter-label">Status</span>
-      {#each statusColorLegend as { color, label, statuses }}
+      {#each statusColorLegend as { color, label }}
         {@const group = label.toLowerCase()}
         {@const isActive = activeStatuses.has(group)}
         {@const count = statusGroupCounts[group] || 0}
@@ -928,7 +967,7 @@
     r: 10;
   }
 
-  /* Asset names use data typography (Roboto Condensed UPPERCASE) */
+  /* Asset names use data typography (Barlow Semi-Condensed UPPERCASE) */
   .asset-name {
     font-family: var(--font-family-data);
     font-size: var(--font-size-sm);

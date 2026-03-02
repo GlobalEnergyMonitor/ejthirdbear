@@ -27,7 +27,7 @@
   />
 </svelte:head>
 
-<main>
+<div class="page">
   <header>
     <nav class="breadcrumb">
       <a href={link('index')}>Home</a> /
@@ -53,10 +53,10 @@
   </section>
 
   <p class="redirect-notice">Redirecting to Coal Mine factsheet...</p>
-</main>
+</div>
 
 <style>
-  main {
+  .page {
     max-width: 800px;
     margin: 0 auto;
     padding: var(--space-10) var(--space-5);

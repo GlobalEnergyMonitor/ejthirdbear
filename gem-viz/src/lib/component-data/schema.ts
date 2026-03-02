@@ -63,7 +63,8 @@ export async function fetchAssetBasics(assetId: string): Promise<AssetBasics | n
       capacityMw: asset.capacity,
     };
   } catch (error) {
-    console.warn(`[fetchAssetBasics] API failed for ${assetId}, error:`, error);
+    if (import.meta.env.DEV)
+      console.warn(`[fetchAssetBasics] API failed for ${assetId}, error:`, error);
     return null;
   }
 }
@@ -86,10 +87,12 @@ export async function fetchSameOwnerAssets(
   _excludeAssetId: string
 ): Promise<{ success: boolean; data: AssetBasics[] }> {
   try {
-    console.warn(`[fetchSameOwnerAssets] API does not expose assets for entity ${ownerEntityId}`);
+    if (import.meta.env.DEV)
+      console.warn(`[fetchSameOwnerAssets] API does not expose assets for entity ${ownerEntityId}`);
     return { success: true, data: [] };
   } catch (error) {
-    console.warn(`[fetchSameOwnerAssets] API failed for ${ownerEntityId}:`, error);
+    if (import.meta.env.DEV)
+      console.warn(`[fetchSameOwnerAssets] API failed for ${ownerEntityId}:`, error);
     return { success: false, data: [] };
   }
 }
@@ -99,7 +102,8 @@ export async function fetchSameOwnerAssets(
  * NOTE: Ownership API doesn't support location-based queries yet.
  */
 export async function fetchCoLocatedAssets(_locationId: string, _excludeAssetId: string) {
-  console.warn('[fetchCoLocatedAssets] API does not expose co-located asset queries.');
+  if (import.meta.env.DEV)
+    console.warn('[fetchCoLocatedAssets] API does not expose co-located asset queries.');
   return { success: true, data: [] };
 }
 
@@ -109,19 +113,23 @@ export async function fetchCoLocatedAssets(_locationId: string, _excludeAssetId:
  */
 export async function fetchOwnerStats(ownerEntityId: string): Promise<OwnerStats | null> {
   try {
-    const entity = await ownershipAPI.getEntity(ownerEntityId);
+    const [entity, graphDown] = await Promise.all([
+      ownershipAPI.getEntity(ownerEntityId),
+      ownershipAPI.getEntityGraphDown(ownerEntityId),
+    ]);
     const countries = new Set<string>();
     if (entity.headquartersCountry) {
       countries.add(entity.headquartersCountry);
     }
 
     return {
-      total_assets: 0,
+      total_assets: graphDown.terminalIds?.length || 0,
       total_capacity_mw: null,
       countries: countries.size || 0,
     };
   } catch (error) {
-    console.warn(`[fetchOwnerStats] API failed for ${ownerEntityId}:`, error);
+    if (import.meta.env.DEV)
+      console.warn(`[fetchOwnerStats] API failed for ${ownerEntityId}:`, error);
     return null;
   }
 }
@@ -192,27 +200,36 @@ export async function fetchOwnershipChain(assetId: string): Promise<OwnershipCha
 
     return ordered;
   } catch (error) {
-    console.warn(`[fetchOwnershipChain] API failed for ${assetId}:`, error);
+    if (import.meta.env.DEV)
+      console.warn(`[fetchOwnershipChain] API failed for ${assetId}:`, error);
     return [];
   }
 }
 
 /**
  * Build an owner portfolio: subsidiaries, directly owned assets, and edges.
- * Uses getSpotlightOwnerData which fetches from Ownership API + DuckDB metadata.
+ * Uses getSpotlightOwnerData which fetches from the Ownership REST API.
  */
 export async function fetchOwnerPortfolio(ownerEntityId: string): Promise<OwnerPortfolio | null> {
   try {
     const spotlightData = await getSpotlightOwnerData(ownerEntityId);
 
     if (!spotlightData) {
-      console.warn(`[fetchOwnerPortfolio] No data found for ${ownerEntityId}`);
+      if (import.meta.env.DEV)
+        console.warn(`[fetchOwnerPortfolio] No data found for ${ownerEntityId}`);
       return null;
     }
 
     // Convert SpotlightAsset[] to AssetBasics[] format
     const convertAssets = (
-      assets: Array<{ id: string; name: string; tracker: string; status: string; country: string }>
+      assets: Array<{
+        id: string;
+        name: string;
+        tracker: string;
+        status: string;
+        country: string;
+        capacityMw?: number;
+      }>
     ): AssetBasics[] =>
       assets.map((a) => ({
         id: a.id,
@@ -223,7 +240,7 @@ export async function fetchOwnerPortfolio(ownerEntityId: string): Promise<OwnerP
         lon: null,
         status: a.status,
         tracker: a.tracker,
-        capacityMw: null,
+        capacityMw: a.capacityMw ?? null,
         country: a.country || null,
       }));
 
@@ -248,7 +265,8 @@ export async function fetchOwnerPortfolio(ownerEntityId: string): Promise<OwnerP
       assets: convertAssets(spotlightData.assets),
     };
   } catch (error) {
-    console.warn(`[fetchOwnerPortfolio] Failed for ${ownerEntityId}:`, error);
+    if (import.meta.env.DEV)
+      console.warn(`[fetchOwnerPortfolio] Failed for ${ownerEntityId}:`, error);
     return null;
   }
 }

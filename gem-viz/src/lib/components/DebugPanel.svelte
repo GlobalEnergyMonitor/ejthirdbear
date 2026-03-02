@@ -8,14 +8,16 @@
    *   </DebugPanel>
    */
 
+  import { ChevronRight, Settings } from 'lucide-svelte';
+
   /** @type {{ title?: string, time?: number | null, children?: import('svelte').Snippet }} */
   let { title = 'Debug', time = null, children } = $props();
 </script>
 
 <details class="debug-panel">
   <summary class="debug-summary">
-    <span class="debug-arrow">▶</span>
-    <span class="debug-icon">⚙</span>
+    <span class="debug-arrow"><ChevronRight size={12} /></span>
+    <span class="debug-icon"><Settings size={14} /></span>
     <span class="debug-title">{title}</span>
     {#if time}
       <span class="debug-time">({time.toFixed(0)}ms)</span>

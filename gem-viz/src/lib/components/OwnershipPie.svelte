@@ -82,7 +82,7 @@
       dominant-baseline="central"
       font-size={size * 0.3}
       fill={percentage >= 50 ? colors.white : colors.navy}
-      font-family="Roboto Condensed, Arial Narrow, sans-serif"
+      font-family="Barlow Semi-Condensed, Arial Narrow, sans-serif"
     >
       {percentage.toFixed(0)}%
     </text>

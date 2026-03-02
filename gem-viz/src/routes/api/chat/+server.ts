@@ -70,10 +70,11 @@ function buildCartContext(cart: CartItem[] | undefined): string {
     if (entityItems.length > 0) {
       context += `\nEntities (${entityItems.length}):\n${entityItems.map((i) => `- ${i.name} (${i.id})`).join('\n')}`;
     }
-    context += '\n\nYou can use add_to_cart, remove_from_cart, or clear_cart to modify this list. Use get_investigation_cart if the user asks what\'s in their cart.';
+    context +=
+      "\n\nYou can use add_to_cart, remove_from_cart, or clear_cart to modify this list. Use get_investigation_cart if the user asks what's in their cart.";
     return context;
   }
-  return '\n\n## User\'s Investigation Cart\nThe cart is currently empty. Use add_to_cart to add items when the user wants to save assets or entities for investigation.';
+  return "\n\n## User's Investigation Cart\nThe cart is currently empty. Use add_to_cart to add items when the user wants to save assets or entities for investigation.";
 }
 
 /**
@@ -82,7 +83,7 @@ function buildCartContext(cart: CartItem[] | undefined): string {
 async function processToolCalls(
   toolCalls: Array<{ id: string; function: { name: string; arguments: string } }>,
   cart: CartItem[] | undefined,
-  send: (event: string, data: unknown) => void
+  send: (_event: string, _data: unknown) => void
 ) {
   const toolCallResults: Array<{ tool: string; args: unknown; result: unknown }> = [];
 
@@ -99,7 +100,7 @@ async function processToolCalls(
       send('tool_start', {
         tool: toolCall.function.name,
         args,
-        id: toolCall.id
+        id: toolCall.id,
       });
 
       const result = await executeTool(toolCall.function.name, args, cart);
@@ -129,7 +130,7 @@ async function processToolCalls(
  */
 async function streamFinalResponse(
   conversationHistory: unknown[],
-  send: (event: string, data: unknown) => void,
+  send: (_event: string, _data: unknown) => void,
   toolCallResults: Array<{ tool: string; args: unknown; result: unknown }>
 ) {
   send('status', { stage: 'writing', message: 'Writing response...' });
@@ -162,7 +163,8 @@ async function streamFinalResponse(
     clearTimeout(streamTimeout);
     console.error('Final streaming fetch failed:', fetchErr);
     send('done', {
-      message: 'I gathered the information above but had trouble generating a summary. Please review the results.',
+      message:
+        'I gathered the information above but had trouble generating a summary. Please review the results.',
       toolCalls: toolCallResults,
       usage: null,
     });
@@ -173,7 +175,8 @@ async function streamFinalResponse(
     clearTimeout(streamTimeout);
     console.error('Final streaming request failed:', streamResponse.status);
     send('done', {
-      message: 'I gathered the information above but had trouble generating a summary. Please review the results.',
+      message:
+        'I gathered the information above but had trouble generating a summary. Please review the results.',
       toolCalls: toolCallResults,
       usage: null,
     });
@@ -241,7 +244,8 @@ async function streamFinalResponse(
   // If we got no content, provide a fallback
   if (!fullContent.trim()) {
     console.warn('Empty response from final streaming request');
-    fullContent = 'I found the information above but encountered an issue generating a summary. Please review the tool results.';
+    fullContent =
+      'I found the information above but encountered an issue generating a summary. Please review the tool results.';
   }
 
   send('done', {
@@ -309,7 +313,11 @@ export const POST: RequestHandler = async ({ request }) => {
 
         while (assistantMessage.tool_calls && iterations < MAX_ITERATIONS) {
           iterations++;
-          send('status', { stage: 'tools', iteration: iterations, message: `Running tools (step ${iterations})...` });
+          send('status', {
+            stage: 'tools',
+            iteration: iterations,
+            message: `Running tools (step ${iterations})...`,
+          });
 
           const { toolResults, toolCallResults } = await processToolCalls(
             assistantMessage.tool_calls,
@@ -353,15 +361,6 @@ export const POST: RequestHandler = async ({ request }) => {
           assistantMessage = result.choices[0].message;
         }
 
-        // Debug logging
-        console.log('Post-tool-loop state:', {
-          hasContent: !!assistantMessage?.content,
-          contentLength: assistantMessage?.content?.length,
-          hasToolCalls: !!assistantMessage?.tool_calls,
-          toolCallResultsCount: allToolCallResults.length,
-          iterations,
-        });
-
         // If we have content already (no tool calls on last iteration), stream it
         if (assistantMessage?.content && assistantMessage.content.trim()) {
           send('status', { stage: 'writing', message: 'Writing response...' });
@@ -371,7 +370,7 @@ export const POST: RequestHandler = async ({ request }) => {
           const chunkSize = 15;
           for (let i = 0; i < text.length; i += chunkSize) {
             send('text_delta', { content: text.slice(i, i + chunkSize) });
-            await new Promise(r => setTimeout(r, 5));
+            await new Promise((r) => setTimeout(r, 5));
           }
 
           send('done', {
@@ -403,7 +402,7 @@ export const POST: RequestHandler = async ({ request }) => {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
+        Connection: 'keep-alive',
       },
     });
   } catch (err) {

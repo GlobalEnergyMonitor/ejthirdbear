@@ -6,9 +6,11 @@
    * For full citation with copy functionality, use Citation.svelte instead.
    */
 
+  import { Zap, Server, HardDrive, AlertTriangle } from 'lucide-svelte';
+
   /**
    * @type {{
-   *   source: 'api' | 'motherduck' | 'local' | 'server' | 'none' | null,
+   *   source: 'api' | 'local' | 'server' | 'none' | null,
    *   queryTime?: number | null,
    *   label?: string | null,
    *   size?: 'sm' | 'md',
@@ -17,14 +19,14 @@
   let { source = null, queryTime = null, label = null, size = 'sm' } = $props();
 
   const sourceConfig = {
-    api: { name: 'REST API', icon: '⚡', color: 'green' },
-    server: { name: 'Server', icon: '🖥', color: 'green' },
-    motherduck: { name: 'MotherDuck', icon: '🦆', color: 'yellow' },
-    local: { name: 'Local', icon: '💾', color: 'gray' },
-    none: { name: 'No Data', icon: '⚠', color: 'red' },
+    api: { name: 'REST API', icon: Zap, color: 'green' },
+    server: { name: 'Server', icon: Server, color: 'green' },
+    local: { name: 'Local', icon: HardDrive, color: 'gray' },
+    none: { name: 'No Data', icon: AlertTriangle, color: 'red' },
   };
 
   const config = $derived(source ? sourceConfig[source] || sourceConfig.none : null);
+  const Icon = $derived(config ? config.icon : null);
 
   const timeDisplay = $derived(
     queryTime != null
@@ -40,7 +42,9 @@
     class="badge {config.color} {size}"
     title="{config.name}{timeDisplay ? ` (${timeDisplay})` : ''}"
   >
-    <span class="icon">{config.icon}</span>
+    {#if Icon}
+      <span class="icon"><Icon size={size === 'sm' ? 10 : 12} /></span>
+    {/if}
     <span class="label">{label || config.name}</span>
     {#if timeDisplay}
       <span class="time">{timeDisplay}</span>
@@ -55,7 +59,7 @@
     gap: 4px;
     padding: 2px 8px;
     border-radius: 4px;
-    font-family: var(--font-family-data, 'Roboto Condensed', sans-serif);
+    font-family: var(--font-family-data, 'Barlow Semi-Condensed', sans-serif);
     white-space: nowrap;
   }
 
@@ -90,12 +94,6 @@
     background: #ecfdf5;
     border: 1px solid #6ee7b7;
     color: #065f46;
-  }
-
-  .yellow {
-    background: #fef3c7;
-    border: 1px solid #f59e0b;
-    color: #78350f;
   }
 
   .gray {

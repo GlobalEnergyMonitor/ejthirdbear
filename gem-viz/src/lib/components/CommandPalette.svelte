@@ -275,20 +275,45 @@
     // Direct shortcuts (single key, no modifier)
     if (!isInputFocused() && !open && !e.metaKey && !e.ctrlKey && !e.altKey) {
       const shortcuts = {
-        a: addCurrentToCart, c: copyCurrentId, u: copyUrl,
-        b: () => history.back(), j: () => scrollToSection('next'), k: () => scrollToSection('prev'),
-        '?': () => { showHelp = !showHelp; }, o: openFirstOwner,
-        t: () => { window.scrollTo({ top: 0, behavior: 'smooth' }); showToast('Top'); },
+        a: addCurrentToCart,
+        c: copyCurrentId,
+        u: copyUrl,
+        b: () => history.back(),
+        j: () => scrollToSection('next'),
+        k: () => scrollToSection('prev'),
+        '?': () => {
+          showHelp = !showHelp;
+        },
+        o: openFirstOwner,
+        t: () => {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          showToast('Top');
+        },
         s: () => scrollToElement('.summary, .portfolio-summary, h2'),
-        e: toggleAllDetails, n: () => navigateRelated('next'), p: () => navigateRelated('prev'),
+        e: toggleAllDetails,
+        n: () => navigateRelated('next'),
+        p: () => navigateRelated('prev'),
         f: focusLocalSearch,
-        '1': () => jumpToSection(1), '2': () => jumpToSection(2), '3': () => jumpToSection(3),
-        '4': () => jumpToSection(4), '5': () => jumpToSection(5), '6': () => jumpToSection(6),
-        '7': () => jumpToSection(7), '8': () => jumpToSection(8), '9': () => jumpToSection(9),
+        '1': () => jumpToSection(1),
+        '2': () => jumpToSection(2),
+        '3': () => jumpToSection(3),
+        '4': () => jumpToSection(4),
+        '5': () => jumpToSection(5),
+        '6': () => jumpToSection(6),
+        '7': () => jumpToSection(7),
+        '8': () => jumpToSection(8),
+        '9': () => jumpToSection(9),
       };
-      if (e.key === 'Escape') { if (showHelp) showHelp = false; return; }
+      if (e.key === 'Escape') {
+        if (showHelp) showHelp = false;
+        return;
+      }
       const handler = shortcuts[e.key];
-      if (handler) { e.preventDefault(); handler(); return; }
+      if (handler) {
+        e.preventDefault();
+        handler();
+        return;
+      }
     }
   }
 
@@ -504,7 +529,9 @@
     );
   }
 
-  function toggle() { open ? close() : openPalette(); }
+  function toggle() {
+    open ? close() : openPalette();
+  }
 
   function openPalette() {
     open = true;

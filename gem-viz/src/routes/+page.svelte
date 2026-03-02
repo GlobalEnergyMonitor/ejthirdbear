@@ -57,9 +57,6 @@
       note: 'German refinery',
     },
   ];
-
-  // Combined for any future use
-  const _featuredAssets = [...coalPlants, ...steelMining, ...oilGas];
 </script>
 
 <!-- ============================================================================
@@ -74,7 +71,7 @@
   />
 </svelte:head>
 
-<main class="home">
+<div class="page home">
   <div class="home-layout">
     <aside class="home-sidebar">
       <!-- Featured Entities -->
@@ -135,14 +132,14 @@
       <TrackerGlobeGrid />
     </section>
   </div>
-</main>
+</div>
 
 <!-- ============================================================================
      STYLES
      ============================================================================ -->
 <style>
   /* Layout */
-  main.home {
+  .page.home {
     width: 100%;
     margin: 0;
     padding: var(--space-5) var(--space-10) var(--space-8);
@@ -227,7 +224,7 @@
   }
 
   @media (max-width: 900px) {
-    main.home {
+    .page.home {
       padding: var(--space-4) var(--space-5) var(--space-6);
     }
 

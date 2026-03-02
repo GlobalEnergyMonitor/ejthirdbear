@@ -19,16 +19,16 @@
  *
  * The matchers in this file reference DETAILED tracker fields (e.g., 'Main production
  * equipment', 'Captive', 'Water Depth (m)') that are NOT available in the consolidated
- * ownership tracker parquet currently used by gem-viz.
+ * ownership tracker REST API currently used by gem-viz.
  *
- * The consolidated parquet only has: GEM unit ID, Project, Status, Capacity (MW), Owner, etc.
+ * The API only returns: GEM unit ID, Project, Status, Capacity (MW), Owner, etc.
  *
  * To use these matchers, you need to:
  * 1. Load data from the detailed tracker CSVs on GitHub (see data-sources.ts), OR
- * 2. Join the consolidated parquet with detailed tracker data
+ * 2. Join API data with detailed tracker data
  *
  * Until detailed tracker data is integrated, these matchers will return false for all
- * records from the consolidated parquet.
+ * records from the API.
  *
  * Based on: Ownership Data Processing and Access Plan (Dec 2025)
  */

@@ -161,10 +161,10 @@ try {
   console.log(`URL: https://${BUCKET}.${REGION}.digitaloceanspaces.com/${DEPLOY_PATH}/`);
   console.log(`Version: ${version}`);
   console.log(`Upload: ${uploadDuration}s | Total: ${totalDuration}s\n`);
-  console.log('IMPORTANT: MotherDuck WASM requires these HTTP headers on your CDN/proxy:');
+  console.log('NOTE: COEP/COOP headers required for SharedArrayBuffer:');
   console.log('   Cross-Origin-Opener-Policy: same-origin');
-  console.log('   Cross-Origin-Embedder-Policy: require-corp\n');
-  console.log('   These cannot be set on S3/Spaces directly - use CloudFlare, CloudFront, or nginx proxy.\n');
+  console.log('   Cross-Origin-Embedder-Policy: require-corp');
+  console.log('   Set these on your CDN/proxy (CloudFlare, CloudFront, or nginx).\n');
 
   // Append to build log (tab-separated: timestamp, version, total_time, upload_time, status, url)
   const logEntry = [

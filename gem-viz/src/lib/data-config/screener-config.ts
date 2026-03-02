@@ -6,8 +6,6 @@
  * - Any screener-specific display settings
  */
 
-import type { TrackerName } from './tracker-schema';
-
 // =============================================================================
 // EXAMPLE COMPANIES BY TRACKER
 // =============================================================================
@@ -134,6 +132,6 @@ export function describePortfolio(count: number): string {
  * Describe filtered asset count in natural language
  */
 export function describeOwnership(count: number, assetDescription: string): string {
-  if (count === 1) return `Ownership in one ${assetDescription}`;
-  return `Ownership in ${count} ${assetDescription}`;
+  if (count === 1) return `Ownership in 1 ${assetDescription} asset`;
+  return `Ownership in ${count} ${assetDescription} assets`;
 }

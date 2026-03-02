@@ -107,7 +107,7 @@ export function createAsyncState<T>(initialData: T | null = null): AsyncState<T>
       const msg = err instanceof Error ? err.message : String(err);
       error = msg;
       queryTime = Date.now() - startTime;
-      console.error('[AsyncState]', msg);
+      if (import.meta.env.DEV) console.error('[AsyncState]', msg);
       return null;
     } finally {
       loading = false;
@@ -149,69 +149,6 @@ export function createAsyncState<T>(initialData: T | null = null): AsyncState<T>
     reset,
     setError,
     setData,
-  };
-}
-
-// ============================================================================
-// WIDGET STATE (specialized for SQL widgets)
-// ============================================================================
-
-// Dynamic import to avoid SSR bundling of @duckdb/duckdb-wasm
-// widgetQuery is loaded lazily when first needed
-/** @type {typeof import('$lib/widgets/widget-utils').widgetQuery | null} */
-let _widgetQuery: typeof import('$lib/widgets/widget-utils').widgetQuery | null = null;
-
-async function getWidgetQuery() {
-  if (!_widgetQuery) {
-    const mod = await import('$lib/widgets/widget-utils');
-    _widgetQuery = mod.widgetQuery;
-  }
-  return _widgetQuery;
-}
-
-export interface WidgetState<T> extends AsyncState<T[]> {
-  /** Run a SQL query against the widget DB */
-  query: (_sql: string) => Promise<T[] | null>;
-}
-
-/**
- * Create reactive state for SQL-based widgets.
- *
- * Wraps widgetQuery with automatic state management.
- * Use this for dashboard widgets that query parquet files.
- *
- * @example
- * const topOwners = createWidgetState<OwnerRow>();
- *
- * async function loadData() {
- *   await topOwners.query(`
- *     SELECT "Owner", COUNT(*) as count
- *     FROM ownership
- *     GROUP BY "Owner"
- *     ORDER BY count DESC
- *     LIMIT 10
- *   `);
- * }
- *
- * onMount(() => loadData());
- */
-export function createWidgetState<T = Record<string, unknown>>(): WidgetState<T> {
-  const state = createAsyncState<T[]>([]);
-
-  async function query(sql: string): Promise<T[] | null> {
-    return state.run(async () => {
-      const widgetQuery = await getWidgetQuery();
-      const result = await widgetQuery<T>(sql);
-      if (!result.success) {
-        throw new Error(result.error || 'Query failed');
-      }
-      return result.data || [];
-    });
-  }
-
-  return {
-    ...state,
-    query,
   };
 }
 

@@ -10,7 +10,7 @@
    * - Top-N with overflow count for high-cardinality fields
    */
   import { onMount } from 'svelte';
-  import { formatNumber, formatCompact, formatPct } from '$lib/format-utils';
+  import { formatCompact, formatPct } from '$lib/format-utils';
   import MiniHistogram from '$lib/components/MiniHistogram.svelte';
 
   // Props
@@ -19,10 +19,16 @@
     trackerTitle?: string;
     trackerColor?: string;
     fieldsMetadata?: FieldInfo[];
-    fetchDistribution?: (field: string) => Promise<FieldDistribution[]>;
+    fetchDistribution?: (_field: string) => Promise<FieldDistribution[]>;
   }
 
-  let { tracker, trackerTitle, trackerColor, fieldsMetadata = [], fetchDistribution }: Props = $props();
+  let {
+    tracker,
+    trackerTitle,
+    trackerColor,
+    fieldsMetadata = [],
+    fetchDistribution,
+  }: Props = $props();
 
   // Types
   interface FieldInfo {
@@ -92,7 +98,7 @@
       if (f.columnName === selectedField.columnName && f.fieldValue) {
         defs.push({
           value: f.fieldValue,
-          definition: f.valueDefinition || f.definition || ''
+          definition: f.valueDefinition || f.definition || '',
         });
       }
     }
@@ -104,13 +110,22 @@
     const cat = field.category?.toLowerCase() || '';
     const name = field.columnName.toLowerCase();
     if (cat === 'size' || cat === 'age') return 'numeric';
-    if (name.includes('capacity') || name.includes('year') || name.includes('age') ||
-        name.includes('mw') || name.includes('mtpa') || name.includes('ttpa') ||
-        name.includes('co2') || name.includes('latitude') || name.includes('longitude')) {
+    if (
+      name.includes('capacity') ||
+      name.includes('year') ||
+      name.includes('age') ||
+      name.includes('mw') ||
+      name.includes('mtpa') ||
+      name.includes('ttpa') ||
+      name.includes('co2') ||
+      name.includes('latitude') ||
+      name.includes('longitude')
+    ) {
       return 'numeric';
     }
     if (cat === 'main' || cat === 'details') return 'enum';
-    if (cat === 'ids' || cat === 'names' || cat === 'reference' || cat === 'geography') return 'text';
+    if (cat === 'ids' || cat === 'names' || cat === 'reference' || cat === 'geography')
+      return 'text';
     return 'text';
   }
 
@@ -126,15 +141,25 @@
     if (cat === 'size' || cat === 'age') return 'numeric';
 
     // Fields with known numeric patterns
-    if (name.includes('capacity') || name.includes('year') || name.includes('age') ||
-        name.includes('mw') || name.includes('mtpa') || name.includes('ttpa') ||
-        name.includes('co2') || name.includes('latitude') || name.includes('longitude')) {
+    if (
+      name.includes('capacity') ||
+      name.includes('year') ||
+      name.includes('age') ||
+      name.includes('mw') ||
+      name.includes('mtpa') ||
+      name.includes('ttpa') ||
+      name.includes('co2') ||
+      name.includes('latitude') ||
+      name.includes('longitude')
+    ) {
       return 'numeric';
     }
 
     // Check if distribution values are mostly numeric
     if (distribution.length > 0) {
-      const numericCount = distribution.filter(d => !isNaN(Number(d.value)) && d.value.trim() !== '').length;
+      const numericCount = distribution.filter(
+        (d) => !isNaN(Number(d.value)) && d.value.trim() !== ''
+      ).length;
       if (numericCount > distribution.length * 0.7) return 'numeric';
     }
 
@@ -149,7 +174,11 @@
 
   // Compute numeric stats from distribution
   function computeNumericStats(distribution: FieldDistribution[]): {
-    min: number; max: number; mean: number; total: number; numericValues: number[];
+    min: number;
+    max: number;
+    mean: number;
+    total: number;
+    numericValues: number[];
   } | null {
     const numericValues: number[] = [];
     let weightedSum = 0;
@@ -178,7 +207,7 @@
 
   // Derived: detected field type
   const detectedType = $derived(
-    selectedField ? detectFieldType(selectedField, fieldDistribution) : 'text' as FieldType
+    selectedField ? detectFieldType(selectedField, fieldDistribution) : ('text' as FieldType)
   );
 
   // Derived: numeric stats (only computed for numeric fields)
@@ -187,14 +216,10 @@
   );
 
   // Derived: total row count from distribution
-  const totalRows = $derived(
-    fieldDistribution.reduce((sum, d) => sum + d.count, 0)
-  );
+  const totalRows = $derived(fieldDistribution.reduce((sum, d) => sum + d.count, 0));
 
   // Derived: max count for bar scaling
-  const maxCount = $derived(
-    Math.max(...fieldDistribution.map(d => d.count), 1)
-  );
+  const maxCount = $derived(Math.max(...fieldDistribution.map((d) => d.count), 1));
 
   // Derived: expand aggregated distribution back into raw values for histogram
   const histogramData = $derived.by(() => {
@@ -241,7 +266,7 @@
       try {
         fieldDistribution = await fetchDistribution(field.columnName);
       } catch (err) {
-        console.error('Failed to fetch distribution:', err);
+        if (import.meta.env.DEV) console.error('Failed to fetch distribution:', err);
       } finally {
         loadingDistribution = false;
       }
@@ -257,9 +282,7 @@
   // Select first field on mount
   onMount(() => {
     // Find "Status" field or first field
-    const statusField = fieldsMetadata.find(
-      (f) => f.columnName === 'Status' && !f.fieldValue
-    );
+    const statusField = fieldsMetadata.find((f) => f.columnName === 'Status' && !f.fieldValue);
     const firstField = fieldsMetadata.find((f) => !f.fieldValue);
     if (statusField) {
       selectField(statusField);
@@ -305,8 +328,12 @@
     {/each}
   </div>
 
-  <div class="dataset-previewer" class:mobile-open={mobilePreviewOpen} style:--bar-color={trackerColor || 'var(--teal)'}>
-    <button class="mobile-preview-toggle" onclick={() => mobilePreviewOpen = !mobilePreviewOpen}>
+  <div
+    class="dataset-previewer"
+    class:mobile-open={mobilePreviewOpen}
+    style:--bar-color={trackerColor || 'var(--teal)'}
+  >
+    <button class="mobile-preview-toggle" onclick={() => (mobilePreviewOpen = !mobilePreviewOpen)}>
       {#if selectedField}
         {mobilePreviewOpen ? 'Hide' : 'Show'} preview: {selectedField.columnName}
       {:else}
@@ -326,11 +353,17 @@
           <span class="dist-stat">{formatCompact(totalRows)} rows</span>
           <span class="dist-stat">{fieldDistribution.length} distinct</span>
           {#if detectedType === 'numeric' && numericStats}
-            <span class="dist-stat type-badge numeric"><span class="type-icon">{typeIcons.numeric}</span> Numeric</span>
+            <span class="dist-stat type-badge numeric"
+              ><span class="type-icon">{typeIcons.numeric}</span> Numeric</span
+            >
           {:else if detectedType === 'enum'}
-            <span class="dist-stat type-badge enum"><span class="type-icon">{typeIcons.enum}</span> Enum</span>
+            <span class="dist-stat type-badge enum"
+              ><span class="type-icon">{typeIcons.enum}</span> Enum</span
+            >
           {:else}
-            <span class="dist-stat type-badge text"><span class="type-icon">{typeIcons.text}</span> Text</span>
+            <span class="dist-stat type-badge text"
+              ><span class="type-icon">{typeIcons.text}</span> Text</span
+            >
           {/if}
         </div>
 
@@ -562,7 +595,7 @@
     font-weight: 700;
     opacity: 0.5;
     margin-right: 2px;
-    font-family: 'Roboto Condensed', monospace;
+    font-family: 'Barlow Semi-Condensed', 'Arial Narrow', sans-serif;
   }
 
   /* Type-colored pill borders */
@@ -630,7 +663,7 @@
   }
 
   .type-icon {
-    font-family: 'Roboto Condensed', monospace;
+    font-family: 'Barlow Semi-Condensed', 'Arial Narrow', sans-serif;
     font-weight: 700;
     margin-right: 2px;
   }
@@ -679,7 +712,11 @@
   .range-fill {
     height: 100%;
     width: 100%;
-    background: linear-gradient(90deg, var(--bar-color, var(--teal)) 0%, rgba(1, 107, 131, 0.2) 100%);
+    background: linear-gradient(
+      90deg,
+      var(--bar-color, var(--teal)) 0%,
+      rgba(1, 107, 131, 0.2) 100%
+    );
     border-radius: 3px;
     opacity: 0.4;
   }

@@ -21,6 +21,7 @@
    *   subtitle?: string,
    *   showStepNav?: boolean,
    *   classesParam?: string,
+   *   ownersParam?: string,
    *   maxWidth?: 'narrow' | 'default' | 'wide',
    *   children?: import('svelte').Snippet,
    *   headerContent?: import('svelte').Snippet,
@@ -33,6 +34,7 @@
     subtitle = '',
     showStepNav = true,
     classesParam = '',
+    ownersParam = '',
     maxWidth = 'default',
     children,
     headerContent,
@@ -51,7 +53,7 @@
 <main class="screener-page">
   <div class="screener-layout {maxWidthClass}">
     {#if showStepNav}
-      <ScreenerStepNav {currentStep} classesParam={derivedClassesParam} />
+      <ScreenerStepNav {currentStep} classesParam={derivedClassesParam} {ownersParam} />
     {/if}
 
     <header class="screener-header">

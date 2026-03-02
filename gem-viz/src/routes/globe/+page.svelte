@@ -1,13 +1,11 @@
 <script>
   /**
    * GLOBAL ASSET EXPLORER
-   * Real-time deck.gl visualization powered by DuckDB WASM queries.
+   * deck.gl visualization powered by REST API + points.geojson.
    *
-   * Demonstrates:
-   * - Instant filtering of 100K+ assets via parquet queries
-   * - deck.gl ScatterplotLayer for WebGL rendering
-   * - Microvisualizations updating in real-time
-   * - Query timing and performance stats
+   * - points.geojson provides all asset locations (~9MB, cached)
+   * - REST API ?facets=true provides exact counts per type/status/country
+   * - Client-side filtering of geojson features
    */
 
   import { onMount } from 'svelte';
@@ -16,11 +14,8 @@
   import { Deck, OrthographicView } from '@deck.gl/core';
   import { ScatterplotLayer } from '@deck.gl/layers';
   import { colors, hexToRgb, colorByTracker } from '$lib/design-tokens';
-  import { ASSET_ID_COALESCE_O } from '$lib/duckdb-queries';
+  import { listAssets } from '$lib/ownership-api';
   import DataSourceBadge from '$lib/components/DataSourceBadge.svelte';
-
-  // DuckDB utilities - loaded dynamically
-  let loadParquetFromPath, query;
 
   // DOM refs
   let mapContainer;
@@ -30,6 +25,9 @@
   let loading = $state(true);
   let loadingPhase = $state('Initializing...');
   let error = $state(null);
+
+  // Raw geojson features (unfiltered)
+  let allFeatures = $state([]);
 
   // Data state
   let filteredAssets = $state([]);
@@ -48,7 +46,6 @@
 
   // Stats
   let queryTime = $state(0);
-  let lastQuerySql = $state('');
   let aggregateStats = $state({
     totalCapacity: 0,
     avgCapacity: 0,
@@ -61,12 +58,6 @@
   let trackerBreakdown = $state([]);
   let statusBreakdown = $state([]);
 
-  // View state (updated by deck.gl callbacks, used for future features)
-  let _viewState = $state({
-    target: [0, 0],
-    zoom: 0,
-  });
-
   // Color helpers
   function trackerToColor(tracker) {
     const hex = colorByTracker.get(tracker) || colors.gray500;
@@ -74,61 +65,55 @@
     return rgb ? [rgb.r, rgb.g, rgb.b, 200] : [128, 128, 128, 200];
   }
 
-  const INIT_TIMEOUT_MS = 15_000;
-
-  // Initialize DuckDB and load data
+  // Initialize data from REST API + geojson
   async function initData() {
     try {
       loading = true;
       error = null;
-      loadingPhase = 'Loading DuckDB WASM...';
 
-      let timer;
+      // Load facets from API and geojson in parallel
+      loadingPhase = 'Loading asset data...';
+      const [facetsResponse, geojsonResponse] = await Promise.all([
+        listAssets({ limit: 1, facets: true }),
+        fetch(assetPath('points.geojson')).then((r) => {
+          if (!r.ok) throw new Error(`Failed to load GeoJSON: ${r.statusText}`);
+          return r.json();
+        }),
+      ]);
 
-      const initWork = async () => {
-        // Dynamic import DuckDB
-        const duckdbUtils = await import('$lib/duckdb-utils');
-        loadParquetFromPath = duckdbUtils.loadParquetFromPath;
-        query = duckdbUtils.query;
+      // Process facets from API
+      const facets = facetsResponse.facets || {};
+      if (facets.asset_type) {
+        trackerFacets = Object.entries(facets.asset_type)
+          .map(([value, count]) => ({ value, count }))
+          .sort((a, b) => b.count - a.count);
+      }
+      if (facets.status) {
+        statusFacets = Object.entries(facets.status)
+          .map(([value, count]) => ({ value, count }))
+          .sort((a, b) => b.count - a.count);
+      }
+      if (facets.country) {
+        countryFacets = Object.entries(facets.country)
+          .map(([value, count]) => ({ value, count }))
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 50);
+      }
 
-        // Load ownership data
-        loadingPhase = 'Loading ownership parquet (7MB)...';
-        const ownershipPath = assetPath('all_trackers_ownership@1.parquet');
-        await loadParquetFromPath(ownershipPath, 'ownership');
+      // Store raw geojson features
+      loadingPhase = 'Processing coordinates...';
+      allFeatures = (geojsonResponse.features || []).filter(
+        (f) =>
+          f.geometry?.coordinates &&
+          f.geometry.coordinates.length >= 2 &&
+          isFinite(f.geometry.coordinates[0]) &&
+          isFinite(f.geometry.coordinates[1]) &&
+          f.geometry.coordinates[1] >= -90 &&
+          f.geometry.coordinates[1] <= 90
+      );
 
-        // Load locations for coordinates
-        loadingPhase = 'Loading locations parquet...';
-        const locationsPath = assetPath('asset_locations.parquet');
-        await loadParquetFromPath(locationsPath, 'locations');
-
-        // Skip to loading facets
-        loadingPhase = 'Counting assets...';
-
-        // Load initial facets
-        loadingPhase = 'Building facets...';
-        await loadFacets();
-
-        // Load initial asset data with locations
-        loadingPhase = 'Loading asset coordinates...';
-        await loadAssets();
-
-        clearTimeout(timer);
-      };
-
-      const timeout = new Promise((_, reject) => {
-        timer = setTimeout(
-          () =>
-            reject(
-              new Error(
-                `DuckDB initialization timed out after ${INIT_TIMEOUT_MS / 1000}s. The data engine may be unresponsive.`
-              )
-            ),
-          INIT_TIMEOUT_MS
-        );
-      });
-
-      await Promise.race([initWork(), timeout]);
-
+      // Initial filter pass
+      filterAssets();
       loading = false;
     } catch (err) {
       error = err?.message || String(err);
@@ -136,143 +121,61 @@
     }
   }
 
-  // Load facet options
-  async function loadFacets() {
+  // Filter geojson features client-side
+  function filterAssets() {
     const start = performance.now();
 
-    // Trackers
-    const trackers = await query(`
-      SELECT Tracker as value, COUNT(*) as count
-      FROM ownership
-      WHERE Tracker IS NOT NULL
-      GROUP BY Tracker
-      ORDER BY count DESC
-    `);
-    trackerFacets = trackers.data || [];
-
-    // Statuses
-    const statuses = await query(`
-      SELECT Status as value, COUNT(*) as count
-      FROM ownership
-      WHERE Status IS NOT NULL
-      GROUP BY Status
-      ORDER BY count DESC
-    `);
-    statusFacets = statuses.data || [];
-
-    // Countries (top 50)
-    const countries = await query(`
-      SELECT "Owner Headquarters Country" as value, COUNT(*) as count
-      FROM ownership
-      WHERE "Owner Headquarters Country" IS NOT NULL
-      GROUP BY "Owner Headquarters Country"
-      ORDER BY count DESC
-      LIMIT 50
-    `);
-    countryFacets = countries.data || [];
-
-    queryTime = Math.round(performance.now() - start);
-  }
-
-  // Load assets with coordinates
-  async function loadAssets() {
-    const start = performance.now();
-
-    // Build WHERE clause from filters
-    const conditions = [];
+    let features = allFeatures;
 
     if (selectedTrackers.length > 0) {
-      const trackerList = selectedTrackers.map((t) => `'${t.replace(/'/g, "''")}'`).join(',');
-      conditions.push(`o.Tracker IN (${trackerList})`);
+      const set = new Set(selectedTrackers);
+      features = features.filter((f) => set.has(f.properties?.tracker));
     }
 
     if (selectedStatuses.length > 0) {
-      const statusList = selectedStatuses.map((s) => `'${s.replace(/'/g, "''")}'`).join(',');
-      conditions.push(`o.Status IN (${statusList})`);
+      const set = new Set(selectedStatuses);
+      features = features.filter((f) => set.has(f.properties?.status));
     }
 
     if (selectedCountries.length > 0) {
-      const countryList = selectedCountries.map((c) => `'${c.replace(/'/g, "''")}'`).join(',');
-      conditions.push(`o."Owner Headquarters Country" IN (${countryList})`);
+      const set = new Set(selectedCountries);
+      features = features.filter((f) => set.has(f.properties?.country));
     }
 
-    if (capacityRange[0] > 0) {
-      conditions.push(`o."Capacity (MW)" >= ${capacityRange[0]}`);
-    }
-    if (capacityRange[1] < 10000) {
-      conditions.push(`o."Capacity (MW)" <= ${capacityRange[1]}`);
-    }
+    // Map to flat objects for deck.gl
+    const mapped = features.map((f) => ({
+      id: f.properties?.id || '',
+      name: f.properties?.name || '',
+      tracker: f.properties?.tracker || '',
+      status: f.properties?.status || '',
+      country: f.properties?.country || '',
+      capacity: Number(f.properties?.capacity) || 0,
+      lat: f.geometry.coordinates[1],
+      lon: f.geometry.coordinates[0],
+    }));
 
-    const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+    filteredAssets = mapped;
+    filteredCount = mapped.length;
 
-    // Main query - join with locations for coordinates
-    const sql = `
-      WITH deduped_locations AS (
-        SELECT * FROM locations
-        QUALIFY ROW_NUMBER() OVER (PARTITION BY "GEM.location.ID" ORDER BY "GEM.location.ID") = 1
-      )
-      SELECT DISTINCT
-        ${ASSET_ID_COALESCE_O} as id,
-        o.Project as name,
-        o.Tracker as tracker,
-        o.Status as status,
-        o."Capacity (MW)" as capacity,
-        o.Owner as owner,
-        o."Owner Headquarters Country" as ownerCountry,
-        l.Latitude as lat,
-        l.Longitude as lon
-      FROM ownership o
-      LEFT JOIN deduped_locations l ON o."GEM location ID" = l."GEM.location.ID"
-      ${whereClause}
-      LIMIT 100000
-    `;
+    // Update aggregate stats
+    const capacities = mapped.map((a) => a.capacity).filter((c) => c > 0);
+    const uniqueCountries = new Set(mapped.map((a) => a.country).filter(Boolean));
 
-    lastQuerySql = sql;
-    const result = await query(sql);
+    aggregateStats = {
+      totalCapacity: Math.round(capacities.reduce((a, b) => a + b, 0)),
+      avgCapacity: Math.round(capacities.reduce((a, b) => a + b, 0) / (capacities.length || 1)),
+      countries: uniqueCountries.size,
+      owners: 0,
+    };
 
-    if (result.success && result.data) {
-      // Filter to assets with valid coordinates
-      const assetsWithCoords = result.data.filter(
-        (a) =>
-          a.lat != null &&
-          a.lon != null &&
-          isFinite(a.lat) &&
-          isFinite(a.lon) &&
-          a.lat >= -90 &&
-          a.lat <= 90 &&
-          a.lon >= -180 &&
-          a.lon <= 180
-      );
-
-      filteredAssets = assetsWithCoords;
-      filteredCount = assetsWithCoords.length;
-
-      // Update aggregate stats
-      const capacities = assetsWithCoords.map((a) => Number(a.capacity) || 0);
-      const uniqueCountries = new Set(assetsWithCoords.map((a) => a.ownerCountry).filter(Boolean));
-      const uniqueOwners = new Set(assetsWithCoords.map((a) => a.owner).filter(Boolean));
-
-      aggregateStats = {
-        totalCapacity: Math.round(capacities.reduce((a, b) => a + b, 0)),
-        avgCapacity: Math.round(capacities.reduce((a, b) => a + b, 0) / (capacities.length || 1)),
-        countries: uniqueCountries.size,
-        owners: uniqueOwners.size,
-      };
-
-      // Build microvis data
-      buildMicrovisData(assetsWithCoords);
-
-      // Update deck.gl
-      updateDeck();
-    }
-
+    buildMicrovisData(mapped);
+    updateDeck();
     queryTime = Math.round(performance.now() - start);
   }
 
   // Build microvisualization data
   function buildMicrovisData(assets) {
-    // Capacity histogram (10 buckets)
-    const capacities = assets.map((a) => Number(a.capacity) || 0).filter((c) => c > 0);
+    const capacities = assets.map((a) => a.capacity).filter((c) => c > 0);
     const maxCap = Math.max(...capacities, 1);
     const bucketSize = maxCap / 10;
     const histogram = Array(10).fill(0);
@@ -283,10 +186,9 @@
     capacityHistogram = histogram.map((count, i) => ({
       range: `${Math.round(i * bucketSize)}-${Math.round((i + 1) * bucketSize)}`,
       count,
-      pct: count / capacities.length,
+      pct: count / (capacities.length || 1),
     }));
 
-    // Count-by-field helper
     function countBy(field) {
       const counts = {};
       for (const a of assets) {
@@ -313,10 +215,7 @@
         zoom: 1,
       },
       controller: true,
-      onViewStateChange: ({ viewState: vs }) => {
-        const zoom = Array.isArray(vs.zoom) ? vs.zoom[0] : vs.zoom;
-        _viewState = { target: vs.target, zoom };
-      },
+      onViewStateChange: () => {},
       getTooltip: ({ object }) => {
         if (!object) return null;
         return {
@@ -343,8 +242,7 @@
       data: filteredAssets,
       getPosition: (d) => [d.lon, d.lat],
       getRadius: (d) => Math.sqrt(Number(d.capacity) || 10) * 2 + 3,
-      getFillColor: (d) =>
-        /** @type {[number, number, number, number]} */ (trackerToColor(d.tracker)),
+      getFillColor: (d) => /** @type {[number,number,number,number]} */ (trackerToColor(d.tracker)),
       radiusMinPixels: 2,
       radiusMaxPixels: 30,
       pickable: true,
@@ -358,22 +256,22 @@
     deck.setProps({ layers: [scatterLayer] });
   }
 
-  // Generic filter toggle — returns new array with item added/removed
+  // Generic filter toggle
   function toggleFilter(arr, value) {
     return arr.includes(value) ? arr.filter((v) => v !== value) : [...arr, value];
   }
 
   function toggleTracker(tracker) {
     selectedTrackers = toggleFilter(selectedTrackers, tracker);
-    loadAssets();
+    filterAssets();
   }
   function toggleStatus(status) {
     selectedStatuses = toggleFilter(selectedStatuses, status);
-    loadAssets();
+    filterAssets();
   }
   function toggleCountry(country) {
     selectedCountries = toggleFilter(selectedCountries, country);
-    loadAssets();
+    filterAssets();
   }
 
   function clearFilters() {
@@ -381,10 +279,9 @@
     selectedStatuses = [];
     selectedCountries = [];
     capacityRange = [0, 10000];
-    loadAssets();
+    filterAssets();
   }
 
-  // Format large numbers
   function formatNumber(n) {
     if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
     if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
@@ -407,7 +304,6 @@
     };
   });
 
-  // Derived
   const hasFilters = $derived(
     selectedTrackers.length > 0 ||
       selectedStatuses.length > 0 ||
@@ -446,7 +342,7 @@
         <span class="stat-label">countries</span>
       </div>
       <div class="stat query-stat">
-        <DataSourceBadge source="local" label="DuckDB" {queryTime} />
+        <DataSourceBadge source="api" label="REST API" {queryTime} />
       </div>
     </div>
   </header>
@@ -460,7 +356,7 @@
 
       <!-- Tracker filter -->
       <div class="filter-section">
-        <h3>Tracker</h3>
+        <h3>Asset Type</h3>
         <div class="filter-options">
           {#each trackerFacets.slice(0, 10) as facet}
             <button
@@ -494,7 +390,7 @@
 
       <!-- Country filter -->
       <div class="filter-section">
-        <h3>Owner Country</h3>
+        <h3>Country</h3>
         <div class="filter-options scrollable">
           {#each countryFacets as facet}
             <button
@@ -511,7 +407,7 @@
 
       <!-- Microvisualizations -->
       <div class="microvis-section">
-        <h3>Tracker Mix</h3>
+        <h3>Asset Type Mix</h3>
         <div class="bar-chart">
           {#each trackerBreakdown.slice(0, 6) as item}
             <div class="bar-row">
@@ -582,7 +478,7 @@
 
       <!-- Map legend -->
       <div class="map-legend">
-        <h4>Trackers</h4>
+        <h4>Asset Types</h4>
         {#each trackerBreakdown.slice(0, 5) as item}
           <div class="legend-item">
             <span
@@ -593,12 +489,6 @@
           </div>
         {/each}
       </div>
-
-      <!-- Query debug panel -->
-      <details class="query-panel">
-        <summary>SQL Query ({queryTime}ms)</summary>
-        <pre>{lastQuerySql}</pre>
-      </details>
     </main>
   </div>
 </div>
@@ -912,37 +802,6 @@
     width: 10px;
     height: 10px;
     border-radius: 50%;
-  }
-
-  .query-panel {
-    position: absolute;
-    bottom: var(--space-5);
-    right: var(--space-5);
-    max-width: 400px;
-    background: rgba(0, 0, 0, 0.9);
-    color: var(--color-white);
-    font-size: var(--font-size-sm);
-    border-radius: var(--radius-md);
-    overflow: hidden;
-  }
-
-  .query-panel summary {
-    padding: var(--space-2) var(--space-3);
-    cursor: pointer;
-    font-size: var(--font-size-base);
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-tight);
-  }
-
-  .query-panel pre {
-    margin: 0;
-    padding: var(--space-3);
-    background: rgba(0, 0, 0, 0.5);
-    font-size: var(--font-size-base);
-    line-height: var(--leading-normal);
-    overflow-x: auto;
-    white-space: pre-wrap;
-    word-break: break-all;
   }
 
   @media (max-width: 768px) {

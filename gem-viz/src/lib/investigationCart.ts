@@ -85,7 +85,7 @@ function loadFromStorage(): CartItem[] {
 
     // Validate it's an array
     if (!Array.isArray(parsed)) {
-      console.error('Investigation cart corrupt: not an array, clearing');
+      if (import.meta.env.DEV) console.error('Investigation cart corrupt: not an array, clearing');
       localStorage.removeItem(STORAGE_KEY);
       return [];
     }
@@ -126,13 +126,14 @@ function loadFromStorage(): CartItem[] {
 
     // Save cleaned/migrated version if different
     if (deduplicated.length !== parsed.length || parsed.some((p) => !p.type)) {
-      console.log(`Investigation cart migrated: ${parsed.length} → ${deduplicated.length} items`);
+      if (import.meta.env.DEV)
+        console.log(`Investigation cart migrated: ${parsed.length} → ${deduplicated.length} items`);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(deduplicated));
     }
 
     return deduplicated;
   } catch (e) {
-    console.error('Failed to load investigation cart:', e);
+    if (import.meta.env.DEV) console.error('Failed to load investigation cart:', e);
     localStorage.removeItem(STORAGE_KEY);
     return [];
   }
@@ -144,7 +145,7 @@ function saveToStorage(list: CartItem[]) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
   } catch (e) {
-    console.error('Failed to save investigation cart:', e);
+    if (import.meta.env.DEV) console.error('Failed to save investigation cart:', e);
   }
 }
 
@@ -171,7 +172,7 @@ function createInvestigationCartStore() {
       metadata?: CartItem['metadata'];
     }) {
       if (!isValidCartId(item.id)) {
-        console.error('Invalid ID format, skipping:', item.id);
+        if (import.meta.env.DEV) console.error('Invalid ID format, skipping:', item.id);
         return false;
       }
 
@@ -180,7 +181,8 @@ function createInvestigationCartStore() {
       // Validate type matches ID prefix
       const expectedType = detectType(item.id);
       if (type !== expectedType) {
-        console.warn(`Type mismatch for ${item.id}: got ${type}, expected ${expectedType}`);
+        if (import.meta.env.DEV)
+          console.warn(`Type mismatch for ${item.id}: got ${type}, expected ${expectedType}`);
       }
 
       let added = false;

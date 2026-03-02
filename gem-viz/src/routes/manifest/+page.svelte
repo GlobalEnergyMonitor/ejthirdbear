@@ -25,7 +25,7 @@
   />
 </svelte:head>
 
-<main>
+<div class="page">
   <header>
     <h1>Data Manifest</h1>
     <p class="subtitle">Admin view of all data sources, schemas, and sample data</p>
@@ -226,10 +226,10 @@
     <p>GEM Viz Data Manifest — Generated at build time</p>
     <p><a href={link('index')}>Back to Homepage</a></p>
   </footer>
-</main>
+</div>
 
 <style>
-  main {
+  .page {
     width: 100%;
     padding: var(--space-10) var(--space-5);
     font-family: var(--font-family-sans);

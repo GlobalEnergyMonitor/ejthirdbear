@@ -228,7 +228,7 @@ export function getTrackerFieldNames(trackerName: string): {
  * Returns an array of missing field names, or empty array if all present
  *
  * NOTE: Location fields are not validated because they're not in the consolidated
- * ownership tracker parquet - location data comes from GeoJSON instead.
+ * ownership tracker API response - location data comes from GeoJSON instead.
  */
 export function validateRecordForTracker(
   trackerName: string,
@@ -239,7 +239,7 @@ export function validateRecordForTracker(
 
   const missing: string[] = [];
 
-  // Only check fields that exist in the consolidated parquet
+  // Only check fields that exist in the API response
   // Location fields are null in config because they come from GeoJSON
   const requiredFields = [config.idField, config.statusField].filter(Boolean);
 

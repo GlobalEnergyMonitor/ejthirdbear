@@ -1,3 +1,3 @@
-// Client-side only - no SSR for DuckDB WASM
+// Client-side only
 export const ssr = false;
 export const prerender = false;

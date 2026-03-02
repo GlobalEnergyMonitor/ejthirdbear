@@ -22,7 +22,7 @@
 
     const height = Math.max(
       document.documentElement?.scrollHeight || 0,
-      document.body?.scrollHeight || 0,
+      document.body?.scrollHeight || 0
     );
 
     if (!height) return;
@@ -34,7 +34,7 @@
         height,
         embedId,
       },
-      '*',
+      '*'
     );
   };
 

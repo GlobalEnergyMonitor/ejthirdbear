@@ -64,13 +64,6 @@ export function intParam(value: string | null, defaultValue: number): number {
   return Number.isNaN(parsed) ? defaultValue : parsed;
 }
 
-/** Parse a float URL param with a default */
-export function floatParam(value: string | null, defaultValue: number): number {
-  if (!value) return defaultValue;
-  const parsed = parseFloat(value);
-  return Number.isNaN(parsed) ? defaultValue : parsed;
-}
-
 /** Parse a boolean URL param (default true, only false if explicitly "false") */
 export function boolParam(value: string | null, defaultValue = true): boolean {
   if (value === null) return defaultValue;

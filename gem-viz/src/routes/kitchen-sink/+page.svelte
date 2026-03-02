@@ -65,21 +65,6 @@
       note: 'Requires cart data',
     },
     {
-      name: 'InvestigationNetwork',
-      path: 'src/lib/components/InvestigationNetwork.svelte',
-      note: 'Requires ownership graph',
-    },
-    {
-      name: 'MermaidOwnership',
-      path: 'src/lib/components/MermaidOwnership.svelte',
-      note: 'Requires entity hierarchy',
-    },
-    {
-      name: 'OwnershipExplorerD3',
-      path: 'src/lib/components/OwnershipExplorerD3.svelte',
-      note: 'Full-page D3 explorer',
-    },
-    {
       name: 'OwnershipFlower',
       path: 'src/lib/components/OwnershipFlower.svelte',
       note: 'Large radial diagram',
@@ -117,19 +102,9 @@
       note: 'Ownership chain viz',
     },
     {
-      name: 'PatternInsights',
-      path: 'src/lib/components/PatternInsights.svelte',
-      note: 'AI-generated insights',
-    },
-    {
       name: 'AssetRingVisualization',
       path: 'src/lib/components/ownership/AssetRingVisualization.svelte',
       note: 'Circular asset display',
-    },
-    {
-      name: 'DagreOwnershipGraph',
-      path: 'src/lib/components/ownership/DagreOwnershipGraph.svelte',
-      note: 'Dagre layout graph',
     },
   ];
 </script>
@@ -139,7 +114,7 @@
   <meta name="description" content="Complete component library with live examples" />
 </svelte:head>
 
-<main>
+<div class="page">
   <header class="page-header">
     <p class="label">Component Library</p>
     <h1>Kitchen Sink</h1>
@@ -263,15 +238,13 @@
       </p>
       <div class="demo-row">
         <DataSourceBadge source="api" queryTime={45} />
-        <DataSourceBadge source="motherduck" queryTime={230} />
         <DataSourceBadge source="local" queryTime={12} />
         <DataSourceBadge source="server" />
       </div>
       <div class="demo-row" style="margin-top: var(--space-3);">
         <DataSourceBadge source="api" label="Entity Search" size="md" queryTime={89} />
       </div>
-      <pre
-        class="code-hint">&lt;DataSourceBadge source="motherduck" queryTime=&#123;230&#125; /&gt;</pre>
+      <pre class="code-hint">&lt;DataSourceBadge source="api" queryTime=&#123;45&#125; /&gt;</pre>
     </div>
 
     <div class="component-group">
@@ -284,12 +257,7 @@
       </p>
       <div class="demo-block full-width">
         <span class="variant-label">footer variant</span>
-        <Citation
-          variant="footer"
-          trackers={['Coal Plant']}
-          dataSource="motherduck"
-          queryTime={142}
-        />
+        <Citation variant="footer" trackers={['Coal Plant']} dataSource="api" queryTime={142} />
       </div>
       <div class="demo-row" style="margin-top: var(--space-4);">
         <span class="variant-label" style="margin-right: var(--space-2);">compact:</span>
@@ -524,7 +492,6 @@
         <FilterBreadcrumbs
           filters={sampleFilters}
           onRemove={(filter) => console.log('Remove:', filter)}
-          onClear={() => console.log('Clear all')}
         />
       </div>
       <pre
@@ -839,10 +806,10 @@
       </div>
     </div>
   </section>
-</main>
+</div>
 
 <style>
-  main {
+  .page {
     max-width: 1000px;
     margin: 0 auto;
     padding: var(--space-10) var(--space-6) var(--space-16);
@@ -1164,7 +1131,7 @@
   }
 
   @media (max-width: 768px) {
-    main {
+    .page {
       padding: var(--space-6) var(--space-4);
     }
 

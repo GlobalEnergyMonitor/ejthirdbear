@@ -12,6 +12,7 @@
  *   const state = new ComposeState();
  *   onMount(() => state.init(urlFilters));
  */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { browser } from '$app/environment';
 import { goto } from '$app/navigation';
@@ -448,8 +449,9 @@ export class ComposeState {
 
       // Static tracker column info
       this.trackerColumns = STATIC_TRACKER_COLUMNS;
-    } catch {
-      // Silently handle reference data load failure
+    } catch (err: any) {
+      this.error = 'Failed to load filter options. Check your connection.';
+      if (import.meta.env.DEV) console.warn('[compose] loadReferenceData failed:', err);
     } finally {
       this.loadingOptions = false;
     }
@@ -472,23 +474,23 @@ export class ComposeState {
 
         this.trackerOptions = mergeParametricCounts(
           this.baseTrackers,
-          facets.trackers.map((f) => ({ value: f.value, cnt: f.count }))
+          facets.trackers.map((f) => ({ value: f.value, count: f.count }))
         );
         this.statusOptions = mergeParametricCounts(
           this.baseStatuses,
-          facets.statuses.map((f) => ({ value: f.value, cnt: f.count }))
+          facets.statuses.map((f) => ({ value: f.value, count: f.count }))
         );
         this.countries = mergeParametricCounts(
           this.baseCountries,
-          facets.countries.map((f) => ({ value: f.value, cnt: f.count }))
+          facets.countries.map((f) => ({ value: f.value, count: f.count }))
         );
         this.owners = mergeParametricCounts(
           this.baseOwners,
-          facets.owners.map((f) => ({ value: f.value, cnt: f.count }))
+          facets.owners.map((f) => ({ value: f.value, count: f.count }))
         );
         this.ownerCountries = mergeParametricCounts(
           this.baseOwnerCountries,
-          facets.ownerCountries.map((f) => ({ value: f.value, cnt: f.count }))
+          facets.ownerCountries.map((f) => ({ value: f.value, count: f.count }))
         );
         return;
       }
@@ -498,18 +500,18 @@ export class ComposeState {
 
       this.trackerOptions = mergeParametricCounts(
         this.baseTrackers,
-        facets.trackers.map((f) => ({ value: f.value, cnt: f.count }))
+        facets.trackers.map((f) => ({ value: f.value, count: f.count }))
       );
       this.statusOptions = mergeParametricCounts(
         this.baseStatuses,
-        facets.statuses.map((f) => ({ value: f.value, cnt: f.count }))
+        facets.statuses.map((f) => ({ value: f.value, count: f.count }))
       );
       this.countries = mergeParametricCounts(
         this.baseCountries,
-        facets.countries.map((f) => ({ value: f.value, cnt: f.count }))
+        facets.countries.map((f) => ({ value: f.value, count: f.count }))
       );
-    } catch {
-      // Silently handle - counts will remain unchanged
+    } catch (err) {
+      if (import.meta.env.DEV) console.warn('[compose] parametric count update failed:', err);
     } finally {
       this.loadingCounts = false;
     }
@@ -611,7 +613,12 @@ export class ComposeState {
 
   handleSaveAssetClass = () => {
     if (!this.newClassName.trim()) return;
-    saveAssetClass(this.newClassName.trim(), this.newClassDescription.trim(), { ...this.filters }, []);
+    saveAssetClass(
+      this.newClassName.trim(),
+      this.newClassDescription.trim(),
+      { ...this.filters },
+      []
+    );
     this.assetClassSaved = true;
     setTimeout(() => {
       this.showSaveAssetClass = false;
@@ -704,7 +711,8 @@ export class ComposeState {
 
   removeFromCart = (items: any[]) => {
     for (const row of items) {
-      if (row.asset_id && this.cartAssetIds.has(row.asset_id)) investigationCart.remove(row.asset_id);
+      if (row.asset_id && this.cartAssetIds.has(row.asset_id))
+        investigationCart.remove(row.asset_id);
     }
   };
 
@@ -750,7 +758,8 @@ export class ComposeState {
         asset_id: a.id,
         name: a.name,
       }));
-    } catch {
+    } catch (err) {
+      if (import.meta.env.DEV) console.warn('[compose] fetchAllMatchingIds failed:', err);
       return [];
     }
   };
@@ -830,7 +839,9 @@ export class ComposeState {
           owner_id: firstOwner?.entityId || asset.ownerEntityId || '',
         };
       });
-    } catch {
+    } catch (err: any) {
+      this._fetchProgress = null;
+      this.error = err?.message || 'Export failed. Please try again.';
       return [];
     }
   };
@@ -910,8 +921,8 @@ export class ComposeState {
     // Load reference data first (single API call)
     await this.loadReferenceData();
 
-    // Load results
-    this.loadResults();
+    // Load results (await to avoid race with parametric counts)
+    await this.loadResults();
 
     // Update parametric counts if we have URL filters
     if (hasActiveFilters(urlFilters)) {

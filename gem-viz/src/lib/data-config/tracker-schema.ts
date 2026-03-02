@@ -3,7 +3,7 @@
  *
  * Single source of truth for:
  * - Available trackers and their metadata
- * - Tracker ↔ MotherDuck asset type mapping
+ * - Tracker ↔ API asset type mapping
  * - Status values and country list
  */
 
@@ -23,12 +23,11 @@ export const TRACKERS = [
 export type TrackerName = (typeof TRACKERS)[number];
 
 // =============================================================================
-// TRACKER TO MOTHERDUCK ASSET TYPE MAPPING
+// TRACKER TO API ASSET TYPE MAPPING
 // =============================================================================
 
 /**
- * Maps UI tracker names to MotherDuck "Asset Type" column values.
- * Use this when querying the ownership table.
+ * Maps UI tracker names to REST API asset type values.
  */
 export const TRACKER_TO_ASSET_TYPE: Record<TrackerName, string> = {
   'Bioenergy Power': 'Bioenergy Power',
@@ -40,7 +39,7 @@ export const TRACKER_TO_ASSET_TYPE: Record<TrackerName, string> = {
 };
 
 /**
- * Get the MotherDuck asset type for a tracker
+ * Get the API asset type for a tracker
  */
 export function getAssetTypeForTracker(tracker: string): string | null {
   if (!isValidTracker(tracker)) return null;
@@ -74,6 +73,27 @@ export const STATUS_VALUES = [
 ] as const;
 
 export type StatusValue = (typeof STATUS_VALUES)[number];
+
+/** Status values grouped into high-level buckets for the screener UI */
+export const STATUS_GROUPS = [
+  { id: 'operating', label: 'Operating', statuses: ['operating'] as StatusValue[] },
+  {
+    id: 'planned',
+    label: 'Planned',
+    statuses: [
+      'announced',
+      'construction',
+      'permitted',
+      'pre-construction',
+      'pre-permit',
+      'proposed',
+    ] as StatusValue[],
+  },
+  { id: 'cancelled', label: 'Cancelled', statuses: ['cancelled', 'shelved'] as StatusValue[] },
+  { id: 'retired', label: 'Retired', statuses: ['retired', 'mothballed', 'idle'] as StatusValue[] },
+] as const;
+
+export type StatusGroup = (typeof STATUS_GROUPS)[number];
 
 // =============================================================================
 // COUNTRIES (for geography filter)

@@ -1,3 +1,4 @@
+/* eslint-env browser */
 (function () {
   const EMBED_CLASS = 'gem-embed';
 

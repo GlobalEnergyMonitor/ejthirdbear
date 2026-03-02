@@ -12,7 +12,6 @@
 
   const trackers = [
     { value: 'Coal Plant', label: 'Coal Plants' },
-    { value: 'Coal Mine', label: 'Coal Mines' },
     { value: 'Gas Plant', label: 'Gas Plants' },
     { value: 'Steel Plant', label: 'Steel Plants' },
     { value: 'Gas Pipeline', label: 'Gas Pipelines' },
@@ -29,7 +28,7 @@
   />
 </svelte:head>
 
-<main>
+<div class="page">
   <header>
     <nav class="breadcrumb">
       <a href={link('index')}>Home</a> /
@@ -104,39 +103,6 @@
         limit={5}
         variant="compact"
       />
-    {:else if selectedTracker === 'Coal Mine'}
-      <ProjectCardList
-        title="Largest Proposed Coal Mines"
-        description="The 5 largest proposed coal mine projects globally"
-        tracker="Coal Mine"
-        statusFilter={['proposed', 'announced', 'pre-permit', 'permitted', 'construction']}
-        sortBy="capacity"
-        sortOrder="desc"
-        limit={5}
-        variant="compact"
-      />
-
-      <ProjectCardList
-        title="Largest Operating Coal Mines"
-        description="The 5 largest operating coal mines globally by capacity"
-        tracker="Coal Mine"
-        statusFilter={['operating']}
-        sortBy="capacity"
-        sortOrder="desc"
-        limit={5}
-        variant="compact"
-      />
-
-      <ProjectCardList
-        title="Cancelled/Shelved Mine Projects"
-        description="The 5 largest cancelled or shelved coal mine projects"
-        tracker="Coal Mine"
-        statusFilter={['cancelled', 'shelved']}
-        sortBy="capacity"
-        sortOrder="desc"
-        limit={5}
-        variant="compact"
-      />
     {:else}
       <ProjectCardList
         title="Largest Proposed"
@@ -180,10 +146,10 @@
     </p>
     <a href={link('explore')}>Back to Explore</a>
   </footer>
-</main>
+</div>
 
 <style>
-  main {
+  .page {
     width: 100%;
     max-width: 1400px;
     margin: 0 auto;

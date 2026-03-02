@@ -2,7 +2,7 @@
   /**
    * MiniNetworkGraph - Focused 3D network visualization for entity pages
    * Shows the ownership network neighborhood around a specific entity.
-   * Uses REST API (getOwnershipGraph) — no DuckDB dependency.
+   * Uses REST API (getOwnershipGraph).
    */
   import { onMount } from 'svelte';
   import { assetPath, assetLink, entityLink } from '$lib/links';
@@ -61,8 +61,12 @@
 
       // Fetch ownership graph in both directions via REST API
       const [graphDown, graphUp] = await Promise.all([
-        getOwnershipGraph({ root: entityId, direction: 'down', max_depth: maxHops }).catch(() => null),
-        getOwnershipGraph({ root: entityId, direction: 'up', max_depth: maxHops }).catch(() => null),
+        getOwnershipGraph({ root: entityId, direction: 'down', max_depth: maxHops }).catch(
+          () => null
+        ),
+        getOwnershipGraph({ root: entityId, direction: 'up', max_depth: maxHops }).catch(
+          () => null
+        ),
       ]);
 
       // Merge nodes and edges from both directions
@@ -103,7 +107,12 @@
 
       // Ensure the target entity exists in the graph
       if (!nodeMap.has(entityId)) {
-        nodeMap.set(entityId, { id: entityId, name: _entityName || entityId, connections: 0, isTarget: true });
+        nodeMap.set(entityId, {
+          id: entityId,
+          name: _entityName || entityId,
+          connections: 0,
+          isTarget: true,
+        });
       }
 
       nodes = Array.from(nodeMap.values());
@@ -124,7 +133,7 @@
       }
       loading = false;
     } catch (e) {
-      console.error('[MiniNetworkGraph] Error:', e);
+      if (import.meta.env.DEV) console.error('[MiniNetworkGraph] Error:', e);
       error = e.message;
       loading = false;
     }
@@ -438,7 +447,7 @@
         getTooltip: ({ object }) => {
           if (!object) return null;
           return {
-            html: `<div style="padding:6px;font-family:Roboto Condensed, sans-serif;font-weight:700;font-size:10px;">
+            html: `<div style="padding:6px;font-family:Barlow Semi-Condensed, sans-serif;font-weight:700;font-size:10px;">
               <strong>${object.name}</strong><br/>
               <span style="color:#888;">${object.id}</span><br/>
               ${object.connections} connections

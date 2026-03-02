@@ -1,19 +1,27 @@
 <script>
+  /**
+   * ENTITY PAGE
+   * Shows an entity's ownership structure: upstream/downstream graphs,
+   * portfolio breakdown by tracker/status/country, asset screener, and network viz.
+   * Data comes from +page.server.js (cached or runtime API), then streams portfolio client-side.
+   */
+
+  // --- Imports ---
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { link, assetLink } from '$lib/links';
   import { page } from '$app/stores';
 
-  // Entity/ownership visualizations
-  import OwnershipExplorerD3 from '$lib/components/OwnershipExplorerD3.svelte';
+  // Components
   import AssetScreener from '$lib/components/AssetScreener.svelte';
   import TrackerIcon from '$lib/components/TrackerIcon.svelte';
   import StatusIcon from '$lib/components/StatusIcon.svelte';
   import OwnershipFlower from '$lib/components/OwnershipFlower.svelte';
   import MiniNetworkGraph from '$lib/components/MiniNetworkGraph.svelte';
+  import AssetScreenerChart from '$lib/components/screener/AssetScreenerChart.svelte';
   import UltimateOwners from '$lib/components/UltimateOwners.svelte';
-  import MermaidOwnership from '$lib/components/MermaidOwnership.svelte';
   import DataSourceBadge from '$lib/components/DataSourceBadge.svelte';
+  import SectionHeader from '$lib/components/SectionHeader.svelte';
   import {
     EntityPortfolioFilters,
     EntityPortfolioHeader,
@@ -21,18 +29,22 @@
     OwnershipSummaryTables,
     AssetRingVisualization,
   } from '$lib/components/ownership';
+
+  // Data
   import { streamOwnerPortfolio } from '$lib/ownership-data';
   import { getEntityGraphUp, getEntityGraphDown } from '$lib/ownership-api';
   import { trackerColors } from '$lib/design-tokens';
 
+  // --- Props ---
   /** @type {{ data: any }} */
   let { data } = $props();
 
+  // --- Helpers ---
   function isLikelyAssetId(id) {
     return id && /^G\d+$/.test(id);
   }
 
-  // Loading state
+  // --- State ---
   let loadingPhase = $state('init');
   let loadingMessage = $state('Initializing...');
   let error = $state(null);
@@ -75,12 +87,6 @@
   const trackerBreakdown = $derived.by(() => countBy('tracker'));
   const statusBreakdown = $derived.by(() => countBy('status'));
   const countryBreakdown = $derived.by(() => countBy('country'));
-
-  // Mermaid node map
-  const upstreamNodeMap = $derived.by(() => {
-    if (!graphUp?.nodes) return new Map();
-    return new Map(graphUp.nodes.map((n) => [n.id, { Name: n.Name }]));
-  });
 
   // Filters
   let selectedCountries = $state(new Set());
@@ -128,11 +134,11 @@
     try {
       const [upResult, downResult] = await Promise.all([
         getEntityGraphUp(id).catch((e) => {
-          console.warn('Failed to fetch upstream graph:', e);
+          if (import.meta.env.DEV) console.warn('Failed to fetch upstream graph:', e);
           return null;
         }),
         getEntityGraphDown(id).catch((e) => {
-          console.warn('Failed to fetch downstream graph:', e);
+          if (import.meta.env.DEV) console.warn('Failed to fetch downstream graph:', e);
           return null;
         }),
       ]);
@@ -143,7 +149,7 @@
         entityName = upResult.rootEntityName;
       }
     } catch (err) {
-      console.error('Graph data load error:', err);
+      if (import.meta.env.DEV) console.error('Graph data load error:', err);
       graphError = err?.message || 'Failed to load ownership graph';
     } finally {
       graphLoading = false;
@@ -164,7 +170,7 @@
       goto(assetLink(paramsId), { replaceState: true });
       return;
     }
-    if (data?.entity?.name) entityName = data.entity.name;
+    if (data?.entity?.Name || data?.entity?.name) entityName = data.entity.Name || data.entity.name;
 
     if (!paramsId) {
       error = 'Missing entity ID';
@@ -207,7 +213,7 @@
         }
       }
     } catch (err) {
-      console.error('Entity portfolio load error:', err);
+      if (import.meta.env.DEV) console.error('Entity portfolio load error:', err);
       loadingPhase = 'error';
       if (!data?.entity) error = err?.message || 'Failed to load entity';
     }
@@ -227,14 +233,17 @@
   <a {href} class="embed-btn" target="_blank" rel="noopener" title="Embed this visualization">↗</a>
 {/snippet}
 
-<main>
+<div class="page">
   <header>
     <a href={link('index')} class="back-link">← Home</a>
     <span class="entity-type">Entity Profile</span>
   </header>
 
-  {#if loadingPhase === 'error' && error}
-    <p class="loading error">{error}</p>
+  {#if loadingPhase === 'error' || (error && !portfolio?.assets?.length)}
+    <div class="error-notice">
+      <p class="loading error">{error || 'Failed to load entity data'}</p>
+      <p><a href={link('index')}>← Back to home</a></p>
+    </div>
   {:else if loadingPhase !== 'done' && !portfolio}
     <div class="loading-progress">
       <p class="loading">{loadingMessage}</p>
@@ -280,28 +289,25 @@
         showFlower={false}
       />
 
-      <!-- Portfolio overview -->
-      <section class="section-divider">
-        <div class="section-header-row">
-          <h2 class="section-title">Portfolio Overview</h2>
+      <!-- Portfolio overview (only shown when assets exist) -->
+      {#if portfolio?.assets?.length}
+        <SectionHeader title="Portfolio Overview">
           <div class="source-badges">
             <DataSourceBadge source="api" label="Assets" queryTime={portfolioQueryTime} />
           </div>
-        </div>
-      </section>
+        </SectionHeader>
 
-      <div class="split-row">
-        <div class="split-col panel panel--hero">
-          <h3>
-            Ownership Flower
-            {@render embedBtn(`/embed/ownership-flower?entityId=${entityId}`)}
-          </h3>
-          <div class="flower-wrapper">
-            <OwnershipFlower ownerId={entityId} {portfolio} size="large" />
+        <div class="split-row">
+          <div class="split-col panel panel--hero">
+            <h3>
+              Ownership Flower
+              {@render embedBtn(`/embed/ownership-flower?entityId=${entityId}`)}
+            </h3>
+            <div class="flower-wrapper">
+              <OwnershipFlower ownerId={entityId} {portfolio} size="large" />
+            </div>
           </div>
-        </div>
-        <div class="split-col">
-          {#if portfolio?.assets?.length}
+          <div class="split-col">
             <div class="stats-hero">
               <div class="stat-big">
                 <span class="stat-number">{portfolio.assets.length.toLocaleString()}</span>
@@ -322,103 +328,89 @@
                 </div>
               </div>
             </div>
-          {/if}
 
-          <!-- Tracker breakdown -->
-          {#if trackerBreakdown.length > 0}
-            <div class="tracker-bars">
-              {#each trackerBreakdown.slice(0, 5) as row}
-                {@const maxCount = trackerBreakdown[0]?.count || 1}
-                {@const pct = (row.count / maxCount) * 100}
-                {@const barColor = trackerColors[row.key] || '#6e8c91'}
-                <div class="tracker-bar-row">
-                  <TrackerIcon tracker={row.key} size={14} showLabel variant="pill" />
-                  <div class="bar-container">
-                    <div class="bar-fill" style="width: {pct}%; background: {barColor}"></div>
+            <!-- Tracker breakdown -->
+            {#if trackerBreakdown.length > 0}
+              <div class="tracker-bars">
+                {#each trackerBreakdown.slice(0, 5) as row}
+                  {@const maxCount = trackerBreakdown[0]?.count || 1}
+                  {@const pct = (row.count / maxCount) * 100}
+                  {@const barColor = trackerColors[row.key] || '#6e8c91'}
+                  <div class="tracker-bar-row">
+                    <TrackerIcon tracker={row.key} size={14} showLabel variant="pill" />
+                    <div class="bar-container">
+                      <div class="bar-fill" style="width: {pct}%; background: {barColor}"></div>
+                    </div>
+                    <span class="bar-count">{row.count.toLocaleString()}</span>
                   </div>
-                  <span class="bar-count">{row.count.toLocaleString()}</span>
-                </div>
-              {/each}
-            </div>
-          {/if}
+                {/each}
+              </div>
+            {/if}
+          </div>
         </div>
-      </div>
+      {/if}
 
-      <!-- Ownership hierarchy -->
-      <section class="section-divider">
-        <div class="section-header-row">
-          <h2 class="section-title">Ownership Hierarchy</h2>
+      <!-- Upstream ownership — HERO when data exists -->
+      {#if graphLoading}
+        <SectionHeader title="Ownership Structure">
           <div class="source-badges">
             <DataSourceBadge source="api" label="Graph" queryTime={graphQueryTime} />
           </div>
+        </SectionHeader>
+        <div class="section-block panel">
+          <p class="placeholder">Loading ownership graph...</p>
         </div>
-        <p class="section-subtitle">Who owns this entity and their ownership structure</p>
-      </section>
+      {:else if graphUp?.nodes?.length > 1}
+        <SectionHeader title={`Who Owns ${entityName || 'This Entity'}`}>
+          <div class="source-badges">
+            <DataSourceBadge source="api" label="Graph" queryTime={graphQueryTime} />
+          </div>
+        </SectionHeader>
 
-      <div class="split-row">
-        <div class="split-col panel panel--tall">
+        <div class="section-block panel panel--graph-hero">
           <h3>
-            Upstream Ownership Graph
+            Upstream Ownership
             {@render embedBtn(`/embed/ownership-graph?entityId=${entityId}&direction=up`)}
           </h3>
-          {#if graphLoading}
-            <p class="placeholder">Loading ownership graph...</p>
-          {:else if graphError}
-            <p class="placeholder error">Failed to load ownership graph: {graphError}</p>
-          {:else if graphUp?.nodes?.length > 1}
-            <OwnershipTreeGraph
-              nodes={graphUp.nodes}
-              edges={graphUp.edges}
-              paths={graphUp.paths || {}}
-              rootId={entityId}
-            />
-          {:else}
-            <p class="placeholder">No upstream owners found (terminal entity)</p>
-          {/if}
-        </div>
-        <div class="split-col panel panel--tall">
-          <h3>
-            Ultimate Owners
-            {@render embedBtn(`/embed/ultimate-owners?entityId=${entityId}`)}
-          </h3>
-          <UltimateOwners {entityId} />
-        </div>
-      </div>
-
-      <!-- Ownership summary -->
-      {#if graphUp?.nodes?.length > 1}
-        <div class="section-block panel">
-          <h3>Ownership Breakdown</h3>
-          <OwnershipSummaryTables nodes={graphUp.nodes} edges={graphUp.edges} rootId={entityId} />
-        </div>
-      {/if}
-
-      <!-- Mermaid flow -->
-      {#if graphUp?.edges?.length > 0}
-        <div class="section-block panel">
-          <h3>
-            Ownership Flow Diagram
-            {@render embedBtn(`/embed/ownership-mermaid?entityId=${entityId}`)}
-          </h3>
-          <MermaidOwnership
+          <OwnershipTreeGraph
+            nodes={graphUp.nodes}
             edges={graphUp.edges}
-            nodeMap={upstreamNodeMap}
-            zoom={0.7}
-            direction="BT"
+            paths={graphUp.paths || {}}
+            rootId={entityId}
           />
         </div>
+
+        <!-- Ownership detail row: Ultimate Owners + Summary Tables -->
+        <div class="split-row">
+          <div class="split-col panel panel--tall">
+            <h3>
+              Ultimate Owners
+              {@render embedBtn(`/embed/ultimate-owners?entityId=${entityId}`)}
+            </h3>
+            <UltimateOwners {entityId} />
+          </div>
+          <div class="split-col panel panel--tall">
+            <h3>Ownership Breakdown</h3>
+            <OwnershipSummaryTables nodes={graphUp.nodes} edges={graphUp.edges} rootId={entityId} />
+          </div>
+        </div>
+      {:else if graphError}
+        <SectionHeader title="Ownership Structure" />
+        <div class="section-block panel">
+          <p class="placeholder error">Failed to load ownership graph: {graphError}</p>
+        </div>
       {/if}
 
-      <!-- Downstream ownership -->
+      <!-- Downstream ownership — full width -->
       {#if graphDown?.nodes?.length > 1}
-        <section class="section-divider">
-          <h2 class="section-title">Subsidiaries & Holdings</h2>
-          <p class="section-subtitle">Entities and assets owned by {entityName || entityId}</p>
-        </section>
+        <SectionHeader
+          title="Subsidiaries & Holdings"
+          subtitle={`Entities and assets owned by ${entityName || entityId}`}
+        />
 
-        <div class="section-block panel panel--tall">
+        <div class="section-block panel panel--graph-hero">
           <h3>
-            Downstream Ownership Graph
+            Downstream Ownership
             {@render embedBtn(`/embed/ownership-graph?entityId=${entityId}&direction=down`)}
           </h3>
           <OwnershipTreeGraph
@@ -431,35 +423,30 @@
       {/if}
 
       <!-- Network analysis -->
-      <section class="section-divider">
-        <h2 class="section-title">Network Analysis</h2>
-        <p class="section-subtitle">Interactive 3D ownership network exploration</p>
-      </section>
+      <SectionHeader
+        title="Network Analysis"
+        subtitle="Interactive ownership network exploration"
+      />
+
+      <div class="section-block panel panel--mega">
+        <h3>Ownership Structure</h3>
+        <AssetScreenerChart {entityId} entityName={entityName} />
+      </div>
 
       <div class="section-block panel panel--mega">
         <h3>
-          3D Ownership Network
+          Ownership Network
           {@render embedBtn(`/embed/network-3d?entityId=${entityId}`)}
         </h3>
         <MiniNetworkGraph {entityId} height={500} maxHops={3} />
       </div>
 
-      <div class="section-block panel panel--mega">
-        <h3>
-          Full Network Explorer
-          {@render embedBtn(`/embed/network-explorer?entityId=${entityId}`)}
-        </h3>
-        <OwnershipExplorerD3 ownerEntityId={entityId} prebakedData={data?.ownerExplorerData} parentPortfolio={portfolio} />
-      </div>
-
       <!-- Asset distribution -->
       {#if filteredAssets.length > 0}
-        <section class="section-divider">
-          <h2 class="section-title">Asset Distribution</h2>
-          <p class="section-subtitle">
-            {filteredAssets.length.toLocaleString()} assets across {countryBreakdown.length} countries
-          </p>
-        </section>
+        <SectionHeader
+          title="Asset Distribution"
+          subtitle={`${filteredAssets.length.toLocaleString()} assets across ${countryBreakdown.length} countries`}
+        />
 
         <div class="section-block panel">
           <h3>
@@ -505,15 +492,14 @@
 
       <!-- Asset screener -->
       {#if portfolio?.assets?.length > 0}
-        <section class="section-divider">
-          <div class="section-header-row">
-            <h2 class="section-title">Asset Screener</h2>
-            <div class="source-badges">
-              <DataSourceBadge source="api" label="Assets" queryTime={portfolioQueryTime} />
-            </div>
+        <SectionHeader
+          title="Asset Screener"
+          subtitle="Filter and explore all assets in this portfolio"
+        >
+          <div class="source-badges">
+            <DataSourceBadge source="api" label="Assets" queryTime={portfolioQueryTime} />
           </div>
-          <p class="section-subtitle">Filter and explore all assets in this portfolio</p>
-        </section>
+        </SectionHeader>
 
         <div class="section-block">
           <EntityPortfolioFilters
@@ -551,10 +537,10 @@
   >
     Embed ↗
   </a>
-</main>
+</div>
 
 <style>
-  main {
+  .page {
     width: 100%;
     padding: var(--space-6);
     max-width: 1800px;
@@ -585,39 +571,10 @@
     letter-spacing: var(--tracking-wide);
   }
 
-  /* Sections */
-  .section-divider {
-    margin: var(--space-10) 0 var(--space-6) 0;
-    padding-top: var(--space-6);
-    border-top: 3px solid var(--color-black);
-  }
-
-  .section-header-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-4);
-    flex-wrap: wrap;
-  }
-
   .source-badges {
     display: flex;
     gap: var(--space-2);
     flex-wrap: wrap;
-  }
-
-  .section-title {
-    font-size: var(--font-size-2xl);
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-wide);
-    margin: 0 0 var(--space-2) 0;
-  }
-
-  .section-subtitle {
-    font-size: var(--font-size-base);
-    color: var(--color-text-secondary);
-    margin: 0;
   }
 
   /* Layout */
@@ -650,6 +607,12 @@
     overflow: auto;
   }
 
+  .panel--graph-hero {
+    min-height: 300px;
+    max-height: 85vh;
+    overflow: auto;
+  }
+
   .panel--mega {
     min-height: 600px;
     max-height: 90vh;
@@ -665,12 +628,6 @@
 
   .section-block {
     margin-bottom: var(--space-6);
-  }
-
-  .panel .panel {
-    border: none;
-    background: transparent;
-    padding: 0;
   }
 
   h3 {
@@ -731,7 +688,6 @@
 
   .stat-number {
     font-size: 4rem;
-    font-weight: 900;
     font-family: var(--font-family-data);
     font-weight: 700;
     line-height: 1;
@@ -890,6 +846,16 @@
   .loading.error {
     color: var(--color-error);
     font-weight: 700;
+  }
+
+  .error-notice {
+    text-align: center;
+    padding: var(--space-12) var(--space-6);
+  }
+
+  .error-notice a {
+    color: var(--color-text-secondary);
+    text-decoration: underline;
   }
 
   .loading-progress {

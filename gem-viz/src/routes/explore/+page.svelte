@@ -1,7 +1,7 @@
 <script>
   /**
    * EXPLORE PAGE
-   * Interactive dashboard with live DuckDB queries against parquet data
+   * Interactive dashboard with live REST API queries
    */
 
   import { link, factsheetLink } from '$lib/links';
@@ -31,15 +31,13 @@
   />
 </svelte:head>
 
-<main>
+<div class="page">
   <header>
     <nav class="breadcrumb">
       <a href={link('index')}>Home</a> / Explore
     </nav>
     <h1>Explore the Data</h1>
-    <p class="lead">
-      Interactive queries against GEM ownership data via the REST API.
-    </p>
+    <p class="lead">Interactive queries against GEM ownership data via the REST API.</p>
   </header>
 
   <!-- Tracker Filter -->
@@ -103,15 +101,13 @@
   </section>
 
   <footer class="page-footer">
-    <p>
-      Data from the GEM REST API at gem-api.thirdbear.net. Exact counts via faceted queries.
-    </p>
+    <p>Data from the GEM REST API at gem-api.thirdbear.net. Exact counts via faceted queries.</p>
     <a href={link('manifest')}>View data manifest</a>
   </footer>
-</main>
+</div>
 
 <style>
-  main {
+  .page {
     width: 100%;
     padding: var(--space-10) var(--space-5);
     font-family: var(--font-family-sans);

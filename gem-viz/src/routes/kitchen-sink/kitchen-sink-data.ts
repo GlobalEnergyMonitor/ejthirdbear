@@ -15,7 +15,14 @@ export const trackers = [
   'Bioenergy Power',
 ];
 
-export const statuses = ['operating', 'proposed', 'construction', 'cancelled', 'retired', 'shelved'];
+export const statuses = [
+  'operating',
+  'proposed',
+  'construction',
+  'cancelled',
+  'retired',
+  'shelved',
+];
 
 // Real company examples
 export const realCompanies = [
@@ -125,18 +132,26 @@ export const capacityTimeSeries = [
 
 // Capacity histogram data (plant sizes in MW)
 export const capacityDistribution = [
-  150, 200, 180, 350, 400, 500, 660, 660, 660, 800, 1000, 1000, 1000, 1200, 1320, 1320, 1320,
-  1500, 2000, 2000, 2640, 3200, 4000, 5000, 6000, 8000, 200, 300, 400, 500, 660, 660, 800, 1000,
-  1000, 1200, 1320, 1500, 1800,
+  150, 200, 180, 350, 400, 500, 660, 660, 660, 800, 1000, 1000, 1000, 1200, 1320, 1320, 1320, 1500,
+  2000, 2000, 2640, 3200, 4000, 5000, 6000, 8000, 200, 300, 400, 500, 660, 660, 800, 1000, 1000,
+  1200, 1320, 1500, 1800,
 ];
 
 // Sample filters for breadcrumbs
-export const sampleFilters = [
-  { type: 'tracker', label: 'Coal Plant', value: 'coal-plant' },
-  { type: 'status', label: 'Operating', value: 'operating' },
-  { type: 'country', label: 'China', value: 'CN' },
-  { type: 'capacity', label: '>1000 MW', value: 'capacity-gt-1000' },
-];
+export const sampleFilters = {
+  trackers: ['Coal Plant'],
+  statuses: ['operating'],
+  countries: ['China'],
+  ownerCountries: [],
+  owners: [],
+  capacityMin: 1000,
+  capacityMax: null,
+  shareMin: null,
+  shareMax: null,
+  startYearMin: null,
+  startYearMax: null,
+  search: '',
+};
 
 // Sample asset classes for panel
 export const sampleClassesParam = JSON.stringify([
@@ -162,7 +177,11 @@ export const componentIndex = [
   { name: 'StatusIcon', path: 'src/lib/components/StatusIcon.svelte', category: 'primitives' },
   { name: 'TrackerIcon', path: 'src/lib/components/TrackerIcon.svelte', category: 'primitives' },
   { name: 'Skeleton', path: 'src/lib/components/Skeleton.svelte', category: 'primitives' },
-  { name: 'DataSourceBadge', path: 'src/lib/components/DataSourceBadge.svelte', category: 'badges' },
+  {
+    name: 'DataSourceBadge',
+    path: 'src/lib/components/DataSourceBadge.svelte',
+    category: 'badges',
+  },
   { name: 'Citation', path: 'src/lib/components/Citation.svelte', category: 'badges' },
   { name: 'EntityMicroCard', path: 'src/lib/components/EntityMicroCard.svelte', category: 'cards' },
   { name: 'AssetMicroCard', path: 'src/lib/components/AssetMicroCard.svelte', category: 'cards' },
@@ -172,10 +191,22 @@ export const componentIndex = [
   { name: 'MiniHistogram', path: 'src/lib/components/MiniHistogram.svelte', category: 'charts' },
   { name: 'OwnershipPie', path: 'src/lib/components/OwnershipPie.svelte', category: 'charts' },
   { name: 'ScreenerStepNav', path: 'src/lib/components/ScreenerStepNav.svelte', category: 'nav' },
-  { name: 'FilterBreadcrumbs', path: 'src/lib/components/FilterBreadcrumbs.svelte', category: 'nav' },
-  { name: 'AssetClassesPanel', path: 'src/lib/components/AssetClassesPanel.svelte', category: 'nav' },
+  {
+    name: 'FilterBreadcrumbs',
+    path: 'src/lib/components/FilterBreadcrumbs.svelte',
+    category: 'nav',
+  },
+  {
+    name: 'AssetClassesPanel',
+    path: 'src/lib/components/AssetClassesPanel.svelte',
+    category: 'nav',
+  },
   { name: 'RangeSlider', path: 'src/lib/components/RangeSlider.svelte', category: 'inputs' },
-  { name: 'AddToCartButton', path: 'src/lib/components/AddToCartButton.svelte', category: 'buttons' },
+  {
+    name: 'AddToCartButton',
+    path: 'src/lib/components/AddToCartButton.svelte',
+    category: 'buttons',
+  },
   { name: 'LoadingWrapper', path: 'src/lib/components/LoadingWrapper.svelte', category: 'states' },
   { name: 'ScreenerLayout', path: 'src/lib/components/ScreenerLayout.svelte', category: 'layouts' },
 ];

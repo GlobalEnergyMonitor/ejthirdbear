@@ -1,18 +1,23 @@
 <script lang="ts">
   /**
-   * AssetClassExpansion — inline expansion panel for a selected asset class.
-   * Shows sub-class checkboxes, geo/status filters, multi-tracker banner,
-   * and continue buttons.
+   * AssetClassExpansion — filter panel for a selected asset class.
+   * Shows sub-class groups with REFINE pattern, status buckets with REFINE,
+   * geography dropdown, and continue buttons.
    */
   import { slide } from 'svelte/transition';
-  import { STATUS_VALUES, COUNTRIES } from '$lib/data-config/tracker-schema';
-  import type { AssetClass } from '$lib/data-config/asset-class-definitions';
+  import { COUNTRIES, STATUS_GROUPS } from '$lib/data-config/tracker-schema';
+  import type { AssetClass, SubClassGroup } from '$lib/data-config/asset-class-definitions';
+  import { ArrowRight, Search as SearchIcon } from 'lucide-svelte';
 
   interface Props {
     assetClass: AssetClass;
+    /** For flat subClasses: option ID -> checked */
     checkedSubClasses: Record<string, boolean>;
+    /** For subClassGroups: option ID -> checked */
+    checkedGroupOptions: Record<string, boolean>;
+    /** Status group option ID -> checked */
+    checkedStatuses: Record<string, boolean>;
     geoFilter: string;
-    statusFilter: string;
     onShowAllOwners: () => void;
     onSearchSpecificOwners: () => void;
   }
@@ -20,29 +25,79 @@
   let {
     assetClass,
     checkedSubClasses = $bindable(),
+    checkedGroupOptions = $bindable(),
+    checkedStatuses = $bindable(),
     geoFilter = $bindable(),
-    statusFilter = $bindable(),
     onShowAllOwners,
     onSearchSpecificOwners,
   }: Props = $props();
 
   const hasSubClasses = $derived(!!assetClass.subClasses?.length);
+  const hasSubClassGroups = $derived(!!assetClass.subClassGroups?.length);
+  const hasStatusFilter = $derived(!!assetClass.availableFilters.status);
   const isMultiTracker = $derived(assetClass.trackers.length > 1);
-  const checkedCount = $derived(Object.values(checkedSubClasses).filter(Boolean).length);
-  const totalSubClasses = $derived(assetClass.subClasses?.length ?? 0);
-  const subClassesNarrowed = $derived(hasSubClasses && checkedCount > 0 && checkedCount < totalSubClasses);
 
-  /** Filter preview tags — only non-default values */
-  const previewTags = $derived.by(() => {
-    const tags: { label: string; color: string }[] = [];
-    if (statusFilter || geoFilter || subClassesNarrowed) {
-      tags.push({ label: assetClass.label, color: 'var(--gem-teal, #2a7f8f)' });
+  // REFINE expand/collapse state
+  let expandedRefine: Record<string, boolean> = $state({});
+
+  function toggleRefine(id: string) {
+    expandedRefine = { ...expandedRefine, [id]: !expandedRefine[id] };
+  }
+
+  // ── SubClassGroup helpers ─────────────────────────────────────────
+
+  function getGroupOptionIds(group: SubClassGroup): string[] {
+    return group.options.map((o) => o.id);
+  }
+
+  function isGroupAllChecked(group: SubClassGroup): boolean {
+    return getGroupOptionIds(group).every((id) => checkedGroupOptions[id]);
+  }
+
+  function isGroupNoneChecked(group: SubClassGroup): boolean {
+    return getGroupOptionIds(group).every((id) => !checkedGroupOptions[id]);
+  }
+
+  function isGroupIndeterminate(group: SubClassGroup): boolean {
+    return !isGroupAllChecked(group) && !isGroupNoneChecked(group);
+  }
+
+  function toggleGroup(group: SubClassGroup) {
+    const allChecked = isGroupAllChecked(group);
+    const next = { ...checkedGroupOptions };
+    for (const id of getGroupOptionIds(group)) {
+      next[id] = !allChecked;
     }
-    if (statusFilter) tags.push({ label: statusFilter, color: 'var(--color-accent, #e67e22)' });
-    if (geoFilter) tags.push({ label: geoFilter, color: '#6b7280' });
-    if (subClassesNarrowed) tags.push({ label: `${checkedCount}/${totalSubClasses} sub-classes`, color: 'var(--color-gray-400, #9ca3af)' });
-    return tags;
-  });
+    checkedGroupOptions = next;
+  }
+
+  // ── Status group helpers ──────────────────────────────────────────
+
+  function getStatusIds(groupId: string): string[] {
+    const g = STATUS_GROUPS.find((sg) => sg.id === groupId);
+    return g ? g.statuses.map((s) => `status-${groupId}-${s}`) : [];
+  }
+
+  function isStatusGroupAllChecked(groupId: string): boolean {
+    return getStatusIds(groupId).every((id) => checkedStatuses[id]);
+  }
+
+  function isStatusGroupNoneChecked(groupId: string): boolean {
+    return getStatusIds(groupId).every((id) => !checkedStatuses[id]);
+  }
+
+  function isStatusGroupIndeterminate(groupId: string): boolean {
+    return !isStatusGroupAllChecked(groupId) && !isStatusGroupNoneChecked(groupId);
+  }
+
+  function toggleStatusGroup(groupId: string) {
+    const allChecked = isStatusGroupAllChecked(groupId);
+    const next = { ...checkedStatuses };
+    for (const id of getStatusIds(groupId)) {
+      next[id] = !allChecked;
+    }
+    checkedStatuses = next;
+  }
 </script>
 
 <div class="expansion-panel" transition:slide={{ duration: 200 }}>
@@ -53,40 +108,115 @@
 
   {#if isMultiTracker}
     <div class="multi-tracker-note">
-      Spans {assetClass.trackers.length} trackers ({assetClass.trackers.join(', ')}).
-      Current query uses <strong>{assetClass.trackers[0]}</strong> only.
+      Spans {assetClass.trackers.length} trackers ({assetClass.trackers.join(', ')}). Current query
+      uses <strong>{assetClass.trackers[0]}</strong> only.
     </div>
   {/if}
 
-  {#if hasSubClasses}
-    <div class="subclass-section">
-      <span class="subclass-heading">
-        Narrow by sub-class
-        {#if totalSubClasses > 0}
-          <span class="subclass-count">({checkedCount}/{totalSubClasses} selected)</span>
-        {/if}
-      </span>
-      <div class="subclass-checkboxes">
-        {#each assetClass.subClasses ?? [] as sc (sc.id)}
-          <label class="subclass-option">
-            <input
-              type="checkbox"
-              bind:checked={checkedSubClasses[sc.id]}
-            />
-            <span class="subclass-label">{sc.label}</span>
-            {#if sc.description}
-              <span class="subclass-desc">{sc.description}</span>
+  <!-- NARROW BY SUBCLASS: grouped (subClassGroups) -->
+  {#if hasSubClassGroups}
+    <div class="filter-section">
+      <span class="section-heading">Narrow by subclass</span>
+      <div class="group-row">
+        {#each assetClass.subClassGroups ?? [] as group (group.id)}
+          {@const hasRefine = group.options.length > 1}
+          <div class="group-item">
+            <label class="group-checkbox">
+              <input
+                type="checkbox"
+                checked={isGroupAllChecked(group)}
+                indeterminate={isGroupIndeterminate(group)}
+                onchange={() => toggleGroup(group)}
+              />
+              <span class="group-label">{group.label}</span>
+            </label>
+            {#if hasRefine}
+              <button class="refine-toggle" onclick={() => toggleRefine(group.id)}>
+                {expandedRefine[group.id] ? '\u25BC' : '\u25B6'} Refine
+              </button>
             {/if}
-          </label>
+            {#if hasRefine && expandedRefine[group.id]}
+              <div class="refine-panel" transition:slide={{ duration: 150 }}>
+                {#each group.options as opt (opt.id)}
+                  <label class="refine-option">
+                    <input type="checkbox" bind:checked={checkedGroupOptions[opt.id]} />
+                    <span>{opt.label}</span>
+                  </label>
+                {/each}
+              </div>
+            {/if}
+          </div>
         {/each}
       </div>
     </div>
   {/if}
 
-  <div class="filter-row">
-    {#if assetClass.availableFilters.geography}
-      <label class="inline-filter">
-        <span class="inline-filter-label">Geography</span>
+  <!-- NARROW BY SUBCLASS: flat (subClasses) -->
+  {#if hasSubClasses && !hasSubClassGroups}
+    <div class="filter-section">
+      <span class="section-heading">Narrow by subclass</span>
+      <div class="group-row">
+        {#each assetClass.subClasses ?? [] as sc (sc.id)}
+          <div class="group-item">
+            <label class="group-checkbox">
+              <input type="checkbox" bind:checked={checkedSubClasses[sc.id]} />
+              <span class="group-label">{sc.label}</span>
+            </label>
+            {#if sc.description}
+              <span class="group-desc">{sc.description}</span>
+            {/if}
+          </div>
+        {/each}
+      </div>
+    </div>
+  {/if}
+
+  <!-- OPERATING STATUS -->
+  {#if hasStatusFilter}
+    <div class="filter-section">
+      <span class="section-heading">Operating status</span>
+      <div class="group-row">
+        {#each STATUS_GROUPS as sg (sg.id)}
+          {@const hasRefine = sg.statuses.length > 1}
+          <div class="group-item">
+            <label class="group-checkbox">
+              <input
+                type="checkbox"
+                checked={isStatusGroupAllChecked(sg.id)}
+                indeterminate={isStatusGroupIndeterminate(sg.id)}
+                onchange={() => toggleStatusGroup(sg.id)}
+              />
+              <span class="group-label">{sg.label}</span>
+            </label>
+            {#if hasRefine}
+              <button class="refine-toggle" onclick={() => toggleRefine(`status-${sg.id}`)}>
+                {expandedRefine[`status-${sg.id}`] ? '\u25BC' : '\u25B6'} Refine
+              </button>
+            {/if}
+            {#if hasRefine && expandedRefine[`status-${sg.id}`]}
+              <div class="refine-panel" transition:slide={{ duration: 150 }}>
+                {#each sg.statuses as status}
+                  <label class="refine-option">
+                    <input
+                      type="checkbox"
+                      bind:checked={checkedStatuses[`status-${sg.id}-${status}`]}
+                    />
+                    <span>{status}</span>
+                  </label>
+                {/each}
+              </div>
+            {/if}
+          </div>
+        {/each}
+      </div>
+    </div>
+  {/if}
+
+  <!-- GEOGRAPHY -->
+  {#if assetClass.availableFilters.geography}
+    <div class="filter-section">
+      <span class="section-heading">Geography</span>
+      <label class="geo-select">
         <select bind:value={geoFilter}>
           <option value="">All countries</option>
           {#each COUNTRIES as country}
@@ -94,25 +224,6 @@
           {/each}
         </select>
       </label>
-    {/if}
-    {#if assetClass.availableFilters.status}
-      <label class="inline-filter">
-        <span class="inline-filter-label">Status</span>
-        <select bind:value={statusFilter}>
-          <option value="">All statuses</option>
-          {#each STATUS_VALUES as status}
-            <option value={status}>{status}</option>
-          {/each}
-        </select>
-      </label>
-    {/if}
-  </div>
-
-  {#if previewTags.length > 0}
-    <div class="filter-preview">
-      {#each previewTags as tag}
-        <span class="filter-preview-tag" style:border-color={tag.color} style:color={tag.color}>{tag.label}</span>
-      {/each}
     </div>
   {/if}
 
@@ -120,12 +231,12 @@
 
   <div class="continue-options">
     <button class="continue-btn primary" onclick={onShowAllOwners}>
-      <span class="btn-icon">→</span>
+      <span class="btn-icon"><ArrowRight size={18} /></span>
       Show All Owners
       <span class="btn-sublabel">See every company with stakes</span>
     </button>
     <button class="continue-btn secondary" onclick={onSearchSpecificOwners}>
-      <span class="btn-icon">⌕</span>
+      <span class="btn-icon"><SearchIcon size={18} /></span>
       Search Specific Owners
       <span class="btn-sublabel">Find companies from a list</span>
     </button>
@@ -142,7 +253,7 @@
   }
 
   .expansion-header {
-    margin-bottom: var(--space-4);
+    margin-bottom: var(--space-5);
   }
 
   .expansion-title {
@@ -165,14 +276,15 @@
     border-radius: var(--radius-sm);
     font-size: var(--font-size-body);
     color: var(--color-text-secondary);
-    margin-bottom: var(--space-4);
-  }
-
-  .subclass-section {
     margin-bottom: var(--space-5);
   }
 
-  .subclass-heading {
+  /* Filter sections */
+  .filter-section {
+    margin-bottom: var(--space-5);
+  }
+
+  .section-heading {
     display: block;
     font-size: var(--font-size-sm);
     font-weight: 500;
@@ -182,71 +294,89 @@
     margin-bottom: var(--space-3);
   }
 
-  .subclass-count {
-    font-weight: 400;
-    text-transform: none;
-    letter-spacing: 0;
+  /* Group row — grid fills available width */
+  .group-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: var(--space-3);
   }
 
-  .subclass-checkboxes {
+  .group-item {
     display: flex;
     flex-direction: column;
+    gap: var(--space-1);
+    min-width: 0;
+  }
+
+  .group-checkbox {
+    display: flex;
+    align-items: center;
     gap: var(--space-2);
-  }
-
-  .subclass-option {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    grid-template-rows: auto auto;
-    gap: 0 var(--space-2);
-    align-items: baseline;
     cursor: pointer;
-    padding: var(--space-1) 0;
-  }
-
-  .subclass-option input[type='checkbox'] {
-    grid-row: 1;
-    margin-top: 2px;
-  }
-
-  .subclass-label {
-    grid-row: 1;
-    grid-column: 2;
     font-size: var(--font-size-body);
+  }
+
+  .group-checkbox input[type='checkbox'] {
+    margin: 0;
+    cursor: pointer;
+  }
+
+  .group-label {
     font-weight: 500;
     color: var(--color-text-primary);
   }
 
-  .subclass-desc {
-    grid-row: 2;
-    grid-column: 2;
+  .group-desc {
     font-size: var(--font-size-sm);
     color: var(--color-text-tertiary);
-    line-height: var(--line-height-normal, 1.5);
   }
 
-  .filter-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--space-4);
-    margin-bottom: var(--space-5);
+  /* REFINE toggle */
+  .refine-toggle {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
   }
 
-  .inline-filter {
+  .refine-toggle:hover {
+    color: var(--gem-teal, #2a7f8f);
+  }
+
+  /* REFINE sub-panel */
+  .refine-panel {
     display: flex;
     flex-direction: column;
     gap: var(--space-1);
+    padding: var(--space-2) 0 var(--space-2) var(--space-4);
+    border-left: 2px solid var(--color-border, #e5e7eb);
+    margin-top: var(--space-1);
   }
 
-  .inline-filter-label {
+  .refine-option {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    cursor: pointer;
     font-size: var(--font-size-sm);
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-caps, 0.05em);
-    color: var(--color-text-tertiary);
+    color: var(--color-text-secondary);
   }
 
-  .inline-filter select {
+  .refine-option input[type='checkbox'] {
+    margin: 0;
+    cursor: pointer;
+  }
+
+  /* Geography select */
+  .geo-select select {
     padding: var(--space-2);
     font-size: var(--font-size-body);
     border: none;
@@ -254,7 +384,7 @@
     border-radius: 0;
     background: transparent;
     color: var(--color-text-primary);
-    width: 100%;
+    min-width: 220px;
     -webkit-appearance: none;
     appearance: none;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='4' viewBox='0 0 8 4'%3E%3Cpath fill='%23999' d='M0 0l4 4 4-4z'/%3E%3C/svg%3E");
@@ -264,27 +394,12 @@
     cursor: pointer;
   }
 
-  .inline-filter select:focus {
+  .geo-select select:focus {
     outline: none;
     border-bottom-color: var(--gem-teal, #2a7f8f);
   }
 
-  .filter-preview {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2);
-    margin-bottom: var(--space-4);
-  }
-
-  .filter-preview-tag {
-    padding: 2px 8px;
-    font-size: var(--font-size-sm);
-    font-weight: 500;
-    border-radius: 999px;
-    background: white;
-    border: 1px solid;
-  }
-
+  /* Step divider + continue */
   .step-divider {
     margin-bottom: var(--space-4);
     padding-top: var(--space-4);
@@ -300,7 +415,6 @@
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: var(--space-4);
-    max-width: 500px;
   }
 
   .continue-btn {
@@ -353,13 +467,12 @@
   }
 
   @media (max-width: 640px) {
-    .filter-row {
+    .group-row {
       grid-template-columns: 1fr;
     }
 
     .continue-options {
       grid-template-columns: 1fr;
-      max-width: 100%;
     }
   }
 </style>

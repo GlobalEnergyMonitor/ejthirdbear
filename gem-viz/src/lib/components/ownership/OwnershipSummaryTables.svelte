@@ -11,6 +11,7 @@
   import { entityLink } from '$lib/links';
   import OwnershipPie from '$lib/components/OwnershipPie.svelte';
   import { colors } from '$lib/design-tokens';
+  import { Minus, Plus } from 'lucide-svelte';
 
   interface GraphNode {
     id: string;
@@ -159,7 +160,7 @@
       >
         <span class="section-title">By Entity</span>
         <span class="section-count">{byEntity.length}</span>
-        <span class="toggle-icon">{entityExpanded ? '−' : '+'}</span>
+        <span class="toggle-icon">{#if entityExpanded}<Minus size={14} />{:else}<Plus size={14} />{/if}</span>
       </button>
 
       {#if entityExpanded}
@@ -214,7 +215,7 @@
       >
         <span class="section-title">By Country</span>
         <span class="section-count">{byCountry.length}</span>
-        <span class="toggle-icon">{countryExpanded ? '−' : '+'}</span>
+        <span class="toggle-icon">{#if countryExpanded}<Minus size={14} />{:else}<Plus size={14} />{/if}</span>
       </button>
 
       {#if countryExpanded}
@@ -254,7 +255,7 @@
       >
         <span class="section-title">By Type</span>
         <span class="section-count">{byType.length}</span>
-        <span class="toggle-icon">{typeExpanded ? '−' : '+'}</span>
+        <span class="toggle-icon">{#if typeExpanded}<Minus size={14} />{:else}<Plus size={14} />{/if}</span>
       </button>
 
       {#if typeExpanded}

@@ -10,7 +10,7 @@
   />
 </svelte:head>
 
-<main>
+<div class="page">
   <header>
     <h1>Ownership Network</h1>
   </header>
@@ -21,10 +21,10 @@
   </p>
 
   <NetworkGraph />
-</main>
+</div>
 
 <style>
-  main {
+  .page {
     width: 100%;
     height: 100vh;
     margin: 0;

@@ -5,7 +5,7 @@
  *
  * Centralized data fetching for the Asset Class Screener flow.
  * All screener pages should import from here, NOT directly from
- * unified-query.ts or ownership-api.ts.
+ * ownership-api.ts.
  *
  * =============================================================================
  * DATA FLOW (as of Feb 2026)
@@ -22,13 +22,13 @@
  *   getOwnersByAssetType(): ✅ REST API — paginated /assets with owners[]
  *     Paginates GET /assets?asset_type={slug}&status=X&country=Y
  *     Aggregates owners client-side from the owners[] array per asset
- *     MotherDuck fallback available via localStorage __GEM_SCREENER_MOTHERDUCK__
+ *     Paginates all assets and aggregates owners client-side
  *
  * =============================================================================
  */
 
 import { browser } from '$app/environment';
-import { getAssetTypeForTracker } from '$lib/data-config/tracker-schema';
+import { getAPIBase } from '$lib/ownership-api';
 
 // =============================================================================
 // GEM TRACKER NAME → UI TRACKER NAME BRIDGE
@@ -36,7 +36,7 @@ import { getAssetTypeForTracker } from '$lib/data-config/tracker-schema';
 
 /**
  * Maps raw GEM tracker names (used in asset-class-definitions.ts) to the
- * UI TrackerName values that getAssetTypeForTracker() understands.
+ * UI TrackerName values that the API understands.
  * Most are identity; only two differ.
  */
 const GEM_TO_UI_TRACKER: Record<string, string> = {
@@ -61,7 +61,7 @@ export interface ScreenerOwner {
 
 export interface ScreenerResultsResponse {
   owners: ScreenerOwner[];
-  source: 'rest-api' | 'motherduck' | 'cache';
+  source: 'rest-api' | 'cache';
   queryTimeMs: number;
   totalCount?: number;
 }
@@ -83,8 +83,11 @@ export interface BulkSearchResponse {
 export interface ScreenerFilters {
   tracker: string;
   status?: string;
+  statuses?: string[];
   country?: string;
   ownerIds?: string[];
+  assetClassId?: string;
+  selectedSubClasses?: string[];
   [key: string]: unknown;
 }
 
@@ -92,10 +95,7 @@ export interface ScreenerFilters {
 // CONFIGURATION
 // =============================================================================
 
-const OWNERSHIP_API_BASE =
-  import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL ||
-  import.meta.env.PUBLIC_OWNERSHIP_API_URL ||
-  'https://gem-api.thirdbear.net';
+const OWNERSHIP_API_BASE = getAPIBase();
 
 /** Enable detailed console logging */
 const DEBUG = false;
@@ -103,13 +103,8 @@ const DEBUG = false;
 /** Cache TTL in milliseconds (5 minutes) */
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
-/**
- * Feature flags.
- * REST API is now the default for owner aggregation.
- * Set __GEM_SCREENER_MOTHERDUCK__=1 to opt back into MotherDuck.
- */
-const USE_MOTHERDUCK = browser && localStorage.getItem('__GEM_SCREENER_MOTHERDUCK__') === '1';
-const ENABLE_BATCH_SEARCH = browser && localStorage.getItem('__GEM_SCREENER_BATCH_SEARCH__') === '1';
+const ENABLE_BATCH_SEARCH =
+  browser && localStorage.getItem('__GEM_SCREENER_BATCH_SEARCH__') === '1';
 
 /** In-memory cache for results */
 const resultsCache = new Map<string, { data: ScreenerResultsResponse; timestamp: number }>();
@@ -132,6 +127,7 @@ const queryLogs: QueryLog[] = [];
 
 function logQuery(log: QueryLog) {
   queryLogs.push(log);
+  if (queryLogs.length > 100) queryLogs.splice(0, queryLogs.length - 100);
   if (DEBUG) {
     const status = log.error ? '❌' : '✅';
     console.log(
@@ -158,10 +154,8 @@ export function clearQueryLogs(): void {
 /**
  * Get owners with stakes in a specific asset type.
  *
- * Default: REST API — paginates /assets?asset_type={slug} and aggregates
+ * REST API — paginates /assets?asset_type={slug} and aggregates
  * owners client-side from the owners[] array on each asset.
- *
- * Fallback: MotherDuck (opt-in via localStorage __GEM_SCREENER_MOTHERDUCK__=1)
  */
 export async function getOwnersByAssetType(
   filters: ScreenerFilters,
@@ -171,10 +165,12 @@ export async function getOwnersByAssetType(
   const { limit = 200, skipCache = false } = options;
 
   // Build cache key (sort filter keys for consistent caching)
-  const sortedFilters = Object.keys(filters).sort().reduce<Record<string, unknown>>((acc, k) => {
-    acc[k] = filters[k];
-    return acc;
-  }, {});
+  const sortedFilters = Object.keys(filters)
+    .sort()
+    .reduce<Record<string, unknown>>((acc, k) => {
+      acc[k] = filters[k];
+      return acc;
+    }, {});
   const cacheKey = JSON.stringify({ filters: sortedFilters, limit });
 
   // Check cache first
@@ -193,159 +189,9 @@ export async function getOwnersByAssetType(
     }
   }
 
-  // MotherDuck opt-in fallback
-  if (USE_MOTHERDUCK) {
-    return await getOwnersByAssetTypeMotherDuck(filters, limit, startTime, cacheKey);
-  }
-
-  // Default: REST API with paginated asset fetching + client-side owner aggregation
-  try {
-    const restResult = await getOwnersByAssetTypeREST(filters, limit, startTime);
-    resultsCache.set(cacheKey, { data: restResult, timestamp: Date.now() });
-    return restResult;
-  } catch (e) {
-    console.warn('[screener-api] REST owner aggregation failed, falling back to MotherDuck:', e);
-    return await getOwnersByAssetTypeMotherDuck(filters, limit, startTime, cacheKey);
-  }
-}
-
-/**
- * CURRENT: MotherDuck implementation (slow)
- *
- * This is what we want to replace with a REST endpoint.
- * The query scans the ownership table twice which is expensive.
- */
-async function getOwnersByAssetTypeMotherDuck(
-  filters: ScreenerFilters,
-  limit: number,
-  startTime: number,
-  cacheKey: string
-): Promise<ScreenerResultsResponse> {
-  if (!browser) {
-    return { owners: [], source: 'motherduck', queryTimeMs: 0 };
-  }
-
-  try {
-    const { unifiedQuery } = await import('$lib/data/unified-query');
-
-    const assetTypeVal = filters.tracker ? getAssetTypeForTracker(filters.tracker) : null;
-    const hasOwnerFilter = filters.ownerIds && filters.ownerIds.length > 0;
-
-    // Build filter clauses
-    // PROBLEM: These string interpolations scan the table twice
-    const trackerClause = assetTypeVal
-      ? `AND "Asset Type" = '${assetTypeVal.replace(/'/g, "''")}'`
-      : '';
-
-    const ownerClause = hasOwnerFilter
-      ? `AND "Immediate Owner Entity ID" IN (${filters.ownerIds!.map((id) => `'${id.replace(/'/g, "''")}'`).join(', ')})`
-      : '';
-
-    // Status filter (e.g., operating, retired, proposed)
-    const statusClause = filters.status
-      ? `AND "Status" ILIKE '${filters.status.replace(/'/g, "''")}'`
-      : '';
-
-    /*
-     * THIS IS THE EXPENSIVE QUERY WE WANT TO REPLACE
-     *
-     * It does TWO full table scans:
-     * 1. owner_totals: COUNT all assets per owner (no filter)
-     * 2. owner_filtered: COUNT assets per owner (with asset type + status filter)
-     *
-     * Then JOINs them together.
-     *
-     * BACKEND: Please provide GET /screener/owners that returns this pre-computed.
-     */
-    const sql = `
-      WITH owner_totals AS (
-        SELECT
-          "Immediate Owner Entity Name" as name,
-          "Immediate Owner Entity ID" as entity_id,
-          COUNT(DISTINCT "Asset ID") as total_assets
-        FROM ownership
-        WHERE "Immediate Owner Entity Name" IS NOT NULL
-          AND "Immediate Owner Entity Name" != ''
-          ${ownerClause}
-        GROUP BY "Immediate Owner Entity Name", "Immediate Owner Entity ID"
-      ),
-      owner_filtered AS (
-        SELECT
-          "Immediate Owner Entity Name" as name,
-          "Immediate Owner Entity ID" as entity_id,
-          COUNT(DISTINCT "Asset ID") as filtered_assets
-        FROM ownership
-        WHERE "Immediate Owner Entity Name" IS NOT NULL
-          AND "Immediate Owner Entity Name" != ''
-          ${ownerClause}
-          ${trackerClause}
-          ${statusClause}
-        GROUP BY "Immediate Owner Entity Name", "Immediate Owner Entity ID"
-      )
-      SELECT
-        t.name,
-        t.entity_id,
-        t.total_assets,
-        COALESCE(f.filtered_assets, 0) as filtered_assets
-      FROM owner_totals t
-      LEFT JOIN owner_filtered f ON t.entity_id = f.entity_id
-      WHERE f.filtered_assets > 0 OR ${hasOwnerFilter ? 'TRUE' : 'FALSE'}
-      ORDER BY f.filtered_assets DESC, t.total_assets DESC
-      LIMIT ${limit}
-    `;
-
-    const result = await unifiedQuery<{
-      name: string;
-      entity_id: string;
-      total_assets: number;
-      filtered_assets: number;
-    }>(sql);
-
-    const queryTimeMs = performance.now() - startTime;
-
-    if (!result.success) {
-      throw new Error(result.error || 'Query failed');
-    }
-
-    const owners: ScreenerOwner[] = (result.data || []).map((row) => ({
-      entityId: row.entity_id || '',
-      name: row.name || 'Unknown',
-      totalAssets: Number(row.total_assets) || 0,
-      filteredAssets: Number(row.filtered_assets) || 0,
-    }));
-
-    const response: ScreenerResultsResponse = {
-      owners,
-      source: 'motherduck',
-      queryTimeMs,
-    };
-
-    // Cache the result
-    resultsCache.set(cacheKey, { data: response, timestamp: Date.now() });
-
-    logQuery({
-      timestamp: new Date(),
-      operation: 'getOwnersByAssetType',
-      durationMs: queryTimeMs,
-      source: 'motherduck',
-      params: filters,
-      resultCount: owners.length,
-    });
-
-    return response;
-  } catch (error) {
-    const queryTimeMs = performance.now() - startTime;
-    logQuery({
-      timestamp: new Date(),
-      operation: 'getOwnersByAssetType',
-      durationMs: queryTimeMs,
-      source: 'motherduck',
-      params: filters,
-      resultCount: 0,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    throw error;
-  }
+  const restResult = await getOwnersByAssetTypeREST(filters, limit, startTime);
+  resultsCache.set(cacheKey, { data: restResult, timestamp: Date.now() });
+  return restResult;
 }
 
 /**
@@ -371,13 +217,47 @@ async function getOwnersByAssetTypeREST(
   const hasOwnerFilter = filters.ownerIds && filters.ownerIds.length > 0;
   const ownerIdSet = hasOwnerFilter ? new Set(filters.ownerIds) : null;
 
+  // Multi-status filter: use statuses[] array, fall back to singular status
+  const statusArray =
+    filters.statuses && filters.statuses.length > 0
+      ? filters.statuses.map((s) => s.toLowerCase())
+      : filters.status
+        ? [filters.status.toLowerCase()]
+        : null;
+
+  // Don't pass status to API — some trackers have null status (e.g., Steel Plants).
+  // All status filtering is done client-side to handle null gracefully.
+  const apiStatus = undefined;
+  let classMatcher: ((_record: Record<string, unknown>) => boolean) | null = null;
+
+  if (filters.assetClassId) {
+    const { getAssetClassById, buildClassMatcher } = await import(
+      '$lib/data-config/asset-class-definitions'
+    );
+    const assetClass = getAssetClassById(filters.assetClassId);
+    if (assetClass) {
+      const selectedSubClassIds = Array.isArray(filters.selectedSubClasses)
+        ? filters.selectedSubClasses
+        : undefined;
+      classMatcher = buildClassMatcher(assetClass, selectedSubClassIds);
+    }
+  }
+
   let pageCount = 0;
   for await (const page of paginateAssetsByType(apiSlug, {
-    status: filters.status,
+    status: apiStatus,
     country: filters.country,
   })) {
     pageCount++;
     for (const asset of page) {
+      if (classMatcher && !classMatcher(asset.raw || {})) continue;
+
+      // Client-side status filtering — skip assets whose status doesn't match.
+      // Assets with null/undefined status pass through (some trackers don't track status).
+      if (statusArray && asset.status) {
+        if (!statusArray.includes(asset.status.toLowerCase())) continue;
+      }
+
       if (!asset.owners || asset.owners.length === 0) continue;
       for (const owner of asset.owners) {
         if (!owner.entityId) continue;
@@ -627,7 +507,9 @@ async function searchEntitiesBulkREST(
     results[term] = (entities as Array<Record<string, unknown>>).map((e) => ({
       id: String(e.id || e.entity_id || ''),
       name: String(e.name || e.full_name || ''),
-      headquartersCountry: (e.headquarters_country || e.headquartersCountry || null) as string | null,
+      headquartersCountry: (e.headquarters_country || e.headquartersCountry || null) as
+        | string
+        | null,
     }));
   }
 
@@ -671,7 +553,10 @@ export async function getAssetTypeCounts(): Promise<Record<string, number>> {
       counts[type] = count;
     }
 
-    resultsCache.set(cacheKey, { data: counts as unknown as ScreenerResultsResponse, timestamp: Date.now() });
+    resultsCache.set(cacheKey, {
+      data: counts as unknown as ScreenerResultsResponse,
+      timestamp: Date.now(),
+    });
 
     logQuery({
       timestamp: new Date(),

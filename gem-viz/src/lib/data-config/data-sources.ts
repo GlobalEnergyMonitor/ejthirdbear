@@ -211,20 +211,10 @@ export const DerivedDatasets: Record<string, GEMDataset> = {
     notes: 'Centralized schema definition - source of truth for field mappings',
   },
 
-  locationFiltering: {
-    name: 'Location Filtering Parquet',
-    description: 'Parquet file with asset IDs, coordinates, and location arrays for fast filtering',
-    url: 'static/asset_locations.parquet',
-    version: '1.0',
-    lastUpdated: '2025-12-01',
-    rowCount: 15000,
-    notes: 'Optimized for front-end geographic filtering without full spatial queries',
-  },
-
   assetClassLookup: {
-    name: 'Asset Class Lookup Parquet',
+    name: 'Asset Class Lookup',
     description:
-      'File for quickly identifying which assets match selected Asset Classes (coal-based steel, captive plants, etc)',
+      'Matcher functions for identifying which assets belong to each asset class (coal-based steel, captive plants, etc)',
     url: 'src/lib/data-config/asset-classes.ts',
     version: '1.0',
     lastUpdated: '2025-12-14',

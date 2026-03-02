@@ -2,22 +2,19 @@
   /**
    * ASSET CLASS SCREENER - Step 1: Select Asset Class
    *
-   * Shows all 19 asset classes grouped by category. Selecting one expands
-   * an inline panel with sub-class checkboxes, geo/status filters, and
-   * continue buttons. Serializes to the same format Step 2/3 expect.
+   * Card-based picker for asset classes grouped by category.
+   * Once selected, shows the full filter panel (AssetClassExpansion)
+   * with sub-class groups, status buckets, and geography filter.
    */
 
   import { goto } from '$app/navigation';
-  import { page } from '$app/stores';
   import ScreenerLayout from '$lib/components/ScreenerLayout.svelte';
   import AssetClassExpansion from '$lib/components/AssetClassExpansion.svelte';
   import DebugPanel from '$lib/components/DebugPanel.svelte';
-  import {
-    ALL_ASSET_CLASSES,
-    getAssetClassById,
-  } from '$lib/data-config/asset-class-definitions';
+  import { ALL_ASSET_CLASSES, getAssetClassById } from '$lib/data-config/asset-class-definitions';
   import { gemTrackerToUiTracker } from '$lib/data-config/screener-api';
-  import { isValidTracker } from '$lib/data-config/tracker-schema';
+  import { buildScreenerUrl } from '$lib/screener-url';
+  import { isValidTracker, STATUS_GROUPS } from '$lib/data-config/tracker-schema';
 
   // ─── Category display config ────────────────────────────────────────
   const CATEGORY_META = [
@@ -30,25 +27,25 @@
     { key: 'cement', label: 'Cement' },
   ];
 
-  // Group asset classes by category in display order
+  // Group asset classes by category in display order (only enabled ones)
   const classesByCategory = $derived(
-    CATEGORY_META
-      .map((cat) => ({
-        ...cat,
-        classes: ALL_ASSET_CLASSES.filter((ac) => ac.category === cat.key),
-      }))
-      .filter((cat) => cat.classes.length > 0)
+    CATEGORY_META.map((cat) => ({
+      ...cat,
+      classes: ALL_ASSET_CLASSES.filter((ac) => ac.category === cat.key && isEnabled(ac)),
+    })).filter((cat) => cat.classes.length > 0)
   );
 
   // ─── State ──────────────────────────────────────────────────────────
   let selectedClassId = $state(null);
+  /** Flat subClasses checkbox state */
   let checkedSubClasses = $state({});
+  /** SubClassGroups option checkbox state */
+  let checkedGroupOptions = $state({});
+  /** Status checkbox state: `status-{groupId}-{statusValue}` -> boolean */
+  let checkedStatuses = $state({});
   let geoFilter = $state('');
-  let statusFilter = $state('');
 
-  const selectedClass = $derived(
-    selectedClassId ? getAssetClassById(selectedClassId) : null
-  );
+  const selectedClass = $derived(selectedClassId ? getAssetClassById(selectedClassId) : null);
 
   // Is a class selectable? Must map to at least one known UI tracker.
   function isEnabled(ac) {
@@ -57,23 +54,14 @@
   }
 
   // ─── Selection logic ───────────────────────────────────────────────
-  function selectClass(ac) {
-    if (!isEnabled(ac)) return;
-
-    if (selectedClassId === ac.id) {
-      // Deselect
-      selectedClassId = null;
-      checkedSubClasses = {};
-      geoFilter = '';
-      statusFilter = '';
-      return;
-    }
+  function selectClass(classId) {
+    const ac = getAssetClassById(classId);
+    if (!ac || !isEnabled(ac)) return;
 
     selectedClassId = ac.id;
     geoFilter = '';
-    statusFilter = '';
 
-    // Initialize sub-class checkboxes from defaultChecked values
+    // Initialize flat sub-class checkboxes
     const checks = {};
     if (ac.subClasses) {
       for (const sc of ac.subClasses) {
@@ -81,22 +69,63 @@
       }
     }
     checkedSubClasses = checks;
+
+    // Initialize group option checkboxes
+    const groupChecks = {};
+    if (ac.subClassGroups) {
+      for (const group of ac.subClassGroups) {
+        for (const opt of group.options) {
+          groupChecks[opt.id] = opt.defaultChecked ?? false;
+        }
+      }
+    }
+    checkedGroupOptions = groupChecks;
+
+    // Initialize status checkboxes — all Operating/Planned checked by default
+    const statusChecks = {};
+    for (const sg of STATUS_GROUPS) {
+      for (const s of sg.statuses) {
+        const key = `status-${sg.id}-${s}`;
+        statusChecks[key] = sg.id === 'operating' || sg.id === 'planned';
+      }
+    }
+    checkedStatuses = statusChecks;
   }
 
   function clearSelection() {
     selectedClassId = null;
     checkedSubClasses = {};
+    checkedGroupOptions = {};
+    checkedStatuses = {};
     geoFilter = '';
-    statusFilter = '';
   }
+
+  // ─── Derive selected statuses ─────────────────────────────────────
+  const selectedStatuses = $derived.by(() => {
+    const statuses = [];
+    for (const sg of STATUS_GROUPS) {
+      for (const s of sg.statuses) {
+        if (checkedStatuses[`status-${sg.id}-${s}`]) {
+          statuses.push(s);
+        }
+      }
+    }
+    return statuses;
+  });
 
   // ─── Backward-compatible serialization ─────────────────────────────
   function buildClassData() {
     if (!selectedClass) return [];
 
-    const selectedSubClassIds = Object.entries(checkedSubClasses)
-      .filter(([, v]) => v)
-      .map(([k]) => k);
+    // Collect selected sub-class IDs from both flat and grouped
+    const selectedSubClassIds = [
+      ...Object.entries(checkedSubClasses)
+        .filter(([, v]) => v)
+        .map(([k]) => k),
+      ...Object.entries(checkedGroupOptions)
+        .filter(([, v]) => v)
+        .map(([k]) => k),
+    ];
 
     return [
       {
@@ -106,7 +135,8 @@
         tracker: gemTrackerToUiTracker(selectedClass.trackers[0]),
         filters: {
           geography: geoFilter || undefined,
-          status: statusFilter || undefined,
+          status: selectedStatuses.length === 1 ? selectedStatuses[0] : undefined,
+          statuses: selectedStatuses.length > 0 ? selectedStatuses : undefined,
         },
         assetClassId: selectedClass.id,
         selectedSubClasses: selectedSubClassIds,
@@ -118,18 +148,20 @@
   function navigateTo(path) {
     const classData = buildClassData();
     if (classData.length === 0) return;
-    const url = new URL(path, $page.url.origin);
-    url.searchParams.set('classes', JSON.stringify(classData));
-    goto(url.pathname + url.search);
+    goto(
+      buildScreenerUrl(path.startsWith('/') ? path.slice(1) : path, {
+        classes: JSON.stringify(classData),
+      })
+    );
   }
 
   const selectionSummary = $derived.by(() => {
     if (!selectedClass) return '';
-    const parts = [statusFilter, selectedClass.label].filter(Boolean).join(' ');
+    const parts = [selectedClass.label].filter(Boolean).join(' ');
     const geo = geoFilter ? ` in ${geoFilter}` : '';
-    const total = selectedClass.subClasses?.length ?? 0;
-    const checked = total > 0 ? Object.values(checkedSubClasses).filter(Boolean).length : 0;
-    const sc = checked > 0 && checked < total ? ` (${checked}/${total} sub-classes)` : '';
+    const statusCount = selectedStatuses.length;
+    const totalStatuses = STATUS_GROUPS.reduce((n, sg) => n + sg.statuses.length, 0);
+    const sc = statusCount > 0 && statusCount < totalStatuses ? ` (${statusCount} statuses)` : '';
     return parts + geo + sc;
   });
 </script>
@@ -150,65 +182,52 @@
     <div class="selection-badge" class:has-selection={selectedClass}>
       {#if selectedClass}
         <span class="selection-text">{selectionSummary}</span>
-        <button class="clear-btn" onclick={clearSelection}>×</button>
+        <button class="clear-btn" onclick={clearSelection}>&times;</button>
       {:else}
         <span class="selection-text">None selected yet</span>
       {/if}
     </div>
   {/snippet}
 
-  {#each classesByCategory as cat (cat.key)}
-    {@const enabled = cat.classes.filter(isEnabled).length}
-    {@const total = cat.classes.length}
-    <section class="category-section">
-      <h2 class="category-heading">
-        {cat.label}
-        <span class="category-count">({enabled < total ? `${enabled} of ${total}` : total})</span>
-      </h2>
-
-      <div class="class-cards">
-        {#each cat.classes as ac (ac.id)}
-          <button
-            class="class-card"
-            class:active={selectedClassId === ac.id}
-            class:tbd={!isEnabled(ac)}
-            disabled={!isEnabled(ac)}
-            onclick={() => selectClass(ac)}
-          >
-            <span class="card-name">{ac.label}</span>
-            <p class="card-description">{ac.description}</p>
-            {#if ac.trackers.length > 1}
-              <span class="tracker-badge">{ac.trackers.length} trackers</span>
-            {/if}
-            {#if ac.subClasses && ac.subClasses.length > 0}
-              <span class="subclass-badge">{ac.subClasses.length} sub-classes</span>
-            {/if}
-            {#if !isEnabled(ac)}
-              <span class="tbd-badge">TBD</span>
-            {/if}
-            {#if selectedClassId === ac.id}
-              <div class="card-active-indicator">●</div>
-            {/if}
-          </button>
-        {/each}
+  <!-- Asset class tile picker -->
+  <div class="picker-section">
+    {#each classesByCategory as cat (cat.key)}
+      <div class="picker-category">
+        <span class="picker-category-label">{cat.label}</span>
+        <div class="picker-grid">
+          {#each cat.classes as ac (ac.id)}
+            <button
+              class="picker-tile"
+              class:selected={selectedClassId === ac.id}
+              aria-pressed={selectedClassId === ac.id}
+              onclick={() => selectClass(ac.id)}
+            >
+              <span class="tile-label">{ac.label}</span>
+              {#if ac.description}
+                <span class="tile-desc">{ac.description}</span>
+              {/if}
+              {#if ac.trackers.length > 1}
+                <span class="tile-badge">{ac.trackers.length} trackers</span>
+              {/if}
+            </button>
+          {/each}
+        </div>
       </div>
+    {/each}
+  </div>
 
-      {#if !selectedClass && cat === classesByCategory[0]}
-        <p class="empty-state-prompt">Select an asset class above to configure filters and continue.</p>
-      {/if}
-
-      {#if selectedClass && selectedClass.category === cat.key}
-        <AssetClassExpansion
-          assetClass={selectedClass}
-          bind:checkedSubClasses
-          bind:geoFilter
-          bind:statusFilter
-          onShowAllOwners={() => navigateTo('/screener/results')}
-          onSearchSpecificOwners={() => navigateTo('/screener/owners')}
-        />
-      {/if}
-    </section>
-  {/each}
+  <!-- Filter panel when class is selected -->
+  {#if selectedClass}
+    <AssetClassExpansion
+      assetClass={selectedClass}
+      bind:checkedSubClasses
+      bind:checkedGroupOptions
+      bind:checkedStatuses
+      bind:geoFilter
+      onShowAllOwners={() => navigateTo('/screener/results')}
+      onSearchSpecificOwners={() => navigateTo('/screener/owners')}
+    />
+  {/if}
 
   <!-- Debug panel -->
   {#if selectedClass}
@@ -225,21 +244,22 @@
         <span class="debug-label">UI Tracker:</span>
         <span class="debug-value">{gemTrackerToUiTracker(selectedClass.trackers[0])}</span>
       </div>
+      <div class="debug-meta">
+        <span class="debug-label">Statuses:</span>
+        <span class="debug-value">{selectedStatuses.join(', ') || 'none'}</span>
+      </div>
       {#if geoFilter}
         <div class="debug-meta">
           <span class="debug-label">Geography:</span>
           <span class="debug-value">{geoFilter}</span>
         </div>
       {/if}
-      {#if statusFilter}
-        <div class="debug-meta">
-          <span class="debug-label">Status:</span>
-          <span class="debug-value">{statusFilter}</span>
-        </div>
-      {/if}
       <div class="debug-json">
         <span class="debug-label">Class Data JSON:</span>
-        <button class="copy-btn" onclick={() => navigator.clipboard.writeText(JSON.stringify(buildClassData(), null, 2))}>
+        <button
+          class="copy-btn"
+          onclick={() => navigator.clipboard.writeText(JSON.stringify(buildClassData(), null, 2))}
+        >
           Copy
         </button>
         <pre class="debug-code">{JSON.stringify(buildClassData(), null, 2)}</pre>
@@ -288,139 +308,91 @@
     color: white;
   }
 
-  /* Category sections */
-  .category-section {
-    margin-bottom: var(--space-12);
+  /* Tile picker */
+  .picker-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+    margin-bottom: var(--space-6);
   }
 
-  .category-heading {
-    font-size: var(--font-size-md);
+  .picker-category {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .picker-category-label {
+    font-size: var(--font-size-sm);
     font-weight: 500;
     text-transform: uppercase;
-    letter-spacing: var(--tracking-caps);
-    margin: 0 0 var(--space-5) 0;
-    color: var(--color-text-secondary);
-    padding-bottom: var(--space-3);
-    border-bottom: var(--border-width) solid var(--color-border);
+    letter-spacing: var(--tracking-caps, 0.05em);
+    color: var(--color-text-tertiary);
   }
 
-  /* Asset class cards — 3-col grid */
-  .class-cards {
+  .picker-grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--space-6) var(--space-8);
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: var(--space-3);
   }
 
-  .class-card {
-    position: relative;
-    padding: var(--space-3) var(--space-4);
-    margin: calc(-1 * var(--space-3)) calc(-1 * var(--space-4));
-    background: transparent;
-    border: none;
-    text-align: left;
-    cursor: pointer;
+  .picker-tile {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-4) var(--space-5);
+    background: var(--color-bg-primary, #fff);
+    border: 2px solid var(--color-gray-200, #e5e7eb);
+    border-left: 4px solid var(--color-gray-200, #e5e7eb);
     border-radius: var(--radius-sm);
+    cursor: pointer;
+    text-align: left;
     transition:
-      background-color var(--duration-base) var(--ease-in-out-quad),
-      transform var(--duration-base) var(--ease-out-back);
+      border-color 150ms ease,
+      box-shadow 150ms ease,
+      transform 150ms ease;
   }
 
-  .class-card:hover:not(:disabled) {
-    background: var(--color-gray-50);
+  .picker-tile:hover {
+    border-color: var(--color-gray-400, #9ca3af);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   }
 
-  .class-card:hover:not(:disabled) .card-name {
-    color: var(--color-text-primary);
+  .picker-tile.selected {
+    border-color: var(--gem-teal, #2a7f8f);
+    background: rgba(42, 127, 143, 0.04);
+    box-shadow: 0 2px 8px rgba(42, 127, 143, 0.12);
   }
 
-  .class-card.active {
-    background: var(--color-bg-secondary);
-    border-left: 2px solid var(--color-accent);
-    margin-left: calc(-2px - var(--space-4));
-    padding-left: calc(var(--space-4) + 2px);
-  }
-
-  .class-card.active .card-name {
-    color: var(--color-text-primary);
-  }
-
-  .class-card.tbd {
-    opacity: 0.45;
-    cursor: not-allowed;
-  }
-
-  .card-active-indicator {
-    position: absolute;
-    top: var(--space-1);
-    right: var(--space-2);
-    font-size: var(--font-size-xs);
-    color: var(--color-accent);
-  }
-
-  .card-name {
-    display: block;
-    font-size: var(--font-size-lg);
-    font-weight: 500;
-    color: var(--color-text-secondary);
-    margin-bottom: var(--space-1);
-    transition: color var(--transition-fast);
-  }
-
-  .card-description {
+  .tile-label {
     font-size: var(--font-size-body);
-    color: var(--color-text-tertiary);
-    margin: 0;
-    line-height: var(--line-height-normal);
+    font-weight: 600;
+    color: var(--color-text-primary);
+    line-height: 1.3;
   }
 
-  .tracker-badge,
-  .subclass-badge,
-  .tbd-badge {
-    display: inline-block;
-    padding: 2px 6px;
-    font-size: 10px;
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    border-radius: 3px;
-    margin-top: var(--space-2);
-    margin-right: var(--space-1);
-  }
-
-  .tracker-badge {
-    background: rgba(29, 73, 97, 0.1);
-    color: var(--gem-primary-blue, #1d4961);
-  }
-
-  .subclass-badge {
-    background: var(--color-gray-100);
-    color: var(--color-text-tertiary);
-  }
-
-  .tbd-badge {
-    background: rgba(107, 114, 128, 0.1);
-    color: #9ca3af;
-  }
-
-  /* Category count */
-  .category-count {
-    font-weight: 400;
+  .tile-desc {
     font-size: var(--font-size-sm);
     color: var(--color-text-tertiary);
-    text-transform: none;
-    letter-spacing: 0;
+    line-height: 1.4;
+    display: -webkit-box;
+    line-clamp: 2;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 
-  /* Empty state prompt */
-  .empty-state-prompt {
-    margin-top: var(--space-6);
-    padding: var(--space-4) var(--space-5);
-    font-size: var(--font-size-body);
-    color: var(--color-text-tertiary);
-    background: var(--color-gray-50, #f9fafb);
-    border: 1px dashed var(--color-border);
+  .tile-badge {
+    display: inline-block;
+    margin-top: var(--space-1);
+    padding: 1px var(--space-2);
+    font-size: 11px;
+    font-weight: 500;
+    background: rgba(42, 127, 143, 0.1);
+    color: var(--gem-teal, #2a7f8f);
     border-radius: var(--radius-sm);
-    text-align: center;
+    width: fit-content;
   }
 
   /* Debug panel */
@@ -432,20 +404,13 @@
   }
 
   /* Responsive */
-  @media (max-width: 900px) {
-    .class-cards {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-  }
-
   @media (max-width: 640px) {
-    .class-cards {
-      grid-template-columns: 1fr;
-      gap: var(--space-4);
-    }
-
     .selection-badge {
       max-width: 100%;
+    }
+
+    .picker-grid {
+      grid-template-columns: 1fr;
     }
   }
 </style>

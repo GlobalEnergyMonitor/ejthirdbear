@@ -3,11 +3,12 @@
    * IntermediaryMiniGraph - Compact dagre graph for subsidiaries
    * Shows a simplified ownership structure for intermediate entities
    */
-  import { onMount, tick } from 'svelte';
+  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { entityLink, assetLink } from '$lib/links';
   import { colors, ownershipColors } from '$lib/design-tokens';
-  import * as d3 from 'd3';
+  import { select } from 'd3-selection';
+  import { curveBasis } from 'd3-shape';
 
   // Dynamic import for dagre-d3 (doesn't work well with SSR)
   let dagreD3: typeof import('dagre-d3') | null = $state(null);
@@ -66,12 +67,12 @@
 
     // Check that dagre-d3 loaded properly
     if (!dagreD3.graphlib || !dagreD3.render) {
-      console.error('dagre-d3 did not load properly');
+      if (import.meta.env.DEV) console.error('dagre-d3 did not load properly');
       dagreError = true;
       return;
     }
 
-    const svg = d3.select(svgEl);
+    const svg = select(svgEl);
     svg.selectAll('*').remove();
 
     // Create dagre graph
@@ -113,7 +114,7 @@
         labelStyle: 'font-size: 8px; fill: #888;',
         style: `stroke: ${ownershipColors.edge}; stroke-width: 1px; fill: none;`,
         arrowheadStyle: `fill: ${ownershipColors.edge};`,
-        curve: d3.curveBasis,
+        curve: curveBasis,
       });
     });
 
@@ -137,7 +138,7 @@
 
     // Add click handlers
     svg.selectAll('g.node').each(function () {
-      const nodeEl = d3.select(this);
+      const nodeEl = select(this);
       const nodeId = (this as any).__data__;
 
       nodeEl.style('cursor', 'pointer').on('click', () => handleNodeClick(nodeId));

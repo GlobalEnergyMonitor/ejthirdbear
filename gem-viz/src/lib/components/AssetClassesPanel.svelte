@@ -12,6 +12,7 @@
    */
 
   import { link } from '$lib/links';
+  import { parseJsonSearchParam } from '$lib/screener-url';
 
   let {
     classesParam = '',
@@ -26,25 +27,23 @@
   // Parse selected classes from URL param
   const selectedClasses = $derived.by(() => {
     if (!classesParam) return [];
-    try {
-      const parsed = JSON.parse(classesParam);
-      if (Array.isArray(parsed)) {
-        return parsed.map((item) => ({
-          id: item.id || '',
-          name: item.name || item.id || 'Unknown',
-          description: item.description || '',
-          tracker: item.tracker || '',
-          filters: item.filters || null,
-        }));
-      }
-      return [];
-    } catch {
-      // Legacy format: comma-separated
-      if (!classesParam.startsWith('[')) {
-        return classesParam.split(',').map((c) => ({ name: c.trim() }));
-      }
-      return [];
+    const parsed = parseJsonSearchParam(classesParam);
+    if (Array.isArray(parsed)) {
+      return parsed.map((item) => ({
+        id: item.id || item.assetClassId || '',
+        name: item.name || item.id || 'Unknown',
+        description: item.description || '',
+        tracker: item.tracker || '',
+        filters: item.filters || null,
+      }));
     }
+
+    // Legacy format: comma-separated
+    if (!classesParam.startsWith('[')) {
+      return classesParam.split(',').map((c) => ({ name: c.trim() }));
+    }
+
+    return [];
   });
 
   // Build human-readable description of a class

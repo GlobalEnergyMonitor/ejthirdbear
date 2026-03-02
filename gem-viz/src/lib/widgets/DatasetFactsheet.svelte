@@ -87,7 +87,7 @@
     try {
       fieldStats = await fetchFieldStats(tracker, field.columnName);
     } catch (err) {
-      console.error('Failed to load field stats:', err);
+      if (import.meta.env.DEV) console.error('Failed to load field stats:', err);
       fieldStats = [];
     } finally {
       statsLoading = false;

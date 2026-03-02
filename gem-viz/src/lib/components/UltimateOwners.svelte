@@ -185,7 +185,7 @@
         return true;
       });
     } catch (err) {
-      console.error('[UltimateOwners] Error:', err);
+      if (import.meta.env.DEV) console.error('[UltimateOwners] Error:', err);
       error = err?.message || 'Failed to trace ownership';
     } finally {
       loading = false;

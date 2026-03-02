@@ -12,7 +12,6 @@ import {
   listAssets,
   getAsset,
   resolveApiSlug,
-  paginateAssetsByType,
 } from '$lib/ownership-api';
 import type { CartItem } from './tools';
 
@@ -60,12 +59,16 @@ export async function executeTool(
 
         // Optionally enrich with portfolio size
         if (args.include_portfolio && baseEntities.length <= 10) {
-          await Promise.all(baseEntities.map(async (entity) => {
-            try {
-              const owned = await getEntityOwned(entity.id);
-              entity.portfolioSize = owned.length;
-            } catch { /* skip */ }
-          }));
+          await Promise.all(
+            baseEntities.map(async (entity) => {
+              try {
+                const owned = await getEntityOwned(entity.id);
+                entity.portfolioSize = owned.length;
+              } catch {
+                /* skip */
+              }
+            })
+          );
         }
 
         return {
@@ -113,10 +116,11 @@ export async function executeTool(
             const entityName = entity?.name || entity?.fullName;
             if (entityName) {
               const assetResult = await listAssets({ q: entityName, limit: 50 });
-              const ownedAssets = assetResult.results.filter(a =>
-                a.owners?.some(o => o.entityId === entityId) || a.ownerEntityId === entityId
+              const ownedAssets = assetResult.results.filter(
+                (a) =>
+                  a.owners?.some((o) => o.entityId === entityId) || a.ownerEntityId === entityId
               );
-              data.assets = ownedAssets.map(a => ({
+              data.assets = ownedAssets.map((a) => ({
                 id: a.id,
                 name: a.name,
                 type: a.facilityType,
@@ -127,7 +131,9 @@ export async function executeTool(
               }));
               data.assetCount = ownedAssets.length;
             }
-          } catch { /* skip asset search on failure */ }
+          } catch {
+            /* skip asset search on failure */
+          }
         }
 
         return { success: true, data };
@@ -150,14 +156,20 @@ export async function executeTool(
         // Optionally trace to ultimate parents
         if (args.include_ultimate && owners.length > 0) {
           try {
-            const graph = await getOwnershipGraph({ root: entityId, direction: 'up', max_depth: 10 });
+            const graph = await getOwnershipGraph({
+              root: entityId,
+              direction: 'up',
+              max_depth: 10,
+            });
             // Ultimate parents = nodes with no incoming "owned by" edges
-            const childIds = new Set(graph.edges.map(e => e.source));
+            const childIds = new Set(graph.edges.map((e) => e.source));
             const ultimateParents = graph.nodes
-              .filter(n => n.id !== entityId && !childIds.has(n.id))
-              .map(n => ({ id: n.id, name: n.label || n.id }));
+              .filter((n) => n.id !== entityId && !childIds.has(n.id))
+              .map((n) => ({ id: n.id, name: n.Name || n.id }));
             data.ultimateParents = ultimateParents;
-          } catch { /* skip */ }
+          } catch {
+            /* skip */
+          }
         }
 
         return { success: true, data };
@@ -174,10 +186,10 @@ export async function executeTool(
             getOwnershipGraph({ root: rootId, direction: 'up', max_depth: maxDepth }),
             getOwnershipGraph({ root: rootId, direction: 'down', max_depth: maxDepth }),
           ]);
-          const nodeMap = new Map<string, typeof upGraph.nodes[0]>();
+          const nodeMap = new Map<string, (typeof upGraph.nodes)[0]>();
           for (const n of [...upGraph.nodes, ...downGraph.nodes]) nodeMap.set(n.id, n);
           const edgeSet = new Set<string>();
-          const allEdges = [...upGraph.edges, ...downGraph.edges].filter(e => {
+          const allEdges = [...upGraph.edges, ...downGraph.edges].filter((e) => {
             const key = `${e.source}->${e.target}`;
             if (edgeSet.has(key)) return false;
             edgeSet.add(key);
@@ -199,7 +211,11 @@ export async function executeTool(
         }
 
         const validDir = direction === 'down' ? 'down' : 'up';
-        const graph = await getOwnershipGraph({ root: rootId, direction: validDir, max_depth: maxDepth });
+        const graph = await getOwnershipGraph({
+          root: rootId,
+          direction: validDir,
+          max_depth: maxDepth,
+        });
         return {
           success: true,
           data: {
@@ -218,9 +234,17 @@ export async function executeTool(
         const tracker = args.tracker as string | undefined;
         const slug = tracker ? resolveApiSlug(tracker) : null;
         // Support both single and multi-value status/country
-        const statusArr = Array.isArray(args.statuses) ? args.statuses : (args.status ? [args.status] : undefined);
+        const statusArr = Array.isArray(args.statuses)
+          ? args.statuses
+          : args.status
+            ? [args.status]
+            : undefined;
         const statuses = statusArr?.map((s: unknown) => String(s).toLowerCase());
-        const countryArr = Array.isArray(args.countries) ? args.countries : (args.country ? [args.country] : undefined);
+        const countryArr = Array.isArray(args.countries)
+          ? args.countries
+          : args.country
+            ? [args.country]
+            : undefined;
         const countries = countryArr?.map((c: unknown) => String(c));
         const limit = clampLimit(args.limit, 20, 500);
 
@@ -242,7 +266,9 @@ export async function executeTool(
           try {
             const facetRaw = await fetchApiJson(`${API_BASE}/assets?${facetSp.toString()}`);
             facetData = facetRaw.facets as Record<string, unknown>;
-          } catch { /* skip facets on error */ }
+          } catch {
+            /* skip facets on error */
+          }
         }
 
         const raw = await fetchApiJson(`${API_BASE}/assets?${sp.toString()}`);
@@ -255,13 +281,15 @@ export async function executeTool(
             count: raw.count,
             ...(facetData ? { facets: facetData } : {}),
             assets: results.slice(0, limit).map((a) => ({
-              id: a.gem_id || a.id,
+              id: a.asset_id || a.gem_id || a.id,
               name: a.asset_name || a.name,
               type: a.asset_type || a.tracker,
               status: a.operating_status || a.status,
               capacity: a.capacity_value ?? a.capacity,
               capacityUnit: a.capacity_unit,
               country: a.country,
+              latitude: a.latitude,
+              longitude: a.longitude,
               owner: (a.owners as Array<Record<string, unknown>>)?.[0]?.name || null,
               owners: (a.owners as Array<Record<string, unknown>>)?.map((o) => ({
                 name: o.name,
@@ -301,17 +329,23 @@ export async function executeTool(
         // Optionally trace ownership chain
         if (args.include_ownership_chain && asset.ownerEntityId) {
           try {
-            const graph = await getOwnershipGraph({ root: asset.ownerEntityId, direction: 'up', max_depth: 5 });
-            data.ownershipChain = graph.nodes.slice(0, 20).map(n => ({
+            const graph = await getOwnershipGraph({
+              root: asset.ownerEntityId,
+              direction: 'up',
+              max_depth: 5,
+            });
+            data.ownershipChain = graph.nodes.slice(0, 20).map((n) => ({
               id: n.id,
-              name: n.label || n.id,
+              name: n.Name || n.id,
             }));
-            data.ownershipEdges = graph.edges.slice(0, 30).map(e => ({
+            data.ownershipEdges = graph.edges.slice(0, 30).map((e) => ({
               from: e.source,
               to: e.target,
-              pct: e.weight,
+              pct: e.value,
             }));
-          } catch { /* skip */ }
+          } catch {
+            /* skip */
+          }
         }
 
         return { success: true, data };
@@ -329,7 +363,10 @@ export async function executeTool(
         // (capped to avoid 30-90s tool calls on large trackers)
         const MAX_ASSETS = 2000;
         const BATCH = 500;
-        const ownerMap = new Map<string, { name: string; entityId: string; assetCount: number; capacity: number }>();
+        const ownerMap = new Map<
+          string,
+          { name: string; entityId: string; assetCount: number; capacity: number }
+        >();
         let totalScanned = 0;
         let totalAvailable = 0;
 
@@ -366,7 +403,9 @@ export async function executeTool(
         }
 
         const sorted = [...ownerMap.values()]
-          .sort((a, b) => metric === 'capacity' ? b.capacity - a.capacity : b.assetCount - a.assetCount)
+          .sort((a, b) =>
+            metric === 'capacity' ? b.capacity - a.capacity : b.assetCount - a.assetCount
+          )
           .slice(0, limit);
 
         return {
@@ -382,9 +421,10 @@ export async function executeTool(
               value: metric === 'capacity' ? o.capacity : o.assetCount,
               assetCount: o.assetCount,
             })),
-            note: totalScanned < totalAvailable
-              ? `Based on ${totalScanned.toLocaleString()} of ${totalAvailable.toLocaleString()} assets (sampled for speed)`
-              : undefined,
+            note:
+              totalScanned < totalAvailable
+                ? `Based on ${totalScanned.toLocaleString()} of ${totalAvailable.toLocaleString()} assets (sampled for speed)`
+                : undefined,
           },
         };
       }
@@ -538,10 +578,14 @@ export async function executeTool(
 
         // Slug mapping for per-type queries
         const slugMap: Record<string, string> = {
-          'Coal Plant': 'coal-plant', 'Oil & Gas Plant': 'oil-gas-plant',
-          'Bioenergy Plant': 'bioenergy-plant', 'Natural Gas Transmission Pipeline': 'gas-pipeline',
-          'Cement or Concrete Plant': 'cement-plant', 'Oil or NGL Pipeline': 'oil-pipeline',
-          'Iron & Steel Plant': 'iron-steel-plant', 'Iron Ore Mine': 'iron-ore-mine',
+          'Coal Plant': 'coal-plant',
+          'Oil & Gas Plant': 'oil-gas-plant',
+          'Bioenergy Plant': 'bioenergy-plant',
+          'Natural Gas Transmission Pipeline': 'gas-pipeline',
+          'Cement or Concrete Plant': 'cement-plant',
+          'Oil or NGL Pipeline': 'oil-pipeline',
+          'Iron & Steel Plant': 'iron-steel-plant',
+          'Iron Ore Mine': 'iron-ore-mine',
         };
 
         // Fetch per-type status breakdown for the top 4 types (parallel)
@@ -553,22 +597,25 @@ export async function executeTool(
           topTypes.map(async ([typeName]) => {
             const slug = slugMap[typeName];
             if (!slug) return { typeName, statuses: {} };
-            const raw = await fetchApiJson(`${API_BASE}/assets?facets=true&limit=1&asset_type=${encodeURIComponent(slug)}&format=json`);
+            const raw = await fetchApiJson(
+              `${API_BASE}/assets?facets=true&limit=1&asset_type=${encodeURIComponent(slug)}&format=json`
+            );
             const f = raw.facets as Record<string, Record<string, number>> | undefined;
             return { typeName, statuses: f?.status || {} };
           })
         );
 
         const trackers = Object.entries(typeFacets).map(([tracker, count]) => {
-          const typeStatus = perTypeStatus.find(t => t.typeName === tracker);
+          const typeStatus = perTypeStatus.find((t) => t.typeName === tracker);
           return {
             tracker,
             totalAssets: count,
             operating: (typeStatus?.statuses as Record<string, number>)?.['operating'] || 0,
             retired: (typeStatus?.statuses as Record<string, number>)?.['retired'] || 0,
-            proposed: ((typeStatus?.statuses as Record<string, number>)?.['proposed'] || 0) +
-                      ((typeStatus?.statuses as Record<string, number>)?.['announced'] || 0) +
-                      ((typeStatus?.statuses as Record<string, number>)?.['construction'] || 0),
+            proposed:
+              ((typeStatus?.statuses as Record<string, number>)?.['proposed'] || 0) +
+              ((typeStatus?.statuses as Record<string, number>)?.['announced'] || 0) +
+              ((typeStatus?.statuses as Record<string, number>)?.['construction'] || 0),
           };
         });
 
@@ -594,13 +641,17 @@ export async function executeTool(
         }
 
         // Search assets associated with this entity
-        const assetResult = await listAssets({ q: entityName, asset_type: slug ?? undefined, limit: 500 });
+        const assetResult = await listAssets({
+          q: entityName,
+          asset_type: slug ?? undefined,
+          limit: 500,
+        });
         const countryMap = new Map<string, number>();
 
         for (const asset of assetResult.results) {
           // Check if this entity is actually an owner of this asset
-          const isOwner = asset.owners?.some(o => o.entityId === entityId) ||
-            asset.ownerEntityId === entityId;
+          const isOwner =
+            asset.owners?.some((o) => o.entityId === entityId) || asset.ownerEntityId === entityId;
           if (!isOwner) continue;
 
           const country = asset.country || 'Unknown';
@@ -645,11 +696,16 @@ export async function executeTool(
             let totalCapacity = 0;
             const entityName = entity?.name || entity?.fullName;
             if (entityName) {
-              const assetResult = await listAssets({ q: entityName, asset_type: slug ?? undefined, limit: 200 }).catch(() => null);
+              const assetResult = await listAssets({
+                q: entityName,
+                asset_type: slug ?? undefined,
+                limit: 200,
+              }).catch(() => null);
               if (assetResult) {
                 const countrySet = new Set<string>();
                 for (const asset of assetResult.results) {
-                  const isOwner = asset.owners?.some(o => o.entityId === entityId) ||
+                  const isOwner =
+                    asset.owners?.some((o) => o.entityId === entityId) ||
                     asset.ownerEntityId === entityId;
                   if (isOwner) {
                     assetCount++;
@@ -694,7 +750,10 @@ export async function executeTool(
 
         // For each country, fetch assets and collect owners
         // ownerCountryMap: entityId → Set<country>
-        const ownerInfo = new Map<string, { name: string; countries: Set<string>; totalAssets: number }>();
+        const ownerInfo = new Map<
+          string,
+          { name: string; countries: Set<string>; totalAssets: number }
+        >();
 
         for (const country of countries.slice(0, 4)) {
           const result = await listAssets({
@@ -725,7 +784,10 @@ export async function executeTool(
         // Filter to owners present in ALL specified countries with min asset threshold
         const minAssets = Math.max(1, (args.min_assets as number) || 2);
         const commonOwners = [...ownerInfo.entries()]
-          .filter(([, info]) => countries.every(c => info.countries.has(c)) && info.totalAssets >= minAssets)
+          .filter(
+            ([, info]) =>
+              countries.every((c) => info.countries.has(c)) && info.totalAssets >= minAssets
+          )
           .map(([entityId, info]) => ({
             entityId,
             name: info.name,
@@ -760,7 +822,9 @@ export async function executeTool(
         params.set('classes', JSON.stringify([filter]));
 
         const url = `/screener/results?${params.toString()}`;
-        const desc = userDesc || `Screener for ${tracker}${status ? ` (${status})` : ''}${country ? ` in ${country}` : ''}`;
+        const desc =
+          userDesc ||
+          `Screener for ${tracker}${status ? ` (${status})` : ''}${country ? ` in ${country}` : ''}`;
 
         return {
           success: true,
@@ -777,8 +841,17 @@ export async function executeTool(
         const title = args.title as string | undefined;
         const mapSlug = mapTracker ? resolveApiSlug(mapTracker) : null;
 
-        if (entityIds.length === 0 && assetIds.length === 0 && !mapQuery && !mapTracker && !mapCountry) {
-          return { success: false, error: 'Need entity_ids, asset_ids, or a search query/filter to generate a map' };
+        if (
+          entityIds.length === 0 &&
+          assetIds.length === 0 &&
+          !mapQuery &&
+          !mapTracker &&
+          !mapCountry
+        ) {
+          return {
+            success: false,
+            error: 'Need entity_ids, asset_ids, or a search query/filter to generate a map',
+          };
         }
 
         const mapFeatures: Array<{
@@ -876,7 +949,9 @@ export async function executeTool(
                 });
               }
             }
-          } catch { /* skip */ }
+          } catch {
+            /* skip */
+          }
         }
 
         // Fetch specific assets by ID
@@ -910,7 +985,8 @@ export async function executeTool(
             data: {
               type: 'map',
               title: title || 'Asset Map',
-              message: 'No assets with coordinates found. Try searching for specific assets by name or ID.',
+              message:
+                'No assets with coordinates found. Try searching for specific assets by name or ID.',
               features: [],
             },
           };
@@ -923,10 +999,10 @@ export async function executeTool(
             title: title || `Assets (${mapFeatures.length} locations)`,
             features: mapFeatures,
             bounds: {
-              minLat: Math.min(...mapFeatures.map(f => f.lat)),
-              maxLat: Math.max(...mapFeatures.map(f => f.lat)),
-              minLng: Math.min(...mapFeatures.map(f => f.lng)),
-              maxLng: Math.max(...mapFeatures.map(f => f.lng)),
+              minLat: Math.min(...mapFeatures.map((f) => f.lat)),
+              maxLat: Math.max(...mapFeatures.map((f) => f.lat)),
+              minLng: Math.min(...mapFeatures.map((f) => f.lng)),
+              maxLng: Math.max(...mapFeatures.map((f) => f.lng)),
             },
           },
         };
@@ -945,9 +1021,10 @@ export async function executeTool(
             total: items.length,
             assets: assetItems.map((i) => ({ id: i.id, name: i.name, tracker: i.tracker })),
             entities: entityItems.map((i) => ({ id: i.id, name: i.name })),
-            summary: items.length === 0
-              ? 'Cart is empty'
-              : `${items.length} items: ${assetItems.length} assets, ${entityItems.length} entities`,
+            summary:
+              items.length === 0
+                ? 'Cart is empty'
+                : `${items.length} items: ${assetItems.length} assets, ${entityItems.length} entities`,
           },
         };
       }

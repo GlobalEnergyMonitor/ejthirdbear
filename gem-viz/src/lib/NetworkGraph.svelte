@@ -1,11 +1,11 @@
 <script>
   import { onMount } from 'svelte';
-  import { assetPath, assetLink, entityLink } from '$lib/links';
+  import { assetLink, entityLink } from '$lib/links';
   import { goto } from '$app/navigation';
   import { Deck } from '@deck.gl/core';
   import { ScatterplotLayer, LineLayer } from '@deck.gl/layers';
   import { colors } from '$lib/design-tokens';
-  import { ASSET_ID_COALESCE } from '$lib/duckdb-queries';
+  import { listAssets } from '$lib/ownership-api';
   import {
     SIMULATION_PRESETS,
     LAYOUT_TUNING,
@@ -22,9 +22,6 @@
     forceX,
     forceY,
   } from 'd3-force-3d';
-
-  // DuckDB utilities - loaded dynamically only on client
-  let loadParquetFromPath, query;
 
   // State
   let container;
@@ -56,18 +53,6 @@
   let animationFrame;
   let lastFrameTime = 0;
 
-  // Shared SQL fragments for edge queries
-  const EDGE_SELECT = `
-    SELECT
-      ${ASSET_ID_COALESCE} as source_id,
-      "Project" as source_name,
-      "Owner GEM Entity ID" as target_id,
-      "Owner" as target_name,
-      "Share" as share
-    FROM ownership
-    WHERE ${ASSET_ID_COALESCE} IS NOT NULL
-      AND "Owner GEM Entity ID" IS NOT NULL`;
-
   // Get or create a node in the nodeMap
   function getOrCreateNode(id, name) {
     if (!nodeMap.has(id)) {
@@ -76,80 +61,69 @@
     return nodeMap.get(id);
   }
 
+  // Extract ownership edges from asset data
+  function extractEdgesFromAssets(assets) {
+    const edges = [];
+    for (const asset of assets) {
+      if (!asset.id || !asset.owners?.length) continue;
+      for (const owner of asset.owners) {
+        if (!owner.entityId) continue;
+        edges.push({
+          source_id: asset.id,
+          source_name: asset.name,
+          target_id: owner.entityId,
+          target_name: owner.name,
+          share: owner.ownershipShare || 0,
+        });
+      }
+    }
+    return edges;
+  }
+
   async function loadData() {
     try {
       loading = true;
       error = null;
-      loadingPhase = 'Loading parquet files...';
+      loadingPhase = 'Fetching assets from API...';
 
-      // Dynamic import - only load DuckDB on client
-      if (!loadParquetFromPath || !query) {
-        const duckdbUtils = await import('$lib/duckdb-utils');
-        loadParquetFromPath = duckdbUtils.loadParquetFromPath;
-        query = duckdbUtils.query;
+      // Paginate through API to collect ownership edges
+      const BATCH = 500;
+      const maxEdges = config.maxEdges || 25000;
+      let allEdges = [];
+      let offset = 0;
+
+      while (allEdges.length < maxEdges && offset < 50000) {
+        const page = await listAssets({ limit: BATCH, offset, facets: offset === 0 });
+        const edges = extractEdgesFromAssets(page.results);
+        allEdges.push(...edges);
+
+        loadingPhase = `Loading edges: ${allEdges.length.toLocaleString()} / ~${maxEdges.toLocaleString()}...`;
+
+        if (page.results.length < BATCH) break;
+        offset += BATCH;
+
+        // Stop if we have enough edges
+        if (allEdges.length >= maxEdges) break;
       }
 
-      const parquetPath = assetPath('all_trackers_ownership@1.parquet');
-      const ownershipResult = await loadParquetFromPath(parquetPath, 'ownership');
+      allEdgesCount = allEdges.length;
 
-      if (!ownershipResult.success) {
-        console.error('[NetworkGraph] Parquet load failed', ownershipResult);
-        throw new Error('Failed to load ownership data: ' + ownershipResult.error);
+      // Apply sampling mode
+      if (config.sampleMode === 'random') {
+        // Shuffle and take maxEdges
+        for (let i = allEdges.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [allEdges[i], allEdges[j]] = [allEdges[j], allEdges[i]];
+        }
       }
-
-      loadingPhase = 'Counting total edges...';
-
-      // The ownership table uses various ID columns depending on tracker - use COALESCE pattern
-      const countResult = await query(`
-        SELECT COUNT(*) as total
-        FROM ownership
-        WHERE ${ASSET_ID_COALESCE} IS NOT NULL
-          AND "Owner GEM Entity ID" IS NOT NULL
-      `);
-
-      allEdgesCount =
-        countResult.success && countResult.data?.[0]?.total ? Number(countResult.data[0].total) : 0;
-
-      loadingPhase = `Querying edges (${config.sampleMode} mode)...`;
-
-      let edgeQuery;
-
-      if (config.sampleMode === 'top') {
-        edgeQuery = `
-          WITH entity_counts AS (
-            SELECT entity_id, COUNT(*) as cnt FROM (
-              SELECT ${ASSET_ID_COALESCE} as entity_id FROM ownership WHERE ${ASSET_ID_COALESCE} IS NOT NULL
-              UNION ALL
-              SELECT "Owner GEM Entity ID" as entity_id FROM ownership WHERE "Owner GEM Entity ID" IS NOT NULL
-            ) GROUP BY entity_id
-          ),
-          top_entities AS (
-            SELECT entity_id FROM entity_counts ORDER BY cnt DESC LIMIT ${Math.ceil(config.maxEdges / 5)}
-          )
-          ${EDGE_SELECT}
-            AND (${ASSET_ID_COALESCE} IN (SELECT entity_id FROM top_entities)
-                 OR "Owner GEM Entity ID" IN (SELECT entity_id FROM top_entities))
-          LIMIT ${config.maxEdges}
-        `;
-      } else if (config.sampleMode === 'random') {
-        edgeQuery = `${EDGE_SELECT} ORDER BY RANDOM() LIMIT ${config.maxEdges}`;
-      } else {
-        edgeQuery = `${EDGE_SELECT} LIMIT ${config.maxEdges}`;
-      }
-
-      const edgesResult = await query(edgeQuery);
-
-      if (!edgesResult.success || !edgesResult.data) {
-        console.error('[NetworkGraph] Edge query failed', edgesResult);
-        throw new Error(`Failed to query ownership edges: ${edgesResult.error || 'unknown error'}`);
-      }
+      allEdges = allEdges.slice(0, maxEdges);
 
       loadingPhase = 'Building graph structure...';
 
       nodeMap.clear();
       links = [];
 
-      for (const edge of edgesResult.data) {
+      for (const edge of allEdges) {
         const sourceNode = getOrCreateNode(edge.source_id, edge.source_name);
         sourceNode.connections++;
         sourceNode.outDegree++;
@@ -181,7 +155,7 @@
       await runSimulation();
       loading = false;
     } catch (e) {
-      console.error('[NetworkGraph] Error loading data:', e);
+      if (import.meta.env.DEV) console.error('[NetworkGraph] Error loading data:', e);
       error = `${e.name || 'Error'}: ${e.message}`;
       loading = false;
     }

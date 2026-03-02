@@ -268,16 +268,16 @@ export const ownershipColors = {
 
 // =============================================================================
 // 6. TYPOGRAPHY - GEM Type Hierarchy
-// Plus Jakarta Sans for UI, Roboto Condensed for Data/Stats (UPPERCASE)
+// Plus Jakarta Sans for UI, Barlow Semi-Condensed for Data/Stats (UPPERCASE)
 // =============================================================================
 
 export const fonts = {
   // Plus Jakarta Sans - Headlines, Body, Buttons, UI
   sans: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
   display: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
-  // Roboto Condensed - Data/Numbers/Stats (UPPERCASE)
-  data: "'Roboto Condensed', 'Arial Narrow', sans-serif",
-  mono: "'Roboto Condensed', 'Arial Narrow', sans-serif" /* Use Roboto Condensed instead of monospace */,
+  // Barlow Semi-Condensed - Data/Numbers/Stats (UPPERCASE)
+  data: "'Barlow Semi-Condensed', 'Arial Narrow', sans-serif",
+  mono: "'Barlow Semi-Condensed', 'Arial Narrow', sans-serif" /* Use Barlow Semi-Condensed instead of monospace */,
 } as const;
 
 export const fontSizes = {
@@ -405,7 +405,7 @@ export const typography = {
     letterSpacing: letterSpacing.wider,
   },
 
-  // Data (Roboto Condensed - UPPERCASE)
+  // Data (Barlow Semi-Condensed - UPPERCASE)
   dataDisplay: {
     fontFamily: fonts.data,
     fontSize: fontSizes['3xl'],

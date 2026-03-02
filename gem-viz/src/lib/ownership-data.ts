@@ -2,8 +2,7 @@
  * GEM Ownership Data Utilities
  * Ported from Observable notebook: bdcdb445752833fa
  *
- * Updated to use the Ownership API instead of direct MotherDuck queries.
- * Maintains backward-compatible function signatures where possible.
+ * Uses the Ownership REST API for all data access.
  */
 
 import {
@@ -16,32 +15,6 @@ import {
   type GraphEdge,
   type AssetSummary,
 } from '$lib/ownership-api';
-
-// ID field mapping by tracker type (preserved for compatibility)
-const idFields = new Map([
-  ['Bioenergy Power', 'GEM unit ID'],
-  ['Coal Plant', 'GEM unit ID'],
-  ['Gas Plant', 'GEM unit ID'],
-  ['Coal Mine', 'GEM Mine ID'],
-  ['Iron Mine', 'GEM Asset ID'],
-  ['Gas Pipeline', 'ProjectID'],
-  ['Oil & NGL Pipeline', 'ProjectID'],
-  ['Steel Plant', 'Steel Plant ID'],
-  ['Cement and Concrete', 'GEM Plant ID'],
-]);
-
-// Capacity field mapping (preserved for compatibility)
-const capacityFields = new Map([
-  ['Bioenergy Power', 'Capacity (MW)'],
-  ['Coal Plant', 'Capacity (MW)'],
-  ['Gas Plant', 'Capacity (MW)'],
-  ['Coal Mine', 'Capacity (Mtpa)'],
-  ['Iron Mine', 'Production 2023 (ttpa)'],
-  ['Gas Infrastructure', 'CapacityBcm/y'],
-  ['Oil Infrastructure', 'CapacityBOEd'],
-  ['Steel Plant', 'Nominal crude steel capacity (ttpa)'],
-  ['Cement and Concrete', 'Cement Capacity (millions metric tonnes per annum)'],
-]);
 
 // ============================================================================
 // TYPES
@@ -102,7 +75,7 @@ export interface SpotlightOwnerData {
 }
 
 // ============================================================================
-// REST API HELPERS (replacing DuckDB getOwnerAssets/getOwnerAssetCount)
+// REST API HELPERS
 // ============================================================================
 
 /** Convert AssetSummary to the row shape expected by rowToAsset */
@@ -118,38 +91,42 @@ function assetToRow(a: AssetSummary, ownershipPct?: number | null): Record<strin
   };
 }
 
-/** Fetch assets owned by an entity via REST API (replaces DuckDB getOwnerAssets) */
+/** Fetch assets owned by an entity via REST API.
+ *  Note: /entities/{id}/owned returns owned *entities*, not assets.
+ *  Direct asset lookup is handled by streamOwnerPortfolio via entity graph instead.
+ */
 async function fetchOwnerAssets(
   entityId: string,
-  limit = 500
+  _limit = 500
 ): Promise<{ success: boolean; data: Record<string, unknown>[] }> {
   try {
     const owned = await getEntityOwned(entityId);
-    const limited = owned.slice(0, limit);
-    const results: Record<string, unknown>[] = [];
+    if (!owned.length) return { success: true, data: [] };
 
-    // Batch getAsset calls to avoid overwhelming the API
+    // getEntityOwned returns entities (subsidiaries), not assets.
+    // We can only use items that resolve as assets — skip silently on 404.
+    const results: Record<string, unknown>[] = [];
     const BATCH = 15;
+    const limited = owned.slice(0, _limit);
     for (let i = 0; i < limited.length; i += BATCH) {
       const batch = limited.slice(i, i + BATCH);
-      const settled = await Promise.allSettled(
-        batch.map((item) => getAsset(item.entityId))
-      );
+      const settled = await Promise.allSettled(batch.map((item) => getAsset(item.entityId)));
       for (let j = 0; j < settled.length; j++) {
         const r = settled[j];
         if (r.status === 'fulfilled') {
           results.push(assetToRow(r.value, batch[j].ownershipPct));
         }
+        // 404s expected for entity IDs — skip silently
       }
     }
     return { success: true, data: results };
   } catch (err) {
-    console.error(`[fetchOwnerAssets] Failed for ${entityId}:`, err);
+    if (import.meta.env.DEV) console.error(`[fetchOwnerAssets] Failed for ${entityId}:`, err);
     return { success: false, data: [] };
   }
 }
 
-/** Count assets owned by an entity via REST API (replaces DuckDB getOwnerAssetCount) */
+/** Count assets owned by an entity via REST API */
 async function fetchOwnerAssetCount(entityId: string): Promise<number> {
   try {
     const owned = await getEntityOwned(entityId);
@@ -179,7 +156,7 @@ export async function getAssetOwners(gemAssetId: string): Promise<AssetOwnersDat
     });
 
     if (!graphData || !graphData.nodes || graphData.nodes.length === 0) {
-      console.warn(`No ownership data found for asset ${gemAssetId}`);
+      if (import.meta.env.DEV) console.warn(`No ownership data found for asset ${gemAssetId}`);
       return null;
     }
 
@@ -245,7 +222,7 @@ export async function getAssetOwners(gemAssetId: string): Promise<AssetOwnersDat
       allEntityIds,
     };
   } catch (err) {
-    console.error('Error fetching asset owners:', err);
+    if (import.meta.env.DEV) console.error('Error fetching asset owners:', err);
     return null;
   }
 }
@@ -295,7 +272,7 @@ export async function* streamOwnerPortfolio(
   let truncated = false;
   let totalAssetCount = 0;
 
-  // Helper to convert DuckDB row to SpotlightAsset
+  // Helper to convert API row to SpotlightAsset
   const rowToAsset = (row: Record<string, unknown>): SpotlightAsset => ({
     id: String(row.id || ''),
     name: String(row.name || row.id || ''),
@@ -348,6 +325,7 @@ export async function* streamOwnerPortfolio(
     totalAssetCount = directCount;
 
     const directResult = await fetchOwnerAssets(entityId, MAX_DIRECT_ASSETS);
+    const directFetchFailed = !directResult.success;
 
     if (directResult.success && directResult.data) {
       for (const row of directResult.data) {
@@ -382,7 +360,8 @@ export async function* streamOwnerPortfolio(
     try {
       const graphData = await Promise.race([
         getEntityGraphDown(entityId).catch((err) => {
-          console.error('[streamOwnerPortfolio] API error fetching entity graph:', err);
+          if (import.meta.env.DEV)
+            console.error('[streamOwnerPortfolio] API error fetching entity graph:', err);
           return null;
         }),
         new Promise<null>((resolve) => setTimeout(() => resolve(null), 10000)),
@@ -406,7 +385,24 @@ export async function* streamOwnerPortfolio(
         }
       }
     } catch (apiErr) {
-      console.warn('[streamOwnerPortfolio] Entity graph API failed:', apiErr);
+      if (import.meta.env.DEV)
+        console.warn('[streamOwnerPortfolio] Entity graph API failed:', apiErr);
+    }
+
+    // If both direct assets AND graph failed, entity likely doesn't exist
+    if (
+      directFetchFailed &&
+      directCount === 0 &&
+      subsidiaryIds.length === 0 &&
+      allAssets.length === 0
+    ) {
+      yield {
+        phase: 'error',
+        message: `Entity ${entityId} not found or has no ownership data`,
+        portfolio: null,
+        error: `Entity ${entityId} not found`,
+      };
+      return;
     }
 
     // Limit subsidiaries for large entities
@@ -490,7 +486,7 @@ export async function* streamOwnerPortfolio(
       portfolio: buildPortfolio(),
     };
   } catch (err) {
-    console.error('Error in streamOwnerPortfolio:', err);
+    if (import.meta.env.DEV) console.error('Error in streamOwnerPortfolio:', err);
     yield {
       phase: 'error',
       message: 'Failed to load entity data',
@@ -536,7 +532,7 @@ export async function getSpotlightOwnerData(
     const matchedEdges = new Map<string, { value: number | null }>();
     let truncated = false;
 
-    // Helper to convert DuckDB row to SpotlightAsset
+    // Helper to convert API row to SpotlightAsset
     const rowToAsset = (row: Record<string, unknown>): SpotlightAsset => ({
       id: String(row.id || ''),
       name: String(row.name || row.id || ''),
@@ -563,7 +559,8 @@ export async function getSpotlightOwnerData(
     try {
       const graphData = await Promise.race([
         getEntityGraphDown(entityId).catch((err) => {
-          console.error('[getSpotlightOwnerData] API error fetching entity graph:', err);
+          if (import.meta.env.DEV)
+            console.error('[getSpotlightOwnerData] API error fetching entity graph:', err);
           return null;
         }),
         new Promise<null>((resolve) => setTimeout(() => resolve(null), 10000)), // 10s timeout
@@ -607,7 +604,8 @@ export async function getSpotlightOwnerData(
         const subResults = await Promise.allSettled(subPromises);
         for (const result of subResults) {
           if (result.status === 'rejected') {
-            console.warn('[getSpotlightOwnerData] Subsidiary asset load failed:', result.reason);
+            if (import.meta.env.DEV)
+              console.warn('[getSpotlightOwnerData] Subsidiary asset load failed:', result.reason);
             continue;
           }
           const { subId, assets } = result.value;
@@ -628,7 +626,8 @@ export async function getSpotlightOwnerData(
         }
       }
     } catch (apiErr) {
-      console.warn('[getSpotlightOwnerData] Entity graph API failed:', apiErr);
+      if (import.meta.env.DEV)
+        console.warn('[getSpotlightOwnerData] Entity graph API failed:', apiErr);
       // Continue with just direct assets if graph API fails
     }
 
@@ -663,7 +662,7 @@ export async function getSpotlightOwnerData(
       truncated,
     };
   } catch (err) {
-    console.error('Error fetching spotlight owner data:', err);
+    if (import.meta.env.DEV) console.error('Error fetching spotlight owner data:', err);
     return null;
   }
 }
@@ -681,8 +680,8 @@ export async function getSpotlightOwnerData(
 interface TopOwner {
   id: string;
   name: string;
-  asset_count: number;
-  ownership_count: number;
+  asset_count: number | null;
+  ownership_count: number | null;
 }
 
 export async function getTopOwners(limit: number = 20): Promise<TopOwner[]> {
@@ -693,13 +692,11 @@ export async function getTopOwners(limit: number = 20): Promise<TopOwner[]> {
     return response.results.map((entity) => ({
       id: entity.id,
       name: entity.name,
-      // Note: asset_count and ownership_count not available from this endpoint
-      // These would need to be fetched separately or added to the API
-      asset_count: 0,
-      ownership_count: 0,
+      asset_count: null, // Not available from list endpoint
+      ownership_count: null,
     }));
   } catch (err) {
-    console.error('Error fetching top owners:', err);
+    if (import.meta.env.DEV) console.error('Error fetching top owners:', err);
     return [];
   }
 }
@@ -797,6 +794,3 @@ export function summarizeAssets(assets: SummarizeAsset[]) {
     byStatus: rollup(assets, (d) => d.status?.toLowerCase() || 'unknown'),
   };
 }
-
-// Export field mappings for backward compatibility
-export { idFields, capacityFields };

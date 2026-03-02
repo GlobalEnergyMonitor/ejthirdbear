@@ -15,8 +15,9 @@
   import { page } from '$app/stores';
   import { getEntity } from '$lib/ownership-api';
   import { onMount } from 'svelte';
-  import MiniNetworkGraph from '$lib/components/MiniNetworkGraph.svelte';
+  import AssetScreenerChart from '$lib/components/screener/AssetScreenerChart.svelte';
   import ScreenerStepNav from '$lib/components/ScreenerStepNav.svelte';
+  import { buildScreenerUrl, parseJsonSearchParam } from '$lib/screener-url';
 
   // Get params from URL
   const classesParam = $derived($page.url.searchParams.get('classes') || '');
@@ -24,6 +25,17 @@
 
   // Parse owner IDs
   const ownerIds = $derived(ownersParam ? ownersParam.split(',') : []);
+
+  // Parse asset class info from URL for display
+  const parsedClasses = $derived(
+    parseJsonSearchParam(classesParam) || []
+  );
+  const assetClassName = $derived(
+    parsedClasses.length > 0 ? (parsedClasses[0]?.tracker || parsedClasses[0]?.name || '') : ''
+  );
+  const trackerSlug = $derived(
+    parsedClasses.length > 0 ? (parsedClasses[0]?.id || '') : ''
+  );
 
   // Owner data
   let owners = $state([]);
@@ -33,7 +45,6 @@
   // View options
   let viewMode = $state('grid'); // 'grid' | 'single'
   let selectedOwner = $state(null);
-  let displayMode = $state('tree'); // 'tree' | 'tabular'
   let showHelp = $state(false);
 
   // Load owner data
@@ -54,7 +65,7 @@
               country: entity?.headquartersCountry || '',
             };
           } catch (err) {
-            console.warn(`Failed to load owner ${id}:`, err);
+            if (import.meta.env.DEV) console.warn(`Failed to load owner ${id}:`, err);
             return { id, name: id, country: '' };
           }
         })
@@ -75,9 +86,10 @@
   // Navigation
   function goBack() {
     goto(
-      link(
-        `screener/results?classes=${encodeURIComponent(classesParam)}&owners=${encodeURIComponent(ownersParam)}`
-      )
+      buildScreenerUrl('screener/results', {
+        classes: classesParam || undefined,
+        owners: ownersParam || undefined,
+      })
     );
   }
 
@@ -93,11 +105,6 @@
 
   function openEntityPage(ownerId) {
     goto(link(`entity/${ownerId}`));
-  }
-
-  // Toggle between tree and tabular display
-  function toggleDisplayMode() {
-    displayMode = displayMode === 'tree' ? 'tabular' : 'tree';
   }
 
   // Download ownership data as CSV
@@ -137,7 +144,7 @@
   />
 </svelte:head>
 
-<main>
+<div class="page">
   <div class="screener-layout">
     <!-- Step indicator -->
     <ScreenerStepNav currentStep={4} {classesParam} {ownersParam} />
@@ -197,10 +204,6 @@
                 {showHelp ? 'Hide guide' : 'Guide'}
               </button>
               <span class="separator">|</span>
-              <button class="text-link muted" onclick={toggleDisplayMode}>
-                {displayMode === 'tree' ? 'Table' : 'Network'}
-              </button>
-              <span class="separator">|</span>
               <button class="text-link muted" onclick={downloadData}> Export </button>
               {#if owners.length > 1}
                 <button class="close-btn" onclick={backToGrid} title="Return to grid">
@@ -222,40 +225,14 @@
             </aside>
           {/if}
 
-          {#if displayMode === 'tree'}
-            <!-- Graph gets maximum space -->
-            <div class="graph-container">
-              <MiniNetworkGraph
-                entityId={selectedOwner.id}
-                entityName={selectedOwner.name}
-                maxHops={2}
-                height={560}
-              />
-            </div>
-          {:else}
-            <!-- Tabular view -->
-            <div class="tabular-view">
-              <table class="ownership-table">
-                <thead>
-                  <tr>
-                    <th>Entity</th>
-                    <th>Type</th>
-                    <th>Relationship</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>{selectedOwner.name}</td>
-                    <td>Parent</td>
-                    <td>Primary</td>
-                  </tr>
-                  <tr class="placeholder">
-                    <td colspan="3">Loading subsidiary data...</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          {/if}
+          <div class="graph-container">
+            <AssetScreenerChart
+              entityId={selectedOwner.id}
+              entityName={selectedOwner.name}
+              {assetClassName}
+              {trackerSlug}
+            />
+          </div>
 
           <!-- Entity link: subtle, bottom -->
           <div class="entity-link">
@@ -282,11 +259,11 @@
                 onclick={() => goToOwner(owner)}
                 onkeydown={(e) => e.key === 'Enter' && goToOwner(owner)}
               >
-                <MiniNetworkGraph
+                <AssetScreenerChart
                   entityId={owner.id}
                   entityName={owner.name}
-                  maxHops={1}
-                  height={220}
+                  {assetClassName}
+                  {trackerSlug}
                 />
               </div>
               <footer class="card-footer">
@@ -309,7 +286,7 @@
       </button>
     </nav>
   </div>
-</main>
+</div>
 
 <style>
   /*
@@ -319,7 +296,7 @@
    * - Typography does the work
    */
 
-  main {
+  .page {
     min-height: 100vh;
     background: var(--color-bg-secondary);
   }
@@ -509,37 +486,6 @@
   /* Graph container: maximize space */
   .graph-container {
     padding: var(--space-8) var(--space-5) var(--space-10);
-  }
-
-  /* Tabular view */
-  .tabular-view {
-    padding: var(--space-6) var(--space-5);
-  }
-
-  .ownership-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: var(--font-size-body);
-  }
-
-  .ownership-table th,
-  .ownership-table td {
-    padding: var(--space-2) var(--space-3);
-    text-align: left;
-    border-bottom: var(--border-width) solid var(--color-border-light);
-  }
-
-  .ownership-table th {
-    font-weight: 500;
-    color: var(--color-text-tertiary);
-    font-size: var(--font-size-md);
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-wide);
-  }
-
-  .ownership-table .placeholder {
-    color: var(--color-gray-400);
-    font-style: italic;
   }
 
   /* Entity link footer */
