@@ -5,16 +5,17 @@
  * All drawing is imperative D3 — called once per data change into a container element.
  */
 
-import { select, arc as d3Arc, path as d3Path, scaleLinear, format } from 'd3';
 import {
-  colors,
-  trackerColors,
-  statusColors,
-  colorByTracker,
-  colorByStatus,
-  getStatusGroup,
-  getTrackerColor,
-} from '$lib/design-tokens';
+  select,
+  arc as d3Arc,
+  path as d3Path,
+  scaleLinear,
+  format,
+  pointer as d3Pointer,
+  type Selection,
+  type BaseType,
+} from 'd3';
+import { colors, statusColors, getTrackerColor } from '$lib/design-tokens';
 import type {
   ScreenerChartData,
   SubsidiaryGroupData,
@@ -28,9 +29,8 @@ import { LAYOUT } from './screener-chart-data';
 // Constants
 // ---------------------------------------------------------------------------
 
-const MARGIN = { top: 80, right: 40, bottom: 120, left: 20 };
+const MARGIN = { top: 20, right: 40, bottom: 40, left: 20 };
 const COL_STROKE = '#d8d8ce';
-const COL_FILL = '#fafaf7';
 const COL_BG_LIGHT = '#f7f7f3';
 
 // ---------------------------------------------------------------------------
@@ -42,6 +42,8 @@ type ColorField = 'tracker' | 'status';
 export interface RenderOptions {
   width?: number;
   colorField?: ColorField;
+  assetClassName?: string;
+  showLegend?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -59,7 +61,9 @@ export function renderChart(
   options: RenderOptions = {}
 ): () => void {
   const width = options.width ?? 1000;
-  const colorField: ColorField = options.colorField ?? 'tracker';
+  const requestedColorField: ColorField = options.colorField ?? 'tracker';
+  const assetClassName = options.assetClassName?.trim();
+  const showLegend = options.showLegend ?? false;
 
   container.innerHTML = '';
 
@@ -70,10 +74,16 @@ export function renderChart(
   const contentHeight = lastGroup.bottom + LAYOUT.yPadding;
   const svgHeight = contentHeight + MARGIN.top + MARGIN.bottom;
 
+  const trackerSet = new Set(
+    chartData.assets.map((a) => a.tracker).filter((t) => t && t !== 'Unknown')
+  );
+  const colorField: ColorField =
+    requestedColorField === 'tracker' && trackerSet.size <= 1 ? 'status' : requestedColorField;
+
   // Color resolver for units
   const getUnitColor = (unit: ChartUnit): string => {
     if (colorField === 'status') {
-      return colorByStatus.get(unit.status_agg) || statusColors.unknown;
+      return statusColors[unit.status_agg] || statusColors.unknown;
     }
     return getTrackerColor(unit.tracker);
   };
@@ -97,33 +107,7 @@ export function renderChart(
     .attr('class', 'chart-main')
     .attr('transform', `translate(${MARGIN.left}, ${MARGIN.top})`);
 
-  // --- Title ---
-  main
-    .append('text')
-    .attr('x', LAYOUT.subsidX)
-    .attr('y', -MARGIN.top + 30)
-    .style('font-size', '18px')
-    .style('font-weight', 700)
-    .style('fill', colors.navy)
-    .style('letter-spacing', '0.02em')
-    .text(chartData.spotlightOwner.Name);
-
-  const nSubs = chartData.subsidiariesMatched.size;
-  const nDirect = chartData.directlyOwned.length;
-  let subtitle = `${chartData.assets.length} assets`;
-  if (nSubs > 0) subtitle += ` across ${nSubs} ${nSubs === 1 ? 'subsidiary' : 'subsidiaries'}`;
-  if (nDirect > 0) subtitle += ` (${nDirect} directly owned)`;
-
-  main
-    .append('text')
-    .attr('x', LAYOUT.subsidX)
-    .attr('y', -MARGIN.top + 50)
-    .style('font-size', '12px')
-    .style('font-weight', 500)
-    .style('text-transform', 'uppercase')
-    .style('letter-spacing', '0.07em')
-    .style('fill', colors.gray500)
-    .text(subtitle);
+  // Title/subtitle omitted — the Svelte wrapper's sticky header provides this info
 
   // --- Vertical connection line ---
   main
@@ -146,7 +130,9 @@ export function renderChart(
   drawCommonAssetLines(assetGroup, lineGroup, subsidiaryGroups, chartData, contentHeight);
 
   // --- Legend ---
-  drawLegend(svg, chartData, colorField, width, svgHeight);
+  if (showLegend) {
+    drawLegend(svg, chartData, colorField, width, svgHeight);
+  }
 
   return () => {
     container.innerHTML = '';
@@ -157,7 +143,7 @@ export function renderChart(
 // Gradient def
 // ---------------------------------------------------------------------------
 
-function addGradient(defs: d3.Selection<SVGDefsElement, unknown, null, undefined>) {
+function addGradient(defs: Selection<SVGDefsElement, unknown, null, undefined>) {
   const gradient = defs
     .append('linearGradient')
     .attr('id', 'gradient-fade')
@@ -166,23 +152,38 @@ function addGradient(defs: d3.Selection<SVGDefsElement, unknown, null, undefined
     .attr('x2', '100%')
     .attr('y2', '100%');
 
-  gradient.append('stop').attr('offset', '0%').attr('stop-color', '#fafaf7').attr('stop-opacity', 1);
+  gradient
+    .append('stop')
+    .attr('offset', '0%')
+    .attr('stop-color', '#fafaf7')
+    .attr('stop-opacity', 1);
   gradient
     .append('stop')
     .attr('offset', '100%')
     .attr('stop-color', COL_BG_LIGHT)
     .attr('stop-opacity', 1);
+
+  // Drop shadow for hover expansion
+  const filter = defs
+    .append('filter')
+    .attr('id', 'hover-shadow')
+    .attr('x', '-10%')
+    .attr('y', '-10%')
+    .attr('width', '120%')
+    .attr('height', '130%');
+  filter
+    .append('feDropShadow')
+    .attr('dx', 0)
+    .attr('dy', 2)
+    .attr('stdDeviation', 6)
+    .attr('flood-color', 'rgba(0,0,0,0.08)');
 }
 
 // ---------------------------------------------------------------------------
 // Subsidiary lane shapes
 // ---------------------------------------------------------------------------
 
-function subsidiaryPath(
-  d: SubsidiaryGroupData,
-  yOffset: number,
-  strokeOnly = false
-): string {
+function subsidiaryPath(d: SubsidiaryGroupData, yOffset: number, strokeOnly = false): string {
   const p = d3Path();
   const xS = 0;
   const yS = d.top;
@@ -214,9 +215,9 @@ function subsidiaryPath(
 }
 
 function drawSubsidiaryRegions(
-  group: d3.Selection<SVGGElement, unknown, null, undefined>,
+  group: Selection<SVGGElement, unknown, null, undefined>,
   data: SubsidiaryGroupData[],
-  totalHeight: number
+  _totalHeight: number
 ) {
   const regions = group
     .selectAll<SVGGElement, SubsidiaryGroupData>('.subsidiary-region')
@@ -245,7 +246,7 @@ function drawSubsidiaryRegions(
 // ---------------------------------------------------------------------------
 
 function drawSubsidiaryLabels(
-  group: d3.Selection<SVGGElement, unknown, null, undefined>,
+  group: Selection<SVGGElement, unknown, null, undefined>,
   data: SubsidiaryGroupData[],
   chartData: ScreenerChartData
 ) {
@@ -307,7 +308,9 @@ function drawSubsidiaryLabels(
     .style('letter-spacing', '0.03em')
     .style('font-weight', 500)
     .each(function (d) {
-      const name = chartData.entityMap.get(d.id)?.Name || (d.id === 'Directly owned' ? 'Directly owned' : d.id);
+      const name =
+        chartData.entityMap.get(d.id)?.Name ||
+        (d.id === 'Directly owned' ? 'Directly owned' : d.id);
       const wrapped = name.length > 22;
       nameWrapped.set(d.id, wrapped);
       wrapTextTwoLines(select(this), name, 22);
@@ -339,6 +342,7 @@ function drawSubsidiaryLabels(
     const wrapped = nameWrapped.get(d.id) || false;
     const barY = markR + 42 + (wrapped ? LINE_HEIGHT : 0);
     drawMiniBarChartsForItem(select(this), d, barY);
+    drawIntermediaryPathForItem(select(this), d, barY + 28);
   });
 }
 
@@ -347,7 +351,7 @@ function drawSubsidiaryLabels(
 // ---------------------------------------------------------------------------
 
 function drawMiniBarChartsForItem(
-  item: d3.Selection<SVGGElement, SubsidiaryGroupData, null, undefined>,
+  item: Selection<SVGGElement, SubsidiaryGroupData, null, undefined>,
   d: SubsidiaryGroupData,
   startY: number
 ) {
@@ -371,7 +375,7 @@ function drawMiniBarChartsForItem(
     .style('fill', colors.gray400)
     .text('TYPE');
 
-  trackerGroup
+  const trackerBars = trackerGroup
     .selectAll<SVGRectElement, BarDatum>('.bar-tracker')
     .data(d.summary_data.tracker)
     .join('rect')
@@ -383,6 +387,20 @@ function drawMiniBarChartsForItem(
     .attr('rx', BAR_HEIGHT * 0.25)
     .attr('ry', BAR_HEIGHT * 0.25)
     .style('fill', (bd) => getTrackerColor(bd.tracker || ''));
+
+  trackerBars
+    .on('mouseover', function (event, bd) {
+      const [mx] = d3Pointer(event, this);
+      showBarTooltip(
+        trackerGroup,
+        mx,
+        -8,
+        `${bd.tracker || 'Unknown'}: ${format('.0%')(bd.percentage)}`
+      );
+    })
+    .on('mouseout', () => {
+      trackerGroup.select('.bar-tooltip').remove();
+    });
 
   // Status bars
   const statusGroup = item
@@ -400,7 +418,7 @@ function drawMiniBarChartsForItem(
     .style('fill', colors.gray400)
     .text('STATUS');
 
-  statusGroup
+  const statusBars = statusGroup
     .selectAll<SVGRectElement, BarDatum>('.bar-status')
     .data(d.summary_data.status)
     .join('rect')
@@ -411,7 +429,157 @@ function drawMiniBarChartsForItem(
     .attr('width', (bd) => Math.max(0, scaleW(bd.percentage)))
     .attr('rx', BAR_HEIGHT * 0.25)
     .attr('ry', BAR_HEIGHT * 0.25)
-    .style('fill', (bd) => colorByStatus.get(bd.status || '') || statusColors.unknown);
+    .style('fill', (bd) => statusColors[bd.status || ''] || statusColors.unknown);
+
+  statusBars
+    .on('mouseover', function (event, bd) {
+      const [mx] = d3Pointer(event, this);
+      showBarTooltip(
+        statusGroup,
+        mx,
+        -8,
+        `${bd.status || 'Unknown'}: ${format('.0%')(bd.percentage)}`
+      );
+    })
+    .on('mouseout', () => {
+      statusGroup.select('.bar-tooltip').remove();
+    });
+}
+
+function showBarTooltip(
+  group: Selection<SVGGElement, unknown, null, undefined>,
+  x: number,
+  y: number,
+  label: string
+) {
+  group.select('.bar-tooltip').remove();
+  const tip = group
+    .append('g')
+    .attr('class', 'bar-tooltip')
+    .attr('transform', `translate(${x}, ${y})`)
+    .style('pointer-events', 'none');
+
+  const text = tip
+    .append('text')
+    .attr('text-anchor', 'middle')
+    .attr('dy', '-0.2em')
+    .style('font-size', '8px')
+    .style('font-weight', 500)
+    .style('fill', '#ffffff')
+    .text(label);
+
+  const bbox = (text.node() as SVGTextElement).getBBox();
+  tip
+    .insert('rect', 'text')
+    .attr('x', bbox.x - 6)
+    .attr('y', bbox.y - 3)
+    .attr('width', bbox.width + 12)
+    .attr('height', bbox.height + 6)
+    .attr('rx', 4)
+    .attr('ry', 4)
+    .style('fill', '#004a63');
+}
+
+// ---------------------------------------------------------------------------
+// Intermediary path hints (ported from notebook)
+// ---------------------------------------------------------------------------
+
+function drawIntermediaryPathForItem(
+  item: Selection<SVGGElement, SubsidiaryGroupData, null, undefined>,
+  d: SubsidiaryGroupData,
+  startY: number
+) {
+  if (d.id === 'Directly owned') return;
+
+  const intermediary = d.intermediary_data;
+  if (!intermediary) return;
+
+  const radius = LAYOUT.yPadding;
+  const endWidth = LAYOUT.assetsX - LAYOUT.subsidX - radius - 20;
+  const COL_HINT = '#61615c';
+
+  const g = item.append('g').attr('class', 'intermediary-path-group');
+
+  // Curved path from subsidiary marker toward asset cluster
+  const path = d3Path();
+  const xS = 0;
+  const yS = startY;
+  const xE = radius;
+  const yE = startY + radius;
+  path.moveTo(xS, yS - 10);
+  path.lineTo(xS, yS);
+  path.bezierCurveTo(xS, yS + radius * 0.8, xE - radius * 0.8, yE, xE, yE);
+  path.lineTo(xE + endWidth, yE);
+
+  g.append('path')
+    .attr('class', 'intermediary-path')
+    .attr('d', path.toString())
+    .style('fill', 'none')
+    .style('stroke', COL_STROKE)
+    .style('stroke-width', 1.5);
+
+  // Descendant count circles
+  if (intermediary.total_descendants > 1) {
+    const circles = g
+      .append('g')
+      .attr('class', 'intermediary-circles')
+      .attr('transform', `translate(${190}, ${startY + radius})`)
+      .style('isolation', 'isolate');
+
+    const N = intermediary.total_descendants;
+    const maxCircles = Math.min(N, 12);
+    for (let i = 0; i < maxCircles; i++) {
+      circles
+        .append('circle')
+        .attr('cx', i * 8)
+        .attr('r', (LAYOUT.subsidiaryMarkHeight / 2) * 0.5)
+        .style('fill', '#cacaca')
+        .style('mix-blend-mode', 'multiply');
+    }
+  }
+
+  // Label
+  g.append('text')
+    .attr('transform', `translate(${radius - 10}, ${startY + radius + 5})`)
+    .style('font-size', '8px')
+    .style('font-weight', 500)
+    .style('font-style', 'italic')
+    .style('letter-spacing', '0.03em')
+    .style('fill', COL_HINT)
+    .selectAll('tspan')
+    .data(
+      intermediary.total_descendants === 1
+        ? ['Assets are directly', 'owned by intermediary']
+        : ['(Some) assets are owned', 'through other intermediaries']
+    )
+    .join('tspan')
+    .attr('x', 0)
+    .attr('y', (_d, i) => `${-2.5 + i * 1.2}em`)
+    .text((t) => t);
+
+  // Visual-only fold-out affordance (parity with notebook mock)
+  if (intermediary.total_descendants > 1) {
+    const fold = g
+      .append('g')
+      .attr('transform', `translate(${radius - 2}, ${startY + radius + 10})`);
+    fold
+      .append('rect')
+      .attr('x', -8)
+      .attr('y', -3)
+      .attr('width', 68)
+      .attr('height', 18)
+      .attr('rx', 4)
+      .attr('ry', 4)
+      .style('fill', '#dee4e7');
+    fold
+      .append('text')
+      .attr('dy', '1em')
+      .style('font-size', '8px')
+      .style('font-weight', 700)
+      .style('letter-spacing', '0.03em')
+      .style('fill', colors.teal)
+      .text('Fold out \u25be');
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -419,9 +587,9 @@ function drawMiniBarChartsForItem(
 // ---------------------------------------------------------------------------
 
 function drawAssetGroups(
-  group: d3.Selection<SVGGElement, unknown, null, undefined>,
+  group: Selection<SVGGElement, unknown, null, undefined>,
   data: SubsidiaryGroupData[],
-  getColor: (unit: ChartUnit) => string
+  getColor: (_unit: ChartUnit) => string
 ) {
   const outerGroups = group
     .selectAll<SVGGElement, SubsidiaryGroupData>('.subsidiary-asset-group')
@@ -440,7 +608,7 @@ function drawAssetGroups(
     .attr('id', (d) => `asset-${d.locationID}`)
     .attr('transform', (d) => `translate(0, ${d.y})`);
 
-  // Hover background rect
+  // Hover background rect (invisible hit area, expands on hover)
   assets
     .append('rect')
     .attr('class', 'asset-hover-bg')
@@ -451,13 +619,15 @@ function drawAssetGroups(
     .attr('rx', LAYOUT.assetMarkHeightSingle * 0.25)
     .style('pointer-events', 'all')
     .style('cursor', 'pointer')
-    .style('fill', COL_BG_LIGHT)
+    .style('fill', '#f5f0e8')
+    .style('stroke', 'none')
+    .style('filter', 'none')
     .style('opacity', 0)
-    .on('mouseover', function () {
-      select(this).transition().duration(200).style('opacity', 1);
+    .on('mouseover', function (_event, locData) {
+      expandAssetHover(select(this), locData);
     })
-    .on('mouseout', function () {
-      select(this).transition().duration(200).style('opacity', 0);
+    .on('mouseout', function (_event, locData) {
+      collapseAssetHover(select(this), locData);
     });
 
   // Draw unit circles for each location
@@ -495,8 +665,10 @@ function drawAssetGroups(
       .join('g')
       .attr('class', 'unit-mark')
       .each(function (p, j) {
-        (p as ChartUnit & { _x: number; _y: number })._x = N === 1 ? 0 : r * Math.cos((TAU * j) / N);
-        (p as ChartUnit & { _x: number; _y: number })._y = N === 1 ? 0 : r * Math.sin((TAU * j) / N);
+        (p as ChartUnit & { _x: number; _y: number })._x =
+          N === 1 ? 0 : r * Math.cos((TAU * j) / N);
+        (p as ChartUnit & { _x: number; _y: number })._y =
+          N === 1 ? 0 : r * Math.sin((TAU * j) / N);
       })
       .attr('transform', (p) => {
         const px = (p as ChartUnit & { _x: number })._x ?? 0;
@@ -598,12 +770,160 @@ function drawAssetGroups(
     });
 }
 
+function expandAssetHover(
+  bgRect: Selection<SVGRectElement, LocationGroup, BaseType, unknown>,
+  locData: LocationGroup
+) {
+  const parent = select(bgRect.node()?.parentNode as SVGGElement);
+  const N = locData.units.length;
+  const LINE_H = 25;
+
+  // Raise to top of SVG stacking order
+  parent.raise();
+
+  // Expand background rect with warm fill + subtle shadow
+  bgRect
+    .transition('reshape')
+    .duration(400)
+    .attr('x', -20)
+    .attr('y', -LAYOUT.assetMarkHeightSingle / 2 - 10)
+    .attr('width', 560)
+    .attr('height', N * LINE_H + LINE_H / 2)
+    .attr('rx', 12)
+    .attr('ry', 12)
+    .style('opacity', 1)
+    .style('stroke', '#e0ddd4')
+    .style('stroke-width', '1px')
+    .style('filter', 'url(#hover-shadow)');
+
+  // Fade out ring + summary label
+  parent.selectAll('.unit-ring').transition('fade').duration(300).style('opacity', 0);
+  parent.selectAll('.asset-label-main').transition('fade').duration(300).style('opacity', 0);
+
+  // Spread unit marks vertically with scale-up
+  parent
+    .selectAll<SVGGElement, ChartUnit>('.unit-mark')
+    .transition('move')
+    .duration(400)
+    .delay(100)
+    .attr('transform', (_p, j) => `translate(0,${j * LINE_H}) scale(${N === 1 ? 1 : 1.5})`);
+
+  // Add detail labels to each unit mark
+  // Scale compensates for unit-mark's 1.5x transform so text is readable
+  const textScale = N === 1 ? 0.85 : 0.55;
+  const labels = parent
+    .selectAll<SVGGElement, ChartUnit>('.unit-mark')
+    .append('text')
+    .attr('class', 'unit-name')
+    .attr('transform', `scale(${textScale})`)
+    .attr('x', (LAYOUT.assetMarkHeightCombined + 10) / textScale * (N === 1 ? textScale : 0.55))
+    .attr('dy', '0.35em')
+    .style('pointer-events', 'none');
+
+  // Status label (skip for operating)
+  labels
+    .filter((u) => getStatusLabel(u.status) !== 'operating')
+    .append('tspan')
+    .style('font-size', '10px')
+    .style('font-weight', 800)
+    .style('text-transform', 'uppercase')
+    .style('letter-spacing', '0.1em')
+    .style('fill', colors.midnight)
+    .text((u) => getStatusLabel(u.status));
+
+  labels
+    .filter((u) => getStatusLabel(u.status) !== 'operating')
+    .append('tspan')
+    .style('font-size', '11px')
+    .style('font-weight', 800)
+    .style('fill', colors.grey)
+    .text(' | ');
+
+  // Asset name
+  labels
+    .append('tspan')
+    .style('font-size', '12px')
+    .style('font-weight', 500)
+    .style('letter-spacing', '0.03em')
+    .style('fill', colors.navy)
+    .text((u) => u.name);
+
+  // Ownership percentage
+  labels
+    .filter((u) => u.spotlightOwnershipSharePct > 1)
+    .append('tspan')
+    .style('font-size', '11px')
+    .style('font-weight', 800)
+    .style('fill', colors.grey)
+    .text(' | ');
+
+  labels
+    .filter((u) => u.spotlightOwnershipSharePct > 1)
+    .append('tspan')
+    .style('font-size', '10px')
+    .style('font-weight', 500)
+    .style('font-style', 'italic')
+    .style('letter-spacing', '0.05em')
+    .style('fill', '#879294')
+    .text((u) => `Ownership: ${format('.0%')(u.spotlightOwnershipSharePct / 100)}`);
+
+  // Fade labels in after units have moved
+  labels.style('opacity', 0).transition('fade').duration(200).delay(300).style('opacity', 1);
+}
+
+function collapseAssetHover(
+  bgRect: Selection<SVGRectElement, LocationGroup, BaseType, unknown>,
+  _locData: LocationGroup
+) {
+  const parent = select(bgRect.node()?.parentNode as SVGGElement);
+
+  // Collapse background rect
+  bgRect
+    .transition('reshape')
+    .duration(400)
+    .attr('x', -10)
+    .attr('y', -LAYOUT.assetMarkHeightSingle / 2)
+    .attr('width', 300)
+    .attr('height', LAYOUT.assetMarkHeightSingle)
+    .attr('rx', LAYOUT.assetMarkHeightSingle * 0.25)
+    .attr('ry', LAYOUT.assetMarkHeightSingle * 0.25)
+    .style('opacity', 0)
+    .style('stroke', 'none')
+    .style('filter', 'none');
+
+  // Restore ring + summary label
+  parent.selectAll('.unit-ring').transition('fade').duration(300).style('opacity', 1);
+  parent.selectAll('.asset-label-main').transition('fade').duration(300).style('opacity', 1);
+
+  // Return unit marks to circular cluster positions
+  parent
+    .selectAll<SVGGElement, ChartUnit>('.unit-mark')
+    .transition('move')
+    .duration(300)
+    .attr('transform', (u) => {
+      const ux = (u as ChartUnit & { _x?: number })._x ?? 0;
+      const uy = (u as ChartUnit & { _y?: number })._y ?? 0;
+      return `translate(${ux},${uy}) scale(1)`;
+    });
+
+  // Remove detail labels immediately
+  parent.selectAll('.unit-name').remove();
+}
+
+function getStatusLabel(status: string): string {
+  const s = status?.toLowerCase() || '';
+  if (s.includes('retired') || s.includes('mothballed')) return 'retired';
+  if (s.includes('cancel')) return 'cancelled';
+  if (s.includes('propos') || s.includes('announce') || s.includes('permit')) return 'proposed';
+  return 'operating';
+}
+
 // ---------------------------------------------------------------------------
 // Status icons (proposed, retired, cancelled)
 // ---------------------------------------------------------------------------
 
 function addStatusIcon(
-  el: d3.Selection<SVGGElement, ChartUnit, SVGGElement | null, unknown>,
+  el: Selection<SVGGElement, ChartUnit, SVGGElement | null, unknown>,
   statusAgg: string,
   r: number,
   center: [number, number] = [0, 0]
@@ -653,8 +973,8 @@ function drawCross(r: number): string {
 // ---------------------------------------------------------------------------
 
 function drawCommonAssetLines(
-  assetGroup: d3.Selection<SVGGElement, unknown, null, undefined>,
-  lineGroup: d3.Selection<SVGGElement, unknown, null, undefined>,
+  assetGroup: Selection<SVGGElement, unknown, null, undefined>,
+  lineGroup: Selection<SVGGElement, unknown, null, undefined>,
   subsidiaryGroups: SubsidiaryGroupData[],
   chartData: ScreenerChartData,
   totalHeight: number
@@ -679,9 +999,7 @@ function drawCommonAssetLines(
       const subsidiary = subsidiaryGroups.find((s) => s.id === subId);
       if (!subsidiary) continue;
 
-      const location = subsidiary.locations.find((loc) =>
-        loc.units.some((u) => u.id === assetId)
-      );
+      const location = subsidiary.locations.find((loc) => loc.units.some((u) => u.id === assetId));
       if (!location) continue;
 
       // Try to get text width from rendered label
@@ -689,9 +1007,7 @@ function drawCommonAssetLines(
         .select(`#subsidiary-asset-group-${subId}`)
         .select(`#asset-${location.locationID}`)
         .select('text');
-      const bbox = labelEl.node()
-        ? (labelEl.node() as SVGTextElement).getBBox()
-        : { width: 100 };
+      const bbox = labelEl.node() ? (labelEl.node() as SVGTextElement).getBBox() : { width: 100 };
 
       points.push({
         subsidiary,
@@ -746,7 +1062,7 @@ function drawCommonAssetLines(
 // ---------------------------------------------------------------------------
 
 function drawLegend(
-  svg: d3.Selection<SVGSVGElement, unknown, null, undefined>,
+  svg: Selection<SVGSVGElement, unknown, null, undefined>,
   chartData: ScreenerChartData,
   colorField: ColorField,
   width: number,
@@ -760,8 +1076,8 @@ function drawLegend(
 
   // Collect unique trackers from data
   const trackers = new Set<string>();
-  for (const unit of chartData.assets) {
-    if (unit.tracker && unit.tracker !== 'Unknown') trackers.add(unit.tracker);
+  for (const _unit of chartData.assets) {
+    if (_unit.tracker && _unit.tracker !== 'Unknown') trackers.add(_unit.tracker);
   }
 
   // Tracker legend
@@ -780,11 +1096,7 @@ function drawLegend(
     let x = 0;
     for (const tracker of trackers) {
       const item = trackerLegend.append('g').attr('transform', `translate(${x}, 8)`);
-      item
-        .append('circle')
-        .attr('r', 5)
-        .attr('cy', 4)
-        .style('fill', getTrackerColor(tracker));
+      item.append('circle').attr('r', 5).attr('cy', 4).style('fill', getTrackerColor(tracker));
       item
         .append('text')
         .attr('x', 10)
@@ -800,7 +1112,7 @@ function drawLegend(
   }
 
   // Status legend (always shown)
-  const statusData = ['operating', 'proposed', 'retired', 'cancelled'] as const;
+  const statusData = ['operating', 'prospective', 'retired', 'cancelled'] as const;
   const statusLegend = legend
     .append('g')
     .attr('class', 'status-legend')
@@ -825,13 +1137,14 @@ function drawLegend(
       .append('circle')
       .attr('r', circleR)
       .attr('cy', 4)
-      .style('fill', colorField === 'status'
-        ? (colorByStatus.get(status) || statusColors.unknown)
-        : colors.grey);
+      .style(
+        'fill',
+        colorField === 'status' ? statusColors[status] || statusColors.unknown : colors.grey
+      );
 
     // Add status icon on the legend circle
     const iconG = item.append('g').attr('transform', `translate(0, 4)`);
-    if (status === 'proposed') {
+    if (status === 'prospective') {
       iconG
         .append('circle')
         .attr('cx', circleR * 1.15)
@@ -877,7 +1190,7 @@ function drawLegend(
 // ---------------------------------------------------------------------------
 
 function wrapTextTwoLines(
-  textEl: d3.Selection<SVGTextElement, unknown, null, undefined>,
+  textEl: Selection<SVGTextElement, unknown, null, undefined>,
   text: string,
   charLimit: number
 ) {
@@ -896,9 +1209,5 @@ function wrapTextTwoLines(
   const line2 = rest.length > charLimit ? rest.slice(0, charLimit).trim() + '\u2026' : rest;
 
   textEl.append('tspan').text(line1);
-  textEl
-    .append('tspan')
-    .attr('x', textEl.attr('x'))
-    .attr('dy', '1.2em')
-    .text(line2);
+  textEl.append('tspan').attr('x', textEl.attr('x')).attr('dy', '1.2em').text(line2);
 }

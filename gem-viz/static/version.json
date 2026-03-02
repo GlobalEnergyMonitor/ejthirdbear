@@ -1,10 +1,10 @@
 {
-  "version": "4ec3136",
-  "commit": "4ec3136",
-  "message": "feat: improve gembot sidebar with provenance tracking",
+  "version": "bbe6d3d",
+  "commit": "bbe6d3d",
+  "message": "screener: add clear step-4 path from results",
   "author": "EJ Fox",
-  "timestamp": "2026-03-02T14:31:43.164Z",
-  "deployed": "2026-03-02T14:31:43.164Z",
-  "buildTime": "3/2/2026, 9:31:43 AM",
-  "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.3.0"
+  "timestamp": "2026-03-02T19:46:42.346Z",
+  "deployed": "2026-03-02T19:46:42.346Z",
+  "buildTime": "3/2/2026, 2:46:42 PM",
+  "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.3.2"
 }

@@ -7,12 +7,14 @@
    *   id - Required. Entity ID
    *   showFlower - Optional. Show ownership flower (default: true)
    *   showAssets - Optional. Show asset list (default: true)
+   *   showChart - Optional. Show ownership structure chart (default: false)
    *   maxAssets - Optional. Max assets to show (default: 10)
    */
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
   import { assetLink } from '$lib/links';
   import OwnershipFlower from '$lib/components/OwnershipFlower.svelte';
+  import AssetScreenerChart from '$lib/components/screener/AssetScreenerChart.svelte';
   import TrackerIcon from '$lib/components/TrackerIcon.svelte';
   import StatusIcon from '$lib/components/StatusIcon.svelte';
   import {
@@ -28,6 +30,7 @@
   const entityId = $derived($page.url.searchParams.get('id'));
   const showFlower = $derived(boolParam($page.url.searchParams.get('showFlower')));
   const showAssets = $derived(boolParam($page.url.searchParams.get('showAssets')));
+  const showChart = $derived($page.url.searchParams.get('showChart') === 'true');
   const maxAssets = $derived(intParam($page.url.searchParams.get('maxAssets'), 10));
 
   // State
@@ -113,6 +116,13 @@
           </span>
         {/each}
       </div>
+    {/if}
+
+    {#if showChart && entityId}
+      <AssetScreenerChart
+        entityId={entityId}
+        entityName={entityName}
+      />
     {/if}
 
     {#if showAssets && displayAssets.length > 0}

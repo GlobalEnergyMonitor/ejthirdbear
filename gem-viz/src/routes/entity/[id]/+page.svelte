@@ -298,7 +298,7 @@
         </SectionHeader>
 
         <div class="split-row">
-          <div class="split-col panel panel--hero">
+          <div class="split-col">
             <h3>
               Ownership Flower
               {@render embedBtn(`/embed/ownership-flower?entityId=${entityId}`)}
@@ -350,14 +350,14 @@
         </div>
       {/if}
 
-      <!-- Upstream ownership — HERO when data exists -->
+      <!-- Ownership structure -->
       {#if graphLoading}
         <SectionHeader title="Ownership Structure">
           <div class="source-badges">
             <DataSourceBadge source="api" label="Graph" queryTime={graphQueryTime} />
           </div>
         </SectionHeader>
-        <div class="section-block panel">
+        <div class="section-block">
           <p class="placeholder">Loading ownership graph...</p>
         </div>
       {:else if graphUp?.nodes?.length > 1}
@@ -367,7 +367,7 @@
           </div>
         </SectionHeader>
 
-        <div class="section-block panel panel--graph-hero">
+        <div class="section-block section-block--scroll">
           <h3>
             Upstream Ownership
             {@render embedBtn(`/embed/ownership-graph?entityId=${entityId}&direction=up`)}
@@ -380,35 +380,28 @@
           />
         </div>
 
-        <!-- Ownership detail row: Ultimate Owners + Summary Tables -->
         <div class="split-row">
-          <div class="split-col panel panel--tall">
+          <div class="split-col">
             <h3>
               Ultimate Owners
               {@render embedBtn(`/embed/ultimate-owners?entityId=${entityId}`)}
             </h3>
             <UltimateOwners {entityId} />
           </div>
-          <div class="split-col panel panel--tall">
+          <div class="split-col">
             <h3>Ownership Breakdown</h3>
             <OwnershipSummaryTables nodes={graphUp.nodes} edges={graphUp.edges} rootId={entityId} />
           </div>
         </div>
       {:else if graphError}
         <SectionHeader title="Ownership Structure" />
-        <div class="section-block panel">
+        <div class="section-block">
           <p class="placeholder error">Failed to load ownership graph: {graphError}</p>
         </div>
       {/if}
 
-      <!-- Downstream ownership — full width -->
       {#if graphDown?.nodes?.length > 1}
-        <SectionHeader
-          title="Subsidiaries & Holdings"
-          subtitle={`Entities and assets owned by ${entityName || entityId}`}
-        />
-
-        <div class="section-block panel panel--graph-hero">
+        <div class="section-block section-block--scroll">
           <h3>
             Downstream Ownership
             {@render embedBtn(`/embed/ownership-graph?entityId=${entityId}&direction=down`)}
@@ -422,18 +415,12 @@
         </div>
       {/if}
 
-      <!-- Network analysis -->
-      <SectionHeader
-        title="Network Analysis"
-        subtitle="Interactive ownership network exploration"
-      />
-
-      <div class="section-block panel panel--mega">
+      <div class="section-block">
         <h3>Ownership Structure</h3>
         <AssetScreenerChart {entityId} entityName={entityName} />
       </div>
 
-      <div class="section-block panel panel--mega">
+      <div class="section-block section-block--scroll" style="min-height: 500px;">
         <h3>
           Ownership Network
           {@render embedBtn(`/embed/network-3d?entityId=${entityId}`)}
@@ -448,7 +435,7 @@
           subtitle={`${filteredAssets.length.toLocaleString()} assets across ${countryBreakdown.length} countries`}
         />
 
-        <div class="section-block panel">
+        <div class="section-block">
           <h3>
             Asset Ring Visualization
             {@render embedBtn(`/embed/asset-ring?entityId=${entityId}`)}
@@ -458,7 +445,7 @@
 
         <!-- Status breakdown -->
         <div class="split-row">
-          <div class="split-col panel">
+          <div class="split-col">
             <h3>Status Distribution</h3>
             <div class="status-grid">
               {#each statusBreakdown as row}
@@ -474,7 +461,7 @@
               {/each}
             </div>
           </div>
-          <div class="split-col panel">
+          <div class="split-col">
             <h3>Geographic Distribution</h3>
             <div class="country-grid">
               {#each countryBreakdown.slice(0, 12) as row}
@@ -589,33 +576,8 @@
     min-width: 0;
   }
 
-  .panel {
-    border: 2px solid var(--color-black);
-    background: var(--color-bg-secondary);
-    padding: var(--space-4);
-    overflow: auto;
-  }
-
-  .panel--hero {
-    min-height: 400px;
-    max-height: 500px;
-  }
-
-  .panel--tall {
-    min-height: 120px;
-    max-height: 80vh;
-    overflow: auto;
-  }
-
-  .panel--graph-hero {
-    min-height: 300px;
+  .section-block--scroll {
     max-height: 85vh;
-    overflow: auto;
-  }
-
-  .panel--mega {
-    min-height: 600px;
-    max-height: 90vh;
     overflow: auto;
   }
 
@@ -981,14 +943,6 @@
   @media (max-width: 900px) {
     .split-row {
       grid-template-columns: 1fr;
-    }
-
-    .panel {
-      max-height: 70vh;
-    }
-
-    .panel--mega {
-      min-height: 400px;
     }
 
     .stat-number {

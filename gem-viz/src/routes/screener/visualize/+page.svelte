@@ -189,58 +189,46 @@
           <p>No entities selected. Return to results to select entities.</p>
         </div>
       {:else if viewMode === 'single' && selectedOwner}
-        <!-- Single owner view: visualization is primary -->
-        <div class="single-view">
-          <!-- Minimal header bar -->
-          <div class="owner-bar">
-            <div class="owner-title">
-              <h2>{selectedOwner.name}</h2>
-              {#if selectedOwner.country}
-                <span class="country">{selectedOwner.country}</span>
-              {/if}
-            </div>
-            <div class="bar-actions">
-              <button class="text-link muted" onclick={toggleHelp}>
-                {showHelp ? 'Hide guide' : 'Guide'}
-              </button>
-              <span class="separator">|</span>
-              <button class="text-link muted" onclick={downloadData}> Export </button>
-              {#if owners.length > 1}
-                <button class="close-btn" onclick={backToGrid} title="Return to grid">
-                  <span class="sr-only">Close</span>
-                  <span aria-hidden="true">×</span>
-                </button>
-              {/if}
-            </div>
+        <!-- Single owner view: flat, no box -->
+        <div class="owner-bar">
+          <div class="owner-title">
+            <h2>{selectedOwner.name}</h2>
+            {#if selectedOwner.country}
+              <span class="country">{selectedOwner.country}</span>
+            {/if}
           </div>
-
-          <!-- Help: subtle, inline -->
-          {#if showHelp}
-            <aside class="help-panel">
-              <p>
-                <strong>Owner node</strong> is the primary entity.
-                <strong>Subsidiaries</strong> show ownership stakes.
-                <strong>Percentages</strong> appear on connection lines. Click any node to explore.
-              </p>
-            </aside>
-          {/if}
-
-          <div class="graph-container">
-            <AssetScreenerChart
-              entityId={selectedOwner.id}
-              entityName={selectedOwner.name}
-              {assetClassName}
-              {trackerSlug}
-            />
-          </div>
-
-          <!-- Entity link: subtle, bottom -->
-          <div class="entity-link">
-            <button class="text-link" onclick={() => openEntityPage(selectedOwner.id)}>
-              View full entity profile
+          <div class="bar-actions">
+            <button class="text-link muted" onclick={toggleHelp}>
+              {showHelp ? 'Hide guide' : 'Guide'}
             </button>
+            <span class="separator">|</span>
+            <button class="text-link muted" onclick={downloadData}> Export </button>
+            <button class="text-link muted" onclick={() => openEntityPage(selectedOwner.id)}>
+              Profile
+            </button>
+            {#if owners.length > 1}
+              <span class="separator">|</span>
+              <button class="text-link" onclick={backToGrid}>
+                All {owners.length}
+              </button>
+            {/if}
           </div>
         </div>
+
+        {#if showHelp}
+          <p class="help-text">
+            <strong>Owner node</strong> is the primary entity.
+            <strong>Subsidiaries</strong> show ownership stakes.
+            <strong>Percentages</strong> appear on connection lines. Click any node to explore.
+          </p>
+        {/if}
+
+        <AssetScreenerChart
+          entityId={selectedOwner.id}
+          entityName={selectedOwner.name}
+          {assetClassName}
+          {trackerSlug}
+        />
       {:else}
         <!-- Grid view: cards are minimal frames for graphs -->
         <div class="grid-view">
@@ -390,18 +378,11 @@
     color: var(--color-error);
   }
 
-  /* Single view: visualization-first */
-  .single-view {
-    background: var(--color-bg-primary);
-    border: var(--border-width) solid var(--color-border);
-  }
-
   .owner-bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: var(--space-3) var(--space-5);
-    border-bottom: var(--border-width) solid var(--color-border-light);
+    margin-bottom: var(--space-4);
   }
 
   .owner-title {
@@ -433,66 +414,16 @@
     font-size: var(--font-size-body);
   }
 
-  .sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-  }
-
-  .close-btn {
-    width: 24px;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: var(--font-size-xl);
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: var(--color-text-tertiary);
-    margin-left: var(--space-2);
-    transition: color var(--duration-slow) var(--ease-in-out-quad);
-  }
-
-  .close-btn:hover {
-    color: var(--color-text-secondary);
-  }
-
-  /* Help panel: subtle, inline */
-  .help-panel {
-    padding: var(--space-3) var(--space-5);
-    background: var(--color-bg-secondary);
-    border-bottom: var(--border-width) solid var(--color-border-light);
+  .help-text {
     font-size: var(--font-size-body);
-    color: var(--color-text-secondary);
+    color: var(--color-text-tertiary);
+    margin: 0 0 var(--space-4) 0;
     line-height: var(--line-height-relaxed);
   }
 
-  .help-panel p {
-    margin: 0;
-  }
-
-  .help-panel strong {
-    color: var(--color-text-secondary);
+  .help-text strong {
     font-weight: 500;
-  }
-
-  /* Graph container: maximize space */
-  .graph-container {
-    padding: var(--space-8) var(--space-5) var(--space-10);
-  }
-
-  /* Entity link footer */
-  .entity-link {
-    padding: var(--space-3) var(--space-5);
-    border-top: var(--border-width) solid var(--color-border-light);
-    text-align: right;
+    color: var(--color-text-secondary);
   }
 
   /* Grid view: minimal cards */
@@ -503,24 +434,15 @@
   }
 
   .graph-card {
-    background: var(--color-bg-primary);
-    border: var(--border-width) solid var(--color-border);
-    transition:
-      border-color var(--duration-slow) var(--ease-in-out-quad),
-      box-shadow var(--duration-slow) var(--ease-in-out-quad);
-  }
-
-  .graph-card:hover {
-    border-color: var(--color-gray-300);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    padding-bottom: var(--space-4);
+    border-bottom: var(--border-width) solid var(--color-border);
   }
 
   .card-header {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    padding: var(--space-2) var(--space-3);
-    border-bottom: var(--border-width) solid var(--color-border-light);
+    margin-bottom: var(--space-2);
   }
 
   .card-header h3 {
@@ -537,14 +459,12 @@
 
   .card-graph {
     cursor: pointer;
-    padding: var(--space-2) 0;
   }
 
   .card-footer {
     display: flex;
     justify-content: space-between;
-    padding: var(--space-2) var(--space-3);
-    border-top: var(--border-width) solid var(--color-border-light);
+    margin-top: var(--space-2);
   }
 
   /* Navigation row: minimal */

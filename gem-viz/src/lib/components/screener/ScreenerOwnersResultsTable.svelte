@@ -14,7 +14,7 @@
   export let onClearSearch: () => void;
 </script>
 
-<div class="results-box">
+<div>
   <div class="matched-intro">
     <strong>Matched Owners:</strong> Click any company name to explore ownership chains and intermediaries
   </div>
@@ -63,14 +63,13 @@
         {#if isExpanded}
           <tr class="tree-row">
             <td colspan="5" class="tree-cell">
-              <div class="expanded-viz">
-                <AssetScreenerChart
-                  entityId={owner.entityId}
-                  entityName={owner.name}
-                  {assetClassName}
-                  {trackerSlug}
-                />
-              </div>
+              <AssetScreenerChart
+                entityId={owner.entityId}
+                entityName={owner.name}
+                {assetClassName}
+                {trackerSlug}
+                filteredAssetCount={owner.filteredAssets}
+              />
             </td>
           </tr>
         {/if}
@@ -98,13 +97,6 @@
 </div>
 
 <style>
-  .results-box {
-    background: white;
-    border: 1px solid #e2e8f0;
-    border-radius: var(--radius-md);
-    padding: var(--space-5);
-  }
-
   .matched-intro {
     padding: var(--space-2) var(--space-3);
     margin-bottom: var(--space-4);
@@ -221,11 +213,6 @@
   .tree-cell {
     padding: 0 !important;
     border-bottom: 2px solid #e2e8f0;
-  }
-
-  .expanded-viz {
-    padding: 16px;
-    background: #fafaf7;
   }
 
   .company-btn {

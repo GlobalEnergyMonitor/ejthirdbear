@@ -4,13 +4,7 @@
  * Flow: getOwnershipGraph() → walk edges → enrich asset nodes → build chart structures
  */
 
-import {
-  getOwnershipGraph,
-  getAsset,
-  type OwnershipGraphResponse,
-  type GraphNode,
-  type AssetSummary,
-} from '$lib/ownership-api';
+import { getOwnershipGraph, getAsset, type GraphNode, type AssetSummary } from '$lib/ownership-api';
 import { getStatusGroup } from '$lib/design-tokens';
 
 // ---------------------------------------------------------------------------
@@ -103,7 +97,7 @@ export const LAYOUT = {
  */
 export async function fetchChartData(
   entityId: string,
-  onProgress?: (msg: string) => void
+  onProgress?: (_msg: string) => void
 ): Promise<ScreenerChartData> {
   onProgress?.('Loading ownership graph...');
 
@@ -264,11 +258,6 @@ export async function fetchChartData(
     }
   }
 
-  // Sort subsidiaries by asset count (descending)
-  const sortedSubsidiaries = new Map(
-    Array.from(subsidiariesMatched).sort((a, b) => b[1].length - a[1].length)
-  );
-
   // Build matchedEdges (root → subsidiary ownership %)
   const matchedEdges = new Map<string, { source: string; target: string; value: number }>();
   for (const subId of subsidiaryIds) {
@@ -277,6 +266,17 @@ export async function fetchChartData(
       matchedEdges.set(subId, { source: rootId, target: subId, value: rootEdge.value });
     }
   }
+
+  // Sort subsidiaries by ownership percentage (desc), then asset count (desc).
+  // This mirrors notebook default behavior (sortByOwnershipPct=true).
+  const sortedSubsidiaries = new Map(
+    Array.from(subsidiariesMatched).sort((a, b) => {
+      const aOwnership = matchedEdges.get(a[0])?.value || 0;
+      const bOwnership = matchedEdges.get(b[0])?.value || 0;
+      if (bOwnership !== aOwnership) return bOwnership - aOwnership;
+      return b[1].length - a[1].length;
+    })
+  );
 
   // Build entity map
   const entityMap = new Map<string, { id: string; Name: string; type: string }>();
@@ -323,7 +323,7 @@ export function buildSubsidiaryGroups(chartData: ScreenerChartData): SubsidiaryG
   const scaleR = (n: number): number => {
     if (n <= 2) return 0.5;
     if (n >= 20) return 1.5;
-    return 0.5 + ((n - 2) / 18);
+    return 0.5 + (n - 2) / 18;
   };
 
   let subsidiariesData: SubsidiaryGroupData[] = groups.map(([id, units]) => {

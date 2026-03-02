@@ -14,6 +14,7 @@
   import DataTable from '$lib/components/DataTable.svelte';
   import ReportLoadingTerminal from '$lib/components/ReportLoadingTerminal.svelte';
   import { OwnershipTreeGraph } from '$lib/components/ownership';
+  import AssetScreenerChart from '$lib/components/screener/AssetScreenerChart.svelte';
   import {
     queryEntityPortfolios,
     fetchOwnershipGraphs,
@@ -391,6 +392,9 @@
         {#if selectedEntityForGraph}
           {@const graphData = entityOwnershipGraphs.get(selectedEntityForGraph)}
           {@const portfolio = entityPortfolios.find((e) => e.entity_id === selectedEntityForGraph)}
+
+          <h3 class="subsection-head">Upstream Ownership</h3>
+          <p class="subsection-lede">Who owns this entity</p>
           {#if graphData && graphData.nodes.length > 1}
             <div class="ownership-graph-container">
               <OwnershipTreeGraph
@@ -407,6 +411,13 @@
                 selectedEntityForGraph}. This may be a terminal entity with no recorded owners.
             </p>
           {/if}
+
+          <h3 class="subsection-head">Portfolio Structure</h3>
+          <p class="subsection-lede">Subsidiaries and assets owned by this entity</p>
+          <AssetScreenerChart
+            entityId={selectedEntityForGraph}
+            entityName={portfolio?.entity_name || selectedEntityForGraph}
+          />
         {/if}
       </section>
     {/if}
@@ -739,6 +750,12 @@
     margin: var(--space-8) 0 var(--space-3) 0;
   }
 
+  .subsection-lede {
+    font-size: 13px;
+    color: var(--color-text-tertiary);
+    margin: 0 0 var(--space-4) 0;
+  }
+
   .muted {
     opacity: 0.5;
   }
@@ -783,10 +800,7 @@
   }
 
   .ownership-graph-container {
-    border: 1px solid var(--color-gray-200);
-    background: var(--color-gray-50);
-    padding: var(--space-4);
-    min-height: 300px;
+    min-height: 200px;
   }
 
   /* ═══════════════════════════════════════════════════════════════════

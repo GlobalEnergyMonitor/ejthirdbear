@@ -510,8 +510,6 @@
   }
   .graph-wrap {
     flex: 1;
-    background: #fafaf7;
-    border: 1px solid #e5e5e5;
     overflow: auto;
     max-height: 700px;
   }
@@ -579,16 +577,18 @@
     text-anchor: middle;
   }
   .panel {
-    min-width: 220px;
-    max-width: 260px;
-    background: #fafaf7;
-    border-left: 2px solid #2a7f8f;
-    padding: 12px 16px;
+    min-width: 200px;
+    max-width: 240px;
+    padding: 0 0 0 16px;
+    border-left: 1px solid #e0e0e0;
   }
   .panel h4 {
     margin: 0 0 8px;
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #888;
   }
   .list {
     max-height: 300px;
@@ -598,10 +598,10 @@
     font-size: 12px;
     padding: 3px 0;
     cursor: pointer;
+    color: #1a3a4a;
   }
   .row:hover,
   .row.active {
     color: #2a7f8f;
-    text-decoration: underline;
   }
 </style>
