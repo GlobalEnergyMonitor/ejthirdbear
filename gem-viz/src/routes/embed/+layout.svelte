@@ -14,6 +14,7 @@
   const padding = $derived($page.url.searchParams.get('padding') || '16');
   const autoHeight = $derived($page.url.searchParams.get('autoHeight') !== 'false');
   const embedId = $derived($page.url.searchParams.get('embedId') || '');
+  const branding = $derived($page.url.searchParams.get('branding') === 'true');
 
   const postHeight = () => {
     if (!autoHeight) return;
@@ -61,6 +62,13 @@
 
 <div class="embed-container" class:dark={theme === 'dark'} style="padding: {padding}px;">
   {@render children()}
+  {#if branding}
+    <footer class="gem-branding">
+      <a href="https://globalenergymonitor.org" target="_blank" rel="noopener">
+        Powered by Global Energy Monitor
+      </a>
+    </footer>
+  {/if}
 </div>
 
 <style>
@@ -80,6 +88,25 @@
     --color-text-primary: var(--color-gray-100);
     --color-text-secondary: var(--color-gray-400);
     --color-border: var(--color-gray-700);
+  }
+
+  .gem-branding {
+    margin-top: var(--space-3);
+    padding: 8px 0 0;
+    text-align: center;
+    border-top: var(--border-width) solid var(--color-border-light);
+  }
+
+  .gem-branding a {
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+    text-decoration: none;
+    letter-spacing: 0.02em;
+  }
+
+  .gem-branding a:hover {
+    color: var(--color-text-secondary);
+    text-decoration: underline;
   }
 
   /* Reset any app-level styles that might leak in */

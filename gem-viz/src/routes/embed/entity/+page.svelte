@@ -92,7 +92,15 @@
     <header class="entity-header">
       <div class="header-text">
         <h1>{entityName}</h1>
-        <p class="subtitle">{(assets as any[]).length.toLocaleString()} assets</p>
+        <p class="subtitle">
+          {#if (assets as any[]).length > 0}
+            {(assets as any[]).length.toLocaleString()} assets
+          {:else if subsidiaries.length > 0}
+            {subsidiaries.length.toLocaleString()} subsidiaries
+          {:else}
+            No assets
+          {/if}
+        </p>
       </div>
       {#if showFlower && portfolio}
         <div class="header-flower">

@@ -39,6 +39,7 @@
     const themeAttr = container.getAttribute('data-theme');
     const paddingAttr = container.getAttribute('data-padding');
     const paramsAttr = container.getAttribute('data-params');
+    const brandingAttr = container.getAttribute('data-branding');
     const allowAttr = container.getAttribute('data-allow');
     const sandboxAttr = container.getAttribute('data-sandbox');
 
@@ -57,6 +58,9 @@
     }
     if (paddingAttr && !url.searchParams.has('padding')) {
       url.searchParams.set('padding', paddingAttr);
+    }
+    if (brandingAttr && !url.searchParams.has('branding')) {
+      url.searchParams.set('branding', brandingAttr);
     }
     if (paramsAttr) {
       const trimmed = paramsAttr.trim();

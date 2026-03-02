@@ -50,9 +50,19 @@ export async function loadEntityPortfolio(entityId: string): Promise<{
   };
 }
 
-/** Extract a clean error message from any thrown value */
+/** Extract a clean error message from any thrown value, stripping raw API JSON */
 export function errorMessage(err: unknown, fallback: string): string {
-  if (err instanceof Error) return err.message;
+  if (err instanceof Error) {
+    const msg = err.message;
+    // Extract "detail" from raw API error JSON
+    const detailMatch = msg.match(/"detail"\s*:\s*"([^"]+)"/);
+    if (detailMatch) return detailMatch[1];
+    // Strip "API error (NNN): " prefix and any remaining JSON
+    const stripped = msg.replace(/^API error \(\d+\):\s*/, '');
+    // If what remains looks like raw JSON, use the fallback
+    if (stripped.startsWith('{') || stripped.startsWith('[')) return fallback;
+    return stripped || fallback;
+  }
   if (typeof err === 'string') return err;
   return fallback;
 }

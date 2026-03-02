@@ -12,7 +12,7 @@
   import { onMount } from 'svelte';
   import { entityLink } from '$lib/links';
   import { colors, colorByStatus } from '$lib/design-tokens';
-  import { getAsset, getOwnershipGraph } from '$lib/ownership-api';
+  import { getAsset, getOwnershipGraph, resolveAssetId } from '$lib/ownership-api';
   import StatusIcon from '$lib/components/StatusIcon.svelte';
   import OwnershipPie from '$lib/components/OwnershipPie.svelte';
   import AssetMap from '$lib/components/AssetMap.svelte';
@@ -28,6 +28,7 @@
   let error = $state<string | null>(null);
   let asset = $state<any>(null);
   let graph = $state<any>(null);
+  let resolvedId = $state<string | null>(null);
   let mapHasLocation = $state(true);
 
   const assetName = $derived(asset?.name || assetId || '');
@@ -36,7 +37,7 @@
   const graphEdges = $derived(graph?.edges || []);
   const graphNodes = $derived(graph?.nodes || []);
   const nodeMap = $derived(new Map(graphNodes.map((n: any) => [n.id, n])));
-  const ownerEdges = $derived(graphEdges.filter((e: any) => e.target === assetId));
+  const ownerEdges = $derived(graphEdges.filter((e: any) => e.target === (resolvedId || assetId)));
   const ownerRows = $derived(
     ownerEdges.map((edge: any) => ({
       edge,
@@ -52,9 +53,10 @@
     }
 
     try {
+      resolvedId = await resolveAssetId(assetId);
       const [assetData, graphData] = await Promise.all([
-        getAsset(assetId),
-        getOwnershipGraph({ root: assetId, direction: 'up', max_depth: 5 }),
+        getAsset(resolvedId),
+        getOwnershipGraph({ root: resolvedId, direction: 'up', max_depth: 5 }),
       ]);
       asset = assetData;
       graph = graphData;

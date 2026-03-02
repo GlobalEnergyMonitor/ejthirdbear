@@ -68,8 +68,12 @@
       <p class="embed-hint">Example: ?entityId=YOUR_ENTITY_ID</p>
     {/if}
   </div>
-{:else if entityId && portfolio}
+{:else if entityId && portfolio && (portfolio.assets as any[]).length > 0}
   <OwnershipFlower ownerId={entityId} {portfolio} size={validSize} {showLabels} {showTitle} />
+{:else if entityId && portfolio}
+  <div class="embed-empty">
+    <p>This entity owns subsidiaries but no direct assets. Try the <a href="/embed/entity?id={entityId}" target="_blank" rel="noopener">Entity Card</a> embed for subsidiary details.</p>
+  </div>
 {:else}
   <div class="embed-error">
     <p>No data found for this entity</p>
