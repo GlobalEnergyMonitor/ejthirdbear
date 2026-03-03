@@ -42,7 +42,6 @@ type ColorField = 'tracker' | 'status';
 export interface RenderOptions {
   width?: number;
   colorField?: ColorField;
-  assetClassName?: string;
   showLegend?: boolean;
 }
 
@@ -62,7 +61,6 @@ export function renderChart(
 ): () => void {
   const width = options.width ?? 1000;
   const requestedColorField: ColorField = options.colorField ?? 'tracker';
-  const assetClassName = options.assetClassName?.trim();
   const showLegend = options.showLegend ?? false;
 
   container.innerHTML = '';
@@ -816,7 +814,7 @@ function expandAssetHover(
     .append('text')
     .attr('class', 'unit-name')
     .attr('transform', `scale(${textScale})`)
-    .attr('x', (LAYOUT.assetMarkHeightCombined + 10) / textScale * (N === 1 ? textScale : 0.55))
+    .attr('x', ((LAYOUT.assetMarkHeightCombined + 10) / textScale) * (N === 1 ? textScale : 0.55))
     .attr('dy', '0.35em')
     .style('pointer-events', 'none');
 

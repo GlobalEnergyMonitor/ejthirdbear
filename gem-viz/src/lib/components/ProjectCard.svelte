@@ -100,7 +100,12 @@
     {#if variant === 'compact'}
       <div class="details-section">
         <div class="section-title">Details</div>
-        {@render detail('Owner', asset.owner)}
+        {@render detail(
+          'Owner',
+          asset.owner && asset.ownershipShare
+            ? `${asset.owner} (${asset.ownershipShare}%)`
+            : asset.owner
+        )}
         {@render detail(
           isMine ? 'Production capacity' : 'Capacity',
           asset.capacity && formatValueWithUnit(asset.capacity, asset.capacityUnit)
@@ -119,7 +124,12 @@
       {#if hasOwnership}
         <div class="details-section">
           <div class="section-title">Ownership</div>
-          {@render detail('Owner', asset.owner)}
+          {@render detail(
+            'Owner',
+            asset.owner && asset.ownershipShare
+              ? `${asset.owner} (${asset.ownershipShare}%)`
+              : asset.owner
+          )}
           {@render detail('Parent', asset.parent)}
           {#if ownership}{@render ownership()}{/if}
         </div>

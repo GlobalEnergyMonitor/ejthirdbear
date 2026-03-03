@@ -42,9 +42,7 @@
     typeof filteredAssetCount === 'number' && !Number.isNaN(filteredAssetCount)
   );
   const matchedAssets = $derived(
-    hasFilteredAssetCount
-      ? Math.max(0, Math.min(filteredAssetCount, totalAssets))
-      : totalAssets
+    hasFilteredAssetCount ? Math.max(0, Math.min(filteredAssetCount, totalAssets)) : totalAssets
   );
   const additionalAssets = $derived(Math.max(0, totalAssets - matchedAssets));
 
@@ -89,7 +87,8 @@
       const rawStatuses = chartData.assets
         .map((a) => String(a.status || '').toLowerCase())
         .filter(Boolean);
-      const allProspective = rawStatuses.length > 0 && rawStatuses.every((s) => prospectiveStatuses.includes(s));
+      const allProspective =
+        rawStatuses.length > 0 && rawStatuses.every((s) => prospectiveStatuses.includes(s));
       prospectiveLegend = allProspective;
 
       if (allProspective) {
@@ -120,7 +119,6 @@
       chartCleanup = renderChart(container, chartData, subsidiaryGroups, {
         width: containerWidth,
         colorField: 'tracker',
-        assetClassName: assetClassName || '',
         showLegend: false,
       });
 
@@ -160,7 +158,10 @@
     <div>
       <p class="subtitle">Details</p>
       <p class="company-details">
-        {matchedAssets} {assetClassName || 'assets'} via {directSubsidiaries} direct {directSubsidiaries === 1 ? 'subsidiary' : 'subsidiaries'}
+        {matchedAssets}
+        {assetClassName || 'assets'} via {directSubsidiaries} direct {directSubsidiaries === 1
+          ? 'subsidiary'
+          : 'subsidiaries'}
       </p>
     </div>
   </div>
@@ -188,8 +189,8 @@
     <p>
       <span>
         {entityName || entityId} has stakes in
-        <strong>{additionalAssets.toLocaleString()}</strong> additional assets identified in the
-        Global Energy Ownership Trackers
+        <strong>{additionalAssets.toLocaleString()}</strong> additional assets identified in the Global
+        Energy Ownership Trackers
       </span>
     </p>
   </div>
@@ -294,10 +295,6 @@
     width: 100%;
     overflow-x: auto;
     overflow-y: visible;
-  }
-
-  .chart-render.hidden {
-    display: none;
   }
 
   .chart-state {

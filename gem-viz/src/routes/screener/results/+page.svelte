@@ -71,11 +71,9 @@
 
   // Derive chart props from selected class
   const chartAssetClassName = $derived(
-    selectedClasses.length > 0 ? (selectedClasses[0]?.tracker || selectedClasses[0]?.name || '') : ''
+    selectedClasses.length > 0 ? selectedClasses[0]?.tracker || selectedClasses[0]?.name || '' : ''
   );
-  const chartTrackerSlug = $derived(
-    selectedClasses.length > 0 ? (selectedClasses[0]?.id || '') : ''
-  );
+  const chartTrackerSlug = $derived(selectedClasses.length > 0 ? selectedClasses[0]?.id || '' : '');
 
   // Derive parse error separately (no state mutation inside $derived)
   const parseError = $derived.by(() => {

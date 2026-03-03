@@ -27,15 +27,11 @@
   const ownerIds = $derived(ownersParam ? ownersParam.split(',') : []);
 
   // Parse asset class info from URL for display
-  const parsedClasses = $derived(
-    parseJsonSearchParam(classesParam) || []
-  );
+  const parsedClasses = $derived(parseJsonSearchParam(classesParam) || []);
   const assetClassName = $derived(
-    parsedClasses.length > 0 ? (parsedClasses[0]?.tracker || parsedClasses[0]?.name || '') : ''
+    parsedClasses.length > 0 ? parsedClasses[0]?.tracker || parsedClasses[0]?.name || '' : ''
   );
-  const trackerSlug = $derived(
-    parsedClasses.length > 0 ? (parsedClasses[0]?.id || '') : ''
-  );
+  const trackerSlug = $derived(parsedClasses.length > 0 ? parsedClasses[0]?.id || '' : '');
 
   // Owner data
   let owners = $state([]);
