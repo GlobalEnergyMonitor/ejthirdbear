@@ -222,6 +222,15 @@
 
 <style>
   .project-card {
+    /* Observable-accurate color overrides (scoped to card only) */
+    --gem-navy: #004A63;
+    --gem-mint: #9DF7E5;
+    --gem-orange: #FE4F2D;
+    --gem-teal: #016B83;
+    --gem-midnight: #002430;
+    --gem-warm-white: #F2F2EB;
+    --gem-white: #FFFFFF;
+
     font-family: var(--gem-font, 'Plus Jakarta Sans', system-ui, sans-serif);
     background: var(--gem-white);
     border-radius: 0px 14px 14px 14px;
@@ -286,8 +295,8 @@
     color: var(--gem-navy);
   }
   .status-retired {
-    background: var(--color-text-secondary, #6e8c91);
-    color: var(--color-white, white);
+    background: #6e8c91;
+    color: white;
   }
   .status-unknown {
     background: var(--color-gray-200, #ddd);
@@ -311,16 +320,12 @@
 
   .details-section {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 0.8rem 1rem;
     margin-bottom: 1.25rem;
-    padding-bottom: 1rem;
-    border-bottom: 1px solid rgba(0, 74, 99, 0.1);
   }
   .details-section:last-of-type {
-    border-bottom: none;
     margin-bottom: 0;
-    padding-bottom: 0;
   }
 
   .section-title {
@@ -438,7 +443,7 @@
     border-top: 1px dashed rgba(0, 74, 99, 0.2);
     display: flex;
     flex-wrap: wrap;
-    gap: 1rem;
+    gap: 1.5rem;
     font-size: 0.65rem;
     color: var(--gem-teal);
   }

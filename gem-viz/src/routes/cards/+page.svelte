@@ -5,15 +5,19 @@
    * Based on Observable notebook: https://observablehq.com/d/b73714688f61ab19
    */
   import { link } from '$lib/links';
+  import { TRACKERS } from '$lib/data-config/tracker-schema';
   import ProjectCardList from '$lib/components/ProjectCardList.svelte';
 
   // Filter state
-  let selectedTracker = $state<string | null>('Coal Plant');
+  let selectedTracker = $state<string>(TRACKERS[3]); // Default to 'Coal Plant'
 
-  const trackers = [
-    { value: 'Coal Plant', label: 'Coal Plants' },
-    { value: 'Coal Mine', label: 'Coal Mines' },
-  ];
+  const trackers = TRACKERS.map((t) => ({ value: t, label: t + 's' }));
+
+  // Status groups for card lists
+  const proposedStatuses = ['announced', 'proposed', 'pre-permit', 'permitted', 'construction'];
+  const operatingStatuses = ['operating'];
+  const cancelledStatuses = ['cancelled', 'shelved'];
+  const retiredStatuses = ['retired', 'mothballed'];
 </script>
 
 <svelte:head>
@@ -32,8 +36,8 @@
     </nav>
     <h1>Project Cards</h1>
     <p class="lead">
-      Default card views for Coal Plants and Coal Mines. Click a card to expand and see ownership,
-      size, age, status, and tracker-specific details.
+      Browse assets across all GEM trackers. Click a card to expand and see ownership, size, age,
+      status, and tracker-specific details.
     </p>
   </header>
 
@@ -55,56 +59,12 @@
 
   <!-- Card Lists -->
   <div class="card-grid">
-    {#if selectedTracker === 'Coal Plant'}
+    {#key selectedTracker}
       <ProjectCardList
-        title="Largest Proposed Coal Plants"
-        description="The 5 largest proposed (announced, pre-permit, permitted, construction) coal units globally"
-        tracker="Coal Plant"
-        statusFilter={['announced', 'pre-permit', 'permitted', 'construction']}
-        sortBy="capacity"
-        sortOrder="desc"
-        limit={5}
-        variant="compact"
-      />
-
-      <ProjectCardList
-        title="Largest Operating Coal Plants"
-        description="The 5 largest operating coal units globally by capacity"
-        tracker="Coal Plant"
-        statusFilter={['operating']}
-        sortBy="capacity"
-        sortOrder="desc"
-        limit={5}
-        variant="compact"
-      />
-
-      <ProjectCardList
-        title="Largest Cancelled/Shelved Projects"
-        description="The 5 largest cancelled or shelved coal plant projects"
-        tracker="Coal Plant"
-        statusFilter={['cancelled', 'shelved']}
-        sortBy="capacity"
-        sortOrder="desc"
-        limit={5}
-        variant="compact"
-      />
-
-      <ProjectCardList
-        title="Largest Retired/Mothballed Units"
-        description="The 5 largest retired or mothballed coal units"
-        tracker="Coal Plant"
-        statusFilter={['retired', 'mothballed']}
-        sortBy="capacity"
-        sortOrder="desc"
-        limit={5}
-        variant="compact"
-      />
-    {:else if selectedTracker === 'Coal Mine'}
-      <ProjectCardList
-        title="Largest Proposed Coal Mines"
-        description="The 5 largest proposed coal mines globally by production capacity"
+        title="Largest Proposed {selectedTracker}s"
+        description="The 5 largest proposed (announced, pre-permit, permitted, construction) {selectedTracker.toLowerCase()}s globally"
         tracker={selectedTracker}
-        statusFilter={['proposed', 'announced', 'pre-permit', 'permitted', 'construction']}
+        statusFilter={proposedStatuses}
         sortBy="capacity"
         sortOrder="desc"
         limit={5}
@@ -112,10 +72,10 @@
       />
 
       <ProjectCardList
-        title="Largest Operating Coal Mines"
-        description="The 5 largest operating coal mines globally by production capacity"
+        title="Largest Operating {selectedTracker}s"
+        description="The 5 largest operating {selectedTracker.toLowerCase()}s globally by capacity"
         tracker={selectedTracker}
-        statusFilter={['operating']}
+        statusFilter={operatingStatuses}
         sortBy="capacity"
         sortOrder="desc"
         limit={5}
@@ -123,10 +83,10 @@
       />
 
       <ProjectCardList
-        title="Largest Cancelled/Shelved Coal Mines"
-        description="The 5 largest cancelled or shelved coal mine projects"
+        title="Largest Cancelled/Shelved {selectedTracker}s"
+        description="The 5 largest cancelled or shelved {selectedTracker.toLowerCase()} projects"
         tracker={selectedTracker}
-        statusFilter={['cancelled', 'shelved']}
+        statusFilter={cancelledStatuses}
         sortBy="capacity"
         sortOrder="desc"
         limit={5}
@@ -134,22 +94,22 @@
       />
 
       <ProjectCardList
-        title="Largest Retired/Mothballed Coal Mines"
-        description="The 5 largest retired or mothballed coal mines"
+        title="Largest Retired/Mothballed {selectedTracker}s"
+        description="The 5 largest retired or mothballed {selectedTracker.toLowerCase()}s"
         tracker={selectedTracker}
-        statusFilter={['retired', 'mothballed']}
+        statusFilter={retiredStatuses}
         sortBy="capacity"
         sortOrder="desc"
         limit={5}
         variant="compact"
       />
-    {/if}
+    {/key}
   </div>
 
   <footer class="page-footer">
     <p>
-      Project cards display asset data from GEM trackers. Cards can be embedded in reports,
-      articles, and search results.
+      Project cards display asset data from GEM trackers. Cards can be embedded in reports, articles,
+      and search results.
     </p>
     <a href={link('explore')}>Back to Explore</a>
   </footer>

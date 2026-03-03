@@ -17,6 +17,7 @@
     type PercentileData,
   } from '$lib/factsheet';
   import ProjectCard from './ProjectCard.svelte';
+  import ProjectCardMap from './ProjectCardMap.svelte';
   import LoadingWrapper from './LoadingWrapper.svelte';
   import { AssetOwnershipTree } from './ownership';
 
@@ -146,6 +147,11 @@
             {#snippet ownership()}
               {#if expandedCards.has(asset.id)}
                 <AssetOwnershipTree assetId={asset.id} />
+              {/if}
+            {/snippet}
+            {#snippet map()}
+              {#if expandedCards.has(asset.id) && asset.lat != null && asset.lon != null}
+                <ProjectCardMap lat={asset.lat} lon={asset.lon} name={asset.name} />
               {/if}
             {/snippet}
           </ProjectCard>
