@@ -44,6 +44,7 @@
   /** Status checkbox state: `status-{groupId}-{statusValue}` -> boolean */
   let checkedStatuses = $state({});
   let geoFilters = $state([]);
+  let geofence = $state(null);
 
   const selectedClass = $derived(selectedClassId ? getAssetClassById(selectedClassId) : null);
 
@@ -60,6 +61,7 @@
 
     selectedClassId = ac.id;
     geoFilters = [];
+    geofence = null;
 
     // Initialize flat sub-class checkboxes
     const checks = {};
@@ -98,6 +100,7 @@
     checkedGroupOptions = {};
     checkedStatuses = {};
     geoFilters = [];
+    geofence = null;
   }
 
   // ─── Derive selected statuses ─────────────────────────────────────
@@ -137,6 +140,7 @@
           geography: geoFilters.length > 0 ? geoFilters : undefined,
           status: selectedStatuses.length === 1 ? selectedStatuses[0] : undefined,
           statuses: selectedStatuses.length > 0 ? selectedStatuses : undefined,
+          geofence: geofence || undefined,
         },
         assetClassId: selectedClass.id,
         selectedSubClasses: selectedSubClassIds,
@@ -278,6 +282,7 @@
       bind:checkedGroupOptions
       bind:checkedStatuses
       bind:geoFilters
+      bind:geofence
       onShowAllOwners={() => navigateTo('/screener/results')}
       onSearchSpecificOwners={() => navigateTo('/screener/owners')}
     />

@@ -29,6 +29,7 @@
 
 import { browser } from '$app/environment';
 import { getAPIBase } from '$lib/ownership-api';
+import { pointInPolygon } from '$lib/geo-utils';
 
 // =============================================================================
 // GEM TRACKER NAME → UI TRACKER NAME BRIDGE
@@ -42,6 +43,8 @@ import { getAPIBase } from '$lib/ownership-api';
 const GEM_TO_UI_TRACKER: Record<string, string> = {
   'Oil & Gas Plant': 'Gas Plant',
   'Iron & Steel Plant': 'Steel Plant',
+  'Oil or NGL Pipeline': 'Oil Pipeline',
+  'Cement or Concrete Plant': 'Cement Plant',
 };
 
 export function gemTrackerToUiTracker(gemName: string): string {
@@ -88,6 +91,7 @@ export interface ScreenerFilters {
   ownerIds?: string[];
   assetClassId?: string;
   selectedSubClasses?: string[];
+  geofence?: number[][];
   [key: string]: unknown;
 }
 
@@ -228,6 +232,7 @@ async function getOwnersByAssetTypeREST(
   // Don't pass status to API — some trackers have null status (e.g., Steel Plants).
   // All status filtering is done client-side to handle null gracefully.
   const apiStatus = undefined;
+  const geofence = filters.geofence || null;
   let classMatcher: ((_record: Record<string, unknown>) => boolean) | null = null;
 
   if (filters.assetClassId) {
@@ -251,6 +256,14 @@ async function getOwnersByAssetTypeREST(
     pageCount++;
     for (const asset of page) {
       if (classMatcher && !classMatcher(asset.raw || {})) continue;
+
+      // Geofence filtering — skip assets outside the custom region
+      if (geofence) {
+        const lng = asset.longitude ?? (asset.raw as Record<string, unknown>)?.longitude;
+        const lat = asset.latitude ?? (asset.raw as Record<string, unknown>)?.latitude;
+        if (typeof lng !== 'number' || typeof lat !== 'number') continue;
+        if (!pointInPolygon([lng, lat], geofence)) continue;
+      }
 
       // Client-side status filtering — skip assets whose status doesn't match.
       // Assets with null/undefined status pass through (some trackers don't track status).

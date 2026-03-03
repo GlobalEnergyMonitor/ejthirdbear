@@ -13,10 +13,13 @@
 
 export const TRACKERS = [
   'Bioenergy Power',
+  'Cement Plant',
+  'Coal Mine',
   'Coal Plant',
   'Gas Pipeline',
   'Gas Plant',
   'Iron Mine',
+  'Oil Pipeline',
   'Steel Plant',
 ] as const;
 
@@ -31,10 +34,13 @@ export type TrackerName = (typeof TRACKERS)[number];
  */
 export const TRACKER_TO_ASSET_TYPE: Record<TrackerName, string> = {
   'Bioenergy Power': 'Bioenergy Power',
+  'Cement Plant': 'Cement or Concrete Plant',
+  'Coal Mine': 'Coal Mine',
   'Coal Plant': 'Coal Plant',
   'Gas Pipeline': 'Natural Gas Transmission Pipeline',
   'Gas Plant': 'Gas Plant',
   'Iron Mine': 'Iron Ore Mine',
+  'Oil Pipeline': 'Oil or NGL Pipeline',
   'Steel Plant': 'Iron & Steel Plant',
 };
 

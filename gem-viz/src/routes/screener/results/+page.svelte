@@ -40,6 +40,7 @@
       status?: string;
       statuses?: string[];
       geography?: string | string[];
+      geofence?: number[][];
     };
     selectedSubClasses?: string[];
     [key: string]: unknown;
@@ -115,6 +116,10 @@
       } else {
         parts.push(`in ${geo}`);
       }
+    }
+
+    if (cls.filters?.geofence) {
+      parts.push('in custom region');
     }
 
     return parts.join(' ');
@@ -225,6 +230,11 @@
         ? geoRaw.length > 0 ? geoRaw : undefined
         : geoRaw || undefined;
 
+      const geofenceRaw = cls?.filters?.geofence;
+      const geofence = Array.isArray(geofenceRaw) && geofenceRaw.length >= 3
+        ? geofenceRaw
+        : undefined;
+
       const filters: ScreenerFilters = {
         tracker: cls?.tracker || '',
         status: cls?.filters?.status,
@@ -235,6 +245,7 @@
         selectedSubClasses: Array.isArray(cls?.selectedSubClasses)
           ? cls.selectedSubClasses
           : undefined,
+        geofence,
       };
 
       // Fetch asset type counts via REST API (cached, for debug panel)
@@ -345,6 +356,12 @@
                   : `${geo.length} countries`
                 : geo}
             </span>
+          </div>
+        {/if}
+        {#if cls.filters?.geofence}
+          <div class="filter-tag geography">
+            <span class="tag-label">Region:</span>
+            <span class="tag-value">Custom region ({cls.filters.geofence.length} vertices)</span>
           </div>
         {/if}
       {/each}

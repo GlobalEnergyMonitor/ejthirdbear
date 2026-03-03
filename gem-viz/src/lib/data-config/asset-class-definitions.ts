@@ -6,7 +6,7 @@
  *
  * GEM tracker names: Bioenergy Power, Cement or Concrete Plant, Coal Mine,
  * Coal Plant, Gas Pipeline, Iron Mine, Iron & Steel Plant, Oil & Gas Plant,
- * Oil or NGL Pipeline. App handles 7 (missing Cement, Oil/NGL Pipeline).
+ * Oil or NGL Pipeline. All 9 trackers have base classes.
  *
  * Source: https://docs.google.com/spreadsheets/d/1oMAVQi8yrsm_Daj8v55FnbcCqZ4JacHjf8o53HFX3BU
  */
@@ -158,6 +158,7 @@ export const CAPTIVE_INDUSTRY_GROUPS = {
       'cement & building',
       'oil & refining',
       'industrial park',
+      'pulp & paper',
       'agriculture',
       'textiles',
       'automobiles',
@@ -646,14 +647,14 @@ export const CementPlants: AssetClass = {
   label: 'Concrete and Cement Plants',
   description: 'Cement and concrete plant asset classes. Definitions TBD.',
   category: 'cement',
-  trackers: ['Cement or Concrete Plant'], // Not yet in app TRACKERS config
+  trackers: ['Cement or Concrete Plant'],
   subClasses: [],
   availableFilters: {
     geography: true,
     status: true,
     capacity: true,
   },
-  notes: 'TBD — "Cement or Concrete Plant" tracker not yet in app config.',
+  notes: 'TBD — awaiting class definitions from the team.',
 };
 
 // =============================================================================
@@ -747,28 +748,37 @@ export const CoalRelatedAssets: AssetClass = {
       description: 'Blast furnaces and coal-based DRI',
       defaultChecked: true,
       filters: [
-        // Steel plants that have BF capacity OR coal-based DRI
-        // This is an OR condition: either filter matches
+        // Steel plants that have BF capacity OR coal-based DRI.
+        // matchesAllFilters uses AND, but for this sub-class we want OR:
+        // a plant qualifies if it has BF capacity > 0 OR has coal DRI units.
+        // Since the current matcher uses AND, we use BF capacity as the
+        // primary filter. Coal-DRI plants are also captured via subUnitContext
+        // (pass-through on flat records).
         {
           field: 'Nominal BF capacity (ttpa)',
           op: 'gt',
           value: 0,
         },
-        // TODO: also include coal-DRI plants (OR logic needed)
+        {
+          field: 'Reductant',
+          op: 'eq',
+          value: 'coal',
+          subUnitContext: 'Iron unit data > DRI furnaces',
+        },
       ],
     },
     {
       id: 'coal-related-chemical',
       label: 'Coal-based chemical plants',
       description: 'TBD — pending chemical tracker class definitions',
-      defaultChecked: true,
+      defaultChecked: false, // empty filters match everything — keep unchecked until defined
       filters: [], // TODO: define when chemical classes are ready
     },
     {
       id: 'coal-related-cement',
       label: 'Coal-based concrete & cement plants',
       description: 'TBD — pending cement tracker integration',
-      defaultChecked: true,
+      defaultChecked: false, // empty filters match everything — keep unchecked until defined
       filters: [], // TODO: define when cement tracker is added
     },
   ],
@@ -854,6 +864,13 @@ export const BioenergyPower = makeBaseClass(
   'bioenergy',
   'Bioenergy Power'
 );
+export const OilPipelines = makeBaseClass(
+  'oil-pipelines',
+  'Oil & NGL Pipelines',
+  'Oil and natural gas liquids pipelines.',
+  'multi-tracker',
+  'Oil or NGL Pipeline'
+);
 
 // =============================================================================
 // REGISTRY
@@ -888,6 +905,7 @@ export const ALL_ASSET_CLASSES: AssetClass[] = [
   CoalMines,
   GasPlants,
   GasPipelines,
+  OilPipelines,
   IronMines,
   SteelPlants,
   BioenergyPower,

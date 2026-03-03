@@ -9,6 +9,7 @@
   import type { AssetClass, SubClassGroup } from '$lib/data-config/asset-class-definitions';
   import { ArrowRight, Search as SearchIcon } from 'lucide-svelte';
   import CountryMultiSelect from '$lib/components/screener/CountryMultiSelect.svelte';
+  import GeoFenceInput from '$lib/components/screener/GeoFenceInput.svelte';
 
   interface Props {
     assetClass: AssetClass;
@@ -19,6 +20,7 @@
     /** Status group option ID -> checked */
     checkedStatuses: Record<string, boolean>;
     geoFilters: string[];
+    geofence: number[][] | null;
     onShowAllOwners: () => void;
     onSearchSpecificOwners: () => void;
   }
@@ -29,6 +31,7 @@
     checkedGroupOptions = $bindable(),
     checkedStatuses = $bindable(),
     geoFilters = $bindable(),
+    geofence = $bindable(),
     onShowAllOwners,
     onSearchSpecificOwners,
   }: Props = $props();
@@ -318,6 +321,7 @@
     <div class="filter-section" bind:this={geoSectionEl}>
       <span class="section-heading">Geography</span>
       <CountryMultiSelect bind:selected={geoFilters} countries={COUNTRIES} />
+      <GeoFenceInput bind:geofence />
     </div>
   {/if}
 
@@ -396,11 +400,12 @@
     margin-bottom: var(--space-3);
   }
 
-  /* Group row — grid fills available width */
+  /* Group row — uniform grid with aligned baselines */
   .group-row {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: var(--space-3);
+    align-items: start;
   }
 
   .group-item {
@@ -408,6 +413,10 @@
     flex-direction: column;
     gap: var(--space-1);
     min-width: 0;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--color-border, #e5e7eb);
+    border-radius: var(--radius-sm);
+    background: var(--color-bg-primary, #fff);
   }
 
   .group-checkbox {

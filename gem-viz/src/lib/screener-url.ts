@@ -43,6 +43,7 @@ export interface ScreenerClassParamItem {
     geography?: string;
     status?: string;
     statuses?: string[];
+    geofence?: number[][];
   };
   selectedSubClasses?: string[];
   gemTrackers?: string[];
