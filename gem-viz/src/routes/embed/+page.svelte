@@ -13,12 +13,13 @@
       description: 'Compact entity profile with ownership flower and asset list.',
       paramKey: 'id',
       paramLabel: 'Entity ID',
-      placeholder: 'E100001000100',
+      placeholder: 'E100001000558',
       defaultHeight: 600,
       params: [
         { key: 'id', desc: 'Required. Entity ID (e.g., E12345).' },
         { key: 'showFlower', desc: 'Optional. Show ownership flower (default: true).' },
         { key: 'showAssets', desc: 'Optional. Show asset list (default: true).' },
+        { key: 'showMap', desc: 'Optional. Show interactive asset location map (default: false).' },
         { key: 'maxAssets', desc: 'Optional. Max assets to display (default: 10).' },
       ],
     },
@@ -28,7 +29,7 @@
       description: 'Compact asset profile with status, metadata, and owners.',
       paramKey: 'id',
       paramLabel: 'Asset ID',
-      placeholder: 'G100001037300',
+      placeholder: 'L100000104168_G100000100057',
       defaultHeight: 500,
       params: [
         { key: 'id', desc: 'Required. Asset ID / GEM unit ID (e.g., G12345).' },
@@ -45,7 +46,10 @@
       placeholder: 'coal-plant',
       defaultHeight: 550,
       params: [
-        { key: 'tracker', desc: 'Required. Tracker slug: coal-mine, coal-plant, gas-plant, steel-plant, iron-mine, gas-pipeline, bioenergy' },
+        {
+          key: 'tracker',
+          desc: 'Required. Tracker slug: coal-mine, coal-plant, gas-plant, steel-plant, iron-mine, gas-pipeline, bioenergy',
+        },
         { key: 'title', desc: 'Optional. Custom title override.' },
         { key: 'height', desc: 'Optional. Max height in pixels (default: 500).' },
       ],
@@ -56,7 +60,7 @@
       description: "Radial visualization showing an entity's portfolio mix by tracker type.",
       paramKey: 'entityId',
       paramLabel: 'Entity ID',
-      placeholder: 'E100001000100',
+      placeholder: 'E100000001926',
       defaultHeight: 520,
       params: [
         { key: 'entityId', desc: 'Required. The entity ID to display.' },
@@ -68,14 +72,18 @@
     {
       name: 'Ownership Graph',
       slug: 'ownership-graph',
-      description: 'Interactive ownership hierarchy graph showing upstream or downstream relationships.',
+      description:
+        'Interactive ownership hierarchy graph showing upstream or downstream relationships.',
       paramKey: 'entityId',
       paramLabel: 'Entity ID',
-      placeholder: 'E100001000100',
+      placeholder: 'E100001000558',
       defaultHeight: 600,
       params: [
         { key: 'entityId', desc: 'Required. The entity ID to display.' },
-        { key: 'direction', desc: 'Optional. "up" (who owns this entity) or "down" (what this entity owns). Default: "up".' },
+        {
+          key: 'direction',
+          desc: 'Optional. "up" (who owns this entity) or "down" (what this entity owns). Default: "up".',
+        },
       ],
     },
     {
@@ -84,11 +92,9 @@
       description: 'Shows the ultimate parent owners at the top of the ownership chain.',
       paramKey: 'entityId',
       paramLabel: 'Entity ID',
-      placeholder: 'E100001000100',
+      placeholder: 'E100001000558',
       defaultHeight: 400,
-      params: [
-        { key: 'entityId', desc: 'Required. The entity ID to display.' },
-      ],
+      params: [{ key: 'entityId', desc: 'Required. The entity ID to display.' }],
     },
     {
       name: 'Network Graph',
@@ -96,7 +102,7 @@
       description: 'Interactive force-directed ownership network visualization.',
       paramKey: 'entityId',
       paramLabel: 'Entity ID',
-      placeholder: 'E100001000100',
+      placeholder: 'E100001000558',
       defaultHeight: 600,
       params: [
         { key: 'entityId', desc: 'Required. The entity ID to display.' },
@@ -110,7 +116,7 @@
       description: 'Circular visualization of asset distribution by type and status.',
       paramKey: 'entityId',
       paramLabel: 'Entity ID',
-      placeholder: 'E100001000100',
+      placeholder: 'E100000001926',
       defaultHeight: 500,
       params: [
         { key: 'entityId', desc: 'Required. The entity ID to display.' },
@@ -121,7 +127,9 @@
 
   // Per-widget input state
   let inputValues = $state(Object.fromEntries(widgets.map((w) => [w.slug, ''])));
-  let copiedStates = $state(Object.fromEntries(widgets.map((w) => [`${w.slug}-iframe`, false, `${w.slug}-script`, false])));
+  let copiedStates = $state(
+    Object.fromEntries(widgets.map((w) => [`${w.slug}-iframe`, false, `${w.slug}-script`, false]))
+  );
 
   function getEmbedPath(widget) {
     const val = inputValues[widget.slug] || widget.placeholder;
@@ -137,14 +145,20 @@
   function getScriptSnippet(widget) {
     const val = inputValues[widget.slug] || widget.placeholder;
     const path = `/embed/${widget.slug}?${widget.paramKey}=${val}`;
-    return `<div class="gem-embed" data-src="${path}" data-height="${widget.defaultHeight}">\n<script src="/embed.js"><\/script>\n</div>`;
+    // Build closing tag via concatenation to avoid ending this Svelte <script> block.
+    return (
+      `<div class="gem-embed" data-src="${path}" data-height="${widget.defaultHeight}">\n<script src="/embed.js"><` +
+      `/script>\n</div>`
+    );
   }
 
   async function copyToClipboard(text, key) {
     try {
       await navigator.clipboard.writeText(text);
       copiedStates[key] = true;
-      setTimeout(() => { copiedStates[key] = false; }, 2000);
+      setTimeout(() => {
+        copiedStates[key] = false;
+      }, 2000);
     } catch {
       // Fallback for older browsers
       const ta = document.createElement('textarea');
@@ -156,7 +170,9 @@
       document.execCommand('copy');
       document.body.removeChild(ta);
       copiedStates[key] = true;
-      setTimeout(() => { copiedStates[key] = false; }, 2000);
+      setTimeout(() => {
+        copiedStates[key] = false;
+      }, 2000);
     }
   }
 </script>
@@ -179,13 +195,26 @@
         <h2>{widget.name}</h2>
         <p>{widget.description}</p>
 
-        <h3>Parameters</h3>
-        <dl>
-          {#each widget.params as param}
-            <dt>{param.key}</dt>
-            <dd>{param.desc}</dd>
-          {/each}
-        </dl>
+        <div class="preview-frame">
+          <iframe
+            src={getEmbedPath(widget)}
+            title="{widget.name} preview"
+            width="100%"
+            height={widget.defaultHeight}
+            frameborder="0"
+            loading="lazy"
+          ></iframe>
+        </div>
+
+        <details class="params-section">
+          <summary>Parameters</summary>
+          <dl>
+            {#each widget.params as param}
+              <dt>{param.key}</dt>
+              <dd>{param.desc}</dd>
+            {/each}
+          </dl>
+        </details>
 
         <details class="code-gen">
           <summary>Generate embed code</summary>
@@ -227,12 +256,7 @@
               <pre><code>{getScriptSnippet(widget)}</code></pre>
             </div>
 
-            <a
-              href={getEmbedPath(widget)}
-              target="_blank"
-              rel="noopener"
-              class="try-btn"
-            >
+            <a href={getEmbedPath(widget)} target="_blank" rel="noopener" class="try-btn">
               Try it
             </a>
           </div>
@@ -244,17 +268,21 @@
   <section class="usage">
     <h2>Usage</h2>
     <p>Embed any widget using an iframe:</p>
-    <pre><code>&lt;iframe
+    <pre><code
+        >&lt;iframe
   src="/embed/tracker-factsheet?tracker=coal-mine"
   width="900"
   height="550"
   frameborder="0"
-&gt;&lt;/iframe&gt;</code></pre>
+&gt;&lt;/iframe&gt;</code
+      ></pre>
 
     <p>Or use the embed script for CMS-friendly snippets:</p>
-    <pre><code>&lt;div class="gem-embed" data-src="/embed/ownership-flower?entityId=E12345" data-height="520"&gt;
+    <pre><code
+        >&lt;div class="gem-embed" data-src="/embed/ownership-flower?entityId=E12345" data-height="520"&gt;
 &lt;script src="/embed.js"&gt;&lt;/script&gt;
-&lt;/div&gt;</code></pre>
+&lt;/div&gt;</code
+      ></pre>
 
     <h3>Script Attributes</h3>
     <dl>
@@ -337,12 +365,41 @@
     margin: 0 0 var(--space-3) 0;
   }
 
-  .widget-card h3 {
+  .preview-frame {
+    border: var(--border-width) solid var(--color-border);
+    background: var(--color-bg-secondary);
+    margin-bottom: var(--space-4);
+    overflow: hidden;
+  }
+
+  .preview-frame iframe {
+    display: block;
+    border: none;
+  }
+
+  .params-section {
+    margin-bottom: var(--space-2);
+    border: var(--border-width) solid var(--color-border);
+  }
+
+  .params-section summary {
+    padding: var(--space-2) var(--space-3);
     font-size: var(--font-size-sm);
+    font-weight: 600;
+    cursor: pointer;
+    background: var(--color-bg-tertiary);
+    user-select: none;
     text-transform: uppercase;
     letter-spacing: var(--tracking-caps);
     color: var(--color-text-tertiary);
-    margin: var(--space-4) 0 var(--space-2) 0;
+  }
+
+  .params-section summary:hover {
+    background: var(--color-bg-secondary);
+  }
+
+  .params-section dl {
+    padding: var(--space-3);
   }
 
   dl {

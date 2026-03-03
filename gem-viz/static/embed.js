@@ -27,8 +27,7 @@
     const dataSrc = container.getAttribute('data-src');
     if (!dataSrc) return;
 
-    const embedId =
-      container.getAttribute('data-embed-id') || `gem-embed-${index + 1}`;
+    const embedId = container.getAttribute('data-embed-id') || `gem-embed-${index + 1}`;
     container.setAttribute('data-embed-id', embedId);
 
     const width = container.getAttribute('data-width') || '100%';
@@ -49,8 +48,7 @@
     const url = new URL(src, window.location.href);
     if (!url.searchParams.has('embedId')) url.searchParams.set('embedId', embedId);
     if (!url.searchParams.has('autoHeight')) {
-      const autoHeight =
-        autoHeightAttr === null || autoHeightAttr.toLowerCase() !== 'false';
+      const autoHeight = autoHeightAttr === null || autoHeightAttr.toLowerCase() !== 'false';
       url.searchParams.set('autoHeight', autoHeight ? 'true' : 'false');
     }
     if (themeAttr && !url.searchParams.has('theme')) {
@@ -76,7 +74,9 @@
         }
       } else {
         try {
-          const extraParams = new URLSearchParams(trimmed.startsWith('?') ? trimmed.slice(1) : trimmed);
+          const extraParams = new URLSearchParams(
+            trimmed.startsWith('?') ? trimmed.slice(1) : trimmed
+          );
           extraParams.forEach((value, key) => {
             if (!url.searchParams.has(key)) url.searchParams.set(key, value);
           });
@@ -114,9 +114,7 @@
     const embedId = data.embedId;
     if (!embedId) return;
 
-    const container = document.querySelector(
-      `.${EMBED_CLASS}[data-embed-id="${embedId}"]`,
-    );
+    const container = document.querySelector(`.${EMBED_CLASS}[data-embed-id="${embedId}"]`);
     if (!container) return;
 
     const iframe = container.querySelector('iframe');
