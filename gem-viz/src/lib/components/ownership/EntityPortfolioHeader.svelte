@@ -42,10 +42,6 @@
   }: Props = $props();
 
   const formatNumber = (value: number) => value.toLocaleString();
-  let statsMemo = $state<{ assetsRef: OwnerPortfolio['assets'] | null; result: any | null }>({
-    assetsRef: null,
-    result: null,
-  });
 
   // Summary stats from the portfolio
   const stats = $derived.by(() => {
@@ -73,7 +69,6 @@
 
     const assets = portfolio?.assets;
     if (!assets?.length) return null;
-    if (statsMemo.assetsRef === assets) return statsMemo.result;
 
     const countries = new Set<string>();
     const trackers = new Set<string>();
@@ -106,9 +101,7 @@
         : null,
     ].filter(Boolean) as Array<{ key: string; value: string; label: string }>;
 
-    const result = { items };
-    statsMemo = { assetsRef: assets, result };
-    return result;
+    return { items };
   });
 
   const displayName = $derived(
