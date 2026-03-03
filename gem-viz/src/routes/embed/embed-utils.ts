@@ -3,51 +3,36 @@
  * Keeps embed routes DRY — common data loading and error handling.
  */
 
-import { getEntityWithPortfolio, graphToExplorerData } from '$lib/ownership-api';
+import { streamOwnerPortfolio, type SpotlightOwnerData } from '$lib/ownership-data';
 
 /** Portfolio shape expected by OwnershipFlower and other components */
-export interface EmbedPortfolio {
-  spotlightOwner: { id: string; Name: string };
-  subsidiariesMatched: Map<string, unknown[]>;
-  directlyOwned: unknown[];
-  matchedEdges: Map<string, { value: number | null }>;
-  entityMap: Map<string, { id: string; Name: string; type: string }>;
-  assets: unknown[];
-}
-
-/** Subsidiary info extracted from entity owned data */
-export interface EmbedSubsidiary {
-  id: string;
-  name: string;
-  ownershipPct: number | null;
-}
+export type EmbedPortfolio = SpotlightOwnerData;
 
 /**
  * Load entity portfolio via REST API.
- * Used by entity, ownership-flower, and asset-ring embeds.
+ * Consumes the streamOwnerPortfolio async generator to completion,
+ * returning the final portfolio with actual asset data.
+ * Used by ownership-flower and asset-ring embeds.
  */
 export async function loadEntityPortfolio(entityId: string): Promise<{
   portfolio: EmbedPortfolio;
-  subsidiaries: EmbedSubsidiary[];
 }> {
-  const { entity, owned, graphDown } = await getEntityWithPortfolio(entityId);
-  const explorerData = graphToExplorerData(entityId, entity.name, graphDown);
+  let portfolio: SpotlightOwnerData | null = null;
 
-  return {
-    portfolio: {
-      spotlightOwner: explorerData.spotlightOwner,
-      subsidiariesMatched: new Map(explorerData.subsidiariesMatched),
-      directlyOwned: explorerData.directlyOwned,
-      matchedEdges: new Map(explorerData.matchedEdges),
-      entityMap: new Map(explorerData.entityMap),
-      assets: explorerData.assets,
-    },
-    subsidiaries: (owned || []).map((o) => ({
-      id: o.entityId,
-      name: o.entityName,
-      ownershipPct: o.ownershipPct,
-    })),
-  };
+  for await (const update of streamOwnerPortfolio(entityId)) {
+    if (update.portfolio) {
+      portfolio = update.portfolio;
+    }
+    if (update.phase === 'error') {
+      throw new Error(update.error || update.message);
+    }
+  }
+
+  if (!portfolio) {
+    throw new Error(`No portfolio data returned for entity ${entityId}`);
+  }
+
+  return { portfolio };
 }
 
 /** Extract a clean error message from any thrown value, stripping raw API JSON */

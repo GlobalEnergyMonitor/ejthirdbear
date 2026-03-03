@@ -7,9 +7,6 @@
 
 import {
   getOwnershipGraph,
-  getEntityGraphDown,
-  getEntityOwned,
-  getAsset,
   listEntities,
   type GraphNode,
   type GraphEdge,
@@ -54,6 +51,8 @@ export interface SpotlightAsset {
   status: string;
   country: string;
   capacityMw?: number;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export interface SpotlightOwnerData {
@@ -79,7 +78,11 @@ export interface SpotlightOwnerData {
 // ============================================================================
 
 /** Convert AssetSummary to the row shape expected by rowToAsset */
-function assetToRow(a: AssetSummary, ownershipPct?: number | null): Record<string, unknown> {
+function _assetToRow(
+  a: AssetSummary,
+  ownershipPct?: number | null,
+  ownerEntityId?: string | null
+): Record<string, unknown> {
   return {
     id: a.id,
     name: a.name,
@@ -88,51 +91,77 @@ function assetToRow(a: AssetSummary, ownershipPct?: number | null): Record<strin
     country: a.country || 'Unknown',
     capacity: a.capacity,
     ownershipShare: ownershipPct ?? null,
+    ownerEntityId: ownerEntityId ?? null,
+    latitude: a.latitude ?? null,
+    longitude: a.longitude ?? null,
   };
 }
 
-/** Fetch assets owned by an entity via REST API.
- *  Note: /entities/{id}/owned returns owned *entities*, not assets.
- *  Direct asset lookup is handled by streamOwnerPortfolio via entity graph instead.
- */
-async function fetchOwnerAssets(
-  entityId: string,
-  _limit = 500
-): Promise<{ success: boolean; data: Record<string, unknown>[] }> {
-  try {
-    const owned = await getEntityOwned(entityId);
-    if (!owned.length) return { success: true, data: [] };
+/** API base URL for direct fetch calls */
+const API_BASE =
+  import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL ||
+  import.meta.env.PUBLIC_OWNERSHIP_API_URL ||
+  'https://gem-api.thirdbear.net';
 
-    // getEntityOwned returns entities (subsidiaries), not assets.
-    // We can only use items that resolve as assets — skip silently on 404.
-    const results: Record<string, unknown>[] = [];
-    const BATCH = 15;
-    const limited = owned.slice(0, _limit);
-    for (let i = 0; i < limited.length; i += BATCH) {
-      const batch = limited.slice(i, i + BATCH);
-      const settled = await Promise.allSettled(batch.map((item) => getAsset(item.entityId)));
-      for (let j = 0; j < settled.length; j++) {
-        const r = settled[j];
-        if (r.status === 'fulfilled') {
-          results.push(assetToRow(r.value, batch[j].ownershipPct));
-        }
-        // 404s expected for entity IDs — skip silently
+/**
+ * Fetch entity's owned assets via the /ownership/graph endpoint.
+ *
+ * This is the only fast way to get entity → assets: a single API call to
+ * /ownership/graph?root=ENTITY_ID&direction=down returns both subsidiary
+ * entities AND their assets with full metadata (type, status, capacity, etc).
+ *
+ * @param entityId - Root entity ID
+ * @returns Asset rows + entity graph info for building the portfolio
+ */
+async function fetchOwnershipGraphDown(entityId: string): Promise<{
+  success: boolean;
+  assets: Record<string, unknown>[];
+  entities: Array<{ id: string; name: string }>;
+  edges: Array<{ source: string; target: string; value: number | null }>;
+  rootName: string;
+}> {
+  try {
+    const resp = await fetch(
+      `${API_BASE}/ownership/graph?root=${encodeURIComponent(entityId)}&direction=down&max_depth=5`,
+      { signal: AbortSignal.timeout(30_000) }
+    );
+    if (!resp.ok) throw new Error(`API error: ${resp.status}`);
+    const data = await resp.json();
+
+    const rootName = String(data.root?.name || data.root?.full_name || entityId);
+    const assets: Record<string, unknown>[] = [];
+    const entities: Array<{ id: string; name: string }> = [];
+
+    for (const node of data.nodes || []) {
+      if (node.node_type === 'asset' && node.asset_id) {
+        assets.push({
+          id: String(node.asset_id),
+          name: String(node.asset_name || node.asset_id),
+          tracker: String(node.asset_type || 'Unknown'),
+          status: String(node.operating_status || 'Unknown'),
+          country: String(node.country || 'Unknown'),
+          capacity: typeof node.capacity_value === 'number' ? node.capacity_value : null,
+          latitude: typeof node.latitude === 'number' ? node.latitude : null,
+          longitude: typeof node.longitude === 'number' ? node.longitude : null,
+        });
+      } else if (node.entity_id) {
+        entities.push({
+          id: String(node.entity_id),
+          name: String(node.name || node.full_name || node.entity_id),
+        });
       }
     }
-    return { success: true, data: results };
-  } catch (err) {
-    if (import.meta.env.DEV) console.error(`[fetchOwnerAssets] Failed for ${entityId}:`, err);
-    return { success: false, data: [] };
-  }
-}
 
-/** Count assets owned by an entity via REST API */
-async function fetchOwnerAssetCount(entityId: string): Promise<number> {
-  try {
-    const owned = await getEntityOwned(entityId);
-    return owned.length;
-  } catch {
-    return 0;
+    const edges = (data.edges || []).map((e: Record<string, unknown>) => ({
+      source: String(e.source || ''),
+      target: String(e.target || ''),
+      value: typeof e.value === 'number' ? e.value : null,
+    }));
+
+    return { success: true, assets, entities, edges, rootName };
+  } catch (err) {
+    if (import.meta.env.DEV) console.error(`[fetchOwnershipGraphDown] Failed:`, err);
+    return { success: false, assets: [], entities: [], edges: [], rootName: entityId };
   }
 }
 
@@ -255,9 +284,9 @@ export async function* streamOwnerPortfolio(
   error?: string;
 }> {
   // Performance limits to prevent browser freeze
-  const MAX_DIRECT_ASSETS = 500;
-  const MAX_SUBSIDIARIES = 50;
-  const MAX_ASSETS_PER_SUBSIDIARY = 200;
+  const _MAX_DIRECT_ASSETS = 500;
+  const _MAX_SUBSIDIARIES = 50;
+  const _MAX_ASSETS_PER_SUBSIDIARY = 200;
   const MAX_TOTAL_ASSETS = 5000;
 
   const subsidiariesMatched = new Map<string, SpotlightAsset[]>();
@@ -280,6 +309,8 @@ export async function* streamOwnerPortfolio(
     status: String(row.status || 'Unknown'),
     country: String(row.country || 'Unknown'),
     capacityMw: typeof row.capacity === 'number' ? row.capacity : undefined,
+    latitude: typeof row.latitude === 'number' ? row.latitude : null,
+    longitude: typeof row.longitude === 'number' ? row.longitude : null,
   });
 
   const addToSummary = (asset: SpotlightAsset) => {
@@ -321,81 +352,81 @@ export async function* streamOwnerPortfolio(
     // Phase 1: Initialize
     yield { phase: 'init', message: 'Loading ownership data...', portfolio: null };
 
-    const directCount = await fetchOwnerAssetCount(entityId);
-    totalAssetCount = directCount;
+    // Single API call: /ownership/graph returns both entities AND assets
+    const graphResult = await fetchOwnershipGraphDown(entityId);
 
-    const directResult = await fetchOwnerAssets(entityId, MAX_DIRECT_ASSETS);
-    const directFetchFailed = !directResult.success;
+    if (!graphResult.success) {
+      yield {
+        phase: 'error',
+        message: `Failed to load ownership data for ${entityId}`,
+        portfolio: null,
+        error: 'API request failed',
+      };
+      return;
+    }
 
-    if (directResult.success && directResult.data) {
-      for (const row of directResult.data) {
-        const asset = rowToAsset(row);
-        directlyOwned.push(asset);
-        allAssets.push(asset);
-        addToSummary(asset);
+    effectiveEntityName = entityName || graphResult.rootName || entityId;
+    entityMap.set(entityId, { id: entityId, Name: effectiveEntityName });
+
+    // Build entity map and edge map from graph
+    const subsidiaryIds: string[] = [];
+    for (const ent of graphResult.entities) {
+      if (ent.id !== entityId) {
+        entityMap.set(ent.id, { id: ent.id, Name: ent.name });
+        subsidiaryIds.push(ent.id);
       }
     }
 
-    if (directCount > MAX_DIRECT_ASSETS) {
-      truncated = true;
+    for (const edge of graphResult.edges) {
+      if (edge.source === entityId) {
+        matchedEdges.set(edge.target, { value: edge.value });
+      }
     }
-
-    // Set entity in map
-    entityMap.set(entityId, { id: entityId, Name: effectiveEntityName });
-
-    // Yield first batch of data
-    const directMsg =
-      directCount > MAX_DIRECT_ASSETS
-        ? `Loaded ${directlyOwned.length} of ${directCount} directly owned assets (limited for performance)`
-        : `Found ${directlyOwned.length} directly owned assets`;
 
     yield {
       phase: 'direct',
-      message: directMsg,
+      message: `Found ${graphResult.assets.length} assets, ${subsidiaryIds.length} subsidiaries`,
       portfolio: buildPortfolio(),
     };
 
-    // Get entity graph from API
-    let subsidiaryIds: string[] = [];
-    try {
-      const graphData = await Promise.race([
-        getEntityGraphDown(entityId).catch((err) => {
-          if (import.meta.env.DEV)
-            console.error('[streamOwnerPortfolio] API error fetching entity graph:', err);
-          return null;
-        }),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 10000)),
-      ]);
-
-      if (graphData && graphData.nodes && graphData.nodes.length > 0) {
-        effectiveEntityName = entityName || graphData.rootEntityName || entityId;
-        entityMap.set(entityId, { id: entityId, Name: effectiveEntityName });
-
-        for (const node of graphData.nodes) {
-          if (node.id !== entityId) {
-            entityMap.set(node.id, { id: node.id, Name: node.Name });
-            subsidiaryIds.push(node.id);
-          }
-        }
-
-        for (const edge of graphData.edges) {
-          if (edge.source === entityId) {
-            matchedEdges.set(edge.target, { value: edge.value || null });
-          }
-        }
+    // Phase 2: Process assets from graph
+    // Assets from the graph don't have direct owner info in the node,
+    // but edges connect entities to assets. Build asset→owner map from edges.
+    const assetOwnerMap = new Map<string, string>();
+    for (const edge of graphResult.edges) {
+      // If target is an asset ID (not an entity ID), map it
+      if (!entityMap.has(edge.target) && edge.target !== entityId) {
+        assetOwnerMap.set(edge.target, edge.source);
       }
-    } catch (apiErr) {
-      if (import.meta.env.DEV)
-        console.warn('[streamOwnerPortfolio] Entity graph API failed:', apiErr);
     }
 
-    // If both direct assets AND graph failed, entity likely doesn't exist
-    if (
-      directFetchFailed &&
-      directCount === 0 &&
-      subsidiaryIds.length === 0 &&
-      allAssets.length === 0
-    ) {
+    for (const row of graphResult.assets) {
+      if (allAssets.length >= MAX_TOTAL_ASSETS) {
+        truncated = true;
+        break;
+      }
+
+      const asset = rowToAsset(row);
+      const ownerEntityId = assetOwnerMap.get(String(row.id)) || entityId;
+
+      if (ownerEntityId === entityId) {
+        directlyOwned.push(asset);
+      } else if (subsidiaryIds.includes(ownerEntityId)) {
+        const existing = subsidiariesMatched.get(ownerEntityId) || [];
+        existing.push(asset);
+        subsidiariesMatched.set(ownerEntityId, existing);
+      } else {
+        directlyOwned.push(asset);
+      }
+
+      allAssets.push(asset);
+      addToSummary(asset);
+    }
+
+    totalAssetCount = allAssets.length;
+
+    // If no assets and no subsidiaries, entity might not exist
+    if (allAssets.length === 0 && subsidiaryIds.length === 0) {
       yield {
         phase: 'error',
         message: `Entity ${entityId} not found or has no ownership data`,
@@ -405,84 +436,16 @@ export async function* streamOwnerPortfolio(
       return;
     }
 
-    // Limit subsidiaries for large entities
-    const totalSubsidiaries = subsidiaryIds.length;
-    if (subsidiaryIds.length > MAX_SUBSIDIARIES) {
-      subsidiaryIds = subsidiaryIds.slice(0, MAX_SUBSIDIARIES);
-      truncated = true;
-    }
-
-    // Yield update with subsidiary count
-    const subMsg =
-      totalSubsidiaries > MAX_SUBSIDIARIES
-        ? `Found ${totalSubsidiaries} subsidiaries (processing first ${MAX_SUBSIDIARIES} for performance)...`
-        : `Found ${subsidiaryIds.length} subsidiaries, loading their assets...`;
-
     yield {
       phase: 'subsidiaries',
-      message: subMsg,
+      message: `Found ${allAssets.length} assets across ${subsidiaryIds.length} subsidiaries`,
       portfolio: buildPortfolio(),
     };
 
-    // Fetch subsidiary assets in batches and yield progress
-    const BATCH_SIZE = 5;
-    for (let i = 0; i < subsidiaryIds.length; i += BATCH_SIZE) {
-      // Check if we've hit the total asset limit
-      if (allAssets.length >= MAX_TOTAL_ASSETS) {
-        truncated = true;
-        yield {
-          phase: 'subsidiaries',
-          message: `Reached ${MAX_TOTAL_ASSETS} asset limit for performance. Stopping load.`,
-          portfolio: buildPortfolio(),
-        };
-        break;
-      }
-
-      const batch = subsidiaryIds.slice(i, i + BATCH_SIZE);
-
-      const batchResults = await Promise.all(
-        batch.map(async (subId) => {
-          const subResult = await fetchOwnerAssets(subId, MAX_ASSETS_PER_SUBSIDIARY);
-          if (subResult.success && subResult.data && subResult.data.length > 0) {
-            return { subId, assets: subResult.data.map(rowToAsset) };
-          }
-          return { subId, assets: [] };
-        })
-      );
-
-      for (const { subId, assets } of batchResults) {
-        if (assets.length > 0) {
-          // Only add up to the remaining budget
-          const remaining = MAX_TOTAL_ASSETS - allAssets.length;
-          const toAdd = assets.slice(0, remaining);
-          if (toAdd.length < assets.length) {
-            truncated = true;
-          }
-          subsidiariesMatched.set(subId, toAdd);
-          for (const asset of toAdd) {
-            allAssets.push(asset);
-            addToSummary(asset);
-          }
-        }
-      }
-
-      // Yield progress update after each batch
-      const processedCount = Math.min(i + BATCH_SIZE, subsidiaryIds.length);
-      yield {
-        phase: 'subsidiaries',
-        message: `Processed ${processedCount}/${subsidiaryIds.length} subsidiaries (${allAssets.length} total assets)`,
-        portfolio: buildPortfolio(),
-      };
-    }
-
-    // Phase 4: Done
-    const doneMsg = truncated
-      ? `Complete: ${allAssets.length} assets loaded (limited for performance, entity has more)`
-      : `Complete: ${allAssets.length} assets loaded`;
-
+    // Phase 3: Done
     yield {
       phase: 'done',
-      message: doneMsg,
+      message: `Complete: ${allAssets.length} assets loaded`,
       portfolio: buildPortfolio(),
     };
   } catch (err) {
@@ -514,153 +477,15 @@ export async function getSpotlightOwnerData(
   entityId: string,
   entityName?: string
 ): Promise<SpotlightOwnerData | null> {
-  // Performance limits to prevent browser freeze
-  const MAX_DIRECT_ASSETS = 500;
-  const MAX_SUBSIDIARIES = 50;
-  const MAX_ASSETS_PER_SUBSIDIARY = 200;
-  const MAX_TOTAL_ASSETS = 5000;
+  // Non-streaming version — consumes streamOwnerPortfolio and returns final result
+  let portfolio: SpotlightOwnerData | null = null;
 
   try {
-    // First, get assets directly owned by this entity via REST API
-    const directResult = await fetchOwnerAssets(entityId, MAX_DIRECT_ASSETS);
-
-    // Build asset list
-    const subsidiariesMatched = new Map<string, SpotlightAsset[]>();
-    const directlyOwned: SpotlightAsset[] = [];
-    const allAssets: SpotlightAsset[] = [];
-    const entityMap = new Map<string, { id: string; Name: string }>();
-    const matchedEdges = new Map<string, { value: number | null }>();
-    let truncated = false;
-
-    // Helper to convert API row to SpotlightAsset
-    const rowToAsset = (row: Record<string, unknown>): SpotlightAsset => ({
-      id: String(row.id || ''),
-      name: String(row.name || row.id || ''),
-      tracker: String(row.tracker || 'Unknown'),
-      status: String(row.status || 'Unknown'),
-      country: String(row.country || 'Unknown'),
-    });
-
-    // Add direct assets
-    if (directResult.success && directResult.data) {
-      for (const row of directResult.data) {
-        const asset = rowToAsset(row);
-        directlyOwned.push(asset);
-        allAssets.push(asset);
-      }
-      // Check if we hit the limit
-      if (directResult.data.length >= MAX_DIRECT_ASSETS) {
-        truncated = true;
-      }
+    for await (const update of streamOwnerPortfolio(entityId, entityName)) {
+      if (update.portfolio) portfolio = update.portfolio;
+      if (update.phase === 'error') return null;
     }
-
-    // Try to get entity graph from API (with short timeout fallback)
-    let effectiveEntityName = entityName || entityId;
-    try {
-      const graphData = await Promise.race([
-        getEntityGraphDown(entityId).catch((err) => {
-          if (import.meta.env.DEV)
-            console.error('[getSpotlightOwnerData] API error fetching entity graph:', err);
-          return null;
-        }),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 10000)), // 10s timeout
-      ]);
-
-      if (graphData && graphData.nodes && graphData.nodes.length > 0) {
-        effectiveEntityName = entityName || graphData.rootEntityName || entityId;
-        entityMap.set(entityId, { id: entityId, Name: effectiveEntityName });
-
-        // Get subsidiary IDs and fetch their assets
-        let subsidiaryIds: string[] = [];
-        for (const node of graphData.nodes) {
-          if (node.id !== entityId) {
-            entityMap.set(node.id, { id: node.id, Name: node.Name });
-            subsidiaryIds.push(node.id);
-          }
-        }
-
-        // Limit subsidiaries for large entities
-        if (subsidiaryIds.length > MAX_SUBSIDIARIES) {
-          subsidiaryIds = subsidiaryIds.slice(0, MAX_SUBSIDIARIES);
-          truncated = true;
-        }
-
-        // Build edge map
-        for (const edge of graphData.edges) {
-          if (edge.source === entityId) {
-            matchedEdges.set(edge.target, { value: edge.value || null });
-          }
-        }
-
-        // Fetch assets for each subsidiary (in parallel for speed)
-        const subPromises = subsidiaryIds.map(async (subId) => {
-          const subResult = await fetchOwnerAssets(subId, MAX_ASSETS_PER_SUBSIDIARY);
-          if (subResult.success && subResult.data && subResult.data.length > 0) {
-            return { subId, assets: subResult.data.map(rowToAsset) };
-          }
-          return { subId, assets: [] };
-        });
-
-        const subResults = await Promise.allSettled(subPromises);
-        for (const result of subResults) {
-          if (result.status === 'rejected') {
-            if (import.meta.env.DEV)
-              console.warn('[getSpotlightOwnerData] Subsidiary asset load failed:', result.reason);
-            continue;
-          }
-          const { subId, assets } = result.value;
-          if (assets.length > 0) {
-            // Only add up to the remaining budget
-            const remaining = MAX_TOTAL_ASSETS - allAssets.length;
-            if (remaining <= 0) {
-              truncated = true;
-              break;
-            }
-            const toAdd = assets.slice(0, remaining);
-            if (toAdd.length < assets.length) {
-              truncated = true;
-            }
-            subsidiariesMatched.set(subId, toAdd);
-            allAssets.push(...toAdd);
-          }
-        }
-      }
-    } catch (apiErr) {
-      if (import.meta.env.DEV)
-        console.warn('[getSpotlightOwnerData] Entity graph API failed:', apiErr);
-      // Continue with just direct assets if graph API fails
-    }
-
-    // Always set entity map for main entity
-    if (!entityMap.has(entityId)) {
-      entityMap.set(entityId, { id: entityId, Name: effectiveEntityName });
-    }
-
-    // Determine asset class from tracker types
-    const trackers = new Set<string>();
-    allAssets.forEach((a) => {
-      if (a.tracker && a.tracker !== 'Unknown') {
-        trackers.add(a.tracker);
-      }
-    });
-
-    const assetClassName =
-      trackers.size === 1
-        ? Array.from(trackers)[0]
-        : trackers.size > 0
-          ? `assets (${trackers.size} types)`
-          : 'assets';
-
-    return {
-      spotlightOwner: { id: entityId, Name: effectiveEntityName },
-      subsidiariesMatched,
-      directlyOwned,
-      assets: allAssets,
-      entityMap,
-      matchedEdges,
-      assetClassName,
-      truncated,
-    };
+    return portfolio;
   } catch (err) {
     if (import.meta.env.DEV) console.error('Error fetching spotlight owner data:', err);
     return null;
