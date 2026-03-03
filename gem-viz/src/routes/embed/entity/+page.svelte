@@ -23,25 +23,39 @@
     intParam,
     boolParam,
     type EmbedPortfolio,
-    type EmbedSubsidiary,
   } from '../embed-utils';
+  import EntityMap from '$lib/components/EntityMap.svelte';
+  import type { SpotlightAsset } from '$lib/ownership-data';
 
   // URL params
   const entityId = $derived($page.url.searchParams.get('id'));
   const showFlower = $derived(boolParam($page.url.searchParams.get('showFlower')));
   const showAssets = $derived(boolParam($page.url.searchParams.get('showAssets')));
   const showChart = $derived($page.url.searchParams.get('showChart') === 'true');
+  const showMap = $derived($page.url.searchParams.get('showMap') === 'true');
   const maxAssets = $derived(intParam($page.url.searchParams.get('maxAssets'), 10));
 
   // State
   let loading = $state(true);
   let error = $state<string | null>(null);
   let portfolio = $state<EmbedPortfolio | null>(null);
-  let subsidiaries = $state<EmbedSubsidiary[]>([]);
+  let mapAssets = $state<SpotlightAsset[]>([]);
 
   const entityName = $derived(portfolio?.spotlightOwner?.Name || entityId || '');
   const assets = $derived(portfolio?.assets || []);
   const displayAssets = $derived((assets as any[]).slice(0, maxAssets));
+
+  // Derive subsidiary list from portfolio entityMap (excluding root entity)
+  const subsidiaries = $derived.by(() => {
+    if (!portfolio?.entityMap || !entityId) return [];
+    return Array.from(portfolio.entityMap.entries())
+      .filter(([id]) => id !== entityId)
+      .map(([id, ent]) => ({
+        id,
+        name: ent.Name,
+        ownershipPct: portfolio!.matchedEdges?.get(id)?.value ?? null,
+      }));
+  });
 
   const trackerCounts = $derived.by(() => {
     const counts = new Map<string, number>();
@@ -64,7 +78,11 @@
     try {
       const result = await loadEntityPortfolio(entityId);
       portfolio = result.portfolio;
-      subsidiaries = result.subsidiaries;
+
+      // Portfolio now includes real assets — use them for map
+      if (showMap && portfolio.assets?.length) {
+        mapAssets = portfolio.assets;
+      }
     } catch (err) {
       error = errorMessage(err, 'Failed to load entity');
     } finally {
@@ -127,10 +145,13 @@
     {/if}
 
     {#if showChart && entityId}
-      <AssetScreenerChart
-        entityId={entityId}
-        entityName={entityName}
-      />
+      <AssetScreenerChart {entityId} {entityName} />
+    {/if}
+
+    {#if showMap && mapAssets.length > 0}
+      <div class="map-section">
+        <EntityMap assets={mapAssets} height={250} />
+      </div>
     {/if}
 
     {#if showAssets && displayAssets.length > 0}
@@ -264,5 +285,9 @@
     color: var(--color-text-tertiary);
     text-align: center;
     margin: var(--space-2) 0 0 0;
+  }
+
+  .map-section {
+    margin-top: var(--space-4);
   }
 </style>

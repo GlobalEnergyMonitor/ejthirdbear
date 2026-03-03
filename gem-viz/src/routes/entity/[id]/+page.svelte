@@ -19,6 +19,7 @@
   import OwnershipFlower from '$lib/components/OwnershipFlower.svelte';
   import MiniNetworkGraph from '$lib/components/MiniNetworkGraph.svelte';
   import AssetScreenerChart from '$lib/components/screener/AssetScreenerChart.svelte';
+  import EntityMap from '$lib/components/EntityMap.svelte';
   import UltimateOwners from '$lib/components/UltimateOwners.svelte';
   import DataSourceBadge from '$lib/components/DataSourceBadge.svelte';
   import SectionHeader from '$lib/components/SectionHeader.svelte';
@@ -417,7 +418,7 @@
 
       <div class="section-block">
         <h3>Ownership Structure</h3>
-        <AssetScreenerChart {entityId} entityName={entityName} />
+        <AssetScreenerChart {entityId} {entityName} />
       </div>
 
       <div class="section-block section-block--scroll" style="min-height: 500px;">
@@ -463,6 +464,9 @@
           </div>
           <div class="split-col">
             <h3>Geographic Distribution</h3>
+            {#if filteredAssets.length > 0}
+              <EntityMap assets={filteredAssets} height={350} />
+            {/if}
             <div class="country-grid">
               {#each countryBreakdown.slice(0, 12) as row}
                 {@const total = portfolio?.assets?.length || 1}

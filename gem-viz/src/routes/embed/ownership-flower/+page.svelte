@@ -72,7 +72,13 @@
   <OwnershipFlower ownerId={entityId} {portfolio} size={validSize} {showLabels} {showTitle} />
 {:else if entityId && portfolio}
   <div class="embed-empty">
-    <p>This entity owns subsidiaries but no direct assets. Try the <a href="/embed/entity?id={entityId}" target="_blank" rel="noopener">Entity Card</a> embed for subsidiary details.</p>
+    <p>
+      This entity owns subsidiaries but no direct assets. Try the <a
+        href="/embed/entity?id={entityId}"
+        target="_blank"
+        rel="noopener">Entity Card</a
+      > embed for subsidiary details.
+    </p>
   </div>
 {:else}
   <div class="embed-error">
