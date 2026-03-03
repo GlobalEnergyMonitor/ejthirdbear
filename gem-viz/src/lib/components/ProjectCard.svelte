@@ -10,6 +10,12 @@
     type PercentileData,
   } from '$lib/factsheet';
   import { formatRatioAsPct } from '$lib/format-utils';
+  import {
+    getTrackerCardConfig,
+    getConfiguredKeys,
+    resolveFieldValue,
+    type CardField,
+  } from '$lib/factsheet/tracker-card-config';
 
   let {
     asset,
@@ -33,17 +39,75 @@
   const isMine = $derived(isMineAsset(asset));
   const formatPct = formatRatioAsPct;
 
-  const hasOwnership = $derived(asset.owner || asset.parent);
-  const hasCapacity = $derived(asset.capacity || asset.capacityFactor || percentiles);
-  const hasAge = $derived(
-    asset.startYear || asset.plannedRetirement || asset.remainingLifetime || asset.plantAge
-  );
-  const hasEmissions = $derived(asset.annualCO2 || asset.lifetimeCO2 || asset.heatRate);
-  const hasDetails = $derived(
-    asset.technology || asset.coalType || asset.mineType || asset.miningMethod
-  );
+  // --- Tabbed layout state ---
+  const cardConfig = $derived(getTrackerCardConfig(asset.tracker));
 
-  // Build location string from available fields
+  // Filter to only tabs that have at least one populated field
+  const visibleTabs = $derived.by(() => {
+    return cardConfig.tabs.filter((tab) =>
+      tab.fields.some((f) => {
+        const val = resolveFieldValue(asset, f.key);
+        return val != null && val !== '';
+      })
+    );
+  });
+
+  let activeTabIndex = $state(0);
+  // Reset tab when asset changes
+  $effect(() => {
+    // Reference asset.id to create dependency
+    void asset.id;
+    activeTabIndex = 0;
+  });
+
+  const activeTab = $derived(visibleTabs[activeTabIndex] ?? visibleTabs[0]);
+
+  // Collect extra raw fields not in any tab config
+  const extraFields = $derived.by(() => {
+    if (!asset.raw) return [];
+    const configuredKeys = getConfiguredKeys(cardConfig);
+    // Also skip keys that map to typed Asset props we already show
+    const skipRawKeys = new Set([
+      'id', 'name', 'status', 'capacity', 'country', 'latitude', 'longitude',
+      'owners', 'ownerName', 'parentName', 'facilityType', 'capacityUnit',
+    ]);
+    const extras: { label: string; value: string }[] = [];
+    for (const [k, v] of Object.entries(asset.raw)) {
+      if (v == null || v === '') continue;
+      if (skipRawKeys.has(k)) continue;
+      // Skip if any config field references this raw key
+      if (configuredKeys.has(`raw.${k}`)) continue;
+      extras.push({ label: k, value: String(v) });
+    }
+    return extras;
+  });
+
+  // --- Format a field value for display ---
+  function formatField(field: CardField, asset: Asset): string | undefined {
+    const val = resolveFieldValue(asset, field.key);
+    if (val == null || val === '') return undefined;
+
+    switch (field.format) {
+      case 'capacity':
+        return formatValueWithUnit(Number(val), asset.capacityUnit);
+      case 'pct':
+        return typeof val === 'number' ? formatPct(val) : `${val}%`;
+      case 'co2':
+        return formatMtCO2(Number(val));
+      case 'heatRate':
+        return `${Number(val).toFixed(0)} Btu/kWh`;
+      case 'years':
+        return `${val} years`;
+      case 'coords':
+        return asset.lat != null && asset.lon != null
+          ? `${asset.lat.toFixed(4)}, ${asset.lon.toFixed(4)}`
+          : undefined;
+      default:
+        return String(val);
+    }
+  }
+
+  // Build location string from available fields (used in compact mode)
   const locationStr = $derived.by(() => {
     const parts: string[] = [];
     if (asset.location) parts.push(asset.location);
@@ -51,9 +115,10 @@
     if (asset.country && !parts.some((p) => p.includes(asset.country!))) parts.push(asset.country);
     return parts.join(', ') || undefined;
   });
+
 </script>
 
-<!-- Reusable snippets: detail row auto-hides when value is falsy, pctBar draws a percentile tick -->
+<!-- Reusable snippets -->
 {#snippet detail(label, value)}
   {#if value}
     <div class="detail">
@@ -70,6 +135,15 @@
       <div class="percentile-tick" style="left:{value}%"></div>
     </div>
     <div class="percentile-value">{value}th</div>
+  </div>
+{/snippet}
+
+<!-- Field cell for tabbed view: shows "NA" for empty configured fields -->
+{#snippet fieldCell(field)}
+  {@const val = formatField(field, asset)}
+  <div class="detail">
+    <span class="detail-label">{field.label}</span>
+    <span class:na={!val}>{val || 'NA'}</span>
   </div>
 {/snippet}
 
@@ -98,6 +172,7 @@
 
   <div class="project-details">
     {#if variant === 'compact'}
+      <!-- Compact mode: unchanged from original -->
       <div class="details-section">
         <div class="section-title">Details</div>
         {@render detail(
@@ -130,86 +205,66 @@
         </div>
       {/if}
     {:else}
-      {#if hasOwnership}
-        <div class="details-section">
-          <div class="section-title">Ownership</div>
-          {@render detail(
-            'Owner',
-            asset.owner && asset.ownershipShare
-              ? `${asset.owner} (${asset.ownershipShare}%)`
-              : asset.owner
-          )}
-          {@render detail('Parent', asset.parent)}
-          {#if ownership}{@render ownership()}{/if}
-        </div>
+      <!-- Full mode: tabbed layout -->
+      <div class="divider"></div>
+
+      {#if visibleTabs.length > 1}
+        <nav class="tab-bar" role="tablist">
+          {#each visibleTabs as tab, i}
+            <button
+              class="tab-btn"
+              class:active={i === activeTabIndex}
+              role="tab"
+              aria-selected={i === activeTabIndex}
+              onclick={() => (activeTabIndex = i)}
+            >
+              {tab.name}
+            </button>
+          {/each}
+        </nav>
       {/if}
 
-      {#if hasCapacity}
-        <div class="details-section">
-          <div class="section-title">{isMine ? 'Size & Production' : 'Capacity'}</div>
-          {@render detail(
-            'Capacity',
-            asset.capacity && formatValueWithUnit(asset.capacity, asset.capacityUnit)
-          )}
-          {@render detail(
-            'Production',
-            asset.production && formatValueWithUnit(asset.production, asset.productionUnit)
-          )}
-          {@render detail(
-            'Capacity factor',
-            asset.capacityFactor && formatPct(asset.capacityFactor)
-          )}
-          {#if percentiles}
-            <div class="detail percentile-block">
-              <span class="detail-label">Capacity percentile</span>
-              {@render pctBar('Global', percentiles.global)}
-              {#if asset.country}
-                {@render pctBar(asset.country, percentiles.country)}
-              {/if}
+      {#if activeTab}
+        <div class="tab-content" role="tabpanel">
+          <div class="field-grid">
+            {#each activeTab.fields as field (field.key)}
+              {@render fieldCell(field)}
+            {/each}
+          </div>
+
+          <!-- Show extra raw fields on Overview tab -->
+          {#if activeTab.name === 'Overview' && extraFields.length > 0}
+            <div class="extra-fields">
+              <div class="section-title">More fields</div>
+              <div class="field-grid">
+                {#each extraFields as ef}
+                  <div class="detail">
+                    <span class="detail-label">{ef.label}</span>
+                    <span>{ef.value}</span>
+                  </div>
+                {/each}
+              </div>
+            </div>
+          {/if}
+
+          <!-- Ownership snippet in Ownership tab -->
+          {#if activeTab.name === 'Ownership' && ownership}
+            <div class="snippet-section">
+              {@render ownership()}
+            </div>
+          {/if}
+
+          <!-- Map in Overview tab -->
+          {#if activeTab.name === 'Overview' && map}
+            <div class="snippet-section">
+              {@render map()}
             </div>
           {/if}
         </div>
       {/if}
 
-      {#if hasAge}
-        <div class="details-section">
-          <div class="section-title">Age</div>
-          {@render detail(isMine ? 'Opening year' : 'Start year', asset.startYear)}
-          {@render detail(
-            isMine ? 'Mine age' : 'Plant age',
-            asset.plantAge && `${asset.plantAge} years`
-          )}
-          {@render detail('Planned retirement', asset.plannedRetirement)}
-          {@render detail(
-            'Remaining lifetime',
-            asset.remainingLifetime && `${asset.remainingLifetime} years`
-          )}
-        </div>
-      {/if}
-
-      {#if hasEmissions && !isMine}
-        <div class="details-section">
-          <div class="section-title">Emissions</div>
-          {@render detail('Annual CO₂', asset.annualCO2 && formatMtCO2(asset.annualCO2))}
-          {@render detail('Lifetime CO₂', asset.lifetimeCO2 && formatMtCO2(asset.lifetimeCO2))}
-          {@render detail('Heat rate', asset.heatRate && `${asset.heatRate.toFixed(0)} Btu/kWh`)}
-        </div>
-      {/if}
-
-      {#if hasDetails}
-        <div class="details-section">
-          <div class="section-title">{isMine ? 'Mine details' : 'Plant details'}</div>
-          {@render detail('Technology', asset.technology)}
-          {@render detail('Coal type', asset.coalType)}
-          {@render detail('Mine type', asset.mineType)}
-          {@render detail('Mining method', asset.miningMethod)}
-        </div>
-      {/if}
-
-      <div class="details-section">
-        <div class="section-title">Additional information</div>
-        {@render detail('Location', locationStr)}
-        {#if map}{@render map()}{/if}
+      <!-- Footer: links -->
+      <div class="card-footer">
         <div class="detail links-row">
           {#if asset.wikiUrl}
             <a class="gem-link" href={asset.wikiUrl} target="_blank" rel="noopener">GEM Wiki</a>
@@ -327,6 +382,67 @@
     padding: 1.25rem 1.5rem;
   }
 
+  /* Divider between header and tabs */
+  .divider {
+    height: 1px;
+    background: rgba(0, 74, 99, 0.12);
+    margin-bottom: 0.75rem;
+  }
+
+  /* Tab bar */
+  .tab-bar {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid rgba(0, 74, 99, 0.12);
+    margin-bottom: 1rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tab-btn {
+    all: unset;
+    cursor: pointer;
+    padding: 0.5rem 1rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--gem-teal);
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    transition: color 0.15s ease, border-color 0.15s ease;
+  }
+  .tab-btn:hover {
+    color: var(--gem-navy);
+  }
+  .tab-btn.active {
+    color: var(--gem-navy);
+    border-bottom-color: var(--gem-orange);
+  }
+
+  /* Tab content area */
+  .tab-content {
+    min-height: 4rem;
+  }
+
+  /* Field grid: 4 columns on desktop */
+  .field-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.8rem 1rem;
+  }
+
+  .extra-fields {
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px dashed rgba(0, 74, 99, 0.15);
+  }
+
+  .card-footer {
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid rgba(0, 74, 99, 0.1);
+  }
+
+  /* Legacy details-section for compact mode */
   .details-section {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -367,6 +483,11 @@
     font-size: 0.85rem;
     color: var(--gem-midnight);
     text-decoration: none;
+  }
+
+  .detail span.na {
+    color: rgba(0, 36, 48, 0.3);
+    font-style: italic;
   }
 
   .links-row {
@@ -512,6 +633,16 @@
       gap: 0.6rem 0.75rem;
     }
 
+    .field-grid {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.6rem 0.75rem;
+    }
+
+    .tab-btn {
+      font-size: 0.7rem;
+      padding: 0.4rem 0.75rem;
+    }
+
     .percentile-row {
       max-width: 160px;
     }
@@ -532,6 +663,10 @@
 
   @media (max-width: 380px) {
     .details-section {
+      grid-template-columns: 1fr;
+    }
+
+    .field-grid {
       grid-template-columns: 1fr;
     }
 

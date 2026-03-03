@@ -29,8 +29,14 @@
   } = $props();
 
   // State - sync with global store
-  let open = $state(embedded);
+  let open = $state(false);
   let showHelp = $state(false);
+
+  $effect(() => {
+    if (embedded) {
+      open = true;
+    }
+  });
 
   // Subscribe to the global store for external triggers
   $effect(() => {

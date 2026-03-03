@@ -40,9 +40,18 @@
   let loading = $state(true);
   /** @type {string | null} */
   let error = $state(null);
-  let title = $state(propsTitle);
-  let resolvedOwnerId = $state(ownerId);
+  let title = $state('');
+  let resolvedOwnerId = $state(null);
   let rendered = $state(false);
+
+  $effect(() => {
+    if (propsTitle) {
+      title = propsTitle;
+    }
+    if (ownerId) {
+      resolvedOwnerId = ownerId;
+    }
+  });
 
   // Navigate to entity page when clicked
   function handleFlowerClick() {

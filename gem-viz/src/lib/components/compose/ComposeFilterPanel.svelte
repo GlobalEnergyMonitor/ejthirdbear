@@ -2,7 +2,7 @@
   import FacetedFilter from '$lib/components/FacetedFilter.svelte';
   import RangeSlider from '$lib/components/RangeSlider.svelte';
 
-  let { state, presetsHref = '/presets' } = $props();
+  let { state = $bindable(), presetsHref = '/presets' } = $props();
 </script>
 
 <aside class="filter-panel">

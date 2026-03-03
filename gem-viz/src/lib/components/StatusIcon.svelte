@@ -12,9 +12,9 @@
   let { status = '', size = 10 } = $props();
 
   const groupedStatus = $derived(regroupStatus(status));
-  const r = size / 2;
+  const r = $derived(size / 2);
   const statusColor = $derived(getAggregatedStatusColor(status));
-  const strokeWidth = Math.max(1.25, size * 0.125);
+  const strokeWidth = $derived(Math.max(1.25, size * 0.125));
 </script>
 
 {#if groupedStatus === 'prospective' || groupedStatus === 'proposed'}
