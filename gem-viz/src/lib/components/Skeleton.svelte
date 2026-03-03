@@ -40,7 +40,7 @@
     paragraph: 'auto',
   };
 
-  const resolvedHeight = height || defaultHeights[variant] || '1em';
+  const resolvedHeight = $derived(height || defaultHeights[variant] || '1em');
 </script>
 
 <div
@@ -52,28 +52,28 @@
   {#if variant === 'paragraph'}
     {#each Array(lines) as _, i}
       <div
-        class="skeleton-line"
+        class="bone"
         style:width="{i === lines - 1 ? 60 + Math.random() * 20 : 90 + Math.random() * 10}%"
-        style:animation-delay="{i * 0.05}s"
+        style:animation-delay="{i * 0.1}s"
       ></div>
     {/each}
   {:else if variant === 'card'}
-    <div class="skeleton-card-header"></div>
+    <div class="bone bone-header" style:width="60%"></div>
     <div class="skeleton-card-body">
-      <div class="skeleton-line" style:width="70%"></div>
-      <div class="skeleton-line" style:width="50%"></div>
+      <div class="bone" style:width="85%"></div>
+      <div class="bone" style:width="65%"></div>
     </div>
   {:else if variant === 'table-row'}
     <div class="skeleton-row">
-      <div class="skeleton-cell" style:width="15%"></div>
-      <div class="skeleton-cell" style:width="35%"></div>
-      <div class="skeleton-cell" style:width="20%"></div>
-      <div class="skeleton-cell" style:width="15%"></div>
+      <div class="bone" style:width="15%"></div>
+      <div class="bone" style:width="35%"></div>
+      <div class="bone" style:width="20%"></div>
+      <div class="bone" style:width="15%"></div>
     </div>
   {:else if variant === 'stat'}
     <div class="skeleton-stat">
-      <div class="skeleton-stat-label"></div>
-      <div class="skeleton-stat-value"></div>
+      <div class="bone" style:width="60%" style:height="12px"></div>
+      <div class="bone" style:width="40%" style:height="28px"></div>
     </div>
   {:else}
     <!-- Default: text line -->
@@ -82,17 +82,25 @@
 
 <style>
   .skeleton {
-    background: linear-gradient(
-      90deg,
-      var(--color-gray-100) 25%,
-      var(--color-gray-200) 50%,
-      var(--color-gray-100) 75%
-    );
-    background-size: 200% 100%;
-    border-radius: 2px;
+    --shimmer-base: var(--color-gray-200, #dce3e5);
+    --shimmer-highlight: var(--color-gray-300, #becccf);
+    border-radius: 4px;
   }
 
-  .skeleton.animated {
+  /* The actual shimmer bar — shared across all variants */
+  .bone {
+    height: 1em;
+    background: linear-gradient(
+      90deg,
+      var(--shimmer-base) 25%,
+      var(--shimmer-highlight) 50%,
+      var(--shimmer-base) 75%
+    );
+    background-size: 200% 100%;
+    border-radius: 4px;
+  }
+
+  .skeleton.animated .bone {
     animation: shimmer 1.5s ease-in-out infinite;
   }
 
@@ -105,6 +113,21 @@
     }
   }
 
+  /* Text variant — the outer div IS the bone */
+  .skeleton-text {
+    background: linear-gradient(
+      90deg,
+      var(--shimmer-base) 25%,
+      var(--shimmer-highlight) 50%,
+      var(--shimmer-base) 75%
+    );
+    background-size: 200% 100%;
+  }
+
+  .skeleton-text.animated {
+    animation: shimmer 1.5s ease-in-out infinite;
+  }
+
   /* Paragraph variant */
   .skeleton-paragraph {
     background: none;
@@ -113,47 +136,18 @@
     gap: 8px;
   }
 
-  .skeleton-line {
-    height: 1em;
-    background: linear-gradient(
-      90deg,
-      var(--color-gray-100) 25%,
-      var(--color-gray-200) 50%,
-      var(--color-gray-100) 75%
-    );
-    background-size: 200% 100%;
-    border-radius: 2px;
-  }
-
-  .skeleton.animated .skeleton-line {
-    animation: shimmer 1.5s ease-in-out infinite;
-  }
-
   /* Card variant */
   .skeleton-card {
-    background: var(--color-gray-50);
-    border: 1px solid var(--color-border);
+    background: var(--color-gray-50, #f2f2eb);
+    border: 1px solid var(--color-border, #dce3e5);
     padding: 16px;
     display: flex;
     flex-direction: column;
     gap: 12px;
   }
 
-  .skeleton-card-header {
+  .bone-header {
     height: 20px;
-    width: 60%;
-    background: linear-gradient(
-      90deg,
-      var(--color-gray-100) 25%,
-      var(--color-gray-200) 50%,
-      var(--color-gray-100) 75%
-    );
-    background-size: 200% 100%;
-    border-radius: 2px;
-  }
-
-  .skeleton.animated .skeleton-card-header {
-    animation: shimmer 1.5s ease-in-out infinite;
   }
 
   .skeleton-card-body {
@@ -165,7 +159,7 @@
   /* Table row variant */
   .skeleton-table-row {
     background: none;
-    border-bottom: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--color-border, #dce3e5);
     padding: 0;
   }
 
@@ -176,25 +170,12 @@
     padding: 12px 0;
   }
 
-  .skeleton-cell {
+  .skeleton-row .bone {
     height: 16px;
-    background: linear-gradient(
-      90deg,
-      var(--color-gray-100) 25%,
-      var(--color-gray-200) 50%,
-      var(--color-gray-100) 75%
-    );
-    background-size: 200% 100%;
-    border-radius: 2px;
-  }
-
-  .skeleton.animated .skeleton-cell {
-    animation: shimmer 1.5s ease-in-out infinite;
   }
 
   /* Stat variant */
   .skeleton-stat {
-    background: none;
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -203,45 +184,14 @@
     padding: 16px;
   }
 
-  .skeleton-stat .skeleton-stat-label {
-    height: 12px;
-    width: 60%;
-    background: linear-gradient(
-      90deg,
-      var(--color-gray-100) 25%,
-      var(--color-gray-200) 50%,
-      var(--color-gray-100) 75%
-    );
-    background-size: 200% 100%;
-    border-radius: 2px;
-  }
-
-  .skeleton-stat .skeleton-stat-value {
-    height: 28px;
-    width: 40%;
-    background: linear-gradient(
-      90deg,
-      var(--color-gray-100) 25%,
-      var(--color-gray-200) 50%,
-      var(--color-gray-100) 75%
-    );
-    background-size: 200% 100%;
-    border-radius: 2px;
-  }
-
-  .skeleton.animated .skeleton-stat-label,
-  .skeleton.animated .skeleton-stat-value {
-    animation: shimmer 1.5s ease-in-out infinite;
+  .skeleton-stat {
+    background: none;
   }
 
   /* Reduced motion */
   @media (prefers-reduced-motion: reduce) {
     .skeleton.animated,
-    .skeleton.animated .skeleton-line,
-    .skeleton.animated .skeleton-card-header,
-    .skeleton.animated .skeleton-cell,
-    .skeleton.animated .skeleton-stat-label,
-    .skeleton.animated .skeleton-stat-value {
+    .skeleton.animated .bone {
       animation: none;
     }
   }
