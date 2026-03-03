@@ -84,7 +84,7 @@ export interface ScreenerFilters {
   tracker: string;
   status?: string;
   statuses?: string[];
-  country?: string;
+  country?: string | string[];
   ownerIds?: string[];
   assetClassId?: string;
   selectedSubClasses?: string[];

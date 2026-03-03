@@ -43,7 +43,7 @@
   let checkedGroupOptions = $state({});
   /** Status checkbox state: `status-{groupId}-{statusValue}` -> boolean */
   let checkedStatuses = $state({});
-  let geoFilter = $state('');
+  let geoFilters = $state([]);
 
   const selectedClass = $derived(selectedClassId ? getAssetClassById(selectedClassId) : null);
 
@@ -59,7 +59,7 @@
     if (!ac || !isEnabled(ac)) return;
 
     selectedClassId = ac.id;
-    geoFilter = '';
+    geoFilters = [];
 
     // Initialize flat sub-class checkboxes
     const checks = {};
@@ -97,7 +97,7 @@
     checkedSubClasses = {};
     checkedGroupOptions = {};
     checkedStatuses = {};
-    geoFilter = '';
+    geoFilters = [];
   }
 
   // ─── Derive selected statuses ─────────────────────────────────────
@@ -134,7 +134,7 @@
         description: selectedClass.description,
         tracker: gemTrackerToUiTracker(selectedClass.trackers[0]),
         filters: {
-          geography: geoFilter || undefined,
+          geography: geoFilters.length > 0 ? geoFilters : undefined,
           status: selectedStatuses.length === 1 ? selectedStatuses[0] : undefined,
           statuses: selectedStatuses.length > 0 ? selectedStatuses : undefined,
         },
@@ -158,7 +158,11 @@
   const selectionSummary = $derived.by(() => {
     if (!selectedClass) return '';
     const parts = [selectedClass.label].filter(Boolean).join(' ');
-    const geo = geoFilter ? ` in ${geoFilter}` : '';
+    const geo = geoFilters.length === 1
+      ? ` in ${geoFilters[0]}`
+      : geoFilters.length > 1
+        ? ` in ${geoFilters.length} countries`
+        : '';
     const statusCount = selectedStatuses.length;
     const totalStatuses = STATUS_GROUPS.reduce((n, sg) => n + sg.statuses.length, 0);
     const sc = statusCount > 0 && statusCount < totalStatuses ? ` (${statusCount} statuses)` : '';
@@ -273,7 +277,7 @@
       bind:checkedSubClasses
       bind:checkedGroupOptions
       bind:checkedStatuses
-      bind:geoFilter
+      bind:geoFilters
       onShowAllOwners={() => navigateTo('/screener/results')}
       onSearchSpecificOwners={() => navigateTo('/screener/owners')}
     />
@@ -298,10 +302,10 @@
         <span class="debug-label">Statuses:</span>
         <span class="debug-value">{selectedStatuses.join(', ') || 'none'}</span>
       </div>
-      {#if geoFilter}
+      {#if geoFilters.length > 0}
         <div class="debug-meta">
           <span class="debug-label">Geography:</span>
-          <span class="debug-value">{geoFilter}</span>
+          <span class="debug-value">{geoFilters.join(', ')}</span>
         </div>
       {/if}
       <div class="debug-json">

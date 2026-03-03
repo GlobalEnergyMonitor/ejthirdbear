@@ -8,6 +8,7 @@
   import { COUNTRIES, STATUS_GROUPS } from '$lib/data-config/tracker-schema';
   import type { AssetClass, SubClassGroup } from '$lib/data-config/asset-class-definitions';
   import { ArrowRight, Search as SearchIcon } from 'lucide-svelte';
+  import CountryMultiSelect from '$lib/components/screener/CountryMultiSelect.svelte';
 
   interface Props {
     assetClass: AssetClass;
@@ -17,7 +18,7 @@
     checkedGroupOptions: Record<string, boolean>;
     /** Status group option ID -> checked */
     checkedStatuses: Record<string, boolean>;
-    geoFilter: string;
+    geoFilters: string[];
     onShowAllOwners: () => void;
     onSearchSpecificOwners: () => void;
   }
@@ -27,7 +28,7 @@
     checkedSubClasses = $bindable(),
     checkedGroupOptions = $bindable(),
     checkedStatuses = $bindable(),
-    geoFilter = $bindable(),
+    geoFilters = $bindable(),
     onShowAllOwners,
     onSearchSpecificOwners,
   }: Props = $props();
@@ -116,6 +117,71 @@
     }
     checkedStatuses = next;
   }
+
+  // ── Auto-scroll to next section on interaction ──────────────────
+  let statusSectionEl: HTMLElement | undefined = $state();
+  let geoSectionEl: HTMLElement | undefined = $state();
+  let step2El: HTMLElement | undefined = $state();
+
+  /** Quad ease-out: fast start, gentle deceleration */
+  function easeOutQuad(t: number): number {
+    return t * (2 - t);
+  }
+
+  /** Scroll just enough to bring `el` into the lower third of the viewport */
+  function smoothScrollTo(el: HTMLElement, duration = 300) {
+    const rect = el.getBoundingClientRect();
+    const viewH = window.innerHeight;
+    // If already visible in the lower two-thirds, don't scroll
+    if (rect.top >= 0 && rect.top < viewH * 0.65) return;
+    // Target: place element at ~60% down the viewport
+    const desired = viewH * 0.6;
+    const distance = rect.top - desired;
+    if (Math.abs(distance) < 10) return;
+
+    const start = window.scrollY;
+    const startTime = performance.now();
+
+    function step(now: number) {
+      const elapsed = now - startTime;
+      const t = Math.min(elapsed / duration, 1);
+      window.scrollTo(0, start + distance * easeOutQuad(t));
+      if (t < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+
+  // Track whether each section has had its first interaction (avoid re-scrolling on every change)
+  let hasScrolledToStatus = false;
+  let hasScrolledToGeo = false;
+  let hasScrolledToStep2 = false;
+
+  // Subclass change → scroll to status (if it exists) or geo
+  const anySubClassChecked = $derived(
+    Object.values(checkedSubClasses).some(Boolean) ||
+    Object.values(checkedGroupOptions).some(Boolean)
+  );
+  $effect(() => {
+    if (!anySubClassChecked || hasScrolledToStatus) return;
+    hasScrolledToStatus = true;
+    const target = statusSectionEl ?? geoSectionEl ?? step2El;
+    if (target) setTimeout(() => smoothScrollTo(target), 50);
+  });
+
+  // Status change → scroll to geography (if it exists) or step 2
+  $effect(() => {
+    if (selectedStatusCount === 0 || hasScrolledToGeo) return;
+    hasScrolledToGeo = true;
+    const target = geoSectionEl ?? step2El;
+    if (target) setTimeout(() => smoothScrollTo(target), 50);
+  });
+
+  // Geography change → scroll to step 2 buttons
+  $effect(() => {
+    if (geoFilters.length === 0 || hasScrolledToStep2) return;
+    hasScrolledToStep2 = true;
+    if (step2El) setTimeout(() => smoothScrollTo(step2El!), 50);
+  });
 </script>
 
 <div class="expansion-panel" transition:slide={{ duration: 200 }}>
@@ -191,7 +257,7 @@
 
   <!-- OPERATING STATUS -->
   {#if hasStatusFilter}
-    <div class="filter-section">
+    <div class="filter-section" bind:this={statusSectionEl}>
       <span class="section-heading">Operating status</span>
       <div class="status-toolbar">
         <div class="status-presets" role="group" aria-label="Status presets">
@@ -249,20 +315,13 @@
 
   <!-- GEOGRAPHY -->
   {#if assetClass.availableFilters.geography}
-    <div class="filter-section">
+    <div class="filter-section" bind:this={geoSectionEl}>
       <span class="section-heading">Geography</span>
-      <label class="geo-select">
-        <select bind:value={geoFilter}>
-          <option value="">All countries</option>
-          {#each COUNTRIES as country}
-            <option value={country}>{country}</option>
-          {/each}
-        </select>
-      </label>
+      <CountryMultiSelect bind:selected={geoFilters} countries={COUNTRIES} />
     </div>
   {/if}
 
-  <div class="step-divider">Step 2: Choose how to find owners</div>
+  <div class="step-divider" bind:this={step2El}>Step 2: Choose how to find owners</div>
 
   <div class="continue-options">
     <button
@@ -457,30 +516,6 @@
   .refine-option input[type='checkbox'] {
     margin: 0;
     cursor: pointer;
-  }
-
-  /* Geography select */
-  .geo-select select {
-    padding: var(--space-2);
-    font-size: var(--font-size-body);
-    border: none;
-    border-bottom: var(--border-width, 1px) solid var(--color-gray-300, #d1d5db);
-    border-radius: 0;
-    background: transparent;
-    color: var(--color-text-primary);
-    min-width: 220px;
-    -webkit-appearance: none;
-    appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='4' viewBox='0 0 8 4'%3E%3Cpath fill='%23999' d='M0 0l4 4 4-4z'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right var(--space-1, 4px) center;
-    padding-right: var(--space-5, 20px);
-    cursor: pointer;
-  }
-
-  .geo-select select:focus {
-    outline: none;
-    border-bottom-color: var(--gem-teal, #2a7f8f);
   }
 
   /* Step divider + continue */

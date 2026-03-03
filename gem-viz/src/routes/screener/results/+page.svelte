@@ -39,7 +39,7 @@
     filters?: {
       status?: string;
       statuses?: string[];
-      geography?: string;
+      geography?: string | string[];
     };
     selectedSubClasses?: string[];
     [key: string]: unknown;
@@ -108,7 +108,13 @@
     parts.push(trackerName);
 
     if (cls.filters?.geography) {
-      parts.push(`in ${cls.filters.geography}`);
+      const geo = cls.filters.geography;
+      if (Array.isArray(geo)) {
+        if (geo.length === 1) parts.push(`in ${geo[0]}`);
+        else if (geo.length > 1) parts.push(`in ${geo.length} countries`);
+      } else {
+        parts.push(`in ${geo}`);
+      }
     }
 
     return parts.join(' ');
@@ -213,11 +219,17 @@
       // Build filters for the screener API
       // Prefer statuses[] array for multi-status filtering; fall back to singular status
       const statusesArray: string[] | undefined = cls?.filters?.statuses;
+      // Normalize geography: could be string (legacy) or string[] (multi-select)
+      const geoRaw = cls?.filters?.geography;
+      const countryFilter: string | string[] | undefined = Array.isArray(geoRaw)
+        ? geoRaw.length > 0 ? geoRaw : undefined
+        : geoRaw || undefined;
+
       const filters: ScreenerFilters = {
         tracker: cls?.tracker || '',
         status: cls?.filters?.status,
         statuses: statusesArray && statusesArray.length > 0 ? statusesArray : undefined,
-        country: cls?.filters?.geography,
+        country: countryFilter,
         ownerIds: selectedOwnerIds.length > 0 ? selectedOwnerIds : undefined,
         assetClassId: cls?.assetClassId || cls?.id,
         selectedSubClasses: Array.isArray(cls?.selectedSubClasses)
@@ -323,9 +335,16 @@
           </div>
         {/if}
         {#if cls.filters?.geography}
+          {@const geo = cls.filters.geography}
           <div class="filter-tag geography">
             <span class="tag-label">Country:</span>
-            <span class="tag-value">{cls.filters.geography}</span>
+            <span class="tag-value">
+              {Array.isArray(geo)
+                ? geo.length <= 3
+                  ? geo.join(', ')
+                  : `${geo.length} countries`
+                : geo}
+            </span>
           </div>
         {/if}
       {/each}

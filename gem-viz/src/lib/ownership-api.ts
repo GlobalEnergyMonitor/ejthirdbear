@@ -383,12 +383,20 @@ function normalizePaginated<T>(raw: T[] | PaginatedResponse<T>): PaginatedRespon
 // ENTITY ENDPOINTS
 // ============================================================================
 
-// Build query string from an object, skipping nullish values
-function buildQuery(params?: Record<string, string | number | undefined | null>): string {
+// Build query string from an object, skipping nullish values.
+// Supports arrays: repeated keys for multi-value params (e.g. country=X&country=Y).
+function buildQuery(params?: Record<string, string | number | string[] | undefined | null>): string {
   if (!params) return '';
   const sp = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
-    if (v != null && v !== '') sp.set(k, String(v));
+    if (v == null || v === '') continue;
+    if (Array.isArray(v)) {
+      for (const item of v) {
+        if (item != null && item !== '') sp.append(k, String(item));
+      }
+    } else {
+      sp.set(k, String(v));
+    }
   }
   const q = sp.toString();
   return q ? `?${q}` : '';
@@ -599,14 +607,14 @@ export function resolveApiSlug(tracker: string): string | null {
 export async function listAssets(params?: {
   q?: string;
   status?: string;
-  country?: string;
+  country?: string | string[];
   asset_type?: string;
   limit?: number;
   offset?: number;
   facets?: boolean;
 }): Promise<PaginatedResponse<AssetSummary> & { facets?: Record<string, Record<string, number>> }> {
   // Build query params — always request JSON format (coal-plant slug returns HTML without it)
-  const queryParams: Record<string, string | number | undefined | null> = {
+  const queryParams: Record<string, string | number | string[] | undefined | null> = {
     q: params?.q,
     status: params?.status,
     country: params?.country,
@@ -633,7 +641,7 @@ export async function listAssets(params?: {
  */
 export async function listAssetsByType(
   assetType: string,
-  opts?: { limit?: number; status?: string; country?: string }
+  opts?: { limit?: number; status?: string; country?: string | string[] }
 ): Promise<AssetSummary[]> {
   const apiSlug = resolveApiSlug(assetType);
   const limit = opts?.limit ?? 100;
@@ -664,7 +672,7 @@ export async function listAssetsByType(
  */
 export async function* paginateAssetsByType(
   apiSlug: string,
-  opts?: { status?: string; country?: string; limit?: number }
+  opts?: { status?: string; country?: string | string[]; limit?: number }
 ): AsyncGenerator<AssetSummary[], void, unknown> {
   const BATCH = opts?.limit ?? 500;
   let offset = 0;
