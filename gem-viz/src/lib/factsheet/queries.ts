@@ -27,6 +27,8 @@ function setCache(key: string, data: unknown): void {
 /** Map REST API AssetSummary to factsheet Asset type */
 function assetSummaryToAsset(a: AssetSummary): Asset {
   const raw = a.raw || {};
+  // Fall back to owners[] array when top-level ownerName/parentName aren't set
+  const primaryOwner = a.owners?.[0];
   return {
     id: a.id,
     name: a.name,
@@ -36,7 +38,8 @@ function assetSummaryToAsset(a: AssetSummary): Asset {
     country: a.country ?? undefined,
     lat: a.latitude ?? undefined,
     lon: a.longitude ?? undefined,
-    owner: a.ownerName ?? undefined,
+    owner: a.ownerName ?? primaryOwner?.name ?? undefined,
+    ownershipShare: primaryOwner?.ownershipShare ?? undefined,
     parent: a.parentName ?? undefined,
     tracker: a.facilityType ?? undefined,
     // Extract additional fields from raw API data when available
@@ -52,6 +55,28 @@ function assetSummaryToAsset(a: AssetSummary): Asset {
     ),
     wikiUrl: toStr(raw['Wiki URL'] ?? raw['wiki_url']),
   };
+}
+
+/** Map granular status filters to the API's aggregated status value.
+ *  API supports single values: "operating", "retired", "planned".
+ *  Returns undefined if statuses don't map cleanly (fall back to client-side filtering). */
+function resolveApiStatus(statuses: string[]): string | undefined {
+  const planned = new Set([
+    'announced',
+    'proposed',
+    'pre-permit',
+    'permitted',
+    'pre-construction',
+    'construction',
+  ]);
+  const operating = new Set(['operating', 'operating pre-retirement']);
+  const retired = new Set(['retired', 'mothballed', 'idle', 'mothballed pre-retirement']);
+
+  const lower = statuses.map((s) => s.toLowerCase());
+  if (lower.every((s) => planned.has(s))) return 'planned';
+  if (lower.every((s) => operating.has(s))) return 'operating';
+  if (lower.every((s) => retired.has(s))) return 'retired';
+  return undefined;
 }
 
 function toStr(v: unknown): string | undefined {
@@ -114,18 +139,25 @@ export async function fetchAssets(options: {
       ? trackerNameToSlug[tracker] || tracker.toLowerCase().replace(/\s+/g, '-')
       : undefined;
 
-    // Fetch with type filtering and client-side sorting
+    // Map granular status filters to API aggregated status for server-side filtering
+    // API supports: "operating", "retired", "planned"
+    const apiStatus = statusFilter?.length ? resolveApiStatus(statusFilter) : undefined;
+
+    // Fetch with type filtering; use API status filter when available for better results
     const fetchLimit = Math.max(limit * 5, 200);
     const results = assetType
-      ? await listAssetsByType(assetType, { limit: fetchLimit })
+      ? await listAssetsByType(assetType, { limit: fetchLimit, status: apiStatus })
       : (await import('$lib/ownership-api').then((m) => m.listAssets({ limit: fetchLimit })))
           .results;
 
     let assets = results.map(assetSummaryToAsset);
 
     // Client-side status filtering
+    // When API already filtered by aggregated status, include that status in match set
+    // (API returns "planned"/"operating"/"retired" instead of granular values)
     if (statusFilter && statusFilter.length > 0) {
       const statusSet = new Set(statusFilter.map((s) => s.toLowerCase()));
+      if (apiStatus) statusSet.add(apiStatus);
       assets = assets.filter((a) => statusSet.has((a.status || '').toLowerCase()));
     }
 

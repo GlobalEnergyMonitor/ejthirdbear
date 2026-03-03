@@ -54,6 +54,7 @@
       country?: string;
       state?: string;
       owner?: string;
+      ownershipShare?: number;
       tracker?: string;
     }>
   >([]);
@@ -125,14 +126,20 @@
         .sort((a, b) => (b.capacity ?? 0) - (a.capacity ?? 0))
         .slice(0, 5);
 
-      sampleAssets = sorted.map((a) => ({
+      const primaryOwner = (idx: number) => sorted[idx]?.owners?.[0];
+      sampleAssets = sorted.map((a, i) => ({
         id: a.id,
         name: a.name,
         status: a.status || '',
         capacity: a.capacity ?? undefined,
         capacityUnit: a.capacityUnit || (tracker.includes('Mine') ? 'Mtpa' : 'MW'),
         country: a.country ?? undefined,
-        owner: a.ownerName ?? undefined,
+        state:
+          (a.raw?.['Subnational unit (province, state)'] as string | undefined) ??
+          (a.raw?.['State'] as string | undefined) ??
+          undefined,
+        owner: a.ownerName ?? primaryOwner(i)?.name ?? undefined,
+        ownershipShare: primaryOwner(i)?.ownershipShare ?? undefined,
         tracker,
       }));
     } catch (err) {

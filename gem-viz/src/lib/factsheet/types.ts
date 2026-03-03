@@ -17,6 +17,7 @@ export interface Asset {
   lat?: number;
   lon?: number;
   owner?: string;
+  ownershipShare?: number;
   parent?: string;
   startYear?: number;
   plannedRetirement?: number;
