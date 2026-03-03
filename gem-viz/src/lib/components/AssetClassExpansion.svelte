@@ -36,6 +36,7 @@
   const hasSubClassGroups = $derived(!!assetClass.subClassGroups?.length);
   const hasStatusFilter = $derived(!!assetClass.availableFilters.status);
   const isMultiTracker = $derived(assetClass.trackers.length > 1);
+  const selectedStatusCount = $derived(Object.values(checkedStatuses).filter(Boolean).length);
 
   // REFINE expand/collapse state
   let expandedRefine: Record<string, boolean> = $state({});
@@ -95,6 +96,23 @@
     const next = { ...checkedStatuses };
     for (const id of getStatusIds(groupId)) {
       next[id] = !allChecked;
+    }
+    checkedStatuses = next;
+  }
+
+  function setStatusPreset(preset: 'default' | 'all' | 'none') {
+    const next: Record<string, boolean> = {};
+    for (const sg of STATUS_GROUPS) {
+      for (const s of sg.statuses) {
+        const key = `status-${sg.id}-${s}`;
+        if (preset === 'all') {
+          next[key] = true;
+        } else if (preset === 'none') {
+          next[key] = false;
+        } else {
+          next[key] = sg.id === 'operating' || sg.id === 'planned';
+        }
+      }
     }
     checkedStatuses = next;
   }
@@ -175,6 +193,20 @@
   {#if hasStatusFilter}
     <div class="filter-section">
       <span class="section-heading">Operating status</span>
+      <div class="status-toolbar">
+        <div class="status-presets" role="group" aria-label="Status presets">
+          <button type="button" class="preset-btn" onclick={() => setStatusPreset('default')}>
+            Operating + planned
+          </button>
+          <button type="button" class="preset-btn" onclick={() => setStatusPreset('all')}>
+            All statuses
+          </button>
+          <button type="button" class="preset-btn" onclick={() => setStatusPreset('none')}>
+            Clear
+          </button>
+        </div>
+        <span class="status-count">{selectedStatusCount} selected</span>
+      </div>
       <div class="group-row">
         {#each STATUS_GROUPS as sg (sg.id)}
           {@const hasRefine = sg.statuses.length > 1}
@@ -209,6 +241,9 @@
           </div>
         {/each}
       </div>
+      {#if selectedStatusCount === 0}
+        <p class="status-warning">Select at least one status to continue.</p>
+      {/if}
     </div>
   {/if}
 
@@ -230,12 +265,20 @@
   <div class="step-divider">Step 2: Choose how to find owners</div>
 
   <div class="continue-options">
-    <button class="continue-btn primary" onclick={onShowAllOwners}>
+    <button
+      class="continue-btn primary"
+      onclick={onShowAllOwners}
+      disabled={hasStatusFilter && selectedStatusCount === 0}
+    >
       <span class="btn-icon"><ArrowRight size={18} /></span>
       Show All Owners
       <span class="btn-sublabel">See every company with stakes</span>
     </button>
-    <button class="continue-btn secondary" onclick={onSearchSpecificOwners}>
+    <button
+      class="continue-btn secondary"
+      onclick={onSearchSpecificOwners}
+      disabled={hasStatusFilter && selectedStatusCount === 0}
+    >
       <span class="btn-icon"><SearchIcon size={18} /></span>
       Search Specific Owners
       <span class="btn-sublabel">Find companies from a list</span>
@@ -329,6 +372,47 @@
   .group-desc {
     font-size: var(--font-size-sm);
     color: var(--color-text-tertiary);
+  }
+
+  .status-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+    flex-wrap: wrap;
+  }
+
+  .status-presets {
+    display: flex;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+  }
+
+  .preset-btn {
+    font-size: var(--font-size-sm);
+    border: 1px solid var(--color-border, #e5e7eb);
+    background: var(--color-bg-primary, #fff);
+    color: var(--color-text-secondary);
+    border-radius: var(--radius-sm);
+    padding: 2px var(--space-2);
+    cursor: pointer;
+  }
+
+  .preset-btn:hover {
+    border-color: var(--gem-teal, #2a7f8f);
+    color: var(--color-text-primary);
+  }
+
+  .status-count {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-tertiary);
+  }
+
+  .status-warning {
+    margin: var(--space-2) 0 0 0;
+    font-size: var(--font-size-sm);
+    color: #b45309;
   }
 
   /* REFINE toggle */
@@ -429,6 +513,13 @@
     border-radius: var(--radius-sm);
     transition: all var(--duration-base, 150ms) var(--ease-in-out-quad, ease);
     text-align: left;
+  }
+
+  .continue-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
   }
 
   .btn-icon {
