@@ -156,14 +156,21 @@
     const sizeConfig = sizes[size] || sizes.medium;
     const portfolioData = prebakedPortfolio;
 
-    if (!portfolioData || !svgEl) return;
+    if (!portfolioData) return;
 
-    // Extract name/id even if no assets
+    // Extract name/id as soon as portfolio arrives
     if (!title && portfolioData.spotlightOwner?.Name) {
       title = portfolioData.spotlightOwner.Name;
     }
     if (!resolvedOwnerId && portfolioData.spotlightOwner?.id) {
       resolvedOwnerId = portfolioData.spotlightOwner.id;
+    }
+
+    // SVG not mounted yet — clear loading so the {:else} branch renders
+    // the <svg>, which binds svgEl and re-triggers this effect
+    if (!svgEl) {
+      if (loading) loading = false;
+      return;
     }
 
     // No assets to render petals from
