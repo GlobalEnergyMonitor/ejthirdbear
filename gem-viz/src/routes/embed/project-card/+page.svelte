@@ -62,6 +62,19 @@
         mineType: toStr(raw['Mine type'] ?? raw['mine_type']),
         miningMethod: toStr(raw['Mining method'] ?? raw['mining_method']),
         wikiUrl: toStr(raw['Wiki URL'] ?? raw['wiki_url']),
+        location: toStr(raw['Location'] ?? raw['location']),
+        unitName: toStr(raw['Unit Name'] ?? raw['unit_name']),
+        database: toStr(raw['Database'] ?? raw['database'] ?? raw['source_file']),
+        plantAge: toNum(raw['Plant age (years)'] ?? raw['plant_age']),
+        remainingLifetime: toNum(raw['Remaining lifetime (years)'] ?? raw['remaining_lifetime']),
+        plannedRetirement: toNum(raw['Planned retirement'] ?? raw['planned_retirement']),
+        capacityFactor: toNum(raw['Capacity factor'] ?? raw['capacity_factor']),
+        annualCO2: toNum(raw['Annual CO2 (million tonnes / annum)'] ?? raw['annual_co2']),
+        lifetimeCO2: toNum(raw['Lifetime CO2 (million tonnes)'] ?? raw['lifetime_co2']),
+        heatRate: toNum(raw['Heat rate (Btu per kWh)'] ?? raw['heat_rate']),
+        production: toNum(raw['Production'] ?? raw['production']),
+        productionUnit: toStr(raw['Production unit'] ?? raw['production_unit']),
+        raw,
       };
     } catch (err) {
       error = errorMessage(err, 'Failed to load asset');

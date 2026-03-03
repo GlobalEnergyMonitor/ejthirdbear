@@ -223,6 +223,7 @@
   let bulkSearchText = $state('');
   let searchLoading = $state(false);
   let searchError = $state(null);
+  let syncedQuery = $state('');
 
   // Search results with disambiguation tracking
   // Each entry: { term: string, results: Entity[], matchCount: number }
@@ -238,6 +239,21 @@
 
   // Check if owner is selected (O(1))
   const isSelected = (owner) => selectedOwnerMap.has(owner.id);
+
+  // URL-based owner search prefill (used by embeddable search bar mode)
+  $effect(() => {
+    const q = $page.url.searchParams.get('q') || '';
+    if (!q) {
+      syncedQuery = '';
+      return;
+    }
+    if (q === syncedQuery) return;
+    syncedQuery = q;
+    singleSearchQuery = q;
+    if (!searchLoading) {
+      void searchSingle();
+    }
+  });
 </script>
 
 <svelte:head>

@@ -38,6 +38,32 @@
       ],
     },
     {
+      name: 'Asset/Owner Search',
+      slug: 'asset-search',
+      description:
+        'Configurable URL-based search bar with asset, owner, and universal modes for CMS embeds.',
+      paramKey: 'q',
+      paramLabel: 'Initial query',
+      placeholder: 'G100000100057',
+      defaultHeight: 140,
+      params: [
+        { key: 'q', desc: 'Optional. Initial query value shown in the search input.' },
+        {
+          key: 'modes',
+          desc: 'Optional. Comma-separated modes: asset, owner, universal (default: all three).',
+        },
+        {
+          key: 'mode',
+          desc: 'Optional. Default active mode (asset, owner, or universal).',
+        },
+        {
+          key: 'open',
+          desc: 'Optional. "self" (default) or "new-tab" for where results open.',
+        },
+        { key: 'showButton', desc: 'Optional. "false" to hide the submit button.' },
+      ],
+    },
+    {
       name: 'Tracker Factsheet',
       slug: 'tracker-factsheet',
       description: 'Two-column metadata explorer with field definitions and value distributions.',

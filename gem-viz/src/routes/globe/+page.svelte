@@ -1,20 +1,19 @@
 <script>
   /**
    * GLOBAL ASSET EXPLORER
-   * deck.gl visualization powered by REST API + points.geojson.
+   * deck.gl visualization powered by points.geojson.
    *
-   * - points.geojson provides all asset locations (~9MB, cached)
-   * - REST API ?facets=true provides exact counts per type/status/country
-   * - Client-side filtering of geojson features
+   * - points.geojson provides asset locations with tracker + country facets
+   * - client-side filtering for fast interactions
    */
 
   import { onMount } from 'svelte';
   import { browser } from '$app/environment';
-  import { link, assetPath } from '$lib/links';
-  import { Deck, OrthographicView } from '@deck.gl/core';
+  import { goto } from '$app/navigation';
+  import { link, assetPath, assetLink } from '$lib/links';
+  import { Deck, MapView } from '@deck.gl/core';
   import { ScatterplotLayer } from '@deck.gl/layers';
   import { colors, hexToRgb, colorByTracker } from '$lib/design-tokens';
-  import { listAssets } from '$lib/ownership-api';
   import DataSourceBadge from '$lib/components/DataSourceBadge.svelte';
 
   // DOM refs
@@ -26,8 +25,8 @@
   let loadingPhase = $state('Initializing...');
   let error = $state(null);
 
-  // Raw geojson features (unfiltered)
-  let allFeatures = $state([]);
+  // Raw geojson asset records
+  let allAssets = $state([]);
 
   // Data state
   let filteredAssets = $state([]);
@@ -35,28 +34,19 @@
 
   // Filter state
   let selectedTrackers = $state([]);
-  let selectedStatuses = $state([]);
   let selectedCountries = $state([]);
-  let capacityRange = $state([0, 10000]);
+  let countrySearch = $state('');
 
   // Facet options (populated from data)
   let trackerFacets = $state([]);
-  let statusFacets = $state([]);
   let countryFacets = $state([]);
 
   // Stats
   let queryTime = $state(0);
-  let aggregateStats = $state({
-    totalCapacity: 0,
-    avgCapacity: 0,
-    countries: 0,
-    owners: 0,
-  });
 
   // Microvis data
-  let capacityHistogram = $state([]);
   let trackerBreakdown = $state([]);
-  let statusBreakdown = $state([]);
+  let countryBreakdown = $state([]);
 
   // Color helpers
   function trackerToColor(tracker) {
@@ -65,142 +55,110 @@
     return rgb ? [rgb.r, rgb.g, rgb.b, 200] : [128, 128, 128, 200];
   }
 
-  // Initialize data from REST API + geojson
+  const visibleCountryFacets = $derived.by(() => {
+    if (!countrySearch.trim()) return countryFacets;
+    const needle = countrySearch.trim().toLowerCase();
+    return countryFacets.filter((facet) => facet.value.toLowerCase().includes(needle));
+  });
+
+  const visibleCountriesCount = $derived(
+    new Set(filteredAssets.map((a) => a.country).filter(Boolean)).size
+  );
+  const visibleTrackerCount = $derived(
+    new Set(filteredAssets.map((a) => a.tracker).filter(Boolean)).size
+  );
+
+  function buildFacets(items, key, limit = Infinity) {
+    const counts = new Map();
+    for (const item of items) {
+      const value = item[key];
+      if (!value) continue;
+      counts.set(value, (counts.get(value) || 0) + 1);
+    }
+    return [...counts.entries()]
+      .map(([value, count]) => ({ value, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, limit);
+  }
+
+  // Initialize data from GeoJSON
   async function initData() {
     try {
       loading = true;
       error = null;
 
-      // Load facets from API and geojson in parallel
-      loadingPhase = 'Loading asset data...';
-      const [facetsResponse, geojsonResponse] = await Promise.all([
-        listAssets({ limit: 1, facets: true }),
-        fetch(assetPath('points.geojson')).then((r) => {
-          if (!r.ok) throw new Error(`Failed to load GeoJSON: ${r.statusText}`);
-          return r.json();
-        }),
-      ]);
+      loadingPhase = 'Loading asset locations...';
+      const geojson = await fetch(assetPath('points.geojson')).then((r) => {
+        if (!r.ok) throw new Error(`Failed to load GeoJSON: ${r.statusText}`);
+        return r.json();
+      });
 
-      // Process facets from API
-      const facets = facetsResponse.facets || {};
-      if (facets.asset_type) {
-        trackerFacets = Object.entries(facets.asset_type)
-          .map(([value, count]) => ({ value, count }))
-          .sort((a, b) => b.count - a.count);
-      }
-      if (facets.status) {
-        statusFacets = Object.entries(facets.status)
-          .map(([value, count]) => ({ value, count }))
-          .sort((a, b) => b.count - a.count);
-      }
-      if (facets.country) {
-        countryFacets = Object.entries(facets.country)
-          .map(([value, count]) => ({ value, count }))
-          .sort((a, b) => b.count - a.count)
-          .slice(0, 50);
-      }
+      loadingPhase = 'Processing records...';
+      allAssets = (geojson.features || [])
+        .filter(
+          (f) =>
+            f.geometry?.coordinates &&
+            f.geometry.coordinates.length >= 2 &&
+            isFinite(f.geometry.coordinates[0]) &&
+            isFinite(f.geometry.coordinates[1]) &&
+            f.geometry.coordinates[1] >= -90 &&
+            f.geometry.coordinates[1] <= 90
+        )
+        .map((f) => ({
+          id: f.properties?.id || f.properties?.['GEM location ID'] || '',
+          name: f.properties?.name || f.properties?.Project || f.properties?.id || '',
+          tracker: f.properties?.tracker || '',
+          country: f.properties?.country || '',
+          lat: f.geometry.coordinates[1],
+          lon: f.geometry.coordinates[0],
+        }));
 
-      // Store raw geojson features
-      loadingPhase = 'Processing coordinates...';
-      allFeatures = (geojsonResponse.features || []).filter(
-        (f) =>
-          f.geometry?.coordinates &&
-          f.geometry.coordinates.length >= 2 &&
-          isFinite(f.geometry.coordinates[0]) &&
-          isFinite(f.geometry.coordinates[1]) &&
-          f.geometry.coordinates[1] >= -90 &&
-          f.geometry.coordinates[1] <= 90
-      );
+      trackerFacets = buildFacets(allAssets, 'tracker');
+      countryFacets = buildFacets(allAssets, 'country', 200);
 
-      // Initial filter pass
       filterAssets();
-      loading = false;
     } catch (err) {
       error = err?.message || String(err);
+    } finally {
       loading = false;
     }
   }
 
-  // Filter geojson features client-side
+  // Filter assets client-side
   function filterAssets() {
     const start = performance.now();
-
-    let features = allFeatures;
+    let assets = allAssets;
 
     if (selectedTrackers.length > 0) {
       const set = new Set(selectedTrackers);
-      features = features.filter((f) => set.has(f.properties?.tracker));
-    }
-
-    if (selectedStatuses.length > 0) {
-      const set = new Set(selectedStatuses);
-      features = features.filter((f) => set.has(f.properties?.status));
+      assets = assets.filter((asset) => set.has(asset.tracker));
     }
 
     if (selectedCountries.length > 0) {
       const set = new Set(selectedCountries);
-      features = features.filter((f) => set.has(f.properties?.country));
+      assets = assets.filter((asset) => set.has(asset.country));
     }
 
-    // Map to flat objects for deck.gl
-    const mapped = features.map((f) => ({
-      id: f.properties?.id || '',
-      name: f.properties?.name || '',
-      tracker: f.properties?.tracker || '',
-      status: f.properties?.status || '',
-      country: f.properties?.country || '',
-      capacity: Number(f.properties?.capacity) || 0,
-      lat: f.geometry.coordinates[1],
-      lon: f.geometry.coordinates[0],
-    }));
+    filteredAssets = assets;
+    filteredCount = assets.length;
 
-    filteredAssets = mapped;
-    filteredCount = mapped.length;
-
-    // Update aggregate stats
-    const capacities = mapped.map((a) => a.capacity).filter((c) => c > 0);
-    const uniqueCountries = new Set(mapped.map((a) => a.country).filter(Boolean));
-
-    aggregateStats = {
-      totalCapacity: Math.round(capacities.reduce((a, b) => a + b, 0)),
-      avgCapacity: Math.round(capacities.reduce((a, b) => a + b, 0) / (capacities.length || 1)),
-      countries: uniqueCountries.size,
-      owners: 0,
-    };
-
-    buildMicrovisData(mapped);
-    updateDeck();
-    queryTime = Math.round(performance.now() - start);
-  }
-
-  // Build microvisualization data
-  function buildMicrovisData(assets) {
-    const capacities = assets.map((a) => a.capacity).filter((c) => c > 0);
-    const maxCap = Math.max(...capacities, 1);
-    const bucketSize = maxCap / 10;
-    const histogram = Array(10).fill(0);
-    for (const cap of capacities) {
-      const bucket = Math.min(9, Math.floor(cap / bucketSize));
-      histogram[bucket]++;
-    }
-    capacityHistogram = histogram.map((count, i) => ({
-      range: `${Math.round(i * bucketSize)}-${Math.round((i + 1) * bucketSize)}`,
-      count,
-      pct: count / (capacities.length || 1),
-    }));
-
-    function countBy(field) {
-      const counts = {};
-      for (const a of assets) {
-        if (a[field]) counts[a[field]] = (counts[a[field]] || 0) + 1;
+    function breakdownBy(field, limit = 6) {
+      const counts = new Map();
+      for (const asset of assets) {
+        if (!asset[field]) continue;
+        counts.set(asset[field], (counts.get(asset[field]) || 0) + 1);
       }
-      return Object.entries(counts)
-        .map(([value, count]) => ({ [field]: value, count, pct: count / assets.length }))
-        .sort((a, b) => b.count - a.count);
+      return [...counts.entries()]
+        .map(([value, count]) => ({ [field]: value, count, pct: count / (assets.length || 1) }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, limit);
     }
 
-    trackerBreakdown = countBy('tracker');
-    statusBreakdown = countBy('status');
+    trackerBreakdown = breakdownBy('tracker', 6);
+    countryBreakdown = breakdownBy('country', 6);
+
+    queryTime = Math.round(performance.now() - start);
+    updateDeck();
   }
 
   // Initialize deck.gl
@@ -209,21 +167,22 @@
 
     deck = new Deck({
       parent: mapContainer,
-      views: new OrthographicView({ flipY: true }),
+      views: new MapView({ repeat: true }),
       initialViewState: {
-        target: [0, 20],
-        zoom: 1,
+        longitude: 0,
+        latitude: 20,
+        zoom: 1.25,
+        minZoom: 0,
+        maxZoom: 8,
       },
       controller: true,
-      onViewStateChange: () => {},
       getTooltip: ({ object }) => {
         if (!object) return null;
         return {
           html: `
             <div style="padding: 8px; font-size: 12px;">
               <strong>${object.name || object.id}</strong><br/>
-              ${object.tracker || ''} · ${object.status || ''}<br/>
-              ${object.capacity ? object.capacity + ' MW' : ''}
+              ${object.tracker || 'Unknown type'} · ${object.country || 'Unknown country'}
             </div>
           `,
         };
@@ -241,15 +200,20 @@
       id: 'assets',
       data: filteredAssets,
       getPosition: (d) => [d.lon, d.lat],
-      getRadius: (d) => Math.sqrt(Number(d.capacity) || 10) * 2 + 3,
-      getFillColor: (d) => /** @type {[number,number,number,number]} */ (trackerToColor(d.tracker)),
+      getRadius: 3.5,
+      radiusUnits: 'pixels',
+      getFillColor: (d) =>
+        /** @type {[number,number,number,number]} */ (trackerToColor(d.tracker)),
       radiusMinPixels: 2,
-      radiusMaxPixels: 30,
+      radiusMaxPixels: 8,
       pickable: true,
-      opacity: 0.8,
+      opacity: 0.82,
+      onClick: ({ object }) => {
+        if (!object?.id) return;
+        goto(assetLink(object.id));
+      },
       updateTriggers: {
-        getPosition: filteredAssets.length,
-        getFillColor: filteredAssets.length,
+        getFillColor: selectedTrackers.join('|'),
       },
     });
 
@@ -265,10 +229,6 @@
     selectedTrackers = toggleFilter(selectedTrackers, tracker);
     filterAssets();
   }
-  function toggleStatus(status) {
-    selectedStatuses = toggleFilter(selectedStatuses, status);
-    filterAssets();
-  }
   function toggleCountry(country) {
     selectedCountries = toggleFilter(selectedCountries, country);
     filterAssets();
@@ -276,9 +236,8 @@
 
   function clearFilters() {
     selectedTrackers = [];
-    selectedStatuses = [];
     selectedCountries = [];
-    capacityRange = [0, 10000];
+    countrySearch = '';
     filterAssets();
   }
 
@@ -304,20 +263,14 @@
     };
   });
 
-  const hasFilters = $derived(
-    selectedTrackers.length > 0 ||
-      selectedStatuses.length > 0 ||
-      selectedCountries.length > 0 ||
-      capacityRange[0] > 0 ||
-      capacityRange[1] < 10000
-  );
+  const hasFilters = $derived(selectedTrackers.length > 0 || selectedCountries.length > 0);
 </script>
 
 <svelte:head>
   <title>Global Asset Map — Global Energy Monitor</title>
   <meta
     name="description"
-    content="Interactive map visualization of energy assets worldwide. Filter by tracker type, status, and country to explore the global energy infrastructure."
+    content="Interactive map visualization of energy assets worldwide. Filter by tracker type and country to explore the global energy infrastructure."
   />
 </svelte:head>
 
@@ -334,15 +287,15 @@
         <span class="stat-label">assets</span>
       </div>
       <div class="stat">
-        <span class="stat-value">{formatNumber(aggregateStats.totalCapacity)}</span>
-        <span class="stat-label">MW total</span>
+        <span class="stat-value">{visibleTrackerCount}</span>
+        <span class="stat-label">tracker types</span>
       </div>
       <div class="stat">
-        <span class="stat-value">{aggregateStats.countries}</span>
+        <span class="stat-value">{visibleCountriesCount}</span>
         <span class="stat-label">countries</span>
       </div>
       <div class="stat query-stat">
-        <DataSourceBadge source="api" label="REST API" {queryTime} />
+        <DataSourceBadge source="local" label="GeoJSON" {queryTime} />
       </div>
     </div>
   </header>
@@ -371,28 +324,17 @@
         </div>
       </div>
 
-      <!-- Status filter -->
-      <div class="filter-section">
-        <h3>Status</h3>
-        <div class="filter-options">
-          {#each statusFacets.slice(0, 10) as facet}
-            <button
-              class="filter-chip"
-              class:selected={selectedStatuses.includes(facet.value)}
-              onclick={() => toggleStatus(facet.value)}
-            >
-              <span class="chip-label">{facet.value}</span>
-              <span class="chip-count">{formatNumber(facet.count)}</span>
-            </button>
-          {/each}
-        </div>
-      </div>
-
       <!-- Country filter -->
       <div class="filter-section">
         <h3>Country</h3>
+        <input
+          class="filter-search"
+          type="search"
+          placeholder="Filter countries..."
+          bind:value={countrySearch}
+        />
         <div class="filter-options scrollable">
-          {#each countryFacets as facet}
+          {#each visibleCountryFacets as facet}
             <button
               class="filter-chip"
               class:selected={selectedCountries.includes(facet.value)}
@@ -426,34 +368,17 @@
       </div>
 
       <div class="microvis-section">
-        <h3>Status Distribution</h3>
+        <h3>Top Countries</h3>
         <div class="bar-chart">
-          {#each statusBreakdown.slice(0, 6) as item}
+          {#each countryBreakdown as item}
             <div class="bar-row">
-              <span class="bar-label">{item.status}</span>
+              <span class="bar-label">{item.country}</span>
               <div class="bar-track">
                 <div class="bar-fill" style="width: {item.pct * 100}%"></div>
               </div>
               <span class="bar-value">{Math.round(item.pct * 100)}%</span>
             </div>
           {/each}
-        </div>
-      </div>
-
-      <div class="microvis-section">
-        <h3>Capacity Histogram</h3>
-        <div class="histogram">
-          {#each capacityHistogram as bucket}
-            <div
-              class="histogram-bar"
-              style="height: {Math.max(2, bucket.pct * 100)}%"
-              title="{bucket.range} MW: {bucket.count} assets"
-            ></div>
-          {/each}
-        </div>
-        <div class="histogram-labels">
-          <span>0 MW</span>
-          <span>Max</span>
         </div>
       </div>
     </aside>
@@ -611,6 +536,15 @@
     gap: var(--space-1);
   }
 
+  .filter-search {
+    width: 100%;
+    padding: var(--space-2);
+    margin-bottom: var(--space-2);
+    border: var(--border-width) solid var(--color-border);
+    background: var(--color-white);
+    font-size: var(--font-size-sm);
+  }
+
   .filter-options.scrollable {
     max-height: 200px;
     overflow-y: auto;
@@ -679,7 +613,7 @@
   }
 
   .bar-label {
-    width: 80px;
+    width: 96px;
     font-size: var(--font-size-base);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -705,28 +639,6 @@
     font-size: var(--font-size-base);
     text-align: right;
     font-variant-numeric: tabular-nums;
-  }
-
-  .histogram {
-    display: flex;
-    align-items: flex-end;
-    gap: 2px;
-    height: 60px;
-    padding: var(--space-1) 0;
-  }
-
-  .histogram-bar {
-    flex: 1;
-    background: var(--color-black);
-    min-height: 2px;
-    transition: height var(--transition-normal);
-  }
-
-  .histogram-labels {
-    display: flex;
-    justify-content: space-between;
-    font-size: var(--font-size-xs);
-    color: var(--color-text-secondary);
   }
 
   .map-container {

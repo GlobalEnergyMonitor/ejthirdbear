@@ -6,16 +6,21 @@
 
   // --- IMPORTS ---
   import { onMount } from 'svelte';
+  import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { link, assetLink } from '$lib/links';
   import { listAssets } from '$lib/ownership-api';
   import DataTable from '$lib/components/DataTable.svelte';
+  import AssetSearchBar from '$lib/components/AssetSearchBar.svelte';
 
   // --- STATE ---
   let loading = $state(true);
   /** @type {string | null} */
   let error = $state(null);
   let assets = $state([]);
+  let searchQuery = $state('');
+  let searchMode = $state('asset');
+  let syncedQuery = $state('');
 
   // --- DATA TRANSFORMS ---
   const columns = $derived([
@@ -40,9 +45,44 @@
     },
   ]);
 
+  const filteredAssets = $derived.by(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return assets;
+
+    return assets.filter((asset) =>
+      [asset.id, asset.name, asset.ownerName, asset.country, asset.status, asset.facilityType].some(
+        (value) => value != null && String(value).toLowerCase().includes(query)
+      )
+    );
+  });
+
+  $effect(() => {
+    const nextQuery = $page.url.searchParams.get('q') || '';
+    if (nextQuery !== syncedQuery) {
+      syncedQuery = nextQuery;
+      searchQuery = nextQuery;
+    }
+  });
+
   // --- HANDLERS ---
   function handleRowClick(row) {
     if (row?.id) goto(assetLink(row.id));
+  }
+
+  function updateSearchInUrl(query) {
+    const params = new URLSearchParams($page.url.searchParams);
+    const trimmed = query.trim();
+    if (trimmed) params.set('q', trimmed);
+    else params.delete('q');
+
+    const queryString = params.toString();
+    const href = `${link('asset')}${queryString ? `?${queryString}` : ''}`;
+    goto(href, { replaceState: true, noScroll: true, keepFocus: true });
+  }
+
+  function handleSearch(query) {
+    searchQuery = query;
+    updateSearchInUrl(query);
   }
 
   // --- DATA FETCHING ---
@@ -89,7 +129,13 @@
     <a href={link('index')} class="back-link">Back to Overview</a>
     <span class="title">All Assets</span>
     <span class="count">
-      {#if loading}Loading…{:else}{assets.length.toLocaleString()} assets{/if}
+      {#if loading}
+        Loading…
+      {:else if searchQuery.trim()}
+        {filteredAssets.length.toLocaleString()} of {assets.length.toLocaleString()} assets
+      {:else}
+        {assets.length.toLocaleString()} assets
+      {/if}
     </span>
   </header>
 
@@ -98,19 +144,40 @@
   {:else if error}
     <p class="no-data">{error}</p>
   {:else if assets.length > 0}
-    <DataTable
-      {columns}
-      data={assets}
-      pageSize={100}
-      showGlobalSearch={true}
-      showColumnFilters={true}
-      showPagination={true}
-      showExport={true}
-      showColumnToggle={true}
-      stickyHeader={true}
-      striped={true}
-      onRowClick={handleRowClick}
-    />
+    <div class="search-toolbar">
+      <AssetSearchBar
+        bind:value={searchQuery}
+        bind:activeMode={searchMode}
+        modes={[
+          {
+            id: 'asset',
+            label: 'Assets',
+            placeholder: 'Search by asset name, ID, owner, country, or status',
+          },
+        ]}
+        buttonLabel="Find"
+        helperText="Live filtering is instant. Press Enter to save this query in the URL for sharing or CMS embeds."
+        onSearch={handleSearch}
+      />
+    </div>
+
+    {#if filteredAssets.length > 0}
+      <DataTable
+        {columns}
+        data={filteredAssets}
+        pageSize={100}
+        showGlobalSearch={false}
+        showColumnFilters={true}
+        showPagination={true}
+        showExport={true}
+        showColumnToggle={true}
+        stickyHeader={true}
+        striped={true}
+        onRowClick={handleRowClick}
+      />
+    {:else}
+      <p class="no-data">No assets match this search query.</p>
+    {/if}
   {:else}
     <p class="no-data">No assets found</p>
   {/if}
@@ -160,6 +227,10 @@
     border: var(--border-width) solid var(--color-gray-200);
     border-radius: var(--radius-full);
     background: var(--color-gray-50);
+  }
+
+  .search-toolbar {
+    margin-bottom: var(--space-4);
   }
 
   /* Empty States */

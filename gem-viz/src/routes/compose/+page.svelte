@@ -20,7 +20,7 @@
 
   import { ComposeState } from '$lib/stores/compose-state.svelte';
 
-  const state = new ComposeState();
+  let state = new ComposeState();
 
   onMount(async () => {
     const urlFilters = decodeFilters($page.url.searchParams);
@@ -42,7 +42,7 @@
   </header>
 
   <div class="composer-layout">
-    <ComposeFilterPanel {state} presetsHref="/presets" />
+    <ComposeFilterPanel bind:state={state} presetsHref="/presets" />
 
     <!-- Main: Results -->
     <section class="results-panel">

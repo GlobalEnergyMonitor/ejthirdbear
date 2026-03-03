@@ -23,6 +23,10 @@
   import MiniFlower from '$lib/components/MiniFlower.svelte';
   import MiniHistogram from '$lib/components/MiniHistogram.svelte';
   import OwnershipPie from '$lib/components/OwnershipPie.svelte';
+  import RadialBarChart from '$lib/components/RadialBarChart.svelte';
+
+  // Debug
+  import ApiCallLog from '$lib/components/ApiCallLog.svelte';
 
   // Navigation & Filters
   import ScreenerStepNav from '$lib/components/ScreenerStepNav.svelte';
@@ -135,6 +139,7 @@
     <a href="#inputs">Inputs</a>
     <a href="#states">Loading States</a>
     <a href="#buttons">Buttons</a>
+    <a href="#debug">Debug</a>
     <a href="#complex">Complex Components</a>
     <a href="#typography">Typography</a>
     <a href="#colors">Colors</a>
@@ -451,6 +456,55 @@
       <pre
         class="code-hint">&lt;MiniHistogram data=&#123;[150, 200, 660, 1000, ...]&#125; label="Capacity" unit="MW" /&gt;</pre>
     </div>
+
+    <div class="component-group">
+      <div class="component-header">
+        <h3>RadialBarChart</h3>
+        <code class="file-path">src/lib/components/RadialBarChart.svelte</code>
+      </div>
+      <p class="component-desc">
+        Stacked radial bar chart with concentric arcs — each ring represents a category, arc length encodes value
+      </p>
+      <div class="demo-row">
+        <div class="demo-item flower-demo">
+          <RadialBarChart
+            data={[
+              { label: 'Operating', value: 847 },
+              { label: 'Planned', value: 312 },
+              { label: 'Retired', value: 520 },
+            ]}
+            size={200}
+          />
+          <span class="demo-label">3 categories</span>
+        </div>
+        <div class="demo-item flower-demo">
+          <RadialBarChart
+            data={[
+              { label: 'Coal', value: 14363, color: '#7F142A' },
+              { label: 'Oil & Gas', value: 14407, color: '#CA4A50' },
+              { label: 'Bioenergy', value: 4537, color: '#A0AAE5' },
+              { label: 'Gas Pipeline', value: 4246, color: '#004F61' },
+            ]}
+            size={200}
+          />
+          <span class="demo-label">Tracker counts</span>
+        </div>
+        <div class="demo-item flower-demo">
+          <RadialBarChart
+            data={[
+              { label: 'China', value: 90 },
+              { label: 'India', value: 65 },
+            ]}
+            size={140}
+            ringWidth={24}
+            cornerRadius={4}
+          />
+          <span class="demo-label">Thick rings</span>
+        </div>
+      </div>
+      <pre
+        class="code-hint">&lt;RadialBarChart data=&#123;[&#123;label: 'Operating', value: 847&#125;, ...]&#125; size=&#123;200&#125; /&gt;</pre>
+    </div>
   </section>
 
   <!-- ========================================
@@ -666,6 +720,31 @@
         <button class="btn btn-link">Link style</button>
       </div>
       <pre class="code-hint">&lt;button class="btn btn-primary"&gt;Primary&lt;/button&gt;</pre>
+    </div>
+  </section>
+
+  <!-- ========================================
+       DEBUG
+       ======================================== -->
+  <section id="debug">
+    <h2>Debug & Diagnostics</h2>
+
+    <div class="component-group">
+      <div class="component-header">
+        <h3>ApiCallLog</h3>
+        <code class="file-path">src/lib/components/ApiCallLog.svelte</code>
+      </div>
+      <p class="component-desc">
+        Collapsible panel showing every REST API call made on the current page — URL, status, timing, and reason. Rendered globally in the layout, clears on route change.
+      </p>
+      <div class="demo-block full-width">
+        <ApiCallLog />
+        <p style="font-size: var(--font-size-sm); color: var(--color-text-tertiary); margin-top: var(--space-3);">
+          Any API calls made by this page (e.g. from EntityMicroCard or other live components) will appear above.
+        </p>
+      </div>
+      <pre
+        class="code-hint">&lt;ApiCallLog /&gt; &mdash; also available globally via layout</pre>
     </div>
   </section>
 
