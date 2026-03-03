@@ -79,6 +79,7 @@ npm run release -- major
 ```
 
 This will:
+
 1. Bump version in package.json
 2. Update version in layout
 3. Update CHANGELOG.md with release date
@@ -97,10 +98,12 @@ node scripts/deploy.js
 ```
 
 **Requirements:**
+
 - AWS CLI configured with Digital Ocean Spaces credentials
 - Profile named `do-tor1` with access to bucket
 
 **Configuration:**
+
 ```bash
 # Set up AWS CLI for Digital Ocean Spaces
 aws configure --profile do-tor1
@@ -113,6 +116,7 @@ aws configure --profile do-tor1
 ## Performance & Scale
 
 ### Build Metrics
+
 - **Asset Pages**: 62,366 pages (from 65,341 database rows with composite IDs)
 - **Total Files**: 124,769 files (HTML, CSS, JS, assets)
 - **Build Size**: 842 MB
@@ -120,10 +124,11 @@ aws configure --profile do-tor1
 - **Database Fetch**: Single 3.5s bulk query (all data loaded to memory, DB closed)
 
 ### Deployment Metrics
+
 Upload times to Digital Ocean Spaces (via `just deploy`):
 
 | Connection Speed | Initial Upload | Incremental Updates |
-|------------------|----------------|---------------------|
+| ---------------- | -------------- | ------------------- |
 | 10 Mbps (home)   | ~20-30 min     | ~2-5 min            |
 | 25 Mbps (office) | ~10-15 min     | ~1-3 min            |
 | 100 Mbps (fast)  | ~5-8 min       | ~30-60 sec          |
@@ -131,6 +136,7 @@ Upload times to Digital Ocean Spaces (via `just deploy`):
 **Note**: Times include both bandwidth transfer (842 MB) and S3 API overhead (124k file operations). Incremental uploads only sync changed files using `aws s3 sync --delete`.
 
 ### Architecture Optimizations
+
 - **Bulk Fetch Strategy**: Single MotherDuck query loads all 65k rows into memory
 - **Disk Cache**: 2.6 MB JSON cache persists across SvelteKit worker processes
 - **Composite IDs**: Handles ownership tables with duplicate owner/unit IDs (e.g., `E100000000014_G100000106283`)
@@ -140,16 +146,19 @@ Upload times to Digital Ocean Spaces (via `just deploy`):
 ## Architecture
 
 ### Static Generation
+
 - **Adapter**: @sveltejs/adapter-static
 - **SSR**: Disabled (required for WASM)
 - **Prerendering**: Enabled for all routes
 
 ### Database Strategy
+
 - **Development**: MotherDuck WASM for live queries
 - **Production**: Static builds with data snapshot at build time
 - **Future**: Client-side parquet loading for offline filtering
 
 ### Geographic Filtering
+
 - **Rectangle Selection**: Shift + drag on map
 - **Polygon Selection**: Click polygon tool to draw custom shapes
 - **SQL Filtering**: Bounding box queries with optional point-in-polygon refinement
@@ -186,6 +195,7 @@ DO_SPACES_ENDPOINT=https://sfo3.digitaloceanspaces.com
 ## Design Philosophy
 
 Academic brutalism with Georgia serif typography:
+
 - No borders except where structurally necessary
 - Black text on white background
 - Underlined links with hover inversion

@@ -60,7 +60,7 @@ See `backend-endpoint-specs.md` for full spec.
 User pastes a list of 30 company names → fires 30 parallel HTTP requests.
 
 ```javascript
-const promises = inputs.map(term => searchEntities(term));
+const promises = inputs.map((term) => searchEntities(term));
 await Promise.all(promises);
 ```
 
@@ -94,6 +94,7 @@ SELECT "Asset Type", COUNT(*) FROM ownership GROUP BY 1
 ### Solution
 
 Either:
+
 - Move to dev-only
 - Backend endpoint: `GET /screener/asset-type-counts`
 - Cache in localStorage
@@ -104,14 +105,15 @@ Either:
 
 Checked 2026-02-02. Available at `gem-ownership-api.fly.dev`:
 
-| Endpoint | Useful for screener? |
-|----------|---------------------|
-| `GET /entities?q=` | Yes - single search |
+| Endpoint                  | Useful for screener?    |
+| ------------------------- | ----------------------- |
+| `GET /entities?q=`        | Yes - single search     |
 | `GET /assets?asset_type=` | Partial - no owner info |
-| `GET /metadata` | Yes - asset type list |
-| `GET /ownership/graph` | No - entity chains only |
+| `GET /metadata`           | Yes - asset type list   |
+| `GET /ownership/graph`    | No - entity chains only |
 
 **Missing:**
+
 - Owner aggregation by asset type
 - Batch entity search
 

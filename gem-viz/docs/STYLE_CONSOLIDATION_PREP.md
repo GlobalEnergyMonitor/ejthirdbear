@@ -3,13 +3,15 @@
 ## Current Architecture
 
 ### Source Files
-| File | Purpose | Lines |
-|------|---------|-------|
-| `src/lib/design-tokens.ts` | TypeScript source of truth for colors, fonts, spacing | 531 |
-| `src/lib/shared-styles.css` | CSS custom properties + utility classes | 919 |
-| `src/app.css` | Base styles, resets, print styles | 341 |
+
+| File                        | Purpose                                               | Lines |
+| --------------------------- | ----------------------------------------------------- | ----- |
+| `src/lib/design-tokens.ts`  | TypeScript source of truth for colors, fonts, spacing | 531   |
+| `src/lib/shared-styles.css` | CSS custom properties + utility classes               | 919   |
+| `src/app.css`               | Base styles, resets, print styles                     | 341   |
 
 ### What's Working Well
+
 - Design tokens are comprehensive (colors, typography, spacing)
 - CSS custom properties mirror TS tokens
 - Good utility classes: `.panel`, `.card`, `.grid-*`, `.data-table`, `.btn`, `.badge`
@@ -21,6 +23,7 @@
 ## Problem Areas
 
 ### 1. Hardcoded Values in Screener Pages
+
 ```
 Screener pages contain:
 - 97 inline font-size declarations
@@ -29,69 +32,136 @@ Screener pages contain:
 ```
 
 ### 2. Repeated Patterns Not Extracted
+
 These patterns appear 5+ times across components but aren't in shared-styles:
 
 #### Stat Displays
+
 ```css
 /* Big hero numbers - used in results, entity, asset pages */
-.stat-value { font-size: 32px; font-weight: 300; line-height: 1; }
-.stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
+.stat-value {
+  font-size: 32px;
+  font-weight: 300;
+  line-height: 1;
+}
+.stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
 ```
 
 #### Breakdown Bars (Status/Tracker)
+
 ```css
 /* Horizontal segmented bars showing distribution */
-.breakdown-bar { display: flex; height: 8px; overflow: hidden; gap: 1px; }
-.bar-segment { min-width: 3px; transition: width 0.3s ease; }
+.breakdown-bar {
+  display: flex;
+  height: 8px;
+  overflow: hidden;
+  gap: 1px;
+}
+.bar-segment {
+  min-width: 3px;
+  transition: width 0.3s ease;
+}
 ```
 
 #### Legend Items
+
 ```css
 /* Color dot + label + count pattern */
-.legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; }
-.legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
 ```
 
 #### Tracker/Status Badges with Progress Bars
+
 ```css
 /* Badge with colored progress bar at bottom */
-.progress-badge { position: relative; padding: 10px 12px; overflow: hidden; }
-.progress-badge::after { position: absolute; bottom: 0; left: 0; height: 3px; }
+.progress-badge {
+  position: relative;
+  padding: 10px 12px;
+  overflow: hidden;
+}
+.progress-badge::after {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+}
 ```
 
 #### Expandable Row Pattern
+
 ```css
 /* Clickable row that expands to show details */
-.expandable-row { border: 1px solid #e0e0e0; }
-.expandable-row.expanded { border-color: #999; }
-.row-toggle { display: grid; grid-template-columns: ... ; cursor: pointer; }
-.row-details { background: #fafafa; border-top: 1px solid #eee; }
+.expandable-row {
+  border: 1px solid #e0e0e0;
+}
+.expandable-row.expanded {
+  border-color: #999;
+}
+.row-toggle {
+  display: grid;
+  grid-template-columns: ...;
+  cursor: pointer;
+}
+.row-details {
+  background: #fafafa;
+  border-top: 1px solid #eee;
+}
 ```
 
 #### Mini Visualization Containers
+
 ```css
 /* Wrapper for MiniFlower, donut charts, etc. */
-.mini-viz { display: flex; align-items: center; justify-content: center; }
+.mini-viz {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 ```
 
 ### 3. Missing Semantic Classes
+
 Need to add to shared-styles.css:
 
 ```css
 /* Section Labels */
-.section-label { /* "BY STATUS", "TOP COUNTRIES" etc */ }
+.section-label {
+  /* "BY STATUS", "TOP COUNTRIES" etc */
+}
 
 /* Inline Stat (used in rows) */
-.inline-stat { /* "42 assets" inline display */ }
+.inline-stat {
+  /* "42 assets" inline display */
+}
 
 /* Country/Tracker badges */
-.data-badge { /* Generic badge with progress bar */ }
+.data-badge {
+  /* Generic badge with progress bar */
+}
 
 /* Asset Item (in lists) */
-.asset-item { /* Clickable asset row in expanded views */ }
+.asset-item {
+  /* Clickable asset row in expanded views */
+}
 
 /* Donut Chart */
-.donut-chart { /* SVG donut container */ }
+.donut-chart {
+  /* SVG donut container */
+}
 ```
 
 ---
@@ -343,6 +413,7 @@ Add these reusable classes:
 ### Phase 3: Refactor Components
 
 For each screener page:
+
 1. Replace inline styles with shared classes
 2. Keep only page-specific overrides in component `<style>`
 3. Use semantic tokens instead of raw colors
@@ -352,6 +423,7 @@ For each screener page:
 ## Files to Update
 
 ### High Priority (lots of duplication)
+
 - [ ] `src/routes/screener/results/+page.svelte` - 489 lines of CSS
 - [ ] `src/routes/screener/+page.svelte` - ~200 lines of CSS
 - [ ] `src/routes/screener/owners/+page.svelte`
@@ -359,11 +431,13 @@ For each screener page:
 - [ ] `src/routes/asset/[id]/+page.svelte`
 
 ### Medium Priority
+
 - [ ] `src/lib/components/DataTable.svelte`
 - [ ] `src/lib/components/FacetedFilter.svelte`
 - [ ] `src/lib/components/CommandPalette.svelte`
 
 ### Low Priority (smaller components)
+
 - [ ] Various widget components
 
 ---
@@ -371,6 +445,7 @@ For each screener page:
 ## Color Mapping Reference
 
 ### Current Hardcoded → Should Be
+
 ```
 #faf9f7  →  var(--color-bg-secondary)
 #fafafa  →  var(--color-bg-secondary)
@@ -400,6 +475,7 @@ When ready to do the visual design pass:
 3. **Finally**: Apply same patterns to other pages
 
 This prep ensures:
+
 - Single source of truth for all visual styles
 - Easy theming/dark mode later
 - Consistent look across all pages

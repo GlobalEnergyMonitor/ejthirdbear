@@ -550,7 +550,9 @@
     onclick={toggleSpin}
     aria-label={isSpinning ? 'Pause rotation' : 'Resume rotation'}
   >
-    <span class="spin-icon">{#if isSpinning}<Pause size={12} />{:else}<Play size={12} />{/if}</span>
+    <span class="spin-icon"
+      >{#if isSpinning}<Pause size={12} />{:else}<Play size={12} />{/if}</span
+    >
   </button>
 
   <!-- Stats -->

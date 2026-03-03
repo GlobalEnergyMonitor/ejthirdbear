@@ -5,11 +5,13 @@ All notable changes to this project will be documented in this file.
 ## [0.3.2] - 2026-03-02
 
 ### Added
+
 - **Asset Screener Chart** — new D3 ownership visualization ported from Observable notebook, showing subsidiary lanes with ownership % pie charts, tracker/status mini bar charts, circular asset clusters with status icons, and shared-asset bezier curves
 - **Screener Visualize step** (`/screener/visualize`) now uses AssetScreenerChart instead of the 3D MiniNetworkGraph for a more structured, information-dense ownership view
 - **Entity profile** (`/entity/[id]`) gains an "Ownership Structure" panel showing the full subsidiary → asset breakdown alongside the existing 3D network
 
 ### New files
+
 - `src/lib/components/screener/AssetScreenerChart.svelte` — Svelte wrapper with loading/progress states
 - `src/lib/components/screener/screener-chart-data.ts` — data adapter (ownership graph → chart layout)
 - `src/lib/components/screener/screener-chart-render.ts` — imperative D3 rendering (~500 lines)
@@ -17,16 +19,19 @@ All notable changes to this project will be documented in this file.
 ## [0.3.1] - 2026-03-02
 
 ### Changed
+
 - **Screener asset class picker redesign** — replaced native `<select>` dropdown with a card-based tile grid grouped by category (Coal Plant, Gas, Steel & Iron, etc.). Each tile shows the class label, description, and multi-tracker badge. Selected tiles highlight with teal accent border.
 - **Fill-width layout in AssetClassExpansion** — subclass/status checkbox rows now use CSS grid (`auto-fill`) to stretch across full panel width instead of huddling left. Continue buttons also span full width.
 
 ### Fixed
+
 - **lucide-svelte SSR crash** — added `lucide-svelte` to Vite `ssr.noExternal` to work around broken ESM exports in v0.576.0 that caused `ERR_MODULE_NOT_FOUND` during server-side rendering.
 - Layout shift on tile selection (default border-left now matches selected width so content doesn't jump).
 
 ## [0.2.1] - 2026-02-25
 
 ### Added
+
 - **Compose page migrated to REST API** — no more DuckDB/parquet loading on compose, loads in ~0.5s instead of 3-5s
   - Multi-value server-side filters (multiple trackers, statuses, countries in one request)
   - Hybrid fast/slow path: simple filters hit API directly, owner/capacity filters use progressive fetch + client-side cache
@@ -50,6 +55,7 @@ All notable changes to this project will be documented in this file.
   - `generate_map`: `query`/`tracker`/`country` search-based mapping (no IDs needed)
 
 ### Fixed
+
 - **Red-team security fixes** in gembot tool executor:
   - Replaced hardcoded API URLs with env-configurable base
   - Added `fetchApiJson()` helper with proper HTTP error handling (no more crashes on non-JSON responses)
@@ -63,6 +69,7 @@ All notable changes to this project will be documented in this file.
 ## [0.1.29] - 2026-02-02
 
 ### Added
+
 - **OwnershipTreeGraph component** - New SVG-based ownership visualization ported from Observable notebook
   - Edge percentages hidden by default, shown on hover path only
   - Non-path nodes fade to 10% opacity on hover (matches Observable's `highlightNodes`)
@@ -73,6 +80,7 @@ All notable changes to this project will be documented in this file.
 - **Tracker availability warnings** - UI now shows warnings for trackers without MotherDuck aggregation data
 
 ### Fixed
+
 - Screener preset filters now properly apply status and geography filters
 - Enabled status filter clause in screener SQL queries (was commented out)
 - Dynamic env imports for production builds (OPENROUTER_API_KEY, MOTHERDUCK_JWT)
@@ -80,9 +88,11 @@ All notable changes to this project will be documented in this file.
 ## [0.1.28] - 2026-02-02
 
 ### Added
+
 - Gembot AI assistant prototype
 - MicroCards redesign with Tufte/Swiss design principles
 
 ### Fixed
+
 - Changed "exposure to" to "ownership in" for clarity
 - Removed investigation filter toggle from screener results

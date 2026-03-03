@@ -7,6 +7,7 @@
 ## Critical Gaps (Ship Blockers)
 
 ### EVAL #1: Path Completeness Validation
+
 **Status**: NOT IMPLEMENTED
 **Impact**: HIGH - Core assumption of the entire system
 **Effort**: Medium (2-3 days)
@@ -14,6 +15,7 @@
 **What we need to prove**: Ownership percentages sum to ~100% per asset
 
 **Implementation**:
+
 ```sql
 -- Add to test suite or monitoring dashboard
 SELECT
@@ -30,6 +32,7 @@ HAVING status != 'VALID'
 ```
 
 **Acceptance criteria**:
+
 - [ ] 95% of assets have total ownership between 95-105%
 - [ ] List of exceptions documented with reasons
 - [ ] Alert when new data violates constraint
@@ -37,6 +40,7 @@ HAVING status != 'VALID'
 ---
 
 ### EVAL #8: Performance Regression Testing
+
 **Status**: NOT IMPLEMENTED
 **Impact**: HIGH - User experience degradation invisible without tracking
 **Effort**: Low (1 day)
@@ -44,6 +48,7 @@ HAVING status != 'VALID'
 **What we need to prove**: Query latencies don't regress over releases
 
 **Implementation**:
+
 ```javascript
 // Add to CI/CD pipeline
 const BENCHMARKS = {
@@ -59,7 +64,7 @@ async function runBenchmark(name, queryFn) {
     await queryFn();
     times.push(performance.now() - start);
   }
-  times.sort((a,b) => a - b);
+  times.sort((a, b) => a - b);
   return {
     p50: times[49],
     p99: times[98],
@@ -68,6 +73,7 @@ async function runBenchmark(name, queryFn) {
 ```
 
 **Acceptance criteria**:
+
 - [ ] Benchmark runs on every PR
 - [ ] Fails if P99 exceeds threshold by >20%
 - [ ] Historical tracking in dashboard
@@ -77,6 +83,7 @@ async function runBenchmark(name, queryFn) {
 ## High Priority (Should Have)
 
 ### EVAL #2: Imputation Accuracy
+
 **Status**: NOT IMPLEMENTED
 **Impact**: HIGH - Affects all downstream calculations
 **Effort**: High (1 week+)
@@ -86,11 +93,13 @@ async function runBenchmark(name, queryFn) {
 **Challenge**: Need ground truth data from external sources
 
 **Proposed approach**:
+
 1. Sample 100 entities with `imputed_share=true`
 2. Cross-reference against SEC 13F, company filings
 3. Calculate Mean Absolute Error (MAE)
 
 **Acceptance criteria**:
+
 - [ ] MAE < 10 percentage points
 - [ ] Document methodology
 - [ ] Track imputation rate over time
@@ -98,6 +107,7 @@ async function runBenchmark(name, queryFn) {
 ---
 
 ### EVAL #7: Co-Investment Statistical Significance
+
 **Status**: NOT IMPLEMENTED
 **Impact**: MEDIUM - Core insight for investigative journalism use case
 **Effort**: Medium (2-3 days)
@@ -105,13 +115,14 @@ async function runBenchmark(name, queryFn) {
 **What we need to prove**: Entity pairs appear together more than chance
 
 **Implementation**:
+
 ```javascript
 function coInvestmentSignificance(entityA, entityB, data) {
   const totalAssets = data.assets.length;
-  const assetsWithA = data.assets.filter(a => a.owners.includes(entityA)).length;
-  const assetsWithB = data.assets.filter(a => a.owners.includes(entityB)).length;
-  const assetsWithBoth = data.assets.filter(a =>
-    a.owners.includes(entityA) && a.owners.includes(entityB)
+  const assetsWithA = data.assets.filter((a) => a.owners.includes(entityA)).length;
+  const assetsWithB = data.assets.filter((a) => a.owners.includes(entityB)).length;
+  const assetsWithBoth = data.assets.filter(
+    (a) => a.owners.includes(entityA) && a.owners.includes(entityB)
   ).length;
 
   // Expected co-occurrence under independence
@@ -128,12 +139,13 @@ function coInvestmentSignificance(entityA, entityB, data) {
     expected: expected.toFixed(1),
     chiSquared: chiSquared.toFixed(2),
     pValue: pValue < 0.001 ? '<0.001' : pValue.toFixed(3),
-    significant: pValue < 0.05
+    significant: pValue < 0.05,
   };
 }
 ```
 
 **Acceptance criteria**:
+
 - [ ] Top 10 co-investment pairs all have p < 0.05
 - [ ] Display significance in UI
 - [ ] Filter to show only significant pairs
@@ -143,6 +155,7 @@ function coInvestmentSignificance(entityA, entityB, data) {
 ## Medium Priority (Nice to Have)
 
 ### EVAL #3: HHI Energy Sector Calibration
+
 **Status**: NOT IMPLEMENTED
 **Impact**: MEDIUM - Affects interpretation of concentration metrics
 **Effort**: Medium (3-5 days)
@@ -150,6 +163,7 @@ function coInvestmentSignificance(entityA, entityB, data) {
 **What we need to prove**: DOJ thresholds apply to energy sector
 
 **Proposed study**:
+
 1. Calculate HHI for all asset types
 2. Compare distribution against known competitive markets (retail)
 3. Compare against known monopolistic markets (utilities)
@@ -160,11 +174,13 @@ function coInvestmentSignificance(entityA, entityB, data) {
 ---
 
 ### EVAL #5: Layout Quality Metrics
+
 **Status**: NOT IMPLEMENTED
 **Impact**: MEDIUM - Affects user comprehension
 **Effort**: Medium (3-5 days)
 
 **Metrics to implement**:
+
 ```javascript
 function layoutQuality(graph) {
   return {
@@ -189,12 +205,14 @@ function countEdgeCrossings(edges) {
 ```
 
 **Acceptance criteria**:
+
 - [ ] < 5% label overlap on graphs with < 20 nodes
 - [ ] Edge crossings minimized (compare to naive layout)
 
 ---
 
 ### EVAL #6: Spine Representativeness
+
 **Status**: NOT IMPLEMENTED
 **Impact**: LOW - Affects label display decisions
 **Effort**: Low (1 day)
@@ -202,6 +220,7 @@ function countEdgeCrossings(edges) {
 **What we need to prove**: Spine represents majority ownership
 
 **Implementation**:
+
 ```javascript
 function spineRepresentativeness(graph, spine) {
   const spineOwnership = spine.reduce((sum, nodeId) => {
@@ -209,7 +228,8 @@ function spineRepresentativeness(graph, spine) {
     return sum + paths.reduce((s, p) => s + p.cumulative_pct, 0);
   }, 0);
 
-  const totalOwnership = [...graph.paths.values()].flat()
+  const totalOwnership = [...graph.paths.values()]
+    .flat()
     .reduce((sum, p) => sum + p.cumulative_pct, 0);
 
   return spineOwnership / totalOwnership;
@@ -217,6 +237,7 @@ function spineRepresentativeness(graph, spine) {
 ```
 
 **Acceptance criteria**:
+
 - [ ] Spine represents > 50% of ownership in 90% of graphs
 - [ ] Log cases where spine < 50% for review
 
@@ -225,6 +246,7 @@ function spineRepresentativeness(graph, spine) {
 ## Low Priority (Future)
 
 ### EVAL #4: Gini Benchmarks
+
 **Status**: NOT IMPLEMENTED
 **Impact**: LOW - Interpretation enhancement
 **Effort**: Low (1-2 days)
@@ -260,28 +282,30 @@ tests/
 
 ## Implementation Order
 
-| Week | Eval | Deliverable |
-|------|------|-------------|
-| 1 | #1 Path Completeness | SQL validation + monitoring |
-| 1 | #8 Performance | CI benchmark pipeline |
-| 2 | #7 Co-Investment | Chi-squared implementation |
-| 2 | #3 HHI Study | White paper section |
-| 3 | #5 Layout Quality | Metrics + thresholds |
-| 3 | #2 Imputation (start) | Sampling methodology |
-| 4 | #2 Imputation (finish) | Ground truth comparison |
-| 4 | #6 Spine | Quick implementation |
+| Week | Eval                   | Deliverable                 |
+| ---- | ---------------------- | --------------------------- |
+| 1    | #1 Path Completeness   | SQL validation + monitoring |
+| 1    | #8 Performance         | CI benchmark pipeline       |
+| 2    | #7 Co-Investment       | Chi-squared implementation  |
+| 2    | #3 HHI Study           | White paper section         |
+| 3    | #5 Layout Quality      | Metrics + thresholds        |
+| 3    | #2 Imputation (start)  | Sampling methodology        |
+| 4    | #2 Imputation (finish) | Ground truth comparison     |
+| 4    | #6 Spine               | Quick implementation        |
 
 ---
 
 ## Success Metrics
 
 **For White Paper publication**:
+
 - [ ] All CRITICAL evals passing
 - [ ] At least 3 HIGH priority evals implemented
 - [ ] Limitations documented with mitigation plans
 - [ ] Reproducible methodology section
 
 **For Production confidence**:
+
 - [ ] Path completeness > 95%
 - [ ] Performance regression < 20%
 - [ ] Co-investment significance p < 0.05 for top pairs

@@ -10,7 +10,7 @@ export default defineConfig({
     alias: {
       $lib: '/src/lib',
       '$app/paths': '/src/lib/test-mocks/app-paths.js',
-      '$app/environment': '/src/lib/test-mocks/app-environment.js'
-    }
-  }
+      '$app/environment': '/src/lib/test-mocks/app-environment.js',
+    },
+  },
 });

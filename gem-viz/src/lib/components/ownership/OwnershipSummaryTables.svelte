@@ -160,7 +160,9 @@
       >
         <span class="section-title">By Entity</span>
         <span class="section-count">{byEntity.length}</span>
-        <span class="toggle-icon">{#if entityExpanded}<Minus size={14} />{:else}<Plus size={14} />{/if}</span>
+        <span class="toggle-icon"
+          >{#if entityExpanded}<Minus size={14} />{:else}<Plus size={14} />{/if}</span
+        >
       </button>
 
       {#if entityExpanded}
@@ -215,7 +217,9 @@
       >
         <span class="section-title">By Country</span>
         <span class="section-count">{byCountry.length}</span>
-        <span class="toggle-icon">{#if countryExpanded}<Minus size={14} />{:else}<Plus size={14} />{/if}</span>
+        <span class="toggle-icon"
+          >{#if countryExpanded}<Minus size={14} />{:else}<Plus size={14} />{/if}</span
+        >
       </button>
 
       {#if countryExpanded}
@@ -255,7 +259,9 @@
       >
         <span class="section-title">By Type</span>
         <span class="section-count">{byType.length}</span>
-        <span class="toggle-icon">{#if typeExpanded}<Minus size={14} />{:else}<Plus size={14} />{/if}</span>
+        <span class="toggle-icon"
+          >{#if typeExpanded}<Minus size={14} />{:else}<Plus size={14} />{/if}</span
+        >
       </button>
 
       {#if typeExpanded}

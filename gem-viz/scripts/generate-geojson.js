@@ -18,9 +18,10 @@ dotenv.config();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const outputPath = path.join(__dirname, '../static/points.geojson');
 
-const API_BASE = process.env.PUBLIC_OWNERSHIP_API_BASE_URL
-  || process.env.PUBLIC_OWNERSHIP_API_URL
-  || 'https://gem-api.thirdbear.net';
+const API_BASE =
+  process.env.PUBLIC_OWNERSHIP_API_BASE_URL ||
+  process.env.PUBLIC_OWNERSHIP_API_URL ||
+  'https://gem-api.thirdbear.net';
 
 const FORCE = process.argv.includes('--force');
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days

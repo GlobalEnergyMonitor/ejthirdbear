@@ -29,7 +29,7 @@ function progressStart(task, icon = '📤', project = 'gem-viz') {
     started: Math.floor(Date.now() / 1000),
     icon,
     done: false,
-    failed: false
+    failed: false,
   };
   fs.writeFileSync(PROGRESS_FILE, JSON.stringify(data, null, 2));
 }
@@ -41,7 +41,9 @@ function progressUpdate(status, progress = null, detail = null) {
     if (progress !== null) data.progress = progress;
     if (detail !== null) data.detail = detail;
     fs.writeFileSync(PROGRESS_FILE, JSON.stringify(data, null, 2));
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 function progressDone(message = 'complete') {
@@ -52,8 +54,16 @@ function progressDone(message = 'complete') {
     data.progress = 100;
     fs.writeFileSync(PROGRESS_FILE, JSON.stringify(data, null, 2));
     // Auto-clear after 30 seconds
-    setTimeout(() => { try { fs.unlinkSync(PROGRESS_FILE); } catch { /* file may not exist */ } }, 30000);
-  } catch { /* ignore */ }
+    setTimeout(() => {
+      try {
+        fs.unlinkSync(PROGRESS_FILE);
+      } catch {
+        /* file may not exist */
+      }
+    }, 30000);
+  } catch {
+    /* ignore */
+  }
 }
 
 function progressFail(message = 'failed') {
@@ -63,8 +73,16 @@ function progressFail(message = 'failed') {
     data.failed = true;
     fs.writeFileSync(PROGRESS_FILE, JSON.stringify(data, null, 2));
     // Auto-clear after 60 seconds
-    setTimeout(() => { try { fs.unlinkSync(PROGRESS_FILE); } catch { /* file may not exist */ } }, 60000);
-  } catch { /* ignore */ }
+    setTimeout(() => {
+      try {
+        fs.unlinkSync(PROGRESS_FILE);
+      } catch {
+        /* file may not exist */
+      }
+    }, 60000);
+  } catch {
+    /* ignore */
+  }
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -84,9 +102,7 @@ try {
 }
 
 // Load package.json to get version
-const packageJson = JSON.parse(
-  fs.readFileSync(path.join(rootDir, 'package.json'), 'utf-8')
-);
+const packageJson = JSON.parse(fs.readFileSync(path.join(rootDir, 'package.json'), 'utf-8'));
 
 const version = packageJson.version;
 const buildDir = path.join(rootDir, 'build');
@@ -142,11 +158,11 @@ try {
 
   execSync(
     `aws s3 sync ${buildDir} s3://${BUCKET}/${DEPLOY_PATH}/ ` +
-    `--endpoint-url ${ENDPOINT} ` +
-    `--profile ${PROFILE} ` +
-    `--acl public-read ` +
-    `--cache-control "public, max-age=3600" ` +
-    `--only-show-errors`,
+      `--endpoint-url ${ENDPOINT} ` +
+      `--profile ${PROFILE} ` +
+      `--acl public-read ` +
+      `--cache-control "public, max-age=3600" ` +
+      `--only-show-errors`,
     { stdio: 'inherit' }
   );
 
@@ -167,21 +183,25 @@ try {
   console.log('   Set these on your CDN/proxy (CloudFlare, CloudFront, or nginx).\n');
 
   // Append to build log (tab-separated: timestamp, version, total_time, upload_time, status, url)
-  const logEntry = [
-    new Date().toISOString(),
-    `v${version}`,
-    `${totalDuration}s`,
-    `${uploadDuration}s`,
-    'SUCCESS',
-    `https://${BUCKET}.${REGION}.digitaloceanspaces.com/${DEPLOY_PATH}/`
-  ].join('\t') + '\n';
+  const logEntry =
+    [
+      new Date().toISOString(),
+      `v${version}`,
+      `${totalDuration}s`,
+      `${uploadDuration}s`,
+      'SUCCESS',
+      `https://${BUCKET}.${REGION}.digitaloceanspaces.com/${DEPLOY_PATH}/`,
+    ].join('\t') + '\n';
 
   fs.appendFileSync(buildLogPath, logEntry);
   console.log(`Logged to build.log`);
 
   // Clean up temp file
-  try { fs.unlinkSync(buildStartPath); } catch { /* ignore */ }
-
+  try {
+    fs.unlinkSync(buildStartPath);
+  } catch {
+    /* ignore */
+  }
 } catch (error) {
   const now = Date.now();
   const uploadDuration = ((now - deployStart) / 1000).toFixed(1);
@@ -191,19 +211,24 @@ try {
   progressFail('deploy failed');
 
   // Log failure
-  const logEntry = [
-    new Date().toISOString(),
-    `v${version}`,
-    `${totalDuration}s`,
-    `${uploadDuration}s`,
-    'FAILED',
-    error.message.replace(/\n/g, ' ').substring(0, 100)
-  ].join('\t') + '\n';
+  const logEntry =
+    [
+      new Date().toISOString(),
+      `v${version}`,
+      `${totalDuration}s`,
+      `${uploadDuration}s`,
+      'FAILED',
+      error.message.replace(/\n/g, ' ').substring(0, 100),
+    ].join('\t') + '\n';
 
   fs.appendFileSync(buildLogPath, logEntry);
 
   // Clean up temp file
-  try { fs.unlinkSync(buildStartPath); } catch { /* ignore */ }
+  try {
+    fs.unlinkSync(buildStartPath);
+  } catch {
+    /* ignore */
+  }
 
   console.error('\nERROR: Deployment failed:', error.message);
   process.exit(1);

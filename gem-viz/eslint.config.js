@@ -112,7 +112,12 @@ export default [
   },
   {
     files: ['src/**/*.js', 'src/**/*.ts'],
-    ignores: ['src/**/*.server.js', 'src/**/*.server.ts', 'src/**/*.svelte.ts', 'src/**/*.svelte.js'],
+    ignores: [
+      'src/**/*.server.js',
+      'src/**/*.server.ts',
+      'src/**/*.svelte.ts',
+      'src/**/*.svelte.js',
+    ],
     plugins: {
       '@typescript-eslint': tsPlugin,
     },

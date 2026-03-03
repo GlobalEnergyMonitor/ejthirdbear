@@ -4,10 +4,7 @@
       "AllowedOrigins": ["*"],
       "AllowedMethods": ["GET", "HEAD"],
       "AllowedHeaders": ["*"],
-      "ExposeHeaders": [
-        "Cross-Origin-Opener-Policy",
-        "Cross-Origin-Embedder-Policy"
-      ],
+      "ExposeHeaders": ["Cross-Origin-Opener-Policy", "Cross-Origin-Embedder-Policy"],
       "MaxAgeSeconds": 3600
     }
   ]

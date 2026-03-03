@@ -8,11 +8,11 @@ Thank you for all your work on the ownership API. It's been a pleasure to build 
 
 ## Quick Summary
 
-| Priority | Endpoint | Why | Current Pain |
-|----------|----------|-----|--------------|
-| **P0** | `GET /screener/owners` | Owner aggregation by asset type | 2-8s browser query |
-| **P1** | `POST /entities/search/batch` | Bulk entity lookup | 30 parallel requests |
-| **P2** | `GET /screener/asset-type-counts` | Cached counts | Redundant query every load |
+| Priority | Endpoint                          | Why                             | Current Pain               |
+| -------- | --------------------------------- | ------------------------------- | -------------------------- |
+| **P0**   | `GET /screener/owners`            | Owner aggregation by asset type | 2-8s browser query         |
+| **P1**   | `POST /entities/search/batch`     | Bulk entity lookup              | 30 parallel requests       |
+| **P2**   | `GET /screener/asset-type-counts` | Cached counts                   | Redundant query every load |
 
 ---
 
@@ -51,6 +51,7 @@ GET /screener/owners?asset_type=Coal%20Plant&limit=200
 | `offset` | No | Default: 0 |
 
 **Response:**
+
 ```json
 {
   "total": 1234,
@@ -67,6 +68,7 @@ GET /screener/owners?asset_type=Coal%20Plant&limit=200
 ```
 
 **Fields explained:**
+
 - `total_assets` = count of ALL assets this entity owns (any type)
 - `filtered_assets` = count matching the `asset_type` filter
 
@@ -103,6 +105,7 @@ POST /entities/search/batch
 ```
 
 **Request:**
+
 ```json
 {
   "queries": ["Shell", "BP", "TotalEnergies", "E100001000348"],
@@ -111,15 +114,12 @@ POST /entities/search/batch
 ```
 
 **Response:**
+
 ```json
 {
   "results": {
-    "Shell": [
-      { "id": "E100001000201", "name": "Shell plc", "headquarters_country": "UK" }
-    ],
-    "BP": [
-      { "id": "E100001000300", "name": "BP plc", "headquarters_country": "UK" }
-    ],
+    "Shell": [{ "id": "E100001000201", "name": "Shell plc", "headquarters_country": "UK" }],
+    "BP": [{ "id": "E100001000300", "name": "BP plc", "headquarters_country": "UK" }],
     "E100001000348": [
       { "id": "E100001000348", "name": "China Energy Investment", "headquarters_country": "China" }
     ],
@@ -150,6 +150,7 @@ GET /screener/asset-type-counts
 ```
 
 **Response:**
+
 ```json
 {
   "counts": {
@@ -169,15 +170,15 @@ This could be a static JSON regenerated hourly - data barely changes.
 
 The frontend uses friendly names. Please accept either:
 
-| Frontend | Database Value |
-|----------|----------------|
-| Coal Plant | Coal Plant |
-| Steel Plant | Iron & Steel Plant |
-| Gas Pipeline | Natural Gas Transmission Pipeline |
-| Oil & NGL Pipeline | Oil or NGL Pipeline |
-| Coal Mine | Coal Mine |
-| Iron Mine | Iron Ore Mine |
-| Cement Plant | Cement or Concrete Plant |
+| Frontend           | Database Value                    |
+| ------------------ | --------------------------------- |
+| Coal Plant         | Coal Plant                        |
+| Steel Plant        | Iron & Steel Plant                |
+| Gas Pipeline       | Natural Gas Transmission Pipeline |
+| Oil & NGL Pipeline | Oil or NGL Pipeline               |
+| Coal Mine          | Coal Mine                         |
+| Iron Mine          | Iron Ore Mine                     |
+| Cement Plant       | Cement or Concrete Plant          |
 
 ---
 
@@ -193,6 +194,7 @@ X-Query-Time-Ms: 234
 ## Frontend Is Ready
 
 All the integration code is written and waiting in:
+
 - `src/lib/data-config/screener-api.ts`
 
 When endpoints are live, we just uncomment the REST functions and delete the MotherDuck ones. Should take ~5 minutes to swap over.

@@ -34,7 +34,7 @@ async function fetchJSON(path, retries = 2) {
     } catch (err) {
       clearTimeout(timeout);
       if (attempt === retries) throw err;
-      await new Promise(r => setTimeout(r, 500 * attempt)); // Faster retry
+      await new Promise((r) => setTimeout(r, 500 * attempt)); // Faster retry
     }
   }
 }
@@ -47,7 +47,7 @@ async function listAllAssets() {
 
   while (hasMore) {
     const data = await fetchJSON(`/assets?limit=500&offset=${offset}`);
-    data.results.forEach(a => {
+    data.results.forEach((a) => {
       const id = a.asset_id || a.id;
       if (id) allIds.push(id);
     });
@@ -67,7 +67,7 @@ async function listAllEntities() {
   while (hasMore) {
     const data = await fetchJSON(`/entities?limit=500&offset=${offset}`);
     // Entity API returns different field names - check all possibilities
-    data.results.forEach(e => {
+    data.results.forEach((e) => {
       const id = e['Entity ID'] || e['GEM Entity ID'] || e.entity_id || e.id;
       if (id) allIds.push(id);
     });
@@ -105,11 +105,13 @@ async function fetchEntityData(id) {
 
 async function fetchInBatches(ids, fetchFn, label, existingCache = {}, saveCallback = null) {
   const cache = { ...existingCache };
-  const idsToFetch = ids.filter(id => !cache[id]?.success);
+  const idsToFetch = ids.filter((id) => !cache[id]?.success);
   const totalBatches = Math.ceil(idsToFetch.length / BATCH_SIZE);
 
   if (Object.keys(existingCache).length > 0) {
-    console.log(`[Prefetch] ${label}: Resuming - ${Object.keys(existingCache).length} already cached, ${idsToFetch.length} remaining`);
+    console.log(
+      `[Prefetch] ${label}: Resuming - ${Object.keys(existingCache).length} already cached, ${idsToFetch.length} remaining`
+    );
   }
 
   const startTime = Date.now();
@@ -122,12 +124,21 @@ async function fetchInBatches(ids, fetchFn, label, existingCache = {}, saveCallb
     const batchNum = Math.floor(i / BATCH_SIZE) + 1;
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
     const rate = (Object.keys(cache).length / Math.max(1, elapsed)).toFixed(1);
-    const eta = idsToFetch.length > 0 ? ((idsToFetch.length - Object.keys(cache).length + Object.keys(existingCache).length) / Math.max(0.1, parseFloat(rate)) / 60).toFixed(1) : 0;
+    const eta =
+      idsToFetch.length > 0
+        ? (
+            (idsToFetch.length - Object.keys(cache).length + Object.keys(existingCache).length) /
+            Math.max(0.1, parseFloat(rate)) /
+            60
+          ).toFixed(1)
+        : 0;
 
-    process.stdout.write(`\r[Prefetch] ${label}: ${batchNum}/${totalBatches} | ${Object.keys(cache).length}/${ids.length} | ${rate}/sec | ETA: ${eta}min | ${batchFail} failed    `);
+    process.stdout.write(
+      `\r[Prefetch] ${label}: ${batchNum}/${totalBatches} | ${Object.keys(cache).length}/${ids.length} | ${rate}/sec | ETA: ${eta}min | ${batchFail} failed    `
+    );
 
     const results = await Promise.allSettled(batch.map(fetchFn));
-    results.forEach(r => {
+    results.forEach((r) => {
       if (r.status === 'fulfilled') {
         cache[r.value.id] = r.value;
         if (r.value.success) batchSuccess++;
@@ -146,7 +157,9 @@ async function fetchInBatches(ids, fetchFn, label, existingCache = {}, saveCallb
   // Final save
   if (saveCallback) saveCallback(cache);
 
-  console.log(`\n[Prefetch] ${label}: Complete! ${Object.keys(cache).length} items (${batchFail} failed)`);
+  console.log(
+    `\n[Prefetch] ${label}: Complete! ${Object.keys(cache).length} items (${batchFail} failed)`
+  );
   successCount += batchSuccess;
   failCount += batchFail;
   return cache;
@@ -156,7 +169,8 @@ function loadExistingCache(filePath) {
   try {
     if (existsSync(filePath)) {
       const data = readFileSync(filePath, 'utf-8');
-      if (data.length > 10) { // Not an empty/tiny file
+      if (data.length > 10) {
+        // Not an empty/tiny file
         return JSON.parse(data);
       }
     }
@@ -170,24 +184,25 @@ async function main() {
   const startTime = Date.now();
   const resume = process.argv.includes('--resume');
 
-  console.log(`[Prefetch] Starting parallel data prefetch (batch=${BATCH_SIZE}, timeout=${TIMEOUT_MS}ms)...`);
+  console.log(
+    `[Prefetch] Starting parallel data prefetch (batch=${BATCH_SIZE}, timeout=${TIMEOUT_MS}ms)...`
+  );
   if (resume) console.log('[Prefetch] Resume mode enabled - will skip already-cached items\n');
   else console.log('');
 
-  [ASSET_CACHE_DIR, ENTITY_CACHE_DIR].forEach(dir => {
+  [ASSET_CACHE_DIR, ENTITY_CACHE_DIR].forEach((dir) => {
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   });
 
   // Load existing caches for resume capability
   const existingAssetCache = resume ? loadExistingCache(join(ASSET_CACHE_DIR, 'assets.json')) : {};
-  const existingEntityCache = resume ? loadExistingCache(join(ENTITY_CACHE_DIR, 'entities.json')) : {};
+  const existingEntityCache = resume
+    ? loadExistingCache(join(ENTITY_CACHE_DIR, 'entities.json'))
+    : {};
 
   // Phase 1: List all IDs in parallel
   console.log('=== Phase 1: Listing IDs ===');
-  const [assetIds, entityIds] = await Promise.all([
-    listAllAssets(),
-    listAllEntities(),
-  ]);
+  const [assetIds, entityIds] = await Promise.all([listAllAssets(), listAllEntities()]);
   console.log(`\nFound ${assetIds.length} assets and ${entityIds.length} entities\n`);
 
   // Phase 2: Fetch data SEQUENTIALLY to avoid API rate limits
@@ -203,8 +218,20 @@ async function main() {
   };
 
   // Run sequentially to avoid overwhelming the API
-  const assetCache = await fetchInBatches(assetIds, fetchAssetData, 'Assets', existingAssetCache, saveAssetCache);
-  const entityCache = await fetchInBatches(entityIds, fetchEntityData, 'Entities', existingEntityCache, saveEntityCache);
+  const assetCache = await fetchInBatches(
+    assetIds,
+    fetchAssetData,
+    'Assets',
+    existingAssetCache,
+    saveAssetCache
+  );
+  const entityCache = await fetchInBatches(
+    entityIds,
+    fetchEntityData,
+    'Entities',
+    existingEntityCache,
+    saveEntityCache
+  );
 
   // Phase 3: Write caches
   console.log('\n=== Phase 3: Writing Caches ===');
@@ -221,11 +248,13 @@ async function main() {
   const elapsed = ((Date.now() - startTime) / 1000 / 60).toFixed(1);
 
   console.log(`[Prefetch] Cache sizes: assets=${assetMB}MB, entities=${entityMB}MB`);
-  console.log(`[Prefetch] DONE! ${assetIds.length} assets + ${entityIds.length} entities in ${elapsed} min`);
+  console.log(
+    `[Prefetch] DONE! ${assetIds.length} assets + ${entityIds.length} entities in ${elapsed} min`
+  );
   console.log(`[Prefetch] Success: ${successCount}, Failed: ${failCount}`);
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error('[Prefetch] Fatal:', err);
   process.exit(1);
 });

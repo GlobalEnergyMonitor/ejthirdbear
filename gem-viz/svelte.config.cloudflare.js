@@ -13,21 +13,21 @@ const config = {
     adapter: adapter({
       routes: {
         include: ['/*'],
-        exclude: ['<all>']
-      }
+        exclude: ['<all>'],
+      },
     }),
     // No prerendering for Cloudflare - pages render dynamically
     prerender: {
-      entries: []  // Don't prerender any pages
+      entries: [], // Don't prerender any pages
     },
     paths: {
-      base: '',  // Serve from root on Cloudflare
-      relative: false
+      base: '', // Serve from root on Cloudflare
+      relative: false,
     },
     alias: {
-      $lib: 'src/lib'
-    }
-  }
+      $lib: 'src/lib',
+    },
+  },
 };
 
 export default config;

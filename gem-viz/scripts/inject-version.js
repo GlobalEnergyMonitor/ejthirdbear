@@ -34,7 +34,8 @@ try {
   console.warn('WARNING: Unable to read package.json');
 }
 
-const DEPLOY_BASE_URL = process.env.DEPLOY_BASE_URL || 'https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz';
+const DEPLOY_BASE_URL =
+  process.env.DEPLOY_BASE_URL || 'https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz';
 const deployUrl = `${DEPLOY_BASE_URL}/v${pkgVersion}`;
 
 const versionInfo = {
@@ -45,7 +46,7 @@ const versionInfo = {
   timestamp,
   deployed: timestamp,
   buildTime: new Date().toLocaleString(),
-  deployUrl
+  deployUrl,
 };
 
 // Write to static directory so it gets served as a static file

@@ -9,10 +9,10 @@ The app uses G-prefix IDs (e.g., `G100000102961`) but the API requires compound 
 
 ## The Problem
 
-| Asset Type | App Uses | API Expects | Works? |
-|------------|----------|-------------|--------|
-| Coal Mine | `M7043` | `M7043` | ✅ Yes |
-| Coal Plant | `G100000102961` | `L100000104107_G100000102961` | ❌ No |
+| Asset Type | App Uses        | API Expects                   | Works? |
+| ---------- | --------------- | ----------------------------- | ------ |
+| Coal Mine  | `M7043`         | `M7043`                       | ✅ Yes |
+| Coal Plant | `G100000102961` | `L100000104107_G100000102961` | ❌ No  |
 
 **Coal mines work** - they use simple M-prefix IDs.
 **Coal plants break** - they need Location + Unit IDs combined.
@@ -36,6 +36,7 @@ curl "https://gem-ownership-api.fly.dev/assets/L100000104107_G100000102961"
 ## Current Workaround
 
 The app now:
+
 1. Detects G-prefix IDs
 2. Looks up location ID from local parquet
 3. Combines them: `L{location}_G{unit}`

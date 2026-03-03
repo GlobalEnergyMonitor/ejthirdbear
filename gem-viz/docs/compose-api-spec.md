@@ -5,6 +5,7 @@ This document describes the API endpoints needed to replace DuckDB queries in th
 ## Current State
 
 The compose page uses 4 DuckDB query patterns:
+
 1. Facet counts (parametric search)
 2. Range data (min/max/histogram)
 3. Filtered results
@@ -17,6 +18,7 @@ The compose page uses 4 DuckDB query patterns:
 Returns facet counts for all filterable dimensions. Supports "parametric search" where counts update based on other active filters.
 
 **Query Params** (all optional):
+
 - `tracker` - Filter by tracker type
 - `status` - Filter by status
 - `country` - Filter by asset country
@@ -24,6 +26,7 @@ Returns facet counts for all filterable dimensions. Supports "parametric search"
 - `owner` - Filter by owner name
 
 **Response:**
+
 ```json
 {
   "trackers": [{"value": "Coal Plant", "count": 15234}, ...],
@@ -41,6 +44,7 @@ Returns facet counts for all filterable dimensions. Supports "parametric search"
 Returns min/max/histogram for numeric fields.
 
 **Response:**
+
 ```json
 {
   "capacity": {
@@ -64,6 +68,7 @@ Returns min/max/histogram for numeric fields.
 Existing endpoint with additional filter params.
 
 **New Query Params:**
+
 - `tracker` - Multi-value: `Coal+Plant,Gas+Plant`
 - `status` - Multi-value: `operating,proposed`
 - `country` - Asset country (from locations)
@@ -76,6 +81,7 @@ Existing endpoint with additional filter params.
 - `limit`, `offset` - Pagination
 
 **Response:**
+
 ```json
 {
   "total": 12345,
@@ -86,6 +92,7 @@ Existing endpoint with additional filter params.
 ## Migration Complexity
 
 **Medium**
+
 - `/assets/facets` is the main new work (parametric counting logic)
 - `/assets/ranges` is straightforward (just min/max/histogram queries)
 - `/assets` filter params are additive to existing endpoint

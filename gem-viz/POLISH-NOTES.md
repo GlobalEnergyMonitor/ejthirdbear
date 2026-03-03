@@ -14,16 +14,17 @@ Quick reference for tomorrow's asset/entity page polish session.
 
 ## Page Comparison
 
-| Aspect | Asset Page | Entity Page |
-|--------|-----------|-------------|
-| Lines | ~625 | ~505 |
-| File | `src/routes/asset/[id]/+page.svelte` | `src/routes/entity/[id]/+page.svelte` |
-| Header | Table name | "Entity Profile" |
-| Hero | Name + ID | Name + Flower viz |
+| Aspect | Asset Page                           | Entity Page                           |
+| ------ | ------------------------------------ | ------------------------------------- |
+| Lines  | ~625                                 | ~505                                  |
+| File   | `src/routes/asset/[id]/+page.svelte` | `src/routes/entity/[id]/+page.svelte` |
+| Header | Table name                           | "Entity Profile"                      |
+| Hero   | Name + ID                            | Name + Flower viz                     |
 
 ## Section Inventory
 
 ### Asset Page Sections
+
 1. Header (table name)
 2. Title + GEM Unit ID + AddToCart
 3. Meta grid: Status, Tracker, Owners, Total %, Country, Coordinates
@@ -37,6 +38,7 @@ Quick reference for tomorrow's asset/entity page polish session.
 11. Raw Data (collapsible JSON)
 
 ### Entity Page Sections
+
 1. Header ("Entity Profile")
 2. Hero: Name + stats subtitle + AddToCart + OwnershipFlower
 3. Meta grid: ID, Assets, Capacity, Countries
@@ -49,37 +51,44 @@ Quick reference for tomorrow's asset/entity page polish session.
 ## Components Used
 
 **Shared:**
+
 - `StatusIcon`, `TrackerIcon`, `OwnershipPie`
 - `AddToCartButton` (now with ✓ checkmark when active)
 - `AssetScreener`
 
 **Asset only:**
+
 - `AssetMap` (MapLibre)
 - `MermaidOwnership`, `OwnershipHierarchy`
 - `RelationshipNetwork`
 
 **Entity only:**
+
 - `OwnershipFlower` (radial viz)
 - `ConnectionFinder` (widget)
 
 ## Remaining Polish Ideas
 
 **Quick wins:**
+
 - Add subtle hover states to asset cards
 - Add capacity bars to Representative Assets cards
 
 **Medium effort:**
+
 - Add Raw JSON section to entity page (for consistency)
 - Extract shared CSS to a `page-common.css` or shared Svelte snippet
 - Coordinate links → open in Google Maps / OSM
 
 **Larger polish:**
+
 - Asset "All Properties" section could use a cleaner two-column grid
 - Consider collapsing some sections by default (long pages)
 
 ## Investigation Cart System
 
 **Files:**
+
 - `src/lib/investigationCart.ts` - core Svelte store
 - `src/lib/components/AddToCartButton.svelte` - add/toggle button
 - `src/lib/components/SiteNav.svelte` - shows cart badge count
@@ -87,6 +96,7 @@ Quick reference for tomorrow's asset/entity page polish session.
 - `src/routes/export/+page.svelte` - CSV/JSON export page
 
 **Features:**
+
 - Add assets (G-prefix) or entities (E-prefix) to cart
 - Shareable URLs with `?ids=` param
 - Co-ownership detection (shared assets, common owners)
@@ -97,6 +107,7 @@ Quick reference for tomorrow's asset/entity page polish session.
 ## CSS Variables in Use
 
 From `ownership-theme.ts`:
+
 ```
 colors.navy = '#333333'
 colors.grey = '#BECCCF'
@@ -107,11 +118,13 @@ Status colors → monochrome palette (prospective=#888, operating=#333, retired=
 ## Quick Reference: Server Data Shape
 
 **Asset page** receives from `+page.server.js`:
+
 ```js
 { assetId, assetName, owners[], asset{}, tableName, columns[], ownerExplorerData, relationshipData }
 ```
 
 **Entity page** receives from `+page.server.js`:
+
 ```js
 { entityId, entityName, entity{}, stats{}, portfolio{}, ownerExplorerData }
 ```
@@ -130,26 +143,29 @@ src/routes/entity/[id]/+page.svelte
 
 ## Component Inventory
 
-| Component | Lines | Purpose | Data Source |
-|-----------|-------|---------|-------------|
-| `OwnershipFlower` | 325 | Nadieh Bremer-style radial flower | prebaked or WASM fetch |
-| `OwnershipPie` | 98 | Simple ownership percentage pie | props only |
-| `OwnershipHierarchy` | 321 | Force-directed ownership network | props only |
-| `MermaidOwnership` | 300 | Auto-generated Mermaid flowchart | props only |
-| `RelationshipNetwork` | 462 | Related/co-located assets | prebaked or WASM fetch |
-| `AssetScreener` | 962 | Full subsidiary portfolio viz | prebaked or WASM fetch |
+| Component             | Lines | Purpose                           | Data Source            |
+| --------------------- | ----- | --------------------------------- | ---------------------- |
+| `OwnershipFlower`     | 325   | Nadieh Bremer-style radial flower | prebaked or WASM fetch |
+| `OwnershipPie`        | 98    | Simple ownership percentage pie   | props only             |
+| `OwnershipHierarchy`  | 321   | Force-directed ownership network  | props only             |
+| `MermaidOwnership`    | 300   | Auto-generated Mermaid flowchart  | props only             |
+| `RelationshipNetwork` | 462   | Related/co-located assets         | prebaked or WASM fetch |
+| `AssetScreener`       | 962   | Full subsidiary portfolio viz     | prebaked or WASM fetch |
 
 ## Component Details
 
 ### OwnershipFlower
+
 **Location:** `src/lib/components/OwnershipFlower.svelte`
 
 Radial "flower" encoding tracker mix:
+
 - Petal angle → tracker share (by asset count)
 - Petal length → capacity for that tracker
 - Petal color → tracker color palette
 
 **Props:**
+
 ```ts
 ownerId?: string        // Entity ID (optional if portfolio provided)
 portfolio?: object      // Prebaked portfolio data
@@ -164,29 +180,33 @@ title?: string          // Override title
 ---
 
 ### OwnershipPie
+
 **Location:** `src/lib/components/OwnershipPie.svelte`
 
 Minimal pie chart showing ownership percentage. Pure SVG, no D3.
 
 **Props:**
+
 ```ts
-percentage: number      // 0-100
-size: number           // Diameter in pixels
-fillColor: string      // Fill color
-strokeColor: string    // Stroke color
-strokeWidth: number    // Stroke width
-showLabel: boolean     // Show % label in center
+percentage: number; // 0-100
+size: number; // Diameter in pixels
+fillColor: string; // Fill color
+strokeColor: string; // Stroke color
+strokeWidth: number; // Stroke width
+showLabel: boolean; // Show % label in center
 ```
 
 ---
 
 ### OwnershipHierarchy
+
 **Location:** `src/lib/components/OwnershipHierarchy.svelte`
 
 Force-directed graph showing ownership network.
 Nodes positioned vertically by depth (asset at bottom).
 
 **Props:**
+
 ```ts
 assetId: string        // Asset being visualized
 assetName: string      // Display name
@@ -201,12 +221,14 @@ height?: number        // Container height
 ---
 
 ### MermaidOwnership
+
 **Location:** `src/lib/components/MermaidOwnership.svelte`
 
 Auto-generated flowchart using Mermaid.js.
 Converts ownership edges to Mermaid syntax.
 
 **Props:**
+
 ```ts
 edges: OwnershipEdge[] // Parsed ownership edges
 nodeMap: Map           // ID -> {Name} lookup
@@ -217,6 +239,7 @@ direction: 'TD'|'LR'   // Flow direction
 ```
 
 **Features:**
+
 - Interactive zoom slider
 - Clickable nodes navigate to asset/entity pages
 - Theme customization via Mermaid config
@@ -224,14 +247,17 @@ direction: 'TD'|'LR'   // Flow direction
 ---
 
 ### RelationshipNetwork
+
 **Location:** `src/lib/components/RelationshipNetwork.svelte`
 
 Shows related assets for an asset page:
+
 1. Ownership chain (linear flow)
 2. Same-owner assets (grid of cards)
 3. Co-located assets (list)
 
 **Props:**
+
 ```ts
 prebakedData?: {
   ownershipChain: ChainItem[]
@@ -245,15 +271,18 @@ prebakedData?: {
 ---
 
 ### AssetScreener
+
 **Location:** `src/lib/components/AssetScreener.svelte`
 
 Complex visualization showing owner's full portfolio:
+
 - Subsidiary groups with ownership pies
 - Assets positioned by location
 - Mini bar charts for tracker/status mix
 - Status icons (proposed/cancelled/retired)
 
 **Props:**
+
 ```ts
 assetClassName: string      // Label ("assets", "plants", etc)
 sortByOwnershipPct: boolean // Sort subsidiaries by ownership %
@@ -262,6 +291,7 @@ prebakedPortfolio?: Portfolio // Prebaked data
 ```
 
 **Key features:**
+
 - Uses shared utilities from `visualization-utils.ts`
 - Supports truncated portfolios (>200 assets)
 - Full legend for colors and status icons
@@ -272,15 +302,15 @@ prebakedPortfolio?: Portfolio // Prebaked data
 
 ```ts
 // Layout constants
-LAYOUT_PARAMS    // Subsidiary/asset positioning
-SVG_MARGIN       // Chart margins
-SVG_WIDTH        // Default width
+LAYOUT_PARAMS; // Subsidiary/asset positioning
+SVG_MARGIN; // Chart margins
+SVG_WIDTH; // Default width
 
 // Functions
-scaleR(n)                    // Radius scaling for combined units
-calculateFrequencyTables()   // Tracker/status frequency for bar charts
-arcPath(value, radius)       // SVG arc path for pie slices
-subsidiaryPath(group)        // SVG path for subsidiary connection
+scaleR(n); // Radius scaling for combined units
+calculateFrequencyTables(); // Tracker/status frequency for bar charts
+arcPath(value, radius); // SVG arc path for pie slices
+subsidiaryPath(group); // SVG path for subsidiary connection
 ```
 
 ## Color System
@@ -305,11 +335,13 @@ colorByTracker: Map<string, string>
 ## Polish Opportunities
 
 ### Quick Fixes
+
 - [ ] AssetScreener header uses hardcoded `#016b83` - could use `colors.teal`
 - [ ] AssetScreener subtitle uses `#9df7e5` - could use `colors.mint`
 - [ ] RelationshipNetwork uses `#4caf50` for operating - should be monochrome
 
 ### Enhancements
+
 - [ ] Add hover transitions to OwnershipFlower petals
 - [ ] OwnershipHierarchy could show ownership % on hover
 - [ ] MermaidOwnership could have LR/TD toggle button

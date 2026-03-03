@@ -15,10 +15,7 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Sample IDs for dynamic routes (known good IDs from the data)
-const SAMPLE_ENTITY_IDS = [
-  'E100000000834',
-  'E100001000348',
-];
+const SAMPLE_ENTITY_IDS = ['E100000000834', 'E100001000348'];
 
 // Interesting asset IDs to spot-check (verified in current dataset)
 // Note: Current dataset only has G-prefix (coal plants). P (steel) and M (mines) are different trackers.
@@ -41,15 +38,15 @@ const ROUTES = [
   { paths: ['/asset.html', '/asset/index.html'], name: 'All Assets', expect: 'assets' },
   { paths: ['/asset/search.html', '/asset/search/index.html'], name: 'Asset Search', csr: true },
   // Check all sample assets
-  ...SAMPLE_ASSETS.map(a => ({
+  ...SAMPLE_ASSETS.map((a) => ({
     paths: [`/asset/${a.id}.html`, `/asset/${a.id}/index.html`],
     name: a.name,
-    expect: a.id
+    expect: a.id,
   })),
-  ...SAMPLE_ENTITY_IDS.map(id => ({
+  ...SAMPLE_ENTITY_IDS.map((id) => ({
     paths: [`/entity/${id}.html`, `/entity/${id}/index.html`],
     name: `Entity ${id.slice(-4)}`,
-    expect: id
+    expect: id,
   })),
   { paths: ['/network.html', '/network/index.html'], name: 'Network', expect: 'network' },
   { paths: ['/export.html', '/export/index.html'], name: 'Export', csr: true },
@@ -71,7 +68,7 @@ async function checkRoute(baseUrl, route) {
 
     try {
       const res = await fetch(url, {
-        headers: { 'User-Agent': 'GEM-Viz-SpotCheck/1.0' }
+        headers: { 'User-Agent': 'GEM-Viz-SpotCheck/1.0' },
       });
       const elapsed = Date.now() - start;
 
@@ -154,14 +151,14 @@ async function main() {
       const csrTag = result.route.csr ? `${DIM}(CSR)${RESET} ` : '';
       console.log(
         `${GREEN}[OK]${RESET} ${result.status} ${csrTag}` +
-        `${DIM}${result.elapsed}ms ${formatSize(result.size)}${RESET}`
+          `${DIM}${result.elapsed}ms ${formatSize(result.size)}${RESET}`
       );
     } else if (result.error) {
       console.log(`${RED}[FAIL] ERROR${RESET} ${result.error}`);
     } else if (!result.contentOk) {
       console.log(
         `${YELLOW}[WARN]${RESET} ${result.status} ` +
-        `${DIM}(missing expected content: "${route.expect}")${RESET}`
+          `${DIM}(missing expected content: "${route.expect}")${RESET}`
       );
     } else {
       console.log(`${RED}[FAIL]${RESET} ${result.status}`);
@@ -169,7 +166,7 @@ async function main() {
   }
 
   // Summary
-  const passed = results.filter(r => r.ok).length;
+  const passed = results.filter((r) => r.ok).length;
   const failed = results.length - passed;
 
   console.log(`\n${DIM}─────────────────────────────────────${RESET}`);
@@ -182,7 +179,7 @@ async function main() {
 
     // Show failed URLs for debugging
     console.log(`${DIM}Failed URLs:${RESET}`);
-    for (const r of results.filter(r => !r.ok)) {
+    for (const r of results.filter((r) => !r.ok)) {
       console.log(`  ${r.url}`);
     }
     console.log('');
@@ -191,7 +188,7 @@ async function main() {
   }
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error(`${RED}Fatal error:${RESET}`, err.message);
   process.exit(1);
 });

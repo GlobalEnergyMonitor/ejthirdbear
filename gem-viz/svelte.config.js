@@ -12,12 +12,12 @@ const config = {
   kit: {
     adapter: adapter({
       out: 'build',
-      precompress: true
+      precompress: true,
     }),
     // No prerendering - pages render dynamically on the server
     prerender: {
       entries: [],
-      handleUnseenRoutes: 'ignore'
+      handleUnseenRoutes: 'ignore',
     },
     paths: {
       // For static builds: base: `/gem-viz/v${version}`
@@ -25,12 +25,12 @@ const config = {
       base: '',
       // Use absolute paths for assets to fix nested route resolution
       // Without this, /asset/[id]/ pages use wrong relative paths
-      relative: false
+      relative: false,
     },
     alias: {
-      $lib: 'src/lib'
-    }
-  }
+      $lib: 'src/lib',
+    },
+  },
 };
 
 export default config;

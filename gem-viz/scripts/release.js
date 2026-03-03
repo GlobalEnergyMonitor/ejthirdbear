@@ -20,11 +20,11 @@ const rootDir = path.resolve(__dirname, '..');
 
 const rl = readline.createInterface({
   input: process.stdin,
-  output: process.stdout
+  output: process.stdout,
 });
 
 function question(query) {
-  return new Promise(resolve => rl.question(query, resolve));
+  return new Promise((resolve) => rl.question(query, resolve));
 }
 
 function bumpVersion(currentVersion, type) {
@@ -73,10 +73,7 @@ async function main() {
   try {
     // Update package.json
     packageJson.version = newVersion;
-    fs.writeFileSync(
-      packageJsonPath,
-      JSON.stringify(packageJson, null, 2) + '\n'
-    );
+    fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2) + '\n');
     console.log('[OK] Updated package.json');
 
     // Update layout.svelte with new version
@@ -124,7 +121,6 @@ async function main() {
     console.log('  1. Review the changes: git show');
     console.log('  2. Push to remote: git push && git push --tags');
     console.log('  3. Deploy: npm run deploy\n');
-
   } catch (error) {
     console.error('\nERROR: Release failed:', error.message);
     process.exit(1);

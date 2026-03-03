@@ -125,8 +125,7 @@ function renderFlowerSvg(trackerStats) {
     const angleEnd = angleAcc + angle;
     angleAcc = angleEnd;
 
-    const capacityRatio =
-      t.capacity > 0 ? Math.log10(t.capacity) / Math.log10(maxCapacity) : 0.3;
+    const capacityRatio = t.capacity > 0 ? Math.log10(t.capacity) / Math.log10(maxCapacity) : 0.3;
     const radius = minRadius + (maxRadius - minRadius) * Math.max(capacityRatio, 0.3);
     return {
       tracker: t.tracker,
@@ -140,12 +139,13 @@ function renderFlowerSvg(trackerStats) {
 
   const petalsMarkup = petals
     .map(
-      (petal) => `<path d="${arcPath(
-        petal.angleStart,
-        petal.angleEnd,
-        petal.innerRadius,
-        petal.outerRadius
-      )}" fill="${petal.color}" stroke="#111" stroke-width="1" fill-opacity="0.9"/>`
+      (petal) =>
+        `<path d="${arcPath(
+          petal.angleStart,
+          petal.angleEnd,
+          petal.innerRadius,
+          petal.outerRadius
+        )}" fill="${petal.color}" stroke="#111" stroke-width="1" fill-opacity="0.9"/>`
     )
     .join('');
 

@@ -47,7 +47,12 @@ function formatCapacity(mw) {
 
 function getField(row, candidates) {
   for (const key of candidates) {
-    if (row && Object.prototype.hasOwnProperty.call(row, key) && row[key] != null && row[key] !== '') {
+    if (
+      row &&
+      Object.prototype.hasOwnProperty.call(row, key) &&
+      row[key] != null &&
+      row[key] !== ''
+    ) {
       return row[key];
     }
   }
@@ -60,15 +65,21 @@ function buildLine(parts) {
 
 function renderAssetSvg({ assetId, name, tracker, status, country, ownerCount, capacity }) {
   const title = escapeXml(truncate(name || assetId || 'GEM Asset', 50));
-  const line1 = escapeXml(buildLine([
-    tracker ? `Tracker: ${tracker}` : null,
-    status ? `Status: ${status}` : null,
-    country ? `Country: ${country}` : null,
-  ]));
-  const line2 = escapeXml(buildLine([
-    ownerCount ? `Owners: ${formatNumber(ownerCount)}` : null,
-    capacity != null && !Number.isNaN(Number(capacity)) ? `Capacity: ${formatCapacity(capacity)}` : null,
-  ]));
+  const line1 = escapeXml(
+    buildLine([
+      tracker ? `Tracker: ${tracker}` : null,
+      status ? `Status: ${status}` : null,
+      country ? `Country: ${country}` : null,
+    ])
+  );
+  const line2 = escapeXml(
+    buildLine([
+      ownerCount ? `Owners: ${formatNumber(ownerCount)}` : null,
+      capacity != null && !Number.isNaN(Number(capacity))
+        ? `Capacity: ${formatCapacity(capacity)}`
+        : null,
+    ])
+  );
   const footer = escapeXml(assetId || 'GEM Asset');
 
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -94,13 +105,22 @@ function renderAssetSvg({ assetId, name, tracker, status, country, ownerCount, c
 </svg>`;
 }
 
-function renderEntitySvg({ entityId, name, assetCount, totalCapacityMw, countryCount, trackerCounts }) {
+function renderEntitySvg({
+  entityId,
+  name,
+  assetCount,
+  totalCapacityMw,
+  countryCount,
+  trackerCounts,
+}) {
   const title = escapeXml(truncate(name || entityId || 'GEM Entity', 50));
-  const line1 = escapeXml(buildLine([
-    assetCount ? `${formatNumber(assetCount)} assets` : null,
-    totalCapacityMw ? `${formatCapacity(totalCapacityMw)} capacity` : null,
-    countryCount ? `${formatNumber(countryCount)} countries` : null,
-  ]));
+  const line1 = escapeXml(
+    buildLine([
+      assetCount ? `${formatNumber(assetCount)} assets` : null,
+      totalCapacityMw ? `${formatCapacity(totalCapacityMw)} capacity` : null,
+      countryCount ? `${formatNumber(countryCount)} countries` : null,
+    ])
+  );
   const footer = escapeXml(entityId || 'GEM Entity');
 
   const barX = 680;
@@ -111,15 +131,18 @@ function renderEntitySvg({ entityId, name, assetCount, totalCapacityMw, countryC
   const maxCount = trackerCounts.length ? Math.max(...trackerCounts.map((t) => t.count)) : 0;
   const colors = ['#1b1b1b', '#2f3b47', '#4a5b6a', '#6b7a87', '#8a97a3'];
 
-  const bars = trackerCounts.slice(0, 4).map((t, i) => {
-    const width = maxCount ? Math.max(10, Math.round((t.count / maxCount) * barWidth)) : 10;
-    const y = barY + i * (barHeight + barGap);
-    const label = escapeXml(truncate(t.tracker, 18));
-    return `
+  const bars = trackerCounts
+    .slice(0, 4)
+    .map((t, i) => {
+      const width = maxCount ? Math.max(10, Math.round((t.count / maxCount) * barWidth)) : 10;
+      const y = barY + i * (barHeight + barGap);
+      const label = escapeXml(truncate(t.tracker, 18));
+      return `
     <text x="${barX}" y="${y - 6}" font-size="14" font-family="IBM Plex Mono, monospace" fill="#444444">${label}</text>
     <rect x="${barX}" y="${y}" width="${width}" height="${barHeight}" fill="${colors[i % colors.length]}"/>
     <text x="${barX + width + 10}" y="${y + 13}" font-size="12" font-family="IBM Plex Mono, monospace" fill="#444444">${formatNumber(t.count)}</text>`;
-  }).join('');
+    })
+    .join('');
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}">
@@ -156,8 +179,9 @@ function buildTrackerCounts(portfolioData) {
     const key = asset.tracker || 'Unknown';
     counts.set(key, (counts.get(key) || 0) + 1);
   }
-  return Array.from(counts, ([tracker, count]) => ({ tracker, count }))
-    .sort((a, b) => b.count - a.count);
+  return Array.from(counts, ([tracker, count]) => ({ tracker, count })).sort(
+    (a, b) => b.count - a.count
+  );
 }
 
 function writeSvg(path, svg) {
@@ -181,7 +205,8 @@ function generateAssetImages(outputDir) {
     const records = assets[assetId] || [];
     const row = records[0] || {};
 
-    const name = getField(row, ['Project', 'Name', 'Asset Name', 'Unit Name', 'Facility Name']) || assetId;
+    const name =
+      getField(row, ['Project', 'Name', 'Asset Name', 'Unit Name', 'Facility Name']) || assetId;
     const tracker = getField(row, ['Tracker']);
     const status = getField(row, ['Status']);
     const country = getField(row, ['Country', 'Country.Area', 'Country Area']);
@@ -244,7 +269,11 @@ function generateEntityImages(outputDir) {
     }
   }
 
-  const fallbackSvg = renderEntitySvg({ entityId: 'GEM Entity', name: 'GEM Entity', trackerCounts: [] });
+  const fallbackSvg = renderEntitySvg({
+    entityId: 'GEM Entity',
+    name: 'GEM Entity',
+    trackerCounts: [],
+  });
   writeSvg(join(outputDir, 'entity', 'default.svg'), fallbackSvg);
 
   console.log(`[OG] Entity images generated: ${limit}`);

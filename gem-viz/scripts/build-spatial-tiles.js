@@ -53,20 +53,22 @@ async function main() {
   const db = new duckdb.Database(':memory:');
 
   // Promisify query
-  const query = (sql) => new Promise((resolve, reject) => {
-    db.all(sql, (err, rows) => {
-      if (err) reject(err);
-      else resolve(rows);
+  const query = (sql) =>
+    new Promise((resolve, reject) => {
+      db.all(sql, (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows);
+      });
     });
-  });
 
   // Run query (no return)
-  const exec = (sql) => new Promise((resolve, reject) => {
-    db.run(sql, (err) => {
-      if (err) reject(err);
-      else resolve();
+  const exec = (sql) =>
+    new Promise((resolve, reject) => {
+      db.run(sql, (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
     });
-  });
 
   // Load and connect to MotherDuck
   console.log('Loading MotherDuck extension...');
@@ -105,7 +107,7 @@ async function main() {
       tileSize: TILE_SIZE,
       totalAssets: 0,
       totalRows: 0,
-      tiles: []
+      tiles: [],
     };
 
     // Step 3: Export each tile as parquet
@@ -114,7 +116,9 @@ async function main() {
       const tileName = `tile_${tile.tile_lat}_${tile.tile_lon}`;
       const tilePath = path.join(OUTPUT_DIR, `${tileName}.parquet`);
 
-      console.log(`[${i + 1}/${tiles.length}] ${tileName}: ${tile.asset_count} assets, ${tile.row_count} rows`);
+      console.log(
+        `[${i + 1}/${tiles.length}] ${tileName}: ${tile.asset_count} assets, ${tile.row_count} rows`
+      );
 
       // Export tile data with all columns
       const minLat = tile.tile_lat;
@@ -156,12 +160,12 @@ async function main() {
           minLat: tile.min_lat,
           maxLat: tile.max_lat,
           minLon: tile.min_lon,
-          maxLon: tile.max_lon
+          maxLon: tile.max_lon,
         },
         tileBounds: { minLat, maxLat, minLon, maxLon },
         assetCount,
         rowCount,
-        sizeMB: parseFloat(sizeMB)
+        sizeMB: parseFloat(sizeMB),
       });
 
       manifest.totalAssets += assetCount;
@@ -183,7 +187,6 @@ async function main() {
     const totalSizeMB = manifest.tiles.reduce((sum, t) => sum + t.sizeMB, 0);
     console.log(`Total size: ${totalSizeMB.toFixed(2)} MB`);
     console.log(`Avg tile: ${(totalSizeMB / manifest.tiles.length).toFixed(2)} MB`);
-
   } catch (err) {
     console.error('Error:', err);
     process.exit(1);

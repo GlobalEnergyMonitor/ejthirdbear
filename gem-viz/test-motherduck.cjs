@@ -31,14 +31,17 @@ conn.run('INSTALL motherduck; LOAD motherduck;', (err) => {
       }
       console.log('Database attached');
 
-      conn.all('SELECT COUNT(*) as cnt FROM gem_data.global_energy_ownership_tracker_october_2025_v1.asset_ownership', (err4, rows) => {
-        if (err4) {
-          console.log('Query error:', err4.message);
-        } else {
-          console.log('Query success:', rows);
+      conn.all(
+        'SELECT COUNT(*) as cnt FROM gem_data.global_energy_ownership_tracker_october_2025_v1.asset_ownership',
+        (err4, rows) => {
+          if (err4) {
+            console.log('Query error:', err4.message);
+          } else {
+            console.log('Query success:', rows);
+          }
+          db.close();
         }
-        db.close();
-      });
+      );
     });
   });
 });

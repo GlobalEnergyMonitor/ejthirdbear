@@ -7,26 +7,28 @@ Global Energy Monitor tracks energy infrastructure worldwide: power plants, mine
 **Entity**: A company/organization (investors, operators, governments). ID prefix: `E` (e.g., E100000000650 = BlackRock)
 
 **Asset**: Physical infrastructure (a power plant, mine, pipeline). ID prefixes vary by tracker:
+
 - `G` = Coal/Gas/Bioenergy plants (GEM unit ID)
 - `M` = Coal mines
 - `P` = Pipelines, Steel plants, Iron mines
 
 **Ownership**: Links entities to assets (or entities to entities). Has `ownershipPct` (0-100). Can be:
+
 - Direct: Entity owns Asset
 - Indirect: Entity owns Entity that owns Asset
 - Chains can be 5+ levels deep
 
 ## The 7 Trackers
 
-| Tracker | ID Field | Capacity Unit | Notes |
-|---------|----------|---------------|-------|
-| Coal Plant | GEM unit ID (G) | MW | Largest dataset |
-| Gas Plant | GEM unit ID (G) | MW | |
-| Coal Mine | GEM Mine ID (M) | Mtpa | |
-| Iron Mine | GEM Asset ID (P) | Mtpa | |
-| Steel Plant | Steel Plant ID (P) | ttpa | Look for BF = blast furnace |
-| Gas Pipeline | ProjectID (P) | Bcm/y | Short IDs like P0061 |
-| Bioenergy Power | GEM unit ID (G) | MW | |
+| Tracker         | ID Field           | Capacity Unit | Notes                       |
+| --------------- | ------------------ | ------------- | --------------------------- |
+| Coal Plant      | GEM unit ID (G)    | MW            | Largest dataset             |
+| Gas Plant       | GEM unit ID (G)    | MW            |                             |
+| Coal Mine       | GEM Mine ID (M)    | Mtpa          |                             |
+| Iron Mine       | GEM Asset ID (P)   | Mtpa          |                             |
+| Steel Plant     | Steel Plant ID (P) | ttpa          | Look for BF = blast furnace |
+| Gas Pipeline    | ProjectID (P)      | Bcm/y         | Short IDs like P0061        |
+| Bioenergy Power | GEM unit ID (G)    | MW            |                             |
 
 ## Status Values
 
@@ -55,10 +57,12 @@ To find who really controls an asset, walk UP the ownership graph until you hit 
 ## Data Access Patterns
 
 **REST API** (gem-ownership-api): Best for ownership queries, entity search, single asset lookup
+
 - Fast, structured responses
 - Supports graph traversal (up/down)
 
 **DuckDB/MotherDuck**: Best for aggregations, geographic queries, custom SQL
+
 - Has location data (lat/lon)
 - Can filter by capacity thresholds
 - WASM-only (browser, not server)
