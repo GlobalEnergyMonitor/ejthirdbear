@@ -1,13 +1,12 @@
 # GEM Viz
 
-Interactive visualization platform for Global Energy Monitor data, powered by MotherDuck and DuckDB WASM.
+Interactive visualization platform for Global Energy Monitor data, powered by the GEM Ownership REST API.
 
 ## Features
 
-- **Real-time Data Querying**: Direct browser access to MotherDuck cloud database
+- **Real-time Data Querying**: REST API for entity/asset data and ownership traversal
 - **Interactive Maps**: MapLibre GL with shift-drag rectangle and polygon selection
 - **Geographic Filtering**: Filter all visualizations by drawn map areas
-- **Dual Database Mode**: Toggle between MotherDuck cloud and local DuckDB
 - **Top Rankings**: Owners, projects, countries, and status breakdowns
 - **Cross-Tabulation Tables**: Tracker types vs status analysis
 
@@ -137,7 +136,6 @@ Upload times to Digital Ocean Spaces (via `just deploy`):
 
 ### Architecture Optimizations
 
-- **Bulk Fetch Strategy**: Single MotherDuck query loads all 65k rows into memory
 - **Disk Cache**: 2.6 MB JSON cache persists across SvelteKit worker processes
 - **Composite IDs**: Handles ownership tables with duplicate owner/unit IDs (e.g., `E100000000014_G100000106283`)
 - **Serial Rendering**: concurrency: 1 prevents DB timeout issues
@@ -145,23 +143,16 @@ Upload times to Digital Ocean Spaces (via `just deploy`):
 
 ## Architecture
 
-### Static Generation
+### Dynamic SSR
 
-- **Adapter**: @sveltejs/adapter-static
-- **SSR**: Disabled (required for WASM)
-- **Prerendering**: Enabled for all routes
-
-### Database Strategy
-
-- **Development**: MotherDuck WASM for live queries
-- **Production**: Static builds with data snapshot at build time
-- **Future**: Client-side parquet loading for offline filtering
+- **Adapter**: @sveltejs/adapter-node
+- **SSR**: Server-side rendering with Fly.io
+- **Data**: REST API for all runtime queries
 
 ### Geographic Filtering
 
 - **Rectangle Selection**: Shift + drag on map
 - **Polygon Selection**: Click polygon tool to draw custom shapes
-- **SQL Filtering**: Bounding box queries with optional point-in-polygon refinement
 - **Visual Feedback**: Selected points highlighted in blue (0.8 opacity), non-selected dimmed to gray (0.2 opacity)
 
 ## Changelog
@@ -174,7 +165,7 @@ Create a `.env` file:
 
 ```bash
 # Ownership Tracing API (primary runtime data source)
-PUBLIC_OWNERSHIP_API_BASE_URL=https://6b7c36096b12.ngrok.app
+PUBLIC_OWNERSHIP_API_BASE_URL=https://gem-api.thirdbear.net
 
 # Digital Ocean Spaces (for deployment)
 DO_SPACES_BUCKET=ejthirdbear
@@ -185,12 +176,12 @@ DO_SPACES_ENDPOINT=https://sfo3.digitaloceanspaces.com
 ## Tech Stack
 
 - **Framework**: SvelteKit
-- **Database**: DuckDB WASM, Ownership Tracing API
+- **Data**: GEM Ownership REST API
 - **Maps**: MapLibre GL
 - **Drawing**: maplibre-gl-draw
 - **Styling**: Brutalist minimalism with Georgia serif
 - **Build**: Vite
-- **Deploy**: Digital Ocean Spaces (S3-compatible)
+- **Deploy**: Fly.io (SSR), Digital Ocean Spaces (static assets)
 
 ## Design Philosophy
 
@@ -199,10 +190,10 @@ Academic brutalism with Georgia serif typography:
 - No borders except where structurally necessary
 - Black text on white background
 - Underlined links with hover inversion
-- Em-dash list bullets (—)
+- Em-dash list bullets (-)
 - Generous whitespace
 - 48px headlines, 15px body text
 
 ---
 
-© 2025 Global Energy Monitor
+(c) 2025 Global Energy Monitor

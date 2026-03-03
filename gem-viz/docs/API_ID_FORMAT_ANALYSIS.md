@@ -38,7 +38,7 @@ curl "https://gem-ownership-api.fly.dev/assets/L100000104107_G100000102961"
 The app now:
 
 1. Detects G-prefix IDs
-2. Looks up location ID from local parquet
+2. Looks up location ID from local id-map.json
 3. Combines them: `L{location}_G{unit}`
 4. Calls API with compound ID
 

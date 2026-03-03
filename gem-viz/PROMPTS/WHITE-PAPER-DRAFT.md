@@ -235,16 +235,16 @@ Return top K pairs by frequency
 ### 4.1 Data Pipeline
 
 ```
-[GEM Trackers] → [REST API] → [MotherDuck] → [DuckDB WASM] → [Visualization]
-                     ↓              ↓              ↓
-                 [Cache]      [Parquet]      [IndexedDB]
+[GEM Trackers] → [REST API] → [Visualization]
+                     ↓
+                 [Cache]
 ```
 
 ### 4.2 Query Performance
 
 | Query Type        | P50 Latency | P99 Latency | Source      |
 | ----------------- | ----------- | ----------- | ----------- |
-| Owner aggregation | 2.1s        | 8.3s        | MotherDuck  |
+| Owner aggregation | 2.1s        | 8.3s        | REST API    |
 | Asset details     | 180ms       | 450ms       | REST API    |
 | Graph traversal   | 50ms        | 200ms       | Client-side |
 
@@ -260,7 +260,7 @@ Return top K pairs by frequency
 
 ### 5.1 Data Limitations
 
-1. **Temporal staleness**: MotherDuck snapshot from October 2025
+1. **Temporal staleness**: Data may lag behind source tracker updates
 2. **Coverage gaps**: Coal Mine, Iron Mine, Gas Pipeline not in aggregation DB
 3. **Imputation rate**: Unknown % of ownership percentages are estimated
 

@@ -1,10 +1,10 @@
 # Compose Page API Specification
 
-This document describes the API endpoints needed to replace DuckDB queries in the `/compose` page with a REST API.
+This document describes the API endpoints used by the `/compose` page.
 
-## Current State
+## Query Patterns
 
-The compose page uses 4 DuckDB query patterns:
+The compose page uses 4 query patterns:
 
 1. Facet counts (parametric search)
 2. Range data (min/max/histogram)

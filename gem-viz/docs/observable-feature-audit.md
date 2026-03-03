@@ -53,9 +53,9 @@ Legend: `Yes` = implemented, `Partial` = exists with limits, `No` = missing by d
 | "Additional assets" footer summary text                               | No            | Notebook TODO; no equivalent API summary yet in chart module.               |
 | Prospective-only disaggregated legend mode                            | Partial       | Aggregated status legend implemented; prospective split legend not added.   |
 | Mermaid exploratory diagrams from imported notebooks                  | No            | Out of scope for screener chart component.                                  |
-| DuckDB-local query pipeline from notebook                             | No (replaced) | Replaced by REST ownership API flow in app.                                 |
+| Local query pipeline from notebook                                    | No (replaced) | Replaced by REST ownership API flow in app.                                 |
 
 ## Notes on Scope
 
 - The imported notebooks include exploratory views (mermaid diagrams, SQL/debug tables, controls) that are not part of the production screener experience and are intentionally excluded.
-- The production app uses the REST API ownership pipeline, not the notebook’s local DuckDB query stack.
+- The production app uses the REST API ownership pipeline, not the notebook’s local query stack.

@@ -22,7 +22,7 @@ Node.js server renders pages on-demand.
 ### Deploy:
 
 ```bash
-fly deploy --build-arg PUBLIC_MOTHERDUCK_TOKEN="$(grep PUBLIC_MOTHERDUCK_TOKEN .env | cut -d= -f2)"
+fly deploy
 ```
 
 ---
@@ -72,10 +72,9 @@ STATIC_BUILD=true npm run build
 
 ## Environment Variables
 
-| Variable                  | SSR                  | Static          | Purpose                         |
-| ------------------------- | -------------------- | --------------- | ------------------------------- |
-| `PUBLIC_MOTHERDUCK_TOKEN` | Build-time + Runtime | Build-time only | MotherDuck API access           |
-| `STATIC_BUILD`            | Not set              | `true`          | Enables `/index.html` URL paths |
+| Variable       | SSR     | Static | Purpose                         |
+| -------------- | ------- | ------ | ------------------------------- |
+| `STATIC_BUILD` | Not set | `true` | Enables `/index.html` URL paths |
 
 ## Docker Ignore
 

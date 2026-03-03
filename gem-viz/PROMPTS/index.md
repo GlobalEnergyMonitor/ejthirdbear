@@ -54,20 +54,14 @@ To find who really controls an asset, walk UP the ownership graph until you hit 
 2. **P-prefix varies**: Pipelines use short (P0061), Steel/Iron use long (P100000120xxx)
 3. **Entity IDs are stable**, asset IDs may have duplicates across trackers (use tracker + ID as key)
 
-## Data Access Patterns
+## Data Access
 
-**REST API** (gem-ownership-api): Best for ownership queries, entity search, single asset lookup
+**REST API** (`gem-api.thirdbear.net`): Primary data source for all queries
 
-- Fast, structured responses
-- Supports graph traversal (up/down)
-
-**DuckDB/MotherDuck**: Best for aggregations, geographic queries, custom SQL
-
-- Has location data (lat/lon)
-- Can filter by capacity thresholds
-- WASM-only (browser, not server)
-
-**Rule of thumb**: Use REST for "who owns X" and DuckDB for "how many X in Y"
+- Ownership queries, entity search, single asset lookup
+- Graph traversal (up/down)
+- Faceted counts by type/status/country
+- Asset listing with filters
 
 ## Common Query Patterns
 
@@ -81,11 +75,11 @@ To find who really controls an asset, walk UP the ownership graph until you hit 
 → Walk ownership graph UP from asset until no more parents
 
 **"Assets in Country Z"**
-→ Filter by country field (use DuckDB for geo, REST for ownership)
+→ Filter by country field via REST API
 
 ## Known Limitations
 
-1. Location data NOT in consolidated parquet—comes from separate GeoJSON
+1. Location data comes from static GeoJSON (points.geojson) for map rendering
 2. Some ownership percentages are estimated or outdated
 3. Pipeline geometry is partial (not full routes)
 4. Historical ownership changes not fully tracked

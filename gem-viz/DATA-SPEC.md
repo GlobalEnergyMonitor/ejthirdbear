@@ -1,70 +1,56 @@
 # GEM Viz Data Spec
 
-Reference notes on what data we fetch, where it comes from, and the column shapes we assume in the UI and prerenderers.
+Reference notes on what data we fetch, where it comes from, and the column shapes we assume in the UI.
 
 ## Data Stack
 
-- **Primary DB:** MotherDuck `gem_data` (client-side via `src/lib/motherduck-wasm.ts`).
-- **Ownership API:** REST API (`src/lib/ownership-api.ts`) for ownership graph queries.
-- **Local engine:** DuckDB WASM (`src/lib/duckdb-utils.ts`) for client queries against static Parquet/GeoJSON assets.
-- **Routing helper:** `src/lib/db.ts` swaps between the two for shared query helpers.
+- **Primary data source:** GEM Ownership REST API (`src/lib/ownership-api.ts`).
+- **Asset data:** `src/lib/asset-data.ts` fetches from API, resolves G-prefix IDs via `/api/resolve-id`.
+- **Barrel export:** `src/lib/data/index.ts` re-exports from `ownership-api` + `asset-data`.
 
 ## Source Artifacts
 
-- **MotherDuck tables (duckdb extension)**
-  - **`catalog`** (schema discovery) expected columns: `original_filename`, `original_tabname`, `db_name`, `schema_name`, `table_name`, `row_count`, `column_count`, `loaded_at` (`src/lib/schemas.ts` `CatalogSchema`).
-  - Asset/ownership tables are auto-detected by picking the largest non-metadata table (`src/routes/asset/+page.server.js`, `src/routes/asset/[id]/+page.server.js`, `src/routes/entity/[id]/+page.server.js`).
-- **Static Parquet** (served under the app base path)
-  - `all_trackers_ownership@1.parquet`
-    - Used for ownership traversal, exports, network graph, asset search fallback.
-    - Columns relied on across code:
-      - Asset IDs: `"GEM unit ID"`, `"Asset ID"`, `"ProjectID"`
-      - Ownership IDs: `"Owner GEM Entity ID"`, `"Immediate Owner Entity ID"`, `"Interested Party ID"`, `"Subject Entity ID"`
-      - Names: `"Owner"`, `"Unit"`, `"Project"`, `"Subject Entity Name"`, `"Immediate Project Owner"`
-      - Shares/metadata: `"% Share of Ownership"`, `"Share"`, `"Share Imputed?"`, `"Ownership Path"`
-      - Classification: `"Tracker"`, `"Status"`, `"Country"`, `"Country/Area"`
-      - Capacity fields (per tracker mappings in `src/lib/ownership-data.ts`): `"Capacity (MW)"`, `"Capacity (Mtpa)"`, `"Production 2023 (ttpa)"`, `"CapacityBcm/y"`, `"CapacityBOEd"`, `"Nominal crude steel capacity (ttpa)"`, `"Cement Capacity (millions metric tonnes per annum)"`
-      - Location join keys: `"GEM location ID"`
-  - `asset_locations.parquet`
-    - Used for map/search/export location joins.
-    - Columns referenced: `"GEM.location.ID"` (or `"GEM location ID"`), `"Latitude"`, `"Longitude"`, `"Country.Area"`, `"State.Province"`.
-  - `tiles/*.parquet` + `tiles/manifest.json` (spatial tiles built at deploy time)
-    - Manifest shape: `version`, `generated`, `tileSize`, `totalAssets`, `totalRows`, `tiles[]` where each tile has `{ name, file, bounds{minLat,maxLat,minLon,maxLon}, tileBounds{minLat,maxLat,minLon,maxLon}, assetCount, rowCount, sizeMB }`.
-    - Tile tables are named from the file (hyphens -> underscores) and store location-level rows with at least `id`, `tracker`, `country`, `state`, `"Latitude"`, `"Longitude"` (queried in `src/routes/asset/search/+page.svelte`).
+- **REST API** (`https://gem-api.thirdbear.net`)
+  - `/assets` - Asset listing with filters (asset_type, status, country, q)
+  - `/assets/{id}` - Asset details with owners array
+  - `/entities` - Entity listing/search
+  - `/entities/{id}` - Entity details
+  - `/entities/{id}/owners` - Direct owners with ownership %
+  - `/ownership/graph` - Graph traversal (up/down with configurable depth)
+  - `?facets=true` on `/assets` returns counts by type/status/country
+
 - **Static GeoJSON**
-  - `points.geojson` (generated from `asset_locations.parquet`) with `metadata.columns` mapping `{ locationId, lat, lon, country, state, tracker }`; features carry those properties and point geometries. Consumed by `src/lib/SimpleMap.svelte`.
+  - `points.geojson` (generated from REST API via `generate-geojson.js`) with `metadata.columns` mapping `{ locationId, lat, lon, country, state, tracker }`; features carry those properties and point geometries. Consumed by `src/lib/SimpleMap.svelte`.
 
-## Schemas & Type Expectations
+## API Asset Type Slugs
 
-- **Zod schemas (`src/lib/schemas.ts`):**
-  - `CatalogSchema` as above.
-  - `BaseAssetSchema` optional fields covering IDs (`"GEM unit id"`, `"GEM location id"`, `"Wiki page"`), names (`Project`, `Plant`, `Mine`, `Unit`), location (`Country`, `Region`, `Latitude`, `Longitude`), ownership (`Owner`, `Parent`), status/type (`Status`, `Tracker`), capacity (`"Capacity (MW)"`, `"Capacity (Mt)"`).
-  - Extensions: `CoalPlantSchema` (adds required `Plant`, optional `"Combustion technology"`, `"Heat rate (Btu per kWh)"`); `CoalMineSchema` (adds required `Mine`, optional `"Mine type"`).
-  - Helpers: `parseTableData()` (partial validation) and `inferTableSchema()` (first-row inference).
-- **Ownership helper mappings (`src/lib/ownership-data.ts`):**
-  - `idFields` map tracker → ID column (e.g., `Coal Plant` → `"GEM unit ID"`, `Coal Mine` → `"GEM Mine ID"`, `Steel Plant` → `"Steel Plant ID"`).
-  - `capacityFields` map tracker → numeric capacity column.
-- **Tile manifest interfaces:** `TileManifest`, `TileInfo`, `MapBounds` (defined inline where used).
-- **Query result shapes:** `QueryResult` in `src/lib/db.ts` / `src/lib/duckdb-utils.ts` adds `{ data?: T[], executionTime?, success, error?, rowCount? }`; MotherDuck WASM uses similar `MotherDuckQueryResult`.
+| Slug | Database Value | Approximate Count |
+|------|---------------|-------------------|
+| `coal-plant` | Coal Plant | 14,363 |
+| `oil-gas-plant` | Oil & Gas Plant | 14,407 |
+| `bioenergy-plant` | Bioenergy Plant | 4,537 |
+| `gas-pipeline` | Natural Gas Transmission Pipeline | 4,246 |
+| `cement-plant` | Cement or Concrete Plant | 3,515 |
+| `oil-pipeline` | Oil or NGL Pipeline | 1,873 |
+| `iron-steel-plant` | Iron & Steel Plant | 1,204 |
+| `iron-ore-mine` | Iron Ore Mine | 949 |
 
 ## Data Fetching Flows
 
-- **Server prerender**
-  - **Asset list** (`src/routes/asset/+page.server.js`): pick largest catalog table (non-`about`/`metadata`), detect columns (country, owner, owner/entity IDs, name/status), fetch up to 10k rows for list, return column names for client rendering.
-  - **Asset detail** (`src/routes/asset/[id]/+page.server.js`): bulk fetch _all_ rows from the chosen table, group by `"GEM unit ID"` (fallback to first ID-like column), cache to `.svelte-kit/.asset-cache.json`; prerender entries are unique asset IDs.
-  - **Entity detail** (`src/routes/entity/[id]/+page.server.js`): bulk aggregate over the same table, grouping by `"Owner GEM Entity ID"` and `"Parent"`; derives counts, capacity sums, tracker lists, sample assets (`ROW_NUMBER` window), and full portfolios (direct vs subsidiary ownership) for Owner Explorer; cached to `.svelte-kit/.entity-cache.json`.
-- **Client-side DuckDB WASM**
-  - **Map** (`src/lib/SimpleMap.svelte`): fetches `points.geojson` only; uses `metadata.columns.lat/lon` to style selection; no live DB access.
-  - **Spatial search** (`src/routes/asset/search/+page.svelte`): prefers tile pipeline (`loadManifest` → `findTilesForBounds` → `loadTiles` → UNION query with spatial WHERE); falls back to loading full `all_trackers_ownership@1.parquet` + `asset_locations.parquet` and joins on `"GEM location ID"` when no bounds or tile load fails; polygon filters re-checked client-side.
-  - **Network graph** (`src/lib/NetworkGraph.svelte`): loads `all_trackers_ownership@1.parquet` into DuckDB, counts edges, then samples edges (top/random/all) using `"GEM unit ID"` → `"Owner GEM Entity ID"` relationships; expects columns `Project`, `Owner`, `Share`.
-  - **Ownership utilities** (`src/lib/ownership-data.ts`):
-    - `getAssetOwners(assetId)`: loads ownership parquet, filters by asset IDs (`"GEM unit ID"` | `"Asset ID"` | `"ProjectID"`), walks upstream via recursive CTE on `"Interested Party ID"`/`"Subject Entity ID"`, produces edges/nodes.
-    - `getSpotlightOwnerData(entityId)`: finds subsidiaries (`"Interested Party ID"` → `"Subject Entity ID"`), then assets per subsidiary and direct holdings (`"Owner GEM Entity ID"`), assembling `matchedEdges`, `subsidiariesMatched`, `directlyOwned`.
-    - `getTopOwners(limit)`: grouped counts over `"Owner GEM Entity ID"` and `"GEM unit ID"`.
-  - **Export** (`src/routes/export/+page.svelte`): ensures both Parquet files loaded, then exports full ownership rows joined to locations for selected IDs (IN clause against `"GEM location ID"`), includes lat/lon and location country/state.
-- **Link helpers** (`src/lib/links.ts`): `assetPath()` prepends `$app/paths` `base` for static assets so paths above resolve in dev/prod.
+- **Entity pages**: `streamOwnerPortfolio` uses `/ownership/graph?root=ENTITY_ID&direction=down&max_depth=5` which returns both entities and assets in one call. Asset nodes include `asset_type`, `operating_status`, `capacity_value`, `country`, `latitude`, `longitude`.
+- **Asset pages**: `getAsset(id)` fetches from `/assets/{id}`, returns asset details with `owners[]` array (entity_id, name, ownership_share, hq_country).
+- **Globe page**: Uses `points.geojson` (~9MB static) + REST API facets.
+- **NetworkGraph**: Builds edges from paginated REST API asset data.
+- **ExportPanel**: Fetches assets via REST API and formats CSV client-side.
+- **Screener**: Fetches owner aggregation data from REST API with client-side filtering for multi-value status.
+
+## ID Resolution
+
+- Coal plant G-prefix IDs (e.g., `G100000102961`) are resolved server-side via `/api/resolve-id` endpoint, which uses `src/lib/server/id-map.json` to map to compound IDs (e.g., `L100000104107_G100000102961`).
+- `resolveApiSlug()` in `ownership-api.ts` maps any identifier to an API slug.
 
 ## Caching & Filesystem Notes
 
 - Asset/entity prerender caches live at `.svelte-kit/.asset-cache.json` and `.svelte-kit/.entity-cache.json` and are reused across build workers.
-- DuckDB query helpers coerce `bigint` → `number` for JSON serialization in WASM (`src/lib/duckdb-utils.ts`).
+- Entity cache built from `getEntityGraphDown()` API calls.
+- Query logs capped at 100 entries; G-prefix cache capped at 5000 entries.

@@ -32,7 +32,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- **Compose page migrated to REST API** — no more DuckDB/parquet loading on compose, loads in ~0.5s instead of 3-5s
+- **Compose page migrated to REST API** — loads in ~0.5s instead of 3-5s
   - Multi-value server-side filters (multiple trackers, statuses, countries in one request)
   - Hybrid fast/slow path: simple filters hit API directly, owner/capacity filters use progressive fetch + client-side cache
   - Parametric faceted counts work correctly across all dimensions
@@ -77,13 +77,13 @@ All notable changes to this project will be documented in this file.
   - `placeOwnerLabels` with Rules 1a, 1b, 2, 3 for collision detection
   - Mint highlight stroke (#97E6DE) on hovered nodes
   - Smooth CSS transitions for opacity changes
-- **Tracker availability warnings** - UI now shows warnings for trackers without MotherDuck aggregation data
+- **Tracker availability warnings** - UI now shows warnings for trackers without aggregation data
 
 ### Fixed
 
 - Screener preset filters now properly apply status and geography filters
 - Enabled status filter clause in screener SQL queries (was commented out)
-- Dynamic env imports for production builds (OPENROUTER_API_KEY, MOTHERDUCK_JWT)
+- Dynamic env imports for production builds (OPENROUTER_API_KEY)
 
 ## [0.1.28] - 2026-02-02
 

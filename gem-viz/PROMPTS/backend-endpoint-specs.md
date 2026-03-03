@@ -20,20 +20,7 @@ Thank you for all your work on the ownership API. It's been a pleasure to build 
 
 ### The Problem
 
-We need to show "which companies own the most coal plants" (or steel plants, etc). Currently this runs in-browser via MotherDuck WASM and scans the ownership table twice:
-
-```sql
--- Scans ~700K rows TWICE, takes 2-8 seconds in browser
-WITH owner_totals AS (
-  SELECT entity_id, name, COUNT(DISTINCT asset_id) as total_assets
-  FROM ownership GROUP BY 1, 2
-),
-owner_filtered AS (
-  SELECT entity_id, name, COUNT(DISTINCT asset_id) as filtered_assets
-  FROM ownership WHERE asset_type = 'Coal Plant' GROUP BY 1, 2
-)
-SELECT ... FROM owner_totals JOIN owner_filtered ...
-```
+We need to show "which companies own the most coal plants" (or steel plants, etc). Currently this requires paginating through all assets client-side, which is slow for large result sets.
 
 ### Proposed Endpoint
 
@@ -74,21 +61,7 @@ GET /screener/owners?asset_type=Coal%20Plant&limit=200
 
 ### Implementation Idea
 
-A pre-aggregated table updated daily would make queries instant:
-
-```sql
-CREATE TABLE owner_asset_counts AS
-SELECT
-  "Immediate Owner Entity ID" as entity_id,
-  "Immediate Owner Entity Name" as name,
-  "Asset Type" as asset_type,
-  COUNT(DISTINCT "Asset ID") as asset_count
-FROM ownership
-WHERE "Immediate Owner Entity Name" IS NOT NULL
-GROUP BY 1, 2, 3;
-```
-
-Then queries just sum from the small table instead of scanning 700K rows.
+A pre-aggregated table updated daily would make queries instant.
 
 ---
 
@@ -137,11 +110,7 @@ Note: If a query looks like an entity ID (starts with `E` + digits), do an exact
 
 ### The Problem
 
-We run this on every page load for debugging/validation:
-
-```sql
-SELECT "Asset Type", COUNT(*) FROM ownership GROUP BY 1
-```
+We run this on every page load for debugging/validation.
 
 ### Proposed Endpoint
 
@@ -197,6 +166,6 @@ All the integration code is written and waiting in:
 
 - `src/lib/data-config/screener-api.ts`
 
-When endpoints are live, we just uncomment the REST functions and delete the MotherDuck ones. Should take ~5 minutes to swap over.
+When endpoints are live, we just swap in the new REST functions.
 
 Thanks again!

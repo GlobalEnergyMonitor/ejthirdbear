@@ -30,20 +30,15 @@ Last updated: 2025-12-17
 
 ### Feature Branch: `feature/ownership-api-integration` (Dec 17)
 
-**New Ownership Tracing API Integration**
+**Ownership Tracing API Integration**
 
-Replaces MotherDuck queries with the new Ownership API (`https://6b7c36096b12.ngrok.app`).
+All data flows through the Ownership REST API (`https://gem-api.thirdbear.net`).
 
-**New Files:**
+**Key Files:**
 
 - `src/lib/ownership-api.ts` - API client with all endpoints
-
-**Modified Files:**
-
-- `src/lib/component-data/schema.ts` - Now uses API for ownership queries
-- `src/lib/ownership-data.ts` - Rewritten to use API instead of DuckDB
-- `src/routes/entity/[id]/+page.server.js` - Uses API for entity prebaking
-- `src/routes/asset/[id]/+page.server.js` - API fallback for dev mode
+- `src/lib/ownership-data.ts` - Ownership data utilities
+- `src/lib/asset-data.ts` - Asset data fetching
 
 **API Endpoints Used:**
 | Endpoint | Purpose |
@@ -54,12 +49,6 @@ Replaces MotherDuck queries with the new Ownership API (`https://6b7c36096b12.ng
 | `GET /entities/{id}/graph/down` | Full ownership graph |
 | `GET /assets/{id}` | Asset details |
 | `GET /ownership/graph` | Universal graph traversal |
-
-**What Still Uses MotherDuck:**
-
-- Asset `entries()` bulk fetch (for geography/S2 cells)
-- Co-located assets queries (API doesn't support location-based queries)
-- Production cache building (hybrid approach)
 
 ---
 
@@ -119,8 +108,6 @@ BlackRock entity page (E100001000348) now correctly shows:
 
 ```
 Build Time:
-  +page.server.js entries() → Bulk fetch from MotherDuck → .entity-cache.json
-
   +page.server.js load() → Read cache → ownerExplorerData {
     spotlightOwner: { id, Name },
     subsidiariesMatched: [[subId, assets[]]],  // Array of tuples (JSON-safe)
@@ -172,7 +159,7 @@ npm run deploy       # Build + upload to DO Spaces (~50 min total)
 ### Deploy Process
 
 1. `inject-version.js` - Stamps commit info into version.json
-2. `generate-geojson.js` - Creates points.geojson from MotherDuck
+2. `generate-geojson.js` - Creates points.geojson from REST API
 3. Vite build - Compiles SSR + client bundles
 4. Static adapter - Prerenders all pages using cached data
 5. `deploy.js` - Syncs build/ to Digital Ocean Spaces via S3 API
@@ -197,14 +184,10 @@ npm run deploy       # Build + upload to DO Spaces (~50 min total)
 
 - `c827d9b` Fix AssetScreener SSR: use $derived instead of $effect (Dec 16)
 - `2110b34` Use $effect for prebaked data to fix hydration timing (Dec 16) - didn't work
-- `f09b0ef` Add optional DuckDB geography extension hooks
+- `f09b0ef` Add optional geography extension hooks
 - `74c0e54` Bump version to 0.1.13
 
 ---
-
-## Known Issues
-
-**Parquet Schema Limitation:** The `all_trackers_ownership@1.parquet` file doesn't have a "Country" column directly. To get country data, queries must JOIN with the locations parquet: `LEFT JOIN locations l ON o."GEM location ID" = l."GEM.location.ID"` and use `l."Country.Area"`.
 
 ---
 

@@ -8,8 +8,8 @@ Internal reference for the screener data flow and known bottlenecks.
 
 ```
 Step 1: Asset Selection     → Static config (instant)
-Step 2: Owner Search        → REST API (gem-ownership-api.fly.dev)
-Step 3: Results             → MotherDuck (DuckDB WASM in browser) ← SLOW
+Step 2: Owner Search        → REST API (gem-api.thirdbear.net)
+Step 3: Results             → REST API with client-side aggregation
 ```
 
 ---
@@ -17,7 +17,7 @@ Step 3: Results             → MotherDuck (DuckDB WASM in browser) ← SLOW
 ## Bottleneck 1: Results Page Query (P0)
 
 **Location:** `src/routes/screener/results/+page.svelte`
-**Data source:** MotherDuck via `screener-api.ts`
+**Data source:** REST API via `screener-api.ts`
 **Time:** 2-8 seconds
 
 ### What happens
