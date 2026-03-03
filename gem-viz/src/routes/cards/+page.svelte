@@ -12,11 +12,7 @@
 
   const trackers = [
     { value: 'Coal Plant', label: 'Coal Plants' },
-    { value: 'Gas Plant', label: 'Gas Plants' },
-    { value: 'Steel Plant', label: 'Steel Plants' },
-    { value: 'Gas Pipeline', label: 'Gas Pipelines' },
-    { value: 'Iron Mine', label: 'Iron Mines' },
-    { value: 'Bioenergy Power', label: 'Bioenergy' },
+    { value: 'Coal Mine', label: 'Coal Mines' },
   ];
 </script>
 
@@ -36,8 +32,8 @@
     </nav>
     <h1>Project Cards</h1>
     <p class="lead">
-      Expandable cards showing detailed asset information. Click a card to expand and see ownership,
-      capacity percentiles, age, emissions, and more.
+      Default card views for Coal Plants and Coal Mines. Click a card to expand and see ownership,
+      size, age, status, and tracker-specific details.
     </p>
   </header>
 
@@ -103,10 +99,10 @@
         limit={5}
         variant="compact"
       />
-    {:else}
+    {:else if selectedTracker === 'Coal Mine'}
       <ProjectCardList
-        title="Largest Proposed"
-        description="Top 5 proposed assets by capacity"
+        title="Largest Proposed Coal Mines"
+        description="The 5 largest proposed coal mines globally by production capacity"
         tracker={selectedTracker}
         statusFilter={['proposed', 'announced', 'pre-permit', 'permitted', 'construction']}
         sortBy="capacity"
@@ -116,8 +112,8 @@
       />
 
       <ProjectCardList
-        title="Largest Operating"
-        description="Top 5 operating assets by capacity"
+        title="Largest Operating Coal Mines"
+        description="The 5 largest operating coal mines globally by production capacity"
         tracker={selectedTracker}
         statusFilter={['operating']}
         sortBy="capacity"
@@ -127,10 +123,21 @@
       />
 
       <ProjectCardList
-        title="Cancelled / Retired"
-        description="Top 5 cancelled, shelved, or retired assets"
+        title="Largest Cancelled/Shelved Coal Mines"
+        description="The 5 largest cancelled or shelved coal mine projects"
         tracker={selectedTracker}
-        statusFilter={['cancelled', 'shelved', 'retired', 'mothballed']}
+        statusFilter={['cancelled', 'shelved']}
+        sortBy="capacity"
+        sortOrder="desc"
+        limit={5}
+        variant="compact"
+      />
+
+      <ProjectCardList
+        title="Largest Retired/Mothballed Coal Mines"
+        description="The 5 largest retired or mothballed coal mines"
+        tracker={selectedTracker}
+        statusFilter={['retired', 'mothballed']}
         sortBy="capacity"
         sortOrder="desc"
         limit={5}

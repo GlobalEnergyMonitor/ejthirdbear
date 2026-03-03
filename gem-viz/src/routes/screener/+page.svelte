@@ -164,6 +164,42 @@
     const sc = statusCount > 0 && statusCount < totalStatuses ? ` (${statusCount} statuses)` : '';
     return parts + geo + sc;
   });
+
+  function buildMailto(subject, bodyLines) {
+    const subjectEncoded = encodeURIComponent(subject);
+    const bodyEncoded = encodeURIComponent(bodyLines.join('\n'));
+    return `mailto:data@globalenergymonitor.org?subject=${subjectEncoded}&body=${bodyEncoded}`;
+  }
+
+  const requestAssetClassHref = $derived.by(() =>
+    buildMailto('Asset Class Screener request', [
+      'Hi GEM team,',
+      '',
+      'I would like to request an additional asset class in the screener.',
+      '',
+      `Current selection: ${selectionSummary || 'None'}`,
+      '',
+      'Requested asset class:',
+      'Use case:',
+      'Desired filters/statuses:',
+      '',
+      'Thanks,',
+    ])
+  );
+
+  const contactUsHref = $derived.by(() =>
+    buildMailto('Asset Class Screener feedback', [
+      'Hi GEM team,',
+      '',
+      'I have feedback about the Asset Class Screener.',
+      '',
+      `Current selection: ${selectionSummary || 'None'}`,
+      '',
+      'Message:',
+      '',
+      'Thanks,',
+    ])
+  );
 </script>
 
 <svelte:head>
@@ -215,6 +251,20 @@
       </div>
     {/each}
   </div>
+
+  <section class="support-cta" aria-label="Screener feedback and requests">
+    <div class="support-text">
+      <h2>Need another asset class?</h2>
+      <p>
+        If a class is missing, send a request and include your use case. You can also share general
+        screener feedback.
+      </p>
+    </div>
+    <div class="support-actions">
+      <a class="support-btn primary" href={requestAssetClassHref}>Request additional asset class</a>
+      <a class="support-btn" href={contactUsHref}>Contact us</a>
+    </div>
+  </section>
 
   <!-- Filter panel when class is selected -->
   {#if selectedClass}
@@ -395,6 +445,68 @@
     width: fit-content;
   }
 
+  .support-cta {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(--space-4);
+    padding: var(--space-5);
+    margin: 0 0 var(--space-6) 0;
+    border: 1px solid var(--color-gray-200, #e5e7eb);
+    border-radius: var(--radius-sm);
+    background: var(--color-bg-secondary, #f8fafc);
+  }
+
+  .support-text h2 {
+    margin: 0 0 var(--space-1) 0;
+    font-size: var(--font-size-lg);
+    color: var(--color-text-primary);
+  }
+
+  .support-text p {
+    margin: 0;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+    max-width: 56ch;
+  }
+
+  .support-actions {
+    display: flex;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .support-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border, #cbd5e1);
+    color: var(--color-text-primary);
+    background: var(--color-bg-primary, #fff);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .support-btn.primary {
+    background: var(--gem-primary-blue);
+    color: white;
+    border-color: var(--gem-primary-blue);
+  }
+
+  .support-btn:hover {
+    border-color: var(--color-gray-400, #9ca3af);
+  }
+
+  .support-btn.primary:hover {
+    filter: brightness(0.95);
+  }
+
   /* Debug panel */
   .debug-json {
     margin-top: var(--space-4);
@@ -411,6 +523,15 @@
 
     .picker-grid {
       grid-template-columns: 1fr;
+    }
+
+    .support-cta {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .support-actions {
+      justify-content: flex-start;
     }
   }
 </style>
