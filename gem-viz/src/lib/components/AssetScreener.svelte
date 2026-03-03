@@ -8,10 +8,10 @@
    *
    * DATA: fetchOwnerPortfolio(entityId) → OwnerPortfolio
    */
+  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { assetLink, entityLink } from '$lib/links';
   import { fetchOwnerPortfolio } from '$lib/component-data/schema';
-  import { useFetch } from '$lib/component-data/use-fetch.svelte';
   import {
     colors,
     colorByTracker,
@@ -32,19 +32,31 @@
   } = $props();
 
   // Status filter state - which status groups are currently visible
-  let activeStatuses = $state(new Set(defaultStatuses));
+  let activeStatuses = $state(new Set());
+
+  $effect(() => {
+    activeStatuses = new Set(defaultStatuses);
+  });
 
   // ============================================================================
-  // DATA FETCHING - Uses prebaked data if provided, otherwise fetches
+  // DATA FETCHING - Uses prebaked data if provided, otherwise fetches on mount
   // ============================================================================
-  const {
-    data: fetchedPortfolio,
-    loading: fetchLoading,
-    error: fetchError,
-  } = useFetch(
-    () => (prebakedPortfolio ? Promise.resolve(prebakedPortfolio) : fetchOwnerPortfolio(entityId)),
-    `portfolio:${entityId}`
-  );
+  let fetchedPortfolio = $state(null);
+  let fetchLoading = $state(false);
+  let fetchError = $state(null);
+
+  onMount(async () => {
+    if (prebakedPortfolio || !entityId) return;
+    fetchLoading = true;
+    fetchError = null;
+    try {
+      fetchedPortfolio = await fetchOwnerPortfolio(entityId);
+    } catch (err) {
+      fetchError = err?.message || 'Failed to load portfolio';
+    } finally {
+      fetchLoading = false;
+    }
+  });
 
   // Use prebaked data if available, otherwise use fetched data
   const portfolio = $derived(prebakedPortfolio || fetchedPortfolio);

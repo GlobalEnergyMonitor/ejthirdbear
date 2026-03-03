@@ -58,8 +58,8 @@
   ];
   const currentPhaseIndex = $derived(loadingPhases.findIndex((p) => p.key === loadingPhase));
 
-  let entityId = $state(data?.entityId || '');
-  let entityName = $state(data?.entityName || '');
+  let entityId = $state('');
+  let entityName = $state('');
   let portfolio = $state(null);
   let headerPortfolio = $state(null);
 

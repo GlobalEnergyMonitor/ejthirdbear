@@ -39,7 +39,8 @@ export function resolveFieldValue(asset: Asset, key: string): unknown {
     const rawKey = key.slice(4);
     return asset.raw?.[rawKey] ?? undefined;
   }
-  return (asset as Record<string, unknown>)[key] ?? undefined;
+  const lookup = asset as unknown as Record<string, unknown>;
+  return lookup[key] ?? undefined;
 }
 
 // ---------------------------------------------------------------------------

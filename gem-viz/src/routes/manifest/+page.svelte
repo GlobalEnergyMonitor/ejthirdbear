@@ -8,7 +8,11 @@
   /** @type {{ data: import('./$types').PageData }} */
   let { data } = $props();
 
-  const { api, trackerConfigs, dataSources, dataVersionInfo, meta } = data;
+  const api = $derived(data?.api);
+  const trackerConfigs = $derived(data?.trackerConfigs || []);
+  const dataSources = $derived(data?.dataSources || { ownership: [], trackers: [], derived: [] });
+  const dataVersionInfo = $derived(data?.dataVersionInfo || null);
+  const meta = $derived(data?.meta || { generatedAt: '', loadTime: null, error: null });
 
   // Helpers
   function formatNumber(n) {

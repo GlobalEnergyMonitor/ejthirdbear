@@ -35,8 +35,8 @@
   } = $props();
 
   // Internal state for slider positions
-  let sliderMin = $state(dataMin);
-  let sliderMax = $state(dataMax);
+  let sliderMin = $state(0);
+  let sliderMax = $state(0);
 
   // Sync external values to slider
   $effect(() => {

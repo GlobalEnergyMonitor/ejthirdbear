@@ -22,7 +22,11 @@
     variant = 'default', // 'default' | 'badge' | 'compact'
   } = $props();
 
-  let isExpanded = $state(expanded);
+  let isExpanded = $state(true);
+
+  $effect(() => {
+    isExpanded = expanded;
+  });
 
   // Parse selected classes from URL param
   const selectedClasses = $derived.by(() => {

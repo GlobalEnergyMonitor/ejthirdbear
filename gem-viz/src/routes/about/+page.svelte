@@ -23,7 +23,7 @@
   /** @type {{ data?: { stats?: PageStats } }} */
   let { data } = $props();
   /** @type {PageStats} */
-  const stats = data?.stats || {};
+  const stats = $derived(data?.stats || {});
 
   // Data sources for methodology section (from data-sources.ts)
   const trackers = Object.values(TrackerDatasets).map((d) => ({

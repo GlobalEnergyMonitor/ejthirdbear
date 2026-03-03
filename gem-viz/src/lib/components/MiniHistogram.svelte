@@ -50,7 +50,7 @@
   });
 
   // Layout
-  const padding = { top: 4, right: 4, bottom: showAxis ? 16 : 4, left: 4 };
+  const padding = $derived({ top: 4, right: 4, bottom: showAxis ? 16 : 4, left: 4 });
   const chartWidth = $derived(width - padding.left - padding.right);
   const chartHeight = $derived(height - padding.top - padding.bottom);
   // Ensure barWidth is at least 1px to prevent rendering issues

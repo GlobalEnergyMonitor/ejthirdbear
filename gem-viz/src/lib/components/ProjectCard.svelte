@@ -68,8 +68,18 @@
     const configuredKeys = getConfiguredKeys(cardConfig);
     // Also skip keys that map to typed Asset props we already show
     const skipRawKeys = new Set([
-      'id', 'name', 'status', 'capacity', 'country', 'latitude', 'longitude',
-      'owners', 'ownerName', 'parentName', 'facilityType', 'capacityUnit',
+      'id',
+      'name',
+      'status',
+      'capacity',
+      'country',
+      'latitude',
+      'longitude',
+      'owners',
+      'ownerName',
+      'parentName',
+      'facilityType',
+      'capacityUnit',
     ]);
     const extras: { label: string; value: string }[] = [];
     for (const [k, v] of Object.entries(asset.raw)) {
@@ -115,7 +125,6 @@
     if (asset.country && !parts.some((p) => p.includes(asset.country!))) parts.push(asset.country);
     return parts.join(', ') || undefined;
   });
-
 </script>
 
 <!-- Reusable snippets -->
@@ -209,7 +218,7 @@
       <div class="divider"></div>
 
       {#if visibleTabs.length > 1}
-        <nav class="tab-bar" role="tablist">
+        <div class="tab-bar" role="tablist">
           {#each visibleTabs as tab, i}
             <button
               class="tab-btn"
@@ -221,7 +230,7 @@
               {tab.name}
             </button>
           {/each}
-        </nav>
+        </div>
       {/if}
 
       {#if activeTab}
@@ -287,13 +296,13 @@
 <style>
   .project-card {
     /* Observable-accurate color overrides (scoped to card only) */
-    --gem-navy: #004A63;
-    --gem-mint: #9DF7E5;
-    --gem-orange: #FE4F2D;
-    --gem-teal: #016B83;
+    --gem-navy: #004a63;
+    --gem-mint: #9df7e5;
+    --gem-orange: #fe4f2d;
+    --gem-teal: #016b83;
     --gem-midnight: #002430;
-    --gem-warm-white: #F2F2EB;
-    --gem-white: #FFFFFF;
+    --gem-warm-white: #f2f2eb;
+    --gem-white: #ffffff;
 
     font-family: var(--gem-font, 'Plus Jakarta Sans', system-ui, sans-serif);
     background: var(--gem-white);
@@ -408,7 +417,9 @@
     color: var(--gem-teal);
     border-bottom: 2px solid transparent;
     white-space: nowrap;
-    transition: color 0.15s ease, border-color 0.15s ease;
+    transition:
+      color 0.15s ease,
+      border-color 0.15s ease;
   }
   .tab-btn:hover {
     color: var(--gem-navy);

@@ -1,7 +1,7 @@
 <script>
   /**
    * GLOBAL ASSET EXPLORER
-   * deck.gl visualization powered by points.geojson.
+   * MapLibre visualization powered by points.geojson.
    *
    * - points.geojson provides asset locations with tracker + country facets
    * - client-side filtering for fast interactions
@@ -10,15 +10,16 @@
   import { onMount } from 'svelte';
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
+  import maplibregl from 'maplibre-gl';
+  import 'maplibre-gl/dist/maplibre-gl.css';
   import { link, assetPath, assetLink } from '$lib/links';
-  import { Deck, MapView } from '@deck.gl/core';
-  import { ScatterplotLayer } from '@deck.gl/layers';
-  import { colors, hexToRgb, colorByTracker } from '$lib/design-tokens';
+  import { colors, colorByTracker } from '$lib/design-tokens';
   import DataSourceBadge from '$lib/components/DataSourceBadge.svelte';
 
   // DOM refs
   let mapContainer;
-  let deck;
+  let map;
+  let hoverPopup;
 
   // Loading state
   let loading = $state(true);
@@ -48,12 +49,10 @@
   let trackerBreakdown = $state([]);
   let countryBreakdown = $state([]);
 
-  // Color helpers
-  function trackerToColor(tracker) {
-    const hex = colorByTracker.get(tracker) || colors.gray500;
-    const rgb = hexToRgb(hex);
-    return rgb ? [rgb.r, rgb.g, rgb.b, 200] : [128, 128, 128, 200];
-  }
+  const BASEMAP_STYLE_URL = 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json';
+  const ASSET_SOURCE_ID = 'asset-points';
+  const ASSET_GLOW_LAYER_ID = 'asset-points-glow';
+  const ASSET_LAYER_ID = 'asset-points-core';
 
   const visibleCountryFacets = $derived.by(() => {
     if (!countrySearch.trim()) return countryFacets;
@@ -79,6 +78,40 @@
       .map(([value, count]) => ({ value, count }))
       .sort((a, b) => b.count - a.count)
       .slice(0, limit);
+  }
+
+  function trackerColorExpression() {
+    const stops = [];
+    for (const [tracker, color] of colorByTracker.entries()) {
+      stops.push(tracker, color);
+    }
+    return ['match', ['coalesce', ['get', 'tracker'], ''], ...stops, colors.gray500];
+  }
+
+  function toFeatureCollection(assets) {
+    return {
+      type: 'FeatureCollection',
+      features: assets.map((asset) => ({
+        type: 'Feature',
+        geometry: {
+          type: 'Point',
+          coordinates: [asset.lon, asset.lat],
+        },
+        properties: {
+          id: asset.id,
+          name: asset.name,
+          tracker: asset.tracker,
+          country: asset.country,
+        },
+      })),
+    };
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? '').replace(
+      /[&<>"']/g,
+      (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]
+    );
   }
 
   // Initialize data from GeoJSON
@@ -158,66 +191,114 @@
     countryBreakdown = breakdownBy('country', 6);
 
     queryTime = Math.round(performance.now() - start);
-    updateDeck();
+    updateMapData();
   }
 
-  // Initialize deck.gl
-  function initDeck() {
-    if (!mapContainer || deck) return;
+  function initMap() {
+    if (!mapContainer || map) return;
 
-    deck = new Deck({
-      parent: mapContainer,
-      views: new MapView({ repeat: true }),
-      initialViewState: {
-        longitude: 0,
-        latitude: 20,
-        zoom: 1.25,
-        minZoom: 0,
-        maxZoom: 8,
-      },
-      controller: true,
-      getTooltip: ({ object }) => {
-        if (!object) return null;
-        return {
-          html: `
-            <div style="padding: 8px; font-size: 12px;">
-              <strong>${object.name || object.id}</strong><br/>
-              ${object.tracker || 'Unknown type'} · ${object.country || 'Unknown country'}
-            </div>
-          `,
-        };
-      },
+    map = new maplibregl.Map({
+      container: mapContainer,
+      style: BASEMAP_STYLE_URL,
+      center: [0, 20],
+      zoom: 1.25,
+      minZoom: 0.9,
+      maxZoom: 10,
     });
 
-    updateDeck();
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+
+    map.on('load', () => {
+      if (!map) return;
+
+      map.addSource(ASSET_SOURCE_ID, {
+        type: 'geojson',
+        data: toFeatureCollection(filteredAssets),
+      });
+
+      const colorsByTracker = trackerColorExpression();
+
+      map.addLayer({
+        id: ASSET_GLOW_LAYER_ID,
+        type: 'circle',
+        source: ASSET_SOURCE_ID,
+        paint: {
+          'circle-color': colorsByTracker,
+          'circle-opacity': 0.25,
+          'circle-blur': 0.9,
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 1, 3, 3, 5, 6, 8, 10, 11],
+        },
+      });
+
+      map.addLayer({
+        id: ASSET_LAYER_ID,
+        type: 'circle',
+        source: ASSET_SOURCE_ID,
+        paint: {
+          'circle-color': colorsByTracker,
+          'circle-opacity': 0.88,
+          'circle-stroke-color': '#ffffff',
+          'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 1, 0.5, 6, 1.4],
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 1, 2, 3, 3.2, 6, 5, 10, 7.5],
+        },
+      });
+
+      hoverPopup = new maplibregl.Popup({
+        closeButton: false,
+        closeOnClick: false,
+        offset: [0, -10],
+        className: 'asset-tooltip',
+      });
+
+      map.on('mouseenter', ASSET_LAYER_ID, () => {
+        if (!map) return;
+        map.getCanvas().style.cursor = 'pointer';
+      });
+
+      map.on('mousemove', ASSET_LAYER_ID, (event) => {
+        if (!map || !hoverPopup) return;
+        const feature = event.features?.[0];
+        if (!feature) return;
+
+        const props = feature.properties || {};
+        hoverPopup
+          .setLngLat(event.lngLat)
+          .setHTML(
+            `<div class="tooltip-title">${escapeHtml(props.name || props.id || 'Asset')}</div>
+             <div class="tooltip-subtitle">${escapeHtml(props.tracker || 'Unknown type')} · ${escapeHtml(props.country || 'Unknown country')}</div>`
+          )
+          .addTo(map);
+      });
+
+      map.on('mouseleave', ASSET_LAYER_ID, () => {
+        if (!map) return;
+        map.getCanvas().style.cursor = '';
+        hoverPopup?.remove();
+      });
+
+      map.on('click', ASSET_LAYER_ID, (event) => {
+        const feature = event.features?.[0];
+        const id = feature?.properties?.id;
+        if (!id) return;
+        goto(assetLink(String(id)));
+      });
+    });
   }
 
-  // Update deck.gl layers
-  function updateDeck() {
-    if (!deck) return;
+  function updateMapData() {
+    if (!map) return;
+    const source = map.getSource(ASSET_SOURCE_ID);
+    if (!source || typeof source.setData !== 'function') return;
+    source.setData(toFeatureCollection(filteredAssets));
+  }
 
-    const scatterLayer = new ScatterplotLayer({
-      id: 'assets',
-      data: filteredAssets,
-      getPosition: (d) => [d.lon, d.lat],
-      getRadius: 3.5,
-      radiusUnits: 'pixels',
-      getFillColor: (d) =>
-        /** @type {[number,number,number,number]} */ (trackerToColor(d.tracker)),
-      radiusMinPixels: 2,
-      radiusMaxPixels: 8,
-      pickable: true,
-      opacity: 0.82,
-      onClick: ({ object }) => {
-        if (!object?.id) return;
-        goto(assetLink(object.id));
-      },
-      updateTriggers: {
-        getFillColor: selectedTrackers.join('|'),
-      },
-    });
-
-    deck.setProps({ layers: [scatterLayer] });
+  async function reloadData() {
+    await initData();
+    if (!map) {
+      initMap();
+      return;
+    }
+    updateMapData();
   }
 
   // Generic filter toggle
@@ -250,15 +331,14 @@
 
   onMount(() => {
     if (browser) {
-      initData().then(() => {
-        initDeck();
-      });
+      reloadData();
     }
 
     return () => {
-      if (deck) {
-        deck.finalize();
-        deck = null;
+      hoverPopup?.remove();
+      if (map) {
+        map.remove();
+        map = null;
       }
     };
   });
@@ -395,11 +475,11 @@
       {:else if error}
         <div class="error-overlay">
           <p>Error: {error}</p>
-          <button onclick={() => initData()}>Retry</button>
+          <button onclick={reloadData}>Retry</button>
         </div>
       {/if}
 
-      <div bind:this={mapContainer} class="deck-container"></div>
+      <div bind:this={mapContainer} class="maplibre-container"></div>
 
       <!-- Map legend -->
       <div class="map-legend">
@@ -647,7 +727,7 @@
     background: var(--gem-midnight);
   }
 
-  .deck-container {
+  .maplibre-container {
     width: 100%;
     height: 100%;
   }
@@ -714,6 +794,39 @@
     width: 10px;
     height: 10px;
     border-radius: 50%;
+  }
+
+  :global(.maplibregl-ctrl-group) {
+    border-radius: var(--radius-md);
+    border: 1px solid rgba(29, 73, 97, 0.2);
+    box-shadow: 0 8px 24px rgba(0, 36, 48, 0.16);
+  }
+
+  :global(.asset-tooltip .maplibregl-popup-content) {
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-md);
+    border: 1px solid rgba(29, 73, 97, 0.2);
+    background: rgba(255, 255, 255, 0.95);
+    color: var(--color-text-primary);
+    box-shadow: 0 8px 24px rgba(0, 36, 48, 0.22);
+  }
+
+  :global(.asset-tooltip .maplibregl-popup-tip) {
+    border-top-color: rgba(255, 255, 255, 0.95);
+    border-bottom-color: rgba(255, 255, 255, 0.95);
+  }
+
+  :global(.asset-tooltip .tooltip-title) {
+    font-size: var(--font-size-body);
+    font-weight: 700;
+    line-height: 1.2;
+    margin-bottom: 2px;
+  }
+
+  :global(.asset-tooltip .tooltip-subtitle) {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    line-height: 1.25;
   }
 
   @media (max-width: 768px) {

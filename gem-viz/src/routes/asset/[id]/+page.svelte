@@ -75,15 +75,19 @@
   let { data } = $props();
 
   // --- STATE ---
-  let loading = $state(!data?.asset);
+  let loading = $state(false);
   let error = $state(null);
   let mapHasLocation = $state(true);
 
-  let asset = $state(data?.asset || null);
-  let graph = $state(data?.graph || null);
+  let fetchedAsset = $state(null);
+  let fetchedGraph = $state(null);
+  let fetchedDataSource = $state(null);
 
   /** @type {'api' | 'server' | null} */
-  let dataSource = $state(data?.asset ? 'server' : null);
+  const dataSource = $derived(fetchedDataSource || (data?.asset ? 'server' : null));
+  const asset = $derived(fetchedAsset || data?.asset || null);
+  const graph = $derived(fetchedGraph || data?.graph || null);
+  const showLoading = $derived(loading || (!asset && !error));
 
   const assetId = $derived(asset?.id || '');
   const assetName = $derived(asset?.name || assetId);
@@ -138,9 +142,9 @@
         throw new Error(result.error || `Asset '${paramsId}' not found`);
       }
 
-      asset = result.asset;
-      graph = result.graph;
-      dataSource = result.source;
+      fetchedAsset = result.asset;
+      fetchedGraph = result.graph;
+      fetchedDataSource = result.source;
       if (import.meta.env.DEV)
         console.log(`[${result.source.toUpperCase()}] Loaded asset ${paramsId}`);
     } catch (err) {
@@ -165,7 +169,7 @@
 </svelte:head>
 
 <div class="page">
-  {#if loading}
+  {#if showLoading}
     <p class="loading">Fetching asset from Ownership API…</p>
   {:else if error}
     <p class="loading error">{error}</p>
