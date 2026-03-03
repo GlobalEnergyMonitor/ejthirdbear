@@ -10,11 +10,11 @@
 
   import { ChevronRight, Settings } from 'lucide-svelte';
 
-  /** @type {{ title?: string, time?: number | null, children?: import('svelte').Snippet }} */
-  let { title = 'Debug', time = null, children } = $props();
+  /** @type {{ title?: string, time?: number | null, open?: boolean, children?: import('svelte').Snippet }} */
+  let { title = 'Debug', time = null, open = false, children } = $props();
 </script>
 
-<details class="debug-panel">
+<details class="debug-panel" {open}>
   <summary class="debug-summary">
     <span class="debug-arrow"><ChevronRight size={12} /></span>
     <span class="debug-icon"><Settings size={14} /></span>

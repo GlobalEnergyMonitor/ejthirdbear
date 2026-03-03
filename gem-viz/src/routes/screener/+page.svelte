@@ -15,6 +15,7 @@
   import { gemTrackerToUiTracker } from '$lib/data-config/screener-api';
   import { buildScreenerUrl } from '$lib/screener-url';
   import { isValidTracker, STATUS_GROUPS } from '$lib/data-config/tracker-schema';
+  import { resolveApiSlug, getAPIBase } from '$lib/ownership-api';
 
   // ─── Category display config ────────────────────────────────────────
   const CATEGORY_META = [
@@ -158,6 +159,18 @@
       })
     );
   }
+
+  // Build the REST API URL that will be called for this config
+  const restUrl = $derived.by(() => {
+    if (!selectedClass) return '';
+    const uiTracker = gemTrackerToUiTracker(selectedClass.trackers[0]);
+    const slug = resolveApiSlug(uiTracker);
+    if (!slug) return '';
+    const base = getAPIBase();
+    const params = new URLSearchParams({ asset_type: slug, format: 'json', limit: '500' });
+    if (geoFilters.length === 1) params.set('country', geoFilters[0]);
+    return `${base}/assets?${params.toString()}`;
+  });
 
   const selectionSummary = $derived.by(() => {
     if (!selectedClass) return '';
@@ -311,6 +324,14 @@
         <div class="debug-meta">
           <span class="debug-label">Geography:</span>
           <span class="debug-value">{geoFilters.join(', ')}</span>
+        </div>
+      {/if}
+      {#if restUrl}
+        <div class="debug-meta">
+          <span class="debug-label">REST API:</span>
+          <span class="debug-value">
+            <a href={restUrl} target="_blank" rel="noopener" class="rest-url">{restUrl}</a>
+          </span>
         </div>
       {/if}
       <div class="debug-json">
@@ -542,5 +563,15 @@
     .support-actions {
       justify-content: flex-start;
     }
+  }
+
+  .rest-url {
+    color: var(--color-link, #016B83);
+    text-decoration: none;
+    word-break: break-all;
+  }
+
+  .rest-url:hover {
+    text-decoration: underline;
   }
 </style>

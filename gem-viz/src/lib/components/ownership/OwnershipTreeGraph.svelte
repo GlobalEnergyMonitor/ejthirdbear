@@ -233,10 +233,10 @@
     const isLarge = nodes.length > 30;
     g.setGraph({
       rankdir: 'BT',
-      nodesep: compact ? nodeR * 2.5 : isLarge ? nodeR * 4 : nodeR * 3,
-      ranksep: compact ? 35 : isLarge ? 80 : 60,
-      marginx: compact ? 25 : 50,
-      marginy: compact ? 20 : 50,
+      nodesep: compact ? nodeR * 2 : isLarge ? nodeR * 4 : nodeR * 3,
+      ranksep: compact ? 28 : isLarge ? 80 : 60,
+      marginx: compact ? 15 : 50,
+      marginy: compact ? 12 : 50,
     });
     g.setDefaultEdgeLabel(() => ({}));
 
@@ -520,8 +520,8 @@
     min-height: 350px;
   }
   .compact svg {
-    min-height: 120px;
-    max-height: 200px;
+    min-height: 80px;
+    max-height: 180px;
   }
   .compact .graph-wrap {
     border: none;

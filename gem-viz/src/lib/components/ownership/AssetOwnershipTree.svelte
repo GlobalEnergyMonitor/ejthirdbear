@@ -29,7 +29,7 @@
       const result = await getOwnershipGraph({
         root: assetId,
         direction: 'up',
-        max_depth: 6,
+        max_depth: 3,
       });
 
       nodes = result.nodes || [];
@@ -69,8 +69,10 @@
 
 <style>
   .asset-ownership-tree {
-    margin-top: 0.5rem;
+    margin-top: 0.25rem;
     grid-column: 1 / -1;
+    max-height: 240px;
+    overflow: auto;
   }
   .tree-loading {
     display: flex;

@@ -18,6 +18,7 @@
   import DataSourceBadge from '$lib/components/DataSourceBadge.svelte';
   import ScreenerLayout from '$lib/components/ScreenerLayout.svelte';
   import AssetClassesPanel from '$lib/components/AssetClassesPanel.svelte';
+  import AssetSearchBar from '$lib/components/AssetSearchBar.svelte';
   import DebugPanel from '$lib/components/DebugPanel.svelte';
   import ScreenerOwnersResultsTable from '$lib/components/screener/ScreenerOwnersResultsTable.svelte';
   import { investigationCart } from '$lib/investigationCart';
@@ -29,6 +30,7 @@
     type ScreenerFilters,
   } from '$lib/data-config/screener-api';
   import { buildScreenerUrl, parseJsonSearchParam } from '$lib/screener-url';
+  import { resolveApiSlug, getAPIBase } from '$lib/ownership-api';
 
   type ScreenerSelectedClass = {
     id?: string;
@@ -138,8 +140,18 @@
 
   // Search/filter for journalists with watchlists
   let searchQuery = $state('');
+  let searchMode = $state('owner');
+  let syncedSearchQuery = $state('');
   // Expanded row state - tracks which owner's ownership tree is visible
   let expandedOwnerId = $state<string | null>(null);
+
+  $effect(() => {
+    const nextSearchQuery = $page.url.searchParams.get('q') || '';
+    if (nextSearchQuery !== syncedSearchQuery) {
+      syncedSearchQuery = nextSearchQuery;
+      searchQuery = nextSearchQuery;
+    }
+  });
 
   function toggleExpanded(ownerId: string) {
     expandedOwnerId = expandedOwnerId === ownerId ? null : ownerId;
@@ -209,6 +221,23 @@
     investigationCart.addMany(toAdd);
   }
 
+  function updateOwnerSearchUrl(query: string) {
+    const trimmed = query.trim();
+    goto(
+      buildScreenerUrl('screener/results', {
+        classes: classesParam || undefined,
+        owners: ownersParam || undefined,
+        q: trimmed || undefined,
+      }),
+      { replaceState: true, noScroll: true, keepFocus: true }
+    );
+  }
+
+  function handleOwnerSearch(query: string) {
+    searchQuery = query;
+    updateOwnerSearchUrl(query);
+  }
+
   // Load owners data using centralized screener API
   onMount(async () => {
     try {
@@ -227,13 +256,14 @@
       // Normalize geography: could be string (legacy) or string[] (multi-select)
       const geoRaw = cls?.filters?.geography;
       const countryFilter: string | string[] | undefined = Array.isArray(geoRaw)
-        ? geoRaw.length > 0 ? geoRaw : undefined
+        ? geoRaw.length > 0
+          ? geoRaw
+          : undefined
         : geoRaw || undefined;
 
       const geofenceRaw = cls?.filters?.geofence;
-      const geofence = Array.isArray(geofenceRaw) && geofenceRaw.length >= 3
-        ? geofenceRaw
-        : undefined;
+      const geofence =
+        Array.isArray(geofenceRaw) && geofenceRaw.length >= 3 ? geofenceRaw : undefined;
 
       const filters: ScreenerFilters = {
         tracker: cls?.tracker || '',
@@ -262,7 +292,11 @@
       queryTime = result.queryTimeMs;
       dataSource =
         result.source === 'rest-api' ? 'api' : result.source === 'cache' ? 'local' : 'api';
-      executedQuery = `[Centralized API] source=${result.source}, filters=${JSON.stringify(filters)}`;
+      const slug = resolveApiSlug(filters.tracker || '');
+      const restBase = getAPIBase();
+      const restParams = new URLSearchParams({ asset_type: slug || filters.tracker || '', format: 'json', limit: '500' });
+      if (filters.country) restParams.set('country', String(filters.country));
+      executedQuery = `GET ${restBase}/assets?${restParams.toString()}\n\nsource=${result.source}, filters=${JSON.stringify(filters, null, 2)}`;
 
       owners = result.owners.map((o) => ({
         name: o.name,
@@ -414,15 +448,20 @@
       <!-- Search and filter toolbar -->
       <div class="search-toolbar">
         <div class="search-input-wrapper">
-          <input
-            type="text"
-            class="search-input"
-            placeholder="Search for companies on your watchlist..."
+          <AssetSearchBar
             bind:value={searchQuery}
+            bind:activeMode={searchMode}
+            modes={[
+              {
+                id: 'owner',
+                label: 'Owners',
+                placeholder: 'Search for companies on your watchlist...',
+              },
+            ]}
+            showButton={false}
+            compact={true}
+            onSearch={handleOwnerSearch}
           />
-          {#if searchQuery}
-            <button class="clear-search" onclick={() => (searchQuery = '')}>×</button>
-          {/if}
         </div>
 
         <div class="toolbar-actions">
@@ -459,7 +498,7 @@
         {isInInvestigation}
         onToggleExpanded={toggleExpanded}
         onToggleInvestigation={toggleInvestigation}
-        onClearSearch={() => (searchQuery = '')}
+        onClearSearch={() => handleOwnerSearch('')}
       />
     </section>
   </LoadingWrapper>
@@ -695,40 +734,7 @@
   }
 
   .search-input-wrapper {
-    position: relative;
     min-width: 0;
-  }
-
-  .search-input {
-    width: 100%;
-    padding: var(--space-3) var(--space-4);
-    padding-right: 36px;
-    font-size: var(--font-size-sm);
-    border: 1px solid #cbd5e0;
-    border-radius: var(--radius-sm);
-  }
-
-  .search-input:focus {
-    outline: none;
-    border-color: #1d4961;
-    box-shadow: 0 0 0 2px rgba(29, 73, 97, 0.1);
-  }
-
-  .clear-search {
-    position: absolute;
-    right: 8px;
-    top: 50%;
-    transform: translateY(-50%);
-    background: none;
-    border: none;
-    font-size: 18px;
-    color: #a0aec0;
-    cursor: pointer;
-    padding: 4px;
-  }
-
-  .clear-search:hover {
-    color: #4a5568;
   }
 
   .toolbar-actions {

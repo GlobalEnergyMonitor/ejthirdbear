@@ -12,6 +12,7 @@ import {
   type GraphEdge,
   type AssetSummary,
 } from '$lib/ownership-api';
+import { logApiCall } from '$lib/api-log.svelte';
 
 // ============================================================================
 // TYPES
@@ -121,10 +122,10 @@ async function fetchOwnershipGraphDown(entityId: string): Promise<{
   rootName: string;
 }> {
   try {
-    const resp = await fetch(
-      `${API_BASE}/ownership/graph?root=${encodeURIComponent(entityId)}&direction=down&max_depth=5`,
-      { signal: AbortSignal.timeout(30_000) }
-    );
+    const fetchUrl = `${API_BASE}/ownership/graph?root=${encodeURIComponent(entityId)}&direction=down&max_depth=5`;
+    const t0 = performance.now();
+    const resp = await fetch(fetchUrl, { signal: AbortSignal.timeout(30_000) });
+    logApiCall({ url: fetchUrl, method: 'GET', status: resp.status, durationMs: performance.now() - t0, timestamp: new Date(), error: resp.ok ? undefined : `${resp.status}`, reason: `fetchOwnershipGraphDown ${entityId}` });
     if (!resp.ok) throw new Error(`API error: ${resp.status}`);
     const data = await resp.json();
 

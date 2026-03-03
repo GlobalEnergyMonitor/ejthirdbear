@@ -17,6 +17,7 @@ import {
   type AssetSummary,
   type PaginatedResponse,
 } from './ownership-api';
+import { logApiCall } from './api-log.svelte';
 // Shared types for compose page
 export interface FacetOption {
   value: string;
@@ -60,12 +61,15 @@ async function listAssetsMulti(
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+  const fetchUrl = `${API_BASE}/assets${queryStr}`;
+  const t0 = performance.now();
 
   try {
-    const response = await fetch(`${API_BASE}/assets${queryStr}`, {
+    const response = await fetch(fetchUrl, {
       signal: controller.signal,
       headers: { 'Content-Type': 'application/json' },
     });
+    logApiCall({ url: fetchUrl, method: 'GET', status: response.status, durationMs: performance.now() - t0, timestamp: new Date(), error: response.ok ? undefined : `${response.status} ${response.statusText}`, reason: 'compose listAssetsMulti' });
     if (!response.ok) {
       throw new Error(`API error: ${response.status} ${response.statusText}`);
     }

@@ -3,10 +3,16 @@
   import SiteNav from '$lib/components/SiteNav.svelte';
   import SiteFooter from '$lib/components/SiteFooter.svelte';
   import CommandPalette from '$lib/components/CommandPalette.svelte';
+  import ApiCallLog from '$lib/components/ApiCallLog.svelte';
+  import { clearApiLog } from '$lib/api-log.svelte';
   import { link } from '$lib/links';
   import { page } from '$app/stores';
+  import { beforeNavigate } from '$app/navigation';
 
   let { children } = $props();
+
+  // Clear API call log on route change so it only shows calls for the current page
+  beforeNavigate(() => clearApiLog());
 
   // Build info injected by Vite at build time
   const buildTime = __BUILD_TIME__;
@@ -29,6 +35,9 @@
       {@render children()}
     </main>
     <CommandPalette />
+    <div class="api-log-wrapper">
+      <ApiCallLog />
+    </div>
     <SiteFooter />
 
     <footer class="build-footer">
@@ -58,6 +67,13 @@
   main > :global(*) {
     width: 100%;
     max-width: var(--container-xl);
+  }
+
+  .api-log-wrapper {
+    padding: 0 var(--space-6);
+    max-width: var(--container-xl);
+    margin: 0 auto;
+    width: 100%;
   }
 
   .build-footer {

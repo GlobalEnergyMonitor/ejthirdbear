@@ -118,8 +118,17 @@
         {/if}
         {@render detail(isMine ? 'Opening year' : 'Start year', asset.startYear)}
         {@render detail('Location', locationStr)}
-        {#if ownership}{@render ownership()}{/if}
       </div>
+      {#if ownership}
+        <div class="snippet-section">
+          {@render ownership()}
+        </div>
+      {/if}
+      {#if map}
+        <div class="snippet-section">
+          {@render map()}
+        </div>
+      {/if}
     {:else}
       {#if hasOwnership}
         <div class="details-section">
@@ -405,9 +414,10 @@
   }
   .percentile-row {
     display: grid;
-    grid-template-columns: 70px 90px 36px;
+    grid-template-columns: auto 1fr auto;
     align-items: center;
     gap: 0.3rem;
+    max-width: 200px;
   }
   .percentile-label {
     font-size: 0.7rem;
@@ -419,7 +429,8 @@
   .percentile-track {
     position: relative;
     height: 5px;
-    width: 90px;
+    width: 100%;
+    min-width: 40px;
     background: rgba(0, 74, 99, 0.18);
     border-radius: 999px;
   }
@@ -446,6 +457,14 @@
     gap: 1.5rem;
     font-size: 0.65rem;
     color: var(--gem-teal);
+  }
+
+  .snippet-section {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid rgba(0, 74, 99, 0.08);
+    max-height: 280px;
+    overflow: auto;
   }
 
   .project-card.compact .details-section {
@@ -494,11 +513,7 @@
     }
 
     .percentile-row {
-      grid-template-columns: 55px 1fr 32px;
-    }
-
-    .percentile-track {
-      width: 100%;
+      max-width: 160px;
     }
 
     a.gem-link {

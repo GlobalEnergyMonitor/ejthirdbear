@@ -1,5 +1,7 @@
 /** Ownership API client — REST API for entity/asset ownership relationships */
 
+import { logApiCall } from './api-log.svelte';
+
 // API base URL (env override or production default)
 const API_BASE =
   import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL ||
@@ -8,6 +10,10 @@ const API_BASE =
 
 // Default timeout for API requests (30 seconds)
 const API_TIMEOUT_MS = 30_000;
+
+// Thread-local-style reason tracker for API call logging.
+// Set before each fetchAPI call so _doFetch can include it in the log.
+let _currentReason = '';
 
 // Cache for G-prefix to compound ID mappings
 const gPrefixToCompoundCache = new Map<string, string>();
@@ -224,6 +230,9 @@ async function _doFetch<T>(url: string, options?: RequestInit): Promise<T> {
   // Add timeout via AbortController
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+  const method = options?.method?.toUpperCase() || 'GET';
+  const reason = _currentReason || undefined;
+  const t0 = performance.now();
 
   try {
     const response = await fetch(url, {
@@ -246,16 +255,23 @@ async function _doFetch<T>(url: string, options?: RequestInit): Promise<T> {
       } catch {
         // Ignore body read errors
       }
+      logApiCall({ url, method, status: response.status, durationMs: performance.now() - t0, timestamp: new Date(), error: errorMessage, reason });
       throw new OwnershipAPIError(response.status, errorMessage);
     }
 
+    logApiCall({ url, method, status: response.status, durationMs: performance.now() - t0, timestamp: new Date(), reason });
     return response.json();
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
+      logApiCall({ url, method, status: null, durationMs: performance.now() - t0, timestamp: new Date(), error: 'timeout', reason });
       throw new OwnershipAPIError(
         0,
         `API request timed out after ${API_TIMEOUT_MS / 1000}s: ${url}`
       );
+    }
+    // Log non-API errors (network failures etc.) only if not already logged above
+    if (!(err instanceof OwnershipAPIError)) {
+      logApiCall({ url, method, status: null, durationMs: performance.now() - t0, timestamp: new Date(), error: String(err), reason });
     }
     throw err;
   } finally {
@@ -409,6 +425,7 @@ export async function listEntities(params?: {
   limit?: number;
   offset?: number;
 }): Promise<PaginatedResponse<EntitySummary>> {
+  _currentReason = `listEntities${params?.q ? ` q="${params.q}"` : ''}`;
   const raw = await fetchAPI<RawEntity[] | PaginatedResponse<RawEntity>>(
     `/entities${buildQuery(params)}`
   );
@@ -417,6 +434,7 @@ export async function listEntities(params?: {
 }
 
 export async function getEntity(entityId: string): Promise<EntitySummary> {
+  _currentReason = `getEntity ${entityId}`;
   return normalizeEntity(await fetchAPI<RawEntity>(`/entities/${encodeURIComponent(entityId)}`));
 }
 
@@ -424,6 +442,7 @@ export async function getEntity(entityId: string): Promise<EntitySummary> {
 const pct = (v?: number) => (typeof v === 'number' ? v : null);
 
 export async function getEntityOwners(entityId: string): Promise<DirectOwnership[]> {
+  _currentReason = `getEntityOwners ${entityId}`;
   const raw = await fetchAPI<
     Array<{ owner_entity_id?: string; owner_name?: string; ownership_percentage?: number }>
   >(`/entities/${encodeURIComponent(entityId)}/owners`);
@@ -435,6 +454,7 @@ export async function getEntityOwners(entityId: string): Promise<DirectOwnership
 }
 
 export async function getEntityOwned(entityId: string): Promise<DirectOwned[]> {
+  _currentReason = `getEntityOwned ${entityId}`;
   const raw = await fetchAPI<
     Array<{
       subject_entity_id?: string;
@@ -451,6 +471,7 @@ export async function getEntityOwned(entityId: string): Promise<DirectOwned[]> {
 
 /** Trace ownership in given direction to all terminal nodes */
 function traceEntity(entityId: string, dir: 'up' | 'down'): Promise<OwnershipTraceResponse> {
+  _currentReason = `traceEntity ${dir} ${entityId}`;
   return fetchAPI(`/entities/${encodeURIComponent(entityId)}/trace/${dir}`);
 }
 export const traceEntityUp = (id: string) => traceEntity(id, 'up');
@@ -613,6 +634,7 @@ export async function listAssets(params?: {
   offset?: number;
   facets?: boolean;
 }): Promise<PaginatedResponse<AssetSummary> & { facets?: Record<string, Record<string, number>> }> {
+  if (!_currentReason) _currentReason = `listAssets${params?.asset_type ? ` type=${params.asset_type}` : ''}${params?.facets ? ' (facets)' : ''}`;
   // Build query params — always request JSON format (coal-plant slug returns HTML without it)
   const queryParams: Record<string, string | number | string[] | undefined | null> = {
     q: params?.q,
@@ -643,6 +665,7 @@ export async function listAssetsByType(
   assetType: string,
   opts?: { limit?: number; status?: string; country?: string | string[] }
 ): Promise<AssetSummary[]> {
+  _currentReason = `listAssetsByType ${assetType}${opts?.status ? ` status=${opts.status}` : ''}`;
   const apiSlug = resolveApiSlug(assetType);
   const limit = opts?.limit ?? 100;
   const results: AssetSummary[] = [];
@@ -674,6 +697,7 @@ export async function* paginateAssetsByType(
   apiSlug: string,
   opts?: { status?: string; country?: string | string[]; limit?: number }
 ): AsyncGenerator<AssetSummary[], void, unknown> {
+  _currentReason = `paginateAssetsByType ${apiSlug} (screener)`;
   const BATCH = opts?.limit ?? 500;
   let offset = 0;
   const MAX_OFFSET = 50000;
@@ -699,6 +723,7 @@ export async function* paginateAssetsByType(
  * Returns a Map of API type name → exact count.
  */
 export async function getAssetTypeCounts(): Promise<Map<string, number>> {
+  _currentReason = 'getAssetTypeCounts (facets)';
   // Try facets first (single request, exact counts)
   try {
     const page = await listAssets({ limit: 1, facets: true });
@@ -746,6 +771,7 @@ export async function getAssetTypeCounts(): Promise<Map<string, number>> {
  * Note: G-prefix IDs are automatically resolved to compound L_G format
  */
 export async function getAsset(assetId: string): Promise<AssetSummary> {
+  _currentReason = `getAsset ${assetId}`;
   const resolvedId = await resolveAssetId(assetId);
   const raw = await fetchAPI<RawAsset>(`/assets/${encodeURIComponent(resolvedId)}`);
   return normalizeAsset(raw);
@@ -761,6 +787,7 @@ export async function getOwnershipGraph(params: {
   direction?: 'up' | 'down';
   max_depth?: number;
 }): Promise<OwnershipGraphResponse> {
+  _currentReason = `getOwnershipGraph ${params.direction || 'up'} ${params.root}`;
   const resolvedRoot = await resolveAssetId(params.root);
   const raw = await fetchAPI<{
     root: Record<string, unknown>;
