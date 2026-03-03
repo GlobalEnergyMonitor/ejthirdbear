@@ -26,7 +26,6 @@ build
 *.sw?
 
 # Data files
-*.parquet
 *.csv
 /data/
 

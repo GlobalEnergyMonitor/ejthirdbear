@@ -51,26 +51,6 @@ export default [
     },
   },
   {
-    files: ['test-motherduck.cjs'],
-    plugins: {
-      '@typescript-eslint': tsPlugin,
-    },
-    languageOptions: {
-      parser: tsParser,
-      ecmaVersion: 2022,
-      sourceType: 'commonjs',
-      globals: {
-        ...globals.node,
-        ...globals.es2021,
-      },
-    },
-    rules: {
-      'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
-      'no-console': 'off',
-      '@typescript-eslint/no-explicit-any': 'warn',
-    },
-  },
-  {
     files: ['static/embed.js'],
     plugins: {
       '@typescript-eslint': tsPlugin,

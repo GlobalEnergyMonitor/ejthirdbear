@@ -5,24 +5,19 @@ FROM node:20-slim AS builder
 WORKDIR /app
 
 # Build args for SvelteKit PUBLIC_ env vars (must be available at build time)
-ARG PUBLIC_MOTHERDUCK_TOKEN
 ARG PUBLIC_OWNERSHIP_API_BASE_URL=https://gem-ownership-api.fly.dev
 ARG PUBLIC_SITE_URL=
 
 # Set as env vars for the build
-ENV PUBLIC_MOTHERDUCK_TOKEN=$PUBLIC_MOTHERDUCK_TOKEN
 ENV PUBLIC_OWNERSHIP_API_BASE_URL=$PUBLIC_OWNERSHIP_API_BASE_URL
 ENV PUBLIC_SITE_URL=$PUBLIC_SITE_URL
-
-# Install ca-certificates for MotherDuck SSL/gRPC
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
 RUN npm ci
 
 COPY . .
 
-# Build the app (SSR mode queries MotherDuck at runtime, no prefetch needed)
+# Build the app (SSR mode queries REST API at runtime)
 RUN npm run build
 
 # Production image

@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 /**
- * Generate G-prefix to compound ID mapping from parquet data.
- * This allows server-side ID resolution without DuckDB.
+ * Generate G-prefix to compound ID mapping from the REST API.
  *
  * Run: node scripts/generate-id-map.js
  * Output: src/lib/server/id-map.json
@@ -16,7 +15,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 async function generateIdMap() {
   console.log('[id-map] Generating G-prefix to compound ID mapping...');
 
-  // Try to use duckdb-wasm or fall back to API
   let mapping = {};
 
   try {
