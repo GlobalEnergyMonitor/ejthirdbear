@@ -35,6 +35,8 @@ export interface Asset {
   wikiUrl?: string;
   tracker?: string;
   database?: string;
+  /** Full raw API response — used to auto-render any fields not explicitly mapped */
+  raw?: Record<string, unknown>;
 }
 
 /** Percentile data for capacity comparisons */

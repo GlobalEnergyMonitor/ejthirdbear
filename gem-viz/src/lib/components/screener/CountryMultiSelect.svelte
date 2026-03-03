@@ -103,6 +103,7 @@
   let highlightIndex = $state(-1);
   let inputEl: HTMLInputElement | undefined = $state();
   let listEl: HTMLUListElement | undefined = $state();
+  const listboxId = 'country-multi-select-listbox';
 
   /** Groups whose alias matches the current query (only groups that would add new countries) */
   const matchedGroups = $derived.by(() => {
@@ -253,6 +254,7 @@
       autocomplete="off"
       role="combobox"
       aria-expanded={open}
+      aria-controls={listboxId}
       aria-haspopup="listbox"
     />
     {#if selected.length > 0}
@@ -261,7 +263,7 @@
   </div>
 
   {#if open && totalItems > 0}
-    <ul class="dropdown" role="listbox" bind:this={listEl}>
+    <ul id={listboxId} class="dropdown" role="listbox" bind:this={listEl}>
       {#each activeGroups as group, gi (group.id)}
         <li
           class="dropdown-item group-item"

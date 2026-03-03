@@ -7,6 +7,7 @@
    */
 
   import { onMount } from 'svelte';
+  import { base } from '$app/paths';
   import {
     getTrackerColor,
     statusColors,
@@ -120,6 +121,7 @@
         width: containerWidth,
         colorField: 'tracker',
         showLegend: false,
+        assetHref: (assetId) => `${base}/asset/${encodeURIComponent(assetId)}`,
       });
 
       loading = false;

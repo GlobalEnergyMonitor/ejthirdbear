@@ -16,6 +16,10 @@ export {
   clearQueryCache,
 } from './queries';
 
+// Card config
+export type { CardField, CardTab, TrackerCardConfig } from './tracker-card-config';
+export { getTrackerCardConfig, getConfiguredKeys, resolveFieldValue } from './tracker-card-config';
+
 // Re-export formatting utils for convenience
 export {
   createPercentileLookup,

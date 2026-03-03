@@ -52,6 +52,7 @@ export interface ScreenerClassParamItem {
 export interface ScreenerUrlParams {
   classes?: string | null;
   owners?: string | null;
+  q?: string | null;
 }
 
 export function buildScreenerUrl(path: ScreenerRoutePath, params: ScreenerUrlParams = {}): string {
@@ -67,6 +68,12 @@ export function buildScreenerUrl(path: ScreenerRoutePath, params: ScreenerUrlPar
     url.searchParams.set('owners', params.owners);
   } else {
     url.searchParams.delete('owners');
+  }
+
+  if (params.q) {
+    url.searchParams.set('q', params.q);
+  } else {
+    url.searchParams.delete('q');
   }
 
   return `${url.pathname}${url.search}`;

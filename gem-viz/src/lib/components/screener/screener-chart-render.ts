@@ -43,6 +43,7 @@ export interface RenderOptions {
   width?: number;
   colorField?: ColorField;
   showLegend?: boolean;
+  assetHref?: (_assetId: string) => string;
 }
 
 // ---------------------------------------------------------------------------
@@ -62,6 +63,8 @@ export function renderChart(
   const width = options.width ?? 1000;
   const requestedColorField: ColorField = options.colorField ?? 'tracker';
   const showLegend = options.showLegend ?? false;
+  const assetHref =
+    options.assetHref ?? ((assetId: string) => `/asset/${encodeURIComponent(assetId)}`);
 
   container.innerHTML = '';
 
@@ -124,7 +127,7 @@ export function renderChart(
 
   drawSubsidiaryRegions(regionGroup, subsidiaryGroups, contentHeight);
   drawSubsidiaryLabels(labelGroup, subsidiaryGroups, chartData);
-  drawAssetGroups(assetGroup, subsidiaryGroups, getUnitColor);
+  drawAssetGroups(assetGroup, subsidiaryGroups, getUnitColor, assetHref);
   drawCommonAssetLines(assetGroup, lineGroup, subsidiaryGroups, chartData, contentHeight);
 
   // --- Legend ---
@@ -587,8 +590,16 @@ function drawIntermediaryPathForItem(
 function drawAssetGroups(
   group: Selection<SVGGElement, unknown, null, undefined>,
   data: SubsidiaryGroupData[],
-  getColor: (_unit: ChartUnit) => string
+  getColor: (_unit: ChartUnit) => string,
+  getAssetHref: (_assetId: string) => string
 ) {
+  const openAsset = (assetId?: string) => {
+    if (!assetId) return;
+    const href = getAssetHref(assetId);
+    if (!href || typeof window === 'undefined') return;
+    window.location.assign(href);
+  };
+
   const outerGroups = group
     .selectAll<SVGGElement, SubsidiaryGroupData>('.subsidiary-asset-group')
     .data(data)
@@ -604,7 +615,20 @@ function drawAssetGroups(
     .join('g')
     .attr('class', 'asset')
     .attr('id', (d) => `asset-${d.locationID}`)
-    .attr('transform', (d) => `translate(0, ${d.y})`);
+    .attr('transform', (d) => `translate(0, ${d.y})`)
+    .style('cursor', 'pointer')
+    .attr('role', 'link')
+    .attr('tabindex', 0)
+    .attr('aria-label', (d) => `Open asset ${d.units[0]?.name || d.units[0]?.id || d.locationID}`)
+    .on('click', (_event, locData) => {
+      openAsset(locData.units[0]?.id);
+    })
+    .on('keydown', (event, locData) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        openAsset(locData.units[0]?.id);
+      }
+    });
 
   // Hover background rect (invisible hit area, expands on hover)
   assets

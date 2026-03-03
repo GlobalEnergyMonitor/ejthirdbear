@@ -54,6 +54,20 @@ function assetSummaryToAsset(a: AssetSummary): Asset {
         raw['state_province']
     ),
     wikiUrl: toStr(raw['Wiki URL'] ?? raw['wiki_url']),
+    unitName: toStr(raw['Unit Name'] ?? raw['unit_name']),
+    database: toStr(raw['Database'] ?? raw['database'] ?? raw['source_file']),
+    coalType: toStr(raw['Coal type'] ?? raw['coal_type']),
+    plannedRetirement: toNum(raw['Planned retirement'] ?? raw['planned_retirement']),
+    capacityFactor: toNum(raw['Capacity factor'] ?? raw['capacity_factor']),
+    annualCO2: toNum(raw['Annual CO2 (million tonnes / annum)'] ?? raw['annual_co2']),
+    lifetimeCO2: toNum(raw['Lifetime CO2 (million tonnes)'] ?? raw['lifetime_co2']),
+    heatRate: toNum(raw['Heat rate (Btu per kWh)'] ?? raw['heat_rate']),
+    remainingLifetime: toNum(raw['Remaining lifetime (years)'] ?? raw['remaining_lifetime']),
+    plantAge: toNum(raw['Plant age (years)'] ?? raw['plant_age']),
+    production: toNum(raw['Production'] ?? raw['production']),
+    productionUnit: toStr(raw['Production unit'] ?? raw['production_unit']),
+    location: toStr(raw['Location'] ?? raw['location']),
+    raw,
   };
 }
 
