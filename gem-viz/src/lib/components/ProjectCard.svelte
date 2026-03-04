@@ -9,7 +9,7 @@
     type Asset,
     type PercentileData,
   } from '$lib/factsheet';
-  import { formatRatioAsPct } from '$lib/format-utils';
+  import { formatRatioAsPct } from '$lib/format';
   import {
     getTrackerCardConfig,
     getConfiguredKeys,

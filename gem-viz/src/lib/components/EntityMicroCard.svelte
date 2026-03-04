@@ -18,7 +18,7 @@
    * />
    */
   import { colorByTracker } from '$lib/design-tokens';
-  import { formatCapacity } from '$lib/format-utils';
+  import { formatCapacityNullable as formatCapacity } from '$lib/format';
 
   let {
     name = '',

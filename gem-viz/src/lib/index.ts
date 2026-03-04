@@ -79,18 +79,6 @@ export {
   type CartCounts,
 } from './investigationCart';
 
-// Map filter
-export {
-  mapFilter,
-  setMapFilter,
-  clearMapFilter,
-  isPolygonFilter,
-  isBoundsFilter,
-  type MapFilter,
-  type MapBounds,
-  type MapPolygon,
-} from './mapFilter';
-
 // =============================================================================
 // UTILITIES
 // =============================================================================
@@ -106,8 +94,6 @@ export { link, assetLink, entityLink, assetPath } from './links';
 // =============================================================================
 
 // For direct submodule access, import from:
-//   '$lib/analysis'       - Statistical analysis (HHI, Gini, outliers)
-//   '$lib/utils'          - SQL helpers
 //   '$lib/data-config'    - Tracker/field configurations
 //   '$lib/component-data' - Component data fetching
 //   '$lib/format'         - Number/string formatting utilities

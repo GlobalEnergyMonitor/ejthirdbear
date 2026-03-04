@@ -10,7 +10,7 @@
    * - Top-N with overflow count for high-cardinality fields
    */
   import { onMount } from 'svelte';
-  import { formatCompact, formatPct } from '$lib/format-utils';
+  import { formatCompact, formatPct } from '$lib/format';
   import MiniHistogram from '$lib/components/MiniHistogram.svelte';
 
   // Props

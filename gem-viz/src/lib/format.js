@@ -218,3 +218,42 @@ export function percentileRank(value, values) {
   const lookup = createPercentileLookup(values);
   return lookup(value);
 }
+
+// ---------------------------------------------------------------------------
+// Lightweight Formatters (migrated from format-utils.ts)
+// ---------------------------------------------------------------------------
+
+/**
+ * Format a number with locale-aware separators.
+ */
+export function formatNumber(n) {
+  return n.toLocaleString();
+}
+
+/**
+ * Format a percentage value (0-100) with smart precision.
+ * Values >= 10 are rounded to integers; smaller values show one decimal.
+ */
+export function formatPct(n) {
+  if (n >= 10) return `${Math.round(n)}%`;
+  return `${n.toFixed(1)}%`;
+}
+
+/**
+ * Format a ratio (0-1) as a percentage string with one decimal place.
+ * Returns empty string for null/undefined values.
+ */
+export function formatRatioAsPct(v) {
+  if (v == null) return '';
+  return `${(v * 100).toFixed(1)}%`;
+}
+
+/**
+ * Format capacity in MW with smart unit conversion.
+ * Returns null for falsy or zero values (useful for conditional rendering).
+ */
+export function formatCapacityNullable(mw) {
+  if (!mw || mw === 0) return null;
+  if (mw >= 1000) return `${(mw / 1000).toFixed(1)} GW`;
+  return `${Math.round(mw).toLocaleString()} MW`;
+}

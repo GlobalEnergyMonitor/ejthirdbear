@@ -8,7 +8,7 @@
   import { assetLink } from '$lib/links';
   import { colorByTracker, colorByStatus } from '$lib/design-tokens';
   import TrackerIcon from './TrackerIcon.svelte';
-  import { formatCapacity } from '$lib/format-utils';
+  import { formatCapacityNullable as formatCapacity } from '$lib/format';
 
   let {
     id = '',
