@@ -46,6 +46,10 @@
     if (!src) return;
 
     const url = new URL(src, window.location.href);
+    // Auto-add embed=true for non-embed paths so root layout strips chrome
+    if (!url.pathname.startsWith('/embed')) {
+      url.searchParams.set('embed', 'true');
+    }
     if (!url.searchParams.has('embedId')) url.searchParams.set('embedId', embedId);
     if (!url.searchParams.has('autoHeight')) {
       const autoHeight = autoHeightAttr === null || autoHeightAttr.toLowerCase() !== 'false';

@@ -4,6 +4,7 @@
   import SiteFooter from '$lib/components/SiteFooter.svelte';
   import CommandPalette from '$lib/components/CommandPalette.svelte';
   import ApiCallLog from '$lib/components/ApiCallLog.svelte';
+  import EmbedShell from '$lib/components/EmbedShell.svelte';
   import { clearApiLog } from '$lib/api-log.svelte';
   import { link } from '$lib/links';
   import { page } from '$app/stores';
@@ -27,6 +28,16 @@
 
 {#if $page.url.pathname.startsWith('/embed') || $page.url.pathname.startsWith('/e/')}
   {@render children()}
+{:else if $page.url.searchParams.get('embed') === 'true'}
+  <EmbedShell
+    theme={$page.url.searchParams.get('theme') || 'light'}
+    padding={$page.url.searchParams.get('padding') || '16'}
+    autoHeight={$page.url.searchParams.get('autoHeight') !== 'false'}
+    embedId={$page.url.searchParams.get('embedId') || ''}
+    branding={$page.url.searchParams.get('branding') === 'true'}
+  >
+    {@render children()}
+  </EmbedShell>
 {:else}
   <a href="#main-content" class="skip-link">Skip to content</a>
   <div class="app">
