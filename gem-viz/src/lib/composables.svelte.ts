@@ -73,7 +73,7 @@ export interface AsyncState<T> {
  * Create reactive async state with loading/error handling.
  *
  * This is the core primitive - use it when you need full control.
- * For simpler cases, use createWidgetState() or createQueryState().
+ * For simpler cases, wrap this with your own helper.
  *
  * @param initialData - Optional initial data (for SSR/prebaked scenarios)
  *

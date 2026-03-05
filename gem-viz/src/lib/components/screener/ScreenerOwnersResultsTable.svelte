@@ -8,6 +8,8 @@
   export let expandedOwnerId: string | null = null;
   export let assetClassName = '';
   export let trackerSlug = '';
+  export let viewMode: 'all' | 'filtered' = 'all';
+  export let selectedOwnerCount = 0;
   export let isInInvestigation: (_entityId: string) => boolean;
   export let onToggleExpanded: (_entityId: string) => void;
   export let onToggleInvestigation: (_owner: any) => void;
@@ -79,13 +81,20 @@
             {#if searchQuery}
               No owners matching "{searchQuery}" found.
               <button class="link-btn" onclick={onClearSearch}>Clear search</button>
+            {:else if viewMode === 'filtered' && selectedOwnerCount > 0}
+              <div class="no-data-notice">
+                <strong>No selected owners matched {classDescription}.</strong>
+                <p>
+                  None of the {selectedOwnerCount} selected companies were returned for these
+                  filters. Try editing your owner selection or clearing some asset filters.
+                </p>
+              </div>
             {:else}
               <div class="no-data-notice">
-                <strong>No ownership data available for {classDescription}.</strong>
+                <strong>No ownership records found for {classDescription}.</strong>
                 <p>
-                  Owner aggregation currently covers Coal Plants, Gas Plants, Steel Plants, and
-                  Bioenergy. Coal Mines, Iron Mines, and Gas Pipelines have asset data in the REST
-                  API but owner relationships are not yet queryable for those tracker types.
+                  This usually means no assets matched the current status/geography filters, or no
+                  owner relationships were returned for the matched assets.
                 </p>
               </div>
             {/if}
@@ -258,24 +267,20 @@
     text-align: left;
     max-width: 500px;
     margin: 0 auto;
-    padding: var(--space-4);
-    background: #fff7ed;
-    border: 1px solid #fed7aa;
-    border-radius: var(--radius-sm);
-    color: #9a3412;
+    color: #4a5568;
   }
 
   .no-data-notice strong {
     display: block;
     margin-bottom: var(--space-2);
-    color: #7c2d12;
+    color: #2d3748;
   }
 
   .no-data-notice p {
     margin: 0;
     font-size: var(--font-size-sm);
     line-height: 1.5;
-    color: #c2410c;
+    color: inherit;
   }
 
   @media (max-width: 768px) {

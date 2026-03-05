@@ -57,7 +57,7 @@
       try {
         localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages));
       } catch (e) {
-        console.warn('Failed to save chat history:', e);
+        if (import.meta.env.DEV) console.warn('Failed to save chat history:', e);
       }
     }
   }
@@ -74,7 +74,7 @@
           }
         }
       } catch (e) {
-        console.warn('Failed to load chat history:', e);
+        if (import.meta.env.DEV) console.warn('Failed to load chat history:', e);
       }
     }
   }
@@ -254,7 +254,7 @@
         scrollToBottom();
       }
     } catch (err) {
-      console.error('Chat error:', err);
+      if (import.meta.env.DEV) console.error('Chat error:', err);
       messages = [
         ...messages,
         {

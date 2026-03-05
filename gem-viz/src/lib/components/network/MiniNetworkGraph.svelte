@@ -5,10 +5,10 @@
    * Uses REST API (getOwnershipGraph).
    */
   import { onMount } from 'svelte';
-  import { assetPath, assetLink, entityLink } from '$lib/links';
+  import { assetLink, entityLink } from '$lib/links';
   import { goto } from '$app/navigation';
   import { Deck } from '@deck.gl/core';
-  import { ScatterplotLayer, PathLayer, IconLayer } from '@deck.gl/layers';
+  import { ScatterplotLayer, PathLayer } from '@deck.gl/layers';
   import {
     forceSimulation,
     forceLink,
@@ -216,8 +216,6 @@
 
     const visibleNodeIds = hoveredNode ? getNodesWithinHops(hoveredNode.id, 1) : null;
     const nodeScale = Math.pow(2, -currentZoom * 0.25);
-    const flowerNodes = nodes.filter((n) => n.id?.startsWith('E'));
-    const circleNodes = nodes.filter((n) => !n.id?.startsWith('E'));
 
     // Build line data
     const lineData = [];
@@ -287,54 +285,9 @@
           pickable: false,
           parameters: { depthTest: false },
         }),
-        new IconLayer({
-          id: 'flower-nodes',
-          data: flowerNodes,
-          autoPacking: true,
-          getPosition: getPos,
-          getIcon: (d) => {
-            const filename = d?.id ? `${d.id}.svg` : 'default.svg';
-            return {
-              url: assetPath(`flowers/${filename}`),
-              width: 64,
-              height: 64,
-              anchorX: 32,
-              anchorY: 32,
-              mask: false,
-            };
-          },
-          sizeUnits: 'pixels',
-          getSize: (d) => {
-            const baseSize = d.isTarget ? 18 : Math.max(6, Math.log2(d.connections + 1) * 3.2);
-            return baseSize * nodeScale;
-          },
-          sizeMinPixels: 5,
-          sizeMaxPixels: 32,
-          billboard: true,
-          pickable: true,
-          parameters: { depthTest: false },
-          onHover: ({ object }) => handleHover(object),
-          onClick: ({ object }) => {
-            if (object) {
-              const isAsset = object.id.startsWith('G');
-              goto(isAsset ? assetLink(object.id) : entityLink(object.id));
-            }
-          },
-          autoHighlight: true,
-          highlightColor: [255, 220, 0, 120],
-          getColor: (d) => {
-            const isVisible = !visibleNodeIds || visibleNodeIds.has(d.id);
-            if (d.isTarget) return [255, 255, 255, isVisible ? 255 : 80];
-            return [255, 255, 255, isVisible ? 140 : 20];
-          },
-          updateTriggers: {
-            getSize: [nodeScale],
-            getColor: [hoveredNode?.id],
-          },
-        }),
         new ScatterplotLayer({
           id: 'nodes',
-          data: circleNodes,
+          data: nodes,
           getPosition: getPos,
           billboard: true,
           getRadius: (d) => {
@@ -344,8 +297,9 @@
           getFillColor: (d) => {
             const isVisible = !visibleNodeIds || visibleNodeIds.has(d.id);
             if (d.isTarget) return [255, 100, 50, isVisible ? 255 : 40];
-            if (flowerNodes.length) {
-              return [130, 130, 130, isVisible ? 160 : 16];
+            // Entity nodes: teal; asset nodes: connection-based gradient
+            if (d.id?.startsWith('E')) {
+              return [0, 79, 97, isVisible ? 200 : 20];
             }
             const t = Math.min(1, d.connections / 20);
             const r = Math.round(90 + t * 165);

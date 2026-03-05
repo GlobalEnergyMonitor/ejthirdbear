@@ -317,7 +317,6 @@
   }
 
   .chart-wrapper {
-    min-height: 420px;
     overflow: visible;
     background: #fafaf7;
   }

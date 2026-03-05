@@ -119,7 +119,7 @@
   const params = {
     subsidX: 20,
     subsidiaryMarkHeight: 19,
-    subsidiaryMinHeight: 90,
+    subsidiaryMinHeight: 60,
     yPadding: 50,
     assetsX: 500,
     assetSpacing: 8,
@@ -901,7 +901,6 @@
 
   /* --- Chart Area --- */
   .chart-wrapper {
-    min-height: 420px;
     overflow: visible;
     background: transparent;
   }
@@ -992,7 +991,7 @@
   /* --- Additional Info Footer --- */
   .additional-info {
     text-align: center;
-    padding: var(--space-4);
+    padding: var(--space-2) var(--space-4);
   }
 
   .additional-info p {
@@ -1006,7 +1005,7 @@
 
   .additional-info span {
     display: inline-block;
-    padding: var(--space-3);
+    padding: var(--space-2);
     border-top: 2px solid var(--gem-orange);
   }
 

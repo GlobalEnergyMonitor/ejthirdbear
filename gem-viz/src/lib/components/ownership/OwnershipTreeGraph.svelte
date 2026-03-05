@@ -27,11 +27,23 @@
     paths?: Record<string, OwnershipPathEntry[]>;
     rootId?: string;
     compact?: boolean;
+    /** downstream places root at top; upstream places root at bottom */
+    direction?: 'auto' | 'upstream' | 'downstream';
+    /** expands graph area and moves owner list under the chart */
+    fullWidth?: boolean;
     /** Optional label for the root asset (passed by some callers, reserved for future use) */
     assetName?: string;
   }
 
-  let { nodes = [], edges = [], paths = {}, rootId = '', compact = false }: Props = $props();
+  let {
+    nodes = [],
+    edges = [],
+    paths = {},
+    rootId = '',
+    compact = false,
+    direction = 'auto',
+    fullWidth = false,
+  }: Props = $props();
 
   // Design tokens — aligned with design-tokens.ts
   const C = {
@@ -60,27 +72,144 @@
   let ready = $state(false);
   let hoveredId = $state<string | null>(null);
   let hoveredNodeData = $state<{ nodesTouched: string[]; edgeIndices: number[] } | null>(null);
+  let hoverSource = $state<'graph' | 'panel' | null>(null);
   let frozenId = $state<string | null>(null);
   let frozenNodeData = $state<{ nodesTouched: string[]; edgeIndices: number[] } | null>(null);
   let hasEverFrozen = $state(false);
   let tooltipX = $state(0);
   let tooltipY = $state(0);
+  let viewportWidth = $state(1280);
+  let zoom = $state(1);
+  let isPanning = $state(false);
+  let panStartX = 0;
+  let panStartY = 0;
+  let panScrollLeft = 0;
+  let panScrollTop = 0;
   let layoutNodes = $state<LayoutNode[]>([]);
   let layoutEdges = $state<LayoutEdge[]>([]);
   let gWidth = $state(400);
   let gHeight = $state(300);
   let nodeRanks = $state<Map<string, number>>(new Map());
 
+  const graphDirection = $derived<'upstream' | 'downstream'>(
+    direction !== 'auto'
+      ? direction
+      : edges.filter((e) => e.source === rootId).length > edges.filter((e) => e.target === rootId).length
+        ? 'downstream'
+        : 'upstream'
+  );
+  const fullWidthMode = $derived(fullWidth && !compact);
+
+  // Adaptive render cap for extremely large graphs to preserve responsiveness.
+  // We still keep full data in memory, but only render a bounded BFS subset.
+  const renderSubset = $derived.by(() => {
+    const totalNodes = nodes.length;
+    const totalEdges = edges.length;
+    const MAX_RENDER_NODES = fullWidthMode ? (viewportWidth < 900 ? 120 : 220) : 320;
+    const MAX_CHILDREN_PER_PARENT = fullWidthMode ? 18 : 24;
+
+    if (compact || totalNodes <= MAX_RENDER_NODES) {
+      return {
+        nodes,
+        edges,
+        trimmed: false,
+        hiddenNodes: 0,
+        hiddenEdges: 0,
+      };
+    }
+
+    const nodeById = new Map(nodes.map((n) => [n.id, n]));
+    const rootNodeId =
+      (nodeById.has(rootId) ? rootId : nodes.find((n) => n.is_root)?.id) || nodes[0]?.id || rootId;
+
+    if (!rootNodeId) {
+      return {
+        nodes,
+        edges,
+        trimmed: false,
+        hiddenNodes: 0,
+        hiddenEdges: 0,
+      };
+    }
+
+    const out = new Map<string, GraphEdge[]>();
+    if (graphDirection === 'downstream') {
+      for (const e of edges) {
+        (out.get(e.source) ?? out.set(e.source, []).get(e.source)!).push(e);
+      }
+    } else {
+      for (const e of edges) {
+        (out.get(e.target) ?? out.set(e.target, []).get(e.target)!).push({
+          source: e.target,
+          target: e.source,
+          value: e.value,
+        });
+      }
+    }
+
+    const keep = new Set<string>([rootNodeId]);
+    const q: string[] = [rootNodeId];
+
+    while (q.length > 0 && keep.size < MAX_RENDER_NODES) {
+      const cur = q.shift()!;
+      const next = (out.get(cur) || [])
+        .slice()
+        .sort((a, b) => (b.value || 0) - (a.value || 0))
+        .slice(0, MAX_CHILDREN_PER_PARENT);
+
+      for (const edge of next) {
+        const child = edge.target;
+        if (!keep.has(child)) {
+          keep.add(child);
+          q.push(child);
+          if (keep.size >= MAX_RENDER_NODES) break;
+        }
+      }
+    }
+
+    const keptNodes = nodes.filter((n) => keep.has(n.id));
+    const keptEdges = edges.filter((e) => keep.has(e.source) && keep.has(e.target));
+
+    return {
+      nodes: keptNodes,
+      edges: keptEdges,
+      trimmed: keptNodes.length < totalNodes,
+      hiddenNodes: Math.max(0, totalNodes - keptNodes.length),
+      hiddenEdges: Math.max(0, totalEdges - keptEdges.length),
+    };
+  });
+
+  const renderNodes = $derived(renderSubset.nodes);
+  const renderEdges = $derived(renderSubset.edges);
+  const isTrimmedGraph = $derived(renderSubset.trimmed);
+  const hiddenNodeCount = $derived(renderSubset.hiddenNodes);
+  const hiddenEdgeCount = $derived(renderSubset.hiddenEdges);
+  const largeGraphMinWidth = $derived(
+    fullWidthMode ? Math.max(720, Math.min(1400, viewportWidth - 64)) : 800
+  );
+  const largeGraphMinHeight = $derived(
+    fullWidthMode ? (viewportWidth < 900 ? 460 : 620) : 600
+  );
+  const graphBaseWidth = $derived(Math.max(gWidth, largeGraphMinWidth));
+  const graphBaseHeight = $derived(Math.max(gHeight, largeGraphMinHeight));
+
   // Large graph threshold — enables scrollable mode with explicit SVG dimensions
-  const isLargeGraph = $derived(!compact && nodes.length > 30);
+  const isLargeGraph = $derived(!compact && renderNodes.length > 30);
 
   // Compute max depth from edge chains (BFS from root)
   const maxDepth = $derived.by(() => {
-    if (edges.length === 0) return 0;
-    // Build adjacency: target → sources (since BT layout, edges go source→target toward root)
+    if (renderEdges.length === 0) return 0;
+    // Build adjacency relative to the chosen direction.
+    // Upstream follows target -> source (toward owners); downstream follows source -> target.
     const children = new Map<string, string[]>();
-    for (const e of edges) {
-      (children.get(e.target) ?? children.set(e.target, []).get(e.target)!).push(e.source);
+    if (graphDirection === 'downstream') {
+      for (const e of renderEdges) {
+        (children.get(e.source) ?? children.set(e.source, []).get(e.source)!).push(e.target);
+      }
+    } else {
+      for (const e of renderEdges) {
+        (children.get(e.target) ?? children.set(e.target, []).get(e.target)!).push(e.source);
+      }
     }
     let depth = 0;
     let frontier = [rootId];
@@ -107,13 +236,13 @@
   // 'large' = ≥25 nodes → hide most labels, show only high-pct or hovered
   const labelMode = $derived<'default' | 'deep-narrow' | 'large'>(
     compact ? 'default' :
-    nodes.length >= 25 ? 'large' :
-    maxDepth > 5 && nodes.length < 25 ? 'deep-narrow' : 'default'
+    renderNodes.length >= 25 ? 'large' :
+    maxDepth > 5 && renderNodes.length < 25 ? 'deep-narrow' : 'default'
   );
 
   // Node radius — scale down for large graphs
   const nodeR = $derived(
-    compact ? 10 : nodes.length < 10 ? 17 : nodes.length < 25 ? 14 : nodes.length < 80 ? 11 : 8
+    compact ? 10 : renderNodes.length < 10 ? 17 : renderNodes.length < 25 ? 14 : renderNodes.length < 80 ? 11 : 8
   );
 
   // Process paths: compute cumulative ownership % and track which nodes/edges
@@ -125,7 +254,7 @@
 
     // O(1) edge lookup instead of O(n) findIndex per path segment
     const edgeIndex = new Map<string, number>();
-    edges.forEach((e, i) => edgeIndex.set(`${e.source}->${e.target}`, i));
+    renderEdges.forEach((e, i) => edgeIndex.set(`${e.source}->${e.target}`, i));
 
     for (const [id, arr] of Object.entries(paths)) {
       if (!Array.isArray(arr)) continue;
@@ -154,17 +283,19 @@
   const pathsMap = $derived(pathsData.pctMap);
   const pathsTouchedMap = $derived(pathsData.touchedMap);
 
-  // "Spine" of the tree: walk up from asset along single-parent edges until
-  // reaching a fork. These nodes always show labels (no hover needed).
+  // "Spine" of the tree: walk along the single-parent/single-child chain from root
+  // until reaching a fork. These nodes always show labels (no hover needed).
   const nodesToShowText = $derived.by(() => {
     const startId = nodes.find((n) => n.type === 'asset' || n.id === rootId)?.id || rootId;
     const spine = new Set<string>([startId]);
     let cur = startId;
 
     while (true) {
-      const parents = edges.filter((e) => e.target === cur && !spine.has(e.source));
-      if (parents.length !== 1) break; // stop at fork or dead end
-      cur = parents[0].source;
+      const next = graphDirection === 'downstream'
+        ? renderEdges.filter((e) => e.source === cur && !spine.has(e.target))
+        : renderEdges.filter((e) => e.target === cur && !spine.has(e.source));
+      if (next.length !== 1) break; // stop at fork or dead end
+      cur = graphDirection === 'downstream' ? next[0].target : next[0].source;
       spine.add(cur);
     }
     return spine;
@@ -174,7 +305,7 @@
   // Handles both upstream (edges → rootId) and downstream (rootId → edges) directions
   const edgePctMap = $derived.by(() => {
     const m = new Map<string, number>();
-    for (const e of edges) {
+    for (const e of renderEdges) {
       if (e.value == null) continue;
       if (e.target === rootId) {
         // Upstream: who owns the root
@@ -189,7 +320,7 @@
 
   // Color-by logic: dynamic coloring by entity-type or country
   const colorConfig = $derived.by(() => {
-    const entityNodes = nodes.filter((n) => n.type !== 'asset' && n.id !== rootId);
+    const entityNodes = renderNodes.filter((n) => n.type !== 'asset' && n.id !== rootId);
 
     const entityTypes = new Set(entityNodes.map((n) => n.entity_type).filter(Boolean));
     const countries = new Set(entityNodes.map((n) => n.headquarters_country).filter(Boolean));
@@ -261,6 +392,7 @@
         const highlighted = colors !== CATEGORY_GREY;
         return {
           id: n.id,
+          nid,
           name: n.name || n.Name || n.id,
           pct: pathsMap.get(nid) || edgePctMap.get(nid) || 0,
           country: n.headquarters_country || '',
@@ -283,11 +415,13 @@
 
   // Data-driven narrative text for the context panel
   const narrativeText = $derived.by(() => {
-    const entityNodes = nodes.filter((n) => n.type !== 'asset' && n.id !== rootId);
+    const entityNodes = renderNodes.filter((n) => n.type !== 'asset' && n.id !== rootId);
+    const isDownstream = graphDirection === 'downstream';
     const totalAccountedPct = Math.min(100, entityNodes.reduce((s, n) => {
-      const nid = n.entity_id || n.id;
-      // Only count direct owners (not intermediaries) to avoid double-counting
-      const directEdge = edges.find((e) => e.source === n.id && e.target === rootId);
+      // Only count direct first-hop relationships (not intermediaries) to avoid double-counting
+      const directEdge = isDownstream
+        ? renderEdges.find((e) => e.source === rootId && e.target === n.id)
+        : renderEdges.find((e) => e.source === n.id && e.target === rootId);
       return s + (directEdge?.value || 0);
     }, 0));
     const unknownPct = Math.max(0, 100 - totalAccountedPct);
@@ -326,16 +460,22 @@
 
       // Ownership line
       if (pct > 0) {
-        let ownershipLine = `Holds ${pct.toFixed(1)}% cumulative ownership of ${assetName}`;
+        let ownershipLine = isDownstream
+          ? `${assetName} holds ${pct.toFixed(1)}% cumulative ownership of ${name}`
+          : `Holds ${pct.toFixed(1)}% cumulative ownership of ${assetName}`;
         if (intermediaries > 0) {
           ownershipLine += ` through ${intermediaries} intermediar${intermediaries === 1 ? 'y' : 'ies'}`;
         }
         parts.push(ownershipLine + '.');
       }
 
-      // Terminal owner note
+      // Terminal chain note
       if (isTerminal) {
-        parts.push('Ultimate owner — no further parent entities identified.');
+        parts.push(
+          isDownstream
+            ? 'Terminal downstream entity — no further controlled subsidiaries identified.'
+            : 'Ultimate owner — no further parent entities identified.'
+        );
       }
 
       return { lines: parts, mode: 'entity' as const };
@@ -343,10 +483,17 @@
 
     // Default: graph summary
     const lines: string[] = [];
-    const directOwners = entityNodes.filter((n) => edges.some((e) => e.source === n.id && e.target === rootId));
+    const directRel = entityNodes.filter((n) =>
+      isDownstream
+        ? renderEdges.some((e) => e.source === rootId && e.target === n.id)
+        : renderEdges.some((e) => e.source === n.id && e.target === rootId)
+    );
     lines.push(
-      `${assetName} has ${directOwners.length} direct owner${directOwners.length !== 1 ? 's' : ''}` +
-      ` and ${entityNodes.length} entities in its ownership structure.`
+      isDownstream
+        ? `${assetName} has ${directRel.length} directly held entit${directRel.length === 1 ? 'y' : 'ies'}` +
+          ` and ${entityNodes.length} entities in this downstream structure.`
+        : `${assetName} has ${directRel.length} direct owner${directRel.length !== 1 ? 's' : ''}` +
+          ` and ${entityNodes.length} entities in its ownership structure.`
     );
     if (unknownPct > 1) {
       lines.push(`${unknownPct.toFixed(0)}% of ownership is unaccounted for in available records.`);
@@ -354,7 +501,11 @@
       lines.push('Ownership is fully accounted for in available records.');
     }
     if (terminalCount > 0) {
-      lines.push(`${terminalCount} ultimate owner${terminalCount !== 1 ? 's' : ''} identified at the top of the chain.`);
+      lines.push(
+        isDownstream
+          ? `${terminalCount} terminal downstream entit${terminalCount === 1 ? 'y' : 'ies'} identified.`
+          : `${terminalCount} ultimate owner${terminalCount !== 1 ? 's' : ''} identified at the top of the chain.`
+      );
     }
     return { lines, mode: 'summary' as const };
   });
@@ -449,33 +600,47 @@
 
   // Run layout
   function runLayout() {
-    if (!dagre || nodes.length === 0) return;
+    if (!dagre || renderNodes.length === 0) return;
 
     const g = new dagre.graphlib.Graph();
-    const isLarge = nodes.length > 30;
+    const isLarge = renderNodes.length > 30;
+    const wideMode = fullWidthMode;
     // Rank separation: deep-narrow compresses vertically, large needs space for edge labels,
     // default leaves room for two-line labels + edge pct between ranks
     const ranksep = compact ? 28 :
       labelMode === 'deep-narrow' ? 45 :
-      labelMode === 'large' ? 70 :
-      isLarge ? 80 : 65;
+      labelMode === 'large'
+        ? graphDirection === 'downstream'
+          ? (wideMode ? 62 : 66)
+          : (wideMode ? 82 : 72)
+        : isLarge
+          ? graphDirection === 'downstream'
+            ? (wideMode ? 64 : 70)
+            : (wideMode ? 92 : 80)
+          : (wideMode ? 74 : 65);
     g.setGraph({
-      rankdir: 'BT',
-      nodesep: compact ? nodeR * 2 : labelMode === 'deep-narrow' ? nodeR * 3.5 : isLarge ? nodeR * 4 : nodeR * 3,
+      rankdir: graphDirection === 'downstream' ? 'TB' : 'BT',
+      nodesep: compact
+        ? nodeR * 2
+        : labelMode === 'deep-narrow'
+          ? nodeR * 3.5
+          : isLarge
+            ? nodeR * (wideMode ? 5.2 : 4)
+            : nodeR * (wideMode ? 3.8 : 3),
       ranksep,
-      marginx: compact ? 15 : labelMode === 'deep-narrow' ? 80 : 50,
-      marginy: compact ? 12 : 50,
+      marginx: compact ? 15 : labelMode === 'deep-narrow' ? 80 : (wideMode ? 70 : 50),
+      marginy: compact ? 12 : graphDirection === 'downstream' ? 34 : 50,
     });
     g.setDefaultEdgeLabel(() => ({}));
 
-    nodes.forEach((n) => {
+    renderNodes.forEach((n) => {
       const isAsset = n.type === 'asset' || n.id === rootId;
       g.setNode(n.id, {
         width: isAsset ? (compact ? 120 : 180) : nodeR * 2,
         height: isAsset ? (compact ? 24 : 36) : nodeR * 2,
       });
     });
-    edges.forEach((e) => g.setEdge(e.source, e.target));
+    renderEdges.forEach((e) => g.setEdge(e.source, e.target));
     dagre.layout(g);
 
     // Convert dagre y-positions to discrete rank indices (bottom = rank 0)
@@ -486,8 +651,8 @@
     nodeRanks = new Map([...yPos].map(([id, y]) => [id, yToRank.get(y) ?? 0]));
 
     // O(1) lookups instead of O(n) find per node/edge
-    const nodeById = new Map(nodes.map((n) => [n.id, n]));
-    const edgeByKey = new Map(edges.map((e) => [`${e.source}->${e.target}`, e]));
+    const nodeById = new Map(renderNodes.map((n) => [n.id, n]));
+    const edgeByKey = new Map(renderEdges.map((e) => [`${e.source}->${e.target}`, e]));
 
     const rawLayoutNodes = g.nodes().map((id: string) => {
       const pos = g.node(id);
@@ -535,7 +700,8 @@
     if (compact && layoutNodes.length < 10) return true;
     // Large graphs: selective labels only
     if (labelMode === 'large') {
-      return n.pct > 20;
+      const rank = nodeRanks.get(n.id) ?? 99;
+      return rank <= 2 || n.pct > 10;
     }
     // Default and deep-narrow: show all labels
     return true;
@@ -569,12 +735,14 @@
   // Hover only allowed when unfrozen OR when hovering a node in the frozen path
   function handleNodeHover(n: LayoutNode, ev?: MouseEvent) {
     if (frozenId && !isNodeInFrozenPath(n.id)) return;
+    hoverSource = 'graph';
     hoveredId = n.id;
-    const entityId = nodes.find((node) => node.id === n.id)?.entity_id || n.id;
+    const entityId = renderNodes.find((node) => node.id === n.id)?.entity_id || n.id;
     hoveredNodeData = pathsTouchedMap.get(entityId) || null;
     if (ev) updateTooltipPos(ev);
   }
   function handleNodeLeave() {
+    hoverSource = null;
     hoveredId = null;
     hoveredNodeData = null;
   }
@@ -587,25 +755,29 @@
     const container = graphWrapEl?.closest('.ownership-tree');
     if (!container) return;
     const rect = container.getBoundingClientRect();
-    tooltipX = ev.clientX - rect.left + 12;
-    tooltipY = ev.clientY - rect.top - 8;
+    // Keep tooltip inside component bounds to prevent jumpy clipping.
+    tooltipX = Math.max(8, Math.min(ev.clientX - rect.left + 12, rect.width - 260));
+    tooltipY = Math.max(8, Math.min(ev.clientY - rect.top - 8, rect.height - 80));
   }
 
   // Path-aware opacity: nodes/edges not on the active (frozen or hovered) path fade
   function getNodeOpacity(n: LayoutNode): number {
-    if (!activeNodeData) return 1;
+    if (!activeNodeData) return isLargeGraph ? 0.92 : 1;
     return n.isAsset || n.id === activeId || activeNodeData.nodesTouched.includes(n.id) ? 1 : 0.1;
   }
   function getEdgeOpacity(idx: number): number {
-    if (!activeNodeData) return 1;
+    if (!activeNodeData) return isLargeGraph ? 0.22 : 1;
     return activeNodeData.edgeIndices.includes(idx) ? 0.7 : 0.1;
   }
-  // Edge labels: always visible in compact/large mode, otherwise only on active path
+  // Edge labels:
+  // - compact: always visible
+  // - normal/large: only visible for active (hovered/pinned) path
   function shouldShowEdgeLabel(idx: number): boolean {
-    if (compact || isLargeGraph) return true;
+    if (compact) return true;
     return !!activeNodeData?.edgeIndices.includes(idx);
   }
 
+  let panelOpen = $state(false);
   let graphWrapEl = $state<HTMLDivElement | null>(null);
 
   function scrollToRoot() {
@@ -613,29 +785,103 @@
     // Find the root node's x position and scroll so it's roughly centered
     const rootNode = layoutNodes.find((n) => n.isAsset || n.id === rootId);
     if (!rootNode) return;
-    const scrollX = Math.max(0, rootNode.x - graphWrapEl.clientWidth / 2);
+    const scrollX = Math.max(0, rootNode.x * zoom - graphWrapEl.clientWidth / 2);
     graphWrapEl.scrollLeft = scrollX;
   }
 
-  onMount(async () => {
-    try {
-      dagre = await import('dagre');
-      runLayout();
-      ready = true;
-      // Auto-scroll to root after first render
-      requestAnimationFrame(scrollToRoot);
-    } catch (e) {
-      if (import.meta.env.DEV) console.error('Failed to load dagre:', e);
+  function startPan(ev: PointerEvent) {
+    if (!graphWrapEl) return;
+    const target = ev.target as Element | null;
+    if (target?.closest('.node')) return;
+    isPanning = true;
+    panStartX = ev.clientX;
+    panStartY = ev.clientY;
+    panScrollLeft = graphWrapEl.scrollLeft;
+    panScrollTop = graphWrapEl.scrollTop;
+    graphWrapEl.setPointerCapture?.(ev.pointerId);
+  }
+
+  function movePan(ev: PointerEvent) {
+    if (!isPanning || !graphWrapEl) return;
+    graphWrapEl.scrollLeft = panScrollLeft - (ev.clientX - panStartX);
+    graphWrapEl.scrollTop = panScrollTop - (ev.clientY - panStartY);
+  }
+
+  function endPan(ev?: PointerEvent) {
+    if (!graphWrapEl) return;
+    if (ev && graphWrapEl.hasPointerCapture?.(ev.pointerId)) {
+      graphWrapEl.releasePointerCapture(ev.pointerId);
     }
+    isPanning = false;
+  }
+
+  function onGraphWheel(ev: WheelEvent) {
+    if (!graphWrapEl || !isLargeGraph) return;
+    if (!(ev.ctrlKey || ev.metaKey)) return;
+    ev.preventDefault();
+
+    const prevZoom = zoom;
+    const delta = ev.deltaY > 0 ? -0.12 : 0.12;
+    const nextZoom = Math.max(0.6, Math.min(2.4, +(prevZoom + delta).toFixed(2)));
+    if (nextZoom === prevZoom) return;
+
+    const rect = graphWrapEl.getBoundingClientRect();
+    const cursorX = ev.clientX - rect.left;
+    const cursorY = ev.clientY - rect.top;
+    const worldX = (graphWrapEl.scrollLeft + cursorX) / prevZoom;
+    const worldY = (graphWrapEl.scrollTop + cursorY) / prevZoom;
+
+    zoom = nextZoom;
+    queueMicrotask(() => {
+      if (!graphWrapEl) return;
+      graphWrapEl.scrollLeft = worldX * nextZoom - cursorX;
+      graphWrapEl.scrollTop = worldY * nextZoom - cursorY;
+    });
+  }
+
+  function zoomBy(step: number) {
+    const prev = zoom;
+    const next = Math.max(0.6, Math.min(2.4, +(prev + step).toFixed(2)));
+    zoom = next;
+  }
+
+  function resetView() {
+    zoom = 1;
+    requestAnimationFrame(scrollToRoot);
+  }
+
+  onMount(() => {
+    const onResize = () => {
+      viewportWidth = window.innerWidth || 1280;
+    };
+    onResize();
+    window.addEventListener('resize', onResize, { passive: true });
+    zoom = 1;
+
+    void (async () => {
+      try {
+        dagre = await import('dagre');
+        runLayout();
+        ready = true;
+        // Auto-scroll to root after first render
+        requestAnimationFrame(scrollToRoot);
+      } catch (e) {
+        if (import.meta.env.DEV) console.error('Failed to load dagre:', e);
+      }
+    })();
+
+    return () => {
+      window.removeEventListener('resize', onResize);
+    };
   });
 
   // Re-run layout when data changes
   $effect(() => {
-    if (dagre && nodes.length > 0) runLayout();
+    if (dagre && renderNodes.length > 0) runLayout();
   });
 </script>
 
-<div class="ownership-tree" class:compact>
+<div class="ownership-tree" class:compact class:full-width={fullWidthMode}>
   {#if !ready}
     <div class="msg">Loading...</div>
   {:else if layoutNodes.length === 0}
@@ -644,6 +890,22 @@
     <div class="container">
       {#if !compact}
         <div class="graph-controls">
+          {#if isLargeGraph}
+            <div class="map-hint">Drag to pan. Ctrl/Cmd + wheel to zoom.</div>
+            <div class="zoom-controls" aria-label="Graph zoom controls">
+              <button type="button" onclick={() => zoomBy(-0.1)} title="Zoom out">-</button>
+              <span>{Math.round(zoom * 100)}%</span>
+              <button type="button" onclick={() => zoomBy(0.1)} title="Zoom in">+</button>
+              <button type="button" onclick={resetView} title="Reset view">Reset</button>
+            </div>
+          {/if}
+          {#if isTrimmedGraph}
+            <div class="density-note">
+              Showing {renderNodes.length.toLocaleString()} of {nodes.length.toLocaleString()} entities
+              ({hiddenNodeCount.toLocaleString()} hidden, {hiddenEdgeCount.toLocaleString()} edges hidden)
+              for responsive rendering.
+            </div>
+          {/if}
           {#if colorConfig.showToggle}
             <div class="color-toggle">
               <button class:active={colorBy === 'entity-type'} onclick={() => colorBy = 'entity-type'}>
@@ -678,12 +940,22 @@
           {/if}
         </div>
       {/if}
-      <div class="graph-wrap" bind:this={graphWrapEl}>
+      <div
+        class="graph-wrap"
+        class:panning={isPanning}
+        bind:this={graphWrapEl}
+        onpointerdown={startPan}
+        onpointermove={movePan}
+        onpointerup={endPan}
+        onpointercancel={endPan}
+        onpointerleave={endPan}
+        onwheel={onGraphWheel}
+      >
         <svg
           viewBox="0 0 {gWidth} {gHeight}"
           preserveAspectRatio="xMidYMid meet"
           style={isLargeGraph
-            ? `width: ${Math.max(gWidth, 800)}px; min-height: ${Math.max(gHeight, 600)}px;`
+            ? `width: ${Math.round(graphBaseWidth * zoom)}px; min-height: ${Math.round(graphBaseHeight * zoom)}px;`
             : ''}
           onclick={(ev) => {
             // Click on SVG background (not a node) unfreezes
@@ -692,6 +964,7 @@
               frozenNodeData = null;
             }
           }}
+          onmouseleave={handleNodeLeave}
         >
           <defs>
             <marker id="arr" markerWidth="8" markerHeight="6" refX="6" refY="3" orient="auto">
@@ -783,9 +1056,12 @@
 
       <!-- Side panel (hidden in compact mode) -->
       {#if !compact}
-        <div class="panel">
+        <div class="panel" class:open={panelOpen}>
           <h4>Owner Entities</h4>
-          <div class="list">
+          <button class="panel-toggle" onclick={() => panelOpen = !panelOpen}>
+            {ownersList.length} owner{ownersList.length !== 1 ? 's' : ''} {panelOpen ? '▲' : '▼'}
+          </button>
+          <div class="owner-list">
             {#each ownersList as o}
               {@const rowColors = getNodeColors(o.id)}
               <div
@@ -797,23 +1073,24 @@
                 tabindex="0"
                 onmouseenter={() => {
                   if (frozenId && !isNodeInFrozenPath(o.id)) return;
+                  hoverSource = 'panel';
                   hoveredId = o.id;
-                  hoveredNodeData = pathsTouchedMap.get(o.id) || null;
+                  hoveredNodeData = pathsTouchedMap.get(o.nid) || null;
                 }}
                 onmouseleave={handleNodeLeave}
                 onclick={() => {
                   if (frozenId === o.id) { frozenId = null; frozenNodeData = null; }
-                  else { frozenId = o.id; frozenNodeData = pathsTouchedMap.get(o.id) || null; hasEverFrozen = true; }
+                  else { frozenId = o.id; frozenNodeData = pathsTouchedMap.get(o.nid) || null; hasEverFrozen = true; }
                 }}
-                ondblclick={() => goto(entityLink(o.id))}
-                onkeydown={(ev) => ev.key === 'Enter' && goto(entityLink(o.id))}
+                ondblclick={() => goto(entityLink(o.nid))}
+                onkeydown={(ev) => ev.key === 'Enter' && goto(entityLink(o.nid))}
               >
-              <div class="row-main">
+                <div class="row-main">
                   <svg class="row-color-dot" viewBox="0 0 10 10" width="10" height="10">
                     <circle cx="5" cy="5" r="4.5" fill={rowColors.bg} />
                     <path d={pieArc(75, 3)} transform="translate(5,5)" fill={rowColors.fg} />
                   </svg>
-                  <span class="row-name">{o.name}</span>
+                  <span class="row-name">{o.name || o.id}</span>
                   <span class="row-pct">{o.pct.toFixed(1)}%</span>
                 </div>
                 {#if hoveredId === o.id || frozenId === o.id}
@@ -836,7 +1113,7 @@
       {/if}
 
       <!-- Tooltip -->
-      {#if hoveredId && hoveredGraphNode}
+      {#if hoverSource === 'graph' && hoveredId && hoveredGraphNode}
         {@const isAsset = hoveredGraphNode.type === 'asset' || hoveredId === rootId}
         {@const pct = hoveredLayoutNode?.pct ?? 0}
         <div class="tooltip" class:frozen={frozenId === hoveredId} style="left: {tooltipX}px; top: {tooltipY}px;">
@@ -853,21 +1130,24 @@
           <div class="tooltip-detail">
             {isAsset ? 'Asset' : 'Entity'}{#if !isAsset && pct > 0} &middot; {pct.toFixed(1)}%{/if}
           </div>
-          {#if !hasEverFrozen && !frozenId}
+          {#if isLargeGraph}
+            <div class="tooltip-hint">Drag to pan · Ctrl/Cmd + wheel to zoom</div>
+          {:else if !hasEverFrozen && !frozenId}
             <div class="tooltip-hint">Click to pin</div>
           {/if}
         </div>
       {/if}
 
-      <!-- Context narrative -->
-      {#if !compact}
-        <div class="narrative" class:entity={narrativeText.mode === 'entity'}>
-          {#each narrativeText.lines as line}
-            <p>{line}</p>
-          {/each}
-        </div>
-      {/if}
     </div>
+
+    <!-- Context narrative -->
+    {#if !compact}
+      <div class="narrative" class:entity={narrativeText.mode === 'entity'}>
+        {#each narrativeText.lines as line}
+          <p>{line}</p>
+        {/each}
+      </div>
+    {/if}
   {/if}
 </div>
 
@@ -890,10 +1170,27 @@
     display: flex;
     gap: 20px;
   }
+  .full-width .container {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
   .graph-wrap {
     flex: 1;
     overflow: auto;
-    max-height: 700px;
+    cursor: grab;
+    touch-action: none;
+  }
+  .graph-wrap.panning {
+    cursor: grabbing;
+  }
+  .graph-wrap.panning,
+  .graph-wrap.panning * {
+    user-select: none;
+  }
+  .full-width .graph-wrap {
+    min-width: 0;
+    max-height: min(74vh, 760px);
   }
   svg {
     display: block;
@@ -986,6 +1283,14 @@
     padding: 0 0 0 16px;
     border-left: 1px solid var(--color-border, #e0e0e0);
   }
+  .full-width .panel {
+    min-width: 0;
+    max-width: none;
+    width: 100%;
+    padding: 10px 0 0;
+    border-left: none;
+    border-top: 1px solid var(--color-border, #e0e0e0);
+  }
   .panel h4 {
     margin: 0 0 8px;
     font-size: 11px;
@@ -994,9 +1299,19 @@
     letter-spacing: 0.05em;
     color: var(--color-text-tertiary, #888);
   }
-  .list {
-    max-height: 300px;
-    overflow-y: auto;
+  .owner-list {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: stretch;
+    gap: 4px;
+    max-height: none;
+    overflow: visible;
+  }
+  .full-width .owner-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 6px 16px;
   }
   .row {
     font-size: 12px;
@@ -1026,23 +1341,40 @@
     border-left: 3px solid #004F61;
     padding-left: 5px;
   }
+  .full-width .row {
+    padding: 6px 0;
+    border-radius: 0;
+  }
+  .full-width .row:hover,
+  .full-width .row.active,
+  .full-width .row.frozen {
+    background: transparent;
+    border-left: none;
+    padding-left: 0;
+  }
+  .full-width .row.active .row-name,
+  .full-width .row.frozen .row-name {
+    font-weight: 700;
+  }
   .row-main {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
+    display: grid;
+    grid-template-columns: 10px minmax(0, 1fr) auto;
+    align-items: center;
     gap: 8px;
+    min-width: 0;
   }
   .row-name {
+    color: #1D4961;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    flex: 1;
+    min-width: 0;
   }
   .row-pct {
+    color: #1D4961;
     font-variant-numeric: tabular-nums;
     font-weight: 500;
     white-space: nowrap;
-    flex-shrink: 0;
   }
   .row-country {
     font-size: 10px;
@@ -1094,6 +1426,35 @@
     align-items: center;
     gap: 12px;
     margin-bottom: 8px;
+  }
+  .map-hint {
+    font-size: 11px;
+    color: var(--color-text-secondary, #555);
+  }
+  .zoom-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--color-text-secondary, #555);
+  }
+  .zoom-controls button {
+    border: 1px solid var(--color-border, #e0e0e0);
+    background: #fff;
+    color: var(--color-text-primary, #1D4961);
+    border-radius: 4px;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    cursor: pointer;
+    font-size: 11px;
+  }
+  .density-note {
+    font-size: 11px;
+    color: var(--color-text-secondary, #555);
+    background: rgba(190, 204, 207, 0.2);
+    padding: 4px 8px;
+    border-radius: 4px;
   }
   .color-toggle {
     display: inline-flex;
@@ -1194,5 +1555,71 @@
   }
   .narrative p:last-child {
     margin-bottom: 0;
+  }
+
+  /* Panel toggle — hidden on desktop */
+  .panel-toggle {
+    display: none;
+    width: 100%;
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    background: var(--color-bg-secondary, #f5f5f5);
+    border: 1px solid var(--color-border, #e0e0e0);
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--color-text-primary, #1D4961);
+    margin-bottom: 6px;
+  }
+
+  /* Mobile responsive */
+  @media (max-width: 768px) {
+    .container {
+      flex-direction: column;
+    }
+    .graph-wrap {
+      max-height: none;
+    }
+    .full-width .graph-wrap {
+      max-height: 62vh;
+    }
+    svg {
+      min-height: 250px;
+    }
+    .panel {
+      min-width: unset;
+      max-width: unset;
+      width: 100%;
+      padding: 12px 0 0;
+      border-left: none;
+      border-top: 1px solid var(--color-border, #e0e0e0);
+    }
+    .panel-toggle {
+      display: block;
+    }
+    .panel .owner-list {
+      display: none;
+      max-height: 200px;
+    }
+    .panel.open .owner-list {
+      display: block;
+    }
+    .full-width .panel.open .owner-list {
+      display: grid;
+      grid-template-columns: 1fr;
+    }
+    .tooltip {
+      max-width: 200px;
+      white-space: normal;
+    }
+    .graph-controls {
+      gap: 8px;
+    }
+    .row {
+      padding: 8px 10px;
+    }
+    .node circle {
+      transform: scale(1.15);
+    }
   }
 </style>

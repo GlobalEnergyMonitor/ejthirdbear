@@ -129,8 +129,15 @@
     return 'text';
   }
 
-  // Type icon characters
-  const typeIcons: Record<FieldType, string> = { numeric: '#', enum: '\u2261', text: 'Aa' };
+  // Type icon characters (used in preview badge)
+  const typeLabels: Record<FieldType, string> = { numeric: '#', enum: '\u2261', text: 'Aa' };
+
+  // Type colors for dot indicators
+  const typeColors: Record<FieldType, string> = {
+    numeric: '#016b83',
+    enum: '#fe4f2d',
+    text: '#004a63',
+  };
 
   // Detect field type from category, name, and distribution data
   function detectFieldType(field: FieldInfo, distribution: FieldDistribution[]): FieldType {
@@ -317,7 +324,7 @@
                   selectField(field);
                 }}
               >
-                <span class="field-type-icon">{typeIcons[fieldType]}</span>
+                <span class="field-type-dot" style="background:{typeColors[fieldType]}"></span>
                 {shorten(field.columnName, 100)}
               </button>
               <span class="definition">{field.definition}</span>
@@ -354,15 +361,15 @@
           <span class="dist-stat">{fieldDistribution.length} distinct</span>
           {#if detectedType === 'numeric' && numericStats}
             <span class="dist-stat type-badge numeric"
-              ><span class="type-icon">{typeIcons.numeric}</span> Numeric</span
+              ><span class="type-icon">{typeLabels.numeric}</span> Numeric</span
             >
           {:else if detectedType === 'enum'}
             <span class="dist-stat type-badge enum"
-              ><span class="type-icon">{typeIcons.enum}</span> Enum</span
+              ><span class="type-icon">{typeLabels.enum}</span> Enum</span
             >
           {:else}
             <span class="dist-stat type-badge text"
-              ><span class="type-icon">{typeIcons.text}</span> Text</span
+              ><span class="type-icon">{typeLabels.text}</span> Text</span
             >
           {/if}
         </div>
@@ -589,31 +596,42 @@
     opacity: 0.8;
   }
 
-  /* Field type icon in pills */
-  .field-type-icon {
-    font-size: 0.65rem;
-    font-weight: 700;
-    opacity: 0.5;
-    margin-right: 2px;
-    font-family: 'Barlow Semi-Condensed', 'Arial Narrow', sans-serif;
+  /* Field type dot indicator in pills */
+  .field-type-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    margin-right: 4px;
+    vertical-align: middle;
+    flex-shrink: 0;
+    opacity: 0.85;
   }
 
-  /* Type-colored pill borders */
+  /* Type-colored pill styling */
   div.dataset-fields div.field-name > button.type-numeric {
     border-color: rgba(1, 107, 131, 0.4);
+    background: rgba(1, 107, 131, 0.06);
   }
   div.dataset-fields div.field-name > button.type-enum {
-    border-color: rgba(157, 247, 229, 0.8);
+    border-color: rgba(254, 79, 45, 0.3);
+    background: rgba(254, 79, 45, 0.04);
   }
   div.dataset-fields div.field-name > button.type-text {
     border-color: rgba(0, 74, 99, 0.15);
+    background: rgba(0, 74, 99, 0.02);
   }
 
-  /* Override selected state (always teal) */
+  /* Override selected state (always teal bg, white dot) */
   div.dataset-fields div.field-name > button.selected.type-numeric,
   div.dataset-fields div.field-name > button.selected.type-enum,
   div.dataset-fields div.field-name > button.selected.type-text {
     border-color: var(--teal);
+    background: var(--teal);
+  }
+
+  div.dataset-fields div.field-name > button.selected .field-type-dot {
+    background: rgba(255, 255, 255, 0.8) !important;
   }
 
   .field-definition {
@@ -653,8 +671,8 @@
   }
 
   .type-badge.enum {
-    background: rgba(157, 247, 229, 0.3);
-    color: var(--navy);
+    background: rgba(254, 79, 45, 0.1);
+    color: var(--orange);
   }
 
   .type-badge.text {

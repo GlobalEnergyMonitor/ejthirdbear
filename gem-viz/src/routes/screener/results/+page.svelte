@@ -496,6 +496,8 @@
         {filteredOwners}
         {classDescription}
         {searchQuery}
+        {viewMode}
+        selectedOwnerCount={selectedOwnerIds.length}
         {expandedOwnerId}
         assetClassName={chartAssetClassName}
         trackerSlug={chartTrackerSlug}
@@ -573,12 +575,8 @@
 <style>
   /* Parse error */
   .parse-error {
-    padding: var(--space-4) var(--space-5);
-    background: #fff7ed;
-    border: 1px solid #fed7aa;
-    border-radius: var(--radius-sm);
-    color: #9a3412;
-    margin-bottom: var(--space-6);
+    margin-bottom: var(--space-4);
+    color: var(--color-text-secondary);
   }
 
   .parse-error p {
@@ -593,11 +591,7 @@
 
   /* Filters summary */
   .filters-summary {
-    padding: var(--space-4) var(--space-5);
-    background: var(--color-gray-50);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm);
-    margin-bottom: var(--space-6);
+    margin-bottom: var(--space-5);
   }
 
   .filters-summary h3 {
@@ -610,39 +604,19 @@
   }
 
   .filter-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2);
+    line-height: 1.5;
     margin-bottom: var(--space-3);
   }
 
   .filter-tag {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-2);
-    padding: var(--space-1) var(--space-3);
-    background: white;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm);
+    display: inline;
     font-size: var(--font-size-sm);
   }
 
-  .filter-tag.asset-class {
-    border-color: var(--gem-teal);
-    background: var(--gem-teal-light, #e8f4f4);
-  }
-
-  .filter-tag.status {
-    border-color: var(--color-accent);
-  }
-
-  .filter-tag.geography {
-    border-color: #6b7280;
-  }
-
-  .filter-tag.owners {
-    border-color: var(--gem-primary-blue);
-    background: #e8f0f4;
+  .filter-tag + .filter-tag::before {
+    content: '•';
+    margin: 0 var(--space-2);
+    color: var(--color-text-tertiary);
   }
 
   .tag-label {
@@ -685,6 +659,21 @@
     gap: var(--space-3);
     align-items: center;
     min-width: 0;
+  }
+
+  .results-title-row :global(.badge) {
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: none;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-xs);
+  }
+
+  .results-title-row :global(.badge .label) {
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
   }
 
   h2 {
@@ -731,10 +720,7 @@
     grid-template-columns: 1fr auto;
     gap: var(--space-4);
     margin-bottom: var(--space-4);
-    padding: var(--space-4);
-    background: white;
-    border: 1px solid #e2e8f0;
-    border-radius: var(--radius-md);
+    align-items: center;
   }
 
   .search-input-wrapper {
@@ -780,20 +766,20 @@
 
   /* Investigation summary */
   .investigation-summary {
-    padding: var(--space-3) var(--space-4);
     margin-bottom: var(--space-4);
-    background: linear-gradient(135deg, #e6fffa 0%, #b2f5ea 100%);
-    border: 1px solid #38b2ac;
-    border-radius: var(--radius-md);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-2);
     font-size: var(--font-size-sm);
-    color: #234e52;
+    color: var(--color-text-secondary);
   }
 
   .report-link {
-    margin-left: var(--space-4);
     color: #1d4961;
     font-weight: 600;
-    text-decoration: none;
+    text-decoration: underline;
+    text-underline-offset: 2px;
   }
 
   .report-link:hover {

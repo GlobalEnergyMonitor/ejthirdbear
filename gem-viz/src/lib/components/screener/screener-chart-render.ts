@@ -89,12 +89,13 @@ export function renderChart(
     return getTrackerColor(unit.tracker);
   };
 
-  // Create SVG
+  // Create SVG — extend width to accommodate asset labels that start at assetsX
+  const svgWidth = Math.max(width, LAYOUT.assetsX + MARGIN.left + 420);
   const svg = select(container)
     .append('svg')
-    .attr('width', width)
+    .attr('width', svgWidth)
     .attr('height', svgHeight)
-    .attr('viewBox', `0 0 ${width} ${svgHeight}`)
+    .attr('viewBox', `0 0 ${svgWidth} ${svgHeight}`)
     .style('font-family', "'Plus Jakarta Sans', system-ui, sans-serif")
     .style('overflow', 'visible');
 
@@ -259,7 +260,7 @@ function drawSubsidiaryLabels(
     .data(data)
     .join('g')
     .attr('class', 'subsidiary-label')
-    .attr('transform', (d) => `translate(${LAYOUT.subsidX}, ${d.top})`);
+    .attr('transform', (d) => `translate(${LAYOUT.subsidX}, ${d.top + 12})`);
 
   // --- Ownership pie circle ---
   // Background circle

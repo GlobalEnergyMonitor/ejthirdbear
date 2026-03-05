@@ -34,7 +34,7 @@
       featuredPresets = await loadFeaturedPresets(fetch);
     } catch (err) {
       featuredError = 'Failed to load featured presets.';
-      console.error('[Presets] Failed to load featured presets:', err);
+      if (import.meta.env.DEV) console.error('[Presets] Failed to load featured presets:', err);
     } finally {
       loadingFeatured = false;
     }

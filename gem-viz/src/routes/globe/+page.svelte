@@ -355,31 +355,6 @@
 </svelte:head>
 
 <div class="explorer">
-  <!-- Header -->
-  <header class="explorer-header">
-    <div class="header-left">
-      <a href={link('index')} class="back-link">Home</a>
-      <h1>Global Asset Explorer</h1>
-    </div>
-    <div class="header-stats">
-      <div class="stat">
-        <span class="stat-value">{formatNumber(filteredCount)}</span>
-        <span class="stat-label">assets</span>
-      </div>
-      <div class="stat">
-        <span class="stat-value">{visibleTrackerCount}</span>
-        <span class="stat-label">tracker types</span>
-      </div>
-      <div class="stat">
-        <span class="stat-value">{visibleCountriesCount}</span>
-        <span class="stat-label">countries</span>
-      </div>
-      <div class="stat query-stat">
-        <DataSourceBadge source="local" label="GeoJSON" {queryTime} />
-      </div>
-    </div>
-  </header>
-
   <div class="explorer-body">
     <!-- Sidebar with filters -->
     <aside class="sidebar">

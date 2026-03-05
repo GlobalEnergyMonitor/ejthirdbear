@@ -27,7 +27,7 @@
       .then((result) => {
         segments = result;
       })
-      .catch((err) => console.warn('Segments fetch failed:', err));
+      .catch((err) => { if (import.meta.env.DEV) console.warn('Segments fetch failed:', err); });
 
     // Fetch asset counts per tracker type from REST API (sampled + extrapolated)
     getAssetTypeCounts()
@@ -42,7 +42,7 @@
         }
         trackerCounts = mapped;
       })
-      .catch((err) => console.warn('Tracker stats failed:', err));
+      .catch((err) => { if (import.meta.env.DEV) console.warn('Tracker stats failed:', err); });
   });
 
   // Get all tracker slugs

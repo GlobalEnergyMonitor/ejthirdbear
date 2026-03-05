@@ -80,8 +80,8 @@ const MAX_ASSET_FETCHES = 150;
 export const LAYOUT = {
   subsidX: 20,
   subsidiaryMarkHeight: 19,
-  subsidiaryMinHeight: 145,
-  yPadding: 50,
+  subsidiaryMinHeight: 112,
+  yPadding: 40,
   assetsX: 500,
   assetSpacing: 9,
   assetMarkHeightSingle: 16,

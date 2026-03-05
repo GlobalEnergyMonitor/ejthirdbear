@@ -24,7 +24,3 @@ Set via `fly secrets set`:
 | Variable | Purpose |
 | --- | --- |
 | `PUBLIC_OWNERSHIP_API_BASE_URL` | REST API base (`https://gem-api.thirdbear.net`) |
-
-## Docker Notes
-
-The `.dockerignore` excludes `static/flowers/` (SVG files) to avoid file descriptor limits during Docker builds.

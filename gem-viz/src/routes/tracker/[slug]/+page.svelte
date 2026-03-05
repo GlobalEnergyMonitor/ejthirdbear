@@ -186,7 +186,7 @@
           percentage: total > 0 ? count / total : 0,
         }));
     } catch (err) {
-      console.warn(`Failed to fetch distribution for ${fieldName}:`, err);
+      if (import.meta.env.DEV) console.warn(`Failed to fetch distribution for ${fieldName}:`, err);
     }
     return [];
   }
@@ -205,7 +205,7 @@
     try {
       const response = await fetch(file);
       if (!response.ok) {
-        console.warn(`Failed to load ${file}: ${response.status}`);
+        if (import.meta.env.DEV) console.warn(`Failed to load ${file}: ${response.status}`);
         // Fall back to synthetic fields
         if (metadata) fieldsMetadata = generateSyntheticFields(metadata);
         return;
@@ -248,7 +248,7 @@
           return result;
         });
     } catch (err) {
-      console.error('Failed to load field metadata:', err);
+      if (import.meta.env.DEV) console.error('Failed to load field metadata:', err);
       // Fall back to synthetic fields
       if (metadata) fieldsMetadata = generateSyntheticFields(metadata);
     }

@@ -368,7 +368,7 @@
           </div>
         </SectionHeader>
 
-        <div class="section-block section-block--scroll">
+        <div class="section-block">
           <h3>
             Upstream Ownership
             {@render embedBtn(`/embed/ownership-graph?entityId=${entityId}&direction=up`)}
@@ -378,6 +378,7 @@
             edges={graphUp.edges}
             paths={graphUp.paths || {}}
             rootId={entityId}
+            direction="upstream"
           />
         </div>
 
@@ -402,7 +403,7 @@
       {/if}
 
       {#if graphDown?.nodes?.length > 1}
-        <div class="section-block section-block--scroll">
+        <div class="section-block">
           <h3>
             Downstream Ownership
             {@render embedBtn(`/embed/ownership-graph?entityId=${entityId}&direction=down`)}
@@ -412,6 +413,8 @@
             edges={graphDown.edges}
             paths={graphDown.paths || {}}
             rootId={entityId}
+            direction="downstream"
+            fullWidth={true}
           />
         </div>
       {/if}

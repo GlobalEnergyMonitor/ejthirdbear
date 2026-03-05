@@ -111,7 +111,7 @@
           };
         });
     } catch (err) {
-      console.error('Failed to load field metadata:', err);
+      if (import.meta.env.DEV) console.error('Failed to load field metadata:', err);
     }
   }
 
@@ -144,7 +144,7 @@
         tracker,
       }));
     } catch (err) {
-      console.error('Failed to load sample assets:', err);
+      if (import.meta.env.DEV) console.error('Failed to load sample assets:', err);
     }
   }
 
