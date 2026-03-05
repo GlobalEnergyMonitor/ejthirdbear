@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { HTMLInputAttributes } from 'svelte/elements';
+  import { track } from '$lib/analytics';
 
   type SearchMode = {
     id: string;
@@ -43,6 +44,7 @@
 
   function submitSearch(event: SubmitEvent) {
     event.preventDefault();
+    track('search', 'search-submit', activeMode);
     onSearch(value.trim(), activeMode);
   }
 

@@ -8,12 +8,23 @@
   import { clearApiLog } from '$lib/api-log.svelte';
   import { link } from '$lib/links';
   import { page } from '$app/stores';
-  import { beforeNavigate } from '$app/navigation';
+  import { onMount } from 'svelte';
+  import { beforeNavigate, afterNavigate } from '$app/navigation';
+  import { initAnalytics, trackPageView } from '$lib/analytics';
 
   let { children } = $props();
 
   // Clear API call log on route change so it only shows calls for the current page
   beforeNavigate(() => clearApiLog());
+
+  onMount(() => initAnalytics());
+
+  // Track page views (skip embeds to avoid inflating counts)
+  afterNavigate(({ to }) => {
+    if (to?.url.searchParams.get('embed') === 'true') return;
+    if (to?.url.pathname.startsWith('/embed') || to?.url.pathname.startsWith('/e/')) return;
+    trackPageView(to?.url.pathname ?? '/');
+  });
 
   // Build info injected by Vite at build time
   const buildTime = __BUILD_TIME__;

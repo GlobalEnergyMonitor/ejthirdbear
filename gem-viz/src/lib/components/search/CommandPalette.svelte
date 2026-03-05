@@ -8,6 +8,7 @@
 
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
+  import { track } from '$lib/analytics';
   import { page } from '$app/stores';
   import { assetLink, entityLink } from '$lib/links';
   import { investigationCart } from '$lib/investigationCart';
@@ -215,6 +216,7 @@
     const safeIndex = Math.min(Math.max(0, selectedIndex), maxIndex);
     const item = selectableResults[safeIndex];
     if (item?.action) {
+      track('command-palette', 'select-result', item.label || item.title);
       item.action();
       // Close after executing (navigateTo already calls close, but commands don't)
       close();

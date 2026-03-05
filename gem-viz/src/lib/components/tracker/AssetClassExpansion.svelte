@@ -6,8 +6,10 @@
    */
   import { slide } from 'svelte/transition';
   import { COUNTRIES, STATUS_GROUPS } from '$lib/data-config/tracker-schema';
+  import type { DynamicStatusGroup } from '$lib/data-config/tracker-schema';
   import type { AssetClass, SubClassGroup } from '$lib/data-config/asset-class-definitions';
   import { ArrowRight, Search as SearchIcon } from 'lucide-svelte';
+  import { track } from '$lib/analytics';
   import CountryMultiSelect from '$lib/components/screener/CountryMultiSelect.svelte';
   import GeoFenceInput from '$lib/components/screener/GeoFenceInput.svelte';
 
@@ -23,6 +25,8 @@
     geofence: number[][] | null;
     onShowAllOwners: () => void;
     onSearchSpecificOwners: () => void;
+    /** Data-driven status groups from API facets (overrides hardcoded STATUS_GROUPS) */
+    dynamicStatusGroups?: DynamicStatusGroup[] | null;
   }
 
   let {
@@ -34,6 +38,7 @@
     geofence = $bindable(),
     onShowAllOwners,
     onSearchSpecificOwners,
+    dynamicStatusGroups = null,
   }: Props = $props();
 
   const hasSubClasses = $derived(!!assetClass.subClasses?.length);
@@ -68,6 +73,7 @@
   }
 
   function toggleGroup(group: SubClassGroup) {
+    track('tracker', 'select-class', group.label);
     const allChecked = isGroupAllChecked(group);
     const next = { ...checkedGroupOptions };
     for (const id of getGroupOptionIds(group)) {
@@ -76,11 +82,24 @@
     checkedGroupOptions = next;
   }
 
+  // ── Resolved status groups (dynamic or hardcoded fallback) ───────
+
+  /** Adapt hardcoded STATUS_GROUPS into DynamicStatusGroup shape for uniform rendering */
+  const resolvedStatusGroups = $derived.by((): DynamicStatusGroup[] => {
+    if (dynamicStatusGroups && dynamicStatusGroups.length > 0) return dynamicStatusGroups;
+    return STATUS_GROUPS.map((sg) => ({
+      id: sg.id,
+      label: sg.label,
+      statuses: sg.statuses.map((s) => ({ value: s, count: -1 })),
+      totalCount: -1,
+    }));
+  });
+
   // ── Status group helpers ──────────────────────────────────────────
 
   function getStatusIds(groupId: string): string[] {
-    const g = STATUS_GROUPS.find((sg) => sg.id === groupId);
-    return g ? g.statuses.map((s) => `status-${groupId}-${s}`) : [];
+    const g = resolvedStatusGroups.find((sg) => sg.id === groupId);
+    return g ? g.statuses.map((s) => `status-${groupId}-${s.value}`) : [];
   }
 
   function isStatusGroupAllChecked(groupId: string): boolean {
@@ -106,9 +125,9 @@
 
   function setStatusPreset(preset: 'default' | 'all' | 'none') {
     const next: Record<string, boolean> = {};
-    for (const sg of STATUS_GROUPS) {
+    for (const sg of resolvedStatusGroups) {
       for (const s of sg.statuses) {
-        const key = `status-${sg.id}-${s}`;
+        const key = `status-${sg.id}-${s.value}`;
         if (preset === 'all') {
           next[key] = true;
         } else if (preset === 'none') {
@@ -277,7 +296,7 @@
         <span class="status-count">{selectedStatusCount} selected</span>
       </div>
       <div class="group-row">
-        {#each STATUS_GROUPS as sg (sg.id)}
+        {#each resolvedStatusGroups as sg (sg.id)}
           {@const hasRefine = sg.statuses.length > 1}
           <div class="group-item">
             <label class="group-checkbox">
@@ -288,6 +307,9 @@
                 onchange={() => toggleStatusGroup(sg.id)}
               />
               <span class="group-label">{sg.label}</span>
+              {#if sg.totalCount > 0}
+                <span class="count-badge">{sg.totalCount.toLocaleString()}</span>
+              {/if}
             </label>
             {#if hasRefine}
               <button class="refine-toggle" onclick={() => toggleRefine(`status-${sg.id}`)}>
@@ -296,13 +318,16 @@
             {/if}
             {#if hasRefine && expandedRefine[`status-${sg.id}`]}
               <div class="refine-panel" transition:slide={{ duration: 150 }}>
-                {#each sg.statuses as status}
+                {#each sg.statuses as statusItem}
                   <label class="refine-option">
                     <input
                       type="checkbox"
-                      bind:checked={checkedStatuses[`status-${sg.id}-${status}`]}
+                      bind:checked={checkedStatuses[`status-${sg.id}-${statusItem.value}`]}
                     />
-                    <span>{status}</span>
+                    <span>{statusItem.value}</span>
+                    {#if statusItem.count > 0}
+                      <span class="count-badge small">{statusItem.count.toLocaleString()}</span>
+                    {/if}
                   </label>
                 {/each}
               </div>
@@ -525,6 +550,21 @@
   .refine-option input[type='checkbox'] {
     margin: 0;
     cursor: pointer;
+  }
+
+  .count-badge {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--color-text-tertiary);
+    background: var(--color-gray-100, #f1f5f9);
+    padding: 1px 6px;
+    border-radius: 9999px;
+    margin-left: auto;
+  }
+
+  .count-badge.small {
+    font-size: 10px;
+    padding: 0 4px;
   }
 
   /* Step divider + continue */

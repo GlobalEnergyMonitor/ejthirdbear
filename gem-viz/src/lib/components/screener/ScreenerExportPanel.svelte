@@ -5,6 +5,7 @@
    * Includes insights strip, share/cite tools.
    */
 
+  import { track } from '$lib/analytics';
   import {
     assetsToCSV,
     assetsToGeoJSON,
@@ -15,7 +16,7 @@
     generateBriefing,
   } from '$lib/components/cart/export-panel-utils';
   import { statusColors } from '$lib/design-tokens';
-  import { formatCapacity } from '$lib/format-utils';
+  import { formatCapacity } from '$lib/format';
 
   let {
     assets = [],
@@ -52,6 +53,7 @@
   }
 
   function copyLink() {
+    track('export', 'export', 'copy-link');
     copyToClipboard(pageUrl, 'link');
   }
 
@@ -66,21 +68,25 @@
   }
 
   function exportCSV() {
+    track('export', 'export', 'csv');
     const csv = assetsToCSV(assets);
     downloadFile(csv, `gem-${slug}-assets-${dateStr}.csv`, 'text/csv;charset=utf-8');
   }
 
   function exportGeoJSON() {
+    track('export', 'export', 'geojson');
     const geojson = assetsToGeoJSON(assets);
     downloadFile(geojson, `gem-${slug}-assets-${dateStr}.geojson`, 'application/geo+json');
   }
 
   function exportJSON() {
+    track('export', 'export', 'json');
     const json = JSON.stringify(assets, null, 2);
     downloadFile(json, `gem-${slug}-assets-${dateStr}.json`, 'application/json;charset=utf-8');
   }
 
   function exportSVG() {
+    track('export', 'export', 'svg');
     const container = chartContainers.values().next().value;
     if (!container) return;
     const svgStr = serializeSVG(container);
