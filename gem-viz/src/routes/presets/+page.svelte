@@ -3,6 +3,7 @@
   import { assetPath, link } from '$lib/links';
   import { buildShareUrl } from '$lib/filter-state';
   import { loadFeaturedPresets, loadLocalPresets } from '$lib/presets';
+  import PageHeader from '$lib/components/nav/PageHeader.svelte';
 
   let featuredPresets = $state([]);
   let localPresets = $state([]);
@@ -50,12 +51,8 @@
   />
 </svelte:head>
 
-<div class="page">
-  <header class="page-header">
-    <span class="page-type">Tool</span>
-    <h1>Preset Gallery</h1>
-    <p>Curated starting points plus your local presets.</p>
-  </header>
+<div class="page-container">
+  <PageHeader title="Preset Gallery" lead="Curated starting points plus your local presets." />
 
   <section class="preset-section">
     <div class="section-header">
@@ -129,34 +126,6 @@
 </div>
 
 <style>
-  .page {
-    padding: var(--space-7) var(--space-10) var(--space-16);
-  }
-
-  .page-header {
-    margin-bottom: var(--space-6);
-  }
-
-  .page-type {
-    font-size: var(--font-size-body);
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-wide);
-    color: var(--color-text-secondary);
-  }
-
-  h1 {
-    margin: var(--space-2) 0 var(--space-1);
-    font-size: var(--font-size-3xl);
-    font-weight: normal;
-    font-family: var(--font-family-serif);
-  }
-
-  .page-header p {
-    margin: 0;
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-lg);
-  }
-
   .preset-section {
     margin-top: var(--space-7);
   }
@@ -268,10 +237,6 @@
   }
 
   @media (max-width: 720px) {
-    .page {
-      padding: var(--space-6) var(--space-5) var(--space-12);
-    }
-
     .section-header {
       flex-direction: column;
       align-items: flex-start;

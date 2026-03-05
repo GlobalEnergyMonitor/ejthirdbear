@@ -12,8 +12,8 @@
   import { onMount } from 'svelte';
   import { getAsset, resolveAssetId } from '$lib/ownership-api';
   import type { Asset } from '$lib/factsheet';
-  import ProjectCard from '$lib/components/ProjectCard.svelte';
-  import ProjectCardMap from '$lib/components/ProjectCardMap.svelte';
+  import ProjectCard from '$lib/components/cards/ProjectCard.svelte';
+  import ProjectCardMap from '$lib/components/map/ProjectCardMap.svelte';
   import { AssetOwnershipTree } from '$lib/components/ownership';
   import { errorMessage, boolParam } from '../embed-utils';
 

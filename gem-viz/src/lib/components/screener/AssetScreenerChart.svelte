@@ -16,6 +16,7 @@
   } from '$lib/design-tokens';
   import { fetchChartData, buildSubsidiaryGroups } from './screener-chart-data';
   import { renderChart } from './screener-chart-render';
+  import Spinner from '$lib/components/feedback/Spinner.svelte';
 
   // Props
   let {
@@ -24,6 +25,8 @@
     assetClassName = '',
     trackerSlug = '',
     filteredAssetCount = null,
+    onDataLoaded = undefined,
+    onContainerReady = undefined,
   } = $props();
 
   // State
@@ -125,6 +128,14 @@
       });
 
       loading = false;
+
+      // Notify parent with loaded data
+      onDataLoaded?.({
+        entityId,
+        assets: Array.from(chartData.assetDetails.values()),
+        chartData,
+      });
+      onContainerReady?.(container);
     } catch (err) {
       if (import.meta.env.DEV) console.error('[AssetScreenerChart] Error:', err);
       error = err?.message || 'Failed to load ownership chart';
@@ -170,7 +181,7 @@
 
   {#if loading}
     <div class="chart-state">
-      <div class="spinner"></div>
+      <Spinner size={20} />
       <p class="progress-msg">{progressMsg || 'Loading ownership data...'}</p>
     </div>
   {:else if error}
@@ -316,22 +327,6 @@
 
   .chart-state--error {
     color: var(--color-error);
-  }
-
-  .spinner {
-    width: 20px;
-    height: 20px;
-    border: 2px solid var(--color-border);
-    border-top-color: var(--color-text-tertiary);
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin-bottom: 8px;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
   }
 
   .progress-msg {

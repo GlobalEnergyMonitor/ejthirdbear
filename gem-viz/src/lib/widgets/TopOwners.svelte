@@ -7,7 +7,7 @@
   import { onMount } from 'svelte';
   import { listAssetsByType, listAssets } from '$lib/ownership-api';
   import { entityLink } from '$lib/links';
-  import DataSourceBadge from '$lib/components/DataSourceBadge.svelte';
+  import DataSourceBadge from '$lib/components/data/DataSourceBadge.svelte';
 
   // Props
   /** @type {{ limit?: number; metric?: 'assets' | 'capacity'; tracker?: string | null; title?: string }} */

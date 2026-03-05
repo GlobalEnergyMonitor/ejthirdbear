@@ -13,16 +13,16 @@
   import { page } from '$app/stores';
 
   // Components
-  import AssetScreener from '$lib/components/AssetScreener.svelte';
-  import TrackerIcon from '$lib/components/TrackerIcon.svelte';
-  import StatusIcon from '$lib/components/StatusIcon.svelte';
-  import OwnershipFlower from '$lib/components/OwnershipFlower.svelte';
-  import MiniNetworkGraph from '$lib/components/MiniNetworkGraph.svelte';
+  import AssetScreener from '$lib/components/screener/AssetScreener.svelte';
+  import TrackerIcon from '$lib/components/tracker/TrackerIcon.svelte';
+  import StatusIcon from '$lib/components/tracker/StatusIcon.svelte';
+  import OwnershipFlower from '$lib/components/network/OwnershipFlower.svelte';
+  import MiniNetworkGraph from '$lib/components/network/MiniNetworkGraph.svelte';
   import AssetScreenerChart from '$lib/components/screener/AssetScreenerChart.svelte';
-  import EntityMap from '$lib/components/EntityMap.svelte';
-  import UltimateOwners from '$lib/components/UltimateOwners.svelte';
-  import DataSourceBadge from '$lib/components/DataSourceBadge.svelte';
-  import SectionHeader from '$lib/components/SectionHeader.svelte';
+  import EntityMap from '$lib/components/map/EntityMap.svelte';
+  import UltimateOwners from '$lib/components/tracker/UltimateOwners.svelte';
+  import DataSourceBadge from '$lib/components/data/DataSourceBadge.svelte';
+  import SectionHeader from '$lib/components/nav/SectionHeader.svelte';
   import {
     EntityPortfolioFilters,
     EntityPortfolioHeader,

@@ -14,12 +14,12 @@
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import LoadingWrapper from '$lib/components/LoadingWrapper.svelte';
-  import DataSourceBadge from '$lib/components/DataSourceBadge.svelte';
-  import ScreenerLayout from '$lib/components/ScreenerLayout.svelte';
-  import AssetClassesPanel from '$lib/components/AssetClassesPanel.svelte';
-  import AssetSearchBar from '$lib/components/AssetSearchBar.svelte';
-  import DebugPanel from '$lib/components/DebugPanel.svelte';
+  import LoadingWrapper from '$lib/components/feedback/LoadingWrapper.svelte';
+  import DataSourceBadge from '$lib/components/data/DataSourceBadge.svelte';
+  import ScreenerLayout from '$lib/components/nav/ScreenerLayout.svelte';
+  import AssetClassesPanel from '$lib/components/tracker/AssetClassesPanel.svelte';
+  import AssetSearchBar from '$lib/components/search/AssetSearchBar.svelte';
+  import DebugPanel from '$lib/components/feedback/DebugPanel.svelte';
   import ScreenerOwnersResultsTable from '$lib/components/screener/ScreenerOwnersResultsTable.svelte';
   import { investigationCart } from '$lib/investigationCart';
   import { getAssetTypeForTracker } from '$lib/data-config/tracker-schema';
@@ -294,7 +294,11 @@
         result.source === 'rest-api' ? 'api' : result.source === 'cache' ? 'local' : 'api';
       const slug = resolveApiSlug(filters.tracker || '');
       const restBase = getAPIBase();
-      const restParams = new URLSearchParams({ asset_type: slug || filters.tracker || '', format: 'json', limit: '500' });
+      const restParams = new URLSearchParams({
+        asset_type: slug || filters.tracker || '',
+        format: 'json',
+        limit: '500',
+      });
       if (filters.country) restParams.set('country', String(filters.country));
       executedQuery = `GET ${restBase}/assets?${restParams.toString()}\n\nsource=${result.source}, filters=${JSON.stringify(filters, null, 2)}`;
 

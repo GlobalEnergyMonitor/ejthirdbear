@@ -6,7 +6,7 @@
 
   import { onMount } from 'svelte';
   import { listAssetsByType, listAssets, resolveApiSlug } from '$lib/ownership-api';
-  import DataSourceBadge from '$lib/components/DataSourceBadge.svelte';
+  import DataSourceBadge from '$lib/components/data/DataSourceBadge.svelte';
 
   // Props
   let { limit = 15, tracker = null, title = 'Assets by Country' } = $props();

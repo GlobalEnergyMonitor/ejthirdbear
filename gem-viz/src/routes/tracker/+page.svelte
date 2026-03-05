@@ -6,6 +6,8 @@
   import { onMount } from 'svelte';
   import { link } from '$lib/links';
   import { getAssetTypeCounts, API_TYPE_TO_SLUG } from '$lib/ownership-api';
+  import PageHeader from '$lib/components/nav/PageHeader.svelte';
+  import Spinner from '$lib/components/feedback/Spinner.svelte';
   import { trackerMetadata } from '$lib/data-config/tracker-metadata';
   import { fetchSegments, getSegmentApiUrl, type Segment } from '$lib/segments-api';
 
@@ -62,21 +64,16 @@
   />
 </svelte:head>
 
-<div class="page">
-  <header>
-    <nav class="breadcrumb">
-      <a href={link('index')}>Home</a> / Trackers
-    </nav>
-    <h1>GEM Trackers</h1>
-    <p class="lead">
-      Global Energy Monitor maintains comprehensive databases tracking energy infrastructure
-      worldwide. Each tracker documents assets from announcement through operation and retirement.
-    </p>
-  </header>
+<div class="page-container--wide">
+  <PageHeader
+    breadcrumbs={[{ label: 'Home', href: link('index') }, { label: 'Trackers' }]}
+    title="GEM Trackers"
+    lead="Global Energy Monitor maintains comprehensive databases tracking energy infrastructure worldwide. Each tracker documents assets from announcement through operation and retirement."
+  />
 
   {#if loading}
     <div class="loading">
-      <div class="spinner"></div>
+      <Spinner />
       <p>Loading tracker data...</p>
     </div>
   {:else if error}
@@ -133,49 +130,6 @@
 </div>
 
 <style>
-  .page {
-    width: 100%;
-    max-width: 1100px;
-    margin: 0 auto;
-    padding: var(--space-8) var(--space-5);
-    font-family: var(--font-family-sans);
-  }
-
-  header {
-    margin-bottom: var(--space-8);
-  }
-
-  .breadcrumb {
-    font-size: var(--font-size-sm);
-    margin-bottom: var(--space-3);
-    color: var(--color-text-tertiary);
-  }
-
-  .breadcrumb a {
-    color: var(--color-text-secondary);
-    text-decoration: none;
-  }
-
-  .breadcrumb a:hover {
-    color: var(--color-text-primary);
-  }
-
-  h1 {
-    font-size: var(--font-size-2xl);
-    margin: 0 0 var(--space-3) 0;
-    font-weight: 600;
-    color: var(--color-text-primary);
-    letter-spacing: -0.01em;
-  }
-
-  .lead {
-    font-size: var(--font-size-body);
-    color: var(--color-text-secondary);
-    margin: 0;
-    max-width: 600px;
-    line-height: 1.6;
-  }
-
   .loading,
   .error {
     text-align: center;
@@ -186,22 +140,6 @@
   .loading p {
     font-size: var(--font-size-sm);
     margin: 0;
-  }
-
-  .spinner {
-    width: 24px;
-    height: 24px;
-    border: 2px solid var(--color-border);
-    border-top-color: var(--color-accent);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-    margin: 0 auto var(--space-3);
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
   }
 
   .error {

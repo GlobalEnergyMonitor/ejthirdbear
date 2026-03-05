@@ -2,7 +2,7 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { assetLink, entityLink, link } from '$lib/links';
-  import AssetSearchBar from '$lib/components/AssetSearchBar.svelte';
+  import AssetSearchBar from '$lib/components/search/AssetSearchBar.svelte';
 
   type SearchMode = {
     id: string;

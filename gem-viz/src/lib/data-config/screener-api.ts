@@ -508,7 +508,15 @@ async function searchEntitiesBulkREST(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ queries, limit_per_query: limitPerQuery }),
   });
-  logApiCall({ url: fetchUrl, method: 'POST', status: response.status, durationMs: performance.now() - t0, timestamp: new Date(), error: response.ok ? undefined : `${response.status}`, reason: 'searchEntitiesBulk (screener)' });
+  logApiCall({
+    url: fetchUrl,
+    method: 'POST',
+    status: response.status,
+    durationMs: performance.now() - t0,
+    timestamp: new Date(),
+    error: response.ok ? undefined : `${response.status}`,
+    reason: 'searchEntitiesBulk (screener)',
+  });
 
   if (!response.ok) {
     const text = await response.text().catch(() => '');
@@ -649,11 +657,27 @@ export async function runDiagnostics(): Promise<{
     results.restApi.latencyMs = performance.now() - restStart;
     results.restApi.ok = response.ok;
     if (!response.ok) results.restApi.error = `HTTP ${response.status}`;
-    logApiCall({ url: diagUrl, method: 'GET', status: response.status, durationMs: results.restApi.latencyMs, timestamp: new Date(), error: response.ok ? undefined : results.restApi.error, reason: 'diagnostics ping' });
+    logApiCall({
+      url: diagUrl,
+      method: 'GET',
+      status: response.status,
+      durationMs: results.restApi.latencyMs,
+      timestamp: new Date(),
+      error: response.ok ? undefined : results.restApi.error,
+      reason: 'diagnostics ping',
+    });
   } catch (e) {
     results.restApi.latencyMs = performance.now() - restStart;
     results.restApi.error = e instanceof Error ? e.message : String(e);
-    logApiCall({ url: diagUrl, method: 'GET', status: null, durationMs: results.restApi.latencyMs, timestamp: new Date(), error: results.restApi.error, reason: 'diagnostics ping' });
+    logApiCall({
+      url: diagUrl,
+      method: 'GET',
+      status: null,
+      durationMs: results.restApi.latencyMs,
+      timestamp: new Date(),
+      error: results.restApi.error,
+      reason: 'diagnostics ping',
+    });
   }
 
   return results;

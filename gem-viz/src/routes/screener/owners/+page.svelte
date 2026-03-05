@@ -7,10 +7,10 @@
 
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
-  import ScreenerLayout from '$lib/components/ScreenerLayout.svelte';
-  import AssetClassesPanel from '$lib/components/AssetClassesPanel.svelte';
-  import DebugPanel from '$lib/components/DebugPanel.svelte';
-  import SectionHeader from '$lib/components/SectionHeader.svelte';
+  import ScreenerLayout from '$lib/components/nav/ScreenerLayout.svelte';
+  import AssetClassesPanel from '$lib/components/tracker/AssetClassesPanel.svelte';
+  import DebugPanel from '$lib/components/feedback/DebugPanel.svelte';
+  import SectionHeader from '$lib/components/nav/SectionHeader.svelte';
   import OwnerSearchPanel from '$lib/components/screener/OwnerSearchPanel.svelte';
   import OwnerResultsGroups from '$lib/components/screener/OwnerResultsGroups.svelte';
   import SelectedOwnersFooter from '$lib/components/screener/SelectedOwnersFooter.svelte';

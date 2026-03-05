@@ -5,34 +5,34 @@
    */
 
   // Core UI Components
-  import Skeleton from '$lib/components/Skeleton.svelte';
-  import StatusIcon from '$lib/components/StatusIcon.svelte';
-  import TrackerIcon from '$lib/components/TrackerIcon.svelte';
-  import DataSourceBadge from '$lib/components/DataSourceBadge.svelte';
-  import AddToCartButton from '$lib/components/AddToCartButton.svelte';
-  import LoadingWrapper from '$lib/components/LoadingWrapper.svelte';
-  import Citation from '$lib/components/Citation.svelte';
+  import Skeleton from '$lib/components/feedback/Skeleton.svelte';
+  import StatusIcon from '$lib/components/tracker/StatusIcon.svelte';
+  import TrackerIcon from '$lib/components/tracker/TrackerIcon.svelte';
+  import DataSourceBadge from '$lib/components/data/DataSourceBadge.svelte';
+  import AddToCartButton from '$lib/components/cart/AddToCartButton.svelte';
+  import LoadingWrapper from '$lib/components/feedback/LoadingWrapper.svelte';
+  import Citation from '$lib/components/data/Citation.svelte';
 
   // Cards
-  import EntityMicroCard from '$lib/components/EntityMicroCard.svelte';
-  import AssetMicroCard from '$lib/components/AssetMicroCard.svelte';
+  import EntityMicroCard from '$lib/components/cards/EntityMicroCard.svelte';
+  import AssetMicroCard from '$lib/components/cards/AssetMicroCard.svelte';
 
   // Charts
-  import Sparkline from '$lib/components/Sparkline.svelte';
-  import MiniBarChart from '$lib/components/MiniBarChart.svelte';
-  import MiniFlower from '$lib/components/MiniFlower.svelte';
-  import MiniHistogram from '$lib/components/MiniHistogram.svelte';
-  import OwnershipPie from '$lib/components/OwnershipPie.svelte';
-  import RadialBarChart from '$lib/components/RadialBarChart.svelte';
+  import Sparkline from '$lib/components/charts/Sparkline.svelte';
+  import MiniBarChart from '$lib/components/charts/MiniBarChart.svelte';
+  import MiniFlower from '$lib/components/charts/MiniFlower.svelte';
+  import MiniHistogram from '$lib/components/charts/MiniHistogram.svelte';
+  import OwnershipPie from '$lib/components/charts/OwnershipPie.svelte';
+  import RadialBarChart from '$lib/components/charts/RadialBarChart.svelte';
 
   // Debug
-  import ApiCallLog from '$lib/components/ApiCallLog.svelte';
+  import ApiCallLog from '$lib/components/data/ApiCallLog.svelte';
 
   // Navigation & Filters
-  import ScreenerStepNav from '$lib/components/ScreenerStepNav.svelte';
-  import FilterBreadcrumbs from '$lib/components/FilterBreadcrumbs.svelte';
-  import RangeSlider from '$lib/components/RangeSlider.svelte';
-  import AssetClassesPanel from '$lib/components/AssetClassesPanel.svelte';
+  import ScreenerStepNav from '$lib/components/nav/ScreenerStepNav.svelte';
+  import FilterBreadcrumbs from '$lib/components/table/FilterBreadcrumbs.svelte';
+  import RangeSlider from '$lib/components/table/RangeSlider.svelte';
+  import AssetClassesPanel from '$lib/components/tracker/AssetClassesPanel.svelte';
 
   // Example data from extracted file
   import {
@@ -60,49 +60,47 @@
   const complexComponents = [
     {
       name: 'AssetMap',
-      path: 'src/lib/components/AssetMap.svelte',
+      path: 'src/lib/components/map/AssetMap.svelte',
       note: 'Requires MapLibre + coordinates',
     },
     {
       name: 'InvestigationMap',
-      path: 'src/lib/components/InvestigationMap.svelte',
+      path: 'src/lib/components/map/InvestigationMap.svelte',
       note: 'Requires cart data',
     },
     {
       name: 'OwnershipFlower',
-      path: 'src/lib/components/OwnershipFlower.svelte',
+      path: 'src/lib/components/network/OwnershipFlower.svelte',
       note: 'Large radial diagram',
     },
     {
-      name: 'RelationshipNetwork',
-      path: 'src/lib/components/RelationshipNetwork.svelte',
-      note: 'Force-directed graph',
-    },
-    {
       name: 'MiniNetworkGraph',
-      path: 'src/lib/components/MiniNetworkGraph.svelte',
+      path: 'src/lib/components/network/MiniNetworkGraph.svelte',
       note: 'Compact network viz',
     },
-    { name: 'DataTable', path: 'src/lib/components/DataTable.svelte', note: 'Sortable data grid' },
+    {
+      name: 'DataTable',
+      path: 'src/lib/components/table/DataTable.svelte',
+      note: 'Sortable data grid',
+    },
     {
       name: 'FacetedFilter',
-      path: 'src/lib/components/FacetedFilter.svelte',
+      path: 'src/lib/components/table/FacetedFilter.svelte',
       note: 'Multi-select facets',
     },
-    { name: 'ExportPanel', path: 'src/lib/components/ExportPanel.svelte', note: 'Export modal' },
     {
       name: 'CommandPalette',
-      path: 'src/lib/components/CommandPalette.svelte',
+      path: 'src/lib/components/search/CommandPalette.svelte',
       note: 'Cmd+K palette',
     },
     {
       name: 'ProjectCard',
-      path: 'src/lib/components/ProjectCard.svelte',
+      path: 'src/lib/components/cards/ProjectCard.svelte',
       note: 'Expandable asset card',
     },
     {
       name: 'UltimateOwners',
-      path: 'src/lib/components/UltimateOwners.svelte',
+      path: 'src/lib/components/tracker/UltimateOwners.svelte',
       note: 'Ownership chain viz',
     },
     {
@@ -463,7 +461,8 @@
         <code class="file-path">src/lib/components/RadialBarChart.svelte</code>
       </div>
       <p class="component-desc">
-        Stacked radial bar chart with concentric arcs — each ring represents a category, arc length encodes value
+        Stacked radial bar chart with concentric arcs — each ring represents a category, arc length
+        encodes value
       </p>
       <div class="demo-row">
         <div class="demo-item flower-demo">
@@ -735,16 +734,19 @@
         <code class="file-path">src/lib/components/ApiCallLog.svelte</code>
       </div>
       <p class="component-desc">
-        Collapsible panel showing every REST API call made on the current page — URL, status, timing, and reason. Rendered globally in the layout, clears on route change.
+        Collapsible panel showing every REST API call made on the current page — URL, status,
+        timing, and reason. Rendered globally in the layout, clears on route change.
       </p>
       <div class="demo-block full-width">
         <ApiCallLog />
-        <p style="font-size: var(--font-size-sm); color: var(--color-text-tertiary); margin-top: var(--space-3);">
-          Any API calls made by this page (e.g. from EntityMicroCard or other live components) will appear above.
+        <p
+          style="font-size: var(--font-size-sm); color: var(--color-text-tertiary); margin-top: var(--space-3);"
+        >
+          Any API calls made by this page (e.g. from EntityMicroCard or other live components) will
+          appear above.
         </p>
       </div>
-      <pre
-        class="code-hint">&lt;ApiCallLog /&gt; &mdash; also available globally via layout</pre>
+      <pre class="code-hint">&lt;ApiCallLog /&gt; &mdash; also available globally via layout</pre>
     </div>
   </section>
 

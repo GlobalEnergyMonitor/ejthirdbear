@@ -7,6 +7,7 @@
   import { onMount } from 'svelte';
   import { assetLink } from '$lib/links';
   import OwnershipTreeGraph from './OwnershipTreeGraph.svelte';
+  import Spinner from '$lib/components/feedback/Spinner.svelte';
   import type { GraphNode, GraphEdge, OwnershipPathEntry } from '$lib/component-data/graph-types';
 
   interface Props {
@@ -54,7 +55,7 @@
 <div class="asset-ownership-tree">
   {#if loading}
     <div class="tree-loading">
-      <span class="spinner"></span>
+      <Spinner size={14} />
       Loading ownership tree...
     </div>
   {:else if error === 'no-owners'}
@@ -81,20 +82,6 @@
     font-size: 0.75rem;
     color: var(--gem-teal, #2a7f8f);
     padding: 0.75rem 0;
-  }
-  .spinner {
-    display: inline-block;
-    width: 14px;
-    height: 14px;
-    border: 2px solid rgba(42, 127, 143, 0.2);
-    border-top-color: var(--gem-teal, #2a7f8f);
-    border-radius: 50%;
-    animation: spin 0.6s linear infinite;
-  }
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
   }
   .tree-empty,
   .tree-error {

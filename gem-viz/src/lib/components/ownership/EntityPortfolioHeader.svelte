@@ -1,5 +1,5 @@
 <script lang="ts">
-  import OwnershipFlower from '$lib/components/OwnershipFlower.svelte';
+  import OwnershipFlower from '$lib/components/network/OwnershipFlower.svelte';
   import { entityLink } from '$lib/links';
 
   interface OwnerPortfolio {

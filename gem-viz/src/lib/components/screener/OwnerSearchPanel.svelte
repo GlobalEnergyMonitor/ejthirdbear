@@ -1,5 +1,6 @@
 <script lang="ts">
-  import SectionHeader from '$lib/components/SectionHeader.svelte';
+  import SectionHeader from '$lib/components/nav/SectionHeader.svelte';
+  import Spinner from '$lib/components/feedback/Spinner.svelte';
 
   type ExampleCompany = { name: string; id: string };
 
@@ -116,7 +117,7 @@
 
   {#if searchLoading}
     <div class="search-loading">
-      <span class="loading-spinner"></span>
+      <Spinner size={16} />
       Searching...
     </div>
   {/if}
@@ -419,21 +420,6 @@
     padding: var(--space-6) 0;
     font-size: var(--font-size-body);
     color: var(--color-text-tertiary);
-  }
-
-  .loading-spinner {
-    width: 16px;
-    height: 16px;
-    border: 2px solid var(--color-gray-200);
-    border-top-color: var(--gem-teal, #1d4961);
-    border-radius: 50%;
-    animation: spin 0.6s linear infinite;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
   }
 
   @media (max-width: 768px) {

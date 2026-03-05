@@ -12,18 +12,6 @@ export * from './graph-types';
 // ID helpers (centralized ID resolution - use these!)
 export * from './id-helpers';
 
-// Shared utilities
-export {
-  parseSegment,
-  sanitizeId,
-  parseOwnershipPaths,
-  extractOwnershipChain,
-  type ParsedSegment,
-  type OwnershipNode,
-  type ParsedOwnershipGraph,
-} from './ownership-parser';
-export { getPageId, getPageType, requirePageId, createHydration } from './use-hydration.svelte';
-
 // Schema functions (Ownership API-based)
 export {
   fetchAssetBasics,

@@ -9,7 +9,7 @@
    *   maxHops - Optional. Max relationship hops (default: 3)
    */
   import { page } from '$app/stores';
-  import MiniNetworkGraph from '$lib/components/MiniNetworkGraph.svelte';
+  import MiniNetworkGraph from '$lib/components/network/MiniNetworkGraph.svelte';
   import { intParam } from '../embed-utils';
 
   const entityId = $derived($page.url.searchParams.get('entityId'));

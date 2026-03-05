@@ -3,8 +3,8 @@
    * EntityPortfolioFilters - Multi-select filter chips
    * Allows filtering by Location, Tracker Type, and Status
    */
-  import TrackerIcon from '$lib/components/TrackerIcon.svelte';
-  import StatusIcon from '$lib/components/StatusIcon.svelte';
+  import TrackerIcon from '$lib/components/tracker/TrackerIcon.svelte';
+  import StatusIcon from '$lib/components/tracker/StatusIcon.svelte';
 
   interface Props {
     assets?: Array<{

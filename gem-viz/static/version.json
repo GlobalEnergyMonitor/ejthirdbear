@@ -1,10 +1,10 @@
 {
-  "version": "bbe6d3d",
-  "commit": "bbe6d3d",
-  "message": "screener: add clear step-4 path from results",
+  "version": "da9093a",
+  "commit": "da9093a",
+  "message": "feat: enable Flourish-style embeds for any page via ?embed=true",
   "author": "EJ Fox",
-  "timestamp": "2026-03-02T19:46:42.346Z",
-  "deployed": "2026-03-02T19:46:42.346Z",
-  "buildTime": "3/2/2026, 2:46:42 PM",
-  "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.3.2"
+  "timestamp": "2026-03-05T04:51:03.661Z",
+  "deployed": "2026-03-05T04:51:03.661Z",
+  "buildTime": "3/4/2026, 11:51:03 PM",
+  "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.3.3"
 }

@@ -553,6 +553,69 @@
 }
 
 /* ============================================================================
+   PAGE CONTAINERS - Standard page widths
+   ============================================================================ */
+
+.page-container {
+  max-width: var(--container-lg);
+  margin: 0 auto;
+  padding: var(--space-10) var(--space-5);
+}
+
+.page-container--narrow {
+  max-width: var(--container-md);
+  margin: 0 auto;
+  padding: var(--space-10) var(--space-5);
+}
+
+.page-container--wide {
+  max-width: var(--container-xl);
+  margin: 0 auto;
+  padding: var(--space-10) var(--space-5);
+}
+
+.page-container--xl {
+  max-width: var(--container-2xl);
+  margin: 0 auto;
+  padding: var(--space-10) var(--space-5);
+}
+
+/* ============================================================================
+   CARD GRID - Auto-fill responsive grid
+   ============================================================================ */
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--space-4);
+}
+
+.card-grid--wide {
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+}
+
+/* ============================================================================
+   PAGE BACK FOOTER - Standard back-link footer
+   ============================================================================ */
+
+.page-back-footer {
+  margin-top: var(--space-12);
+  padding-top: var(--space-6);
+  border-top: var(--border-width) solid var(--color-border);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.page-back-footer a {
+  color: var(--color-text-secondary);
+  text-decoration: none;
+}
+
+.page-back-footer a:hover {
+  color: var(--color-text-primary);
+}
+
+/* ============================================================================
    ANALYTICS/RANKING LISTS
    ============================================================================ */
 

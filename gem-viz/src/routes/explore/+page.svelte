@@ -8,6 +8,7 @@
   import TopOwners from '$lib/widgets/TopOwners.svelte';
   import CountryBreakdown from '$lib/widgets/CountryBreakdown.svelte';
   import StatusDistribution from '$lib/widgets/StatusDistribution.svelte';
+  import PageHeader from '$lib/components/nav/PageHeader.svelte';
 
   // Filter state
   let selectedTracker = $state(null);
@@ -32,13 +33,11 @@
 </svelte:head>
 
 <div class="page">
-  <header>
-    <nav class="breadcrumb">
-      <a href={link('index')}>Home</a> / Explore
-    </nav>
-    <h1>Explore the Data</h1>
-    <p class="lead">Interactive queries against GEM ownership data via the REST API.</p>
-  </header>
+  <PageHeader
+    breadcrumbs={[{ label: 'Home', href: link('index') }, { label: 'Explore' }]}
+    title="Explore the Data"
+    lead="Interactive queries against GEM ownership data via the REST API."
+  />
 
   <!-- Tracker Filter -->
   <section class="filter-bar">
@@ -100,7 +99,7 @@
     </div>
   </section>
 
-  <footer class="page-footer">
+  <footer class="page-back-footer">
     <p>Data from the GEM REST API at gem-api.thirdbear.net. Exact counts via faceted queries.</p>
     <a href={link('manifest')}>View data manifest</a>
   </footer>
@@ -111,32 +110,6 @@
     width: 100%;
     padding: var(--space-10) var(--space-5);
     font-family: var(--font-family-sans);
-  }
-
-  header {
-    margin-bottom: var(--space-8);
-  }
-  .breadcrumb {
-    font-size: var(--font-size-body);
-    margin-bottom: var(--space-3);
-  }
-  .breadcrumb a {
-    color: var(--color-gray-700);
-    text-decoration: none;
-  }
-  .breadcrumb a:hover {
-    text-decoration: underline;
-  }
-  h1 {
-    font-size: var(--font-size-3xl);
-    margin: 0 0 var(--space-2) 0;
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-wide);
-  }
-  .lead {
-    font-size: var(--font-size-lg);
-    color: var(--color-text-secondary);
-    margin: 0;
   }
 
   .filter-bar {
@@ -230,14 +203,5 @@
   }
   .factsheet-link.secondary:hover {
     text-decoration-thickness: 2px;
-  }
-
-  .page-footer {
-    padding-top: var(--space-5);
-    font-size: var(--font-size-body);
-    color: var(--color-text-secondary);
-  }
-  .page-footer a {
-    color: var(--color-gray-700);
   }
 </style>

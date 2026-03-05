@@ -125,7 +125,15 @@ async function fetchOwnershipGraphDown(entityId: string): Promise<{
     const fetchUrl = `${API_BASE}/ownership/graph?root=${encodeURIComponent(entityId)}&direction=down&max_depth=5`;
     const t0 = performance.now();
     const resp = await fetch(fetchUrl, { signal: AbortSignal.timeout(30_000) });
-    logApiCall({ url: fetchUrl, method: 'GET', status: resp.status, durationMs: performance.now() - t0, timestamp: new Date(), error: resp.ok ? undefined : `${resp.status}`, reason: `fetchOwnershipGraphDown ${entityId}` });
+    logApiCall({
+      url: fetchUrl,
+      method: 'GET',
+      status: resp.status,
+      durationMs: performance.now() - t0,
+      timestamp: new Date(),
+      error: resp.ok ? undefined : `${resp.status}`,
+      reason: `fetchOwnershipGraphDown ${entityId}`,
+    });
     if (!resp.ok) throw new Error(`API error: ${resp.status}`);
     const data = await resp.json();
 

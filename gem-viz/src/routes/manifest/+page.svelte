@@ -4,6 +4,7 @@
    * Shows all data sources, schemas, and sample rows
    */
   import { link } from '$lib/links';
+  import PageHeader from '$lib/components/nav/PageHeader.svelte';
 
   /** @type {{ data: import('./$types').PageData }} */
   let { data } = $props();
@@ -30,9 +31,7 @@
 </svelte:head>
 
 <div class="page">
-  <header>
-    <h1>Data Manifest</h1>
-    <p class="subtitle">Admin view of all data sources, schemas, and sample data</p>
+  <PageHeader title="Data Manifest" lead="Admin view of all data sources, schemas, and sample data">
     <div class="meta-bar">
       <span>Generated: {new Date(meta.generatedAt).toLocaleString()}</span>
       <span>Load time: {meta.loadTime}ms</span>
@@ -41,7 +40,7 @@
     {#if meta.error}
       <div class="error-banner">Error: {meta.error}</div>
     {/if}
-  </header>
+  </PageHeader>
 
   <!-- Table of Contents -->
   <nav class="toc">
@@ -226,35 +225,13 @@
     </details>
   </section>
 
-  <footer>
+  <footer class="page-back-footer" style="text-align: center;">
     <p>GEM Viz Data Manifest — Generated at build time</p>
     <p><a href={link('index')}>Back to Homepage</a></p>
   </footer>
 </div>
 
 <style>
-  .page {
-    width: 100%;
-    padding: var(--space-10) var(--space-5);
-    font-family: var(--font-family-sans);
-  }
-
-  header {
-    margin-bottom: var(--space-10);
-    border-bottom: 2px solid var(--color-black);
-    padding-bottom: var(--space-5);
-  }
-  h1 {
-    font-size: var(--font-size-3xl);
-    margin: 0 0 var(--space-2) 0;
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-wide);
-  }
-  .subtitle {
-    font-size: var(--font-size-lg);
-    color: var(--color-text-secondary);
-    margin: 0 0 var(--space-4) 0;
-  }
   .meta-bar {
     display: flex;
     gap: var(--space-6);
@@ -478,16 +455,5 @@
     white-space: pre-wrap;
     margin-top: var(--space-3);
     line-height: var(--leading-relaxed);
-  }
-
-  footer {
-    border-top: var(--border-width) solid var(--color-border);
-    padding-top: var(--space-5);
-    text-align: center;
-    font-size: var(--font-size-body);
-    color: var(--color-text-secondary);
-  }
-  footer a {
-    color: var(--color-gray-700);
   }
 </style>

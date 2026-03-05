@@ -1,6 +1,6 @@
 <script lang="ts">
-  import EntityMicroCard from '$lib/components/EntityMicroCard.svelte';
-  import DataSourceBadge from '$lib/components/DataSourceBadge.svelte';
+  import EntityMicroCard from '$lib/components/cards/EntityMicroCard.svelte';
+  import DataSourceBadge from '$lib/components/data/DataSourceBadge.svelte';
 
   type EntityResult = {
     id: string;

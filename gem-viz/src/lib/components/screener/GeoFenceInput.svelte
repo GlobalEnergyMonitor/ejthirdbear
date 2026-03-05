@@ -40,22 +40,19 @@
   }
 
   const vertexCount = $derived(
-    geofence ? geofence.length - (
-      geofence.length > 0 &&
-      geofence[0][0] === geofence[geofence.length - 1][0] &&
-      geofence[0][1] === geofence[geofence.length - 1][1]
-        ? 1
-        : 0
-    ) : 0
+    geofence
+      ? geofence.length -
+          (geofence.length > 0 &&
+          geofence[0][0] === geofence[geofence.length - 1][0] &&
+          geofence[0][1] === geofence[geofence.length - 1][1]
+            ? 1
+            : 0)
+      : 0
   );
 </script>
 
 <div class="geofence-input">
-  <button
-    type="button"
-    class="toggle-btn"
-    onclick={() => (expanded = !expanded)}
-  >
+  <button type="button" class="toggle-btn" onclick={() => (expanded = !expanded)}>
     {expanded ? '\u25BC' : '\u25B6'} Custom region
     {#if geofence}
       <span class="active-badge">{vertexCount} vertices</span>
@@ -66,13 +63,13 @@
     <div class="geofence-body" transition:slide={{ duration: 150 }}>
       <p class="hint">
         Draw a region on
-        <a href="https://geojson.io" target="_blank" rel="noopener noreferrer">geojson.io</a>,
-        then paste the GeoJSON here.
+        <a href="https://geojson.io" target="_blank" rel="noopener noreferrer">geojson.io</a>, then
+        paste the GeoJSON here.
       </p>
       <textarea
         class="geojson-textarea"
         class:has-error={!!error}
-        placeholder='Paste GeoJSON (Polygon or LineString)...'
+        placeholder="Paste GeoJSON (Polygon or LineString)..."
         bind:value={rawInput}
         oninput={handleInput}
         rows="4"

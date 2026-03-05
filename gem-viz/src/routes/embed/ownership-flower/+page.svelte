@@ -11,7 +11,7 @@
    */
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
-  import OwnershipFlower from '$lib/components/OwnershipFlower.svelte';
+  import OwnershipFlower from '$lib/components/network/OwnershipFlower.svelte';
   import {
     loadEntityPortfolio,
     errorMessage,

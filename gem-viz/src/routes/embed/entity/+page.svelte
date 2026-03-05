@@ -13,10 +13,10 @@
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
   import { assetLink } from '$lib/links';
-  import OwnershipFlower from '$lib/components/OwnershipFlower.svelte';
+  import OwnershipFlower from '$lib/components/network/OwnershipFlower.svelte';
   import AssetScreenerChart from '$lib/components/screener/AssetScreenerChart.svelte';
-  import TrackerIcon from '$lib/components/TrackerIcon.svelte';
-  import StatusIcon from '$lib/components/StatusIcon.svelte';
+  import TrackerIcon from '$lib/components/tracker/TrackerIcon.svelte';
+  import StatusIcon from '$lib/components/tracker/StatusIcon.svelte';
   import {
     loadEntityPortfolio,
     errorMessage,
@@ -24,7 +24,7 @@
     boolParam,
     type EmbedPortfolio,
   } from '../embed-utils';
-  import EntityMap from '$lib/components/EntityMap.svelte';
+  import EntityMap from '$lib/components/map/EntityMap.svelte';
   import type { SpotlightAsset } from '$lib/ownership-data';
 
   // URL params

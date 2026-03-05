@@ -7,6 +7,7 @@
   import { link } from '$lib/links';
   import { dataVersionInfo, TrackerDatasets } from '$lib/data-config/data-sources';
   import { changelog } from '$lib/data/changelog';
+  import PageHeader from '$lib/components/nav/PageHeader.svelte';
 
   /**
    * @typedef {Object} PageStats
@@ -43,16 +44,11 @@
 </svelte:head>
 
 <div class="page">
-  <header class="page-header">
-    <nav class="breadcrumb">
-      <a href={link('index')}>Home</a> / About
-    </nav>
-    <h1>About GEM Viz</h1>
-    <p class="lead">
-      An interactive visualization tool for exploring Global Energy Monitor's energy infrastructure
-      and ownership data.
-    </p>
-  </header>
+  <PageHeader
+    breadcrumbs={[{ label: 'Home', href: link('index') }, { label: 'About' }]}
+    title="About GEM Viz"
+    lead="An interactive visualization tool for exploring Global Energy Monitor's energy infrastructure and ownership data."
+  />
 
   <nav class="toc">
     <h2>Contents</h2>
@@ -437,7 +433,7 @@
     </p>
   </section>
 
-  <footer class="page-footer">
+  <footer class="page-back-footer">
     <a href={link('index')}>Back to Homepage</a>
   </footer>
 </div>
@@ -454,34 +450,6 @@
   .page p,
   .page li {
     max-width: 65ch;
-  }
-
-  .page-header {
-    margin-bottom: var(--space-10);
-    padding-bottom: var(--space-6);
-    border-bottom: 2px solid var(--color-black);
-  }
-  .breadcrumb {
-    font-size: var(--font-size-body);
-    margin-bottom: var(--space-3);
-  }
-  .breadcrumb a {
-    color: var(--color-gray-700);
-    text-decoration: none;
-  }
-  .breadcrumb a:hover {
-    text-decoration: underline;
-  }
-  h1 {
-    font-size: var(--font-size-4xl);
-    margin: 0 0 var(--space-3) 0;
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-wide);
-  }
-  .lead {
-    font-size: var(--font-size-2xl);
-    color: var(--color-gray-700);
-    margin: 0;
   }
 
   .toc {
@@ -741,20 +709,6 @@
   }
   .tech-list li {
     font-size: var(--font-size-lg);
-  }
-
-  .page-footer {
-    margin-top: var(--space-12);
-    padding-top: var(--space-6);
-    border-top: var(--border-width) solid var(--color-border);
-  }
-  .page-footer a {
-    color: var(--color-gray-700);
-    text-decoration: none;
-    font-size: var(--font-size-lg);
-  }
-  .page-footer a:hover {
-    text-decoration: underline;
   }
 
   @media (max-width: 600px) {

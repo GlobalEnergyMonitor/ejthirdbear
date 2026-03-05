@@ -5,7 +5,7 @@
    * Delegates to EmbedShell for postMessage/resize/theme/branding logic.
    */
   import '../../app.css';
-  import EmbedShell from '$lib/components/EmbedShell.svelte';
+  import EmbedShell from '$lib/components/nav/EmbedShell.svelte';
   import { page } from '$app/stores';
 
   let { children } = $props();

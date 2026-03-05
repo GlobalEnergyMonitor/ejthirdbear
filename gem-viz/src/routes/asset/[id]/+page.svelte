@@ -13,12 +13,12 @@
   import { fetchAssetData } from '$lib/asset-data';
 
   // Components
-  import AssetMap from '$lib/components/AssetMap.svelte';
-  import OwnershipPie from '$lib/components/OwnershipPie.svelte';
-  import StatusIcon from '$lib/components/StatusIcon.svelte';
-  import AddToCartButton from '$lib/components/AddToCartButton.svelte';
-  import Citation from '$lib/components/Citation.svelte';
-  import DataSourceBadge from '$lib/components/DataSourceBadge.svelte';
+  import AssetMap from '$lib/components/map/AssetMap.svelte';
+  import OwnershipPie from '$lib/components/charts/OwnershipPie.svelte';
+  import StatusIcon from '$lib/components/tracker/StatusIcon.svelte';
+  import AddToCartButton from '$lib/components/cart/AddToCartButton.svelte';
+  import Citation from '$lib/components/data/Citation.svelte';
+  import DataSourceBadge from '$lib/components/data/DataSourceBadge.svelte';
   import { OwnershipTreeGraph, OwnershipSummaryTables } from '$lib/components/ownership';
 
   /**

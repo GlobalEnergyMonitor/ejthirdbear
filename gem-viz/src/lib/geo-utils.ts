@@ -35,8 +35,7 @@ export function parseGeoFence(geojson: string): number[][] | null {
     // Auto-close into a polygon ring
     const first = line[0];
     const last = line[line.length - 1];
-    const ring =
-      first[0] === last[0] && first[1] === last[1] ? line : [...line, first];
+    const ring = first[0] === last[0] && first[1] === last[1] ? line : [...line, first];
     if (validRing(ring)) return ring;
   }
 
@@ -90,9 +89,11 @@ export function pointInPolygon(point: [number, number], ring: number[][]): boole
   const [x, y] = point;
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const xi = ring[i][0], yi = ring[i][1];
-    const xj = ring[j][0], yj = ring[j][1];
-    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
+    const xi = ring[i][0],
+      yi = ring[i][1];
+    const xj = ring[j][0],
+      yj = ring[j][1];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
       inside = !inside;
     }
   }

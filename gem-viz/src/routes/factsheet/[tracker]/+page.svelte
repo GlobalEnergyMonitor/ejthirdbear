@@ -8,9 +8,10 @@
   import { onMount } from 'svelte';
   import { link } from '$lib/links';
   import DatasetFactsheet from '$lib/widgets/DatasetFactsheet.svelte';
-  import ProjectCard from '$lib/components/ProjectCard.svelte';
+  import ProjectCard from '$lib/components/cards/ProjectCard.svelte';
   import { listAssetsByType } from '$lib/ownership-api';
   import { trackerNameToSlug } from '$lib/data-config/tracker-metadata';
+  import PageHeader from '$lib/components/nav/PageHeader.svelte';
 
   // Get tracker from URL param
   const trackerParam = $derived($page.params.tracker);
@@ -195,14 +196,15 @@
 {:else}
   <!-- Full page mode -->
   <main>
-    <header>
-      <nav class="breadcrumb">
-        <a href={link('index')}>Home</a> /
-        <a href={link('explore')}>Explore</a> / Factsheet
-      </nav>
-      <h1>{info.title}</h1>
-      <p class="lead">{info.description}</p>
-    </header>
+    <PageHeader
+      breadcrumbs={[
+        { label: 'Home', href: link('index') },
+        { label: 'Explore', href: link('explore') },
+        { label: 'Factsheet' },
+      ]}
+      title={info.title}
+      lead={info.description}
+    />
 
     <section class="factsheet-section">
       <DatasetFactsheet {tracker} {fieldsMetadata} title="{info.title} Fields" />
@@ -225,9 +227,9 @@
       <p>{info.citation}</p>
     </section>
 
-    <footer class="page-footer">
+    <footer class="page-back-footer">
       <p>
-        <a href="?embed=true" target="_blank" rel="noopener"> View embeddable version </a>
+        <a href="?embed=true" target="_blank" rel="noopener">View embeddable version</a>
         &middot;
         <a href={link('explore')}>Back to Explore</a>
       </p>
@@ -250,32 +252,6 @@
     margin: 0 auto;
   }
 
-  header {
-    margin-bottom: var(--space-8);
-  }
-
-  .breadcrumb {
-    font-size: var(--font-size-body);
-    margin-bottom: var(--space-3);
-  }
-
-  .breadcrumb a {
-    color: var(--color-text-primary);
-    text-decoration: none;
-  }
-
-  .breadcrumb a:hover {
-    text-decoration: underline;
-  }
-
-  h1 {
-    font-size: var(--font-size-3xl);
-    margin: 0 0 var(--space-2) 0;
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-wide);
-    color: var(--color-accent);
-  }
-
   h2 {
     font-size: var(--font-size-2xl);
     text-transform: uppercase;
@@ -290,13 +266,6 @@
     letter-spacing: var(--tracking-tight);
     color: var(--color-accent);
     margin: 0 0 var(--space-2) 0;
-  }
-
-  .lead {
-    font-size: var(--font-size-lg);
-    color: var(--color-text-secondary);
-    margin: 0;
-    max-width: 600px;
   }
 
   .factsheet-section {
@@ -331,16 +300,5 @@
     color: var(--color-text-primary);
     margin: 0;
     line-height: var(--leading-relaxed);
-  }
-
-  .page-footer {
-    border-top: var(--border-width) solid var(--color-border);
-    padding-top: var(--space-5);
-    font-size: var(--font-size-body);
-    color: var(--color-text-secondary);
-  }
-
-  .page-footer a {
-    color: var(--color-link);
   }
 </style>

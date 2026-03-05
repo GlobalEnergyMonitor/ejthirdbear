@@ -83,6 +83,24 @@ export function trackerLink(tracker: string): string {
 }
 
 /**
+ * Generate downloads page link
+ */
+export function downloadsLink(): string {
+  return link('downloads');
+}
+
+/**
+ * Generate search page link
+ */
+export function searchLink(q?: string, type?: string): string {
+  const params = new URLSearchParams();
+  if (q) params.set('q', q);
+  if (type && type !== 'all') params.set('type', type);
+  const qs = params.toString();
+  return link(`search${qs ? `?${qs}` : ''}`);
+}
+
+/**
  * Get the base path for static assets (geojson, etc.)
  * Uses base path which works in both dev and production
  */

@@ -1,6 +1,6 @@
 <script>
   import { formatCount } from '$lib/format';
-  import DataSourceBadge from '$lib/components/DataSourceBadge.svelte';
+  import DataSourceBadge from '$lib/components/data/DataSourceBadge.svelte';
 
   let { state } = $props();
 </script>

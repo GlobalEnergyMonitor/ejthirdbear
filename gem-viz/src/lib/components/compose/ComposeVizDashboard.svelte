@@ -1,7 +1,7 @@
 <script lang="ts">
-  import MiniHistogram from '$lib/components/MiniHistogram.svelte';
-  import Sparkline from '$lib/components/Sparkline.svelte';
-  import MiniBarChart from '$lib/components/MiniBarChart.svelte';
+  import MiniHistogram from '$lib/components/charts/MiniHistogram.svelte';
+  import Sparkline from '$lib/components/charts/Sparkline.svelte';
+  import MiniBarChart from '$lib/components/charts/MiniBarChart.svelte';
 
   let {
     loading,
@@ -13,6 +13,10 @@
     capacityData,
     startYearData,
     statusColors,
+    baseStatusDistribution = [],
+    baseTrackerDistribution = [],
+    baseCountryDistribution = [],
+    hasFilters = false,
   }: {
     loading: boolean;
     initialLoadComplete: boolean;
@@ -23,6 +27,10 @@
     capacityData: Array<number | Record<string, unknown>>;
     startYearData: Array<number | Record<string, unknown>>;
     statusColors: Record<string, string>;
+    baseStatusDistribution?: Array<Record<string, unknown>>;
+    baseTrackerDistribution?: Array<Record<string, unknown>>;
+    baseCountryDistribution?: Array<Record<string, unknown>>;
+    hasFilters?: boolean;
   } = $props();
 </script>
 
@@ -41,6 +49,7 @@
       {:else}
         <MiniBarChart
           data={statusDistribution}
+          compareData={hasFilters ? baseStatusDistribution : []}
           label="Status"
           maxItems={4}
           width={120}
@@ -65,6 +74,7 @@
       {:else}
         <MiniBarChart
           data={trackerDistribution}
+          compareData={hasFilters ? baseTrackerDistribution : []}
           label="Tracker"
           maxItems={4}
           width={120}
@@ -88,6 +98,7 @@
       {:else}
         <MiniBarChart
           data={countryDistribution}
+          compareData={hasFilters ? baseCountryDistribution : []}
           label="Countries"
           maxItems={4}
           width={120}

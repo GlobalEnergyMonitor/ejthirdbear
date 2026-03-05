@@ -11,8 +11,8 @@ export const handle: Handle = async ({ event, resolve }) => {
   const response = await resolve(event);
 
   // Skip COEP/COOP for embed routes and ?embed=true — they need to work in cross-origin iframes
-  const isEmbedRoute = event.url.pathname.startsWith('/embed') ||
-    event.url.searchParams.get('embed') === 'true';
+  const isEmbedRoute =
+    event.url.pathname.startsWith('/embed') || event.url.searchParams.get('embed') === 'true';
 
   if (!isEmbedRoute) {
     // Add required headers for SharedArrayBuffer support

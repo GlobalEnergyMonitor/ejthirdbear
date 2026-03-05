@@ -1,5 +1,5 @@
 <script lang="ts">
-  import ProjectCard from '$lib/components/ProjectCard.svelte';
+  import ProjectCard from '$lib/components/cards/ProjectCard.svelte';
 
   type TooltipAsset = {
     id: string;

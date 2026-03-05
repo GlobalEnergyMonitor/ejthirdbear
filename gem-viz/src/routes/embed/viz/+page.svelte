@@ -6,10 +6,10 @@
   import { page } from '$app/stores';
   import { base } from '$app/paths';
 
-  import OwnershipFlower from '$lib/components/OwnershipFlower.svelte';
-  import AssetScreener from '$lib/components/AssetScreener.svelte';
-  import AssetMap from '$lib/components/AssetMap.svelte';
-  import InvestigationMap from '$lib/components/InvestigationMap.svelte';
+  import OwnershipFlower from '$lib/components/network/OwnershipFlower.svelte';
+  import AssetScreener from '$lib/components/screener/AssetScreener.svelte';
+  import AssetMap from '$lib/components/map/AssetMap.svelte';
+  import InvestigationMap from '$lib/components/map/InvestigationMap.svelte';
   import DatasetFactsheet from '$lib/widgets/DatasetFactsheet.svelte';
   import { OwnershipTreeGraph, AssetRingVisualization } from '$lib/components/ownership';
 

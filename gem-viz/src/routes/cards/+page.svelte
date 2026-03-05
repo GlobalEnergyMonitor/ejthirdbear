@@ -6,7 +6,8 @@
    */
   import { link } from '$lib/links';
   import { TRACKERS } from '$lib/data-config/tracker-schema';
-  import ProjectCardList from '$lib/components/ProjectCardList.svelte';
+  import ProjectCardList from '$lib/components/cards/ProjectCardList.svelte';
+  import PageHeader from '$lib/components/nav/PageHeader.svelte';
 
   // Filter state
   let selectedTracker = $state<string>(TRACKERS[3]); // Default to 'Coal Plant'
@@ -28,18 +29,16 @@
   />
 </svelte:head>
 
-<div class="page">
-  <header>
-    <nav class="breadcrumb">
-      <a href={link('index')}>Home</a> /
-      <a href={link('explore')}>Explore</a> / Cards
-    </nav>
-    <h1>Project Cards</h1>
-    <p class="lead">
-      Browse assets across all GEM trackers. Click a card to expand and see ownership, size, age,
-      status, and tracker-specific details.
-    </p>
-  </header>
+<div class="page-container--xl">
+  <PageHeader
+    breadcrumbs={[
+      { label: 'Home', href: link('index') },
+      { label: 'Explore', href: link('explore') },
+      { label: 'Cards' },
+    ]}
+    title="Project Cards"
+    lead="Browse assets across all GEM trackers. Click a card to expand and see ownership, size, age, status, and tracker-specific details."
+  />
 
   <!-- Tracker Filter -->
   <section class="filter-bar">
@@ -48,7 +47,7 @@
       {#each trackers as tracker}
         <button
           class="chip"
-          class:active={selectedTracker === tracker.value}
+          class:chip--selected={selectedTracker === tracker.value}
           onclick={() => (selectedTracker = tracker.value)}
         >
           {tracker.label}
@@ -106,57 +105,16 @@
     {/key}
   </div>
 
-  <footer class="page-footer">
+  <footer class="page-back-footer">
     <p>
-      Project cards display asset data from GEM trackers. Cards can be embedded in reports, articles,
-      and search results.
+      Project cards display asset data from GEM trackers. Cards can be embedded in reports,
+      articles, and search results.
     </p>
     <a href={link('explore')}>Back to Explore</a>
   </footer>
 </div>
 
 <style>
-  .page {
-    width: 100%;
-    max-width: 1400px;
-    margin: 0 auto;
-    padding: var(--space-10) var(--space-5);
-    font-family: var(--font-family-sans);
-  }
-
-  header {
-    margin-bottom: var(--space-8);
-  }
-
-  .breadcrumb {
-    font-size: var(--font-size-body);
-    margin-bottom: var(--space-3);
-  }
-
-  .breadcrumb a {
-    color: var(--color-text-primary);
-    text-decoration: none;
-  }
-
-  .breadcrumb a:hover {
-    text-decoration: underline;
-  }
-
-  h1 {
-    font-size: var(--font-size-3xl);
-    margin: 0 0 var(--space-2) 0;
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-wide);
-    color: var(--color-accent);
-  }
-
-  .lead {
-    font-size: var(--font-size-lg);
-    color: var(--color-text-secondary);
-    margin: 0;
-    max-width: 600px;
-  }
-
   .filter-bar {
     display: flex;
     align-items: center;
@@ -178,26 +136,6 @@
     flex-wrap: wrap;
   }
 
-  .chip {
-    padding: var(--space-1) var(--space-3);
-    font-size: var(--font-size-body);
-    border: var(--border-width) solid var(--color-border);
-    background: var(--color-white);
-    cursor: pointer;
-    transition: all var(--transition-fast);
-    border-radius: var(--radius-md);
-  }
-
-  .chip:hover {
-    border-color: var(--color-gray-500);
-  }
-
-  .chip.active {
-    background: var(--color-accent);
-    color: var(--color-white);
-    border-color: var(--color-accent);
-  }
-
   .card-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
@@ -209,16 +147,5 @@
     .card-grid {
       grid-template-columns: 1fr;
     }
-  }
-
-  .page-footer {
-    border-top: var(--border-width) solid var(--color-border);
-    padding-top: var(--space-5);
-    font-size: var(--font-size-body);
-    color: var(--color-text-secondary);
-  }
-
-  .page-footer a {
-    color: var(--color-link);
   }
 </style>

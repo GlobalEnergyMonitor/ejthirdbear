@@ -11,7 +11,8 @@
   import { goto } from '$app/navigation';
   import { link, assetLink, assetPath } from '$lib/links';
   import { exportList } from '$lib/exportList';
-  import DataTable from '$lib/components/DataTable.svelte';
+  import DataTable from '$lib/components/table/DataTable.svelte';
+  import Spinner from '$lib/components/feedback/Spinner.svelte';
 
   // --- STATE ---
   let loading = $state(true);
@@ -197,7 +198,7 @@
   />
 </svelte:head>
 
-<div class="page">
+<div class="page-container">
   <!-- Header -->
   <header>
     <a href={link('index')} class="back-link">Back to Map</a>
@@ -218,7 +219,7 @@
   <!-- Loading State -->
   {#if loading}
     <div class="loading-state">
-      <div class="spinner"></div>
+      <Spinner size={30} />
       <p>{loadingStatus}</p>
     </div>
 
@@ -273,12 +274,6 @@
      STYLES
      ============================================================================ -->
 <style>
-  /* Layout */
-  .page {
-    width: 100%;
-    padding: var(--space-5) var(--space-10);
-  }
-
   /* Header */
   header {
     display: flex;
@@ -379,20 +374,6 @@
     padding: var(--space-16) var(--space-5);
     color: var(--color-text-secondary);
   }
-  .spinner {
-    width: 30px;
-    height: 30px;
-    border: 3px solid var(--color-border);
-    border-top-color: var(--color-black);
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin: 0 auto var(--space-5);
-  }
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
   .error-state {
     color: var(--color-error);
   }
@@ -410,12 +391,5 @@
     color: var(--color-text-secondary);
     font-size: var(--font-size-body);
     font-style: italic;
-  }
-
-  /* Responsive */
-  @media (max-width: 768px) {
-    .page {
-      padding: var(--space-4);
-    }
   }
 </style>

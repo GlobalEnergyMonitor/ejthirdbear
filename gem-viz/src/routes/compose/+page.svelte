@@ -11,7 +11,7 @@
 
   import { decodeFilters } from '$lib/filter-state';
 
-  import FilterBreadcrumbs from '$lib/components/FilterBreadcrumbs.svelte';
+  import FilterBreadcrumbs from '$lib/components/table/FilterBreadcrumbs.svelte';
   import ComposeFilterPanel from '$lib/components/compose/ComposeFilterPanel.svelte';
   import ComposeResultsHeader from '$lib/components/compose/ComposeResultsHeader.svelte';
   import ComposeTableState from '$lib/components/compose/ComposeTableState.svelte';
@@ -42,7 +42,7 @@
   </header>
 
   <div class="composer-layout">
-    <ComposeFilterPanel bind:state={state} presetsHref="/presets" />
+    <ComposeFilterPanel bind:state presetsHref="/presets" />
 
     <!-- Main: Results -->
     <section class="results-panel">
@@ -66,6 +66,10 @@
         capacityData={state.capacityData}
         startYearData={state.startYearData}
         statusColors={state.statusColors}
+        baseStatusDistribution={state.baseStatusDistribution}
+        baseTrackerDistribution={state.baseTrackerDistribution}
+        baseCountryDistribution={state.baseCountryDistribution}
+        hasFilters={state.hasFilters}
       />
 
       <ComposeTableState {state} />

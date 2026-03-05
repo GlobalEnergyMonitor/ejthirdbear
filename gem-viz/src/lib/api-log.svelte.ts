@@ -4,14 +4,14 @@
  */
 
 export interface ApiCall {
-	url: string;
-	method: string;
-	status: number | null;
-	durationMs: number;
-	timestamp: Date;
-	error?: string;
-	/** Why this call was made — which component/operation triggered it */
-	reason?: string;
+  url: string;
+  method: string;
+  status: number | null;
+  durationMs: number;
+  timestamp: Date;
+  error?: string;
+  /** Why this call was made — which component/operation triggered it */
+  reason?: string;
 }
 
 const MAX_LOG_SIZE = 200;
@@ -20,9 +20,9 @@ let _revision = $state(0);
 
 /** Record an API call. Called from fetch wrappers across the app. */
 export function logApiCall(call: ApiCall) {
-	log.push(call);
-	if (log.length > MAX_LOG_SIZE) log.splice(0, log.length - MAX_LOG_SIZE);
-	_revision++;
+  log.push(call);
+  if (log.length > MAX_LOG_SIZE) log.splice(0, log.length - MAX_LOG_SIZE);
+  _revision++;
 }
 
 /**
@@ -30,19 +30,19 @@ export function logApiCall(call: ApiCall) {
  * Returns newest-first.
  */
 export function getApiLog(): ApiCall[] {
-	// Reading _revision makes this reactive in Svelte 5 $derived contexts
-	void _revision;
-	return log.slice().reverse();
+  // Reading _revision makes this reactive in Svelte 5 $derived contexts
+  void _revision;
+  return log.slice().reverse();
 }
 
 /** Clear the log (e.g. on navigation) */
 export function clearApiLog() {
-	log.length = 0;
-	_revision++;
+  log.length = 0;
+  _revision++;
 }
 
 /** Get count (reactive) */
 export function getApiLogCount(): number {
-	void _revision;
-	return log.length;
+  void _revision;
+  return log.length;
 }

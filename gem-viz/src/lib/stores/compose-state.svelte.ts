@@ -269,6 +269,17 @@ export class ComposeState {
   countryDistribution = $derived(calculateCountryDistribution(this.results));
   trackerDistribution = $derived(calculateTrackerDistribution(this.results));
 
+  // --- Base (full dataset) distributions for comparison ---
+  baseStatusDistribution = $derived(
+    this.baseStatuses.map((f: any) => ({ label: f.value, value: f.count }))
+  );
+  baseTrackerDistribution = $derived(
+    this.baseTrackers.map((f: any) => ({ label: f.value, value: f.count }))
+  );
+  baseCountryDistribution = $derived(
+    this.baseCountries.map((f: any) => ({ label: f.value, value: f.count }))
+  );
+
   // --- Status color map ---
   statusColors = statusColorsGranular;
 

@@ -10,8 +10,8 @@
   import { goto } from '$app/navigation';
   import { link, assetLink } from '$lib/links';
   import { listAssets } from '$lib/ownership-api';
-  import DataTable from '$lib/components/DataTable.svelte';
-  import AssetSearchBar from '$lib/components/AssetSearchBar.svelte';
+  import DataTable from '$lib/components/table/DataTable.svelte';
+  import AssetSearchBar from '$lib/components/search/AssetSearchBar.svelte';
 
   // --- STATE ---
   let loading = $state(true);

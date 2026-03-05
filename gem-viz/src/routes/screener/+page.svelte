@@ -8,9 +8,9 @@
    */
 
   import { goto } from '$app/navigation';
-  import ScreenerLayout from '$lib/components/ScreenerLayout.svelte';
-  import AssetClassExpansion from '$lib/components/AssetClassExpansion.svelte';
-  import DebugPanel from '$lib/components/DebugPanel.svelte';
+  import ScreenerLayout from '$lib/components/nav/ScreenerLayout.svelte';
+  import AssetClassExpansion from '$lib/components/tracker/AssetClassExpansion.svelte';
+  import DebugPanel from '$lib/components/feedback/DebugPanel.svelte';
   import { ALL_ASSET_CLASSES, getAssetClassById } from '$lib/data-config/asset-class-definitions';
   import { gemTrackerToUiTracker } from '$lib/data-config/screener-api';
   import { buildScreenerUrl } from '$lib/screener-url';
@@ -175,11 +175,12 @@
   const selectionSummary = $derived.by(() => {
     if (!selectedClass) return '';
     const parts = [selectedClass.label].filter(Boolean).join(' ');
-    const geo = geoFilters.length === 1
-      ? ` in ${geoFilters[0]}`
-      : geoFilters.length > 1
-        ? ` in ${geoFilters.length} countries`
-        : '';
+    const geo =
+      geoFilters.length === 1
+        ? ` in ${geoFilters[0]}`
+        : geoFilters.length > 1
+          ? ` in ${geoFilters.length} countries`
+          : '';
     const statusCount = selectedStatuses.length;
     const totalStatuses = STATUS_GROUPS.reduce((n, sg) => n + sg.statuses.length, 0);
     const sc = statusCount > 0 && statusCount < totalStatuses ? ` (${statusCount} statuses)` : '';
@@ -566,7 +567,7 @@
   }
 
   .rest-url {
-    color: var(--color-link, #016B83);
+    color: var(--color-link, #016b83);
     text-decoration: none;
     word-break: break-all;
   }

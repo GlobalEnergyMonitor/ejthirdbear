@@ -9,7 +9,7 @@
    * - Links to entity pages
    */
   import { entityLink } from '$lib/links';
-  import OwnershipPie from '$lib/components/OwnershipPie.svelte';
+  import OwnershipPie from '$lib/components/charts/OwnershipPie.svelte';
   import { colors } from '$lib/design-tokens';
   import { Minus, Plus } from 'lucide-svelte';
 

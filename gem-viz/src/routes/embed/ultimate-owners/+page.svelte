@@ -7,7 +7,7 @@
    *   entityId - Required. Entity ID to display
    */
   import { page } from '$app/stores';
-  import UltimateOwners from '$lib/components/UltimateOwners.svelte';
+  import UltimateOwners from '$lib/components/tracker/UltimateOwners.svelte';
 
   const entityId = $derived($page.url.searchParams.get('entityId'));
 </script>

@@ -1,84 +1,30 @@
-# Deployment Configuration
+# Deployment
 
-This app supports two deployment modes:
+GEM Viz runs on Fly.io as a Node.js SSR app.
 
-## Dynamic SSR (Fly.io) - Current
-
-Node.js server renders pages on-demand.
-
-### Files to configure for SSR:
-
-| File                               | Setting                                                                                 |
-| ---------------------------------- | --------------------------------------------------------------------------------------- |
-| `svelte.config.js`                 | Use `adapter-node`, `prerender.entries: []`, `handleUnseenRoutes: 'ignore'`, `base: ''` |
-| `src/routes/+layout.js`            | `prerender = false`                                                                     |
-| `src/routes/+page.js`              | `prerender = false`                                                                     |
-| `src/routes/presets/+page.js`      | `prerender = false`                                                                     |
-| `src/routes/asset/+page.server.js` | `prerender = false`                                                                     |
-| `src/routes/asset/search/+page.js` | `prerender = false`                                                                     |
-| `src/routes/network/+page.js`      | `prerender = false`                                                                     |
-| `src/lib/links.ts`                 | Uses clean URLs (no `/index.html`)                                                      |
-
-### Deploy:
+## Deploy
 
 ```bash
 fly deploy
 ```
 
----
+## Configuration
 
-## Static Build (DO Spaces) - Legacy
-
-Pre-renders all pages as static HTML.
-
-### Files to configure for Static:
-
-| File                               | Setting                                                  |
-| ---------------------------------- | -------------------------------------------------------- |
-| `svelte.config.js`                 | Use `adapter-static`, set `base: '/gem-viz/v${version}'` |
-| `src/routes/+layout.js`            | `prerender = true`                                       |
-| `src/routes/+page.js`              | `prerender = true`                                       |
-| `src/routes/presets/+page.js`      | `prerender = true`                                       |
-| `src/routes/asset/+page.server.js` | `prerender = true`                                       |
-| `src/routes/asset/search/+page.js` | `prerender = true`                                       |
-| `src/routes/network/+page.js`      | `prerender = true`                                       |
-| `src/lib/links.ts`                 | Set `STATIC_BUILD=true` env var for `/index.html` URLs   |
-
-### Deploy:
-
-```bash
-STATIC_BUILD=true npm run build
-# Then upload build/ to DO Spaces
-```
-
----
-
-## Quick Switch Checklist
-
-### To switch to SSR (Fly.io):
-
-1. Set all `prerender = false` in route files
-2. Use `svelte.config.js` (adapter-node)
-3. Deploy with `fly deploy`
-
-### To switch to Static (DO Spaces):
-
-1. Set all `prerender = true` in route files
-2. Use `svelte.config.cloudflare.js` or create static config
-3. Set `STATIC_BUILD=true` in build environment
-4. Build and upload to DO Spaces
-
----
+| File | Setting |
+| --- | --- |
+| `svelte.config.js` | `adapter-node`, `prerender.entries: []` |
+| `Dockerfile` | Node.js production image |
+| `fly.toml` | Fly.io app config (`gem-viz`) |
+| `server.js` | Production server entry point |
 
 ## Environment Variables
 
-| Variable       | SSR     | Static | Purpose                         |
-| -------------- | ------- | ------ | ------------------------------- |
-| `STATIC_BUILD` | Not set | `true` | Enables `/index.html` URL paths |
+Set via `fly secrets set`:
 
-## Docker Ignore
+| Variable | Purpose |
+| --- | --- |
+| `PUBLIC_OWNERSHIP_API_BASE_URL` | REST API base (`https://gem-api.thirdbear.net`) |
 
-The `.dockerignore` excludes `static/flowers/` (8,681 SVG files) to avoid file descriptor limits during Docker builds. If you need the flower SVGs, either:
+## Docker Notes
 
-- Generate them on-demand at runtime
-- Upload them to a CDN separately
+The `.dockerignore` excludes `static/flowers/` (SVG files) to avoid file descriptor limits during Docker builds.

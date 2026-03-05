@@ -12,7 +12,9 @@
     trackerMetadata,
     type TrackerMetadata,
   } from '$lib/data-config/tracker-metadata';
-  import TrackerFactsheet from '$lib/components/TrackerFactsheet.svelte';
+  import TrackerFactsheet from '$lib/components/tracker/TrackerFactsheet.svelte';
+  import PageHeader from '$lib/components/nav/PageHeader.svelte';
+  import Spinner from '$lib/components/feedback/Spinner.svelte';
 
   // Cache for REST API asset data (avoids re-fetching for each field)
   let cachedAssets: AssetSummary[] | null = null;
@@ -278,24 +280,20 @@
   <meta name="description" content={metadata?.description || `Data overview for ${trackerName}`} />
 </svelte:head>
 
-<div class="page">
-  <header>
-    <nav class="breadcrumb">
-      <a href={link('index')}>Home</a> /
-      <a href={link('tracker')}>Trackers</a> /
-      {metadata?.name || trackerName}
-    </nav>
-    {#if metadata}
-      <h1>{metadata.name}</h1>
-      <p class="lead">{metadata.description}</p>
-    {:else}
-      <h1>{trackerName}</h1>
-    {/if}
-  </header>
+<div class="page-container--wide">
+  <PageHeader
+    breadcrumbs={[
+      { label: 'Home', href: link('index') },
+      { label: 'Trackers', href: link('tracker') },
+      { label: metadata?.name || trackerName },
+    ]}
+    title={metadata?.name || trackerName}
+    lead={metadata?.description || ''}
+  />
 
   {#if loading}
     <div class="loading">
-      <div class="spinner"></div>
+      <Spinner size={40} />
       <p>Loading tracker data...</p>
     </div>
   {:else if error}
@@ -337,68 +335,11 @@
 </div>
 
 <style>
-  .page {
-    width: 100%;
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: var(--space-8) var(--space-5);
-    font-family: var(--font-family-sans);
-  }
-
-  header {
-    margin-bottom: var(--space-6);
-  }
-
-  .breadcrumb {
-    font-size: var(--font-size-body);
-    margin-bottom: var(--space-3);
-  }
-
-  .breadcrumb a {
-    color: var(--color-text-primary);
-    text-decoration: none;
-  }
-
-  .breadcrumb a:hover {
-    text-decoration: underline;
-  }
-
-  h1 {
-    font-size: var(--font-size-2xl);
-    margin: 0 0 var(--space-2) 0;
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-wide);
-    color: var(--color-accent);
-  }
-
-  .lead {
-    font-size: var(--font-size-lg);
-    color: var(--color-text-secondary);
-    margin: 0;
-    max-width: 700px;
-  }
-
   .loading,
   .error {
     text-align: center;
     padding: var(--space-12);
     color: var(--color-text-secondary);
-  }
-
-  .spinner {
-    width: 40px;
-    height: 40px;
-    border: 3px solid var(--color-border);
-    border-top-color: var(--color-accent);
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin: 0 auto var(--space-4);
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
   }
 
   .error {

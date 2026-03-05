@@ -15,8 +15,8 @@
   import { colorByTracker, colors } from '$lib/design-tokens';
 
   // Components
-  import EntityMicroCard from '$lib/components/EntityMicroCard.svelte';
-  import AssetMicroCard from '$lib/components/AssetMicroCard.svelte';
+  import EntityMicroCard from '$lib/components/cards/EntityMicroCard.svelte';
+  import AssetMicroCard from '$lib/components/cards/AssetMicroCard.svelte';
 
   // Gembot utilities
   import {

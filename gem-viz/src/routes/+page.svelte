@@ -6,8 +6,8 @@
 
   // --- IMPORTS ---
   import { assetLink, entityLink } from '$lib/links';
-  import TrackerGlobeGrid from '$lib/components/TrackerGlobeGrid.svelte';
-  import TrackerIcon from '$lib/components/TrackerIcon.svelte';
+  import TrackerGlobeGrid from '$lib/components/tracker/TrackerGlobeGrid.svelte';
+  import TrackerIcon from '$lib/components/tracker/TrackerIcon.svelte';
 
   // --- DATA ---
   // Featured entities - interesting ownership structures from Observable notebooks

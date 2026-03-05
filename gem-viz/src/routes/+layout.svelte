@@ -1,10 +1,10 @@
 <script>
   import '../app.css';
-  import SiteNav from '$lib/components/SiteNav.svelte';
-  import SiteFooter from '$lib/components/SiteFooter.svelte';
-  import CommandPalette from '$lib/components/CommandPalette.svelte';
-  import ApiCallLog from '$lib/components/ApiCallLog.svelte';
-  import EmbedShell from '$lib/components/EmbedShell.svelte';
+  import SiteNav from '$lib/components/nav/SiteNav.svelte';
+  import SiteFooter from '$lib/components/nav/SiteFooter.svelte';
+  import CommandPalette from '$lib/components/search/CommandPalette.svelte';
+  import ApiCallLog from '$lib/components/data/ApiCallLog.svelte';
+  import EmbedShell from '$lib/components/nav/EmbedShell.svelte';
   import { clearApiLog } from '$lib/api-log.svelte';
   import { link } from '$lib/links';
   import { page } from '$app/stores';

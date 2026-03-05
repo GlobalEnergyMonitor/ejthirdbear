@@ -63,6 +63,7 @@ export interface ScreenerChartData {
   entityMap: Map<string, { id: string; Name: string; type: string }>;
   multiplePathAssets: Map<string, string[]>;
   intermediaryData: Map<string, { total_descendants: number; max_generations: number }>;
+  assetDetails: Map<string, AssetSummary>;
 }
 
 // ---------------------------------------------------------------------------
@@ -305,6 +306,7 @@ export async function fetchChartData(
     entityMap,
     multiplePathAssets,
     intermediaryData,
+    assetDetails,
   };
 }
 

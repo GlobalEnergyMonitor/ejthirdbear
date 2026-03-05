@@ -255,15 +255,38 @@ async function _doFetch<T>(url: string, options?: RequestInit): Promise<T> {
       } catch {
         // Ignore body read errors
       }
-      logApiCall({ url, method, status: response.status, durationMs: performance.now() - t0, timestamp: new Date(), error: errorMessage, reason });
+      logApiCall({
+        url,
+        method,
+        status: response.status,
+        durationMs: performance.now() - t0,
+        timestamp: new Date(),
+        error: errorMessage,
+        reason,
+      });
       throw new OwnershipAPIError(response.status, errorMessage);
     }
 
-    logApiCall({ url, method, status: response.status, durationMs: performance.now() - t0, timestamp: new Date(), reason });
+    logApiCall({
+      url,
+      method,
+      status: response.status,
+      durationMs: performance.now() - t0,
+      timestamp: new Date(),
+      reason,
+    });
     return response.json();
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
-      logApiCall({ url, method, status: null, durationMs: performance.now() - t0, timestamp: new Date(), error: 'timeout', reason });
+      logApiCall({
+        url,
+        method,
+        status: null,
+        durationMs: performance.now() - t0,
+        timestamp: new Date(),
+        error: 'timeout',
+        reason,
+      });
       throw new OwnershipAPIError(
         0,
         `API request timed out after ${API_TIMEOUT_MS / 1000}s: ${url}`
@@ -271,7 +294,15 @@ async function _doFetch<T>(url: string, options?: RequestInit): Promise<T> {
     }
     // Log non-API errors (network failures etc.) only if not already logged above
     if (!(err instanceof OwnershipAPIError)) {
-      logApiCall({ url, method, status: null, durationMs: performance.now() - t0, timestamp: new Date(), error: String(err), reason });
+      logApiCall({
+        url,
+        method,
+        status: null,
+        durationMs: performance.now() - t0,
+        timestamp: new Date(),
+        error: String(err),
+        reason,
+      });
     }
     throw err;
   } finally {
@@ -401,7 +432,9 @@ function normalizePaginated<T>(raw: T[] | PaginatedResponse<T>): PaginatedRespon
 
 // Build query string from an object, skipping nullish values.
 // Supports arrays: repeated keys for multi-value params (e.g. country=X&country=Y).
-function buildQuery(params?: Record<string, string | number | string[] | undefined | null>): string {
+function buildQuery(
+  params?: Record<string, string | number | string[] | undefined | null>
+): string {
   if (!params) return '';
   const sp = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
@@ -634,7 +667,8 @@ export async function listAssets(params?: {
   offset?: number;
   facets?: boolean;
 }): Promise<PaginatedResponse<AssetSummary> & { facets?: Record<string, Record<string, number>> }> {
-  if (!_currentReason) _currentReason = `listAssets${params?.asset_type ? ` type=${params.asset_type}` : ''}${params?.facets ? ' (facets)' : ''}`;
+  if (!_currentReason)
+    _currentReason = `listAssets${params?.asset_type ? ` type=${params.asset_type}` : ''}${params?.facets ? ' (facets)' : ''}`;
   // Build query params — always request JSON format (coal-plant slug returns HTML without it)
   const queryParams: Record<string, string | number | string[] | undefined | null> = {
     q: params?.q,

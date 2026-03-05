@@ -971,14 +971,57 @@ export function evaluateFilter(filter: FieldFilter, record: Record<string, unkno
   }
 
   // Special pseudo-field: _tracker matches the record's tracker/asset type
+  // REST API uses snake_case keys (asset_type), older sources use Title Case (Asset Type, Tracker)
   if (filter.field === '_tracker') {
-    const tracker = String(record['Asset Type'] || record['Tracker'] || '');
+    const tracker = String(
+      record['Asset Type'] ||
+        record['Tracker'] ||
+        record['asset_type'] ||
+        record['Facility Type'] ||
+        record['facility_type'] ||
+        ''
+    );
     if (filter.op === 'eq') return tracker === filter.value;
     if (filter.op === 'neq') return tracker !== filter.value;
     return false;
   }
 
-  const raw = record[filter.field];
+  // REST API returns snake_case keys; asset-class filters use Title Case.
+  // Map common Title Case field names → snake_case equivalents so filters
+  // work against raw API responses.
+  const FIELD_ALIASES: Record<string, string[]> = {
+    Status: ['operating_status', 'status'],
+    'Country Area': ['country'],
+    Country: ['country'],
+    Capacity: ['capacity_value', 'capacity'],
+    'Capacity Unit': ['capacity_unit'],
+    'Facility Name': ['asset_name', 'name'],
+    Latitude: ['latitude', 'lat'],
+    Longitude: ['longitude', 'lon'],
+  };
+
+  let raw = record[filter.field];
+
+  // If field not found, try snake_case aliases
+  if (raw === undefined && filter.field in FIELD_ALIASES) {
+    for (const alias of FIELD_ALIASES[filter.field]) {
+      if (record[alias] !== undefined) {
+        raw = record[alias];
+        break;
+      }
+    }
+  }
+
+  // Tracker-specific fields (Captive, Planned retirement, Reductant, etc.)
+  // are NOT returned by the REST API list endpoint. Pass through rather than
+  // rejecting, since we can't evaluate what we don't have.
+  if (raw === undefined && !(filter.field in FIELD_ALIASES) && filter.field !== '_tracker') {
+    // For not_null/is_null ops on missing fields, we can't know — pass through
+    if (filter.op === 'not_null' || filter.op === 'is_null') return true;
+    // For value-matching ops on missing fields, pass through to avoid
+    // silently filtering out all assets
+    return true;
+  }
 
   // Handle null/empty checks first
   if (filter.op === 'is_null') {

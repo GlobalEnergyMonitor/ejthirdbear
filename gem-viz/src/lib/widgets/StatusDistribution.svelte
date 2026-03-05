@@ -7,7 +7,7 @@
   import { onMount } from 'svelte';
   import { listAssetsByType, listAssets, resolveApiSlug } from '$lib/ownership-api';
   import { regroupStatus, statusColors as designStatusColors } from '$lib/design-tokens';
-  import DataSourceBadge from '$lib/components/DataSourceBadge.svelte';
+  import DataSourceBadge from '$lib/components/data/DataSourceBadge.svelte';
 
   // Props
   let { tracker = null, title = 'Status Distribution' } = $props();

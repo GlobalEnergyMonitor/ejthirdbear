@@ -3,6 +3,7 @@
    * SITEMAP PAGE
    * Complete directory of all pages and routes in GEM Viz
    */
+  import PageHeader from '$lib/components/nav/PageHeader.svelte';
 
   const sections = [
     {
@@ -141,12 +142,8 @@
   <meta name="description" content="Complete directory of all pages in GEM Viz" />
 </svelte:head>
 
-<div class="page">
-  <header>
-    <p class="label">Directory</p>
-    <h1>Sitemap</h1>
-    <p class="count">{totalRoutes} pages</p>
-  </header>
+<div class="page-container--narrow">
+  <PageHeader title="Sitemap" lead="{totalRoutes} pages" />
 
   <div class="sections">
     {#each sections as section}
@@ -172,38 +169,6 @@
 </div>
 
 <style>
-  .page {
-    max-width: 800px;
-    margin: 0 auto;
-    padding: var(--space-10) var(--space-5);
-  }
-
-  header {
-    margin-bottom: var(--space-10);
-  }
-
-  .label {
-    font-size: var(--font-size-sm);
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-wide);
-    color: var(--color-text-tertiary);
-    margin: 0 0 var(--space-2) 0;
-  }
-
-  h1 {
-    font-size: var(--font-size-3xl);
-    font-weight: 400;
-    margin: 0 0 var(--space-2) 0;
-    letter-spacing: -0.02em;
-  }
-
-  .count {
-    font-family: var(--font-family-data);
-    font-size: var(--font-size-sm);
-    color: var(--color-text-tertiary);
-    margin: 0;
-  }
-
   .sections {
     display: flex;
     flex-direction: column;

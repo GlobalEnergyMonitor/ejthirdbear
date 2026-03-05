@@ -69,7 +69,15 @@ async function listAssetsMulti(
       signal: controller.signal,
       headers: { 'Content-Type': 'application/json' },
     });
-    logApiCall({ url: fetchUrl, method: 'GET', status: response.status, durationMs: performance.now() - t0, timestamp: new Date(), error: response.ok ? undefined : `${response.status} ${response.statusText}`, reason: 'compose listAssetsMulti' });
+    logApiCall({
+      url: fetchUrl,
+      method: 'GET',
+      status: response.status,
+      durationMs: performance.now() - t0,
+      timestamp: new Date(),
+      error: response.ok ? undefined : `${response.status} ${response.statusText}`,
+      reason: 'compose listAssetsMulti',
+    });
     if (!response.ok) {
       throw new Error(`API error: ${response.status} ${response.statusText}`);
     }

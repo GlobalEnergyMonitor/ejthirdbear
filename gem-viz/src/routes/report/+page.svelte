@@ -7,14 +7,15 @@
   import { onMount } from 'svelte';
   import { investigationCart } from '$lib/investigationCart';
   import { link, assetLink, entityLink } from '$lib/links';
-  import Citation from '$lib/components/Citation.svelte';
-  import DebugPanel from '$lib/components/DebugPanel.svelte';
-  import EntityMicroCard from '$lib/components/EntityMicroCard.svelte';
-  import AssetMicroCard from '$lib/components/AssetMicroCard.svelte';
-  import DataTable from '$lib/components/DataTable.svelte';
-  import ReportLoadingTerminal from '$lib/components/ReportLoadingTerminal.svelte';
+  import Citation from '$lib/components/data/Citation.svelte';
+  import DebugPanel from '$lib/components/feedback/DebugPanel.svelte';
+  import EntityMicroCard from '$lib/components/cards/EntityMicroCard.svelte';
+  import AssetMicroCard from '$lib/components/cards/AssetMicroCard.svelte';
+  import DataTable from '$lib/components/table/DataTable.svelte';
+  import ReportLoadingTerminal from '$lib/components/feedback/ReportLoadingTerminal.svelte';
   import { OwnershipTreeGraph } from '$lib/components/ownership';
   import AssetScreenerChart from '$lib/components/screener/AssetScreenerChart.svelte';
+  import PageHeader from '$lib/components/nav/PageHeader.svelte';
   import {
     queryEntityPortfolios,
     fetchOwnershipGraphs,
@@ -245,16 +246,16 @@
 </svelte:head>
 
 <div class="page report-page">
-  <header>
-    <nav class="breadcrumb">
-      <a href={link('index')}>Home</a> /
-      <a href={link('explore')}>Explore</a> / Report
-    </nav>
-    <div class="title-block">
-      <h1>Investigation Report</h1>
-      <time class="report-date">{reportDate}</time>
-    </div>
-  </header>
+  <PageHeader
+    breadcrumbs={[
+      { label: 'Home', href: link('index') },
+      { label: 'Explore', href: link('explore') },
+      { label: 'Report' },
+    ]}
+    title="Investigation Report"
+  >
+    <time class="report-date">{reportDate}</time>
+  </PageHeader>
 
   {#if isEmpty}
     <section class="empty-state">
@@ -595,40 +596,6 @@
     font-feature-settings: 'tnum' 1; /* tabular numbers */
   }
 
-  /* Header */
-  header {
-    margin-bottom: var(--space-10);
-  }
-
-  .breadcrumb {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--color-text-tertiary);
-    margin-bottom: var(--space-4);
-  }
-
-  .breadcrumb a {
-    color: inherit;
-    text-decoration: none;
-  }
-
-  .breadcrumb a:hover {
-    text-decoration: underline;
-  }
-
-  .title-block {
-    border-top: 2px solid var(--color-black);
-    padding-top: var(--space-4);
-  }
-
-  h1 {
-    font-size: 32px;
-    font-weight: 400;
-    margin: 0;
-    letter-spacing: -0.02em;
-  }
-
   .report-date {
     display: block;
     font-size: 13px;
@@ -893,10 +860,6 @@
       padding: var(--space-4);
     }
 
-    h1 {
-      font-size: 24px;
-    }
-
     .key-figures {
       flex-wrap: wrap;
       gap: var(--space-4);
@@ -934,10 +897,6 @@
 
     .report-section {
       page-break-inside: avoid;
-    }
-
-    .title-block {
-      border-top-width: 1px;
     }
   }
 </style>

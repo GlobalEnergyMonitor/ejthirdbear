@@ -14,7 +14,7 @@
   import 'maplibre-gl/dist/maplibre-gl.css';
   import { link, assetPath, assetLink } from '$lib/links';
   import { colors, colorByTracker } from '$lib/design-tokens';
-  import DataSourceBadge from '$lib/components/DataSourceBadge.svelte';
+  import DataSourceBadge from '$lib/components/data/DataSourceBadge.svelte';
 
   // DOM refs
   let mapContainer;

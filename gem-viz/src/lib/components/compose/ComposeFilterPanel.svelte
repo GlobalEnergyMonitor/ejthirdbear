@@ -1,6 +1,6 @@
 <script>
-  import FacetedFilter from '$lib/components/FacetedFilter.svelte';
-  import RangeSlider from '$lib/components/RangeSlider.svelte';
+  import FacetedFilter from '$lib/components/table/FacetedFilter.svelte';
+  import RangeSlider from '$lib/components/table/RangeSlider.svelte';
 
   let { state = $bindable(), presetsHref = '/presets' } = $props();
 </script>

@@ -17,7 +17,7 @@
     CATEGORIES_ORDERED,
     type FieldInfo,
   } from '$lib/factsheet';
-  import LoadingWrapper from '$lib/components/LoadingWrapper.svelte';
+  import LoadingWrapper from '$lib/components/feedback/LoadingWrapper.svelte';
 
   // Props
   let {

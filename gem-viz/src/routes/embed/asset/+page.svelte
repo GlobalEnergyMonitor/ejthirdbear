@@ -13,9 +13,9 @@
   import { entityLink } from '$lib/links';
   import { colors, colorByStatus } from '$lib/design-tokens';
   import { getAsset, getOwnershipGraph, resolveAssetId } from '$lib/ownership-api';
-  import StatusIcon from '$lib/components/StatusIcon.svelte';
-  import OwnershipPie from '$lib/components/OwnershipPie.svelte';
-  import AssetMap from '$lib/components/AssetMap.svelte';
+  import StatusIcon from '$lib/components/tracker/StatusIcon.svelte';
+  import OwnershipPie from '$lib/components/charts/OwnershipPie.svelte';
+  import AssetMap from '$lib/components/map/AssetMap.svelte';
   import { errorMessage, boolParam } from '../embed-utils';
 
   // URL params
