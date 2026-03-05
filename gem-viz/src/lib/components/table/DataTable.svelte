@@ -224,7 +224,6 @@
   function handleSort(key) {
     const col = columns.find((c) => c.key === key);
     if (!col?.sortable) return;
-
     if (sortColumn === key) {
       sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
     } else {

@@ -16,9 +16,10 @@
   import ScreenerExportPanel from '$lib/components/screener/ScreenerExportPanel.svelte';
   import MiniBarChart from '$lib/components/charts/MiniBarChart.svelte';
   import { buildScreenerUrl, parseJsonSearchParam } from '$lib/screener-url';
-  import { formatCapacity } from '$lib/format-utils';
+  import { formatCapacity } from '$lib/format';
   import { formatNumber } from '$lib/components/cart/export-panel-utils';
   import { statusColorsGranular } from '$lib/design-tokens';
+  import RangeSlider from '$lib/components/table/RangeSlider.svelte';
 
   // Get params from URL
   const classesParam = $derived($page.url.searchParams.get('classes') || '');
@@ -33,6 +34,11 @@
     parsedClasses.length > 0 ? parsedClasses[0]?.tracker || parsedClasses[0]?.name || '' : ''
   );
   const trackerSlug = $derived(parsedClasses.length > 0 ? parsedClasses[0]?.id || '' : '');
+
+  // Status filter from Step 1 selection
+  const statusFilter = $derived(
+    parsedClasses.length > 0 ? parsedClasses[0]?.filters?.statuses || undefined : undefined
+  );
 
   // Owner data
   let owners = $state([]);
@@ -122,8 +128,12 @@
   let sortDir = $state(1); // 1 = asc, -1 = desc
   const TABLE_LIMIT = 200;
 
+  // Ownership % filter
+  let ownershipMin = $state(null);
+  let ownershipMax = $state(null);
+
   // Denormalized rows for data table (one per asset-owner pair)
-  const tableRows = $derived(() => {
+  const tableRowsUnfiltered = $derived(() => {
     const flat = [];
     for (const asset of allAssets()) {
       const assetOwners = asset.owners || [];
@@ -161,6 +171,33 @@
       return String(av || '').localeCompare(String(bv || '')) * sortDir;
     });
     return flat;
+  });
+
+  // Ownership histogram (20 bins across 0–100%)
+  const ownershipHistogram = $derived.by(() => {
+    const rows = tableRowsUnfiltered();
+    const bins = new Array(20).fill(0);
+    for (const row of rows) {
+      if (row.ownershipShare != null) {
+        const pct = row.ownershipShare * 100;
+        const idx = Math.min(Math.floor(pct / 5), 19);
+        bins[idx]++;
+      }
+    }
+    return bins;
+  });
+
+  // Filtered table rows
+  const tableRows = $derived(() => {
+    const rows = tableRowsUnfiltered();
+    if (ownershipMin === null && ownershipMax === null) return rows;
+    return rows.filter((row) => {
+      if (row.ownershipShare == null) return true; // null ownership always passes
+      const pct = row.ownershipShare * 100;
+      if (ownershipMin !== null && pct < ownershipMin) return false;
+      if (ownershipMax !== null && pct > ownershipMax) return false;
+      return true;
+    });
   });
 
   function toggleSort(col) {
@@ -305,6 +342,15 @@
     {/if}
   {/snippet}
 
+  <!-- Status filter badge -->
+  {#if statusFilter && statusFilter.length > 0}
+    <div class="status-filter-badge">
+      Showing: {statusFilter.length <= 4
+        ? statusFilter.join(', ')
+        : `${statusFilter.length} statuses`}
+    </div>
+  {/if}
+
   <!-- Visualization section -->
   <section class="viz-section">
     {#if pageLoading}
@@ -359,6 +405,7 @@
         entityName={selectedOwner.name}
         {assetClassName}
         {trackerSlug}
+        {statusFilter}
         onDataLoaded={handleDataLoaded}
         onContainerReady={(el) => handleContainerReady(selectedOwner.id, el)}
       />
@@ -385,6 +432,7 @@
                 entityName={owner.name}
                 {assetClassName}
                 {trackerSlug}
+                {statusFilter}
                 onDataLoaded={handleDataLoaded}
                 onContainerReady={(el) => handleContainerReady(owner.id, el)}
               />
@@ -462,9 +510,22 @@
   <!-- Data table -->
   {#if !pageLoading && allAssets().length > 0}
     {@const rows = tableRows()}
+    {@const totalRows = tableRowsUnfiltered().length}
     <details class="data-table-section">
-      <summary class="table-summary">Data table ({formatNumber(allAssets().length)} assets)</summary
+      <summary class="table-summary">Data table ({rows.length === totalRows ? formatNumber(totalRows) : `${formatNumber(rows.length)} of ${formatNumber(totalRows)}`} rows)</summary
       >
+      <div class="ownership-filter">
+        <RangeSlider
+          label="Ownership %"
+          bind:min={ownershipMin}
+          bind:max={ownershipMax}
+          dataMin={0}
+          dataMax={100}
+          step={1}
+          unit="%"
+          histogram={ownershipHistogram}
+        />
+      </div>
       <div class="table-scroll">
         <table class="data-table">
           <thead>
@@ -517,6 +578,18 @@
 </ScreenerLayout>
 
 <style>
+  .status-filter-badge {
+    display: inline-block;
+    padding: var(--space-2) var(--space-3);
+    margin-bottom: var(--space-3);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    background: var(--color-bg-secondary, #f8fafc);
+    border: 1px solid var(--color-border, #e5e7eb);
+    border-radius: var(--radius-sm);
+    text-transform: capitalize;
+  }
+
   /* Text links: the primary action style */
   .text-link {
     background: none;
@@ -687,6 +760,11 @@
 
   .table-summary:hover {
     color: var(--color-text-primary);
+  }
+
+  .ownership-filter {
+    max-width: 300px;
+    margin: var(--space-3) 0;
   }
 
   .table-scroll {

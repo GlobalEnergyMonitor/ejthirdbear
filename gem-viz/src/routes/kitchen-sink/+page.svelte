@@ -1,21 +1,30 @@
 <script>
   /**
    * KITCHEN SINK - Complete Component Library
-   * Live examples of all UI components with file paths and real data
+   * Live examples of all UI components with file paths and real data.
+   * 69 components across 15 directories — this page demos ~30 live,
+   * lists the rest organized by category.
    */
 
-  // Core UI Components
+  // Core UI
   import Skeleton from '$lib/components/feedback/Skeleton.svelte';
+  import Spinner from '$lib/components/feedback/Spinner.svelte';
   import StatusIcon from '$lib/components/tracker/StatusIcon.svelte';
   import TrackerIcon from '$lib/components/tracker/TrackerIcon.svelte';
   import DataSourceBadge from '$lib/components/data/DataSourceBadge.svelte';
   import AddToCartButton from '$lib/components/cart/AddToCartButton.svelte';
   import LoadingWrapper from '$lib/components/feedback/LoadingWrapper.svelte';
+  import ReportLoadingTerminal from '$lib/components/feedback/ReportLoadingTerminal.svelte';
   import Citation from '$lib/components/data/Citation.svelte';
+
+  // Layout
+  import PageHeader from '$lib/components/nav/PageHeader.svelte';
+  import SectionHeader from '$lib/components/nav/SectionHeader.svelte';
 
   // Cards
   import EntityMicroCard from '$lib/components/cards/EntityMicroCard.svelte';
   import AssetMicroCard from '$lib/components/cards/AssetMicroCard.svelte';
+  import ProjectCard from '$lib/components/cards/ProjectCard.svelte';
 
   // Charts
   import Sparkline from '$lib/components/charts/Sparkline.svelte';
@@ -25,8 +34,17 @@
   import OwnershipPie from '$lib/components/charts/OwnershipPie.svelte';
   import RadialBarChart from '$lib/components/charts/RadialBarChart.svelte';
 
-  // Debug
+  // Ownership & network viz
+  import OwnershipTreeGraph from '$lib/components/ownership/OwnershipTreeGraph.svelte';
+  import AssetRingVisualization from '$lib/components/ownership/AssetRingVisualization.svelte';
+
+  // Tables & data
+  import DataTable from '$lib/components/table/DataTable.svelte';
   import ApiCallLog from '$lib/components/data/ApiCallLog.svelte';
+
+  // Inputs & search
+  import AssetSearchBar from '$lib/components/search/AssetSearchBar.svelte';
+  import CountryMultiSelect from '$lib/components/screener/CountryMultiSelect.svelte';
 
   // Navigation & Filters
   import ScreenerStepNav from '$lib/components/nav/ScreenerStepNav.svelte';
@@ -34,7 +52,7 @@
   import RangeSlider from '$lib/components/table/RangeSlider.svelte';
   import AssetClassesPanel from '$lib/components/tracker/AssetClassesPanel.svelte';
 
-  // Example data from extracted file
+  // Data
   import {
     trackers,
     statuses,
@@ -46,6 +64,15 @@
     sampleFilters,
     sampleClassesParam,
     rangeHistogram,
+    treeGraphSmall,
+    treeGraphDeep,
+    treeGraphLarge,
+    sampleProjectAssets,
+    sampleRingAssets,
+    tableColumns,
+    tableData,
+    sampleReportSteps,
+    sampleCountries,
     componentIndex,
   } from './kitchen-sink-data';
 
@@ -55,59 +82,26 @@
   let showEmpty = $state(false);
   let rangeMin = $state(null);
   let rangeMax = $state(null);
+  let selectedCountries = $state([]);
+  let searchValue = $state('');
 
-  // Not shown in demos (complex/context-dependent)
+  // Derived stats
+  const liveComponentCount = 30;
+  const totalComponentCount = componentIndex.length;
+  const registryCategories = [...new Set(componentIndex.map(c => c.category))];
+
+  // Components that need API/complex context — not demoed live
   const complexComponents = [
-    {
-      name: 'AssetMap',
-      path: 'src/lib/components/map/AssetMap.svelte',
-      note: 'Requires MapLibre + coordinates',
-    },
-    {
-      name: 'InvestigationMap',
-      path: 'src/lib/components/map/InvestigationMap.svelte',
-      note: 'Requires cart data',
-    },
-    {
-      name: 'OwnershipFlower',
-      path: 'src/lib/components/network/OwnershipFlower.svelte',
-      note: 'Large radial diagram',
-    },
-    {
-      name: 'MiniNetworkGraph',
-      path: 'src/lib/components/network/MiniNetworkGraph.svelte',
-      note: 'Compact network viz',
-    },
-    {
-      name: 'DataTable',
-      path: 'src/lib/components/table/DataTable.svelte',
-      note: 'Sortable data grid',
-    },
-    {
-      name: 'FacetedFilter',
-      path: 'src/lib/components/table/FacetedFilter.svelte',
-      note: 'Multi-select facets',
-    },
-    {
-      name: 'CommandPalette',
-      path: 'src/lib/components/search/CommandPalette.svelte',
-      note: 'Cmd+K palette',
-    },
-    {
-      name: 'ProjectCard',
-      path: 'src/lib/components/cards/ProjectCard.svelte',
-      note: 'Expandable asset card',
-    },
-    {
-      name: 'UltimateOwners',
-      path: 'src/lib/components/tracker/UltimateOwners.svelte',
-      note: 'Ownership chain viz',
-    },
-    {
-      name: 'AssetRingVisualization',
-      path: 'src/lib/components/ownership/AssetRingVisualization.svelte',
-      note: 'Circular asset display',
-    },
+    { name: 'OwnershipFlower', path: 'src/lib/components/network/OwnershipFlower.svelte', note: 'Large radial diagram — needs entity API data' },
+    { name: 'MiniNetworkGraph', path: 'src/lib/components/network/MiniNetworkGraph.svelte', note: 'Compact force-directed network' },
+    { name: 'OwnershipMiniTree', path: 'src/lib/components/ownership/OwnershipMiniTree.svelte', note: 'Horizontal dagre tree — fetches from API' },
+    { name: 'UltimateOwners', path: 'src/lib/components/tracker/UltimateOwners.svelte', note: 'Ownership chain — fetches from API' },
+    { name: 'FacetedFilter', path: 'src/lib/components/table/FacetedFilter.svelte', note: 'Multi-select facets' },
+    { name: 'CommandPalette', path: 'src/lib/components/search/CommandPalette.svelte', note: 'Cmd+K palette' },
+    { name: 'ProjectCardList', path: 'src/lib/components/cards/ProjectCardList.svelte', note: 'Paginated list — fetches from API' },
+    { name: 'AssetMap / EntityMap', path: 'src/lib/components/map/', note: 'MapLibre-based — needs coordinates + tiles' },
+    { name: 'TrackerGlobeGrid', path: 'src/lib/components/tracker/TrackerGlobeGrid.svelte', note: 'Globe visualization — needs GeoJSON' },
+    { name: 'TrackerFactsheet', path: 'src/lib/components/tracker/TrackerFactsheet.svelte', note: 'Full tracker page — needs API context' },
   ];
 </script>
 
@@ -121,7 +115,8 @@
     <p class="label">Component Library</p>
     <h1>Kitchen Sink</h1>
     <p class="subtitle">
-      {componentIndex.length} documented components + {complexComponents.length} complex components.
+      {totalComponentCount} components across 15 directories.
+      {liveComponentCount} demoed live below, {complexComponents.length} need API context.
       All examples use realistic data from Global Energy Monitor trackers.
     </p>
   </header>
@@ -131,14 +126,18 @@
     <span class="toc-label">Jump to:</span>
     <a href="#primitives">Primitives</a>
     <a href="#badges">Badges</a>
+    <a href="#layout">Layout</a>
     <a href="#cards">Cards</a>
     <a href="#charts">Charts</a>
-    <a href="#navigation">Navigation</a>
+    <a href="#ownership-tree">Ownership Tree</a>
+    <a href="#tables">Tables</a>
     <a href="#inputs">Inputs</a>
+    <a href="#navigation">Navigation</a>
     <a href="#states">Loading States</a>
     <a href="#buttons">Buttons</a>
     <a href="#debug">Debug</a>
-    <a href="#complex">Complex Components</a>
+    <a href="#complex">Complex</a>
+    <a href="#registry">Full Registry</a>
     <a href="#typography">Typography</a>
     <a href="#colors">Colors</a>
   </nav>
@@ -190,6 +189,29 @@
       </div>
       <pre
         class="code-hint">&lt;TrackerIcon tracker="Coal Plant" showLabel variant="pill" /&gt;</pre>
+    </div>
+
+    <div class="component-group">
+      <div class="component-header">
+        <h3>Spinner</h3>
+        <code class="file-path">src/lib/components/feedback/Spinner.svelte</code>
+      </div>
+      <p class="component-desc">Rotating loading indicator at various sizes</p>
+      <div class="demo-row">
+        <div class="demo-item">
+          <Spinner size={16} />
+          <span class="demo-label">16px</span>
+        </div>
+        <div class="demo-item">
+          <Spinner size={24} />
+          <span class="demo-label">24px</span>
+        </div>
+        <div class="demo-item">
+          <Spinner size={40} />
+          <span class="demo-label">40px</span>
+        </div>
+      </div>
+      <pre class="code-hint">&lt;Spinner size=&#123;24&#125; /&gt;</pre>
     </div>
 
     <div class="component-group">
@@ -272,6 +294,46 @@
   </section>
 
   <!-- ========================================
+       LAYOUT
+       ======================================== -->
+  <section id="layout">
+    <h2>Layout Components</h2>
+
+    <div class="component-group">
+      <div class="component-header">
+        <h3>PageHeader</h3>
+        <code class="file-path">src/lib/components/nav/PageHeader.svelte</code>
+      </div>
+      <p class="component-desc">Page header with breadcrumb navigation, title, and optional lead text</p>
+      <div class="demo-block full-width">
+        <PageHeader
+          breadcrumbs={[{ label: 'Home', href: '/' }, { label: 'Trackers', href: '/tracker' }, { label: 'Coal Plant' }]}
+          title="Shenhua Ningxia Coal Power Station"
+          lead="3,200 MW coal plant in Ningxia, China — operating since 2011"
+        />
+      </div>
+      <pre class="code-hint">&lt;PageHeader breadcrumbs=&#123;[...]&#125; title="..." lead="..." /&gt;</pre>
+    </div>
+
+    <div class="component-group">
+      <div class="component-header">
+        <h3>SectionHeader</h3>
+        <code class="file-path">src/lib/components/nav/SectionHeader.svelte</code>
+      </div>
+      <p class="component-desc">Section heading with optional subtitle and right-aligned slot</p>
+      <div class="demo-block full-width">
+        <SectionHeader title="Ownership Structure" subtitle="Based on most recent filings" />
+      </div>
+      <div class="demo-block full-width" style="margin-top: var(--space-3);">
+        <SectionHeader title="Asset Portfolio">
+          <button class="btn btn-sm">Export CSV</button>
+        </SectionHeader>
+      </div>
+      <pre class="code-hint">&lt;SectionHeader title="..." subtitle="..."&gt;&#123;slot&#125;&lt;/SectionHeader&gt;</pre>
+    </div>
+  </section>
+
+  <!-- ========================================
        CARDS
        ======================================== -->
   <section id="cards">
@@ -313,6 +375,22 @@
       </div>
       <pre
         class="code-hint">&lt;AssetMicroCard id="G100000109409" name="Shenhua Ningxia" tracker="Coal Plant" status="operating" capacity=&#123;3200&#125; /&gt;</pre>
+    </div>
+
+    <div class="component-group">
+      <div class="component-header">
+        <h3>ProjectCard</h3>
+        <code class="file-path">src/lib/components/cards/ProjectCard.svelte</code>
+      </div>
+      <p class="component-desc">Expandable asset detail card with tabbed layout for factsheet data</p>
+      <div class="demo-stack">
+        {#each sampleProjectAssets as asset}
+          <div class="demo-block full-width">
+            <ProjectCard {asset} variant="compact" showLink={false} />
+          </div>
+        {/each}
+      </div>
+      <pre class="code-hint">&lt;ProjectCard asset=&#123;assetData&#125; variant="compact" /&gt;</pre>
     </div>
   </section>
 
@@ -507,6 +585,137 @@
   </section>
 
   <!-- ========================================
+       OWNERSHIP TREE GRAPH
+       ======================================== -->
+  <section id="ownership-tree">
+    <h2>Ownership Tree Graph</h2>
+
+    <div class="component-group">
+      <div class="component-header">
+        <h3>Default mode</h3>
+        <code class="file-path">src/lib/components/ownership/OwnershipTreeGraph.svelte</code>
+      </div>
+      <p class="component-desc">
+        Small tree (6 nodes, depth 2) — all labels centered below nodes. Color-by toggle and legend visible.
+      </p>
+      <div class="demo-block full-width">
+        <span class="variant-label">labelMode: default</span>
+        <OwnershipTreeGraph
+          nodes={treeGraphSmall.nodes}
+          edges={treeGraphSmall.edges}
+          paths={treeGraphSmall.paths}
+          rootId={treeGraphSmall.rootId}
+        />
+      </div>
+    </div>
+
+    <div class="component-group">
+      <div class="component-header">
+        <h3>Deep-narrow mode</h3>
+      </div>
+      <p class="component-desc">
+        Deep chain (12 nodes, depth 7) — ranks compressed, labels shifted to the right of nodes.
+      </p>
+      <div class="demo-block full-width">
+        <span class="variant-label">labelMode: deep-narrow</span>
+        <OwnershipTreeGraph
+          nodes={treeGraphDeep.nodes}
+          edges={treeGraphDeep.edges}
+          paths={treeGraphDeep.paths}
+          rootId={treeGraphDeep.rootId}
+        />
+      </div>
+    </div>
+
+    <div class="component-group">
+      <div class="component-header">
+        <h3>Large mode</h3>
+      </div>
+      <p class="component-desc">
+        Large tree (30 nodes) — labels hidden by default, only shown for high-pct (&gt;20%) nodes. Hover to reveal others.
+      </p>
+      <div class="demo-block full-width">
+        <span class="variant-label">labelMode: large</span>
+        <OwnershipTreeGraph
+          nodes={treeGraphLarge.nodes}
+          edges={treeGraphLarge.edges}
+          paths={treeGraphLarge.paths}
+          rootId={treeGraphLarge.rootId}
+        />
+      </div>
+    </div>
+
+    <div class="component-group">
+      <div class="component-header">
+        <h3>Compact mode</h3>
+      </div>
+      <p class="component-desc">
+        Same small tree data but in compact/embed mode — no side panel, smaller nodes.
+      </p>
+      <div class="demo-block full-width">
+        <span class="variant-label">compact: true</span>
+        <OwnershipTreeGraph
+          nodes={treeGraphSmall.nodes}
+          edges={treeGraphSmall.edges}
+          paths={treeGraphSmall.paths}
+          rootId={treeGraphSmall.rootId}
+          compact
+        />
+      </div>
+    </div>
+
+    <div class="component-group">
+      <div class="component-header">
+        <h3>AssetRingVisualization</h3>
+        <code class="file-path">src/lib/components/ownership/AssetRingVisualization.svelte</code>
+      </div>
+      <p class="component-desc">
+        Ring-of-circles showing multiple units at a single location with status coloring and ownership pies.
+      </p>
+      <div class="demo-row">
+        <div class="demo-item flower-demo">
+          <AssetRingVisualization assets={sampleRingAssets} size={200} interactive={false} />
+          <span class="demo-label">6 units, mixed status</span>
+        </div>
+        <div class="demo-item flower-demo">
+          <AssetRingVisualization assets={sampleRingAssets.slice(0, 3)} size={140} interactive={false} />
+          <span class="demo-label">3 units</span>
+        </div>
+      </div>
+      <pre class="code-hint">&lt;AssetRingVisualization assets=&#123;[&#123;id, name, status, capacityMw, share&#125;]&#125; size=&#123;200&#125; /&gt;</pre>
+    </div>
+  </section>
+
+  <!-- ========================================
+       TABLES
+       ======================================== -->
+  <section id="tables">
+    <h2>Tables & Data</h2>
+
+    <div class="component-group">
+      <div class="component-header">
+        <h3>DataTable</h3>
+        <code class="file-path">src/lib/components/table/DataTable.svelte</code>
+      </div>
+      <p class="component-desc">
+        Feature-rich data table with search, column filters, sorting, pagination, and CSV/JSON export.
+      </p>
+      <div class="demo-block full-width">
+        <DataTable
+          columns={tableColumns}
+          data={tableData}
+          pageSize={5}
+          striped
+          showExport
+          showGlobalSearch
+          showColumnFilters={false}
+        />
+      </div>
+      <pre class="code-hint">&lt;DataTable columns=&#123;[...]&#125; data=&#123;[...]&#125; pageSize=&#123;25&#125; showExport /&gt;</pre>
+    </div>
+  </section>
+
+  <!-- ========================================
        NAVIGATION
        ======================================== -->
   <section id="navigation">
@@ -582,12 +791,53 @@
        INPUTS
        ======================================== -->
   <section id="inputs">
-    <h2>Inputs</h2>
+    <h2>Inputs & Search</h2>
+
+    <div class="component-group">
+      <div class="component-header">
+        <h3>AssetSearchBar</h3>
+        <code class="file-path">src/lib/components/search/AssetSearchBar.svelte</code>
+      </div>
+      <p class="component-desc">
+        Search input with optional mode selector, clear button, and submit
+      </p>
+      <div class="demo-block full-width" style="max-width: 500px;">
+        <AssetSearchBar
+          bind:value={searchValue}
+          modes={[
+            { id: 'name', label: 'Name', placeholder: 'Search by asset name...' },
+            { id: 'owner', label: 'Owner', placeholder: 'Search by owner name...' },
+            { id: 'id', label: 'ID', placeholder: 'Enter asset ID (e.g. G100...)' },
+          ]}
+          helperText="Try searching for 'Shenhua' or 'China Energy'"
+        />
+      </div>
+      <div class="demo-block" style="max-width: 300px; margin-top: var(--space-3);">
+        <span class="variant-label">compact, no button</span>
+        <AssetSearchBar compact showButton={false} placeholder="Quick search..." />
+      </div>
+      <pre class="code-hint">&lt;AssetSearchBar bind:value modes=&#123;[...]&#125; helperText="..." /&gt;</pre>
+    </div>
+
+    <div class="component-group">
+      <div class="component-header">
+        <h3>CountryMultiSelect</h3>
+        <code class="file-path">src/lib/components/screener/CountryMultiSelect.svelte</code>
+      </div>
+      <p class="component-desc">
+        Searchable multi-select combobox with preset country groups (G7, EU, BRICS).
+        Type "G7" to add all G7 countries at once.
+      </p>
+      <div class="demo-block full-width" style="max-width: 400px;">
+        <CountryMultiSelect bind:selected={selectedCountries} countries={sampleCountries} />
+      </div>
+      <pre class="code-hint">&lt;CountryMultiSelect bind:selected countries=&#123;[...]&#125; /&gt;</pre>
+    </div>
 
     <div class="component-group">
       <div class="component-header">
         <h3>RangeSlider</h3>
-        <code class="file-path">src/lib/components/RangeSlider.svelte</code>
+        <code class="file-path">src/lib/components/table/RangeSlider.svelte</code>
       </div>
       <p class="component-desc">
         Dual-handle range slider with histogram preview for numeric filters
@@ -667,6 +917,26 @@
       </div>
       <pre
         class="code-hint">&lt;LoadingWrapper loading error=&#123;errorMsg&#125; skeleton="card"&gt;...&lt;/LoadingWrapper&gt;</pre>
+    </div>
+
+    <div class="component-group">
+      <div class="component-header">
+        <h3>ReportLoadingTerminal</h3>
+        <code class="file-path">src/lib/components/feedback/ReportLoadingTerminal.svelte</code>
+      </div>
+      <p class="component-desc">
+        Terminal-style progress display for long-running report generation, with step status indicators
+      </p>
+      <div class="demo-block full-width" style="max-width: 480px;">
+        <ReportLoadingTerminal
+          elapsedMs={2910}
+          cartCount={3}
+          entityCount={12}
+          assetCount={847}
+          steps={sampleReportSteps}
+        />
+      </div>
+      <pre class="code-hint">&lt;ReportLoadingTerminal elapsedMs=&#123;2910&#125; steps=&#123;[&#123;id, label, status, rows?, ms?&#125;]&#125; /&gt;</pre>
     </div>
   </section>
 
@@ -756,8 +1026,8 @@
   <section id="complex">
     <h2>Complex Components</h2>
     <p class="section-intro">
-      These components require specific data contexts (maps, graphs, ownership hierarchies) and are
-      documented here for reference.
+      These components require API data or complex runtime context and can't be demoed with static data.
+      See them live on their respective pages.
     </p>
 
     <div class="component-index">
@@ -769,6 +1039,30 @@
         </div>
       {/each}
     </div>
+  </section>
+
+  <!-- ========================================
+       FULL REGISTRY
+       ======================================== -->
+  <section id="registry">
+    <h2>Full Component Registry</h2>
+    <p class="section-intro">
+      All {totalComponentCount} components in the codebase, organized by category.
+    </p>
+
+    {#each registryCategories as cat}
+      <div class="registry-category">
+        <h3 class="registry-cat-label">{cat}</h3>
+        <div class="component-index">
+          {#each componentIndex.filter(c => c.category === cat) as comp}
+            <div class="index-item">
+              <code class="comp-name">{comp.name}</code>
+              <code class="file-path">{comp.path}</code>
+            </div>
+          {/each}
+        </div>
+      </div>
+    {/each}
   </section>
 
   <!-- ========================================
@@ -1207,6 +1501,17 @@
     font-family: var(--font-family-mono);
   }
 
+  .registry-category {
+    margin-bottom: var(--space-6);
+  }
+  .registry-cat-label {
+    font-size: var(--font-size-sm);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-caps);
+    color: var(--color-text-tertiary);
+    margin: 0 0 var(--space-2) 0;
+    font-weight: 600;
+  }
   .component-group h3:not(:first-of-type) {
     margin-top: var(--space-8);
   }

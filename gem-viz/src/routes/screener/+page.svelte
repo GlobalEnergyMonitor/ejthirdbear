@@ -14,8 +14,8 @@
   import { ALL_ASSET_CLASSES, getAssetClassById } from '$lib/data-config/asset-class-definitions';
   import { gemTrackerToUiTracker } from '$lib/data-config/screener-api';
   import { buildScreenerUrl } from '$lib/screener-url';
-  import { isValidTracker, STATUS_GROUPS } from '$lib/data-config/tracker-schema';
-  import { resolveApiSlug, getAPIBase } from '$lib/ownership-api';
+  import { isValidTracker, STATUS_GROUPS, discoverStatusGroups } from '$lib/data-config/tracker-schema';
+  import { resolveApiSlug, getAPIBase, fetchStatusFacets } from '$lib/ownership-api';
 
   // ─── Category display config ────────────────────────────────────────
   const CATEGORY_META = [
@@ -46,6 +46,8 @@
   let checkedStatuses = $state({});
   let geoFilters = $state([]);
   let geofence = $state(null);
+  /** @type {import('$lib/data-config/tracker-schema').DynamicStatusGroup[] | null} */
+  let dynamicStatusGroups = $state(null);
 
   const selectedClass = $derived(selectedClassId ? getAssetClassById(selectedClassId) : null);
 
@@ -63,6 +65,7 @@
     selectedClassId = ac.id;
     geoFilters = [];
     geofence = null;
+    dynamicStatusGroups = null; // reset while loading
 
     // Initialize flat sub-class checkboxes
     const checks = {};
@@ -93,6 +96,46 @@
       }
     }
     checkedStatuses = statusChecks;
+
+    // Fetch status facets from API (non-blocking)
+    fetchStatusFacetsForClass(ac);
+  }
+
+  async function fetchStatusFacetsForClass(ac) {
+    try {
+      // Resolve API slugs for all trackers in this class
+      const slugs = ac.trackers
+        .map((t) => resolveApiSlug(gemTrackerToUiTracker(t)))
+        .filter(Boolean);
+      if (slugs.length === 0) return;
+
+      // Fetch facets for each tracker, merge counts
+      const mergedFacets = new Map();
+      const results = await Promise.all(slugs.map((slug) => fetchStatusFacets(slug)));
+      for (const facetMap of results) {
+        for (const [status, count] of facetMap) {
+          mergedFacets.set(status, (mergedFacets.get(status) ?? 0) + count);
+        }
+      }
+
+      // Only update if this class is still selected
+      if (selectedClassId !== ac.id) return;
+
+      const groups = discoverStatusGroups(mergedFacets);
+      dynamicStatusGroups = groups;
+
+      // Re-initialize status checkboxes with discovered statuses
+      const statusChecks = {};
+      for (const sg of groups) {
+        for (const s of sg.statuses) {
+          const key = `status-${sg.id}-${s.value}`;
+          statusChecks[key] = sg.id === 'operating' || sg.id === 'planned';
+        }
+      }
+      checkedStatuses = statusChecks;
+    } catch {
+      // Silently fall back to hardcoded groups
+    }
   }
 
   function clearSelection() {
@@ -102,15 +145,21 @@
     checkedStatuses = {};
     geoFilters = [];
     geofence = null;
+    dynamicStatusGroups = null;
   }
 
   // ─── Derive selected statuses ─────────────────────────────────────
   const selectedStatuses = $derived.by(() => {
     const statuses = [];
-    for (const sg of STATUS_GROUPS) {
+    // Use dynamic groups if available, otherwise hardcoded
+    const groups = dynamicStatusGroups ?? STATUS_GROUPS.map((sg) => ({
+      id: sg.id,
+      statuses: sg.statuses.map((s) => ({ value: s })),
+    }));
+    for (const sg of groups) {
       for (const s of sg.statuses) {
-        if (checkedStatuses[`status-${sg.id}-${s}`]) {
-          statuses.push(s);
+        if (checkedStatuses[`status-${sg.id}-${s.value}`]) {
+          statuses.push(s.value);
         }
       }
     }
@@ -182,7 +231,9 @@
           ? ` in ${geoFilters.length} countries`
           : '';
     const statusCount = selectedStatuses.length;
-    const totalStatuses = STATUS_GROUPS.reduce((n, sg) => n + sg.statuses.length, 0);
+    const totalStatuses = dynamicStatusGroups
+      ? dynamicStatusGroups.reduce((n, sg) => n + sg.statuses.length, 0)
+      : STATUS_GROUPS.reduce((n, sg) => n + sg.statuses.length, 0);
     const sc = statusCount > 0 && statusCount < totalStatuses ? ` (${statusCount} statuses)` : '';
     return parts + geo + sc;
   });
@@ -297,6 +348,7 @@
       bind:checkedStatuses
       bind:geoFilters
       bind:geofence
+      {dynamicStatusGroups}
       onShowAllOwners={() => navigateTo('/screener/results')}
       onSearchSpecificOwners={() => navigateTo('/screener/owners')}
     />

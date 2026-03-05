@@ -849,6 +849,7 @@ export async function getOwnershipGraph(params: {
     // Preserve useful raw fields for side panel
     entity_id: n.entity_id as string | undefined,
     headquarters_country: n.headquarters_country as string | undefined,
+    entity_type: n.entity_type as string | undefined,
   }));
 
   return {
@@ -903,6 +904,22 @@ export function graphToExplorerData(
     ),
     assets: [] as unknown[],
   };
+}
+
+/**
+ * Fetch status facets for a given asset type.
+ * Uses limit=1 since we only need the facet metadata, not the assets themselves.
+ */
+export async function fetchStatusFacets(
+  assetTypeSlug?: string
+): Promise<Map<string, number>> {
+  _currentReason = `fetchStatusFacets${assetTypeSlug ? ` type=${assetTypeSlug}` : ''}`;
+  const res = await listAssets({
+    asset_type: assetTypeSlug,
+    facets: true,
+    limit: 1,
+  });
+  return new Map(Object.entries(res.facets?.status ?? {}));
 }
 
 // Export the API base for debugging

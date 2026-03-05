@@ -25,6 +25,8 @@
     assetClassName = '',
     trackerSlug = '',
     filteredAssetCount = null,
+    /** Optional: only show assets whose raw status is in this list */
+    statusFilter = undefined,
     onDataLoaded = undefined,
     onContainerReady = undefined,
   } = $props();
@@ -68,6 +70,22 @@
       const chartData = await fetchChartData(entityId, (msg) => {
         progressMsg = msg;
       });
+
+      // Apply status filter if provided
+      if (statusFilter && statusFilter.length > 0) {
+        const allowed = new Set(statusFilter.map((s) => s.toLowerCase()));
+        const matchStatus = (u) => allowed.has((u.status || '').toLowerCase());
+        chartData.assets = chartData.assets.filter(matchStatus);
+        chartData.directlyOwned = chartData.directlyOwned.filter(matchStatus);
+        for (const [subId, units] of chartData.subsidiariesMatched) {
+          const filtered = units.filter(matchStatus);
+          if (filtered.length === 0) {
+            chartData.subsidiariesMatched.delete(subId);
+          } else {
+            chartData.subsidiariesMatched.set(subId, filtered);
+          }
+        }
+      }
 
       if (chartData.assets.length === 0) {
         isEmpty = true;

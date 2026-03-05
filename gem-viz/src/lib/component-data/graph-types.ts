@@ -39,6 +39,7 @@ export interface GraphNode {
   is_terminal?: boolean;
   is_root?: boolean;
   headquarters_country?: string;
+  entity_type?: string;
   /** MiniTree-specific: whether this is the root entity */
   isRoot?: boolean;
   /** MiniTree-specific: asset tracker type slug */

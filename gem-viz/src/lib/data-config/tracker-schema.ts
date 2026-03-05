@@ -102,6 +102,66 @@ export const STATUS_GROUPS = [
 export type StatusGroup = (typeof STATUS_GROUPS)[number];
 
 // =============================================================================
+// DYNAMIC STATUS GROUPS (data-driven from API facets)
+// =============================================================================
+
+export interface DynamicStatusGroup {
+  id: string;
+  label: string;
+  statuses: { value: string; count: number }[];
+  totalCount: number;
+}
+
+/**
+ * Build status groups from API facet data.
+ * Known statuses are placed into their STATUS_GROUPS bucket.
+ * Unknown statuses go into an "Other" catch-all.
+ * Groups with 0 total are excluded.
+ */
+export function discoverStatusGroups(
+  facets: Map<string, number>
+): DynamicStatusGroup[] {
+  // Build a set of all statuses claimed by known groups
+  const claimedStatuses = new Set<string>();
+  for (const sg of STATUS_GROUPS) {
+    for (const s of sg.statuses) claimedStatuses.add(s);
+  }
+
+  // Build known groups from facet data
+  const groups: DynamicStatusGroup[] = [];
+  for (const sg of STATUS_GROUPS) {
+    const statuses: { value: string; count: number }[] = [];
+    for (const s of sg.statuses) {
+      const count = facets.get(s) ?? 0;
+      if (count > 0) statuses.push({ value: s, count });
+    }
+    const totalCount = statuses.reduce((sum, s) => sum + s.count, 0);
+    if (totalCount > 0) {
+      groups.push({ id: sg.id, label: sg.label, statuses, totalCount });
+    }
+  }
+
+  // Collect unclaimed statuses into "Other"
+  const otherStatuses: { value: string; count: number }[] = [];
+  for (const [status, count] of facets) {
+    if (!claimedStatuses.has(status) && count > 0) {
+      otherStatuses.push({ value: status, count });
+    }
+  }
+  if (otherStatuses.length > 0) {
+    otherStatuses.sort((a, b) => b.count - a.count);
+    groups.push({
+      id: 'other',
+      label: 'Other',
+      statuses: otherStatuses,
+      totalCount: otherStatuses.reduce((sum, s) => sum + s.count, 0),
+    });
+  }
+
+  return groups;
+}
+
+// =============================================================================
 // COUNTRIES (for geography filter)
 // =============================================================================
 
