@@ -6,6 +6,7 @@
 import { goto } from '$app/navigation';
 import { link } from '$lib/links';
 import { investigationCart } from '$lib/investigationCart';
+import { buildScreenerUrl } from '$lib/screener-url';
 
 export interface Command {
   id: string;
@@ -123,6 +124,8 @@ export function createCommands(callbacks: {
       action: () => history.back(),
       section: 'Navigation',
     },
+    // Screener — jump to tracker results
+    ...screenerTrackerCommands(),
     // Actions
     {
       id: 'add-cart',
@@ -170,6 +173,34 @@ export function createCommands(callbacks: {
       section: 'Help',
     },
   ];
+}
+
+/**
+ * Generate screener commands for each base tracker
+ */
+function screenerTrackerCommands(): Command[] {
+  const trackers = [
+    { id: 'coal-plants', label: 'Coal Plants', tracker: 'Coal Plant' },
+    { id: 'gas-plants', label: 'Gas Plants', tracker: 'Oil & Gas Plant' },
+    { id: 'coal-mines', label: 'Coal Mines', tracker: 'Coal Mine' },
+    { id: 'steel-plants', label: 'Iron & Steel Plants', tracker: 'Iron & Steel Plant' },
+    { id: 'iron-mines', label: 'Iron Mines', tracker: 'Iron Mine' },
+    { id: 'gas-pipelines', label: 'Gas Pipelines', tracker: 'Natural Gas Transmission Pipeline' },
+    { id: 'oil-pipelines', label: 'Oil Pipelines', tracker: 'Oil or NGL Pipeline' },
+    { id: 'bioenergy-power', label: 'Bioenergy Power', tracker: 'Bioenergy Power' },
+  ];
+
+  return trackers.map((t) => ({
+    id: `screener-${t.id}`,
+    label: t.label,
+    action: () => {
+      const classes = JSON.stringify([
+        { id: t.id, name: t.label, tracker: t.tracker, gemTrackers: [t.tracker] },
+      ]);
+      goto(buildScreenerUrl('screener/results', { classes }));
+    },
+    section: 'Screener',
+  }));
 }
 
 /**
