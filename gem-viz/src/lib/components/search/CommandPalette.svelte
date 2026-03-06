@@ -11,7 +11,7 @@
   import { track } from '$lib/analytics';
   import { page } from '$app/stores';
   import { assetLink, entityLink } from '$lib/links';
-  import { investigationCart } from '$lib/investigationCart';
+
   import { listAssets, listEntities } from '$lib/ownership-api';
   import { commandPaletteOpen } from '$lib/stores/commandPalette';
   import { createCommands, shortcutMap } from './command-palette-commands';
@@ -283,7 +283,6 @@
     // Direct shortcuts (single key, no modifier)
     if (!isInputFocused() && !open && !e.metaKey && !e.ctrlKey && !e.altKey) {
       const shortcuts = {
-        a: addCurrentToCart,
         c: copyCurrentId,
         u: copyUrl,
         b: () => history.back(),
@@ -349,27 +348,6 @@
       return { type: 'entity', id: entityMatch[1] };
     }
     return null;
-  }
-
-  // Add current page item to cart
-  function addCurrentToCart() {
-    const info = getCurrentPageInfo();
-    if (!info) {
-      showToast('Not on an asset or entity page');
-      return;
-    }
-
-    // Get name from page title or fall back to ID
-    const pageTitle = document.querySelector('h1')?.textContent || info.id;
-
-    investigationCart.add({
-      id: info.id,
-      name: pageTitle,
-      type: /** @type {'asset' | 'entity'} */ (info.type),
-    });
-
-    showToast(`Added ${info.type} to report`);
-    close();
   }
 
   // Copy current page ID to clipboard
@@ -568,7 +546,6 @@
     commands = createCommands({
       close,
       toggleHelp,
-      addCurrentToCart,
       copyCurrentId,
       copyUrl,
     });
@@ -734,7 +711,6 @@
 
       <div class="shortcut-group">
         <h3>Actions</h3>
-        <div class="shortcut-row"><kbd>a</kbd> <span>Add to report</span></div>
         <div class="shortcut-row"><kbd>c</kbd> <span>Copy ID</span></div>
         <div class="shortcut-row"><kbd>u</kbd> <span>Copy URL</span></div>
         <div class="shortcut-row"><kbd>⌘</kbd><kbd>P</kbd> <span>Print</span></div>

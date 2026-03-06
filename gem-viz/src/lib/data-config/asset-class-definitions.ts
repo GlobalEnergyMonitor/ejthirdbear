@@ -119,6 +119,7 @@ export interface AssetClass {
 export type AssetClassCategory =
   | 'coal-plant'
   | 'coal-mine'
+  | 'oil-gas'
   | 'steel-iron'
   | 'chemical'
   | 'bioenergy'

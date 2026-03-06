@@ -97,6 +97,7 @@
 <style>
   .page {
     width: 100%;
+    max-width: 100% !important;
     padding: 0;
     min-height: 100vh;
     display: flex;

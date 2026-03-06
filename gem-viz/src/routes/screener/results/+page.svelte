@@ -3,12 +3,7 @@
    * ASSET-CLASS SCREENER - Results
    *
    * Shows OWNERS who have ownership stakes in selected asset classes.
-   * Designed for investigative journalists building dossiers.
-   *
-   * Key features:
-   * - Search/filter to find specific companies from your watchlist
-   * - Add to Investigation cart for building reports
-   * - Natural language descriptions of ownership exposure
+   * Search/filter to find specific companies from your watchlist.
    */
 
   import { page } from '$app/stores';
@@ -21,7 +16,7 @@
   import AssetSearchBar from '$lib/components/search/AssetSearchBar.svelte';
   import DebugPanel from '$lib/components/feedback/DebugPanel.svelte';
   import ScreenerOwnersResultsTable from '$lib/components/screener/ScreenerOwnersResultsTable.svelte';
-  import { investigationCart } from '$lib/investigationCart';
+
   import { getAssetTypeForTracker } from '$lib/data-config/tracker-schema';
   import {
     getOwnersByAssetType,
@@ -144,6 +139,17 @@
   let syncedSearchQuery = $state('');
   // Expanded row state - tracks which owner's ownership tree is visible
   let expandedOwnerId = $state<string | null>(null);
+  let resultsSectionEl: HTMLElement | undefined = $state();
+
+  // Scroll results table into view when data finishes loading
+  $effect(() => {
+    if (owners.length > 0 && resultsSectionEl) {
+      const rect = resultsSectionEl.getBoundingClientRect();
+      if (rect.top > window.innerHeight * 0.5) {
+        resultsSectionEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+  });
 
   $effect(() => {
     const nextSearchQuery = $page.url.searchParams.get('q') || '';
@@ -157,18 +163,10 @@
     expandedOwnerId = expandedOwnerId === ownerId ? null : ownerId;
   }
 
-  // Investigation cart state (reactive via auto-subscribe)
-  let cartItems = $derived($investigationCart);
-
-  // Get just entities from cart
-  const investigationEntities = $derived(cartItems.filter((item) => item.type === 'entity'));
-
-  // Owners to pass into Step 4 (prefer explicit Step 2 selection, then cart entities)
+  // Owners to pass into Step 4
   const visualizeOwnerIds = $derived.by(() => {
     if (selectedOwnerIds.length > 0) return selectedOwnerIds;
-    return investigationEntities
-      .map((item) => String(item.id || '').trim())
-      .filter((id) => id.length > 0);
+    return [];
   });
 
   const visualizeUrl = $derived.by(() =>
@@ -190,36 +188,6 @@
 
     return result;
   });
-
-  // Check if entity is in investigation
-  function isInInvestigation(entityId) {
-    // Entity IDs need E prefix for the cart
-    const cartId = entityId?.startsWith('E') ? entityId : `E${entityId}`;
-    return cartItems.some((item) => item.id === cartId);
-  }
-
-  // Toggle entity in investigation
-  function toggleInvestigation(owner) {
-    // Entity IDs need E prefix for the cart
-    const cartId = owner.entityId?.startsWith('E') ? owner.entityId : `E${owner.entityId}`;
-    investigationCart.toggle({
-      id: cartId,
-      name: owner.name,
-      type: 'entity',
-    });
-  }
-
-  // Add all visible results to investigation
-  function addAllToInvestigation() {
-    const toAdd = filteredOwners
-      .filter((o) => o.entityId && !isInInvestigation(o.entityId))
-      .map((o) => ({
-        id: o.entityId?.startsWith('E') ? o.entityId : `E${o.entityId}`,
-        name: o.name,
-        type: 'entity' as const,
-      }));
-    investigationCart.addMany(toAdd);
-  }
 
   function updateOwnerSearchUrl(query: string) {
     const trimmed = query.trim();
@@ -359,59 +327,39 @@
     />
   {/snippet}
 
-  <!-- Active filters summary -->
-  <section class="filters-summary">
-    <h3>Active Filters</h3>
-    <div class="filter-tags">
+  <!-- Compact filter breadcrumb -->
+  <div class="filter-bar">
+    <span class="filter-crumbs">
       {#each selectedClasses as cls}
-        <div class="filter-tag asset-class">
-          <span class="tag-label">Asset:</span>
-          <span class="tag-value">{cls.tracker || cls.name}</span>
-        </div>
+        <span class="crumb">{cls.tracker || cls.name}</span>
         {#if cls.filters?.statuses?.length > 0}
-          <div class="filter-tag status">
-            <span class="tag-label">Status:</span>
-            <span class="tag-value">
-              {cls.filters.statuses.length <= 3
-                ? cls.filters.statuses.join(', ')
-                : `${cls.filters.statuses.length} statuses selected`}
-            </span>
-          </div>
+          <span class="crumb-sep">/</span>
+          <span class="crumb">
+            {cls.filters.statuses.length <= 3
+              ? cls.filters.statuses.join(', ')
+              : `${cls.filters.statuses.length} statuses`}
+          </span>
         {:else if cls.filters?.status}
-          <div class="filter-tag status">
-            <span class="tag-label">Status:</span>
-            <span class="tag-value">{cls.filters.status}</span>
-          </div>
+          <span class="crumb-sep">/</span>
+          <span class="crumb">{cls.filters.status}</span>
         {/if}
         {#if cls.filters?.geography}
           {@const geo = cls.filters.geography}
-          <div class="filter-tag geography">
-            <span class="tag-label">Country:</span>
-            <span class="tag-value">
-              {Array.isArray(geo)
-                ? geo.length <= 3
-                  ? geo.join(', ')
-                  : `${geo.length} countries`
-                : geo}
-            </span>
-          </div>
+          <span class="crumb-sep">/</span>
+          <span class="crumb">
+            {Array.isArray(geo)
+              ? geo.length <= 3 ? geo.join(', ') : `${geo.length} countries`
+              : geo}
+          </span>
         {/if}
         {#if cls.filters?.geofence}
-          <div class="filter-tag geography">
-            <span class="tag-label">Region:</span>
-            <span class="tag-value">Custom region ({cls.filters.geofence.length} vertices)</span>
-          </div>
+          <span class="crumb-sep">/</span>
+          <span class="crumb">custom region</span>
         {/if}
       {/each}
-      {#if viewMode === 'filtered'}
-        <div class="filter-tag owners">
-          <span class="tag-label">Owners:</span>
-          <span class="tag-value">{selectedOwnerIds.length} selected</span>
-        </div>
-      {/if}
-    </div>
-    <a href="/screener/" class="edit-filters-link">← Edit filters</a>
-  </section>
+    </span>
+    <button class="edit-link" onclick={() => history.back()}>Edit filters</button>
+  </div>
 
   {#if parseError}
     <div class="parse-error">
@@ -421,76 +369,34 @@
   {/if}
 
   <LoadingWrapper {loading} {error} loadingMessage="Finding owners...">
-    <!-- Results section -->
-    <section class="results-section">
+    <section class="results-section" bind:this={resultsSectionEl}>
       <div class="results-header">
         <div class="results-title-row">
-          <h2>{viewMode === 'filtered' ? 'Selected Companies' : 'All Owners'}</h2>
+          <h2>
+            {filteredOwners.length}
+            {viewMode === 'filtered' ? 'selected' : ''}
+            owners
+          </h2>
           <DataSourceBadge source={dataSource} {queryTime} />
         </div>
-        <div class="results-meta">
-          <span class="result-count">
-            {#if viewMode === 'filtered'}
-              {owners.length} of {selectedOwnerIds.length} selected found
-            {:else}
-              {filteredOwners.length} of {owners.length} owners
-            {/if}
-          </span>
-          <button
-            class="visualize-btn"
-            onclick={() => goto(visualizeUrl)}
-            disabled={visualizeOwnerIds.length === 0}
-            title={visualizeOwnerIds.length === 0
-              ? 'Select owners in Step 2 or add entities to investigation first'
-              : 'Continue to Step 4 visualization'}
-          >
-            Visualize →
-          </button>
-        </div>
       </div>
 
-      <!-- Search and filter toolbar -->
-      <div class="search-toolbar">
-        <div class="search-input-wrapper">
-          <AssetSearchBar
-            bind:value={searchQuery}
-            bind:activeMode={searchMode}
-            modes={[
-              {
-                id: 'owner',
-                label: 'Owners',
-                placeholder: 'Search for companies on your watchlist...',
-              },
-            ]}
-            showButton={false}
-            compact={true}
-            onSearch={handleOwnerSearch}
-          />
-        </div>
-
-        <div class="toolbar-actions">
-          {#if cartItems.length > 0}
-            <button class="clear-cart-btn" onclick={() => investigationCart.clear()}>
-              Clear report ({cartItems.length})
-            </button>
-          {/if}
-
-          {#if filteredOwners.length > 0}
-            <button class="add-all-btn" onclick={addAllToInvestigation}>
-              + Add all {filteredOwners.length} to report
-            </button>
-          {/if}
-        </div>
+      <div class="search-bar">
+        <AssetSearchBar
+          bind:value={searchQuery}
+          bind:activeMode={searchMode}
+          modes={[
+            {
+              id: 'owner',
+              label: 'Owners',
+              placeholder: 'Filter owners...',
+            },
+          ]}
+          showButton={false}
+          compact={true}
+          onSearch={handleOwnerSearch}
+        />
       </div>
-
-      <!-- Investigation cart summary -->
-      {#if cartItems.length > 0}
-        <div class="investigation-summary">
-          <strong>Report:</strong>
-          {cartItems.length} items selected ({investigationEntities.length} entities)
-          <a href="/report/" class="report-link">→ Build Report</a>
-        </div>
-      {/if}
 
       <ScreenerOwnersResultsTable
         {filteredOwners}
@@ -501,9 +407,7 @@
         {expandedOwnerId}
         assetClassName={chartAssetClassName}
         trackerSlug={chartTrackerSlug}
-        {isInInvestigation}
         onToggleExpanded={toggleExpanded}
-        onToggleInvestigation={toggleInvestigation}
         onClearSearch={() => handleOwnerSearch('')}
       />
     </section>
@@ -573,7 +477,7 @@
 </ScreenerLayout>
 
 <style>
-  /* Parse error */
+  /* ── Parse error ────────────────────────────── */
   .parse-error {
     margin-bottom: var(--space-4);
     color: var(--color-text-secondary);
@@ -585,80 +489,71 @@
   }
 
   .parse-error a {
-    color: #1d4961;
+    color: var(--gem-teal, #2a7f8f);
     font-size: var(--font-size-sm);
   }
 
-  /* Filters summary */
-  .filters-summary {
-    margin-bottom: var(--space-5);
+  /* ── Filter breadcrumb bar ──────────────────── */
+  .filter-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: 8px 12px;
+    margin-bottom: var(--space-4);
+    background: var(--color-gray-50, #f8fafc);
+    border: 1px solid var(--color-gray-200, #e5e7eb);
+    border-radius: 2px;
+    font-size: 13px;
   }
 
-  .filters-summary h3 {
-    font-size: var(--font-size-sm);
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-caps);
-    color: var(--color-text-tertiary);
-    margin: 0 0 var(--space-3) 0;
-  }
-
-  .filter-tags {
-    line-height: 1.5;
-    margin-bottom: var(--space-3);
-  }
-
-  .filter-tag {
-    display: inline;
-    font-size: var(--font-size-sm);
-  }
-
-  .filter-tag + .filter-tag::before {
-    content: '•';
-    margin: 0 var(--space-2);
-    color: var(--color-text-tertiary);
-  }
-
-  .tag-label {
-    color: var(--color-text-tertiary);
-    font-weight: 500;
-  }
-
-  .tag-value {
-    color: var(--color-text-primary);
-    font-weight: 500;
-  }
-
-  .edit-filters-link {
-    font-size: var(--font-size-sm);
+  .filter-crumbs {
     color: var(--color-text-secondary);
+  }
+
+  .crumb {
+    font-weight: 500;
+    color: var(--color-text-primary);
+  }
+
+  .crumb-sep {
+    margin: 0 6px;
+    color: var(--color-text-tertiary);
+  }
+
+  .edit-link {
+    background: none;
+    border: none;
+    font: inherit;
+    font-size: 12px;
+    color: var(--color-text-tertiary);
     text-decoration: underline;
     text-underline-offset: 2px;
+    cursor: pointer;
+    white-space: nowrap;
+    padding: 0;
   }
 
-  .edit-filters-link:hover {
-    color: var(--color-text-primary);
+  .edit-link:hover {
+    color: var(--gem-teal, #2a7f8f);
   }
 
-  /* Results section */
+  /* ── Results section ────────────────────────── */
   .results-section {
-    margin-top: var(--space-6);
+    margin-top: var(--space-4);
   }
 
   .results-header {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: var(--space-4);
+    display: flex;
     align-items: baseline;
-    margin-bottom: var(--space-4);
+    justify-content: space-between;
+    margin-bottom: var(--space-3);
   }
 
   .results-title-row {
-    display: grid;
-    grid-template-columns: auto auto;
-    gap: var(--space-3);
+    display: flex;
     align-items: center;
-    min-width: 0;
+    gap: var(--space-3);
   }
 
   .results-title-row :global(.badge) {
@@ -666,8 +561,8 @@
     border: none;
     border-radius: 0;
     background: none;
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+    font-size: 10px;
   }
 
   .results-title-row :global(.badge .label) {
@@ -677,135 +572,15 @@
   }
 
   h2 {
-    font-size: 1.5rem;
-    font-weight: 400;
-    color: #1d4961;
-    margin: 0;
-  }
-
-  .result-count {
-    font-size: var(--font-size-sm);
-    color: #718096;
-  }
-
-  .results-meta {
-    display: grid;
-    justify-items: end;
-    gap: var(--space-2);
-  }
-
-  .visualize-btn {
-    padding: var(--space-2) var(--space-4);
-    font-size: var(--font-size-sm);
-    border: none;
-    border-radius: var(--radius-sm);
-    background: #1d4961;
-    color: white;
-    cursor: pointer;
-    white-space: nowrap;
-  }
-
-  .visualize-btn:hover:not(:disabled) {
-    background: #2d5a75;
-  }
-
-  .visualize-btn:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-
-  /* Search toolbar - grid layout */
-  .search-toolbar {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: var(--space-4);
-    margin-bottom: var(--space-4);
-    align-items: center;
-  }
-
-  .search-input-wrapper {
-    min-width: 0;
-  }
-
-  .toolbar-actions {
-    display: grid;
-    grid-auto-flow: column;
-    gap: var(--space-4);
-    align-items: center;
-  }
-
-  .add-all-btn {
-    padding: var(--space-2) var(--space-3);
-    font-size: var(--font-size-sm);
-    background: #1d4961;
-    color: white;
-    border: none;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    white-space: nowrap;
-  }
-
-  .add-all-btn:hover {
-    background: #2d5a75;
-  }
-
-  .clear-cart-btn {
-    padding: var(--space-2) var(--space-3);
-    font-size: var(--font-size-sm);
-    background: white;
-    color: #c53030;
-    border: 1px solid #c53030;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    white-space: nowrap;
-  }
-
-  .clear-cart-btn:hover {
-    background: #fff5f5;
-  }
-
-  /* Investigation summary */
-  .investigation-summary {
-    margin-bottom: var(--space-4);
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: var(--space-2);
-    font-size: var(--font-size-sm);
+    font-size: 15px;
+    font-weight: 500;
     color: var(--color-text-secondary);
+    margin: 0;
+    font-family: Georgia, serif;
   }
 
-  .report-link {
-    color: #1d4961;
-    font-weight: 600;
-    text-decoration: underline;
-    text-underline-offset: 2px;
-  }
-
-  .report-link:hover {
-    text-decoration: underline;
-  }
-
-  /* Responsive */
-  @media (max-width: 768px) {
-    .results-header {
-      grid-template-columns: 1fr;
-      gap: var(--space-2);
-    }
-
-    .results-meta {
-      justify-items: start;
-    }
-
-    .search-toolbar {
-      grid-template-columns: 1fr;
-    }
-
-    .toolbar-actions {
-      grid-auto-flow: row;
-      grid-template-columns: repeat(2, 1fr);
-      justify-items: start;
-    }
+  .search-bar {
+    margin-bottom: var(--space-3);
   }
 
   /* Page-specific debug styles */

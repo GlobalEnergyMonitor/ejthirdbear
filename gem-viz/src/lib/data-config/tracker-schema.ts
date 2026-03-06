@@ -127,13 +127,15 @@ export function discoverStatusGroups(
     for (const s of sg.statuses) claimedStatuses.add(s);
   }
 
-  // Build known groups from facet data
+  // Build known groups from facet data.
+  // Include ALL known sub-statuses (even with 0 count) so the Refine
+  // toggle appears for groups that have multiple sub-statuses.
   const groups: DynamicStatusGroup[] = [];
   for (const sg of STATUS_GROUPS) {
     const statuses: { value: string; count: number }[] = [];
     for (const s of sg.statuses) {
       const count = facets.get(s) ?? 0;
-      if (count > 0) statuses.push({ value: s, count });
+      statuses.push({ value: s, count });
     }
     const totalCount = statuses.reduce((sum, s) => sum + s.count, 0);
     if (totalCount > 0) {

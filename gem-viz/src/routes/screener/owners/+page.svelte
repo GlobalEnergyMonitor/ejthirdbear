@@ -7,6 +7,7 @@
 
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
+  import { onMount } from 'svelte';
   import ScreenerLayout from '$lib/components/nav/ScreenerLayout.svelte';
   import AssetClassesPanel from '$lib/components/tracker/AssetClassesPanel.svelte';
   import DebugPanel from '$lib/components/feedback/DebugPanel.svelte';
@@ -15,7 +16,13 @@
   import OwnerResultsGroups from '$lib/components/screener/OwnerResultsGroups.svelte';
   import SelectedOwnersFooter from '$lib/components/screener/SelectedOwnersFooter.svelte';
   import { getExampleCompanies } from '$lib/data-config/screener-config';
-  import { searchEntities, searchEntitiesBulk, getQueryLogs } from '$lib/data-config/screener-api';
+  import {
+    searchEntities,
+    searchEntitiesBulk,
+    getQueryLogs,
+    getOwnersByAssetType,
+    type ScreenerFilters,
+  } from '$lib/data-config/screener-api';
   import { buildScreenerUrl, parseJsonSearchParam } from '$lib/screener-url';
 
   type OwnerFlowClass = {
@@ -65,10 +72,40 @@
     goto(buildOwnersUrl(updated.length > 0 ? JSON.stringify(updated) : ''), { replaceState: true });
   }
 
-  // Get relevant example companies based on selected asset classes
+  // Get relevant example companies: fetch top 3 owners for selected asset class,
+  // fall back to static examples while loading or if no classes selected
+  let topOwners = $state<{ name: string; id: string }[]>([]);
+  let topOwnersLoaded = $state(false);
+
   const exampleCompanies = $derived.by(() => {
+    if (topOwnersLoaded && topOwners.length > 0) return topOwners;
     const trackers = classList.map((c) => c.tracker).filter(Boolean);
     return getExampleCompanies(trackers);
+  });
+
+  // Fetch top 3 owners for the first selected asset class
+  onMount(async () => {
+    if (selectedClasses.length === 0) return;
+    const cls = selectedClasses[0];
+    if (!cls?.tracker) return;
+
+    try {
+      const filters: ScreenerFilters = {
+        tracker: cls.tracker || '',
+        assetClassId: cls.assetClassId || cls.id,
+      };
+      const result = await getOwnersByAssetType(filters, { limit: 3 });
+      if (result.owners.length > 0) {
+        topOwners = result.owners.slice(0, 3).map((o) => ({
+          name: o.name,
+          id: o.entityId,
+        }));
+      }
+    } catch {
+      // Silently fall back to static examples
+    } finally {
+      topOwnersLoaded = true;
+    }
   });
 
   // Show all companies with ownership in selected asset classes

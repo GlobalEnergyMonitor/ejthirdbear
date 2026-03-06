@@ -127,9 +127,9 @@
           </ul>
         {/if}
 
-        <a href={link(editHref)} class="edit-btn">
+        <button class="edit-btn" onclick={() => history.back()}>
           {selectedClasses.length === 0 ? 'Select asset classes' : 'Edit selection'}
-        </a>
+        </button>
       </div>
     {/if}
   </div>

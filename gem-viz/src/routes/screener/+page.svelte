@@ -30,14 +30,21 @@
   ];
 
   // Group asset classes by category in display order (only enabled ones)
-  const classesByCategory = $derived(
-    CATEGORY_META.map((cat) => ({
+  // Filter by search query against label and description
+  const classesByCategory = $derived.by(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return CATEGORY_META.map((cat) => ({
       ...cat,
-      classes: ALL_ASSET_CLASSES.filter((ac) => ac.category === cat.key && isEnabled(ac)),
-    })).filter((cat) => cat.classes.length > 0)
-  );
+      classes: ALL_ASSET_CLASSES.filter((ac) => {
+        if (ac.category !== cat.key || !isEnabled(ac)) return false;
+        if (!q) return true;
+        return ac.label.toLowerCase().includes(q) || ac.description.toLowerCase().includes(q);
+      }),
+    })).filter((cat) => cat.classes.length > 0);
+  });
 
   // ─── State ──────────────────────────────────────────────────────────
+  let searchQuery = $state('');
   let selectedClassId = $state(null);
   /** Flat subClasses checkbox state */
   let checkedSubClasses = $state({});
@@ -64,25 +71,26 @@
     if (!ac || !isEnabled(ac)) return;
 
     selectedClassId = ac.id;
+    searchQuery = '';
     geoFilters = [];
     geofence = null;
     dynamicStatusGroups = null; // reset while loading
 
-    // Initialize flat sub-class checkboxes
+    // Initialize flat sub-class checkboxes (default: checked)
     const checks = {};
     if (ac.subClasses) {
       for (const sc of ac.subClasses) {
-        checks[sc.id] = sc.defaultChecked ?? false;
+        checks[sc.id] = sc.defaultChecked ?? true;
       }
     }
     checkedSubClasses = checks;
 
-    // Initialize group option checkboxes
+    // Initialize group option checkboxes (default: checked)
     const groupChecks = {};
     if (ac.subClassGroups) {
       for (const group of ac.subClassGroups) {
         for (const opt of group.options) {
-          groupChecks[opt.id] = opt.defaultChecked ?? false;
+          groupChecks[opt.id] = opt.defaultChecked ?? true;
         }
       }
     }
@@ -301,6 +309,14 @@
 
   <!-- Asset class tile picker -->
   <div class="picker-section">
+    <div class="picker-search">
+      <input
+        type="text"
+        class="picker-search-input"
+        placeholder="Search asset classes..."
+        bind:value={searchQuery}
+      />
+    </div>
     {#each classesByCategory as cat (cat.key)}
       <div class="picker-category">
         <span class="picker-category-label">{cat.label}</span>
@@ -352,6 +368,7 @@
       {dynamicStatusGroups}
       onShowAllOwners={() => navigateTo('/screener/results')}
       onSearchSpecificOwners={() => navigateTo('/screener/owners')}
+      onClose={clearSelection}
     />
   {/if}
 
@@ -440,6 +457,31 @@
 
   .clear-btn:hover {
     color: white;
+  }
+
+  /* Search input */
+  .picker-search {
+    margin-bottom: var(--space-2);
+  }
+
+  .picker-search-input {
+    width: 100%;
+    padding: var(--space-3) var(--space-4);
+    font-size: var(--font-size-body);
+    border: 1px solid var(--color-gray-200, #e5e7eb);
+    border-radius: var(--radius-sm);
+    background: var(--color-bg-primary, #fff);
+    color: var(--color-text-primary);
+    outline: none;
+  }
+
+  .picker-search-input:focus {
+    border-color: var(--gem-teal, #2a7f8f);
+    box-shadow: 0 0 0 2px rgba(42, 127, 143, 0.15);
+  }
+
+  .picker-search-input::placeholder {
+    color: var(--color-text-tertiary);
   }
 
   /* Tile picker */

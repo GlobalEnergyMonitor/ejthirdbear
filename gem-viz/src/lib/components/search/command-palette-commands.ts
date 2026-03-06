@@ -5,7 +5,7 @@
 
 import { goto } from '$app/navigation';
 import { link } from '$lib/links';
-import { investigationCart } from '$lib/investigationCart';
+
 import { buildScreenerUrl } from '$lib/screener-url';
 
 export interface Command {
@@ -23,11 +23,11 @@ export interface Command {
 export function createCommands(callbacks: {
   close: () => void;
   toggleHelp: () => void;
-  addCurrentToCart: () => void;
+
   copyCurrentId: () => void;
   copyUrl: () => void;
 }): Command[] {
-  const { close, toggleHelp, addCurrentToCart, copyCurrentId, copyUrl } = callbacks;
+  const { close, toggleHelp, copyCurrentId, copyUrl } = callbacks;
 
   return [
     // Navigation
@@ -128,13 +128,6 @@ export function createCommands(callbacks: {
     ...screenerTrackerCommands(),
     // Actions
     {
-      id: 'add-cart',
-      label: 'Add to Report',
-      shortcut: 'a',
-      action: addCurrentToCart,
-      section: 'Actions',
-    },
-    {
       id: 'copy-id',
       label: 'Copy ID to Clipboard',
       shortcut: 'c',
@@ -146,15 +139,6 @@ export function createCommands(callbacks: {
       label: 'Copy Page URL',
       shortcut: 'u',
       action: copyUrl,
-      section: 'Actions',
-    },
-    {
-      id: 'clear-cart',
-      label: 'Clear Report',
-      action: () => {
-        investigationCart.clear();
-        close();
-      },
       section: 'Actions',
     },
     {
