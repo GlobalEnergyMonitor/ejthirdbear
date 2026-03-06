@@ -123,6 +123,7 @@ export type AssetClassCategory =
   | 'chemical'
   | 'bioenergy'
   | 'cement'
+  | 'oil-gas'
   | 'multi-tracker';
 
 // =============================================================================
@@ -833,14 +834,14 @@ export const GasPlants = makeBaseClass(
   'gas-plants',
   'Gas Plants',
   'Oil & gas power plants.',
-  'multi-tracker',
+  'oil-gas',
   'Oil & Gas Plant'
 );
 export const GasPipelines = makeBaseClass(
   'gas-pipelines',
   'Gas Pipelines',
   'Natural gas transmission pipelines.',
-  'multi-tracker',
+  'oil-gas',
   'Gas Pipeline'
 );
 export const IronMines = makeBaseClass(
@@ -868,7 +869,7 @@ export const OilPipelines = makeBaseClass(
   'oil-pipelines',
   'Oil & NGL Pipelines',
   'Oil and natural gas liquids pipelines.',
-  'multi-tracker',
+  'oil-gas',
   'Oil or NGL Pipeline'
 );
 

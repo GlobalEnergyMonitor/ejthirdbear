@@ -22,6 +22,7 @@
     { key: 'multi-tracker', label: 'Multi-Tracker Classes' },
     { key: 'coal-plant', label: 'Coal Plant' },
     { key: 'coal-mine', label: 'Coal Mine' },
+    { key: 'oil-gas', label: 'Oil & Gas' },
     { key: 'steel-iron', label: 'Steel & Iron' },
     { key: 'bioenergy', label: 'Bioenergy' },
     { key: 'chemical', label: 'Chemical' },
