@@ -41,7 +41,8 @@ export interface ColumnNames {
   startYear: string | null;
 }
 
-const API_BASE = getAPIBase();
+let _apiBase: string;
+function getBase() { return _apiBase ??= getAPIBase(); }
 
 const API_TIMEOUT_MS = 30_000;
 
@@ -61,7 +62,7 @@ async function listAssetsMulti(
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
-  const fetchUrl = `${API_BASE}/assets${queryStr}`;
+  const fetchUrl = `${getBase()}/assets${queryStr}`;
   const t0 = performance.now();
 
   try {

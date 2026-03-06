@@ -5,7 +5,6 @@ import { logApiCall } from './api-log.svelte';
 // API base URL (env override or production default)
 const API_BASE =
   import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL ||
-  import.meta.env.PUBLIC_OWNERSHIP_API_URL ||
   'https://gem-api.thirdbear.net'; // Fallback to production API
 
 // Default timeout for API requests (30 seconds)
@@ -463,10 +462,10 @@ export async function listEntities(params?: {
     `/entities${buildQuery(params)}`
   );
   const page = normalizePaginated(raw);
-  return { ...page, results: page.results.map(normalizeEntity) };
+  return { ...page, results: page.results.map(normalizeEntity).filter((e): e is EntitySummary => e !== null) };
 }
 
-export async function getEntity(entityId: string): Promise<EntitySummary> {
+export async function getEntity(entityId: string): Promise<EntitySummary | null> {
   _currentReason = `getEntity ${entityId}`;
   return normalizeEntity(await fetchAPI<RawEntity>(`/entities/${encodeURIComponent(entityId)}`));
 }

@@ -229,6 +229,9 @@
   onMount(() => {
     log('Mounted');
     loadReport();
+    return () => {
+      if (loadingInterval) clearInterval(loadingInterval);
+    };
   });
 
   // Reload when cart changes

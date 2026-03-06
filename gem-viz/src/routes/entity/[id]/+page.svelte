@@ -208,7 +208,7 @@
             entityName = portfolio.spotlightOwner.Name;
           }
         }
-        if (update.phase === 'error') error = update.error;
+        if (update.phase === 'error') error = update.error || 'Unknown error loading portfolio';
         if (update.phase === 'done') {
           portfolioQueryTime = performance.now() - portfolioStartTime;
         }

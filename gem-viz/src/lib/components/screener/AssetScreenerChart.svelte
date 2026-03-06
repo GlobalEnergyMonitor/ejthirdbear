@@ -43,6 +43,7 @@
   let trackerLegend = $state([]);
   let statusLegend = $state([]);
   let prospectiveLegend = $state(false);
+  let destroyed = false;
 
   const hasFilteredAssetCount = $derived(
     typeof filteredAssetCount === 'number' && !Number.isNaN(filteredAssetCount)
@@ -70,6 +71,8 @@
       const chartData = await fetchChartData(entityId, (msg) => {
         progressMsg = msg;
       });
+
+      if (destroyed || !container) return;
 
       // Apply status filter if provided
       if (statusFilter && statusFilter.length > 0) {
@@ -165,6 +168,7 @@
     loadAndRender();
 
     return () => {
+      destroyed = true;
       if (chartCleanup) {
         chartCleanup();
         chartCleanup = null;

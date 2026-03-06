@@ -32,6 +32,7 @@
   let currentZoom = $state(-1.5);
   let hoverFrame;
   let hoverTimeout;
+  let destroyed = false;
 
   // Graph data
   let nodes = [];
@@ -68,6 +69,8 @@
           () => null
         ),
       ]);
+
+      if (destroyed) return;
 
       // Merge nodes and edges from both directions
       nodeMap.clear();
@@ -415,6 +418,7 @@
     })();
 
     return () => {
+      destroyed = true;
       if (simulation) simulation.stop();
       if (hoverFrame) cancelAnimationFrame(hoverFrame);
       if (hoverTimeout) clearTimeout(hoverTimeout);

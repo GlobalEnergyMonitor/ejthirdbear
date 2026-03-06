@@ -576,6 +576,7 @@
     loadRecent();
     window.addEventListener('keydown', handleGlobalKeydown);
     return () => {
+      clearTimeout(searchTimeout);
       window.removeEventListener('keydown', handleGlobalKeydown);
     };
   });
