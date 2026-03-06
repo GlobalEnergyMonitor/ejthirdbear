@@ -40,7 +40,7 @@ function getStaticData() {
   return { trackerConfigs, dataSources, staticFiles };
 }
 
-/** @type {import('./$types').PageServerLoad} */
+/** @type {import('./$types').PageLoad} */
 export async function load() {
   const startTime = Date.now();
   const staticData = getStaticData();

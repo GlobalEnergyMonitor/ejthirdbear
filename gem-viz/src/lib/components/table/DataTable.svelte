@@ -5,7 +5,7 @@
 
   /**
    * @type {{
-   *   columns?: Array<{key: string, label: string, sortable?: boolean, filterable?: boolean, type?: 'string' | 'number' | 'date', width?: string}>,
+   *   columns?: Array<{key: string, label: string, sortable?: boolean, filterable?: boolean, type?: 'string' | 'number' | 'date', width?: string, colorMap?: Record<string, string>}>,
    *   data?: Array<Record<string, any>>,
    *   pageSize?: number,
    *   showGlobalSearch?: boolean,
@@ -467,6 +467,9 @@
             {#each displayColumns as col}
               <td>
                 {#if row[col.key] != null}
+                  {#if col.colorMap?.[row[col.key]]}
+                    <span class="cell-dot" style="background:{col.colorMap[row[col.key]]}"></span>
+                  {/if}
                   {#if col.type === 'number'}
                     {formatCount(Number(row[col.key]))}
                   {:else}
@@ -784,6 +787,16 @@
 
   .null-value {
     color: var(--color-gray-300);
+  }
+
+  .cell-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    margin-right: 4px;
+    vertical-align: middle;
+    flex-shrink: 0;
   }
 
   .empty-state {

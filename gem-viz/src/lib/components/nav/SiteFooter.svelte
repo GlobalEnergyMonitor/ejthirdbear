@@ -9,9 +9,9 @@
 
   const footerLinks = [
     { path: 'explore', label: 'Explore' },
-    { path: 'asset', label: 'Assets' },
+    { path: 'compose', label: 'Asset Filter' },
     { path: 'network', label: 'Ownership Network' },
-    { path: 'report', label: 'Investigation Report', showBadge: true },
+    { path: 'report', label: 'Report', showBadge: true },
     { path: 'sitemap', label: 'Sitemap' },
     { path: 'about', label: 'About' },
   ];

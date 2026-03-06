@@ -37,7 +37,7 @@
 <div class="asset-tooltip" style="left: {left}px; top: {top}px;">
   {#if inCart}
     <div class="tooltip-header">
-      <span class="in-cart-badge" title="In your investigation">In Cart</span>
+      <span class="in-cart-badge" title="Added to your report">In Report</span>
     </div>
   {/if}
   <ProjectCard

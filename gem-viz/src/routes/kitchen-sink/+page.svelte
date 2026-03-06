@@ -76,6 +76,46 @@
     componentIndex,
   } from './kitchen-sink-data';
 
+  // Featured assets from Observable notebook — for ownership tree parity testing
+  import { getOwnershipGraph } from '$lib/ownership-api';
+  const featuredAssets = new Map([
+    ['sinesPowerStation', 'G100000109409'],
+    ['BaghlanPowerStation', 'G100001057899'],
+    ['CAPAceroHuachipatoSteelPlant', 'P100000120066'],
+    ['PKNCoalMines', 'M4499'],
+    ['MaranhãoSãoLuísCoalPlant', 'G100000106660'],
+    ['NanshanAluminumDonghaiCoalPlant', 'G100000107258'],
+    ['Bayernoil Refinery', 'G100000400116'],
+    ['Cebu Energy', 'G100000110218'],
+  ]);
+  let selectedFeaturedAsset = $state('sinesPowerStation');
+  let featuredGraphData = $state(null);
+  let featuredLoading = $state(false);
+  let featuredError = $state('');
+
+  async function loadFeaturedAsset(name) {
+    const assetId = featuredAssets.get(name);
+    if (!assetId) return;
+    featuredLoading = true;
+    featuredError = '';
+    try {
+      const result = await getOwnershipGraph({ root: assetId, direction: 'up', max_depth: 12 });
+      featuredGraphData = result;
+    } catch (e) {
+      featuredError = e.message || 'Failed to load';
+      featuredGraphData = null;
+    } finally {
+      featuredLoading = false;
+    }
+  }
+
+  // Load the first featured asset on mount
+  $effect(() => {
+    if (selectedFeaturedAsset) {
+      loadFeaturedAsset(selectedFeaturedAsset);
+    }
+  });
+
   // Toggle states for interactive demos
   let showLoading = $state(false);
   let showError = $state(false);
@@ -135,12 +175,129 @@
     <a href="#navigation">Navigation</a>
     <a href="#states">Loading States</a>
     <a href="#buttons">Buttons</a>
+    <a href="#typography">Typography</a>
+    <a href="#colors">Colors</a>
     <a href="#debug">Debug</a>
     <a href="#complex">Complex</a>
     <a href="#registry">Full Registry</a>
-    <a href="#typography">Typography</a>
-    <a href="#colors">Colors</a>
   </nav>
+
+  <!-- ========================================
+       TYPOGRAPHY REFERENCE
+       ======================================== -->
+  <section id="typography">
+    <h2>Typography Reference</h2>
+    <div class="component-group">
+      <div class="type-samples">
+        <div class="type-row">
+          <span class="type-label">--font-size-xs</span>
+          <span style="font-size: var(--font-size-xs);">10px - Smallest labels, badges</span>
+        </div>
+        <div class="type-row">
+          <span class="type-label">--font-size-sm</span>
+          <span style="font-size: var(--font-size-sm);">11px - Secondary text, captions</span>
+        </div>
+        <div class="type-row">
+          <span class="type-label">--font-size-base</span>
+          <span style="font-size: var(--font-size-base);">12px - Form labels</span>
+        </div>
+        <div class="type-row">
+          <span class="type-label">--font-size-body</span>
+          <span style="font-size: var(--font-size-body);">13px - Body text, paragraphs</span>
+        </div>
+        <div class="type-row">
+          <span class="type-label">--font-size-md</span>
+          <span style="font-size: var(--font-size-md);">14px - Emphasis</span>
+        </div>
+        <div class="type-row">
+          <span class="type-label">--font-size-lg</span>
+          <span style="font-size: var(--font-size-lg);">15px - Large text</span>
+        </div>
+        <div class="type-row">
+          <span class="type-label">--font-size-xl</span>
+          <span style="font-size: var(--font-size-xl);">18px - Section headings</span>
+        </div>
+        <div class="type-row">
+          <span class="type-label">--font-size-2xl</span>
+          <span style="font-size: var(--font-size-2xl);">24px - Page titles</span>
+        </div>
+        <div class="type-row">
+          <span class="type-label">--font-size-3xl</span>
+          <span style="font-size: var(--font-size-3xl);">32px - Hero headings</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================
+       COLOR REFERENCE
+       ======================================== -->
+  <section id="colors">
+    <h2>Color Reference</h2>
+    <div class="component-group">
+      <h3>Text Colors</h3>
+      <div class="color-swatches">
+        <div class="swatch">
+          <div class="swatch-box" style="background: var(--color-text-primary);"></div>
+          <span>--color-text-primary</span>
+        </div>
+        <div class="swatch">
+          <div class="swatch-box" style="background: var(--color-text-secondary);"></div>
+          <span>--color-text-secondary</span>
+        </div>
+        <div class="swatch">
+          <div class="swatch-box" style="background: var(--color-text-tertiary);"></div>
+          <span>--color-text-tertiary</span>
+        </div>
+      </div>
+
+      <h3>GEM Brand</h3>
+      <div class="color-swatches">
+        <div class="swatch">
+          <div class="swatch-box" style="background: var(--gem-primary-blue);"></div>
+          <span>--gem-primary-blue</span>
+        </div>
+        <div class="swatch">
+          <div class="swatch-box" style="background: var(--gem-teal);"></div>
+          <span>--gem-teal</span>
+        </div>
+        <div class="swatch">
+          <div class="swatch-box" style="background: var(--gem-navy);"></div>
+          <span>--gem-navy</span>
+        </div>
+        <div class="swatch">
+          <div class="swatch-box" style="background: var(--gem-orange);"></div>
+          <span>--gem-orange</span>
+        </div>
+      </div>
+
+      <h3>Semantic</h3>
+      <div class="color-swatches">
+        <div class="swatch">
+          <div class="swatch-box" style="background: var(--color-accent);"></div>
+          <span>--color-accent</span>
+        </div>
+        <div class="swatch">
+          <div class="swatch-box" style="background: var(--color-error);"></div>
+          <span>--color-error</span>
+        </div>
+        <div class="swatch">
+          <div class="swatch-box" style="background: var(--color-border);"></div>
+          <span>--color-border</span>
+        </div>
+      </div>
+
+      <h3>Gray Scale</h3>
+      <div class="color-swatches grays">
+        {#each [50, 100, 200, 300, 400, 500, 600, 700, 800, 900] as shade}
+          <div class="swatch">
+            <div class="swatch-box" style="background: var(--color-gray-{shade});"></div>
+            <span>{shade}</span>
+          </div>
+        {/each}
+      </div>
+    </div>
+  </section>
 
   <!-- ========================================
        PRIMITIVES
@@ -589,6 +746,41 @@
        ======================================== -->
   <section id="ownership-tree">
     <h2>Ownership Tree Graph</h2>
+
+    <div class="component-group">
+      <div class="component-header">
+        <h3>Featured Assets (API — Observable parity testing)</h3>
+        <code class="file-path">src/lib/components/ownership/OwnershipTreeGraph.svelte</code>
+      </div>
+      <p class="component-desc">
+        Same featured assets from the Observable notebook. Select one to fetch live data and compare rendering parity.
+      </p>
+      <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px;">
+        {#each [...featuredAssets] as [name, id]}
+          <button
+            style="padding: 4px 10px; border: 1px solid {selectedFeaturedAsset === name ? '#016B83' : '#ccc'}; border-radius: 4px; background: {selectedFeaturedAsset === name ? '#016B83' : '#fff'}; color: {selectedFeaturedAsset === name ? '#fff' : '#333'}; cursor: pointer; font-size: 12px;"
+            onclick={() => { selectedFeaturedAsset = name; }}
+          >
+            {name} <span style="opacity: 0.6; font-size: 10px;">({id})</span>
+          </button>
+        {/each}
+      </div>
+      <div class="demo-block full-width">
+        <span class="variant-label">API: {selectedFeaturedAsset} ({featuredAssets.get(selectedFeaturedAsset)})</span>
+        {#if featuredLoading}
+          <div style="padding: 40px; text-align: center; color: #888;">Loading {selectedFeaturedAsset}...</div>
+        {:else if featuredError}
+          <div style="padding: 40px; text-align: center; color: #c00;">{featuredError}</div>
+        {:else if featuredGraphData}
+          <OwnershipTreeGraph
+            nodes={featuredGraphData.nodes}
+            edges={featuredGraphData.edges}
+            paths={featuredGraphData.paths}
+            rootId={featuredGraphData.root?.id || ''}
+          />
+        {/if}
+      </div>
+    </div>
 
     <div class="component-group">
       <div class="component-header">
@@ -1065,122 +1257,6 @@
     {/each}
   </section>
 
-  <!-- ========================================
-       TYPOGRAPHY REFERENCE
-       ======================================== -->
-  <section id="typography">
-    <h2>Typography Reference</h2>
-    <div class="component-group">
-      <div class="type-samples">
-        <div class="type-row">
-          <span class="type-label">--font-size-xs</span>
-          <span style="font-size: var(--font-size-xs);">10px - Smallest labels, badges</span>
-        </div>
-        <div class="type-row">
-          <span class="type-label">--font-size-sm</span>
-          <span style="font-size: var(--font-size-sm);">11px - Secondary text, captions</span>
-        </div>
-        <div class="type-row">
-          <span class="type-label">--font-size-base</span>
-          <span style="font-size: var(--font-size-base);">12px - Form labels</span>
-        </div>
-        <div class="type-row">
-          <span class="type-label">--font-size-body</span>
-          <span style="font-size: var(--font-size-body);">13px - Body text, paragraphs</span>
-        </div>
-        <div class="type-row">
-          <span class="type-label">--font-size-md</span>
-          <span style="font-size: var(--font-size-md);">14px - Emphasis</span>
-        </div>
-        <div class="type-row">
-          <span class="type-label">--font-size-lg</span>
-          <span style="font-size: var(--font-size-lg);">15px - Large text</span>
-        </div>
-        <div class="type-row">
-          <span class="type-label">--font-size-xl</span>
-          <span style="font-size: var(--font-size-xl);">18px - Section headings</span>
-        </div>
-        <div class="type-row">
-          <span class="type-label">--font-size-2xl</span>
-          <span style="font-size: var(--font-size-2xl);">24px - Page titles</span>
-        </div>
-        <div class="type-row">
-          <span class="type-label">--font-size-3xl</span>
-          <span style="font-size: var(--font-size-3xl);">32px - Hero headings</span>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ========================================
-       COLOR REFERENCE
-       ======================================== -->
-  <section id="colors">
-    <h2>Color Reference</h2>
-    <div class="component-group">
-      <h3>Text Colors</h3>
-      <div class="color-swatches">
-        <div class="swatch">
-          <div class="swatch-box" style="background: var(--color-text-primary);"></div>
-          <span>--color-text-primary</span>
-        </div>
-        <div class="swatch">
-          <div class="swatch-box" style="background: var(--color-text-secondary);"></div>
-          <span>--color-text-secondary</span>
-        </div>
-        <div class="swatch">
-          <div class="swatch-box" style="background: var(--color-text-tertiary);"></div>
-          <span>--color-text-tertiary</span>
-        </div>
-      </div>
-
-      <h3>GEM Brand</h3>
-      <div class="color-swatches">
-        <div class="swatch">
-          <div class="swatch-box" style="background: var(--gem-primary-blue);"></div>
-          <span>--gem-primary-blue</span>
-        </div>
-        <div class="swatch">
-          <div class="swatch-box" style="background: var(--gem-teal);"></div>
-          <span>--gem-teal</span>
-        </div>
-        <div class="swatch">
-          <div class="swatch-box" style="background: var(--gem-navy);"></div>
-          <span>--gem-navy</span>
-        </div>
-        <div class="swatch">
-          <div class="swatch-box" style="background: var(--gem-orange);"></div>
-          <span>--gem-orange</span>
-        </div>
-      </div>
-
-      <h3>Semantic</h3>
-      <div class="color-swatches">
-        <div class="swatch">
-          <div class="swatch-box" style="background: var(--color-accent);"></div>
-          <span>--color-accent</span>
-        </div>
-        <div class="swatch">
-          <div class="swatch-box" style="background: var(--color-error);"></div>
-          <span>--color-error</span>
-        </div>
-        <div class="swatch">
-          <div class="swatch-box" style="background: var(--color-border);"></div>
-          <span>--color-border</span>
-        </div>
-      </div>
-
-      <h3>Gray Scale</h3>
-      <div class="color-swatches grays">
-        {#each [50, 100, 200, 300, 400, 500, 600, 700, 800, 900] as shade}
-          <div class="swatch">
-            <div class="swatch-box" style="background: var(--color-gray-{shade});"></div>
-            <span>{shade}</span>
-          </div>
-        {/each}
-      </div>
-    </div>
-  </section>
 </div>
 
 <style>

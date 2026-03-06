@@ -171,6 +171,7 @@
     flex: 1 1 140px;
     min-width: 140px;
     max-width: 180px;
+    min-height: 50px;
     padding: 6px 8px;
     transition: opacity 0.15s ease;
   }

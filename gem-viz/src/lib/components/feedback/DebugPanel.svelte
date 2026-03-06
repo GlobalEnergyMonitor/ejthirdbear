@@ -30,9 +30,10 @@
 
 <style>
   .debug-panel {
-    margin-top: var(--space-12);
+    margin-top: var(--space-16, 64px);
+    margin-bottom: var(--space-12, 48px);
     border-top: 1px solid var(--color-border);
-    padding-top: var(--space-4);
+    padding-top: var(--space-6, 24px);
   }
 
   .debug-summary {
@@ -103,8 +104,8 @@
   .debug-content :global(.debug-code) {
     margin: 0;
     padding: var(--space-4);
-    background: #1e1e1e;
-    color: #d4d4d4;
+    background: var(--color-gray-100);
+    color: var(--color-text-primary);
     font-family: var(--font-family-mono);
     font-size: var(--font-size-xs);
     line-height: 1.5;
@@ -117,7 +118,7 @@
   .debug-content :global(.copy-btn) {
     padding: var(--space-1) var(--space-3);
     font-size: var(--font-size-xs);
-    background: white;
+    background: transparent;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-sm);
     cursor: pointer;

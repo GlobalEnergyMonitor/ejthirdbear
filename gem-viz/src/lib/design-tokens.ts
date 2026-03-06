@@ -94,14 +94,21 @@ export const trackerColors: Record<string, string> = {
 
   // Oil & Gas (Lighter Red)
   'Gas Plant': '#CA4A50',
+  'Oil & Gas Plant': '#CA4A50',
   'Gas Pipeline': '#CA4A50',
+  'Natural Gas Transmission Pipeline': '#CA4A50',
   'Oil & NGL Pipeline': '#CA4A50',
+  'Oil or NGL Pipeline': '#CA4A50',
+  'Oil Pipeline': '#CA4A50',
 
   // Cement (Grey-Teal)
   'Cement and Concrete': '#6e8c91',
+  'Cement or Concrete Plant': '#6e8c91',
+  'Cement Plant': '#6e8c91',
 
   // Bioenergy (Purple)
   'Bioenergy Power': '#A0AAE5',
+  'Bioenergy Plant': '#A0AAE5',
 
   // Geothermal (Deep Teal)
   Geothermal: '#004F61',
@@ -110,6 +117,7 @@ export const trackerColors: Record<string, string> = {
   'Iron Mine': '#004F61',
   'Iron Ore Mine': '#004F61',
   'Steel Plant': '#004F61',
+  'Iron & Steel Plant': '#004F61',
 
   // Renewables (from Global Integrated Power Tracker spec)
   Solar: '#FFE366',

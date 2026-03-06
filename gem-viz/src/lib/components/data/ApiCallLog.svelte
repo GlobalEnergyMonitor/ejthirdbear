@@ -69,7 +69,7 @@
     gap: 1px;
     font-family: var(--font-family-mono, monospace);
     font-size: var(--font-size-xs, 11px);
-    background: #1e1e1e;
+    background: var(--color-border, #e5e5e5);
     border-radius: var(--radius-sm, 2px);
     max-height: 300px;
     overflow-y: auto;
@@ -80,25 +80,26 @@
     grid-template-columns: 40px 1fr 40px 52px auto;
     gap: var(--space-2, 8px);
     padding: var(--space-1, 4px) var(--space-2, 8px);
-    background: #252526;
+    background: var(--color-gray-50, #fafafa);
     align-items: center;
   }
 
   .call-row:hover {
-    background: #2a2d2e;
+    background: var(--color-gray-100, #f0f0f0);
   }
 
   .call-row.call-error {
-    background: #3a1d1d;
+    background: var(--color-error-bg, #fef2f2);
   }
 
   .call-method {
-    color: #569cd6;
+    color: var(--color-text-secondary);
     font-weight: 600;
+    text-transform: uppercase;
   }
 
   .call-url {
-    color: #d4d4d4;
+    color: var(--color-text-primary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -108,7 +109,6 @@
   }
 
   .call-url:hover {
-    color: #569cd6;
     text-decoration: underline;
   }
 
@@ -118,20 +118,20 @@
   }
 
   .status-ok {
-    color: #4ec9b0;
+    color: var(--color-success, #16a34a);
   }
 
   .status-err {
-    color: #f44747;
+    color: var(--color-error, #dc2626);
   }
 
   .call-time {
     text-align: right;
-    color: #808080;
+    color: var(--color-text-tertiary);
   }
 
   .call-reason {
-    color: #6a9955;
+    color: var(--color-text-tertiary);
     font-style: italic;
     overflow: hidden;
     text-overflow: ellipsis;

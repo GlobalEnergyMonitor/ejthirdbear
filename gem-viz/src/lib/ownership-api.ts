@@ -845,10 +845,12 @@ export async function getOwnershipGraph(params: {
     type: (n.node_type as 'entity' | 'asset') || 'entity',
     is_terminal: n.is_terminal as boolean | undefined,
     is_root: n.is_root as boolean | undefined,
-    // Preserve useful raw fields for side panel
+    // Preserve useful raw fields for side panel and entity type classification
     entity_id: n.entity_id as string | undefined,
     headquarters_country: n.headquarters_country as string | undefined,
     entity_type: n.entity_type as string | undefined,
+    publiclylisted: (n.publiclylisted || n.publicly_listed) as boolean | undefined,
+    asset_type: n.asset_type as string | undefined,
   }));
 
   return {

@@ -38,6 +38,7 @@ import {
   clientSideFilter,
   deriveOwnerFacets,
   deriveOwnerCountryFacets,
+  deriveStateProvinceFacets,
   deriveCapacityRange,
   deriveAllParametricFacets,
   hasClientSideFilters,
@@ -47,6 +48,7 @@ import {
   type ComposeRow,
 } from '$lib/compose-api';
 import type { AssetSummary } from '$lib/ownership-api';
+import { trackerColors } from '$lib/design-tokens';
 import {
   mergeParametricCounts,
   calculateCapacityData,
@@ -93,6 +95,7 @@ export class ComposeState {
 
   // --- Base reference data (all possible options, never filtered) ---
   baseCountries = $state<any[]>([]);
+  baseStateProvinces = $state<any[]>([]);
   baseOwnerCountries = $state<any[]>([]);
   baseOwners = $state<any[]>([]);
   baseTrackers = $state<any[]>([]);
@@ -100,6 +103,7 @@ export class ComposeState {
 
   // --- Parametric counts (update based on current filters, merged with base) ---
   countries = $state<any[]>([]);
+  stateProvinces = $state<any[]>([]);
   ownerCountries = $state<any[]>([]);
   owners = $state<any[]>([]);
   trackerOptions = $state<any[]>([]);
@@ -220,7 +224,7 @@ export class ComposeState {
     const allColumns = [
       { key: 'name', label: 'Asset', sortable: true, filterable: true },
       { key: 'asset_id', label: 'Asset ID', sortable: true, filterable: true },
-      { key: 'tracker', label: 'Tracker', sortable: true, filterable: true },
+      { key: 'tracker', label: 'Tracker', sortable: true, filterable: true, colorMap: trackerColors },
       { key: 'status', label: 'Status', sortable: true, filterable: true },
       { key: 'country', label: 'Country', sortable: true, filterable: true },
       ...(this.availableColumns.hasCapacity
@@ -404,6 +408,7 @@ export class ComposeState {
             tracker: asset.facilityType || '',
             status: asset.status || '',
             country: asset.country || '',
+            state_province: (asset as any).stateProvince || '',
             capacity_mw: asset.capacity ?? null,
             owner: firstOwner?.name || asset.ownerName || '',
             owner_id: firstOwner?.entityId || asset.ownerEntityId || '',
@@ -495,6 +500,10 @@ export class ComposeState {
           this.baseCountries,
           facets.countries.map((f) => ({ value: f.value, count: f.count }))
         );
+        this.stateProvinces = mergeParametricCounts(
+          this.baseStateProvinces,
+          facets.stateProvinces.map((f) => ({ value: f.value, count: f.count }))
+        );
         this.owners = mergeParametricCounts(
           this.baseOwners,
           facets.owners.map((f) => ({ value: f.value, count: f.count }))
@@ -552,8 +561,10 @@ export class ComposeState {
     // Derive owner/ownerCountry base facets + capacity range from fetched data
     this.baseOwners = deriveOwnerFacets(assets);
     this.baseOwnerCountries = deriveOwnerCountryFacets(assets);
+    this.baseStateProvinces = deriveStateProvinceFacets(assets);
     this.owners = this.baseOwners;
     this.ownerCountries = this.baseOwnerCountries;
+    this.stateProvinces = this.baseStateProvinces;
 
     const capRange = deriveCapacityRange(assets);
     this.capacityRange = capRange;
@@ -573,12 +584,13 @@ export class ComposeState {
     this.trackerOptions = this.baseTrackers;
     this.statusOptions = this.baseStatuses;
     this.countries = this.baseCountries;
+    this.stateProvinces = this.baseStateProvinces;
     this.ownerCountries = this.baseOwnerCountries;
     this.owners = this.baseOwners;
   };
 
   removeFilter = (key: string, value?: string) => {
-    const arrayKeys = ['trackers', 'statuses', 'countries', 'ownerCountries', 'owners'];
+    const arrayKeys = ['trackers', 'statuses', 'countries', 'stateProvinces', 'ownerCountries', 'owners'];
     if (arrayKeys.includes(key)) {
       (this.filters as any)[key] = value
         ? (this.filters as any)[key].filter((v: string) => v !== value)
@@ -820,6 +832,7 @@ export class ComposeState {
             tracker: asset.facilityType || '',
             status: asset.status || '',
             country: asset.country || '',
+            state_province: (asset as any).stateProvince || '',
             capacity_mw: asset.capacity ?? null,
             owner: firstOwner?.name || asset.ownerName || '',
             owner_id: firstOwner?.entityId || asset.ownerEntityId || '',
@@ -845,6 +858,7 @@ export class ComposeState {
           tracker: asset.facilityType || '',
           status: asset.status || '',
           country: asset.country || '',
+          state_province: (asset as any).stateProvince || '',
           capacity_mw: asset.capacity ?? null,
           owner: firstOwner?.name || asset.ownerName || '',
           owner_id: firstOwner?.entityId || asset.ownerEntityId || '',

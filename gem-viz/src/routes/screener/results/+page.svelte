@@ -471,13 +471,13 @@
         <div class="toolbar-actions">
           {#if cartItems.length > 0}
             <button class="clear-cart-btn" onclick={() => investigationCart.clear()}>
-              Clear cart ({cartItems.length})
+              Clear report ({cartItems.length})
             </button>
           {/if}
 
           {#if filteredOwners.length > 0}
             <button class="add-all-btn" onclick={addAllToInvestigation}>
-              + Add all {filteredOwners.length} to investigation
+              + Add all {filteredOwners.length} to report
             </button>
           {/if}
         </div>
@@ -486,9 +486,9 @@
       <!-- Investigation cart summary -->
       {#if cartItems.length > 0}
         <div class="investigation-summary">
-          <strong>Investigation Cart:</strong>
+          <strong>Report:</strong>
           {cartItems.length} items selected ({investigationEntities.length} entities)
-          <a href="/report/" class="report-link">→ Generate Report</a>
+          <a href="/report/" class="report-link">→ Build Report</a>
         </div>
       {/if}
 

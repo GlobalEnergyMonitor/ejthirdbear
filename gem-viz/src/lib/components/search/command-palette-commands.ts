@@ -75,8 +75,8 @@ export function createCommands(callbacks: {
     },
     {
       id: 'assets',
-      label: 'Go to Assets',
-      action: () => goto(link('asset')),
+      label: 'Go to Asset Filter',
+      action: () => goto(link('compose')),
       section: 'Navigation',
     },
     {
@@ -129,7 +129,7 @@ export function createCommands(callbacks: {
     // Actions
     {
       id: 'add-cart',
-      label: 'Add to Cart',
+      label: 'Add to Report',
       shortcut: 'a',
       action: addCurrentToCart,
       section: 'Actions',
@@ -150,7 +150,7 @@ export function createCommands(callbacks: {
     },
     {
       id: 'clear-cart',
-      label: 'Clear Investigation Cart',
+      label: 'Clear Report',
       action: () => {
         investigationCart.clear();
         close();

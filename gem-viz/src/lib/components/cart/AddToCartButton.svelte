@@ -52,12 +52,12 @@
     if (variant === 'minimal') {
       return inCart ? 'Remove' : 'Add';
     }
-    return inCart ? 'In Cart' : 'Add to Cart';
+    return inCart ? 'In Report' : 'Add to Report';
   });
 
   // Aria label for accessibility
   const ariaLabel = $derived(
-    inCart ? `Remove ${name} from investigation` : `Add ${name} to investigation`
+    inCart ? `Remove ${name} from report` : `Add ${name} to report`
   );
 
   // Build class list from global button classes

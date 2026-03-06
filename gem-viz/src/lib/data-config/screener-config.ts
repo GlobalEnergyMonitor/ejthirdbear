@@ -111,7 +111,7 @@ export const SCREENER_STEPS: ScreenerStep[] = [
     number: 3,
     title: 'View Results',
     path: '/screener/results',
-    description: 'Explore ownership stakes and build your investigation',
+    description: 'Explore ownership stakes and build your report',
   },
 ];
 

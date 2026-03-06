@@ -87,7 +87,7 @@
 
     if (mode === 'asset') {
       if (looksLikeAssetId(q)) return assetLink(q.toUpperCase());
-      return `${link('asset')}?q=${encodeURIComponent(q)}`;
+      return `${link('compose')}?search=${encodeURIComponent(q)}`;
     }
 
     if (mode === 'owner') {
@@ -97,7 +97,7 @@
 
     if (looksLikeOwnerId(q)) return entityLink(q.toUpperCase());
     if (looksLikeAssetId(q)) return assetLink(q.toUpperCase());
-    return `${link('asset')}?q=${encodeURIComponent(q)}`;
+    return `${link('compose')}?search=${encodeURIComponent(q)}`;
   }
 
   function updateEmbedUrl(rawQuery: string, mode: string) {

@@ -1,10 +1,15 @@
 import adapter from '@sveltejs/adapter-node';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 
-// Entity pages are not prerendered at build time
-// They will return 404 errors (focus on asset pages)
-
-// No base path needed for dynamic deployment
+// ---------------------------------------------------------------------------
+// Static build notes:
+//   - adapter-static and adapter-cloudflare are installed as devDependencies
+//   - To switch, swap the adapter import and set prerender entries
+//   - Manifest and most CSR-only pages already work without a server
+//   - About page load uses fetch() (not fs) so it can become +page.js
+//   - Asset/entity detail pages still need build-cache or API at SSR time
+//   - /api/resolve-id and /api/chat are the only true server routes
+// ---------------------------------------------------------------------------
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
@@ -14,17 +19,13 @@ const config = {
       out: 'build',
       precompress: true,
     }),
-    // No prerendering - pages render dynamically on the server
     prerender: {
       entries: [],
       handleUnseenRoutes: 'ignore',
     },
     paths: {
-      // For static builds: base: `/gem-viz/v${version}`
-      // For dynamic/Fly.io: base: ''
       base: '',
-      // Use absolute paths for assets to fix nested route resolution
-      // Without this, /asset/[id]/ pages use wrong relative paths
+      // Absolute paths — required for nested dynamic routes like /asset/[id]/
       relative: false,
     },
     alias: {

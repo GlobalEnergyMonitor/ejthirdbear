@@ -36,6 +36,8 @@ import { base } from '$app/paths';
  * @property {string[]} statusesAnd - Selected statuses (AND)
  * @property {string[]} countries - Selected countries (OR)
  * @property {string[]} countriesAnd - Selected countries (AND)
+ * @property {string[]} stateProvinces - Selected state/provinces (OR)
+ * @property {string[]} stateProvincesAnd - Selected state/provinces (AND)
  * @property {string[]} ownerCountries - Selected owner headquarters countries (OR)
  * @property {string[]} ownerCountriesAnd - Selected owner headquarters countries (AND)
  * @property {string[]} owners - Selected owner names (OR)
@@ -62,6 +64,8 @@ export function emptyFilterState() {
     statusesAnd: [],
     countries: [],
     countriesAnd: [],
+    stateProvinces: [],
+    stateProvincesAnd: [],
     ownerCountries: [],
     ownerCountriesAnd: [],
     owners: [],
@@ -105,6 +109,12 @@ export function encodeFilters(filters) {
   }
   if (filters.countriesAnd?.length) {
     params.set('countriesAnd', encodeArray(filters.countriesAnd));
+  }
+  if (filters.stateProvinces?.length) {
+    params.set('stateProvinces', encodeArray(filters.stateProvinces));
+  }
+  if (filters.stateProvincesAnd?.length) {
+    params.set('stateProvincesAnd', encodeArray(filters.stateProvincesAnd));
   }
   if (filters.ownerCountries?.length) {
     params.set('ownerCountries', encodeArray(filters.ownerCountries));
@@ -197,6 +207,15 @@ export function decodeFilters(searchParams) {
     filters.countriesAnd = decodeArray(countriesAnd);
   }
 
+  const stateProvinces = params.get('stateProvinces');
+  if (stateProvinces) {
+    filters.stateProvinces = decodeArray(stateProvinces);
+  }
+  const stateProvincesAnd = params.get('stateProvincesAnd');
+  if (stateProvincesAnd) {
+    filters.stateProvincesAnd = decodeArray(stateProvincesAnd);
+  }
+
   const ownerCountries = params.get('ownerCountries');
   if (ownerCountries) {
     filters.ownerCountries = decodeArray(ownerCountries);
@@ -268,6 +287,8 @@ export function hasActiveFilters(filters) {
     filters.statusesAnd?.length > 0 ||
     filters.countries?.length > 0 ||
     filters.countriesAnd?.length > 0 ||
+    filters.stateProvinces?.length > 0 ||
+    filters.stateProvincesAnd?.length > 0 ||
     filters.ownerCountries?.length > 0 ||
     filters.ownerCountriesAnd?.length > 0 ||
     filters.owners?.length > 0 ||
@@ -292,6 +313,7 @@ export function countActiveFilters(filters) {
   if (filters.trackers?.length > 0 || filters.trackersAnd?.length > 0) count++;
   if (filters.statuses?.length > 0 || filters.statusesAnd?.length > 0) count++;
   if (filters.countries?.length > 0 || filters.countriesAnd?.length > 0) count++;
+  if (filters.stateProvinces?.length > 0 || filters.stateProvincesAnd?.length > 0) count++;
   if (filters.ownerCountries?.length > 0 || filters.ownerCountriesAnd?.length > 0) count++;
   if (filters.owners?.length > 0 || filters.ownersAnd?.length > 0) count++;
   if (filters.capacityMin != null || filters.capacityMax != null) count++;

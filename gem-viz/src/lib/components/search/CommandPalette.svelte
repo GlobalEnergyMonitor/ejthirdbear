@@ -368,7 +368,7 @@
       type: /** @type {'asset' | 'entity'} */ (info.type),
     });
 
-    showToast(`Added ${info.type} to cart`);
+    showToast(`Added ${info.type} to report`);
     close();
   }
 
@@ -734,7 +734,7 @@
 
       <div class="shortcut-group">
         <h3>Actions</h3>
-        <div class="shortcut-row"><kbd>a</kbd> <span>Add to cart</span></div>
+        <div class="shortcut-row"><kbd>a</kbd> <span>Add to report</span></div>
         <div class="shortcut-row"><kbd>c</kbd> <span>Copy ID</span></div>
         <div class="shortcut-row"><kbd>u</kbd> <span>Copy URL</span></div>
         <div class="shortcut-row"><kbd>⌘</kbd><kbd>P</kbd> <span>Print</span></div>

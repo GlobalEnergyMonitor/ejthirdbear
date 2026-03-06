@@ -46,23 +46,28 @@
       <span class="selection-count">{state.allMatchingIds.length.toLocaleString()} selected</span>
       {#if state.allMatchingNotInCart > 0}
         <button class="cart-btn add" onclick={state.addAllMatchingToCart}
-          >Add all to investigation</button
+          >Add all to report</button
         >
       {/if}
       {#if state.allMatchingInCart > 0}
         <button class="cart-btn remove" onclick={state.removeAllMatchingFromCart}>
-          Remove {state.allMatchingInCart.toLocaleString()} from investigation
+          Remove {state.allMatchingInCart.toLocaleString()} from report
         </button>
       {/if}
       <button class="cart-btn text" onclick={state.clearAllMatchingSelection}>Cancel</button>
     {:else if state.selectedRows.length > 0}
       <span class="selection-count">{state.selectedRows.length} selected</span>
+      {#if state.allPageSelected && state.totalCount > state.results.length}
+        <button class="cart-btn secondary" onclick={state.selectAllMatching}>
+          Select all {state.totalCount.toLocaleString()} matching
+        </button>
+      {/if}
       {#if state.selectedNotInCart > 0}
-        <button class="cart-btn add" onclick={state.addSelectedToCart}>Add to investigation</button>
+        <button class="cart-btn add" onclick={state.addSelectedToCart}>Add to report</button>
       {/if}
       {#if state.selectedInCart > 0}
         <button class="cart-btn remove" onclick={state.removeSelectedFromCart}
-          >Remove from investigation</button
+          >Remove from report</button
         >
       {/if}
     {:else if state.results.length > 0 && !state.loading}
@@ -76,7 +81,7 @@
       </button>
       {#if state.pageInCart > 0}
         <button class="cart-btn text remove" onclick={state.removePageFromCart}>
-          Remove {state.pageInCart} in investigation
+          Remove {state.pageInCart} from report
         </button>
       {/if}
     {/if}
@@ -143,6 +148,7 @@
     gap: var(--space-2);
     align-items: center;
     flex-wrap: wrap;
+    min-height: 32px;
   }
 
   .selection-count {

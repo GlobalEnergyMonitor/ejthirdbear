@@ -35,7 +35,7 @@ const SAMPLE_ASSETS = [
 // csr: true means page is client-side rendered (check for SvelteKit shell, not specific content)
 const ROUTES = [
   { paths: ['/index.html', '/'], name: 'Home', expect: 'GEM' },
-  { paths: ['/asset.html', '/asset/index.html'], name: 'All Assets', expect: 'assets' },
+  { paths: ['/compose.html', '/compose/index.html'], name: 'Asset Filter', expect: 'Asset Filter' },
   { paths: ['/asset/search.html', '/asset/search/index.html'], name: 'Asset Search', csr: true },
   // Check all sample assets
   ...SAMPLE_ASSETS.map((a) => ({

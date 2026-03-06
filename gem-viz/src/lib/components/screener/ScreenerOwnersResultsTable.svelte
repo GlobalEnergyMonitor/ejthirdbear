@@ -50,7 +50,7 @@
               class="select-btn"
               class:selected={inInvestigation}
               onclick={() => onToggleInvestigation(owner)}
-              title={inInvestigation ? 'Remove from investigation' : 'Add to investigation'}
+              title={inInvestigation ? 'Remove from report' : 'Add to report'}
             >
               {inInvestigation ? '✓' : '+'}
             </button>

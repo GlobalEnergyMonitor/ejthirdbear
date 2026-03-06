@@ -24,22 +24,6 @@
     {/each}
   </div>
 {:else if state.results.length > 0}
-  {#if state.allPageSelected && !state.allMatchingSelected && state.totalCount > state.results.length}
-    <div class="select-all-banner">
-      All {state.results.length} assets on this page selected.
-      <button onclick={state.selectAllMatching}>
-        Select all {state.totalCount.toLocaleString()} that match your filters?
-      </button>
-    </div>
-  {/if}
-  {#if state.allMatchingSelected}
-    <div class="select-all-banner selected">
-      <strong>{state.allMatchingIds.length.toLocaleString()} assets</strong> matching your filters
-      are selected.
-      <button onclick={state.clearAllMatchingSelection}>Clear</button>
-    </div>
-  {/if}
-
   <DataTable
     columns={state.tableColumns}
     data={state.tableRows}
@@ -116,39 +100,6 @@
 {/if}
 
 <style>
-  .select-all-banner {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-2);
-    padding: var(--space-2) var(--space-3);
-    background: var(--color-warning-bg);
-    border: var(--border-width) solid var(--color-warning);
-    font-size: var(--font-size-sm);
-    color: var(--color-warning-text);
-  }
-
-  .select-all-banner.selected {
-    background: var(--color-info-bg);
-    border-color: var(--color-info);
-    color: var(--color-info-text);
-  }
-
-  .select-all-banner button {
-    background: none;
-    border: none;
-    color: var(--color-link);
-    font-size: var(--font-size-sm);
-    font-weight: 500;
-    cursor: pointer;
-    text-decoration: underline;
-    padding: 0;
-  }
-
-  .select-all-banner button:hover {
-    color: var(--color-link-hover);
-  }
-
   .pagination {
     display: flex;
     justify-content: space-between;

@@ -1,7 +1,5 @@
-// Directory URLs - generates /network/index.html
-// DO Spaces requires explicit /index.html in URLs
+// Trailing slash generates /path/index.html — works on both Fly.io and static hosts (DO Spaces)
 export const trailingSlash = 'always';
 
-// SSR mode - pages render dynamically on the server
-// Set to true for static builds (DO Spaces)
+// Dynamic SSR by default; individual routes can opt into prerender = true
 export const prerender = false;

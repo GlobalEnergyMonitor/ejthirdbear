@@ -146,19 +146,19 @@
   <PageHeader
     breadcrumbs={[{ label: 'GEM Viz', href: link('index') }, { label: 'Downloads' }]}
     title="Downloads"
-    lead="Export GEM data as CSV, GeoJSON, or JSON. Download full tracker datasets or export your investigation cart."
+    lead="Export GEM data as CSV, GeoJSON, or JSON. Download full tracker datasets or export your report."
   />
 
   <!-- Section A: Investigation Cart -->
   <section class="section">
-    <h2><Package size={18} /> Investigation Cart</h2>
+    <h2><Package size={18} /> Report</h2>
     {#if cartCount > 0}
       <p class="section-desc">
-        {cartCount} item{cartCount !== 1 ? 's' : ''} in cart ({assetIds.length} asset{assetIds.length !==
+        {cartCount} item{cartCount !== 1 ? 's' : ''} in report ({assetIds.length} asset{assetIds.length !==
         1
           ? 's'
           : ''}, {entityIds.length} entit{entityIds.length !== 1 ? 'ies' : 'y'}).
-        <a href={link('report')}>Manage cart</a>
+        <a href={link('report')}>Manage report</a>
       </p>
       <div class="btn-row">
         <button
@@ -193,7 +193,7 @@
       {/if}
     {:else}
       <p class="section-desc empty">
-        Your investigation cart is empty. Add assets or entities from
+        Your report is empty. Add assets or entities from
         <a href={link('compose')}>Compose</a> or <a href={link('screener')}>Screener</a>, then
         return here to export.
       </p>

@@ -160,6 +160,7 @@ function normalizeAssetRaw(raw: Record<string, unknown>): AssetSummary {
     capacity: num(['capacity_value', 'Capacity', 'Capacity (MW)', 'capacity']),
     capacityUnit: str(['capacity_unit', 'Capacity Unit']),
     country: str(['country', 'Country Area', 'Country']),
+    stateProvince: str(['state_province', 'Subnational unit (province, state)', 'State']),
     latitude: num(['latitude', 'Latitude', 'lat']),
     longitude: num(['longitude', 'Longitude', 'lon']),
     ownerName: owners?.[0]?.name || str(['owner', 'Owner']),
@@ -285,6 +286,9 @@ export function hasClientSideFilters(filters: FilterState): boolean {
   // Owner country always needs client-side
   if (filters.ownerCountries?.length || filters.ownerCountriesAnd?.length) return true;
 
+  // State/province needs client-side
+  if (filters.stateProvinces?.length || filters.stateProvincesAnd?.length) return true;
+
   // Numeric range filters need client-side
   if (filters.capacityMin != null || filters.capacityMax != null) return true;
   if (filters.shareMin != null || filters.shareMax != null) return true;
@@ -341,6 +345,7 @@ export interface ComposeRow {
   tracker: string;
   status: string;
   country: string;
+  state_province: string;
   capacity_mw: number | null;
   owner: string;
   owner_id: string;
@@ -373,6 +378,7 @@ function assetToComposeRow(asset: AssetSummary): ComposeRow {
     tracker: asset.facilityType || '',
     status: asset.status || '',
     country: asset.country || '',
+    state_province: (asset as any).stateProvince || '',
     capacity_mw: asset.capacity ?? null,
     owner: firstOwner?.name || asset.ownerName || '',
     owner_id: firstOwner?.entityId || asset.ownerEntityId || '',
@@ -455,6 +461,13 @@ export function clientSideFilter(assets: AssetSummary[], filters: FilterState): 
       }
     }
 
+    // State/province filter
+    const allStateProvinces = [...(filters.stateProvinces || []), ...(filters.stateProvincesAnd || [])];
+    if (allStateProvinces.length) {
+      const sp = (asset as any).stateProvince || '';
+      if (!allStateProvinces.includes(sp)) return false;
+    }
+
     // Owner filter (OR)
     if (filters.owners?.length) {
       const ownerNames = (asset.owners || []).map((o) => o.name);
@@ -533,6 +546,10 @@ function filtersExcluding(filters: FilterState, exclude: string): FilterState {
       copy.countries = [];
       copy.countriesAnd = [];
       break;
+    case 'stateProvinces':
+      copy.stateProvinces = [];
+      copy.stateProvincesAnd = [];
+      break;
     case 'ownerCountries':
       copy.ownerCountries = [];
       copy.ownerCountriesAnd = [];
@@ -565,6 +582,19 @@ export function deriveOwnerFacets(assets: AssetSummary[]): FacetOption[] {
     } else if (asset.ownerName) {
       counts.set(asset.ownerName, (counts.get(asset.ownerName) || 0) + 1);
     }
+  }
+  return Array.from(counts.entries())
+    .map(([value, count]) => ({ value, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 1000);
+}
+
+/** Derive state/province facet options from cached assets */
+export function deriveStateProvinceFacets(assets: AssetSummary[]): FacetOption[] {
+  const counts = new Map<string, number>();
+  for (const asset of assets) {
+    const sp = (asset as any).stateProvince;
+    if (sp) counts.set(sp, (counts.get(sp) || 0) + 1);
   }
   return Array.from(counts.entries())
     .map(([value, count]) => ({ value, count }))
@@ -632,6 +662,7 @@ export function deriveAllParametricFacets(
   trackers: FacetOption[];
   statuses: FacetOption[];
   countries: FacetOption[];
+  stateProvinces: FacetOption[];
   owners: FacetOption[];
   ownerCountries: FacetOption[];
 } {
@@ -639,6 +670,10 @@ export function deriveAllParametricFacets(
   const trackersFiltered = clientSideFilter(cachedAssets, filtersExcluding(filters, 'trackers'));
   const statusesFiltered = clientSideFilter(cachedAssets, filtersExcluding(filters, 'statuses'));
   const countriesFiltered = clientSideFilter(cachedAssets, filtersExcluding(filters, 'countries'));
+  const stateProvincesFiltered = clientSideFilter(
+    cachedAssets,
+    filtersExcluding(filters, 'stateProvinces')
+  );
   const ownersFiltered = clientSideFilter(cachedAssets, filtersExcluding(filters, 'owners'));
   const ownerCountriesFiltered = clientSideFilter(
     cachedAssets,
@@ -649,6 +684,7 @@ export function deriveAllParametricFacets(
     trackers: deriveTrackerFacets(trackersFiltered),
     statuses: deriveStatusFacets(statusesFiltered),
     countries: deriveCountryFacets(countriesFiltered),
+    stateProvinces: deriveStateProvinceFacets(stateProvincesFiltered),
     owners: deriveOwnerFacets(ownersFiltered),
     ownerCountries: deriveOwnerCountryFacets(ownerCountriesFiltered),
   };

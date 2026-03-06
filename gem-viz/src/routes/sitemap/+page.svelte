@@ -15,12 +15,12 @@
       ],
     },
     {
-      title: 'Investigation Tools',
+      title: 'Report Tools',
       routes: [
         {
           path: '/screener',
           name: 'Screener',
-          description: 'Asset-class screener for building investigations',
+          description: 'Asset-class screener for building reports',
         },
         {
           path: '/screener/results',
@@ -35,8 +35,8 @@
         { path: '/screener/visualize', name: 'Visualize', description: 'Visualization tools' },
         {
           path: '/report',
-          name: 'Investigation Report',
-          description: 'Generate reports from your cart',
+          name: 'Report',
+          description: 'Build a report from selected assets and entities',
         },
         { path: '/compose', name: 'Compose', description: 'Build custom queries' },
       ],
@@ -44,8 +44,7 @@
     {
       title: 'Asset & Entity Pages',
       routes: [
-        { path: '/asset', name: 'Assets', description: 'Browse all assets' },
-        { path: '/asset/search', name: 'Asset Search', description: 'Search assets' },
+        { path: '/compose', name: 'Asset Filter', description: 'Filter and explore assets' },
         {
           path: '/asset/[id]',
           name: 'Asset Detail',

@@ -255,15 +255,15 @@
       { label: 'Explore', href: link('explore') },
       { label: 'Report' },
     ]}
-    title="Investigation Report"
+    title="Report"
   >
     <time class="report-date">{reportDate}</time>
   </PageHeader>
 
   {#if isEmpty}
     <section class="empty-state">
-      <h2>No Items in Cart</h2>
-      <p>Add assets or entities to your investigation cart to generate a report.</p>
+      <h2>No Items in Report</h2>
+      <p>Add assets or entities from Compose or Screener to build a report.</p>
       <a href={link('explore')} class="btn">Go to Explore</a>
     </section>
   {:else if loading}

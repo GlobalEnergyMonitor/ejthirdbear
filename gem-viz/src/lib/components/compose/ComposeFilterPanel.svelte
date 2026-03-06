@@ -1,6 +1,7 @@
 <script>
   import FacetedFilter from '$lib/components/table/FacetedFilter.svelte';
   import RangeSlider from '$lib/components/table/RangeSlider.svelte';
+  import { trackerColors } from '$lib/design-tokens';
 
   let { state = $bindable(), presetsHref = '/presets' } = $props();
 </script>
@@ -30,6 +31,7 @@
       label="Tracker Type"
       initialVisible={10}
       loading={state.loadingCounts}
+      colorMap={trackerColors}
     />
 
     <FacetedFilter
@@ -46,6 +48,16 @@
       bind:selected={state.filters.countries}
       bind:selectedAnd={state.filters.countriesAnd}
       label="Asset Country"
+      initialVisible={5}
+      searchThreshold={10}
+      loading={state.loadingCounts}
+    />
+
+    <FacetedFilter
+      options={state.stateProvinces}
+      bind:selected={state.filters.stateProvinces}
+      bind:selectedAnd={state.filters.stateProvincesAnd}
+      label="State / Province"
       initialVisible={5}
       searchThreshold={10}
       loading={state.loadingCounts}
@@ -95,94 +107,25 @@
       />
     {/if}
 
+    {#if state.availableColumns.hasShare}
+      <RangeSlider
+        label="Ownership Share"
+        bind:min={state.filters.shareMin}
+        bind:max={state.filters.shareMax}
+        dataMin={0}
+        dataMax={100}
+        step={1}
+        unit="%"
+      />
+    {/if}
+
     <section class="filter-section">
       <h3>Text Search</h3>
       <input type="text" placeholder="Project or Owner name..." bind:value={state.filters.search} />
     </section>
   {/if}
 
-  <div class="share-section">
-    <button class="share-btn" onclick={state.copyShareUrl}>
-      {state.copied ? 'Copied!' : 'Copy Share Link'}
-    </button>
-    <button class="preset-btn" onclick={() => (state.showPresets = !state.showPresets)}>
-      {state.showPresets ? 'Hide Presets' : 'Presets'}
-    </button>
-    {#if state.hasFilters}
-      <button
-        class="save-class-btn"
-        onclick={() => (state.showSaveAssetClass = !state.showSaveAssetClass)}
-      >
-        Save as Asset Class
-      </button>
-    {/if}
-  </div>
-
-  {#if state.showSaveAssetClass}
-    <div class="save-class-panel">
-      {#if state.assetClassSaved}
-        <p class="save-success">Saved!</p>
-      {:else}
-        <input
-          type="text"
-          placeholder="Class name (e.g., South Asian Coal)"
-          bind:value={state.newClassName}
-        />
-        <input
-          type="text"
-          placeholder="Description (optional)"
-          bind:value={state.newClassDescription}
-        />
-        <button onclick={state.handleSaveAssetClass} disabled={!state.newClassName.trim()}>
-          Save Asset Class
-        </button>
-      {/if}
-    </div>
-  {/if}
-
-  {#if state.showPresets}
-    <div class="presets-panel">
-      <h4>Saved Presets</h4>
-      {#if state.presets.length === 0}
-        <p class="no-presets">No saved presets</p>
-      {:else}
-        <ul class="preset-list">
-          {#each state.presets as preset}
-            <li>
-              <button class="preset-name" onclick={() => state.handleLoadPreset(preset)}>
-                {preset.name}
-              </button>
-              <button class="preset-export" onclick={() => state.downloadPresetFile(preset)}
-                >Export</button
-              >
-              <button class="preset-delete" onclick={() => state.handleDeletePreset(preset.id)}
-                >×</button
-              >
-            </li>
-          {/each}
-        </ul>
-      {/if}
-      <div class="save-preset">
-        <input
-          type="text"
-          placeholder="Preset name..."
-          bind:value={state.newPresetName}
-          onkeydown={(e) => e.key === 'Enter' && state.handleSavePreset()}
-        />
-        <button onclick={state.handleSavePreset}>Save</button>
-      </div>
-      <div class="preset-io">
-        <label class="import-btn">
-          Import JSON
-          <input type="file" accept="application/json" onchange={state.handleImportPreset} />
-        </label>
-        <a class="preset-link" href={presetsHref}>View featured presets</a>
-      </div>
-      {#if state.importError}
-        <p class="import-error">{state.importError}</p>
-      {/if}
-    </div>
-  {/if}
+  <!-- TODO: re-enable share/presets/asset-class UI once ready -->
 </aside>
 
 <style>
@@ -268,204 +211,6 @@
     padding: var(--space-1);
     font-size: var(--font-size-sm);
     border: var(--border-width) solid var(--color-border);
-  }
-
-  .share-section {
-    display: flex;
-    gap: var(--space-1);
-    margin-top: var(--space-2);
-  }
-
-  .share-btn,
-  .preset-btn {
-    flex: 1;
-    padding: var(--space-1);
-    font-size: var(--font-size-base);
-    background: transparent;
-    border: var(--border-width) solid transparent;
-    cursor: pointer;
-  }
-
-  .share-btn:hover,
-  .preset-btn:hover {
-    text-decoration: underline;
-  }
-
-  .save-class-btn {
-    flex: 1;
-    padding: var(--space-1);
-    font-size: var(--font-size-base);
-    background: var(--color-black);
-    color: var(--color-white);
-    border: none;
-    cursor: pointer;
-  }
-
-  .save-class-btn:hover {
-    opacity: 0.85;
-  }
-
-  .save-class-panel {
-    margin-top: var(--space-2);
-    padding: var(--space-3);
-    background: var(--color-gray-50);
-    border: var(--border-width) solid var(--color-border);
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-  }
-
-  .save-class-panel input {
-    padding: var(--space-2);
-    font-size: var(--font-size-body);
-    border: var(--border-width) solid var(--color-border);
-  }
-
-  .save-class-panel button {
-    padding: var(--space-2) var(--space-3);
-    font-size: var(--font-size-sm);
-    background: var(--color-black);
-    color: var(--color-white);
-    border: none;
-    cursor: pointer;
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-wide);
-  }
-
-  .save-class-panel button:disabled {
-    background: var(--color-gray-300);
-    cursor: not-allowed;
-  }
-
-  .save-success {
-    font-size: var(--font-size-body);
-    color: var(--color-success);
-    margin: 0;
-  }
-
-  .presets-panel {
-    margin-top: var(--space-2);
-    padding: var(--space-2);
-  }
-
-  .presets-panel h4 {
-    margin: 0 0 var(--space-2) 0;
-    font-size: var(--font-size-base);
-    font-weight: 600;
-    text-transform: uppercase;
-  }
-
-  .no-presets {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
-    margin: 0;
-  }
-
-  .preset-list {
-    list-style: none;
-    margin: 0 0 var(--space-3) 0;
-    padding: 0;
-  }
-
-  .preset-list li {
-    display: flex;
-    align-items: center;
-    gap: var(--space-1);
-    padding: var(--space-1) 0;
-  }
-
-  .preset-name {
-    background: none;
-    border: none;
-    font-size: var(--font-size-sm);
-    cursor: pointer;
-    text-align: left;
-    flex: 1;
-    text-decoration: underline;
-    text-decoration-color: transparent;
-  }
-
-  .preset-name:hover {
-    text-decoration-color: currentColor;
-  }
-
-  .preset-export {
-    font-size: var(--font-size-base);
-    padding: 3px 5px;
-    border: var(--border-width) solid transparent;
-    background: transparent;
-    cursor: pointer;
-  }
-
-  .preset-export:hover {
-    text-decoration: underline;
-  }
-
-  .preset-delete {
-    background: none;
-    border: none;
-    font-size: var(--font-size-lg);
-    color: var(--color-text-tertiary);
-    cursor: pointer;
-  }
-
-  .preset-delete:hover {
-    color: var(--color-error);
-  }
-
-  .save-preset {
-    display: flex;
-    gap: var(--space-1);
-  }
-
-  .save-preset input {
-    flex: 1;
-    padding: 5px;
-    font-size: var(--font-size-base);
-    border: var(--border-width) solid var(--color-border);
-  }
-
-  .save-preset button {
-    padding: 5px var(--space-2);
-    font-size: var(--font-size-base);
-    background: var(--color-black);
-    color: var(--color-white);
-    border: none;
-    cursor: pointer;
-  }
-
-  .preset-io {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    margin-top: var(--space-2);
-  }
-
-  .import-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-1);
-    font-size: var(--font-size-base);
-    border: var(--border-width) solid transparent;
-    padding: 5px var(--space-2);
-    cursor: pointer;
-    background: transparent;
-  }
-
-  .import-btn input {
-    display: none;
-  }
-
-  .preset-link {
-    font-size: var(--font-size-base);
-    color: var(--color-text-primary);
-    text-decoration: underline;
-  }
-
-  .import-error {
-    margin-top: var(--space-1);
-    color: var(--color-error);
-    font-size: var(--font-size-sm);
   }
 
   @media (max-width: 768px) {

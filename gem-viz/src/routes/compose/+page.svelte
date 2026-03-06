@@ -37,7 +37,7 @@
 </svelte:head>
 
 <div class="page">
-  <header>
+  <header class:hidden={!state.hasFilters && state.initialLoadComplete}>
     <span class="page-type">Tool</span>
   </header>
 
@@ -46,33 +46,41 @@
 
     <!-- Main: Results -->
     <section class="results-panel">
-      <ComposeResultsHeader {state} />
+      <!-- Empty state overlays the results area when no filters active -->
+      <div class="empty-state" class:visible={!state.hasFilters && state.initialLoadComplete}>
+        <p class="empty-hint">Select filters to explore {state.totalCount?.toLocaleString() || '45,000+'} assets</p>
+      </div>
 
-      {#if state.hasFilters}
-        <FilterBreadcrumbs filters={state.filters} onRemove={state.removeFilter} />
-      {/if}
+      <!-- Always rendered, fades in/out -->
+      <div class="results-content" class:active={state.hasFilters || !state.initialLoadComplete}>
+        <ComposeResultsHeader {state} />
 
-      {#if state.error}
-        <div class="error-message">{state.error}</div>
-      {/if}
+        <div class="breadcrumbs-slot" class:has-crumbs={state.hasFilters}>
+          <FilterBreadcrumbs filters={state.filters} onRemove={state.removeFilter} />
+        </div>
 
-      <ComposeVizDashboard
-        loading={state.loading}
-        initialLoadComplete={state.initialLoadComplete}
-        resultsLength={state.results.length}
-        statusDistribution={state.statusDistribution}
-        trackerDistribution={state.trackerDistribution}
-        countryDistribution={state.countryDistribution}
-        capacityData={state.capacityData}
-        startYearData={state.startYearData}
-        statusColors={state.statusColors}
-        baseStatusDistribution={state.baseStatusDistribution}
-        baseTrackerDistribution={state.baseTrackerDistribution}
-        baseCountryDistribution={state.baseCountryDistribution}
-        hasFilters={state.hasFilters}
-      />
+        {#if state.error}
+          <div class="error-message">{state.error}</div>
+        {/if}
 
-      <ComposeTableState {state} />
+        <ComposeVizDashboard
+          loading={state.loading}
+          initialLoadComplete={state.initialLoadComplete}
+          resultsLength={state.results.length}
+          statusDistribution={state.statusDistribution}
+          trackerDistribution={state.trackerDistribution}
+          countryDistribution={state.countryDistribution}
+          capacityData={state.capacityData}
+          startYearData={state.startYearData}
+          statusColors={state.statusColors}
+          baseStatusDistribution={state.baseStatusDistribution}
+          baseTrackerDistribution={state.baseTrackerDistribution}
+          baseCountryDistribution={state.baseCountryDistribution}
+          hasFilters={state.hasFilters}
+        />
+
+        <ComposeTableState {state} />
+      </div>
     </section>
   </div>
 
@@ -103,6 +111,15 @@
     position: sticky;
     top: 0;
     z-index: 100;
+    transition: opacity 0.2s ease;
+  }
+
+  header.hidden {
+    opacity: 0;
+    visibility: hidden;
+    height: 0;
+    padding: 0;
+    overflow: hidden;
   }
 
   .page-type {
@@ -126,20 +143,80 @@
     }
   }
 
-  /* Results Panel */
+  /* Results Panel - flows naturally, page scrollbar handles overflow */
   .results-panel {
     min-width: 0;
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: var(--space-1);
     padding: var(--space-2) var(--space-2);
-    overflow-y: auto;
-    height: calc(100vh - 45px);
+    min-height: calc(100vh - 45px);
   }
 
   .error-message {
     padding: var(--space-2);
     color: var(--color-error);
     font-size: var(--font-size-sm);
+  }
+
+  /* Results content - always in DOM, fades in/out */
+  .results-content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.25s ease, visibility 0.25s ease;
+  }
+
+  .results-content.active {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  /* Breadcrumbs slot - reserves consistent space */
+  .breadcrumbs-slot {
+    min-height: 0;
+    overflow: hidden;
+    transition: min-height 0.2s ease, opacity 0.2s ease;
+    opacity: 0;
+  }
+
+  .breadcrumbs-slot.has-crumbs {
+    min-height: 28px;
+    opacity: 1;
+  }
+
+  /* Empty / welcome state - overlays the results area */
+  .empty-state {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+    pointer-events: none;
+  }
+
+  .empty-state.visible {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+
+  .empty-state::before {
+    display: none;
+  }
+
+  .empty-hint {
+    margin: 0;
+    font-size: 18px;
+    color: var(--color-text-tertiary);
+    letter-spacing: 0.01em;
+    line-height: 1.6;
   }
 </style>

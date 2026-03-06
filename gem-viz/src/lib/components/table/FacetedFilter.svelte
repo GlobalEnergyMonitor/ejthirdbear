@@ -25,6 +25,7 @@
    *   initialVisible?: number,
    *   searchThreshold?: number,
    *   loading?: boolean,
+   *   colorMap?: Record<string, string>,
    * }}
    */
   let {
@@ -35,6 +36,7 @@
     initialVisible = 5,
     searchThreshold = 10,
     loading = false,
+    colorMap = {},
   } = $props();
 
   // Internal state
@@ -148,10 +150,11 @@
     {#each optionsWithResults as option (option.value)}
       {@const isSelected = selectedSet.has(option.value)}
       {@const proportion = ((option.count || 0) / maxCount) * 100}
+      {@const optColor = colorMap[option.value] || ''}
       <label
         class="facet-option"
         class:selected={isSelected}
-        style="--bar-width: {proportion}%"
+        style="--bar-width: {proportion}%{optColor ? `; --facet-accent: ${optColor}` : ''}"
         animate:flip={{ duration: 200, easing: (t) => t * (2 - t) }}
         in:fade={{ duration: 150 }}
       >
@@ -162,6 +165,9 @@
           tabindex="-1"
           onchange={() => toggle(option.value)}
         />
+        {#if optColor}
+          <span class="facet-color-dot" style="background: {optColor}"></span>
+        {/if}
         <span class="facet-option-label">{option.value}</span>
         {#if option.count !== undefined}
           <span class="facet-count">({formatCompact(option.count)})</span>
@@ -330,7 +336,11 @@
   }
 
   .facet-option.selected .facet-bar {
-    background: linear-gradient(90deg, rgba(254, 79, 45, 0.25) 0%, rgba(254, 79, 45, 0.08) 100%);
+    background: linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--facet-accent, #fe4f2d) 25%, transparent) 0%,
+      color-mix(in srgb, var(--facet-accent, #fe4f2d) 8%, transparent) 100%
+    );
   }
 
   .facet-option:hover {
@@ -343,7 +353,7 @@
 
   .facet-option.selected {
     font-weight: 700;
-    border-left: 3px solid var(--gem-orange, #fe4f2d);
+    border-left: 3px solid var(--facet-accent, var(--gem-orange, #fe4f2d));
     padding-left: 7px;
   }
 
@@ -367,6 +377,14 @@
     background: var(--color-gray-50);
   }
 
+  .facet-color-dot {
+    width: 8px;
+    height: 8px;
+    min-width: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
   .facet-option input[type='checkbox'] {
     position: relative;
     width: 14px;
@@ -374,7 +392,7 @@
     min-width: 14px;
     margin: 0;
     pointer-events: auto;
-    accent-color: var(--gem-orange, #fe4f2d);
+    accent-color: var(--facet-accent, var(--gem-orange, #fe4f2d));
     border: 1px solid var(--color-text-tertiary);
     border-radius: 2px;
     appearance: auto;

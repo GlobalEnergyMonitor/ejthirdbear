@@ -39,7 +39,7 @@
   </div>
   <div class="terminal-body">
     <div class="terminal-meta">
-      <span>Investigating {cartCount} items</span>
+      <span>Building report for {cartCount} items</span>
       <span>{entityCount} entities · {assetCount} assets</span>
     </div>
     <ul class="query-steps">
