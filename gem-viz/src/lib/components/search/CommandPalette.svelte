@@ -15,6 +15,18 @@
   import { listAssets, listEntities } from '$lib/ownership-api';
   import { commandPaletteOpen } from '$lib/stores/commandPalette';
   import { createCommands, shortcutMap } from './command-palette-commands';
+  import { loadRecentSearches, addRecentSearch } from './command-palette-recents';
+  import {
+    isInputFocused,
+    getCurrentPageInfo,
+    scrollToSection,
+    scrollToElement,
+    jumpToSection,
+    toggleAllDetails,
+    findRelatedAsset,
+    focusLocalSearch,
+    clickFirstOwnerLink,
+  } from './command-palette-navigation';
 
   /**
    * @type {{
@@ -166,45 +178,9 @@
   }
 
   function navigateTo(type, id, name) {
-    addToRecent({ type, id, label: name || id });
+    recentSearches = addRecentSearch({ type, id, label: name || id }, recentSearches);
     goto(type === 'asset' ? assetLink(id) : entityLink(id));
     close();
-  }
-
-  // Add to recent searches
-  function addToRecent(item) {
-    // Only add valid items with labels
-    if (!item || !item.label || !item.label.trim() || !item.id) return;
-
-    const filtered = recentSearches.filter((r) => r.id !== item.id);
-    recentSearches = [item, ...filtered].slice(0, 10);
-    saveRecent();
-  }
-
-  // Persist recent searches
-  function saveRecent() {
-    try {
-      localStorage.setItem('gem-recent-searches', JSON.stringify(recentSearches));
-    } catch {
-      /* localStorage may be unavailable */
-    }
-  }
-
-  function loadRecent() {
-    try {
-      const stored = localStorage.getItem('gem-recent-searches');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        // Filter out invalid entries (blank labels, missing data)
-        recentSearches = parsed.filter((r) => r && r.label && r.label.trim() && r.id);
-        // If we filtered out items, save the cleaned list
-        if (recentSearches.length !== parsed.length) {
-          saveRecent();
-        }
-      }
-    } catch {
-      /* localStorage may be unavailable */
-    }
   }
 
   // Execute selected action (with bounds checking)
@@ -296,20 +272,20 @@
           window.scrollTo({ top: 0, behavior: 'smooth' });
           showToast('Top');
         },
-        s: () => scrollToElement('.summary, .portfolio-summary, h2'),
-        e: toggleAllDetails,
+        s: () => scrollToElementOrToast('.summary, .portfolio-summary, h2'),
+        e: toggleAllDetailsWithToast,
         n: () => navigateRelated('next'),
         p: () => navigateRelated('prev'),
-        f: focusLocalSearch,
-        '1': () => jumpToSection(1),
-        '2': () => jumpToSection(2),
-        '3': () => jumpToSection(3),
-        '4': () => jumpToSection(4),
-        '5': () => jumpToSection(5),
-        '6': () => jumpToSection(6),
-        '7': () => jumpToSection(7),
-        '8': () => jumpToSection(8),
-        '9': () => jumpToSection(9),
+        f: focusLocalSearchOrOpen,
+        '1': () => jumpToSectionWithToast(1),
+        '2': () => jumpToSectionWithToast(2),
+        '3': () => jumpToSectionWithToast(3),
+        '4': () => jumpToSectionWithToast(4),
+        '5': () => jumpToSectionWithToast(5),
+        '6': () => jumpToSectionWithToast(6),
+        '7': () => jumpToSectionWithToast(7),
+        '8': () => jumpToSectionWithToast(8),
+        '9': () => jumpToSectionWithToast(9),
       };
       if (e.key === 'Escape') {
         if (showHelp) showHelp = false;
@@ -324,40 +300,16 @@
     }
   }
 
-  // Navigate to first owner on asset page
   function openFirstOwner() {
-    const ownerLink = /** @type {HTMLElement | null} */ (
-      document.querySelector('.owner-link, .entity-link')
-    );
-    if (ownerLink) {
-      ownerLink.click();
-    } else {
-      showToast('No owner link found');
-    }
+    if (!clickFirstOwnerLink()) showToast('No owner link found');
   }
 
-  // Get current page info from URL
-  function getCurrentPageInfo() {
-    const path = $page.url.pathname;
-    const assetMatch = path.match(/\/asset\/([^/]+)/);
-    const entityMatch = path.match(/\/entity\/([^/]+)/);
-
-    if (assetMatch) {
-      return { type: 'asset', id: assetMatch[1] };
-    } else if (entityMatch) {
-      return { type: 'entity', id: entityMatch[1] };
-    }
-    return null;
-  }
-
-  // Copy current page ID to clipboard
   async function copyCurrentId() {
-    const info = getCurrentPageInfo();
+    const info = getCurrentPageInfo($page.url.pathname);
     if (!info) {
       showToast('Not on an asset or entity page');
       return;
     }
-
     try {
       await navigator.clipboard.writeText(info.id);
       showToast(`Copied: ${info.id}`);
@@ -367,7 +319,6 @@
     close();
   }
 
-  // Copy current URL to clipboard
   async function copyUrl() {
     try {
       await navigator.clipboard.writeText(window.location.href);
@@ -392,127 +343,29 @@
     }, 2000);
   }
 
-  // Scroll to section by index
-  function scrollToSection(direction) {
-    const sections = document.querySelectorAll('section, .viz-section, .breakdown-section, h2, h3');
-    if (sections.length === 0) return;
-
-    let targetSection = null;
-
-    if (direction === 'next') {
-      for (const section of sections) {
-        const rect = section.getBoundingClientRect();
-        if (rect.top > 100) {
-          targetSection = section;
-          break;
-        }
-      }
-    } else {
-      const sectionsArray = Array.from(sections).reverse();
-      for (const section of sectionsArray) {
-        const rect = section.getBoundingClientRect();
-        if (rect.top < -10) {
-          targetSection = section;
-          break;
-        }
-      }
-    }
-
-    if (targetSection) {
-      targetSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+  function scrollToElementOrToast(selector) {
+    if (!scrollToElement(selector)) showToast('Section not found');
   }
 
-  // Scroll to an element by selector
-  function scrollToElement(selector) {
-    const el = document.querySelector(selector);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    } else {
-      showToast('Section not found');
-    }
+  function jumpToSectionWithToast(n) {
+    showToast(jumpToSection(n));
   }
 
-  // Jump to nth section (1-9)
-  function jumpToSection(n) {
-    const sections = document.querySelectorAll('section, .viz-section, h2');
-    const target = sections[n - 1];
-    if (target) {
-      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      showToast(`Section ${n}`);
-    } else {
-      showToast(`No section ${n}`);
-    }
+  function toggleAllDetailsWithToast() {
+    showToast(toggleAllDetails());
   }
 
-  // Toggle all details/disclosure elements
-  function toggleAllDetails() {
-    const details = document.querySelectorAll('details');
-    if (details.length === 0) {
-      showToast('No expandable sections');
-      return;
-    }
-
-    // Check if most are open or closed
-    const openCount = Array.from(details).filter((d) => d.open).length;
-    const shouldOpen = openCount < details.length / 2;
-
-    details.forEach((d) => {
-      d.open = shouldOpen;
-    });
-    showToast(shouldOpen ? 'Expanded all' : 'Collapsed all');
-  }
-
-  // Navigate to related assets (next/prev in a list)
   function navigateRelated(direction) {
-    // Look for asset links in siblings or nearby lists
-    const assetLinks = document.querySelectorAll('a[href*="/asset/"]');
-    const currentPath = window.location.pathname;
-
-    // Find current position
-    const linksArray = Array.from(assetLinks);
-    const currentIndex = linksArray.findIndex((a) => a.getAttribute('href') === currentPath);
-
-    if (currentIndex === -1 && linksArray.length > 0) {
-      // We're on an asset page, try to find it in a list
-      // For now just go to first/last
-      if (direction === 'next' && linksArray[0]) {
-        goto(linksArray[0].getAttribute('href'));
-      } else {
-        showToast('No related assets found');
-      }
-      return;
-    }
-
-    const nextIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1;
-    if (nextIndex >= 0 && nextIndex < linksArray.length) {
-      goto(linksArray[nextIndex].getAttribute('href'));
+    const result = findRelatedAsset(direction, window.location.pathname);
+    if ('href' in result) {
+      goto(result.href);
     } else {
-      showToast(direction === 'next' ? 'Last asset' : 'First asset');
+      showToast(result.message);
     }
   }
 
-  // Focus local search input if present
-  function focusLocalSearch() {
-    const searchInput = /** @type {HTMLInputElement | null} */ (
-      document.querySelector(
-        '.filter-input, .search-input, input[type="search"], input[placeholder*="Search"], input[placeholder*="Filter"]'
-      )
-    );
-    if (searchInput) {
-      searchInput.focus();
-      searchInput.select();
-    } else {
-      // Fall back to opening command palette
-      openPalette();
-    }
-  }
-
-  function isInputFocused() {
-    const active = /** @type {HTMLElement | null} */ (document.activeElement);
-    return (
-      active?.tagName === 'INPUT' || active?.tagName === 'TEXTAREA' || active?.isContentEditable
-    );
+  function focusLocalSearchOrOpen() {
+    if (!focusLocalSearch()) openPalette();
   }
 
   function toggle() {
@@ -550,7 +403,7 @@
       copyUrl,
     });
 
-    loadRecent();
+    recentSearches = loadRecentSearches();
     window.addEventListener('keydown', handleGlobalKeydown);
     return () => {
       clearTimeout(searchTimeout);
