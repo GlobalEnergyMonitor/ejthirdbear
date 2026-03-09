@@ -19,6 +19,7 @@
     statusColors,
     statusColorLegend,
   } from '$lib/design-tokens';
+  import { cleanAssetName, wrapTextLines } from './screener-utils';
 
   // Props - can receive pre-fetched portfolio data or fetch its own
   let {
@@ -317,27 +318,8 @@
     `;
   }
 
-  // Wrap text into two lines
-  function wrapText(text, maxChars = 25) {
-    if (!text || text.length <= maxChars) return [text || ''];
-    const breakPos = text.lastIndexOf(' ', maxChars);
-    const pos = breakPos === -1 ? maxChars : breakPos;
-    const line1 = text.slice(0, pos).trim();
-    let line2 = text.slice(pos).trim();
-    if (line2.length > maxChars) {
-      line2 = line2.slice(0, maxChars).trim() + '...';
-    }
-    return [line1, line2].filter(Boolean);
-  }
-
-  // Clean asset name (remove suffixes)
-  function cleanAssetName(name) {
-    if (!name) return '';
-    return name.replace(
-      /\b(plant|station|project|center|centre|complex|facility)\b[\s\S]*$/i,
-      '$1'
-    );
-  }
+  // wrapText alias for template compatibility
+  const wrapText = wrapTextLines;
 
   // Hover state
   let hoverData = $state(null);

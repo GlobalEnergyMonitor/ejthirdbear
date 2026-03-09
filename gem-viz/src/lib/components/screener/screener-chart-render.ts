@@ -24,6 +24,7 @@ import type {
   BarDatum,
 } from './screener-chart-data';
 import { LAYOUT } from './screener-chart-data';
+import { cleanAssetName } from './screener-utils';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -741,12 +742,7 @@ function drawAssetGroups(
     .each(function (locData) {
       const el = select(this);
       const unit = locData.units[0];
-      let name = unit.name;
-      // Truncate after facility type keyword
-      name = name.replace(
-        /\b(plant|station|project|center|centre|complex|facility)\b[\s\S]*$/i,
-        '$1'
-      );
+      const name = cleanAssetName(unit.name);
 
       const type = unit.tracker.toLowerCase();
       let typeLabel = '';
