@@ -8,19 +8,27 @@
   import { spring } from 'svelte/motion';
   import { goto } from '$app/navigation';
   import { entityLink, assetLink } from '$lib/links';
-  import { colors } from '$lib/design-tokens';
   import { track } from '$lib/analytics';
   import { sum } from 'd3-array';
-  import { line, curveBasis } from 'd3-shape';
+  // d3-shape line/curveBasis now imported via ownership-tree-utils
   import type {
     GraphNode,
     GraphEdge,
     OwnershipPathEntry,
-    LayoutPoint,
     LayoutNode,
     LayoutEdge,
     DagreEdge,
   } from '$lib/component-data/graph-types';
+  import {
+    TREE_COLORS as C,
+    OWNERSHIP_ENTITY_COLORS,
+    classifyOwnerType,
+    wrapText,
+    pieArc,
+    edgePath,
+    getNodeColors,
+  } from './ownership-tree-utils';
+  import { buildNarrativeText } from './ownership-tree-narrative';
 
   interface Props {
     nodes?: GraphNode[];
@@ -45,41 +53,6 @@
     direction = 'auto',
     fullWidth = false,
   }: Props = $props();
-
-  // Design tokens — matched to Observable notebook
-  const C = {
-    navy: '#004A63',
-    teal: '#016B83',
-    mint: '#9DF7E5',
-    warmWhite: '#fafaf7',
-    nodeFill: '#BECCCF',
-    edge: '#74d2cc',              // Observable: known edge color
-    edgeImputed: '#d2d2cb',       // Observable: imputed/estimated edge color
-    midnight: '#002430',
-  };
-
-  // Entity type colors — matched to Observable's colorByOwnershipEntity
-  // bg = base fill, fg = dark pie arc fill (chroma.mix(color, midnight, 0.8) approximation)
-  // Observable uses exactly 4 ownership entity categories
-  // bg = base fill, fg = dark pie arc (chroma.mix(color, midnight, 0.8)),
-  // light = small ownership fill (chroma.mix(color, white, 0.5))
-  const OWNERSHIP_ENTITY_COLORS: Record<string, { bg: string; fg: string; light: string }> = {
-    'Government':            { bg: '#A0AAE5', fg: '#1a2351', light: '#d0d5f2' },  // colors.purple
-    'Publicly Listed Corp.': { bg: '#099ED8', fg: '#04304a', light: '#84cfec' },  // colors.blue
-    'Private Company':       { bg: '#65BD8B', fg: '#1a3828', light: '#b2dec5' },  // colors.green
-    'Other':                 { bg: '#BECCCF', fg: '#3a4a4f', light: '#dfe6e7' },  // colors.grey
-  };
-
-  // Observable's ownerType classification function
-  function classifyOwnerType(node: GraphNode): string {
-    const et = (node.entity_type || '').toLowerCase();
-    if (et === 'state' || et === 'state body') return 'Government';
-    if (node.publiclylisted) return 'Publicly Listed Corp.';
-    if (et === 'legal entity') return 'Private Company';
-    return 'Other';
-  }
-
-  // Observable uses fixed entity-type coloring (no toggle needed)
 
   let dagre: typeof import('dagre') | null = null;
   let ready = $state(false);
@@ -354,14 +327,6 @@
     return { legendItems };
   });
 
-  // Get paired colors for a node using Observable's 4-category classification
-  function getNodeColors(nodeId: string): { bg: string; fg: string; light: string } {
-    const orig = nodes.find((n) => n.id === nodeId);
-    if (!orig || orig.type === 'asset' || orig.id === rootId) return { bg: C.nodeFill, fg: C.teal, light: '#dfe6e7' };
-    const category = classifyOwnerType(orig);
-    return OWNERSHIP_ENTITY_COLORS[category] || OWNERSHIP_ENTITY_COLORS['Other'];
-  }
-
   // Owners for side panel — sorted by ownership pct desc (matching Observable)
   const ownersList = $derived.by(() => {
     const list = nodes
@@ -425,116 +390,17 @@
   const maxOwnerPct = $derived(ownersList.length > 0 ? ownersList[0].pct : 100);
 
   // Data-driven narrative text for the context panel
-  const narrativeText = $derived.by(() => {
-    const entityNodes = renderNodes.filter((n) => n.type !== 'asset' && n.id !== rootId);
-    const isDownstream = graphDirection === 'downstream';
-    const totalAccountedPct = Math.min(100, entityNodes.reduce((s, n) => {
-      // Only count direct first-hop relationships (not intermediaries) to avoid double-counting
-      const directEdge = isDownstream
-        ? renderEdges.find((e) => e.source === rootId && e.target === n.id)
-        : renderEdges.find((e) => e.source === n.id && e.target === rootId);
-      return s + (directEdge?.value || 0);
-    }, 0));
-    const unknownPct = Math.max(0, 100 - totalAccountedPct);
-    const terminalCount = entityNodes.filter((n) => n.is_terminal).length;
-    const assetName = nodes.find((n) => n.type === 'asset' || n.id === rootId)?.Name ||
-                      nodes.find((n) => n.type === 'asset' || n.id === rootId)?.name || 'this asset';
-
-    // Active entity (frozen takes priority over hovered)
-    const focusId = frozenId || hoveredId;
-    const focusNode = focusId ? nodes.find((n) => n.id === focusId) : null;
-
-    // Entity-specific narrative
-    if (focusNode && focusNode.type !== 'asset' && focusNode.id !== rootId) {
-      const name = focusNode.name || focusNode.Name || focusNode.id;
-      const nid = focusNode.entity_id || focusNode.id;
-      const pct = pathsMap.get(nid) || edgePctMap.get(nid) || 0;
-      const country = focusNode.headquarters_country;
-      const eType = focusNode.entity_type;
-      const isTerminal = focusNode.is_terminal;
-
-      // Count intermediaries in the path
-      const pathEntries = paths ? paths[nid] : null;
-      const longestRoute = pathEntries
-        ? Math.max(...pathEntries.map((p: OwnershipPathEntry) => p.route?.length || 0))
-        : 0;
-      const intermediaries = Math.max(0, longestRoute - 2); // minus source and target
-
-      const parts: string[] = [];
-
-      // Identity line
-      let identity = name;
-      if (eType && country) identity += ` is a ${eType} based in ${country}`;
-      else if (country) identity += ` is based in ${country}`;
-      else if (eType) identity += ` is a ${eType}`;
-      parts.push(identity + '.');
-
-      // Ownership line
-      if (pct > 0) {
-        let ownershipLine = isDownstream
-          ? `${assetName} holds ${pct.toFixed(1)}% cumulative ownership of ${name}`
-          : `Holds ${pct.toFixed(1)}% cumulative ownership of ${assetName}`;
-        if (intermediaries > 0) {
-          ownershipLine += ` through ${intermediaries} intermediar${intermediaries === 1 ? 'y' : 'ies'}`;
-        }
-        parts.push(ownershipLine + '.');
-      }
-
-      // Terminal chain note
-      if (isTerminal) {
-        parts.push(
-          isDownstream
-            ? 'Terminal downstream entity — no further controlled subsidiaries identified.'
-            : 'Ultimate owner — no further parent entities identified.'
-        );
-      }
-
-      return { lines: parts, mode: 'entity' as const };
-    }
-
-    // Default: graph summary
-    const lines: string[] = [];
-    const directRel = entityNodes.filter((n) =>
-      isDownstream
-        ? renderEdges.some((e) => e.source === rootId && e.target === n.id)
-        : renderEdges.some((e) => e.source === n.id && e.target === rootId)
-    );
-    lines.push(
-      isDownstream
-        ? `${assetName} has ${directRel.length} directly held entit${directRel.length === 1 ? 'y' : 'ies'}` +
-          ` and ${entityNodes.length} entities in this downstream structure.`
-        : `${assetName} has ${directRel.length} direct owner${directRel.length !== 1 ? 's' : ''}` +
-          ` and ${entityNodes.length} entities in its ownership structure.`
-    );
-    if (unknownPct > 1) {
-      lines.push(`${unknownPct.toFixed(0)}% of ownership is unaccounted for in available records.`);
-    } else if (totalAccountedPct >= 99) {
-      lines.push('Ownership is fully accounted for in available records.');
-    }
-    if (terminalCount > 0) {
-      lines.push(
-        isDownstream
-          ? `${terminalCount} terminal downstream entit${terminalCount === 1 ? 'y' : 'ies'} identified.`
-          : `${terminalCount} ultimate owner${terminalCount !== 1 ? 's' : ''} identified at the top of the chain.`
-      );
-    }
-    return { lines, mode: 'summary' as const };
-  });
+  const narrativeText = $derived.by(() => buildNarrativeText({
+    renderNodes, renderEdges, nodes, rootId, graphDirection,
+    focusId: frozenId || hoveredId,
+    pathsMap, edgePctMap, paths,
+  }));
 
   // Max chars per label line — scales with node radius so labels fit
   // nodeR 28 → 16 chars, nodeR 22 → 13, nodeR 18 → 11, compact → 10
   const labelMaxChars = $derived(
     compact ? 10 : Math.max(8, Math.round(nodeR * 0.57))
   );
-
-  // Break text into max 2 lines at word boundary, truncate with ellipsis if needed
-  function wrapText(text: string, max = 12): { line1: string; line2?: string } {
-    if (text.length <= max) return { line1: text };
-    const brk = text.lastIndexOf(' ', max);
-    const line1 = text.slice(0, brk > 0 ? brk : max).trim();
-    const rest = text.slice(line1.length).trim();
-    return { line1, line2: rest.length > max ? rest.slice(0, max - 1).trim() + '…' : rest };
-  }
 
   // Position labels to avoid overlap: groups entity nodes by dagre rank,
   // then picks centered/offset/stacked placement based on horizontal spacing.
@@ -595,27 +461,6 @@
         n.labelPos = { dx: 0, dy: n.r * 2 + labelGap * 0.6, below: true, small: true };
       });
     }
-  }
-
-  // Pie arc generator
-  function pieArc(pct: number, r: number): string {
-    if (pct <= 0) return '';
-    const angle = (Math.min(pct, 100) / 100) * 2 * Math.PI;
-    if (pct >= 100) return `M 0 ${-r} A ${r} ${r} 0 1 1 0 ${r} A ${r} ${r} 0 1 1 0 ${-r}`;
-    const x = Math.sin(angle) * r;
-    const y = -Math.cos(angle) * r;
-    return `M 0 0 L 0 ${-r} A ${r} ${r} 0 ${pct > 50 ? 1 : 0} 1 ${x} ${y} Z`;
-  }
-
-  // Edge path generator
-  function edgePath(pts: LayoutPoint[]): string {
-    if (!pts || pts.length < 2) return '';
-    return (
-      line<LayoutPoint>()
-        .x((d) => d.x)
-        .y((d) => d.y)
-        .curve(curveBasis)(pts) || ''
-    );
   }
 
   // Run layout
@@ -1225,7 +1070,7 @@
                   >
                 {/if}
               {:else}
-                {@const nodeColors = getNodeColors(n.id)}
+                {@const nodeColors = getNodeColors(n.id, rootId, nodes)}
                 {@const circlePad = Math.round(nodeR * 0.18)}
                 {@const visualR = n.r - (n.isSmallOwnership ? 0.75 : 2) - circlePad * (n.isSmallOwnership ? 0.5 : 1)}
                 {@const pieR = visualR - (n.isSmallOwnership ? 0 : 2)}
@@ -1287,7 +1132,7 @@
             <h4>Owner Entities</h4>
             <div class="tabular-rows">
               {#each ownersList as o}
-                {@const rowColors = getNodeColors(o.id)}
+                {@const rowColors = getNodeColors(o.id, rootId, nodes)}
                 <div
                   class="tabular-row"
                   class:is-frozen-view={frozenId === o.id}
