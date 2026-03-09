@@ -108,11 +108,17 @@ const DEBUG = false;
 /** Cache TTL in milliseconds (5 minutes) */
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
+/** Cache TTL for asset type counts (1 hour — counts rarely change) */
+const CACHE_TTL_COUNTS_MS = 60 * 60 * 1000;
+
 const ENABLE_BATCH_SEARCH =
   browser && localStorage.getItem('__GEM_SCREENER_BATCH_SEARCH__') === '1';
 
-/** In-memory cache for results */
+/** In-memory cache for owner results */
 const resultsCache = new Map<string, { data: ScreenerResultsResponse; timestamp: number }>();
+
+/** In-memory cache for asset type counts */
+const countsCache = new Map<string, { data: Record<string, number>; timestamp: number }>();
 
 // =============================================================================
 // LOGGING / PROFILING
@@ -142,15 +148,6 @@ function logQuery(log: QueryLog) {
   }
 }
 
-/** Get recent query logs for debugging */
-export function getQueryLogs(): QueryLog[] {
-  return [...queryLogs].slice(-50);
-}
-
-/** Clear query logs */
-export function clearQueryLogs(): void {
-  queryLogs.length = 0;
-}
 
 // =============================================================================
 // RESULTS PAGE: GET OWNERS BY ASSET TYPE
@@ -232,7 +229,6 @@ async function getOwnersByAssetTypeREST(
 
   // Don't pass status to API — some trackers have null status (e.g., Steel Plants).
   // All status filtering is done client-side to handle null gracefully.
-  const apiStatus = undefined;
   const geofence = filters.geofence || null;
   let classMatcher: ((_record: Record<string, unknown>) => boolean) | null = null;
 
@@ -251,7 +247,7 @@ async function getOwnersByAssetTypeREST(
 
   let pageCount = 0;
   for await (const page of paginateAssetsByType(apiSlug, {
-    status: apiStatus,
+    status: undefined,
     country: filters.country,
   })) {
     pageCount++;
@@ -425,7 +421,7 @@ export async function searchEntitiesBulk(
     try {
       return await searchEntitiesBulkREST(cleanQueries, limitPerQuery, startTime);
     } catch (e) {
-      console.warn('[screener-api] Batch search endpoint failed, falling back to sequential:', e);
+      if (import.meta.env.DEV) console.warn('[screener-api] Batch search endpoint failed, falling back to sequential:', e);
     }
   }
 
@@ -560,10 +556,10 @@ async function searchEntitiesBulkREST(
  */
 export async function getAssetTypeCounts(): Promise<Record<string, number>> {
   const cacheKey = 'asset-type-counts';
-  const cached = resultsCache.get(cacheKey);
+  const cached = countsCache.get(cacheKey);
 
-  if (cached && Date.now() - cached.timestamp < 60 * 60 * 1000) {
-    return cached.data as unknown as Record<string, number>;
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_COUNTS_MS) {
+    return cached.data;
   }
 
   const startTime = performance.now();
@@ -578,8 +574,8 @@ export async function getAssetTypeCounts(): Promise<Record<string, number>> {
       counts[type] = count;
     }
 
-    resultsCache.set(cacheKey, {
-      data: counts as unknown as ScreenerResultsResponse,
+    countsCache.set(cacheKey, {
+      data: counts,
       timestamp: Date.now(),
     });
 
@@ -607,78 +603,3 @@ export async function getAssetTypeCounts(): Promise<Record<string, number>> {
   }
 }
 
-// =============================================================================
-// CACHE MANAGEMENT
-// =============================================================================
-
-/** Clear all cached data */
-export function clearCache(): void {
-  resultsCache.clear();
-  if (DEBUG) console.log('[screener-api] Cache cleared');
-}
-
-/** Get cache stats for debugging */
-export function getCacheStats(): { size: number; keys: string[] } {
-  return {
-    size: resultsCache.size,
-    keys: [...resultsCache.keys()],
-  };
-}
-
-// =============================================================================
-// DEBUG UTILITIES
-// =============================================================================
-
-/** Get API configuration for debugging */
-export function getConfig() {
-  return {
-    apiBase: OWNERSHIP_API_BASE,
-    debug: DEBUG,
-    cacheTtlMs: CACHE_TTL_MS,
-  };
-}
-
-/**
- * Run a diagnostic check on data sources.
- * All screener data now flows through the REST API by default.
- */
-export async function runDiagnostics(): Promise<{
-  restApi: { ok: boolean; latencyMs: number; error?: string };
-}> {
-  const results = {
-    restApi: { ok: false, latencyMs: 0, error: undefined as string | undefined },
-  };
-
-  // Test REST API
-  const diagUrl = `${OWNERSHIP_API_BASE}/entities?limit=1`;
-  const restStart = performance.now();
-  try {
-    const response = await fetch(diagUrl);
-    results.restApi.latencyMs = performance.now() - restStart;
-    results.restApi.ok = response.ok;
-    if (!response.ok) results.restApi.error = `HTTP ${response.status}`;
-    logApiCall({
-      url: diagUrl,
-      method: 'GET',
-      status: response.status,
-      durationMs: results.restApi.latencyMs,
-      timestamp: new Date(),
-      error: response.ok ? undefined : results.restApi.error,
-      reason: 'diagnostics ping',
-    });
-  } catch (e) {
-    results.restApi.latencyMs = performance.now() - restStart;
-    results.restApi.error = e instanceof Error ? e.message : String(e);
-    logApiCall({
-      url: diagUrl,
-      method: 'GET',
-      status: null,
-      durationMs: results.restApi.latencyMs,
-      timestamp: new Date(),
-      error: results.restApi.error,
-      reason: 'diagnostics ping',
-    });
-  }
-
-  return results;
-}

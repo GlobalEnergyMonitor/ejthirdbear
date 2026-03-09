@@ -124,7 +124,6 @@ export type AssetClassCategory =
   | 'chemical'
   | 'bioenergy'
   | 'cement'
-  | 'oil-gas'
   | 'multi-tracker';
 
 // =============================================================================

@@ -47,11 +47,11 @@
   let searchQuery = $state('');
   let selectedClassId = $state(null);
   /** Flat subClasses checkbox state */
-  let checkedSubClasses = $state({});
+  let subClassChecks = $state({});
   /** SubClassGroups option checkbox state */
-  let checkedGroupOptions = $state({});
+  let groupOptionChecks = $state({});
   /** Status checkbox state: `status-{groupId}-{statusValue}` -> boolean */
-  let checkedStatuses = $state({});
+  let statusChecks = $state({});
   let geoFilters = $state([]);
   let geofence = $state(null);
   /** @type {import('$lib/data-config/tracker-schema').DynamicStatusGroup[] | null} */
@@ -77,34 +77,34 @@
     dynamicStatusGroups = null; // reset while loading
 
     // Initialize flat sub-class checkboxes (default: checked)
-    const checks = {};
+    const initialSubClassChecks = {};
     if (ac.subClasses) {
       for (const sc of ac.subClasses) {
-        checks[sc.id] = sc.defaultChecked ?? true;
+        initialSubClassChecks[sc.id] = sc.defaultChecked ?? true;
       }
     }
-    checkedSubClasses = checks;
+    subClassChecks = initialSubClassChecks;
 
     // Initialize group option checkboxes (default: checked)
-    const groupChecks = {};
+    const initialGroupChecks = {};
     if (ac.subClassGroups) {
       for (const group of ac.subClassGroups) {
         for (const opt of group.options) {
-          groupChecks[opt.id] = opt.defaultChecked ?? true;
+          initialGroupChecks[opt.id] = opt.defaultChecked ?? true;
         }
       }
     }
-    checkedGroupOptions = groupChecks;
+    groupOptionChecks = initialGroupChecks;
 
     // Initialize status checkboxes — all Operating/Planned checked by default
-    const statusChecks = {};
+    const initialStatusChecks = {};
     for (const sg of STATUS_GROUPS) {
       for (const s of sg.statuses) {
         const key = `status-${sg.id}-${s}`;
-        statusChecks[key] = sg.id === 'operating' || sg.id === 'planned';
+        initialStatusChecks[key] = sg.id === 'operating' || sg.id === 'planned';
       }
     }
-    checkedStatuses = statusChecks;
+    statusChecks = initialStatusChecks;
 
     // Fetch status facets from API (non-blocking)
     fetchStatusFacetsForClass(ac);
@@ -134,14 +134,14 @@
       dynamicStatusGroups = groups;
 
       // Re-initialize status checkboxes with discovered statuses
-      const statusChecks = {};
+      const discoveredStatusChecks = {};
       for (const sg of groups) {
         for (const s of sg.statuses) {
           const key = `status-${sg.id}-${s.value}`;
-          statusChecks[key] = sg.id === 'operating' || sg.id === 'planned';
+          discoveredStatusChecks[key] = sg.id === 'operating' || sg.id === 'planned';
         }
       }
-      checkedStatuses = statusChecks;
+      statusChecks = discoveredStatusChecks;
     } catch {
       // Silently fall back to hardcoded groups
     }
@@ -149,9 +149,9 @@
 
   function clearSelection() {
     selectedClassId = null;
-    checkedSubClasses = {};
-    checkedGroupOptions = {};
-    checkedStatuses = {};
+    subClassChecks = {};
+    groupOptionChecks = {};
+    statusChecks = {};
     geoFilters = [];
     geofence = null;
     dynamicStatusGroups = null;
@@ -167,7 +167,7 @@
     }));
     for (const sg of groups) {
       for (const s of sg.statuses) {
-        if (checkedStatuses[`status-${sg.id}-${s.value}`]) {
+        if (statusChecks[`status-${sg.id}-${s.value}`]) {
           statuses.push(s.value);
         }
       }
@@ -181,10 +181,10 @@
 
     // Collect selected sub-class IDs from both flat and grouped
     const selectedSubClassIds = [
-      ...Object.entries(checkedSubClasses)
+      ...Object.entries(subClassChecks)
         .filter(([, v]) => v)
         .map(([k]) => k),
-      ...Object.entries(checkedGroupOptions)
+      ...Object.entries(groupOptionChecks)
         .filter(([, v]) => v)
         .map(([k]) => k),
     ];
@@ -360,9 +360,9 @@
   {#if selectedClass}
     <AssetClassExpansion
       assetClass={selectedClass}
-      bind:checkedSubClasses
-      bind:checkedGroupOptions
-      bind:checkedStatuses
+      bind:subClassChecks
+      bind:groupOptionChecks
+      bind:statusChecks
       bind:geoFilters
       bind:geofence
       {dynamicStatusGroups}

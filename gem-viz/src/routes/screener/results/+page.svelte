@@ -21,27 +21,12 @@
   import {
     getOwnersByAssetType,
     getAssetTypeCounts,
-    getQueryLogs,
     type ScreenerFilters,
+    type ScreenerOwner,
   } from '$lib/data-config/screener-api';
   import { buildScreenerUrl, parseJsonSearchParam } from '$lib/screener-url';
   import { resolveApiSlug, getAPIBase } from '$lib/ownership-api';
-
-  type ScreenerSelectedClass = {
-    id?: string;
-    assetClassId?: string;
-    name?: string;
-    description?: string;
-    tracker?: string;
-    filters?: {
-      status?: string;
-      statuses?: string[];
-      geography?: string | string[];
-      geofence?: number[][];
-    };
-    selectedSubClasses?: string[];
-    [key: string]: unknown;
-  };
+  import type { ScreenerSelectedClass } from '$lib/data-config/screener-types';
 
   // URL params
   const classesParam = $derived($page.url.searchParams.get('classes') || '');
@@ -73,17 +58,12 @@
   );
   const chartTrackerSlug = $derived(selectedClasses.length > 0 ? selectedClasses[0]?.id || '' : '');
 
-  // Derive parse error separately (no state mutation inside $derived)
-  const parseError = $derived.by(() => {
-    if (!classesParam) return null;
-    try {
-      const parsed = parseJsonSearchParam<ScreenerSelectedClass[]>(classesParam);
-      if (parsed) return null;
-      return 'Invalid asset class data in URL. Please go back and re-select.';
-    } catch {
-      return 'Could not read asset class from URL. Please go back and re-select.';
-    }
-  });
+  // Show parse error when classesParam exists but selectedClasses is empty
+  const parseError = $derived(
+    classesParam && selectedClasses.length === 0
+      ? 'Could not read asset class from URL. Please go back and re-select.'
+      : null
+  );
 
   // Build human-readable description of selected class
   const classDescription = $derived.by(() => {
@@ -124,19 +104,17 @@
 
   // State
   let loading = $state(true);
-  let error = $state(null);
-  let owners = $state([]);
+  let error: string | null = $state(null);
+  let owners: ScreenerOwner[] = $state([]);
 
   // Data source tracking
-  let dataSource = $state<'none' | 'local' | 'api' | 'server'>('api');
-  let queryTime = $state(null);
+  let dataSource = $state<'local' | 'api'>('api');
+  let queryTime: number | null = $state(null);
   let executedQuery = $state('');
-  let availableAssetTypes = $state([]);
+  let availableAssetTypes: { asset_type: string; cnt: number }[] = $state([]);
 
   // Search/filter for journalists with watchlists
   let searchQuery = $state('');
-  let searchMode = $state('owner');
-  let syncedSearchQuery = $state('');
   // Expanded row state - tracks which owner's ownership tree is visible
   let expandedOwnerId = $state<string | null>(null);
   let resultsSectionEl: HTMLElement | undefined = $state();
@@ -148,14 +126,6 @@
       if (rect.top > window.innerHeight * 0.5) {
         resultsSectionEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
-    }
-  });
-
-  $effect(() => {
-    const nextSearchQuery = $page.url.searchParams.get('q') || '';
-    if (nextSearchQuery !== syncedSearchQuery) {
-      syncedSearchQuery = nextSearchQuery;
-      searchQuery = nextSearchQuery;
     }
   });
 
@@ -189,7 +159,8 @@
     return result;
   });
 
-  function updateOwnerSearchUrl(query: string) {
+  function handleOwnerSearch(query: string) {
+    searchQuery = query;
     const trimmed = query.trim();
     goto(
       buildScreenerUrl('screener/results', {
@@ -201,13 +172,11 @@
     );
   }
 
-  function handleOwnerSearch(query: string) {
-    searchQuery = query;
-    updateOwnerSearchUrl(query);
-  }
-
   // Load owners data using centralized screener API
   onMount(async () => {
+    // Init search from URL
+    searchQuery = $page.url.searchParams.get('q') || '';
+
     try {
       const classes = selectedClasses;
       if (classes.length === 0) {
@@ -283,11 +252,10 @@
       error = err?.message || 'Failed to load data';
       loading = false;
 
-      if (import.meta.env.DEV) console.log('Query logs:', getQueryLogs());
     }
   });
 
-  function removeAssetClass(index) {
+  function removeAssetClass(index: number) {
     if (index < 0) return;
     const classes = selectedClasses.filter((_, i) => i !== index);
     if (classes.length === 0) {
@@ -384,7 +352,7 @@
       <div class="search-bar">
         <AssetSearchBar
           bind:value={searchQuery}
-          bind:activeMode={searchMode}
+          activeMode="owner"
           modes={[
             {
               id: 'owner',

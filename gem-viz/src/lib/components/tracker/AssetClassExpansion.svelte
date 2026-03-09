@@ -16,11 +16,11 @@
   interface Props {
     assetClass: AssetClass;
     /** For flat subClasses: option ID -> checked */
-    checkedSubClasses: Record<string, boolean>;
+    subClassChecks: Record<string, boolean>;
     /** For subClassGroups: option ID -> checked */
-    checkedGroupOptions: Record<string, boolean>;
+    groupOptionChecks: Record<string, boolean>;
     /** Status group option ID -> checked */
-    checkedStatuses: Record<string, boolean>;
+    statusChecks: Record<string, boolean>;
     geoFilters: string[];
     geofence: number[][] | null;
     onShowAllOwners: () => void;
@@ -32,9 +32,9 @@
 
   let {
     assetClass,
-    checkedSubClasses = $bindable(),
-    checkedGroupOptions = $bindable(),
-    checkedStatuses = $bindable(),
+    subClassChecks = $bindable(),
+    groupOptionChecks = $bindable(),
+    statusChecks = $bindable(),
     geoFilters = $bindable(),
     geofence = $bindable(),
     onShowAllOwners,
@@ -47,7 +47,7 @@
   const hasSubClassGroups = $derived(!!assetClass.subClassGroups?.length);
   const hasStatusFilter = $derived(!!assetClass.availableFilters.status);
   const isMultiTracker = $derived(assetClass.trackers.length > 1);
-  const selectedStatusCount = $derived(Object.values(checkedStatuses).filter(Boolean).length);
+  const selectedStatusCount = $derived(Object.values(statusChecks).filter(Boolean).length);
 
   // ── Wizard steps ───────────────────────────────────────────────────
   const steps = $derived.by(() => {
@@ -84,11 +84,11 @@
   }
 
   function isGroupAllChecked(group: SubClassGroup): boolean {
-    return getGroupOptionIds(group).every((id) => checkedGroupOptions[id]);
+    return getGroupOptionIds(group).every((id) => groupOptionChecks[id]);
   }
 
   function isGroupNoneChecked(group: SubClassGroup): boolean {
-    return getGroupOptionIds(group).every((id) => !checkedGroupOptions[id]);
+    return getGroupOptionIds(group).every((id) => !groupOptionChecks[id]);
   }
 
   function isGroupIndeterminate(group: SubClassGroup): boolean {
@@ -97,12 +97,12 @@
 
   function toggleGroup(group: SubClassGroup) {
     track('tracker', 'select-class', group.label);
-    const allChecked = isGroupAllChecked(group);
-    const next = { ...checkedGroupOptions };
+    const wasAllChecked = isGroupAllChecked(group);
+    const next = { ...groupOptionChecks };
     for (const id of getGroupOptionIds(group)) {
-      next[id] = !allChecked;
+      next[id] = !wasAllChecked;
     }
-    checkedGroupOptions = next;
+    groupOptionChecks = next;
   }
 
   // ── Resolved status groups (dynamic or hardcoded fallback) ───────
@@ -126,11 +126,11 @@
   }
 
   function isStatusGroupAllChecked(groupId: string): boolean {
-    return getStatusIds(groupId).every((id) => checkedStatuses[id]);
+    return getStatusIds(groupId).every((id) => statusChecks[id]);
   }
 
   function isStatusGroupNoneChecked(groupId: string): boolean {
-    return getStatusIds(groupId).every((id) => !checkedStatuses[id]);
+    return getStatusIds(groupId).every((id) => !statusChecks[id]);
   }
 
   function isStatusGroupIndeterminate(groupId: string): boolean {
@@ -138,12 +138,12 @@
   }
 
   function toggleStatusGroup(groupId: string) {
-    const allChecked = isStatusGroupAllChecked(groupId);
-    const next = { ...checkedStatuses };
+    const wasAllChecked = isStatusGroupAllChecked(groupId);
+    const next = { ...statusChecks };
     for (const id of getStatusIds(groupId)) {
-      next[id] = !allChecked;
+      next[id] = !wasAllChecked;
     }
-    checkedStatuses = next;
+    statusChecks = next;
   }
 
   function setStatusPreset(preset: 'default' | 'all' | 'none') {
@@ -160,7 +160,7 @@
         }
       }
     }
-    checkedStatuses = next;
+    statusChecks = next;
   }
 
   // ── Modal helpers ─────────────────────────────────────────────────
@@ -275,7 +275,7 @@
                         <div class="refine-panel" transition:slide={{ duration: 150 }}>
                           {#each group.options as opt (opt.id)}
                             <label class="refine-option">
-                              <input type="checkbox" bind:checked={checkedGroupOptions[opt.id]} />
+                              <input type="checkbox" bind:checked={groupOptionChecks[opt.id]} />
                               <span>{opt.label}</span>
                             </label>
                           {/each}
@@ -295,7 +295,7 @@
                   {#each assetClass.subClasses ?? [] as sc (sc.id)}
                     <div class="group-item">
                       <label class="group-checkbox">
-                        <input type="checkbox" bind:checked={checkedSubClasses[sc.id]} />
+                        <input type="checkbox" bind:checked={subClassChecks[sc.id]} />
                         <span class="group-label">{sc.label}</span>
                       </label>
                       {#if sc.description}
@@ -352,7 +352,7 @@
                           <label class="refine-option">
                             <input
                               type="checkbox"
-                              bind:checked={checkedStatuses[`status-${sg.id}-${statusItem.value}`]}
+                              bind:checked={statusChecks[`status-${sg.id}-${statusItem.value}`]}
                             />
                             <span>{statusItem.value}</span>
                             {#if statusItem.count > 0}

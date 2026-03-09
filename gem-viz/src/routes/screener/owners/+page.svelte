@@ -15,31 +15,23 @@
   import OwnerSearchPanel from '$lib/components/screener/OwnerSearchPanel.svelte';
   import OwnerResultsGroups from '$lib/components/screener/OwnerResultsGroups.svelte';
   import SelectedOwnersFooter from '$lib/components/screener/SelectedOwnersFooter.svelte';
-  import { getExampleCompanies } from '$lib/data-config/screener-config';
+  import { getExampleCompanies, type ExampleCompany } from '$lib/data-config/screener-config';
   import {
     searchEntities,
     searchEntitiesBulk,
-    getQueryLogs,
     getOwnersByAssetType,
     type ScreenerFilters,
   } from '$lib/data-config/screener-api';
   import { buildScreenerUrl, parseJsonSearchParam } from '$lib/screener-url';
-
-  type OwnerFlowClass = {
-    id?: string;
-    assetClassId?: string;
-    name?: string;
-    tracker?: string;
-    [key: string]: unknown;
-  };
+  import type { ScreenerSelectedClass } from '$lib/data-config/screener-types';
 
   // Get selected classes from URL params
   const classesParam = $derived($page.url.searchParams.get('classes') || '');
 
   // Parse selected classes for example companies feature
-  const selectedClasses = $derived.by((): OwnerFlowClass[] => {
+  const selectedClasses = $derived.by((): ScreenerSelectedClass[] => {
     if (!classesParam) return [];
-    const parsed = parseJsonSearchParam<OwnerFlowClass[]>(classesParam);
+    const parsed = parseJsonSearchParam<ScreenerSelectedClass[]>(classesParam);
     return Array.isArray(parsed) ? parsed : [];
   });
 
@@ -66,7 +58,7 @@
     }));
   });
 
-  function removeClass(classToRemove) {
+  function removeClass(classToRemove: ScreenerSelectedClass) {
     const removeId = classToRemove?.id || classToRemove?.assetClassId || classToRemove?.name;
     const updated = classList.filter((c) => (c.id || c.assetClassId || c.name) !== removeId);
     goto(buildOwnersUrl(updated.length > 0 ? JSON.stringify(updated) : ''), { replaceState: true });
@@ -75,16 +67,22 @@
   // Get relevant example companies: fetch top 3 owners for selected asset class,
   // fall back to static examples while loading or if no classes selected
   let topOwners = $state<{ name: string; id: string }[]>([]);
-  let topOwnersLoaded = $state(false);
 
   const exampleCompanies = $derived.by(() => {
-    if (topOwnersLoaded && topOwners.length > 0) return topOwners;
+    if (topOwners.length > 0) return topOwners;
     const trackers = classList.map((c) => c.tracker).filter(Boolean);
     return getExampleCompanies(trackers);
   });
 
-  // Fetch top 3 owners for the first selected asset class
+  // Fetch top 3 owners for the first selected asset class + prefill from URL
   onMount(async () => {
+    // Prefill search from URL query param
+    const q = $page.url.searchParams.get('q') || '';
+    if (q) {
+      singleSearchQuery = q;
+      void searchSingle();
+    }
+
     if (selectedClasses.length === 0) return;
     const cls = selectedClasses[0];
     if (!cls?.tracker) return;
@@ -103,8 +101,6 @@
       }
     } catch {
       // Silently fall back to static examples
-    } finally {
-      topOwnersLoaded = true;
     }
   });
 
@@ -120,13 +116,17 @@
   }
 
   // Use an example company
-  function useExample(example) {
+  function useExample(example: ExampleCompany) {
     singleSearchQuery = example.name;
     searchSingle();
   }
 
-  // Toggle or add owner selection (O(1) with Map)
-  function selectOwner(owner, toggle = true) {
+  /**
+   * Toggle or add owner selection (O(1) with Map).
+   * @param toggle - If true (default), deselects the owner if already selected.
+   *                 If false, only adds — useful for "select all" flows.
+   */
+  function selectOwner(owner: { id: string; name: string }, toggle = true) {
     const newMap = new Map(selectedOwnerMap);
     if (toggle && newMap.has(owner.id)) {
       newMap.delete(owner.id);
@@ -225,15 +225,15 @@
         );
     } catch (err) {
       searchError = err?.message || 'Bulk search failed';
-      if (import.meta.env.DEV) console.error('Bulk search failed:', err, getQueryLogs());
+      if (import.meta.env.DEV) console.error('Bulk search failed:', err);
     } finally {
       searchLoading = false;
     }
   }
 
   // Handle CSV upload
-  async function handleCsvUpload(event) {
-    const file = event.target.files?.[0];
+  async function handleCsvUpload(event: Event) {
+    const file = (event.target as HTMLInputElement).files?.[0];
     if (!file) return;
 
     try {
@@ -260,7 +260,6 @@
   let bulkSearchText = $state('');
   let searchLoading = $state(false);
   let searchError = $state(null);
-  let syncedQuery = $state('');
 
   // Search results with disambiguation tracking
   // Each entry: { term: string, results: Entity[], matchCount: number }
@@ -277,20 +276,6 @@
   // Check if owner is selected (O(1))
   const isSelected = (owner) => selectedOwnerMap.has(owner.id);
 
-  // URL-based owner search prefill (used by embeddable search bar mode)
-  $effect(() => {
-    const q = $page.url.searchParams.get('q') || '';
-    if (!q) {
-      syncedQuery = '';
-      return;
-    }
-    if (q === syncedQuery) return;
-    syncedQuery = q;
-    singleSearchQuery = q;
-    if (!searchLoading) {
-      void searchSingle();
-    }
-  });
 </script>
 
 <svelte:head>

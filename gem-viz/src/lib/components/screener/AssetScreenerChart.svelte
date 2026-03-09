@@ -277,9 +277,9 @@
     font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
     max-height: 760px;
     overflow: auto;
-    border: 1px solid #e4e7eb;
+    border: 1px solid var(--color-gray-200, #e4e7eb);
     border-radius: 8px;
-    background: #fafaf7;
+    background: var(--color-gray-50, #fafaf7);
   }
 
   #chart-header {
@@ -291,7 +291,7 @@
     gap: 2em;
     padding: 0.5em 1.4em;
     border-bottom: 3px solid #d8d8ce;
-    background: #004a63;
+    background: var(--gem-primary-blue, #004a63);
     color: #ffffff;
   }
 
@@ -322,7 +322,7 @@
 
   .chart-wrapper {
     overflow: visible;
-    background: #fafaf7;
+    background: var(--color-gray-50, #fafaf7);
   }
 
   .chart-render {
@@ -370,7 +370,7 @@
   #additional-info span {
     display: inline-block;
     padding: 0.8em;
-    border-top: 2px solid #d45f42;
+    border-top: 2px solid var(--gem-orange, #d45f42);
   }
 
   #legend-container {
@@ -378,9 +378,9 @@
     bottom: 0;
     z-index: 20;
     padding: 0.6em 1.2em 1em 1.2em;
-    border-top: 3px solid #004a63;
-    background: #fafaf7;
-    color: #002c40;
+    border-top: 3px solid var(--gem-primary-blue, #004a63);
+    background: var(--color-gray-50, #fafaf7);
+    color: var(--color-text-primary, #002c40);
     backdrop-filter: blur(4px);
   }
 
@@ -392,7 +392,7 @@
     font-weight: 700;
     letter-spacing: 0.07em;
     margin: 0.2em 0 0.5em 0;
-    color: #004a63;
+    color: var(--gem-primary-blue, #004a63);
   }
 
   .legend-container .title span {
