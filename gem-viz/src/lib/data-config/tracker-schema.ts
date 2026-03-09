@@ -118,9 +118,7 @@ export interface DynamicStatusGroup {
  * Unknown statuses go into an "Other" catch-all.
  * Groups with 0 total are excluded.
  */
-export function discoverStatusGroups(
-  facets: Map<string, number>
-): DynamicStatusGroup[] {
+export function discoverStatusGroups(facets: Map<string, number>): DynamicStatusGroup[] {
   // Build a set of all statuses claimed by known groups
   const claimedStatuses = new Set<string>();
   for (const sg of STATUS_GROUPS) {

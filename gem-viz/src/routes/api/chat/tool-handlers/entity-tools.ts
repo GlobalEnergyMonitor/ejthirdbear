@@ -86,8 +86,7 @@ async function getEntityPortfolio(args: ToolArgs): Promise<ToolResult> {
       if (entityName) {
         const assetResult = await listAssets({ q: entityName, limit: 50 });
         const ownedAssets = assetResult.results.filter(
-          (a) =>
-            a.owners?.some((o) => o.entityId === entityId) || a.ownerEntityId === entityId
+          (a) => a.owners?.some((o) => o.entityId === entityId) || a.ownerEntityId === entityId
         );
         data.assets = ownedAssets.map((a) => ({
           id: a.id,
@@ -299,8 +298,7 @@ async function findCommonOwners(args: ToolArgs): Promise<ToolResult> {
   const minAssets = Math.max(1, (args.min_assets as number) || 2);
   const commonOwners = [...ownerInfo.entries()]
     .filter(
-      ([, info]) =>
-        countries.every((c) => info.countries.has(c)) && info.totalAssets >= minAssets
+      ([, info]) => countries.every((c) => info.countries.has(c)) && info.totalAssets >= minAssets
     )
     .map(([entityId, info]) => ({
       entityId,

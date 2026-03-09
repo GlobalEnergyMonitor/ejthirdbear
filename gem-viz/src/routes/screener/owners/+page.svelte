@@ -275,7 +275,6 @@
 
   // Check if owner is selected (O(1))
   const isSelected = (owner) => selectedOwnerMap.has(owner.id);
-
 </script>
 
 <svelte:head>

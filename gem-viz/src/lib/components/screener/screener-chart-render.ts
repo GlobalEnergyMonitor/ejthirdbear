@@ -6,7 +6,7 @@
  * asset, and legend rendering, and exports the single `renderChart` entry point.
  */
 
-import { select, path as d3Path, type Selection } from 'd3';
+import { select, type Selection } from 'd3';
 import { statusColors, getTrackerColor } from '$lib/design-tokens';
 import type { ScreenerChartData, SubsidiaryGroupData, ChartUnit } from './screener-chart-data';
 import { LAYOUT } from './screener-chart-data';

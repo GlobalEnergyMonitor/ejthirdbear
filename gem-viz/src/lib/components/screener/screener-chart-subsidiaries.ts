@@ -14,11 +14,7 @@ import {
   type Selection,
 } from 'd3';
 import { colors, statusColors, getTrackerColor } from '$lib/design-tokens';
-import type {
-  ScreenerChartData,
-  SubsidiaryGroupData,
-  BarDatum,
-} from './screener-chart-data';
+import type { ScreenerChartData, SubsidiaryGroupData, BarDatum } from './screener-chart-data';
 import { LAYOUT } from './screener-chart-data';
 
 const COL_STROKE = '#d8d8ce';
@@ -27,7 +23,11 @@ const COL_STROKE = '#d8d8ce';
 // Subsidiary lane shapes
 // ---------------------------------------------------------------------------
 
-export function subsidiaryPath(d: SubsidiaryGroupData, yOffset: number, strokeOnly = false): string {
+export function subsidiaryPath(
+  d: SubsidiaryGroupData,
+  yOffset: number,
+  strokeOnly = false
+): string {
   const p = d3Path();
   const xS = 0;
   const yS = d.top;

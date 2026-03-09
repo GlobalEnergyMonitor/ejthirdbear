@@ -319,7 +319,8 @@ export function validateDataSourcesArePublished(): boolean {
       dataset.url.includes('src/lib/data-config');
 
     if (!isPublic) {
-      if (import.meta.env.DEV) console.warn(`Non-public data source detected: ${dataset.name} at ${dataset.url}`);
+      if (import.meta.env.DEV)
+        console.warn(`Non-public data source detected: ${dataset.name} at ${dataset.url}`);
       return false;
     }
   }

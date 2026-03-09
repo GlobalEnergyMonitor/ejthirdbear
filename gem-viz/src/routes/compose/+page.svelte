@@ -48,7 +48,9 @@
     <section class="results-panel">
       <!-- Empty state overlays the results area when no filters active -->
       <div class="empty-state" class:visible={!state.hasFilters && state.initialLoadComplete}>
-        <p class="empty-hint">Select filters to explore {state.totalCount?.toLocaleString() || '45,000+'} assets</p>
+        <p class="empty-hint">
+          Select filters to explore {state.totalCount?.toLocaleString() || '45,000+'} assets
+        </p>
       </div>
 
       <!-- Always rendered, fades in/out -->
@@ -168,7 +170,9 @@
     gap: var(--space-1);
     opacity: 0;
     visibility: hidden;
-    transition: opacity 0.25s ease, visibility 0.25s ease;
+    transition:
+      opacity 0.25s ease,
+      visibility 0.25s ease;
   }
 
   .results-content.active {
@@ -180,7 +184,9 @@
   .breadcrumbs-slot {
     min-height: 0;
     overflow: hidden;
-    transition: min-height 0.2s ease, opacity 0.2s ease;
+    transition:
+      min-height 0.2s ease,
+      opacity 0.2s ease;
     opacity: 0;
   }
 
@@ -199,7 +205,9 @@
     padding: 0;
     opacity: 0;
     visibility: hidden;
-    transition: opacity 0.3s ease, visibility 0.3s ease;
+    transition:
+      opacity 0.3s ease,
+      visibility 0.3s ease;
     pointer-events: none;
   }
 

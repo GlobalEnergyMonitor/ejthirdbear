@@ -148,7 +148,6 @@ function logQuery(log: QueryLog) {
   }
 }
 
-
 // =============================================================================
 // RESULTS PAGE: GET OWNERS BY ASSET TYPE
 // =============================================================================
@@ -421,7 +420,8 @@ export async function searchEntitiesBulk(
     try {
       return await searchEntitiesBulkREST(cleanQueries, limitPerQuery, startTime);
     } catch (e) {
-      if (import.meta.env.DEV) console.warn('[screener-api] Batch search endpoint failed, falling back to sequential:', e);
+      if (import.meta.env.DEV)
+        console.warn('[screener-api] Batch search endpoint failed, falling back to sequential:', e);
     }
   }
 
@@ -602,4 +602,3 @@ export async function getAssetTypeCounts(): Promise<Record<string, number>> {
     return {};
   }
 }
-

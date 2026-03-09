@@ -512,7 +512,10 @@
     {@const rows = tableRows()}
     {@const totalRows = tableRowsUnfiltered().length}
     <details class="data-table-section">
-      <summary class="table-summary">Data table ({rows.length === totalRows ? formatNumber(totalRows) : `${formatNumber(rows.length)} of ${formatNumber(totalRows)}`} rows)</summary
+      <summary class="table-summary"
+        >Data table ({rows.length === totalRows
+          ? formatNumber(totalRows)
+          : `${formatNumber(rows.length)} of ${formatNumber(totalRows)}`} rows)</summary
       >
       <div class="ownership-filter">
         <RangeSlider

@@ -25,22 +25,34 @@ interface NarrativeParams {
 /** Build the context-panel narrative text for the ownership tree. */
 export function buildNarrativeText(params: NarrativeParams): NarrativeResult {
   const {
-    renderNodes, renderEdges, nodes, rootId,
-    graphDirection, focusId, pathsMap, edgePctMap, paths,
+    renderNodes,
+    renderEdges,
+    nodes,
+    rootId,
+    graphDirection,
+    focusId,
+    pathsMap,
+    edgePctMap,
+    paths,
   } = params;
 
   const entityNodes = renderNodes.filter((n) => n.type !== 'asset' && n.id !== rootId);
   const isDownstream = graphDirection === 'downstream';
-  const totalAccountedPct = Math.min(100, entityNodes.reduce((s, n) => {
-    const directEdge = isDownstream
-      ? renderEdges.find((e) => e.source === rootId && e.target === n.id)
-      : renderEdges.find((e) => e.source === n.id && e.target === rootId);
-    return s + (directEdge?.value || 0);
-  }, 0));
+  const totalAccountedPct = Math.min(
+    100,
+    entityNodes.reduce((s, n) => {
+      const directEdge = isDownstream
+        ? renderEdges.find((e) => e.source === rootId && e.target === n.id)
+        : renderEdges.find((e) => e.source === n.id && e.target === rootId);
+      return s + (directEdge?.value || 0);
+    }, 0)
+  );
   const unknownPct = Math.max(0, 100 - totalAccountedPct);
   const terminalCount = entityNodes.filter((n) => n.is_terminal).length;
-  const assetName = nodes.find((n) => n.type === 'asset' || n.id === rootId)?.Name ||
-                    nodes.find((n) => n.type === 'asset' || n.id === rootId)?.name || 'this asset';
+  const assetName =
+    nodes.find((n) => n.type === 'asset' || n.id === rootId)?.Name ||
+    nodes.find((n) => n.type === 'asset' || n.id === rootId)?.name ||
+    'this asset';
 
   // Entity-specific narrative
   const focusNode = focusId ? nodes.find((n) => n.id === focusId) : null;
@@ -98,9 +110,9 @@ export function buildNarrativeText(params: NarrativeParams): NarrativeResult {
   lines.push(
     isDownstream
       ? `${assetName} has ${directRel.length} directly held entit${directRel.length === 1 ? 'y' : 'ies'}` +
-        ` and ${entityNodes.length} entities in this downstream structure.`
+          ` and ${entityNodes.length} entities in this downstream structure.`
       : `${assetName} has ${directRel.length} direct owner${directRel.length !== 1 ? 's' : ''}` +
-        ` and ${entityNodes.length} entities in its ownership structure.`
+          ` and ${entityNodes.length} entities in its ownership structure.`
   );
   if (unknownPct > 1) {
     lines.push(`${unknownPct.toFixed(0)}% of ownership is unaccounted for in available records.`);

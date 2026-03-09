@@ -19,10 +19,10 @@ export const TREE_COLORS = {
 
 // Entity type colors — matched to Observable's colorByOwnershipEntity
 export const OWNERSHIP_ENTITY_COLORS: Record<string, { bg: string; fg: string; light: string }> = {
-  'Government':            { bg: '#A0AAE5', fg: '#1a2351', light: '#d0d5f2' },
+  Government: { bg: '#A0AAE5', fg: '#1a2351', light: '#d0d5f2' },
   'Publicly Listed Corp.': { bg: '#099ED8', fg: '#04304a', light: '#84cfec' },
-  'Private Company':       { bg: '#65BD8B', fg: '#1a3828', light: '#b2dec5' },
-  'Other':                 { bg: '#BECCCF', fg: '#3a4a4f', light: '#dfe6e7' },
+  'Private Company': { bg: '#65BD8B', fg: '#1a3828', light: '#b2dec5' },
+  Other: { bg: '#BECCCF', fg: '#3a4a4f', light: '#dfe6e7' },
 };
 
 /** Observable's ownerType classification function. */

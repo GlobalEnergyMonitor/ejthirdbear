@@ -224,7 +224,13 @@ export class ComposeState {
     const allColumns = [
       { key: 'name', label: 'Asset', sortable: true, filterable: true },
       { key: 'asset_id', label: 'Asset ID', sortable: true, filterable: true },
-      { key: 'tracker', label: 'Tracker', sortable: true, filterable: true, colorMap: trackerColors },
+      {
+        key: 'tracker',
+        label: 'Tracker',
+        sortable: true,
+        filterable: true,
+        colorMap: trackerColors,
+      },
       { key: 'status', label: 'Status', sortable: true, filterable: true },
       { key: 'country', label: 'Country', sortable: true, filterable: true },
       ...(this.availableColumns.hasCapacity
@@ -590,7 +596,14 @@ export class ComposeState {
   };
 
   removeFilter = (key: string, value?: string) => {
-    const arrayKeys = ['trackers', 'statuses', 'countries', 'stateProvinces', 'ownerCountries', 'owners'];
+    const arrayKeys = [
+      'trackers',
+      'statuses',
+      'countries',
+      'stateProvinces',
+      'ownerCountries',
+      'owners',
+    ];
     if (arrayKeys.includes(key)) {
       (this.filters as any)[key] = value
         ? (this.filters as any)[key].filter((v: string) => v !== value)

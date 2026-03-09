@@ -2,7 +2,7 @@
  * Asset search & detail tool handlers.
  */
 
-import { getAsset, getOwnershipGraph, listAssets, resolveApiSlug } from '$lib/ownership-api';
+import { getAsset, getOwnershipGraph, resolveApiSlug } from '$lib/ownership-api';
 import {
   API_BASE,
   fetchApiJson,

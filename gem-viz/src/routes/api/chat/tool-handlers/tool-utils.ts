@@ -6,7 +6,7 @@ import type { CartItem } from '../tools';
 
 export type ToolArgs = Record<string, unknown>;
 export type ToolResult = { success: boolean; data?: unknown; error?: string };
-export type ToolHandler = (args: ToolArgs, cart?: CartItem[]) => Promise<ToolResult>;
+export type ToolHandler = (_args: ToolArgs, _cart?: CartItem[]) => Promise<ToolResult>;
 
 export const API_BASE =
   import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL ||

@@ -14,7 +14,11 @@
   import { ALL_ASSET_CLASSES, getAssetClassById } from '$lib/data-config/asset-class-definitions';
   import { gemTrackerToUiTracker } from '$lib/data-config/screener-api';
   import { buildScreenerUrl } from '$lib/screener-url';
-  import { isValidTracker, STATUS_GROUPS, discoverStatusGroups } from '$lib/data-config/tracker-schema';
+  import {
+    isValidTracker,
+    STATUS_GROUPS,
+    discoverStatusGroups,
+  } from '$lib/data-config/tracker-schema';
   import { resolveApiSlug, getAPIBase, fetchStatusFacets } from '$lib/ownership-api';
 
   // ─── Category display config ────────────────────────────────────────
@@ -161,10 +165,12 @@
   const selectedStatuses = $derived.by(() => {
     const statuses = [];
     // Use dynamic groups if available, otherwise hardcoded
-    const groups = dynamicStatusGroups ?? STATUS_GROUPS.map((sg) => ({
-      id: sg.id,
-      statuses: sg.statuses.map((s) => ({ value: s })),
-    }));
+    const groups =
+      dynamicStatusGroups ??
+      STATUS_GROUPS.map((sg) => ({
+        id: sg.id,
+        statuses: sg.statuses.map((s) => ({ value: s })),
+      }));
     for (const sg of groups) {
       for (const s of sg.statuses) {
         if (statusChecks[`status-${sg.id}-${s.value}`]) {

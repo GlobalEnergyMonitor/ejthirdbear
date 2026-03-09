@@ -54,7 +54,8 @@
     const s: { id: string; label: string; optional?: boolean }[] = [];
     if (hasSubClasses || hasSubClassGroups) s.push({ id: 'subclass', label: 'Subclass' });
     if (hasStatusFilter) s.push({ id: 'status', label: 'Status' });
-    if (assetClass.availableFilters.geography) s.push({ id: 'geography', label: 'Geography', optional: true });
+    if (assetClass.availableFilters.geography)
+      s.push({ id: 'geography', label: 'Geography', optional: true });
     return s;
   });
   let currentStep = $state(0);
@@ -211,8 +212,8 @@
     {/if}
     {#if isMultiTracker}
       <div class="multi-tracker-note">
-        Spans {assetClass.trackers.length} trackers ({assetClass.trackers.join(', ')}). Current query
-        uses <strong>{assetClass.trackers[0]}</strong> only.
+        Spans {assetClass.trackers.length} trackers ({assetClass.trackers.join(', ')}). Current
+        query uses <strong>{assetClass.trackers[0]}</strong> only.
       </div>
     {/if}
     <!-- Step tabs -->
@@ -306,14 +307,17 @@
                 </div>
               </div>
             {/if}
-
           {:else if step.id === 'status'}
             <!-- OPERATING STATUS -->
             <div class="filter-section">
               <span class="section-heading">Operating status</span>
               <div class="status-toolbar">
                 <div class="status-presets" role="group" aria-label="Status presets">
-                  <button type="button" class="preset-btn" onclick={() => setStatusPreset('default')}>
+                  <button
+                    type="button"
+                    class="preset-btn"
+                    onclick={() => setStatusPreset('default')}
+                  >
                     Operating + planned
                   </button>
                   <button type="button" class="preset-btn" onclick={() => setStatusPreset('all')}>
@@ -356,7 +360,9 @@
                             />
                             <span>{statusItem.value}</span>
                             {#if statusItem.count > 0}
-                              <span class="count-badge small">{statusItem.count.toLocaleString()}</span>
+                              <span class="count-badge small"
+                                >{statusItem.count.toLocaleString()}</span
+                              >
                             {/if}
                           </label>
                         {/each}
@@ -369,12 +375,15 @@
                 <p class="status-warning">Select at least one status to continue.</p>
               {/if}
             </div>
-
           {:else if step.id === 'geography'}
             <!-- GEOGRAPHY (optional) -->
             <div class="filter-section">
-              <span class="section-heading">Geography <span class="optional-inline">optional</span></span>
-              <p class="step-hint">Leave empty to include all countries. You can proceed without filtering.</p>
+              <span class="section-heading"
+                >Geography <span class="optional-inline">optional</span></span
+              >
+              <p class="step-hint">
+                Leave empty to include all countries. You can proceed without filtering.
+              </p>
               <CountryMultiSelect bind:selected={geoFilters} countries={COUNTRIES} />
               <GeoFenceInput bind:geofence />
             </div>
@@ -395,7 +404,11 @@
     </button>
     <div class="footer-right">
       {#key isLastStep || canFinishNow}
-        <div class="footer-actions" in:fade={{ duration: 180, delay: 60 }} out:fade={{ duration: 120 }}>
+        <div
+          class="footer-actions"
+          in:fade={{ duration: 180, delay: 60 }}
+          out:fade={{ duration: 120 }}
+        >
           {#if isLastStep || canFinishNow}
             {#if !isLastStep}
               <button class="footer-btn geo-opt-in" onclick={() => goToStep(currentStep + 1)}>
@@ -410,11 +423,7 @@
               <SearchIcon size={14} />
               Search Specific Owners
             </button>
-            <button
-              class="footer-btn primary"
-              onclick={onShowAllOwners}
-              disabled={actionsDisabled}
-            >
+            <button class="footer-btn primary" onclick={onShowAllOwners} disabled={actionsDisabled}>
               <ArrowRight size={14} />
               Show All Owners
             </button>
@@ -441,8 +450,12 @@
   }
 
   @keyframes backdropIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
 
   .modal {
@@ -620,8 +633,8 @@
     transform: translateX(0);
     pointer-events: auto;
     transition:
-      opacity 260ms cubic-bezier(0.4, 0, 0.2, 1) 40ms, /* slight delay for crossfade feel */
-      transform 300ms cubic-bezier(0.16, 1, 0.3, 1) 40ms,
+      opacity 260ms cubic-bezier(0.4, 0, 0.2, 1) 40ms,
+      /* slight delay for crossfade feel */ transform 300ms cubic-bezier(0.16, 1, 0.3, 1) 40ms,
       visibility 0ms 0ms; /* immediately visible */
   }
 

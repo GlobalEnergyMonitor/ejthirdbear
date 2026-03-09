@@ -56,9 +56,7 @@
   });
 
   // Aria label for accessibility
-  const ariaLabel = $derived(
-    inCart ? `Remove ${name} from report` : `Add ${name} to report`
-  );
+  const ariaLabel = $derived(inCart ? `Remove ${name} from report` : `Add ${name} to report`);
 
   // Build class list from global button classes
   const buttonClass = $derived.by(() => {

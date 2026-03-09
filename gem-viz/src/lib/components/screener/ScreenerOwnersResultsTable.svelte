@@ -157,7 +157,9 @@
     border-style: solid;
     border-width: 4px 0 4px 6px;
     border-color: transparent transparent transparent var(--color-gray-300, #cbd5e1);
-    transition: transform 150ms ease, border-color 150ms ease;
+    transition:
+      transform 150ms ease,
+      border-color 150ms ease;
     flex-shrink: 0;
   }
 
@@ -252,7 +254,8 @@
       width: 60px;
     }
 
-    td, th {
+    td,
+    th {
       padding: 8px 10px;
     }
   }

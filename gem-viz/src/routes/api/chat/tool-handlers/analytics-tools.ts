@@ -60,9 +60,7 @@ async function getTopOwners(args: ToolArgs): Promise<ToolResult> {
   }
 
   const sorted = [...ownerMap.values()]
-    .sort((a, b) =>
-      metric === 'capacity' ? b.capacity - a.capacity : b.assetCount - a.assetCount
-    )
+    .sort((a, b) => (metric === 'capacity' ? b.capacity - a.capacity : b.assetCount - a.assetCount))
     .slice(0, limit);
 
   return {
@@ -143,9 +141,7 @@ async function getTopOwnersByCountry(args: ToolArgs): Promise<ToolResult> {
     }
   }
 
-  const sortedOwners = [...ownerCounts.values()]
-    .sort((a, b) => b.count - a.count)
-    .slice(0, limit);
+  const sortedOwners = [...ownerCounts.values()].sort((a, b) => b.count - a.count).slice(0, limit);
 
   return {
     success: true,

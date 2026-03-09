@@ -9,10 +9,7 @@
  */
 export function cleanAssetName(name: string): string {
   if (!name) return '';
-  return name.replace(
-    /\b(plant|station|project|center|centre|complex|facility)\b[\s\S]*$/i,
-    '$1'
-  );
+  return name.replace(/\b(plant|station|project|center|centre|complex|facility)\b[\s\S]*$/i, '$1');
 }
 
 /**

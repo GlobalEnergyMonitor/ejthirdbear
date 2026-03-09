@@ -251,7 +251,6 @@
       if (import.meta.env.DEV) console.error('Failed to load owners:', err);
       error = err?.message || 'Failed to load data';
       loading = false;
-
     }
   });
 
@@ -316,7 +315,9 @@
           <span class="crumb-sep">/</span>
           <span class="crumb">
             {Array.isArray(geo)
-              ? geo.length <= 3 ? geo.join(', ') : `${geo.length} countries`
+              ? geo.length <= 3
+                ? geo.join(', ')
+                : `${geo.length} countries`
               : geo}
           </span>
         {/if}

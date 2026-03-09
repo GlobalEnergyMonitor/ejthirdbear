@@ -45,9 +45,7 @@
     {#if state.allMatchingSelected}
       <span class="selection-count">{state.allMatchingIds.length.toLocaleString()} selected</span>
       {#if state.allMatchingNotInCart > 0}
-        <button class="cart-btn add" onclick={state.addAllMatchingToCart}
-          >Add all to report</button
-        >
+        <button class="cart-btn add" onclick={state.addAllMatchingToCart}>Add all to report</button>
       {/if}
       {#if state.allMatchingInCart > 0}
         <button class="cart-btn remove" onclick={state.removeAllMatchingFromCart}>

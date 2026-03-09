@@ -42,7 +42,9 @@ export interface ColumnNames {
 }
 
 let _apiBase: string;
-function getBase() { return _apiBase ??= getAPIBase(); }
+function getBase() {
+  return (_apiBase ??= getAPIBase());
+}
 
 const API_TIMEOUT_MS = 30_000;
 
@@ -462,7 +464,10 @@ export function clientSideFilter(assets: AssetSummary[], filters: FilterState): 
     }
 
     // State/province filter
-    const allStateProvinces = [...(filters.stateProvinces || []), ...(filters.stateProvincesAnd || [])];
+    const allStateProvinces = [
+      ...(filters.stateProvinces || []),
+      ...(filters.stateProvincesAnd || []),
+    ];
     if (allStateProvinces.length) {
       const sp = (asset as any).stateProvince || '';
       if (!allStateProvinces.includes(sp)) return false;

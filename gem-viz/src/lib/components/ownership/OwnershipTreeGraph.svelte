@@ -84,7 +84,8 @@
   const graphDirection = $derived<'upstream' | 'downstream'>(
     direction !== 'auto'
       ? direction
-      : edges.filter((e) => e.source === rootId).length > edges.filter((e) => e.target === rootId).length
+      : edges.filter((e) => e.source === rootId).length >
+          edges.filter((e) => e.target === rootId).length
         ? 'downstream'
         : 'upstream'
   );
@@ -177,9 +178,7 @@
   const largeGraphMinWidth = $derived(
     fullWidthMode ? Math.max(720, Math.min(1400, viewportWidth - 64)) : 800
   );
-  const largeGraphMinHeight = $derived(
-    fullWidthMode ? (viewportWidth < 900 ? 460 : 620) : 600
-  );
+  const largeGraphMinHeight = $derived(fullWidthMode ? (viewportWidth < 900 ? 460 : 620) : 600);
   const graphBaseWidth = $derived(Math.max(gWidth, largeGraphMinWidth));
   const graphBaseHeight = $derived(Math.max(gHeight, largeGraphMinHeight));
 
@@ -225,9 +224,13 @@
   // 'deep-narrow' = deep tree (>5 ranks) with <25 nodes → compress ranks, labels to right
   // 'large' = ≥25 nodes → hide most labels, show only high-pct or hovered
   const labelMode = $derived<'default' | 'deep-narrow' | 'large'>(
-    compact ? 'default' :
-    renderNodes.length >= 25 ? 'large' :
-    maxDepth > 5 && renderNodes.length < 25 ? 'deep-narrow' : 'default'
+    compact
+      ? 'default'
+      : renderNodes.length >= 25
+        ? 'large'
+        : maxDepth > 5 && renderNodes.length < 25
+          ? 'deep-narrow'
+          : 'default'
   );
 
   // Node radius — matched to Observable's nodeRadius function
@@ -282,9 +285,10 @@
     let cur = startId;
 
     while (true) {
-      const next = graphDirection === 'downstream'
-        ? renderEdges.filter((e) => e.source === cur && !spine.has(e.target))
-        : renderEdges.filter((e) => e.target === cur && !spine.has(e.source));
+      const next =
+        graphDirection === 'downstream'
+          ? renderEdges.filter((e) => e.source === cur && !spine.has(e.target))
+          : renderEdges.filter((e) => e.target === cur && !spine.has(e.source));
       if (next.length !== 1) break; // stop at fork or dead end
       cur = graphDirection === 'downstream' ? next[0].target : next[0].source;
       spine.add(cur);
@@ -386,28 +390,36 @@
 
   // Lookup original GraphNode for tooltip (by hovered layout node id)
   const hoveredGraphNode = $derived(hoveredId ? nodes.find((n) => n.id === hoveredId) : null);
-  const hoveredLayoutNode = $derived(hoveredId ? layoutNodes.find((n) => n.id === hoveredId) : null);
+  const hoveredLayoutNode = $derived(
+    hoveredId ? layoutNodes.find((n) => n.id === hoveredId) : null
+  );
   const maxOwnerPct = $derived(ownersList.length > 0 ? ownersList[0].pct : 100);
 
   // Data-driven narrative text for the context panel
-  const narrativeText = $derived.by(() => buildNarrativeText({
-    renderNodes, renderEdges, nodes, rootId, graphDirection,
-    focusId: frozenId || hoveredId,
-    pathsMap, edgePctMap, paths,
-  }));
+  const narrativeText = $derived.by(() =>
+    buildNarrativeText({
+      renderNodes,
+      renderEdges,
+      nodes,
+      rootId,
+      graphDirection,
+      focusId: frozenId || hoveredId,
+      pathsMap,
+      edgePctMap,
+      paths,
+    })
+  );
 
   // Max chars per label line — scales with node radius so labels fit
   // nodeR 28 → 16 chars, nodeR 22 → 13, nodeR 18 → 11, compact → 10
-  const labelMaxChars = $derived(
-    compact ? 10 : Math.max(8, Math.round(nodeR * 0.57))
-  );
+  const labelMaxChars = $derived(compact ? 10 : Math.max(8, Math.round(nodeR * 0.57)));
 
   // Position labels to avoid overlap: groups entity nodes by dagre rank,
   // then picks centered/offset/stacked placement based on horizontal spacing.
   // In 'deep-narrow' mode, labels shift to the right of nodes to save vertical space.
   function computeLabelPositions(lnodes: LayoutNode[], ranks: Map<string, number>) {
     // Label gap and estimated width scale with node radius
-    const labelGap = Math.round(nodeR * 0.45);   // nodeR 28→13, 22→10, 18→8
+    const labelGap = Math.round(nodeR * 0.45); // nodeR 28→13, 22→10, 18→8
     const labelW = Math.round(labelMaxChars * 6); // ~6px per char at current font size
 
     // Deep-narrow mode: all labels to the right of the node
@@ -471,15 +483,16 @@
     // Observable's sizeDependantNodeSeparation:
     // d3.scaleLinear().domain([5, 40]).range([30, 2]).clamp(true)
     const nodeCount = renderNodes.length;
-    const dynamicNodeSep = compact ? nodeR * 2 :
-      Math.max(2, Math.min(30, 30 - (nodeCount - 5) * (28 / 35)));
+    const dynamicNodeSep = compact
+      ? nodeR * 2
+      : Math.max(2, Math.min(30, 30 - (nodeCount - 5) * (28 / 35)));
     g.setGraph({
       rankdir: graphDirection === 'downstream' ? 'TB' : 'BT',
-      nodesep: dynamicNodeSep,               // Observable: sizeDependantNodeSeparation
-      ranksep: compact ? 28 : 60,            // Observable default: 60
-      edgesep: 0,                            // Observable default: 0
-      marginx: compact ? 15 : nodeR,         // Observable: nodeRadius
-      marginy: compact ? 12 : nodeR,         // Observable: nodeRadius
+      nodesep: dynamicNodeSep, // Observable: sizeDependantNodeSeparation
+      ranksep: compact ? 28 : 60, // Observable default: 60
+      edgesep: 0, // Observable default: 0
+      marginx: compact ? 15 : nodeR, // Observable: nodeRadius
+      marginy: compact ? 12 : nodeR, // Observable: nodeRadius
     });
     g.setDefaultEdgeLabel(() => ({}));
 
@@ -501,7 +514,7 @@
       const assetLabel = n.name || n.Name || n.id || '';
       const estimatedTextW = Math.min(assetLabel.length * 7.5, 300);
       const assetW = compact ? 120 : Math.max(180, estimatedTextW + 48);
-      const assetH = compact ? 24 : (n.asset_type ? 48 : 36);
+      const assetH = compact ? 24 : n.asset_type ? 48 : 36;
       // Observable: include label text width in entity node width for dagre layout
       // This prevents labels from overlapping adjacent nodes
       const entityLabel = n.name || n.Name || n.id || '';
@@ -515,8 +528,10 @@
     // Observable: edge weights influence dagre layout priority
     // asset edges = 3, both small = 1, one small = 2, normal = 3
     renderEdges.forEach((e) => {
-      const srcIsAsset = e.source === rootId || renderNodes.find((n) => n.id === e.source)?.type === 'asset';
-      const tgtIsAsset = e.target === rootId || renderNodes.find((n) => n.id === e.target)?.type === 'asset';
+      const srcIsAsset =
+        e.source === rootId || renderNodes.find((n) => n.id === e.source)?.type === 'asset';
+      const tgtIsAsset =
+        e.target === rootId || renderNodes.find((n) => n.id === e.target)?.type === 'asset';
       let weight = 3;
       if (!srcIsAsset && !tgtIsAsset) {
         const srcSmall = smallOwnershipSet.has(e.source);
@@ -535,9 +550,7 @@
     const yPos = new Map(g.nodes().map((id: string) => [id, Math.round(g.node(id).y)] as const));
     const isBT = graphDirection === 'upstream';
     const yToRank = new Map(
-      [...new Set(yPos.values())]
-        .sort((a, b) => isBT ? b - a : a - b)
-        .map((y, i) => [y, i])
+      [...new Set(yPos.values())].sort((a, b) => (isBT ? b - a : a - b)).map((y, i) => [y, i])
     );
     nodeRanks = new Map([...yPos].map(([id, y]) => [id, yToRank.get(y) ?? 0]));
 
@@ -552,7 +565,7 @@
       const pct = pathsMap.get(orig?.entity_id || id) || 0;
       // Observable: make_tiny = dynamicSizing && curPct < 2
       const isSmallOwnership = !isAsset && pct < 2;
-      const r = isAsset ? 0 : (isSmallOwnership ? nodeR * 0.5 : nodeR);
+      const r = isAsset ? 0 : isSmallOwnership ? nodeR * 0.5 : nodeR;
       return {
         id,
         x: pos.x,
@@ -597,7 +610,8 @@
   // Small ownership nodes (< 2%) don't show labels unless hovered
   function shouldShowLabel(n: LayoutNode): boolean {
     // Always show: asset root, currently hovered/frozen, spine nodes
-    if (n.isAsset || hoveredId === n.id || frozenId === n.id || nodesToShowText.has(n.id)) return true;
+    if (n.isAsset || hoveredId === n.id || frozenId === n.id || nodesToShowText.has(n.id))
+      return true;
     // Observable: unhide labels for ALL nodes on the active path (not just the hovered one)
     if (activeNodeData?.nodesTouched.includes(n.id)) return true;
     if (compact && layoutNodes.length < 10) return true;
@@ -622,7 +636,8 @@
     const id = activeId;
     if (!id) return { ownerId: null, country: null, entityType: null };
     const orig = nodes.find((n) => n.id === id);
-    if (!orig || orig.type === 'asset' || orig.id === rootId) return { ownerId: null, country: null, entityType: null };
+    if (!orig || orig.type === 'asset' || orig.id === rootId)
+      return { ownerId: null, country: null, entityType: null };
     return {
       ownerId: orig.entity_id || orig.id,
       country: orig.headquarters_country || null,
@@ -779,8 +794,12 @@
       const svgPtY = vbY + fracY * vbH;
       const newW = fullW / next;
       const newH = fullH / next;
-      panXSpring.set(svgPtX - fracX * newW - (-svgMargins.left + (fullW - newW) / 2), { hard: true });
-      panYSpring.set(svgPtY - fracY * newH - (-svgMargins.top + (fullH - newH) / 2), { hard: true });
+      panXSpring.set(svgPtX - fracX * newW - (-svgMargins.left + (fullW - newW) / 2), {
+        hard: true,
+      });
+      panYSpring.set(svgPtY - fracY * newH - (-svgMargins.top + (fullH - newH) / 2), {
+        hard: true,
+      });
     }
 
     zoomSpring.set(next, { hard: true });
@@ -800,9 +819,15 @@
   }
 
   async function runEntranceAnimation() {
-    if (compact) { entranceAnimDone = true; return; }
+    if (compact) {
+      entranceAnimDone = true;
+      return;
+    }
     const container = graphWrapEl?.closest('.ownership-tree');
-    if (!container) { entranceAnimDone = true; return; }
+    if (!container) {
+      entranceAnimDone = true;
+      return;
+    }
 
     try {
       const { createTimeline } = await import('animejs');
@@ -815,40 +840,58 @@
         const nodeEls = container.querySelectorAll(`.node[data-rank="${rank}"]`);
         const edgeEls = container.querySelectorAll(`.edge[data-rank="${rank}"]`);
         if (nodeEls.length > 0) {
-          tl.add(nodeEls, {
-            opacity: [0, 1],
-            duration: 500,
-          }, rank === 0 ? 0 : '-=300');
+          tl.add(
+            nodeEls,
+            {
+              opacity: [0, 1],
+              duration: 500,
+            },
+            rank === 0 ? 0 : '-=300'
+          );
 
-          const shapes = container.querySelectorAll(`.node[data-rank="${rank}"] circle, .node[data-rank="${rank}"] rect`);
+          const shapes = container.querySelectorAll(
+            `.node[data-rank="${rank}"] circle, .node[data-rank="${rank}"] rect`
+          );
           if (shapes.length > 0) {
-            tl.add(shapes, {
-              scale: [0, 1],
-              duration: 450,
-              ease: 'easeOutBack',
-            }, rank === 0 ? 50 : '-=350');
+            tl.add(
+              shapes,
+              {
+                scale: [0, 1],
+                duration: 450,
+                ease: 'easeOutBack',
+              },
+              rank === 0 ? 50 : '-=350'
+            );
           }
         }
 
         // Edges fade in after their rank's nodes
         if (edgeEls.length > 0) {
-          tl.add(edgeEls, {
-            opacity: [0, 1],
-            duration: 400,
-            ease: 'easeOutQuad',
-          }, '-=250');
+          tl.add(
+            edgeEls,
+            {
+              opacity: [0, 1],
+              duration: 400,
+              ease: 'easeOutQuad',
+            },
+            '-=250'
+          );
         }
       }
 
       // Panel slides in toward the end
       const panel = container.querySelector('.panel');
       if (panel) {
-        tl.add(panel, {
-          opacity: [0, 1],
-          translateX: [16, 0],
-          duration: 400,
-          ease: 'easeOutQuad',
-        }, '-=200');
+        tl.add(
+          panel,
+          {
+            opacity: [0, 1],
+            translateX: [16, 0],
+            duration: 400,
+            ease: 'easeOutQuad',
+          },
+          '-=200'
+        );
       }
 
       // When timeline completes, hand control back to Svelte reactivity
@@ -913,8 +956,8 @@
             {#if isTrimmedGraph}
               <div class="density-note">
                 Showing {renderNodes.length.toLocaleString()} of {nodes.length.toLocaleString()} entities
-                ({hiddenNodeCount.toLocaleString()} hidden, {hiddenEdgeCount.toLocaleString()} edges hidden)
-                for responsive rendering.
+                ({hiddenNodeCount.toLocaleString()} hidden, {hiddenEdgeCount.toLocaleString()} edges
+                hidden) for responsive rendering.
               </div>
             {/if}
             {#if colorConfig.legendItems.length > 0}
@@ -932,189 +975,274 @@
             <div class="color-legend edge-legend">
               <span class="legend-item">
                 <svg class="legend-swatch" viewBox="0 0 24 8" width="24" height="8">
-                  <line x1="0" y1="4" x2="24" y2="4" stroke={C.edge} stroke-width="2" stroke-linecap="round" />
+                  <line
+                    x1="0"
+                    y1="4"
+                    x2="24"
+                    y2="4"
+                    stroke={C.edge}
+                    stroke-width="2"
+                    stroke-linecap="round"
+                  />
                 </svg>
                 Known
               </span>
               <span class="legend-item">
                 <svg class="legend-swatch" viewBox="0 0 24 8" width="24" height="8">
-                  <line x1="0" y1="4" x2="24" y2="4" stroke={C.edgeImputed} stroke-width="1.5" stroke-linecap="round" />
+                  <line
+                    x1="0"
+                    y1="4"
+                    x2="24"
+                    y2="4"
+                    stroke={C.edgeImputed}
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                  />
                 </svg>
                 Estimated
               </span>
             </div>
           </div>
         {/if}
-      <div
-        class="graph-wrap"
-        class:panning={isPanning}
-        bind:this={graphWrapEl}
-        onpointerdown={startPan}
-        onpointermove={movePan}
-        onpointerup={endPan}
-        onpointercancel={endPan}
-        onpointerleave={endPan}
-        onwheel={onGraphWheel}
-      >
-        <svg
-          viewBox="{vbX} {vbY} {vbW} {vbH}"
-          preserveAspectRatio="xMidYMid meet"
-          style={isLargeGraph
-            ? `width: ${Math.round(graphBaseWidth)}px; min-height: ${Math.round(graphBaseHeight)}px;`
-            : !compact
-              ? `max-width: ${fullW + 40}px; max-height: ${fullH + 40}px;`
-              : ''}
-          onclick={(ev) => {
-            // Click on SVG background (not a node) unfreezes
-            if (ev.target === ev.currentTarget || (ev.target instanceof Element && ev.target.tagName === 'svg')) {
-              frozenId = null;
-              frozenNodeData = null;
-            }
-          }}
-          onmouseleave={handleNodeLeave}
+        <div
+          class="graph-wrap"
+          class:panning={isPanning}
+          bind:this={graphWrapEl}
+          onpointerdown={startPan}
+          onpointermove={movePan}
+          onpointerup={endPan}
+          onpointercancel={endPan}
+          onpointerleave={endPan}
+          onwheel={onGraphWheel}
         >
-          <defs>
-            <marker id="arr" markerWidth="10" markerHeight="10" refX="4" refY="5" orient="auto" markerUnits="strokeWidth" viewBox="0 0 10 10">
-              <path d="M -5 0 L 5 5 L -5 10 Z" fill={C.edge} />
-            </marker>
-            <marker id="arr-imputed" markerWidth="10" markerHeight="10" refX="4" refY="5" orient="auto" markerUnits="strokeWidth" viewBox="0 0 10 10">
-              <path d="M -5 0 L 5 5 L -5 10 Z" fill={C.edgeImputed} />
-            </marker>
-          </defs>
-          <!-- Content group with isolation for mix-blend-mode -->
-          <g style="isolation: isolate">
+          <svg
+            viewBox="{vbX} {vbY} {vbW} {vbH}"
+            preserveAspectRatio="xMidYMid meet"
+            style={isLargeGraph
+              ? `width: ${Math.round(graphBaseWidth)}px; min-height: ${Math.round(graphBaseHeight)}px;`
+              : !compact
+                ? `max-width: ${fullW + 40}px; max-height: ${fullH + 40}px;`
+                : ''}
+            onclick={(ev) => {
+              // Click on SVG background (not a node) unfreezes
+              if (
+                ev.target === ev.currentTarget ||
+                (ev.target instanceof Element && ev.target.tagName === 'svg')
+              ) {
+                frozenId = null;
+                frozenNodeData = null;
+              }
+            }}
+            onmouseleave={handleNodeLeave}
+          >
+            <defs>
+              <marker
+                id="arr"
+                markerWidth="10"
+                markerHeight="10"
+                refX="4"
+                refY="5"
+                orient="auto"
+                markerUnits="strokeWidth"
+                viewBox="0 0 10 10"
+              >
+                <path d="M -5 0 L 5 5 L -5 10 Z" fill={C.edge} />
+              </marker>
+              <marker
+                id="arr-imputed"
+                markerWidth="10"
+                markerHeight="10"
+                refX="4"
+                refY="5"
+                orient="auto"
+                markerUnits="strokeWidth"
+                viewBox="0 0 10 10"
+              >
+                <path d="M -5 0 L 5 5 L -5 10 Z" fill={C.edgeImputed} />
+              </marker>
+            </defs>
+            <!-- Content group with isolation for mix-blend-mode -->
+            <g style="isolation: isolate">
+              <!-- Edges -->
+              {#each layoutEdges as e, idx (e.source + e.target)}
+                {@const mid = e.points?.[Math.floor(e.points.length / 2)]}
+                {@const showLabel = shouldShowEdgeLabel(idx)}
+                {@const opacity = getEdgeOpacity(idx)}
+                {@const sourceNode = layoutNodes.find((nd) => nd.id === e.source)}
+                {@const targetNode = layoutNodes.find((nd) => nd.id === e.target)}
+                {@const sourcePct = sourceNode?.pct ?? 0}
+                {@const isSmall = sourcePct < 2}
+                {@const baseWidth = isSmall
+                  ? e.imputed_share
+                    ? 0.9
+                    : 0.95
+                  : e.imputed_share
+                    ? 1.25
+                    : 1.5}
+                {@const scaleFactor = Math.min(
+                  1.75,
+                  Math.max(0.9, 0.9 + Math.pow(Math.min(sourcePct, 50) / 50, 2) * 0.85)
+                )}
+                {@const strokeW = baseWidth * scaleFactor}
+                {@const edgeOpacity = isSmall ? (e.imputed_share ? 0.8 : 0.6) : 1}
+                {@const edgeRank = Math.max(sourceNode?.rank ?? 0, targetNode?.rank ?? 0)}
+                <g
+                  class="edge"
+                  data-rank={edgeRank}
+                  style="opacity: {entranceAnimDone ? opacity : 0}"
+                >
+                  <path
+                    d={edgePath(e.points)}
+                    stroke={e.imputed_share ? C.edgeImputed : C.edge}
+                    stroke-width={strokeW}
+                    stroke-linecap="round"
+                    style="mix-blend-mode: multiply; opacity: {edgeOpacity}"
+                    fill="none"
+                    marker-end="url(#{e.imputed_share ? 'arr-imputed' : 'arr'})"
+                  />
+                  {#if e.value && mid && showLabel}
+                    <text
+                      x={mid.x}
+                      y={mid.y - 5}
+                      class="edge-lbl"
+                      style="fill: {e.imputed_share ? '#6c777a' : C.teal}"
+                      >{Number.isInteger(e.value) ? e.value : e.value.toFixed(1)}%</text
+                    >
+                  {/if}
+                </g>
+              {/each}
 
-          <!-- Edges -->
-          {#each layoutEdges as e, idx (e.source + e.target)}
-            {@const mid = e.points?.[Math.floor(e.points.length / 2)]}
-            {@const showLabel = shouldShowEdgeLabel(idx)}
-            {@const opacity = getEdgeOpacity(idx)}
-            {@const sourceNode = layoutNodes.find((nd) => nd.id === e.source)}
-            {@const targetNode = layoutNodes.find((nd) => nd.id === e.target)}
-            {@const sourcePct = sourceNode?.pct ?? 0}
-            {@const isSmall = sourcePct < 2}
-            {@const baseWidth = isSmall ? (e.imputed_share ? 0.9 : 0.95) : (e.imputed_share ? 1.25 : 1.5)}
-            {@const scaleFactor = Math.min(1.75, Math.max(0.9, 0.9 + (Math.pow(Math.min(sourcePct, 50) / 50, 2)) * 0.85))}
-            {@const strokeW = baseWidth * scaleFactor}
-            {@const edgeOpacity = isSmall ? (e.imputed_share ? 0.8 : 0.6) : 1}
-            {@const edgeRank = Math.max(sourceNode?.rank ?? 0, targetNode?.rank ?? 0)}
-            <g
-              class="edge"
-              data-rank={edgeRank}
-              style="opacity: {entranceAnimDone ? opacity : 0}"
-            >
-              <path
-                d={edgePath(e.points)}
-                stroke={e.imputed_share ? C.edgeImputed : C.edge}
-                stroke-width={strokeW}
-                stroke-linecap="round"
-                style="mix-blend-mode: multiply; opacity: {edgeOpacity}"
-                fill="none"
-                marker-end="url(#{e.imputed_share ? 'arr-imputed' : 'arr'})"
-              />
-              {#if e.value && mid && showLabel}
-                <text x={mid.x} y={mid.y - 5} class="edge-lbl"
-                  style="fill: {e.imputed_share ? '#6c777a' : C.teal}"
-                >{Number.isInteger(e.value) ? e.value : e.value.toFixed(1)}%</text>
-              {/if}
-            </g>
-          {/each}
-
-          <!-- Nodes -->
-          {#each layoutNodes as n (n.id)}
-            {@const showLabel = shouldShowLabel(n)}
-            {@const wrapped = wrapText(n.label, labelMaxChars)}
-            {@const pos = n.labelPos || { dx: 0, dy: n.r + 12, below: false, small: false }}
-            {@const opacity = getNodeOpacity(n)}
-            <g
-              class="node"
-              class:hovered={hoveredId === n.id || frozenId === n.id}
-              class:frozen={frozenId === n.id}
-              class:in-chain={nodesToShowText.has(n.id)}
-              data-rank={n.rank}
-              transform="translate({n.x},{n.y})"
-              style="opacity: {entranceAnimDone ? opacity : 0}"
-              role="button"
-              tabindex="0"
-              onclick={() => clickNode(n)}
-              ondblclick={() => dblClickNode(n)}
-              onkeydown={(ev) => ev.key === 'Enter' && dblClickNode(n)}
-              onmouseenter={(ev) => handleNodeHover(n, ev)}
-              onmousemove={updateTooltipPos}
-              onmouseleave={handleNodeLeave}
-            >
-              {#if n.isAsset}
-                {@const assetNode = nodes.find((nd) => nd.id === n.id)}
-                {@const assetType = assetNode?.asset_type || ''}
-                <rect
-                  x={-n.w / 2}
-                  y={-n.h / 2}
-                  width={n.w}
-                  height={n.h}
-                  rx="8"
-                  fill={C.teal}
-                  stroke="none"
-                />
-                {@const maxChars = Math.max(18, Math.floor(n.w / 7.5))}
-                {@const displayLabel = n.label.length > maxChars ? n.label.slice(0, maxChars - 1).trim() + '…' : n.label}
-                {#if assetType && !compact}
-                  <text class="asset-sub-lbl" fill={C.mint} dy="-0.15em"
-                    >{assetType}</text
-                  >
-                  <text class="asset-main-lbl" fill="white" dy="1.15em"
-                    >{displayLabel}</text
-                  >
-                {:else}
-                  <text class="asset-main-lbl" fill="white" dy="0.35em"
-                    >{compact ? (n.label.length > Math.floor(n.w / 6) ? n.label.slice(0, Math.floor(n.w / 6) - 1).trim() + '…' : n.label) : displayLabel}</text
-                  >
-                {/if}
-              {:else}
-                {@const nodeColors = getNodeColors(n.id, rootId, nodes)}
-                {@const circlePad = Math.round(nodeR * 0.18)}
-                {@const visualR = n.r - (n.isSmallOwnership ? 0.75 : 2) - circlePad * (n.isSmallOwnership ? 0.5 : 1)}
-                {@const pieR = visualR - (n.isSmallOwnership ? 0 : 2)}
-                <circle
-                  r={visualR}
-                  fill={n.isSmallOwnership ? nodeColors.light : nodeColors.bg}
-                  stroke={n.isSmallOwnership ? nodeColors.bg : nodeColors.bg}
-                  stroke-width={n.isSmallOwnership ? 1.5 : 4}
-                  stroke-opacity={n.isSmallOwnership ? 0.7 : 1}
-                />
-                {#if n.pct > 0 && !n.isSmallOwnership}
-                  <path d={pieArc(n.pct, pieR)} fill={nodeColors.fg} style="pointer-events: none" />
-                {/if}
-                {#if showLabel}
-                  {@const isRightLabel = pos.dx > 0 && pos.dy === 0}
-                  <text
-                    class="node-lbl"
-                    class:small={pos.small}
-                    class:right-label={isRightLabel}
-                    x={pos.dx}
-                    y={pos.dy}
-                  >
-                    <tspan x={pos.dx} dy={wrapped.line2 ? '-0.3em' : '0'}>{wrapped.line1}</tspan>
-                    {#if wrapped.line2}
-                      <tspan x={pos.dx} dy="1.1em">{wrapped.line2}</tspan>
+              <!-- Nodes -->
+              {#each layoutNodes as n (n.id)}
+                {@const showLabel = shouldShowLabel(n)}
+                {@const wrapped = wrapText(n.label, labelMaxChars)}
+                {@const pos = n.labelPos || { dx: 0, dy: n.r + 12, below: false, small: false }}
+                {@const opacity = getNodeOpacity(n)}
+                <g
+                  class="node"
+                  class:hovered={hoveredId === n.id || frozenId === n.id}
+                  class:frozen={frozenId === n.id}
+                  class:in-chain={nodesToShowText.has(n.id)}
+                  data-rank={n.rank}
+                  transform="translate({n.x},{n.y})"
+                  style="opacity: {entranceAnimDone ? opacity : 0}"
+                  role="button"
+                  tabindex="0"
+                  onclick={() => clickNode(n)}
+                  ondblclick={() => dblClickNode(n)}
+                  onkeydown={(ev) => ev.key === 'Enter' && dblClickNode(n)}
+                  onmouseenter={(ev) => handleNodeHover(n, ev)}
+                  onmousemove={updateTooltipPos}
+                  onmouseleave={handleNodeLeave}
+                >
+                  {#if n.isAsset}
+                    {@const assetNode = nodes.find((nd) => nd.id === n.id)}
+                    {@const assetType = assetNode?.asset_type || ''}
+                    <rect
+                      x={-n.w / 2}
+                      y={-n.h / 2}
+                      width={n.w}
+                      height={n.h}
+                      rx="8"
+                      fill={C.teal}
+                      stroke="none"
+                    />
+                    {@const maxChars = Math.max(18, Math.floor(n.w / 7.5))}
+                    {@const displayLabel =
+                      n.label.length > maxChars
+                        ? n.label.slice(0, maxChars - 1).trim() + '…'
+                        : n.label}
+                    {#if assetType && !compact}
+                      <text class="asset-sub-lbl" fill={C.mint} dy="-0.15em">{assetType}</text>
+                      <text class="asset-main-lbl" fill="white" dy="1.15em">{displayLabel}</text>
+                    {:else}
+                      <text class="asset-main-lbl" fill="white" dy="0.35em"
+                        >{compact
+                          ? n.label.length > Math.floor(n.w / 6)
+                            ? n.label.slice(0, Math.floor(n.w / 6) - 1).trim() + '…'
+                            : n.label
+                          : displayLabel}</text
+                      >
                     {/if}
-                  </text>
-                {/if}
-              {/if}
+                  {:else}
+                    {@const nodeColors = getNodeColors(n.id, rootId, nodes)}
+                    {@const circlePad = Math.round(nodeR * 0.18)}
+                    {@const visualR =
+                      n.r -
+                      (n.isSmallOwnership ? 0.75 : 2) -
+                      circlePad * (n.isSmallOwnership ? 0.5 : 1)}
+                    {@const pieR = visualR - (n.isSmallOwnership ? 0 : 2)}
+                    <circle
+                      r={visualR}
+                      fill={n.isSmallOwnership ? nodeColors.light : nodeColors.bg}
+                      stroke={n.isSmallOwnership ? nodeColors.bg : nodeColors.bg}
+                      stroke-width={n.isSmallOwnership ? 1.5 : 4}
+                      stroke-opacity={n.isSmallOwnership ? 0.7 : 1}
+                    />
+                    {#if n.pct > 0 && !n.isSmallOwnership}
+                      <path
+                        d={pieArc(n.pct, pieR)}
+                        fill={nodeColors.fg}
+                        style="pointer-events: none"
+                      />
+                    {/if}
+                    {#if showLabel}
+                      {@const isRightLabel = pos.dx > 0 && pos.dy === 0}
+                      <text
+                        class="node-lbl"
+                        class:small={pos.small}
+                        class:right-label={isRightLabel}
+                        x={pos.dx}
+                        y={pos.dy}
+                      >
+                        <tspan x={pos.dx} dy={wrapped.line2 ? '-0.3em' : '0'}>{wrapped.line1}</tspan
+                        >
+                        {#if wrapped.line2}
+                          <tspan x={pos.dx} dy="1.1em">{wrapped.line2}</tspan>
+                        {/if}
+                      </text>
+                    {/if}
+                  {/if}
+                </g>
+              {/each}
             </g>
-          {/each}
-          </g>
-        </svg>
-      </div>
+          </svg>
+        </div>
         {#if !compact}
           <div class="zoom-stack">
             <button type="button" onclick={() => zoomBy(0.2)} title="Zoom in">
-              <svg viewBox="0 0 16 16" width="16" height="16"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+              <svg viewBox="0 0 16 16" width="16" height="16"
+                ><path
+                  d="M8 3v10M3 8h10"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  fill="none"
+                /></svg
+              >
             </button>
             <button type="button" onclick={() => zoomBy(-0.2)} title="Zoom out">
-              <svg viewBox="0 0 16 16" width="16" height="16"><path d="M3 8h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+              <svg viewBox="0 0 16 16" width="16" height="16"
+                ><path
+                  d="M3 8h10"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  fill="none"
+                /></svg
+              >
             </button>
             <button type="button" onclick={resetView} title="Reset view" class="home-btn">
-              <svg viewBox="0 0 16 16" width="16" height="16"><path d="M3 8.5V13h4v-3h2v3h4V8.5M1 9l7-6 7 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+              <svg viewBox="0 0 16 16" width="16" height="16"
+                ><path
+                  d="M3 8.5V13h4v-3h2v3h4V8.5M1 9l7-6 7 6"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  fill="none"
+                /></svg
+              >
             </button>
           </div>
         {/if}
@@ -1123,8 +1251,9 @@
       <!-- Side panel — 3 sections matching Observable's tables-container -->
       {#if !compact}
         <div class="panel" class:open={panelOpen} style="opacity: {entranceAnimDone ? 1 : 0}">
-          <button class="panel-toggle" onclick={() => panelOpen = !panelOpen}>
-            {ownersList.length} owner{ownersList.length !== 1 ? 's' : ''} {panelOpen ? '▲' : '▼'}
+          <button class="panel-toggle" onclick={() => (panelOpen = !panelOpen)}>
+            {ownersList.length} owner{ownersList.length !== 1 ? 's' : ''}
+            {panelOpen ? '▲' : '▼'}
           </button>
 
           <!-- Section 1: Owner Entities -->
@@ -1137,7 +1266,9 @@
                   class="tabular-row"
                   class:is-frozen-view={frozenId === o.id}
                   class:is-hovered-view={hoveredId === o.id && frozenId !== o.id}
-                  class:tease-connection={hoverSource === 'graph' && teaseNode.ownerId === o.nid && frozenId !== o.id}
+                  class:tease-connection={hoverSource === 'graph' &&
+                    teaseNode.ownerId === o.nid &&
+                    frozenId !== o.id}
                   role="button"
                   tabindex="0"
                   onmouseenter={() => {
@@ -1148,8 +1279,14 @@
                   }}
                   onmouseleave={handleNodeLeave}
                   onclick={() => {
-                    if (frozenId === o.id) { frozenId = null; frozenNodeData = null; }
-                    else { frozenId = o.id; frozenNodeData = pathsTouchedMap.get(o.nid) || null; hasEverFrozen = true; }
+                    if (frozenId === o.id) {
+                      frozenId = null;
+                      frozenNodeData = null;
+                    } else {
+                      frozenId = o.id;
+                      frozenNodeData = pathsTouchedMap.get(o.nid) || null;
+                      hasEverFrozen = true;
+                    }
                   }}
                   ondblclick={() => goto(entityLink(o.nid))}
                   onkeydown={(ev) => ev.key === 'Enter' && goto(entityLink(o.nid))}
@@ -1168,23 +1305,39 @@
                 {#each ownersByCountry as [country, data]}
                   <div
                     class="tabular-row"
-                    class:is-frozen-view={frozenNodeData && frozenNodeData.nodesTouched.length > 0 && data.ids.every((id: string) => frozenNodeData!.nodesTouched.includes(id)) && data.ids.some((id: string) => frozenId === id || frozenNodeData!.nodesTouched.includes(id))}
-                    class:tease-connection={hoverSource === 'graph' && teaseNode.country === country}
+                    class:is-frozen-view={frozenNodeData &&
+                      frozenNodeData.nodesTouched.length > 0 &&
+                      data.ids.every((id: string) => frozenNodeData!.nodesTouched.includes(id)) &&
+                      data.ids.some(
+                        (id: string) => frozenId === id || frozenNodeData!.nodesTouched.includes(id)
+                      )}
+                    class:tease-connection={hoverSource === 'graph' &&
+                      teaseNode.country === country}
                     role="button"
                     tabindex="0"
                     onmouseenter={() => {
                       if (frozenId) return;
                       hoverSource = 'panel';
                       hoveredId = data.ids[0] || null;
-                      hoveredNodeData = data.ids.length > 0 ? { nodesTouched: data.ids, edgeIndices: [] } : null;
+                      hoveredNodeData =
+                        data.ids.length > 0 ? { nodesTouched: data.ids, edgeIndices: [] } : null;
                     }}
                     onmouseleave={handleNodeLeave}
                     onclick={() => {
-                      if (frozenId && data.ids.includes(frozenId)) { frozenId = null; frozenNodeData = null; }
-                      else { frozenId = data.ids[0] || null; frozenNodeData = data.ids.length > 0 ? { nodesTouched: data.ids, edgeIndices: [] } : null; hasEverFrozen = true; }
+                      if (frozenId && data.ids.includes(frozenId)) {
+                        frozenId = null;
+                        frozenNodeData = null;
+                      } else {
+                        frozenId = data.ids[0] || null;
+                        frozenNodeData =
+                          data.ids.length > 0 ? { nodesTouched: data.ids, edgeIndices: [] } : null;
+                        hasEverFrozen = true;
+                      }
                     }}
                   >
-                    <span class="table-row-text">{country} ({data.count} owner{data.count !== 1 ? 's' : ''})</span>
+                    <span class="table-row-text"
+                      >{country} ({data.count} owner{data.count !== 1 ? 's' : ''})</span
+                    >
                   </div>
                 {/each}
               </div>
@@ -1199,22 +1352,33 @@
                 {#each ownersByType as [type, data]}
                   <div
                     class="tabular-row"
-                    class:tease-connection={hoverSource === 'graph' && teaseNode.entityType === type}
+                    class:tease-connection={hoverSource === 'graph' &&
+                      teaseNode.entityType === type}
                     role="button"
                     tabindex="0"
                     onmouseenter={() => {
                       if (frozenId) return;
                       hoverSource = 'panel';
                       hoveredId = data.ids[0] || null;
-                      hoveredNodeData = data.ids.length > 0 ? { nodesTouched: data.ids, edgeIndices: [] } : null;
+                      hoveredNodeData =
+                        data.ids.length > 0 ? { nodesTouched: data.ids, edgeIndices: [] } : null;
                     }}
                     onmouseleave={handleNodeLeave}
                     onclick={() => {
-                      if (frozenId && data.ids.includes(frozenId)) { frozenId = null; frozenNodeData = null; }
-                      else { frozenId = data.ids[0] || null; frozenNodeData = data.ids.length > 0 ? { nodesTouched: data.ids, edgeIndices: [] } : null; hasEverFrozen = true; }
+                      if (frozenId && data.ids.includes(frozenId)) {
+                        frozenId = null;
+                        frozenNodeData = null;
+                      } else {
+                        frozenId = data.ids[0] || null;
+                        frozenNodeData =
+                          data.ids.length > 0 ? { nodesTouched: data.ids, edgeIndices: [] } : null;
+                        hasEverFrozen = true;
+                      }
                     }}
                   >
-                    <span class="table-row-text">{type} ({data.count} owner{data.count !== 1 ? 's' : ''})</span>
+                    <span class="table-row-text"
+                      >{type} ({data.count} owner{data.count !== 1 ? 's' : ''})</span
+                    >
                   </div>
                 {/each}
               </div>
@@ -1227,11 +1391,17 @@
       {#if hoverSource === 'graph' && hoveredId && hoveredGraphNode}
         {@const isAsset = hoveredGraphNode.type === 'asset' || hoveredId === rootId}
         {@const pct = hoveredLayoutNode?.pct ?? 0}
-        <div class="tooltip" class:frozen={frozenId === hoveredId} style="left: {tooltipX}px; top: {tooltipY}px;">
+        <div
+          class="tooltip"
+          class:frozen={frozenId === hoveredId}
+          style="left: {tooltipX}px; top: {tooltipY}px;"
+        >
           {#if frozenId === hoveredId}
             <div class="tooltip-pinned">Pinned</div>
           {/if}
-          <div class="tooltip-name">{hoveredGraphNode.name || hoveredGraphNode.Name || hoveredId}</div>
+          <div class="tooltip-name">
+            {hoveredGraphNode.name || hoveredGraphNode.Name || hoveredId}
+          </div>
           {#if hoveredGraphNode.headquarters_country}
             <div class="tooltip-detail">{hoveredGraphNode.headquarters_country}</div>
           {/if}
@@ -1239,7 +1409,8 @@
             <div class="tooltip-detail">{hoveredGraphNode.entity_type}</div>
           {/if}
           <div class="tooltip-detail">
-            {isAsset ? 'Asset' : 'Entity'}{#if !isAsset && pct > 0} &middot; {pct.toFixed(1)}%{/if}
+            {isAsset ? 'Asset' : 'Entity'}{#if !isAsset && pct > 0}
+              &middot; {pct.toFixed(1)}%{/if}
           </div>
           {#if isLargeGraph}
             <div class="tooltip-hint">Drag to pan · Ctrl/Cmd + wheel to zoom</div>
@@ -1248,7 +1419,6 @@
           {/if}
         </div>
       {/if}
-
     </div>
 
     <!-- Context narrative -->
@@ -1265,7 +1435,7 @@
 <style>
   .ownership-tree {
     font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
-    color: var(--color-text-primary, #1D4961);
+    color: var(--color-text-primary, #1d4961);
     position: relative;
   }
   .msg {
@@ -1352,44 +1522,64 @@
     animation: edge-enter 0.4s ease-out both;
   }
   @keyframes node-enter {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
   @keyframes shape-enter {
-    from { transform: scale(0); }
-    to { transform: scale(1); }
+    from {
+      transform: scale(0);
+    }
+    to {
+      transform: scale(1);
+    }
   }
   @keyframes edge-enter {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
 
   .node {
     cursor: pointer;
   }
   .node circle {
-    transition: stroke 0.2s ease-out, stroke-width 0.2s ease-out, fill 0.2s ease-out, r 0.2s ease-out;
+    transition:
+      stroke 0.2s ease-out,
+      stroke-width 0.2s ease-out,
+      fill 0.2s ease-out,
+      r 0.2s ease-out;
   }
   .node rect {
-    transition: stroke 0.2s ease-out, stroke-width 0.2s ease-out;
+    transition:
+      stroke 0.2s ease-out,
+      stroke-width 0.2s ease-out;
   }
   .edge path {
-    transition: stroke-width 0.2s ease-out, opacity 0.25s ease-out;
+    transition:
+      stroke-width 0.2s ease-out,
+      opacity 0.25s ease-out;
   }
   .node.hovered circle {
-    stroke: #9DF7E5;
+    stroke: #9df7e5;
     stroke-width: 3;
   }
   .node.frozen circle {
-    stroke: #004F61;
+    stroke: #004f61;
     stroke-width: 3;
   }
   .node.hovered rect {
-    stroke: #9DF7E5;
+    stroke: #9df7e5;
     stroke-width: 2;
   }
   .node.frozen rect {
-    stroke: #004F61;
+    stroke: #004f61;
     stroke-width: 2;
   }
   .node.in-chain circle {
@@ -1418,12 +1608,14 @@
     letter-spacing: 0.02em;
     font-weight: normal;
     dominant-baseline: hanging;
-    fill: #004A63;
+    fill: #004a63;
     stroke: #fff;
     stroke-width: 3px;
     stroke-linejoin: round;
     paint-order: stroke fill;
-    transition: font-weight 0.15s ease-out, opacity 0.2s ease-out;
+    transition:
+      font-weight 0.15s ease-out,
+      opacity 0.2s ease-out;
   }
   .node-lbl.right-label {
     text-anchor: start;
@@ -1444,7 +1636,7 @@
   /* Side panel — matches Observable's #tables-container */
   .panel {
     background: #fafaf7;
-    border-left: 2px solid #016B83;
+    border-left: 2px solid #016b83;
     padding: 20px;
     display: flex;
     flex-direction: column;
@@ -1459,8 +1651,14 @@
     animation: panel-enter 0.5s ease-out 0.5s both;
   }
   @keyframes panel-enter {
-    from { opacity: 0; transform: translateX(12px); }
-    to { opacity: 1; transform: translateX(0); }
+    from {
+      opacity: 0;
+      transform: translateX(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
   }
   .full-width .panel {
     min-width: 0;
@@ -1468,7 +1666,7 @@
     width: 100%;
     padding: 20px;
     border-left: none;
-    border-top: 2px solid #016B83;
+    border-top: 2px solid #016b83;
     flex-direction: row;
     flex-wrap: wrap;
     gap: 20px 30px;
@@ -1486,7 +1684,7 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: #004A63;
+    color: #004a63;
   }
   .tabular-rows {
     max-height: 160px;
@@ -1497,8 +1695,10 @@
     line-height: 1.2;
     cursor: pointer;
     padding: 2px 0;
-    color: #004A63;
-    transition: font-weight 0.15s ease-out, opacity 0.2s ease-out;
+    color: #004a63;
+    transition:
+      font-weight 0.15s ease-out,
+      opacity 0.2s ease-out;
   }
   .tabular-row:hover,
   .tabular-row.is-hovered-view {
@@ -1516,8 +1716,8 @@
     font-weight: 600;
   }
   .tabular-row.tease-connection > .table-row-text::before {
-    content: "•";
-    color: #9DF7E5;
+    content: '•';
+    color: #9df7e5;
     margin-right: 4px;
   }
 
@@ -1552,7 +1752,7 @@
     border: none;
     border-bottom: 1px solid rgba(0, 0, 0, 0.08);
     background: #fff;
-    color: #004A63;
+    color: #004a63;
     cursor: pointer;
     padding: 0;
     transition: background 0.1s;
@@ -1617,8 +1817,14 @@
     animation: tooltip-in 0.15s ease-out;
   }
   @keyframes tooltip-in {
-    from { opacity: 0; transform: translateY(4px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
   .tooltip-name {
     font-weight: 600;
@@ -1631,7 +1837,7 @@
     opacity: 0.8;
   }
   .tooltip.frozen {
-    border-color: #004F61;
+    border-color: #004f61;
     background: rgba(0, 79, 97, 0.95);
   }
   .tooltip-pinned {
@@ -1659,7 +1865,7 @@
     transition: opacity 0.15s ease-out;
   }
   .narrative.entity {
-    color: var(--color-text-primary, #1D4961);
+    color: var(--color-text-primary, #1d4961);
   }
   .narrative p {
     margin: 0 0 3px;
@@ -1679,7 +1885,7 @@
     border: 1px solid var(--color-border, #e0e0e0);
     border-radius: 6px;
     cursor: pointer;
-    color: var(--color-text-primary, #1D4961);
+    color: var(--color-text-primary, #1d4961);
     margin-bottom: 6px;
   }
 
@@ -1703,7 +1909,7 @@
       width: 100%;
       padding: 12px;
       border-left: none;
-      border-top: 2px solid #016B83;
+      border-top: 2px solid #016b83;
       flex-direction: column;
     }
     .panel-toggle {

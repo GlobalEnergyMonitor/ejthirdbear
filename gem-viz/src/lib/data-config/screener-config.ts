@@ -82,4 +82,3 @@ export function getExampleCompanies(trackers: string[]): ExampleCompany[] {
 
   return examples.length > 0 ? examples.slice(0, 4) : EXAMPLE_COMPANIES_BY_TRACKER.default;
 }
-

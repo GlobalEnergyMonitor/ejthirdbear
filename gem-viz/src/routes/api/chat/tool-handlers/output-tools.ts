@@ -37,13 +37,7 @@ async function generateMap(args: ToolArgs): Promise<ToolResult> {
   const title = args.title as string | undefined;
   const mapSlug = mapTracker ? resolveApiSlug(mapTracker) : null;
 
-  if (
-    entityIds.length === 0 &&
-    assetIds.length === 0 &&
-    !mapQuery &&
-    !mapTracker &&
-    !mapCountry
-  ) {
+  if (entityIds.length === 0 && assetIds.length === 0 && !mapQuery && !mapTracker && !mapCountry) {
     return {
       success: false,
       error: 'Need entity_ids, asset_ids, or a search query/filter to generate a map',

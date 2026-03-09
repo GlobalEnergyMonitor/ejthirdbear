@@ -3,9 +3,7 @@
 import { logApiCall } from './api-log.svelte';
 
 // API base URL (env override or production default)
-const API_BASE =
-  import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL ||
-  'https://gem-api.thirdbear.net'; // Fallback to production API
+const API_BASE = import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-api.thirdbear.net'; // Fallback to production API
 
 // Default timeout for API requests (30 seconds)
 const API_TIMEOUT_MS = 30_000;
@@ -462,7 +460,10 @@ export async function listEntities(params?: {
     `/entities${buildQuery(params)}`
   );
   const page = normalizePaginated(raw);
-  return { ...page, results: page.results.map(normalizeEntity).filter((e): e is EntitySummary => e !== null) };
+  return {
+    ...page,
+    results: page.results.map(normalizeEntity).filter((e): e is EntitySummary => e !== null),
+  };
 }
 
 export async function getEntity(entityId: string): Promise<EntitySummary | null> {
@@ -911,9 +912,7 @@ export function graphToExplorerData(
  * Fetch status facets for a given asset type.
  * Uses limit=1 since we only need the facet metadata, not the assets themselves.
  */
-export async function fetchStatusFacets(
-  assetTypeSlug?: string
-): Promise<Map<string, number>> {
+export async function fetchStatusFacets(assetTypeSlug?: string): Promise<Map<string, number>> {
   _currentReason = `fetchStatusFacets${assetTypeSlug ? ` type=${assetTypeSlug}` : ''}`;
   const res = await listAssets({
     asset_type: assetTypeSlug,
