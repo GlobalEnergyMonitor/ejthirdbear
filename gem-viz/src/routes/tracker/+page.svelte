@@ -10,6 +10,7 @@
   import Spinner from '$lib/components/feedback/Spinner.svelte';
   import { trackerMetadata } from '$lib/data-config/tracker-metadata';
   import { fetchSegments, getSegmentApiUrl, type Segment } from '$lib/segments-api';
+  import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
   // State
   let trackerCounts = $state<Map<string, number>>(new Map());
@@ -65,6 +66,10 @@
   <meta
     name="description"
     content="Browse all Global Energy Monitor trackers: coal plants, gas plants, mines, pipelines, and more."
+  />
+  <SeoMeta
+    title="Trackers — Global Energy Monitor"
+    description="Browse all Global Energy Monitor trackers: coal plants, gas plants, mines, pipelines, and more."
   />
 </svelte:head>
 

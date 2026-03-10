@@ -14,6 +14,7 @@
   } from '$lib/data-config/tracker-metadata';
   import TrackerFactsheet from '$lib/components/tracker/TrackerFactsheet.svelte';
   import PageHeader from '$lib/components/nav/PageHeader.svelte';
+  import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
   import Spinner from '$lib/components/feedback/Spinner.svelte';
 
   // Cache for REST API asset data (avoids re-fetching for each field)
@@ -278,6 +279,10 @@
 <svelte:head>
   <title>{metadata?.name || trackerName} — Global Energy Monitor</title>
   <meta name="description" content={metadata?.description || `Data overview for ${trackerName}`} />
+  <SeoMeta
+    title="{metadata?.name || trackerName} — Global Energy Monitor"
+    description={metadata?.description || `Data overview for ${trackerName}`}
+  />
 </svelte:head>
 
 <div class="page-container--wide">

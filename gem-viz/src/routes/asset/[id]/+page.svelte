@@ -20,6 +20,7 @@
   import Citation from '$lib/components/data/Citation.svelte';
   import DataSourceBadge from '$lib/components/data/DataSourceBadge.svelte';
   import { OwnershipTreeGraph, OwnershipSummaryTables } from '$lib/components/ownership';
+  import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
   /**
    * @typedef {Object} AssetData
@@ -164,6 +165,11 @@
   <meta
     name="description"
     content="Ownership details and corporate structure for {assetName ||
+      assetId} from the Global Energy Monitor database."
+  />
+  <SeoMeta
+    title="{assetName || assetId} — Global Energy Monitor"
+    description="Ownership details and corporate structure for {assetName ||
       assetId} from the Global Energy Monitor database."
   />
 </svelte:head>

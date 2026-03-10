@@ -15,6 +15,7 @@
   import { link, assetPath, assetLink } from '$lib/links';
   import { colors, colorByTracker } from '$lib/design-tokens';
   import DataSourceBadge from '$lib/components/data/DataSourceBadge.svelte';
+  import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
   // DOM refs
   let mapContainer;
@@ -351,6 +352,10 @@
   <meta
     name="description"
     content="Interactive map visualization of energy assets worldwide. Filter by tracker type and country to explore the global energy infrastructure."
+  />
+  <SeoMeta
+    title="Global Asset Map — Global Energy Monitor"
+    description="Interactive map visualization of energy assets worldwide. Filter by tracker type and country to explore the global energy infrastructure."
   />
 </svelte:head>
 

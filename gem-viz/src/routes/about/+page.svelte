@@ -8,6 +8,7 @@
   import { dataVersionInfo, TrackerDatasets } from '$lib/data-config/data-sources';
   import { changelog } from '$lib/data/changelog';
   import PageHeader from '$lib/components/nav/PageHeader.svelte';
+  import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
   /**
    * @typedef {Object} PageStats
@@ -40,6 +41,10 @@
   <meta
     name="description"
     content="About the Global Energy Monitor ownership visualization platform: methodology, data sources, and how to explore energy asset ownership structures."
+  />
+  <SeoMeta
+    title="About — Global Energy Monitor"
+    description="About the Global Energy Monitor ownership visualization platform: methodology, data sources, and how to explore energy asset ownership structures."
   />
 </svelte:head>
 

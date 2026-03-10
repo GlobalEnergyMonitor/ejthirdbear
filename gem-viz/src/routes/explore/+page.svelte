@@ -9,6 +9,7 @@
   import CountryBreakdown from '$lib/widgets/CountryBreakdown.svelte';
   import StatusDistribution from '$lib/widgets/StatusDistribution.svelte';
   import PageHeader from '$lib/components/nav/PageHeader.svelte';
+  import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
   // Filter state
   let selectedTracker = $state(null);
@@ -29,6 +30,10 @@
   <meta
     name="description"
     content="Browse and explore Global Energy Monitor's ownership database by entity, asset, tracker type, and ownership structure."
+  />
+  <SeoMeta
+    title="Explore Data — Global Energy Monitor"
+    description="Browse and explore Global Energy Monitor's ownership database by entity, asset, tracker type, and ownership structure."
   />
 </svelte:head>
 

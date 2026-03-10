@@ -20,6 +20,7 @@
   import { formatNumber } from '$lib/components/cart/export-panel-utils';
   import { statusColorsGranular } from '$lib/design-tokens';
   import RangeSlider from '$lib/components/table/RangeSlider.svelte';
+  import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
   // Get params from URL
   const classesParam = $derived($page.url.searchParams.get('classes') || '');
@@ -314,7 +315,7 @@
     showOwnerPicker = false;
   }
 
-  function backToGrid() {
+  function _backToGrid() {
     viewMode = 'grid';
     selectedOwner = null;
   }
@@ -341,6 +342,11 @@
   <meta
     name="description"
     content="Visualize ownership network connections and export asset data for selected companies."
+  />
+  <SeoMeta
+    title="Ownership Analysis — Global Energy Monitor"
+    description="Visualize ownership network connections and export asset data for selected companies."
+    image="/og/screener.png"
   />
 </svelte:head>
 
@@ -608,11 +614,7 @@
         {#each owners as owner (owner.id)}
           {@const isCurrent = selectedOwner?.id === owner.id}
           <li>
-            <button
-              class="picker-item"
-              class:current={isCurrent}
-              onclick={() => goToOwner(owner)}
-            >
+            <button class="picker-item" class:current={isCurrent} onclick={() => goToOwner(owner)}>
               <span class="picker-name">{owner.name}</span>
               {#if owner.country}
                 <span class="picker-country">{owner.country}</span>

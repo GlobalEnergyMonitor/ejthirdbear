@@ -20,6 +20,7 @@
     discoverStatusGroups,
   } from '$lib/data-config/tracker-schema';
   import { resolveApiSlug, getAPIBase, fetchStatusFacets } from '$lib/ownership-api';
+  import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
   // ─── Category display config ────────────────────────────────────────
   const CATEGORY_META = [
@@ -295,6 +296,11 @@
   <meta
     name="description"
     content="Screen and analyze corporate ownership in specific classes of energy assets such as coal plants, gas infrastructure, and steel facilities."
+  />
+  <SeoMeta
+    title="Asset Class Screener — Global Energy Monitor"
+    description="Screen and analyze corporate ownership in specific classes of energy assets such as coal plants, gas infrastructure, and steel facilities."
+    image="/og/screener.png"
   />
 </svelte:head>
 

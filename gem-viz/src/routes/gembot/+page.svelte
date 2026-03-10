@@ -17,6 +17,7 @@
   // Components
   import EntityMicroCard from '$lib/components/cards/EntityMicroCard.svelte';
   import AssetMicroCard from '$lib/components/cards/AssetMicroCard.svelte';
+  import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
   // Gembot utilities
   import {
@@ -379,6 +380,10 @@
   <meta
     name="description"
     content="Chat with Gembot to explore Global Energy Monitor data on energy assets and ownership."
+  />
+  <SeoMeta
+    title="GEM Bot — Global Energy Monitor"
+    description="Chat with Gembot to explore Global Energy Monitor data on energy assets and ownership."
   />
 </svelte:head>
 

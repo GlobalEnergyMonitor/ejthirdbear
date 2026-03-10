@@ -35,6 +35,7 @@
   import { streamOwnerPortfolio } from '$lib/ownership-data';
   import { getEntityGraphUp, getEntityGraphDown } from '$lib/ownership-api';
   import { trackerColors } from '$lib/design-tokens';
+  import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
   // --- Props ---
   /** @type {{ data: any }} */
@@ -227,6 +228,12 @@
     name="description"
     content="Corporate ownership profile for {entityName ||
       entityId} including subsidiary structure, asset portfolio, and ownership hierarchy."
+  />
+  <SeoMeta
+    title="{entityName || entityId || 'Entity'} — Global Energy Monitor"
+    description="Corporate ownership profile for {entityName ||
+      entityId} including subsidiary structure, asset portfolio, and ownership hierarchy."
+    type="profile"
   />
 </svelte:head>
 

@@ -12,6 +12,7 @@
   import { listAssetsByType } from '$lib/ownership-api';
   import { trackerNameToSlug } from '$lib/data-config/tracker-metadata';
   import PageHeader from '$lib/components/nav/PageHeader.svelte';
+  import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
   // Get tracker from URL param
   const trackerParam = $derived($page.params.tracker);
@@ -185,6 +186,10 @@
   <meta
     name="description"
     content="Field-level documentation and data distribution analysis for the {info.title} dataset from Global Energy Monitor."
+  />
+  <SeoMeta
+    title="{info.title} Factsheet — Global Energy Monitor"
+    description="Field-level documentation and data distribution analysis for the {info.title} dataset from Global Energy Monitor."
   />
 </svelte:head>
 

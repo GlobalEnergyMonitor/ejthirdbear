@@ -40,6 +40,7 @@
   import AssetClassExpansion from '$lib/components/tracker/AssetClassExpansion.svelte';
   import { getAssetClassById } from '$lib/data-config/asset-class-definitions';
   import type { AssetClass } from '$lib/data-config/asset-class-definitions';
+  import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
   // URL params
   const classesParam = $derived($page.url.searchParams.get('classes') || '');
@@ -423,6 +424,11 @@
     name="description"
     content="View companies with ownership stakes in selected asset classes and add them to your investigation."
   />
+  <SeoMeta
+    title="Screener Results — Global Energy Monitor"
+    description="View companies with ownership stakes in selected asset classes and add them to your investigation."
+    image="/og/screener.png"
+  />
 </svelte:head>
 
 <ScreenerLayout
@@ -606,8 +612,8 @@
       bind:geoFilters={editGeoFilters}
       bind:geofence={editGeofence}
       dynamicStatusGroups={editDynamicStatusGroups}
-      onShowAllOwners={() => handleEditDone('/screener/results')}
-      onSearchSpecificOwners={() => handleEditDone('/screener/owners')}
+      onShowAllOwners={() => handleEditDone('screener/results')}
+      onSearchSpecificOwners={() => handleEditDone('screener/owners')}
       onClose={() => (showEditModal = false)}
     />
   {/if}

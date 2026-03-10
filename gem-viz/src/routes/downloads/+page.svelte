@@ -15,6 +15,7 @@
   } from '$lib/components/cart/export-panel-utils';
   import { paginateAssetsByType, getAssetTypeCounts, SLUG_TO_API_TYPE } from '$lib/ownership-api';
   import PageHeader from '$lib/components/nav/PageHeader.svelte';
+  import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
   import {
     Download,
     Package,
@@ -140,6 +141,15 @@
 
 <svelte:head>
   <title>Downloads — GEM Viz</title>
+  <meta
+    name="description"
+    content="Export ownership data as CSV, JSON, and GeoJSON across all GEM energy trackers."
+  />
+  <SeoMeta
+    title="Downloads — Global Energy Monitor"
+    description="Export ownership data as CSV, JSON, and GeoJSON across all GEM energy trackers."
+    image="/og/downloads.png"
+  />
 </svelte:head>
 
 <div class="page-container">

@@ -1,62 +1,127 @@
 /* eslint-env browser */
+/**
+ * GEM Embed Loader v2
+ * Drop-in script for embedding GEM visualizations on any page.
+ *
+ * Usage:
+ *   <div class="gem-embed" data-src="/embed/entity?id=E12345"></div>
+ *   <script src="https://gem-viz-staging.fly.dev/embed.js"></script>
+ *
+ * Features:
+ *   - Loading skeleton while iframe initializes
+ *   - IntersectionObserver: iframes only created when scrolled into view
+ *   - Auto dark-mode detection (prefers-color-scheme)
+ *   - Double-init guard (safe to include script multiple times)
+ *   - Load timeout with fallback link after 15s
+ *   - postMessage auto-resize from embedded content
+ */
 (function () {
-  const EMBED_CLASS = 'gem-embed';
+  // Double-init guard
+  if (window.__GEM_EMBED_INIT__) return;
+  window.__GEM_EMBED_INIT__ = true;
 
-  const getBaseUrl = () => {
-    const script = document.currentScript;
+  var EMBED_CLASS = 'gem-embed';
+  var LOAD_TIMEOUT_MS = 15000;
+
+  var getBaseUrl = function () {
+    var script = document.currentScript;
     if (!script || !script.src) return '';
     try {
-      const url = new URL(script.src);
-      const basePath = url.pathname.replace(/\/embed\.js$/, '');
-      return `${url.origin}${basePath}`;
-    } catch {
+      var url = new URL(script.src);
+      var basePath = url.pathname.replace(/\/embed\.js$/, '');
+      return url.origin + basePath;
+    } catch (_e) {
       return '';
     }
   };
 
-  const baseUrl = getBaseUrl();
+  var baseUrl = getBaseUrl();
 
-  const normalizeSrc = (src) => {
+  // Detect host page dark mode preference
+  var prefersDark =
+    window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+  var normalizeSrc = function (src) {
     if (!src) return '';
     if (/^https?:\/\//i.test(src)) return src;
-    const withSlash = src.startsWith('/') ? src : `/${src}`;
-    return baseUrl ? `${baseUrl}${withSlash}` : withSlash;
+    var withSlash = src.startsWith('/') ? src : '/' + src;
+    return baseUrl ? baseUrl + withSlash : withSlash;
   };
 
-  const createIframe = (container, index) => {
-    const dataSrc = container.getAttribute('data-src');
+  // Inject minimal loading skeleton styles (once)
+  var style = document.createElement('style');
+  style.textContent =
+    '.' + EMBED_CLASS + '-loading{display:flex;align-items:center;justify-content:center;' +
+    'min-height:120px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:4px;' +
+    'font-family:system-ui,sans-serif;font-size:13px;color:#64748b;gap:8px}' +
+    '.' + EMBED_CLASS + '-loading .gem-spinner{width:16px;height:16px;border:2px solid #e5e7eb;' +
+    'border-top-color:#64748b;border-radius:50%;animation:gem-spin .8s linear infinite}' +
+    '@keyframes gem-spin{to{transform:rotate(360deg)}}' +
+    '.' + EMBED_CLASS + '-timeout{text-align:center;padding:20px;font-family:system-ui,sans-serif;' +
+    'font-size:13px;color:#64748b}' +
+    '.' + EMBED_CLASS + '-timeout a{color:#1d4961;text-decoration:underline}';
+  document.head.appendChild(style);
+
+  var showLoading = function (container, height) {
+    var el = document.createElement('div');
+    el.className = EMBED_CLASS + '-loading';
+    el.style.height = (height || 200) + 'px';
+    el.innerHTML = '<div class="gem-spinner"></div><span>Loading visualization\u2026</span>';
+    container.appendChild(el);
+  };
+
+  var showTimeout = function (container, src) {
+    container.innerHTML = '';
+    var el = document.createElement('div');
+    el.className = EMBED_CLASS + '-timeout';
+    el.innerHTML =
+      '<p>This visualization is taking longer than expected.</p>' +
+      '<p><a href="' + src + '" target="_blank" rel="noopener">Open directly \u2197</a></p>';
+    container.appendChild(el);
+  };
+
+  // Track which embeds have loaded (for timeout cleanup)
+  var loadedEmbeds = {};
+
+  var createIframe = function (container, index) {
+    var dataSrc = container.getAttribute('data-src');
     if (!dataSrc) return;
 
-    const embedId = container.getAttribute('data-embed-id') || `gem-embed-${index + 1}`;
+    // Skip if already initialized
+    if (container.getAttribute('data-gem-initialized')) return;
+    container.setAttribute('data-gem-initialized', 'true');
+
+    var embedId = container.getAttribute('data-embed-id') || 'gem-embed-' + (index + 1);
     container.setAttribute('data-embed-id', embedId);
 
-    const width = container.getAttribute('data-width') || '100%';
-    const height = container.getAttribute('data-height') || '600';
-    const loading = container.getAttribute('data-loading') || 'lazy';
-    const title = container.getAttribute('data-title') || 'GEM Visualization';
-    const autoHeightAttr = container.getAttribute('data-autoheight');
-    const themeAttr = container.getAttribute('data-theme');
-    const paddingAttr = container.getAttribute('data-padding');
-    const paramsAttr = container.getAttribute('data-params');
-    const brandingAttr = container.getAttribute('data-branding');
-    const allowAttr = container.getAttribute('data-allow');
-    const sandboxAttr = container.getAttribute('data-sandbox');
+    var width = container.getAttribute('data-width') || '100%';
+    var height = container.getAttribute('data-height') || '600';
+    var title = container.getAttribute('data-title') || 'GEM Visualization';
+    var autoHeightAttr = container.getAttribute('data-autoheight');
+    var themeAttr = container.getAttribute('data-theme');
+    var paddingAttr = container.getAttribute('data-padding');
+    var paramsAttr = container.getAttribute('data-params');
+    var brandingAttr = container.getAttribute('data-branding');
+    var allowAttr = container.getAttribute('data-allow');
+    var sandboxAttr = container.getAttribute('data-sandbox');
 
-    const src = normalizeSrc(dataSrc);
+    var src = normalizeSrc(dataSrc);
     if (!src) return;
 
-    const url = new URL(src, window.location.href);
+    var url = new URL(src, window.location.href);
     // Auto-add embed=true for non-embed paths so root layout strips chrome
     if (!url.pathname.startsWith('/embed')) {
       url.searchParams.set('embed', 'true');
     }
     if (!url.searchParams.has('embedId')) url.searchParams.set('embedId', embedId);
     if (!url.searchParams.has('autoHeight')) {
-      const autoHeight = autoHeightAttr === null || autoHeightAttr.toLowerCase() !== 'false';
+      var autoHeight = autoHeightAttr === null || autoHeightAttr.toLowerCase() !== 'false';
       url.searchParams.set('autoHeight', autoHeight ? 'true' : 'false');
     }
-    if (themeAttr && !url.searchParams.has('theme')) {
-      url.searchParams.set('theme', themeAttr);
+    // Auto dark mode: use explicit theme if set, otherwise detect from host page
+    if (!url.searchParams.has('theme')) {
+      var theme = themeAttr || (prefersDark ? 'dark' : 'light');
+      url.searchParams.set('theme', theme);
     }
     if (paddingAttr && !url.searchParams.has('padding')) {
       url.searchParams.set('padding', paddingAttr);
@@ -65,70 +130,137 @@
       url.searchParams.set('branding', brandingAttr);
     }
     if (paramsAttr) {
-      const trimmed = paramsAttr.trim();
+      var trimmed = paramsAttr.trim();
       if (trimmed.startsWith('{')) {
         try {
-          const parsed = JSON.parse(trimmed);
-          Object.entries(parsed).forEach(([key, value]) => {
-            if (value === undefined || value === null) return;
-            if (!url.searchParams.has(key)) url.searchParams.set(key, `${value}`);
+          var parsed = JSON.parse(trimmed);
+          Object.entries(parsed).forEach(function (entry) {
+            if (entry[1] === undefined || entry[1] === null) return;
+            if (!url.searchParams.has(entry[0])) url.searchParams.set(entry[0], '' + entry[1]);
           });
-        } catch {
+        } catch (_e) {
           // Ignore invalid JSON params
         }
       } else {
         try {
-          const extraParams = new URLSearchParams(
+          var extraParams = new URLSearchParams(
             trimmed.startsWith('?') ? trimmed.slice(1) : trimmed
           );
-          extraParams.forEach((value, key) => {
+          extraParams.forEach(function (value, key) {
             if (!url.searchParams.has(key)) url.searchParams.set(key, value);
           });
-        } catch {
+        } catch (_e) {
           // Ignore invalid query params
         }
       }
     }
 
-    const iframe = document.createElement('iframe');
-    iframe.src = url.toString();
+    var finalUrl = url.toString();
+
+    // Show loading skeleton
+    container.innerHTML = '';
+    showLoading(container, parseInt(height, 10));
+
+    var iframe = document.createElement('iframe');
+    iframe.src = finalUrl;
     iframe.width = width;
     iframe.height = height;
-    iframe.loading = loading;
+    iframe.loading = 'lazy';
     iframe.title = title;
     iframe.setAttribute('frameborder', '0');
     iframe.style.border = '0';
     iframe.style.width = width;
     iframe.style.display = 'block';
+    iframe.style.opacity = '0';
+    iframe.style.transition = 'opacity 0.3s ease';
     if (allowAttr) iframe.setAttribute('allow', allowAttr);
     if (sandboxAttr) iframe.setAttribute('sandbox', sandboxAttr);
 
-    container.innerHTML = '';
+    // On iframe load, fade in and remove skeleton
+    iframe.onload = function () {
+      loadedEmbeds[embedId] = true;
+      var loading = container.querySelector('.' + EMBED_CLASS + '-loading');
+      if (loading) loading.remove();
+      iframe.style.opacity = '1';
+    };
+
     container.appendChild(iframe);
+
+    // Timeout fallback
+    setTimeout(function () {
+      if (!loadedEmbeds[embedId]) {
+        var loading = container.querySelector('.' + EMBED_CLASS + '-loading');
+        if (loading) {
+          showTimeout(container, finalUrl);
+          // Keep the iframe in case it loads eventually
+          container.appendChild(iframe);
+        }
+      }
+    }, LOAD_TIMEOUT_MS);
   };
 
-  const init = () => {
-    const embeds = document.querySelectorAll(`.${EMBED_CLASS}[data-src]`);
-    embeds.forEach((container, index) => createIframe(container, index));
+  // Global embed counter for unique IDs
+  var embedCounter = 0;
+
+  var initContainer = function (container) {
+    createIframe(container, embedCounter++);
   };
 
-  const onMessage = (event) => {
-    const data = event?.data;
-    if (!data || data.source !== 'gem-embed' || data.type !== 'resize') return;
-    const embedId = data.embedId;
+  var init = function () {
+    var embeds = document.querySelectorAll('.' + EMBED_CLASS + '[data-src]');
+
+    // Use IntersectionObserver for lazy initialization (if available)
+    if ('IntersectionObserver' in window) {
+      var observer = new IntersectionObserver(
+        function (entries) {
+          entries.forEach(function (entry) {
+            if (entry.isIntersecting) {
+              observer.unobserve(entry.target);
+              initContainer(entry.target);
+            }
+          });
+        },
+        { rootMargin: '200px' } // Start loading 200px before visible
+      );
+      embeds.forEach(function (container) {
+        if (container.getAttribute('data-gem-initialized')) return;
+        observer.observe(container);
+      });
+    } else {
+      // Fallback: init all immediately
+      embeds.forEach(function (container) {
+        initContainer(container);
+      });
+    }
+  };
+
+  var onMessage = function (event) {
+    var data = event && event.data;
+    if (!data || data.source !== 'gem-embed') return;
+
+    var embedId = data.embedId;
     if (!embedId) return;
 
-    const container = document.querySelector(`.${EMBED_CLASS}[data-embed-id="${embedId}"]`);
+    var container = document.querySelector('.' + EMBED_CLASS + '[data-embed-id="' + embedId + '"]');
     if (!container) return;
 
-    const iframe = container.querySelector('iframe');
+    var iframe = container.querySelector('iframe');
     if (!iframe) return;
 
-    const height = Number.parseInt(data.height, 10);
-    if (!Number.isFinite(height) || height <= 0) return;
+    if (data.type === 'resize') {
+      var height = parseInt(data.height, 10);
+      if (!isFinite(height) || height <= 0) return;
+      iframe.style.height = height + 'px';
+      iframe.setAttribute('height', '' + height);
+    }
 
-    iframe.style.height = `${height}px`;
-    iframe.setAttribute('height', `${height}`);
+    // Mark as loaded on any message from the embed
+    if (!loadedEmbeds[embedId]) {
+      loadedEmbeds[embedId] = true;
+      var loading = container.querySelector('.' + EMBED_CLASS + '-loading');
+      if (loading) loading.remove();
+      iframe.style.opacity = '1';
+    }
   };
 
   if (document.readyState === 'loading') {

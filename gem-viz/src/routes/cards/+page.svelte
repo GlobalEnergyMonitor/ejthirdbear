@@ -8,6 +8,7 @@
   import { TRACKERS } from '$lib/data-config/tracker-schema';
   import ProjectCardList from '$lib/components/cards/ProjectCardList.svelte';
   import PageHeader from '$lib/components/nav/PageHeader.svelte';
+  import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
   // Filter state
   let selectedTracker = $state<string>(TRACKERS[3]); // Default to 'Coal Plant'
@@ -26,6 +27,11 @@
   <meta
     name="description"
     content="Browse energy assets as visual cards showing key information about ownership, status, and location."
+  />
+  <SeoMeta
+    title="Asset Cards — Global Energy Monitor"
+    description="Browse energy assets as visual cards showing key information about ownership, status, and location."
+    image="/og/cards.png"
   />
 </svelte:head>
 

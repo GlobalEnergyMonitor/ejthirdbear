@@ -137,6 +137,20 @@
       ],
     },
     {
+      name: 'Project Card',
+      slug: 'project-card',
+      description: 'Rich asset card with tabbed details, ownership tree, and location map.',
+      paramKey: 'id',
+      paramLabel: 'Asset ID',
+      placeholder: 'G100001000201',
+      defaultHeight: 700,
+      params: [
+        { key: 'id', desc: 'Required. Asset ID / GEM unit ID (e.g., G12345).' },
+        { key: 'showOwnership', desc: 'Optional. Show ownership tree (default: true).' },
+        { key: 'showMap', desc: 'Optional. Show location map (default: true).' },
+      ],
+    },
+    {
       name: 'Asset Ring',
       slug: 'asset-ring',
       description: 'Circular visualization of asset distribution by type and status.',

@@ -24,6 +24,7 @@
   } from '$lib/data-config/screener-api';
   import { buildScreenerUrl, parseJsonSearchParam } from '$lib/screener-url';
   import type { ScreenerSelectedClass } from '$lib/data-config/screener-types';
+  import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
   // Get selected classes from URL params
   const classesParam = $derived($page.url.searchParams.get('classes') || '');
@@ -282,6 +283,11 @@
   <meta
     name="description"
     content="Search for companies by name, GEM Entity ID, LEI, or Perm ID to analyze their ownership of energy assets."
+  />
+  <SeoMeta
+    title="Find Owners — Global Energy Monitor"
+    description="Search for companies by name, GEM Entity ID, LEI, or Perm ID to analyze their ownership of energy assets."
+    image="/og/screener.png"
   />
 </svelte:head>
 

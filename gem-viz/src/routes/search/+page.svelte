@@ -7,6 +7,7 @@
   import PageHeader from '$lib/components/nav/PageHeader.svelte';
   import OwnershipTreeGraph from '$lib/components/ownership/OwnershipTreeGraph.svelte';
   import StatusIcon from '$lib/components/tracker/StatusIcon.svelte';
+  import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
   let searchType = $state(/** @type {string} */ ($page.url.searchParams.get('type') || 'all'));
   let query = $state($page.url.searchParams.get('q') || '');
@@ -156,6 +157,10 @@
   <meta
     name="description"
     content="Search for assets and entities and view their ownership trees."
+  />
+  <SeoMeta
+    title="Search — Global Energy Monitor"
+    description="Search for assets and entities and view their ownership trees."
   />
 </svelte:head>
 

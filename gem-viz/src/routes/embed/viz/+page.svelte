@@ -9,7 +9,6 @@
   import OwnershipFlower from '$lib/components/network/OwnershipFlower.svelte';
   import AssetScreener from '$lib/components/screener/AssetScreener.svelte';
   import AssetMap from '$lib/components/map/AssetMap.svelte';
-  import InvestigationMap from '$lib/components/map/InvestigationMap.svelte';
   import DatasetFactsheet from '$lib/widgets/DatasetFactsheet.svelte';
   import { OwnershipTreeGraph, AssetRingVisualization } from '$lib/components/ownership';
 
@@ -39,7 +38,6 @@
     'asset-ring',
     'asset-screener',
     'asset-map',
-    'investigation-map',
     'factsheet',
   ];
 
@@ -230,23 +228,6 @@
 
         component = AssetMap;
         componentProps = { assetId };
-        loading = false;
-        return;
-      }
-
-      if (vizName === 'investigation-map') {
-        const entityIds = parseList(params.get('entityIds') || params.get('entityId'));
-        const assetIds = parseList(params.get('assetIds') || params.get('assetId'));
-        if (entityIds.length === 0 && assetIds.length === 0) {
-          throw new Error('Missing required parameter: entityId or assetId');
-        }
-
-        component = InvestigationMap;
-        componentProps = {
-          entityIds,
-          assetIds,
-          height: intParam(params.get('height'), 350),
-        };
         loading = false;
         return;
       }

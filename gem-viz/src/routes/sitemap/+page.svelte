@@ -4,6 +4,7 @@
    * Complete directory of all pages and routes in GEM Viz
    */
   import PageHeader from '$lib/components/nav/PageHeader.svelte';
+  import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
   const sections = [
     {
@@ -139,6 +140,7 @@
 <svelte:head>
   <title>Sitemap — GEM Viz</title>
   <meta name="description" content="Complete directory of all pages in GEM Viz" />
+  <SeoMeta title="Sitemap — GEM Viz" description="Complete directory of all pages in GEM Viz" />
 </svelte:head>
 
 <div class="page-container--narrow">

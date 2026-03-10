@@ -11,6 +11,7 @@
   import { onMount } from 'svelte';
   import { beforeNavigate, afterNavigate } from '$app/navigation';
   import { initAnalytics, trackPageView } from '$lib/analytics';
+  import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
   let { children } = $props();
 
@@ -35,6 +36,7 @@
 <svelte:head>
   <meta name="build-time" content={buildTime} />
   <meta name="build-hash" content={buildHash} />
+  <SeoMeta />
 </svelte:head>
 
 {#if $page.url.pathname.startsWith('/embed') || $page.url.pathname.startsWith('/e/')}
