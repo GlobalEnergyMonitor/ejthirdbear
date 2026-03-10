@@ -64,6 +64,13 @@
 
   const selectedClass = $derived(selectedClassId ? getAssetClassById(selectedClassId) : null);
 
+  /** Svelte action: scroll element into view on mount */
+  function scrollIntoNearestView(node) {
+    requestAnimationFrame(() => {
+      node.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  }
+
   // Is a class selectable? Must map to at least one known UI tracker.
   function isEnabled(ac) {
     if (ac.trackers.length === 0) return false;
@@ -370,6 +377,7 @@
 
   <!-- Filter panel when class is selected -->
   {#if selectedClass}
+    <div use:scrollIntoNearestView></div>
     <AssetClassExpansion
       assetClass={selectedClass}
       bind:subClassChecks

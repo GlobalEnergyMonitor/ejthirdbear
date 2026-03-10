@@ -315,11 +315,6 @@
     showOwnerPicker = false;
   }
 
-  function _backToGrid() {
-    viewMode = 'grid';
-    selectedOwner = null;
-  }
-
   function openEntityPage(ownerId) {
     goto(link(`entity/${ownerId}`));
   }
@@ -381,7 +376,7 @@
       </div>
     {:else if owners.length === 0}
       <div class="empty-state">
-        <p>No entities selected. Return to results to select entities.</p>
+        <p>No entities selected. <button class="text-link" onclick={goBack}>Return to results</button> to select entities.</p>
       </div>
     {:else if viewMode === 'single' && selectedOwner}
       <!-- Single owner view -->

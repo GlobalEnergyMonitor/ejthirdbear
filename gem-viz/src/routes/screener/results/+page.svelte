@@ -147,8 +147,8 @@
   $effect(() => {
     if (owners.length > 0 && resultsSectionEl) {
       const rect = resultsSectionEl.getBoundingClientRect();
-      if (rect.top > window.innerHeight * 0.5) {
-        resultsSectionEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (rect.top > window.innerHeight * 0.6) {
+        resultsSectionEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
     }
   });
@@ -617,6 +617,17 @@
       onClose={() => (showEditModal = false)}
     />
   {/if}
+
+  {#snippet footer()}
+    {#if visualizeOwnerIds.length > 0 && !loading}
+      <div class="visualize-footer">
+        <span class="footer-summary">
+          {visualizeOwnerIds.length} {visualizeOwnerIds.length === 1 ? 'company' : 'companies'} selected
+        </span>
+        <a href={visualizeUrl} class="btn-visualize">Continue to Visualize</a>
+      </div>
+    {/if}
+  {/snippet}
 </ScreenerLayout>
 
 <style>
@@ -765,5 +776,39 @@
     background: var(--gem-teal);
     color: white;
     font-weight: 600;
+  }
+
+  /* ── Visualize footer ────────────────────────── */
+  .visualize-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  .footer-summary {
+    font-size: 14px;
+    color: var(--color-text-secondary);
+  }
+
+  .btn-visualize {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 10px 24px;
+    background: var(--gem-primary-blue, #004a63);
+    color: var(--color-white);
+    font-size: 14px;
+    font-weight: 600;
+    border: none;
+    border-radius: 4px;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 120ms ease;
+  }
+
+  .btn-visualize:hover {
+    background: var(--gem-teal, #2a7f8f);
   }
 </style>

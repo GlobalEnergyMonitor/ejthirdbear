@@ -19,7 +19,7 @@
       <tr>
         <th class="th-company">Company</th>
         <th class="th-count">Total Assets</th>
-        <th class="th-count">Matching</th>
+        <th class="th-count" title="Assets matching current class and status filters">Matching</th>
       </tr>
     </thead>
     <tbody>
@@ -39,7 +39,9 @@
             <span class="count-num">{owner.totalAssets?.toLocaleString() ?? '—'}</span>
           </td>
           <td class="td-count">
-            <span class="count-num count-match">{owner.filteredAssets?.toLocaleString() ?? '—'}</span>
+            <span class="count-num count-match"
+              >{owner.filteredAssets?.toLocaleString() ?? '—'}</span
+            >
           </td>
         </tr>
         {#if isExpanded}

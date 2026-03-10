@@ -36,6 +36,13 @@
   function isActive(stepNum) {
     return stepNum === currentStep;
   }
+
+  // Step 4 is reachable from Step 3 when owners are selected
+  function isClickable(stepNum) {
+    if (isCompleted(stepNum)) return true;
+    if (stepNum === 4 && currentStep === 3 && ownersParam) return true;
+    return false;
+  }
 </script>
 
 <nav class="step-nav">
@@ -58,6 +65,11 @@
             <polyline points="20 6 9 17 4 12"></polyline>
           </svg>
         </span>
+        <span class="step-label">{step.label}</span>
+      </a>
+    {:else if isClickable(step.num)}
+      <a href={getStepUrl(step)} class="step reachable" style="--step-delay: {i * 0.05}s">
+        <span class="step-num">{step.num}</span>
         <span class="step-label">{step.label}</span>
       </a>
     {:else}
@@ -98,6 +110,14 @@
 
   a.step:hover {
     opacity: 0.85;
+  }
+
+  .step.reachable {
+    opacity: 0.7;
+  }
+
+  .step.reachable .step-num {
+    border-style: dashed;
   }
 
   .step-num {

@@ -39,6 +39,7 @@
   let chartCleanup = null;
   let isEmpty = $state(false);
   let totalAssets = $state(0);
+  let totalAssetsPreFilter = $state(0);
   let directSubsidiaries = $state(0);
   let trackerLegend = $state([]);
   let statusLegend = $state([]);
@@ -50,9 +51,15 @@
     typeof filteredAssetCount === 'number' && !Number.isNaN(filteredAssetCount)
   );
   const matchedAssets = $derived(
-    hasFilteredAssetCount ? Math.max(0, Math.min(filteredAssetCount, totalAssets)) : totalAssets
+    hasFilteredAssetCount
+      ? totalAssets > 0
+        ? Math.max(0, Math.min(filteredAssetCount, totalAssets))
+        : filteredAssetCount
+      : totalAssets
   );
-  const additionalAssets = $derived(Math.max(0, totalAssets - matchedAssets));
+  const additionalAssets = $derived(
+    Math.max(0, (totalAssetsPreFilter || totalAssets) - matchedAssets)
+  );
 
   function formatOwnershipPct(value) {
     if (typeof value !== 'number' || Number.isNaN(value)) return null;
@@ -80,6 +87,9 @@
       });
 
       if (destroyed || !container) return;
+
+      // Record pre-filter total for "additional assets" calculation
+      totalAssetsPreFilter = chartData.assets.length;
 
       // Apply status filter if provided
       if (statusFilter && statusFilter.length > 0) {
@@ -170,10 +180,13 @@
 
       loading = false;
 
-      // Notify parent with loaded data
+      // Notify parent with loaded data (status-filtered asset IDs)
+      const filteredAssetIds = new Set(chartData.assets.map((a) => a.id));
       onDataLoaded?.({
         entityId,
-        assets: Array.from(chartData.assetDetails.values()),
+        assets: Array.from(chartData.assetDetails.values()).filter((a) =>
+          filteredAssetIds.has(a.id)
+        ),
         chartData,
       });
       onContainerReady?.(container);
@@ -214,9 +227,14 @@
       <p class="subtitle">Details</p>
       <p class="company-details">
         {matchedAssets}
-        {assetClassName || 'assets'} via {directSubsidiaries} direct {directSubsidiaries === 1
-          ? 'subsidiary'
-          : 'subsidiaries'}
+        {assetClassName || 'assets'}
+        {#if loading}
+          <span class="loading-hint">loading…</span>
+        {:else}
+          via {directSubsidiaries} direct {directSubsidiaries === 1
+            ? 'subsidiary'
+            : 'subsidiaries'}
+        {/if}
       </p>
     </div>
   </div>
@@ -272,8 +290,8 @@
                 <strong>{summary.totalDescendants} intermediary companies</strong>.
               {/if}
               {#if summary.maxGenerations > 1}
-                The longest chain reaches <strong>{summary.maxGenerations}</strong> layers below
-                the direct subsidiary.
+                The longest chain reaches <strong>{summary.maxGenerations}</strong> layers below the
+                direct subsidiary.
               {:else}
                 The chain stays within <strong>1 layer</strong> below the direct subsidiary.
               {/if}
@@ -382,6 +400,12 @@
   .company-details {
     font-size: 0.9em;
     margin: 0;
+  }
+
+  .loading-hint {
+    opacity: 0.6;
+    font-style: italic;
+    font-size: 0.85em;
   }
 
   .chart-wrapper {
