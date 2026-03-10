@@ -8,7 +8,6 @@
   import { assetLink, entityLink } from '$lib/links';
   import TrackerGlobeGrid from '$lib/components/tracker/TrackerGlobeGrid.svelte';
   import TrackerIcon from '$lib/components/tracker/TrackerIcon.svelte';
-  import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
   // --- DATA ---
   // Featured entities - interesting ownership structures from Observable notebooks
@@ -69,10 +68,6 @@
   <meta
     name="description"
     content="Explore ownership structures, corporate relationships, and asset portfolios across global energy infrastructure with interactive visualizations."
-  />
-  <SeoMeta
-    title="Global Energy Monitor — Ownership Data Explorer"
-    description="Explore ownership structures, corporate relationships, and asset portfolios across global energy infrastructure with interactive visualizations."
   />
 </svelte:head>
 
