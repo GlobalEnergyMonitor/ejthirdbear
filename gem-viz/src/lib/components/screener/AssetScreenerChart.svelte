@@ -43,6 +43,7 @@
   let trackerLegend = $state([]);
   let statusLegend = $state([]);
   let prospectiveLegend = $state(false);
+  let intermediarySummaries = $state([]);
   let destroyed = false;
 
   const hasFilteredAssetCount = $derived(
@@ -53,6 +54,11 @@
   );
   const additionalAssets = $derived(Math.max(0, totalAssets - matchedAssets));
 
+  function formatOwnershipPct(value) {
+    if (typeof value !== 'number' || Number.isNaN(value)) return null;
+    return Number.isInteger(value) ? `${value}%` : `${value.toFixed(1)}%`;
+  }
+
   async function loadAndRender() {
     if (!entityId || !container) return;
 
@@ -60,6 +66,7 @@
       loading = true;
       error = null;
       isEmpty = false;
+      intermediarySummaries = [];
 
       // Clean up previous render
       if (chartCleanup) {
@@ -100,6 +107,19 @@
       const subsidiaryGroups = buildSubsidiaryGroups(chartData);
       totalAssets = chartData.assets.length;
       directSubsidiaries = chartData.subsidiariesMatched.size;
+      intermediarySummaries = Array.from(chartData.subsidiariesMatched.entries())
+        .filter(([subId]) => chartData.intermediaryData.has(subId))
+        .map(([subId, units]) => {
+          const intermediary = chartData.intermediaryData.get(subId);
+          return {
+            id: subId,
+            name: chartData.entityMap.get(subId)?.Name || subId,
+            matchedAssetCount: units.length,
+            ownershipPct: chartData.matchedEdges.get(subId)?.value ?? null,
+            totalDescendants: intermediary?.total_descendants ?? 0,
+            maxGenerations: intermediary?.max_generations ?? 0,
+          };
+        });
 
       const trackers = Array.from(
         new Set(chartData.assets.map((a) => a.tracker).filter((t) => t && t !== 'Unknown'))
@@ -219,6 +239,50 @@
   <div class="chart-wrapper" class:hidden={loading || !!error || isEmpty}>
     <div bind:this={container} class="chart-render"></div>
   </div>
+
+  {#if intermediarySummaries.length > 0}
+    <section class="intermediary-foldouts" class:hidden={loading || !!error || isEmpty}>
+      <div class="intermediary-header">
+        <p class="title">Intermediary Paths</p>
+        <p class="intermediary-copy">
+          Some subsidiaries hold the matched assets through additional intermediary companies.
+        </p>
+      </div>
+      <div class="intermediary-list">
+        {#each intermediarySummaries as summary (summary.id)}
+          <details class="intermediary-item" open={intermediarySummaries.length === 1}>
+            <summary class="intermediary-summary">
+              <span class="intermediary-name">{summary.name}</span>
+              <span class="intermediary-meta">
+                {summary.matchedAssetCount} matching {summary.matchedAssetCount === 1
+                  ? assetClassName || 'asset'
+                  : assetClassName || 'assets'}
+              </span>
+            </summary>
+            <p class="intermediary-detail">
+              {#if formatOwnershipPct(summary.ownershipPct)}
+                <strong>{entityName || entityId}</strong> holds
+                <strong>{formatOwnershipPct(summary.ownershipPct)}</strong> of
+                <strong>{summary.name}</strong>.
+              {/if}
+              {#if summary.totalDescendants === 1}
+                This ownership path passes through <strong>1 intermediary company</strong>.
+              {:else}
+                This ownership path passes through
+                <strong>{summary.totalDescendants} intermediary companies</strong>.
+              {/if}
+              {#if summary.maxGenerations > 1}
+                The longest chain reaches <strong>{summary.maxGenerations}</strong> layers below
+                the direct subsidiary.
+              {:else}
+                The chain stays within <strong>1 layer</strong> below the direct subsidiary.
+              {/if}
+            </p>
+          </details>
+        {/each}
+      </div>
+    </section>
+  {/if}
 
   <div id="additional-info" class:hidden={loading || !!error || isEmpty}>
     <p>
@@ -371,6 +435,69 @@
     display: inline-block;
     padding: 0.8em;
     border-top: 2px solid var(--gem-orange, #d45f42);
+  }
+
+  .intermediary-foldouts {
+    padding: 0.75em 1.2em 0.25em 1.2em;
+    border-top: 1px solid #e1e4de;
+    background: rgba(255, 255, 255, 0.55);
+  }
+
+  .intermediary-header {
+    margin-bottom: 0.7em;
+  }
+
+  .intermediary-copy {
+    margin: 0.3em 0 0 0;
+    font-size: 0.88em;
+    color: var(--color-text-secondary, #43525b);
+  }
+
+  .intermediary-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55em;
+  }
+
+  .intermediary-item {
+    border: 1px solid #d8d8ce;
+    border-radius: 6px;
+    background: #ffffff;
+    overflow: hidden;
+  }
+
+  .intermediary-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1em;
+    padding: 0.8em 1em;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .intermediary-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .intermediary-name {
+    font-size: 0.95em;
+    font-weight: 700;
+    color: var(--gem-primary-blue, #004a63);
+  }
+
+  .intermediary-meta {
+    font-size: 0.82em;
+    color: var(--color-text-tertiary, #61717b);
+    text-align: right;
+  }
+
+  .intermediary-detail {
+    margin: 0;
+    padding: 0 1em 0.9em 1em;
+    font-size: 0.88em;
+    line-height: 1.55;
+    color: var(--color-text-primary, #1f2f38);
   }
 
   #legend-container {

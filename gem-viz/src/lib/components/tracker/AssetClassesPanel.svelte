@@ -20,6 +20,7 @@
     onRemove = null,
     editHref = '/screener',
     variant = 'default', // 'default' | 'badge' | 'compact'
+    onEdit = null,
   } = $props();
 
   let isExpanded = $state(true);
@@ -127,7 +128,7 @@
           </ul>
         {/if}
 
-        <button class="edit-btn" onclick={() => history.back()}>
+        <button class="edit-btn" onclick={() => (onEdit ? onEdit() : history.back())}>
           {selectedClasses.length === 0 ? 'Select asset classes' : 'Edit selection'}
         </button>
       </div>

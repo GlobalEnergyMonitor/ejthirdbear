@@ -101,6 +101,31 @@ export const STATUS_GROUPS = [
 
 export type StatusGroup = (typeof STATUS_GROUPS)[number];
 
+/** Short help text for the high-level status groups shown in the screener modal */
+export const STATUS_GROUP_DESCRIPTIONS: Record<string, string> = {
+  operating: 'Assets currently operating or producing.',
+  planned: 'Announced, permitted, or under-construction assets not yet operating.',
+  cancelled: 'Projects that were cancelled or shelved before operation.',
+  retired: 'Assets that have closed, idled, or been mothballed.',
+  other: 'Statuses outside the standard screener groupings.',
+};
+
+/** Definitions for individual tracker status values shown under Refine */
+export const STATUS_VALUE_DESCRIPTIONS: Record<string, string> = {
+  announced: 'Publicly announced but not yet permitted or built.',
+  construction: 'Physically under construction.',
+  idle: 'Temporarily not operating.',
+  mothballed: 'Suspended and preserved for possible restart.',
+  operating: 'Currently operating.',
+  permitted: 'Permits secured, construction not yet underway.',
+  'pre-construction': 'In development before construction begins.',
+  'pre-permit': 'Early-stage development before permits are secured.',
+  proposed: 'Proposed project without construction underway.',
+  retired: 'Permanently closed or decommissioned.',
+  cancelled: 'Project cancelled.',
+  shelved: 'Paused indefinitely or put on hold.',
+};
+
 // =============================================================================
 // DYNAMIC STATUS GROUPS (data-driven from API facets)
 // =============================================================================

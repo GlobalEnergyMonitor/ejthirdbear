@@ -18,7 +18,8 @@
     <thead>
       <tr>
         <th class="th-company">Company</th>
-        <th class="th-count">Assets</th>
+        <th class="th-count">Total Assets</th>
+        <th class="th-count">Matching</th>
       </tr>
     </thead>
     <tbody>
@@ -35,12 +36,15 @@
             <span class="owner-name">{owner.name}</span>
           </td>
           <td class="td-count">
-            <span class="count-num">{owner.filteredAssets?.toLocaleString() ?? '—'}</span>
+            <span class="count-num">{owner.totalAssets?.toLocaleString() ?? '—'}</span>
+          </td>
+          <td class="td-count">
+            <span class="count-num count-match">{owner.filteredAssets?.toLocaleString() ?? '—'}</span>
           </td>
         </tr>
         {#if isExpanded}
           <tr class="detail-row">
-            <td colspan="2" class="detail-cell">
+            <td colspan="3" class="detail-cell">
               <AssetScreenerChart
                 entityId={owner.entityId}
                 entityName={owner.name}
@@ -53,7 +57,7 @@
         {/if}
       {:else}
         <tr>
-          <td colspan="2" class="empty-cell">
+          <td colspan="3" class="empty-cell">
             {#if searchQuery}
               No owners matching "{searchQuery}."
               <button class="clear-link" onclick={onClearSearch}>Clear search</button>
@@ -196,8 +200,13 @@
     font-family: var(--font-family-data, 'IBM Plex Mono', monospace);
     font-size: 13px;
     font-weight: 500;
-    color: var(--color-text-secondary, #475569);
+    color: var(--color-text-tertiary, #94a3b8);
     font-variant-numeric: tabular-nums;
+  }
+
+  .count-match {
+    color: var(--color-text-secondary, #475569);
+    font-weight: 600;
   }
 
   /* ── Expanded detail ────────────────────────── */

@@ -64,7 +64,7 @@
     goto(buildOwnersUrl(updated.length > 0 ? JSON.stringify(updated) : ''), { replaceState: true });
   }
 
-  // Get relevant example companies: fetch top 3 owners for selected asset class,
+  // Get relevant example companies: fetch top 4 owners for selected asset class,
   // fall back to static examples while loading or if no classes selected
   let topOwners = $state<{ name: string; id: string }[]>([]);
 
@@ -74,7 +74,7 @@
     return getExampleCompanies(trackers);
   });
 
-  // Fetch top 3 owners for the first selected asset class + prefill from URL
+  // Fetch top 4 owners for the first selected asset class + prefill from URL
   onMount(async () => {
     // Prefill search from URL query param
     const q = $page.url.searchParams.get('q') || '';
@@ -92,9 +92,9 @@
         tracker: cls.tracker || '',
         assetClassId: cls.assetClassId || cls.id,
       };
-      const result = await getOwnersByAssetType(filters, { limit: 3 });
+      const result = await getOwnersByAssetType(filters, { limit: 4 });
       if (result.owners.length > 0) {
-        topOwners = result.owners.slice(0, 3).map((o) => ({
+        topOwners = result.owners.slice(0, 4).map((o) => ({
           name: o.name,
           id: o.entityId,
         }));
@@ -327,7 +327,7 @@
         Show every asset in the database — no ownership filter.
       {/if}
     </SectionHeader>
-    <button class="show-all-btn" onclick={showAllAssets}> Show all assets </button>
+    <button class="show-all-btn" onclick={showAllAssets}> All owners of this asset type </button>
   </section>
 
   <!-- Debug panel -->

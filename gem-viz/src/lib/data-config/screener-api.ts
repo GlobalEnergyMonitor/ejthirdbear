@@ -213,8 +213,11 @@ async function getOwnersByAssetTypeREST(
     throw new Error(`Cannot resolve API slug for tracker: ${trackerName}`);
   }
 
-  // Accumulate owners: entityId → { name, assetIds }
-  const ownerMap = new Map<string, { name: string; assetIds: Set<string> }>();
+  // Accumulate owners: entityId → { name, totalAssetIds (pre-filter), filteredAssetIds (post-filter) }
+  const ownerMap = new Map<
+    string,
+    { name: string; totalAssetIds: Set<string>; filteredAssetIds: Set<string> }
+  >();
   const hasOwnerFilter = filters.ownerIds && filters.ownerIds.length > 0;
   const ownerIdSet = hasOwnerFilter ? new Set(filters.ownerIds) : null;
 
@@ -252,44 +255,47 @@ async function getOwnersByAssetTypeREST(
     pageCount++;
     for (const asset of page) {
       if (classMatcher && !classMatcher(asset.raw || {})) continue;
+      if (!asset.owners || asset.owners.length === 0) continue;
 
-      // Geofence filtering — skip assets outside the custom region
+      // Determine if this asset passes the status/geofence filters
+      let passesFilters = true;
+
       if (geofence) {
         const lng = asset.longitude ?? (asset.raw as Record<string, unknown>)?.longitude;
         const lat = asset.latitude ?? (asset.raw as Record<string, unknown>)?.latitude;
-        if (typeof lng !== 'number' || typeof lat !== 'number') continue;
-        if (!pointInPolygon([lng, lat], geofence)) continue;
+        if (typeof lng !== 'number' || typeof lat !== 'number') passesFilters = false;
+        else if (!pointInPolygon([lng, lat], geofence)) passesFilters = false;
       }
 
-      // Client-side status filtering — skip assets whose status doesn't match.
-      // Assets with null/undefined status pass through (some trackers don't track status).
-      if (statusArray && asset.status) {
-        if (!statusArray.includes(asset.status.toLowerCase())) continue;
+      if (passesFilters && statusArray && asset.status) {
+        if (!statusArray.includes(asset.status.toLowerCase())) passesFilters = false;
       }
 
-      if (!asset.owners || asset.owners.length === 0) continue;
       for (const owner of asset.owners) {
         if (!owner.entityId) continue;
-        // If ownerIds filter is active, skip non-matching owners
         if (ownerIdSet && !ownerIdSet.has(owner.entityId)) continue;
 
         let entry = ownerMap.get(owner.entityId);
         if (!entry) {
-          entry = { name: owner.name, assetIds: new Set() };
+          entry = { name: owner.name, totalAssetIds: new Set(), filteredAssetIds: new Set() };
           ownerMap.set(owner.entityId, entry);
         }
-        entry.assetIds.add(asset.id);
+        entry.totalAssetIds.add(asset.id);
+        if (passesFilters) {
+          entry.filteredAssetIds.add(asset.id);
+        }
       }
     }
   }
 
   // Sort by filtered asset count descending, take top N
   const sorted = [...ownerMap.entries()]
-    .map(([entityId, { name, assetIds }]) => ({
+    .filter(([, { filteredAssetIds }]) => filteredAssetIds.size > 0)
+    .map(([entityId, { name, totalAssetIds, filteredAssetIds }]) => ({
       entityId,
       name,
-      totalAssets: 0, // cross-type totals not available without full scan
-      filteredAssets: assetIds.size,
+      totalAssets: totalAssetIds.size,
+      filteredAssets: filteredAssetIds.size,
     }))
     .sort((a, b) => b.filteredAssets - a.filteredAssets)
     .slice(0, limit);

@@ -4,7 +4,12 @@
    * Each filter category (subclass, status, geography) gets its own step.
    * Replaces the previous inline scroll-based expansion panel.
    */
-  import { COUNTRIES, STATUS_GROUPS } from '$lib/data-config/tracker-schema';
+  import {
+    COUNTRIES,
+    STATUS_GROUPS,
+    STATUS_GROUP_DESCRIPTIONS,
+    STATUS_VALUE_DESCRIPTIONS,
+  } from '$lib/data-config/tracker-schema';
   import type { DynamicStatusGroup } from '$lib/data-config/tracker-schema';
   import type { AssetClass, SubClassGroup } from '$lib/data-config/asset-class-definitions';
   import { ArrowRight, Search as SearchIcon, X } from 'lucide-svelte';
@@ -345,6 +350,9 @@
                         <span class="count-badge">{sg.totalCount.toLocaleString()}</span>
                       {/if}
                     </label>
+                    {#if STATUS_GROUP_DESCRIPTIONS[sg.id]}
+                      <span class="group-desc">{STATUS_GROUP_DESCRIPTIONS[sg.id]}</span>
+                    {/if}
                     {#if hasRefine}
                       <button class="refine-toggle" onclick={() => toggleRefine(`status-${sg.id}`)}>
                         {expandedRefine[`status-${sg.id}`] ? '\u25BC' : '\u25B6'} Refine
@@ -358,7 +366,14 @@
                               type="checkbox"
                               bind:checked={statusChecks[`status-${sg.id}-${statusItem.value}`]}
                             />
-                            <span>{statusItem.value}</span>
+                            <span class="refine-copy">
+                              <span class="refine-label">{statusItem.value}</span>
+                              {#if STATUS_VALUE_DESCRIPTIONS[statusItem.value]}
+                                <span class="refine-desc">
+                                  {STATUS_VALUE_DESCRIPTIONS[statusItem.value]}
+                                </span>
+                              {/if}
+                            </span>
                             {#if statusItem.count > 0}
                               <span class="count-badge small"
                                 >{statusItem.count.toLocaleString()}</span
@@ -425,7 +440,7 @@
             </button>
             <button class="footer-btn primary" onclick={onShowAllOwners} disabled={actionsDisabled}>
               <ArrowRight size={14} />
-              Show All Owners
+              All owners of this asset type
             </button>
           {:else}
             <button class="footer-btn primary" onclick={() => goToStep(currentStep + 1)}>
@@ -871,7 +886,7 @@
 
   .refine-option {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: var(--space-2, 8px);
     cursor: pointer;
     font-size: var(--font-size-sm, 13px);
@@ -896,6 +911,24 @@
   .count-badge.small {
     font-size: 10px;
     padding: 0 4px;
+  }
+
+  .refine-copy {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .refine-label {
+    text-transform: capitalize;
+  }
+
+  .refine-desc {
+    font-size: 12px;
+    line-height: 1.35;
+    color: var(--color-text-tertiary);
   }
 
   /* ── Responsive ───────────────────────────────────────────────────── */

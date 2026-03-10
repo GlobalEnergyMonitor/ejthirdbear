@@ -413,7 +413,7 @@ function drawIntermediaryPathForItem(
       .style('font-weight', 700)
       .style('letter-spacing', '0.03em')
       .style('fill', colors.teal)
-      .text('Fold out \u25be');
+      .text('Details below');
   }
 }
 

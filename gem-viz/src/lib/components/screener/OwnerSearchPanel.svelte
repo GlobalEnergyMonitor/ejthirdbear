@@ -53,7 +53,7 @@
     </div>
     <div class="search-help">
       <div class="example-companies">
-        <span class="example-label">Try:</span>
+        <span class="example-label">Quick fill from top owners:</span>
         {#each exampleCompanies as example, i}
           {#if i > 0}<span class="example-sep">,</span>{/if}
           <button class="example-btn" onclick={() => onUseExample(example)}>
@@ -334,6 +334,7 @@
   .example-label {
     color: var(--color-text-tertiary);
     margin-right: var(--space-1);
+    font-size: var(--font-size-sm);
   }
 
   .example-sep {

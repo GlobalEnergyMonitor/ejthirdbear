@@ -17,16 +17,29 @@
   import DebugPanel from '$lib/components/feedback/DebugPanel.svelte';
   import ScreenerOwnersResultsTable from '$lib/components/screener/ScreenerOwnersResultsTable.svelte';
 
-  import { getAssetTypeForTracker } from '$lib/data-config/tracker-schema';
+  import {
+    getAssetTypeForTracker,
+    STATUS_GROUPS,
+    discoverStatusGroups,
+  } from '$lib/data-config/tracker-schema';
+  import type { DynamicStatusGroup } from '$lib/data-config/tracker-schema';
   import {
     getOwnersByAssetType,
     getAssetTypeCounts,
+    gemTrackerToUiTracker,
     type ScreenerFilters,
     type ScreenerOwner,
   } from '$lib/data-config/screener-api';
-  import { buildScreenerUrl, parseJsonSearchParam } from '$lib/screener-url';
-  import { resolveApiSlug, getAPIBase } from '$lib/ownership-api';
+  import {
+    buildScreenerUrl,
+    parseJsonSearchParam,
+    type ScreenerRoutePath,
+  } from '$lib/screener-url';
+  import { resolveApiSlug, getAPIBase, fetchStatusFacets } from '$lib/ownership-api';
   import type { ScreenerSelectedClass } from '$lib/data-config/screener-types';
+  import AssetClassExpansion from '$lib/components/tracker/AssetClassExpansion.svelte';
+  import { getAssetClassById } from '$lib/data-config/asset-class-definitions';
+  import type { AssetClass } from '$lib/data-config/asset-class-definitions';
 
   // URL params
   const classesParam = $derived($page.url.searchParams.get('classes') || '');
@@ -118,6 +131,16 @@
   // Expanded row state - tracks which owner's ownership tree is visible
   let expandedOwnerId = $state<string | null>(null);
   let resultsSectionEl: HTMLElement | undefined = $state();
+
+  // ── Edit modal state ──────────────────────────────────
+  let showEditModal = $state(false);
+  let editAssetClass: AssetClass | null = $state(null);
+  let editSubClassChecks: Record<string, boolean> = $state({});
+  let editGroupOptionChecks: Record<string, boolean> = $state({});
+  let editStatusChecks: Record<string, boolean> = $state({});
+  let editGeoFilters: string[] = $state([]);
+  let editGeofence: number[][] | null = $state(null);
+  let editDynamicStatusGroups: DynamicStatusGroup[] | null = $state(null);
 
   // Scroll results table into view when data finishes loading
   $effect(() => {
@@ -263,6 +286,135 @@
       goto(buildScreenerUrl('screener/results', { classes: JSON.stringify(classes) }));
     }
   }
+
+  // ── Edit modal ──────────────────────────────────────────
+  function openEditModal() {
+    if (selectedClasses.length === 0) return;
+    const cls = selectedClasses[0];
+    const ac = getAssetClassById(cls.assetClassId || cls.id || '');
+    if (!ac) {
+      history.back();
+      return;
+    }
+
+    editAssetClass = ac;
+    editDynamicStatusGroups = null;
+
+    // Hydrate subclass/group checks from URL params
+    const subs = new Set(cls.selectedSubClasses || []);
+    editSubClassChecks = Object.fromEntries(
+      (ac.subClasses || []).map((sc) => [
+        sc.id,
+        subs.size > 0 ? subs.has(sc.id) : (sc.defaultChecked ?? true),
+      ])
+    );
+    editGroupOptionChecks = Object.fromEntries(
+      (ac.subClassGroups || []).flatMap((g) =>
+        g.options.map((o) => [o.id, subs.size > 0 ? subs.has(o.id) : (o.defaultChecked ?? true)])
+      )
+    );
+
+    // Hydrate status checks
+    const selStatuses = new Set(
+      cls.filters?.statuses || (cls.filters?.status ? [cls.filters.status] : [])
+    );
+    const sc: Record<string, boolean> = {};
+    for (const sg of STATUS_GROUPS) {
+      for (const s of sg.statuses) {
+        sc[`status-${sg.id}-${s}`] =
+          selStatuses.size > 0 ? selStatuses.has(s) : sg.id === 'operating' || sg.id === 'planned';
+      }
+    }
+    editStatusChecks = sc;
+
+    // Hydrate geography
+    const geoRaw = cls.filters?.geography;
+    editGeoFilters = Array.isArray(geoRaw) ? [...geoRaw] : geoRaw ? [geoRaw] : [];
+    editGeofence = cls.filters?.geofence || null;
+
+    showEditModal = true;
+
+    // Fetch dynamic status facets (non-blocking)
+    const slugs = ac.trackers
+      .map((t: string) => resolveApiSlug(gemTrackerToUiTracker(t)))
+      .filter(Boolean);
+    if (slugs.length > 0) {
+      Promise.all(slugs.map((slug: string) => fetchStatusFacets(slug)))
+        .then((results) => {
+          if (!showEditModal) return;
+          const merged = new Map<string, number>();
+          for (const fm of results)
+            for (const [k, v] of fm) merged.set(k, (merged.get(k) ?? 0) + v);
+          const groups = discoverStatusGroups(merged);
+          editDynamicStatusGroups = groups;
+          // Re-map status checks to discovered groups
+          const next: Record<string, boolean> = {};
+          for (const sg of groups) {
+            for (const s of sg.statuses) {
+              next[`status-${sg.id}-${s.value}`] =
+                selStatuses.size > 0
+                  ? selStatuses.has(s.value)
+                  : sg.id === 'operating' || sg.id === 'planned';
+            }
+          }
+          editStatusChecks = next;
+        })
+        .catch(() => {});
+    }
+  }
+
+  function handleEditDone(path: ScreenerRoutePath) {
+    if (!editAssetClass) return;
+
+    // Derive selected statuses
+    const statuses: string[] = [];
+    const groups =
+      editDynamicStatusGroups ??
+      STATUS_GROUPS.map((sg) => ({
+        id: sg.id,
+        statuses: sg.statuses.map((s) => ({ value: s })),
+      }));
+    for (const sg of groups)
+      for (const s of sg.statuses)
+        if (editStatusChecks[`status-${sg.id}-${s.value}`]) statuses.push(s.value);
+
+    // Derive selected sub-classes
+    const selectedSubClassIds = [
+      ...Object.entries(editSubClassChecks)
+        .filter(([, v]) => v)
+        .map(([k]) => k),
+      ...Object.entries(editGroupOptionChecks)
+        .filter(([, v]) => v)
+        .map(([k]) => k),
+    ];
+
+    const classData = [
+      {
+        id: editAssetClass.id,
+        name: editAssetClass.label,
+        description: editAssetClass.description,
+        tracker: gemTrackerToUiTracker(editAssetClass.trackers[0]),
+        filters: {
+          geography: editGeoFilters.length > 0 ? editGeoFilters : undefined,
+          status: statuses.length === 1 ? statuses[0] : undefined,
+          statuses: statuses.length > 0 ? statuses : undefined,
+          geofence: editGeofence || undefined,
+        },
+        assetClassId: editAssetClass.id,
+        selectedSubClasses: selectedSubClassIds,
+        gemTrackers: editAssetClass.trackers,
+      },
+    ];
+
+    showEditModal = false;
+    editAssetClass = null;
+
+    // Navigate with updated params — full reload since onMount fetches data
+    const url = buildScreenerUrl(path, {
+      classes: JSON.stringify(classData),
+    });
+    window.location.href = url;
+  }
 </script>
 
 <svelte:head>
@@ -291,6 +443,7 @@
             (c) => (c.id || c.assetClassId || c.name) === (cls.id || cls.assetClassId || cls.name)
           )
         )}
+      onEdit={openEditModal}
     />
   {/snippet}
 
@@ -327,7 +480,7 @@
         {/if}
       {/each}
     </span>
-    <button class="edit-link" onclick={() => history.back()}>Edit filters</button>
+    <button class="edit-link" onclick={openEditModal}>Edit filters</button>
   </div>
 
   {#if parseError}
@@ -442,6 +595,21 @@
         <pre class="debug-code">{executedQuery}</pre>
       </div>
     </DebugPanel>
+  {/if}
+
+  {#if showEditModal && editAssetClass}
+    <AssetClassExpansion
+      assetClass={editAssetClass}
+      bind:subClassChecks={editSubClassChecks}
+      bind:groupOptionChecks={editGroupOptionChecks}
+      bind:statusChecks={editStatusChecks}
+      bind:geoFilters={editGeoFilters}
+      bind:geofence={editGeofence}
+      dynamicStatusGroups={editDynamicStatusGroups}
+      onShowAllOwners={() => handleEditDone('/screener/results')}
+      onSearchSpecificOwners={() => handleEditDone('/screener/owners')}
+      onClose={() => (showEditModal = false)}
+    />
   {/if}
 </ScreenerLayout>
 
