@@ -49,8 +49,8 @@
   // View options
   let viewMode = $state('grid');
   let selectedOwner = $state(null);
-  let showHelp = $state(false);
   let showOwnerPicker = $state(false);
+  let chartModalOwner = $state(null);
 
   // Data collection from chart callbacks
   let assetsByOwner = $state(new Map());
@@ -319,13 +319,13 @@
     goto(link(`entity/${ownerId}`));
   }
 
-  function toggleHelp() {
-    showHelp = !showHelp;
-  }
-
   function handleKeydown(e) {
-    if (e.key === 'Escape' && showOwnerPicker) {
-      showOwnerPicker = false;
+    if (e.key === 'Escape') {
+      if (chartModalOwner) {
+        chartModalOwner = null;
+      } else if (showOwnerPicker) {
+        showOwnerPicker = false;
+      }
     }
   }
 </script>
@@ -379,85 +379,57 @@
         <p>No entities selected. <button class="text-link" onclick={goBack}>Return to results</button> to select entities.</p>
       </div>
     {:else if viewMode === 'single' && selectedOwner}
-      <!-- Single owner view -->
-      <div class="owner-bar">
-        <div class="owner-title">
-          {#if owners.length > 1}
-            <button class="owner-name-btn" onclick={() => (showOwnerPicker = true)}>
-              <h2>{selectedOwner.name}</h2>
-              <span class="owner-switch-hint">{owners.length} owners ▾</span>
-            </button>
-          {:else}
-            <h2>{selectedOwner.name}</h2>
-          {/if}
-          {#if selectedOwner.country}
-            <span class="country">{selectedOwner.country}</span>
-          {/if}
-        </div>
-        <div class="bar-actions">
-          <button class="text-link muted" onclick={toggleHelp}>
-            {showHelp ? 'Hide guide' : 'Guide'}
-          </button>
-          <span class="separator">|</span>
-          <button class="text-link muted" onclick={() => openEntityPage(selectedOwner.id)}>
-            Profile
-          </button>
-        </div>
+      <!-- Single owner — click to open fullscreen chart modal -->
+      {#each [selectedOwner] as owner (owner.id)}
+        <article class="owner-card" role="button" tabindex="0" onclick={() => (chartModalOwner = owner)} onkeydown={(e) => e.key === 'Enter' && (chartModalOwner = owner)}>
+          <div class="owner-card-info">
+            <h2 class="owner-card-name">{owner.name}</h2>
+            {#if owner.country}
+              <span class="country">{owner.country}</span>
+            {/if}
+          </div>
+          <span class="owner-card-action">View ownership chart →</span>
+        </article>
+      {/each}
+
+      <!-- Still render the chart offscreen so data loads for export -->
+      <div class="offscreen-chart">
+        <AssetScreenerChart
+          entityId={selectedOwner.id}
+          entityName={selectedOwner.name}
+          {assetClassName}
+          {trackerSlug}
+          {statusFilter}
+          onDataLoaded={handleDataLoaded}
+          onContainerReady={(el) => handleContainerReady(selectedOwner.id, el)}
+        />
       </div>
-
-      {#if showHelp}
-        <p class="help-text">
-          <strong>Owner node</strong> is the primary entity.
-          <strong>Subsidiaries</strong> show ownership stakes.
-          <strong>Percentages</strong> appear on connection lines. Click any node to explore.
-        </p>
-      {/if}
-
-      <AssetScreenerChart
-        entityId={selectedOwner.id}
-        entityName={selectedOwner.name}
-        {assetClassName}
-        {trackerSlug}
-        {statusFilter}
-        onDataLoaded={handleDataLoaded}
-        onContainerReady={(el) => handleContainerReady(selectedOwner.id, el)}
-      />
     {:else}
       <!-- Grid view -->
       <div class="grid-view">
-        <p class="grid-hint">Open a company to inspect its full ownership view and export data.</p>
+        <p class="grid-hint">Click a company to inspect its full ownership chart.</p>
         {#each owners as owner}
-          <article class="graph-card">
-            <header class="card-header">
-              <h3>{owner.name}</h3>
+          <article class="owner-card" role="button" tabindex="0" onclick={() => (chartModalOwner = owner)} onkeydown={(e) => e.key === 'Enter' && (chartModalOwner = owner)}>
+            <div class="owner-card-info">
+              <h3 class="owner-card-name">{owner.name}</h3>
               {#if owner.country}
                 <span class="country">{owner.country}</span>
               {/if}
-            </header>
-            <div
-              class="card-graph"
-              role="button"
-              tabindex="0"
-              onclick={() => goToOwner(owner)}
-              onkeydown={(e) => e.key === 'Enter' && goToOwner(owner)}
-            >
-              <AssetScreenerChart
-                entityId={owner.id}
-                entityName={owner.name}
-                {assetClassName}
-                {trackerSlug}
-                {statusFilter}
-                onDataLoaded={handleDataLoaded}
-                onContainerReady={(el) => handleContainerReady(owner.id, el)}
-              />
             </div>
-            <footer class="card-footer">
-              <button class="text-link" onclick={() => goToOwner(owner)}>Open detailed view</button>
-              <button class="text-link muted" onclick={() => openEntityPage(owner.id)}>
-                Profile
-              </button>
-            </footer>
+            <span class="owner-card-action">View chart →</span>
           </article>
+          <!-- Offscreen chart for data loading -->
+          <div class="offscreen-chart">
+            <AssetScreenerChart
+              entityId={owner.id}
+              entityName={owner.name}
+              {assetClassName}
+              {trackerSlug}
+              {statusFilter}
+              onDataLoaded={handleDataLoaded}
+              onContainerReady={(el) => handleContainerReady(owner.id, el)}
+            />
+          </div>
         {/each}
       </div>
     {/if}
@@ -593,6 +565,42 @@
     <button class="text-link nav-link" onclick={() => goto(link('screener'))}> New search </button>
   </nav>
 
+  <!-- Fullscreen chart modal -->
+  {#if chartModalOwner}
+    <div
+      class="chart-modal-backdrop"
+      onclick={() => (chartModalOwner = null)}
+      role="presentation"
+    ></div>
+    <div class="chart-modal" role="dialog" aria-modal="true" aria-label="{chartModalOwner.name} ownership chart">
+      <header class="chart-modal-header">
+        <div class="chart-modal-title">
+          <h2>{chartModalOwner.name}</h2>
+          {#if chartModalOwner.country}
+            <span class="country">{chartModalOwner.country}</span>
+          {/if}
+        </div>
+        <div class="chart-modal-actions">
+          <button class="text-link muted" onclick={() => openEntityPage(chartModalOwner.id)}>
+            Profile
+          </button>
+          <button class="chart-modal-close" onclick={() => (chartModalOwner = null)}>✕</button>
+        </div>
+      </header>
+      <div class="chart-modal-body">
+        <AssetScreenerChart
+          entityId={chartModalOwner.id}
+          entityName={chartModalOwner.name}
+          {assetClassName}
+          {trackerSlug}
+          {statusFilter}
+          onDataLoaded={handleDataLoaded}
+          onContainerReady={(el) => handleContainerReady(chartModalOwner.id, el)}
+        />
+      </div>
+    </div>
+  {/if}
+
   <!-- Owner picker modal -->
   {#if showOwnerPicker}
     <div
@@ -691,100 +699,148 @@
     color: var(--color-error);
   }
 
-  .owner-bar {
+  .country {
+    font-size: var(--font-size-body);
+    color: var(--color-text-tertiary);
+  }
+
+  /* Owner cards (clickable summary) */
+  .owner-card {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: var(--space-4);
+    padding: var(--space-4) var(--space-5);
+    border: 1px solid var(--color-border, #e5e7eb);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: border-color 120ms ease, background 120ms ease;
   }
 
-  .owner-title {
+  .owner-card:hover {
+    border-color: var(--gem-teal, #2a7f8f);
+    background: rgba(42, 127, 143, 0.03);
+  }
+
+  .owner-card-info {
     display: flex;
     align-items: baseline;
     gap: var(--space-3);
   }
 
-  .owner-title h2 {
+  .owner-card-name {
     margin: 0;
     font-size: var(--font-size-lg);
     font-weight: 500;
     color: var(--color-text-primary);
   }
 
-  .country {
+  .owner-card-action {
     font-size: var(--font-size-body);
-    color: var(--color-text-tertiary);
+    color: var(--gem-teal, #2a7f8f);
+    white-space: nowrap;
   }
 
-  .bar-actions {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-  }
-
-  .separator {
-    color: var(--color-gray-300);
-    font-size: var(--font-size-body);
-  }
-
-  .help-text {
-    font-size: var(--font-size-body);
-    color: var(--color-text-tertiary);
-    margin: 0 0 var(--space-4) 0;
-    line-height: var(--line-height-relaxed);
-  }
-
-  .help-text strong {
-    font-weight: 500;
-    color: var(--color-text-secondary);
+  .offscreen-chart {
+    position: absolute;
+    left: -9999px;
+    width: 800px;
+    height: 1px;
+    overflow: hidden;
+    pointer-events: none;
   }
 
   /* Grid view */
   .grid-view {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: var(--space-5);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
   }
 
   .grid-hint {
-    grid-column: 1 / -1;
     margin: 0;
     font-size: var(--font-size-sm);
     color: var(--color-text-tertiary);
   }
 
-  .graph-card {
-    padding-bottom: var(--space-4);
-    border-bottom: var(--border-width) solid var(--color-border);
+  /* Fullscreen chart modal */
+  .chart-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    z-index: 9998;
   }
 
-  .card-header {
+  .chart-modal {
+    position: fixed;
+    inset: 5vh 5vw;
+    background: var(--color-bg-primary, #fff);
+    border: 1px solid var(--color-border, #e5e7eb);
+    border-radius: var(--radius-sm);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: chartModalIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes chartModalIn {
+    from {
+      opacity: 0;
+      transform: scale(0.97);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  .chart-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-4) var(--space-5);
+    border-bottom: 1px solid var(--color-border, #e5e7eb);
+    flex-shrink: 0;
+  }
+
+  .chart-modal-title {
     display: flex;
     align-items: baseline;
-    justify-content: space-between;
-    margin-bottom: var(--space-2);
+    gap: var(--space-3);
   }
 
-  .card-header h3 {
+  .chart-modal-title h2 {
     margin: 0;
-    font-size: var(--font-size-body);
+    font-size: var(--font-size-lg);
     font-weight: 500;
     color: var(--color-text-primary);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    flex: 1;
-    margin-right: var(--space-2);
   }
 
-  .card-graph {
-    cursor: pointer;
-  }
-
-  .card-footer {
+  .chart-modal-actions {
     display: flex;
-    justify-content: space-between;
-    margin-top: var(--space-2);
+    align-items: center;
+    gap: var(--space-4);
+  }
+
+  .chart-modal-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--color-text-tertiary);
+    font-size: 20px;
+    padding: 4px 8px;
+    line-height: 1;
+  }
+
+  .chart-modal-close:hover {
+    color: var(--color-text-primary);
+  }
+
+  .chart-modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--space-4) var(--space-5);
   }
 
   /* Navigation row */
@@ -916,32 +972,6 @@
     font-style: italic;
   }
 
-  /* Owner name button (clickable to open picker) */
-  .owner-name-btn {
-    display: flex;
-    align-items: baseline;
-    gap: var(--space-2);
-    background: none;
-    border: none;
-    padding: 0;
-    cursor: pointer;
-    text-align: left;
-  }
-
-  .owner-name-btn:hover h2 {
-    color: var(--gem-teal, #2a7f8f);
-  }
-
-  .owner-switch-hint {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-tertiary);
-    white-space: nowrap;
-  }
-
-  .owner-name-btn:hover .owner-switch-hint {
-    color: var(--gem-teal, #2a7f8f);
-  }
-
   /* Owner picker modal */
   .picker-backdrop {
     position: fixed;
@@ -1065,19 +1095,14 @@
 
   /* Responsive */
   @media (max-width: 768px) {
-    .grid-view {
-      grid-template-columns: 1fr;
+    .chart-modal {
+      inset: 2vh 2vw;
     }
 
-    .owner-bar {
+    .owner-card {
       flex-direction: column;
       align-items: flex-start;
-      gap: var(--space-3);
-    }
-
-    .bar-actions {
-      width: 100%;
-      justify-content: flex-start;
+      gap: var(--space-2);
     }
   }
 </style>
