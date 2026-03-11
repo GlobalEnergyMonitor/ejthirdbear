@@ -7,8 +7,9 @@
    */
 
   import { page } from '$app/stores';
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { goto } from '$app/navigation';
+  import { animate } from 'animejs';
   import LoadingWrapper from '$lib/components/feedback/LoadingWrapper.svelte';
   import DataSourceBadge from '$lib/components/data/DataSourceBadge.svelte';
   import ScreenerLayout from '$lib/components/nav/ScreenerLayout.svelte';
@@ -16,6 +17,7 @@
   import AssetSearchBar from '$lib/components/search/AssetSearchBar.svelte';
   import DebugPanel from '$lib/components/feedback/DebugPanel.svelte';
   import ScreenerOwnersResultsTable from '$lib/components/screener/ScreenerOwnersResultsTable.svelte';
+  import AssetScreenerChart from '$lib/components/screener/AssetScreenerChart.svelte';
 
   import {
     getAssetTypeForTracker,
@@ -129,8 +131,13 @@
 
   // Search/filter for journalists with watchlists
   let searchQuery = $state('');
-  // Expanded row state - tracks which owner's ownership tree is visible
-  let expandedOwnerId = $state<string | null>(null);
+  // Modal state for ownership chart
+  let chartModalOwner: { entityId: string; name: string; filteredAssets?: number } | null = $state(null);
+  let modalOriginRect: DOMRect | null = $state(null);
+  let modalNameEl: HTMLElement | undefined = $state();
+  let modalEl: HTMLElement | undefined = $state();
+  let backdropEl: HTMLElement | undefined = $state();
+  let isModalClosing = $state(false);
   let resultsSectionEl: HTMLElement | undefined = $state();
 
   // ── Edit modal state ──────────────────────────────────
@@ -153,8 +160,126 @@
     }
   });
 
-  function toggleExpanded(ownerId: string) {
-    expandedOwnerId = expandedOwnerId === ownerId ? null : ownerId;
+  function openChartModal(entityId: string, event?: MouseEvent) {
+    const owner = owners.find((o) => o.entityId === entityId);
+    if (!owner || isModalClosing) return;
+
+    // Capture source rect for FLIP animation
+    if (event) {
+      const row = event.currentTarget as HTMLElement;
+      const nameEl = row?.querySelector('.owner-name');
+      if (nameEl) modalOriginRect = nameEl.getBoundingClientRect();
+    }
+
+    chartModalOwner = owner;
+
+    // Animate entrance after DOM renders
+    tick().then(() => {
+      const hasFlip = !!(modalOriginRect && modalNameEl);
+
+      // Backdrop fades in immediately
+      if (backdropEl) {
+        animate(backdropEl, {
+          opacity: [0, 1],
+          duration: 600,
+          ease: 'out(2)',
+        });
+      }
+
+      // Modal shell appears but body stays invisible until name lands
+      if (modalEl) {
+        // Show just the header frame first
+        modalEl.style.opacity = '1';
+        modalEl.style.transform = 'none';
+      }
+
+      // Hide the chart body — it fades in after the name flight
+      const bodyEl = modalEl?.querySelector('.chart-modal-body') as HTMLElement | null;
+      if (bodyEl) bodyEl.style.opacity = '0';
+
+      const revealBody = () => {
+        if (bodyEl) {
+          animate(bodyEl, {
+            opacity: [0, 1],
+            translateY: [12, 0],
+            duration: 500,
+            ease: 'out(3)',
+          });
+        }
+      };
+
+      // FLIP: fly the company name from table to modal header
+      if (hasFlip && modalOriginRect && modalNameEl) {
+        const destRect = modalNameEl.getBoundingClientRect();
+        const clone = document.createElement('span');
+        clone.textContent = owner.name;
+        Object.assign(clone.style, {
+          position: 'fixed',
+          left: `${modalOriginRect.left}px`,
+          top: `${modalOriginRect.top}px`,
+          fontSize: getComputedStyle(modalNameEl).fontSize,
+          fontWeight: '500',
+          fontFamily: 'Georgia, serif',
+          color: 'var(--color-text-primary, #1e293b)',
+          zIndex: '10001',
+          pointerEvents: 'none',
+          whiteSpace: 'nowrap',
+        });
+        document.body.appendChild(clone);
+        modalNameEl.style.opacity = '0';
+        const destEl = modalNameEl;
+
+        animate(clone, {
+          left: [modalOriginRect.left, destRect.left],
+          top: [modalOriginRect.top, destRect.top],
+          duration: 600,
+          ease: 'out(2)',
+          onComplete: () => {
+            clone.remove();
+            if (destEl) destEl.style.opacity = '1';
+            revealBody();
+          },
+        });
+      } else {
+        // No FLIP source — just fade everything in together
+        revealBody();
+      }
+
+      modalOriginRect = null;
+    });
+  }
+
+  function closeChartModal() {
+    if (!chartModalOwner || isModalClosing) return;
+    isModalClosing = true;
+
+    const done = () => {
+      chartModalOwner = null;
+      isModalClosing = false;
+    };
+
+    // Animate modal out — gently sinks and fades
+    if (modalEl) {
+      animate(modalEl, {
+        opacity: [1, 0],
+        scale: [1, 0.96],
+        translateY: [0, 40],
+        duration: 400,
+        ease: 'in(2)',
+      });
+    }
+
+    // Backdrop fade out, then clear state
+    if (backdropEl) {
+      animate(backdropEl, {
+        opacity: [1, 0],
+        duration: 450,
+        ease: 'in(2)',
+        onComplete: done,
+      });
+    } else {
+      setTimeout(done, 450);
+    }
   }
 
   // Owners to pass into Step 4
@@ -418,6 +543,8 @@
   }
 </script>
 
+<svelte:window onkeydown={(e) => { if (e.key === 'Escape' && chartModalOwner) closeChartModal(); }} />
+
 <svelte:head>
   <title>Screener Results — Global Energy Monitor</title>
   <meta
@@ -532,10 +659,7 @@
         {searchQuery}
         {viewMode}
         selectedOwnerCount={selectedOwnerIds.length}
-        {expandedOwnerId}
-        assetClassName={chartAssetClassName}
-        trackerSlug={chartTrackerSlug}
-        onToggleExpanded={toggleExpanded}
+        onToggleExpanded={openChartModal}
         onClearSearch={() => handleOwnerSearch('')}
       />
     </section>
@@ -601,6 +725,34 @@
         <pre class="debug-code">{executedQuery}</pre>
       </div>
     </DebugPanel>
+  {/if}
+
+  <!-- Fullscreen chart modal -->
+  {#if chartModalOwner}
+    <div
+      class="chart-modal-backdrop"
+      bind:this={backdropEl}
+      onclick={closeChartModal}
+      role="presentation"
+    ></div>
+    <div class="chart-modal" bind:this={modalEl} role="dialog" aria-modal="true" aria-label="{chartModalOwner.name} ownership chart">
+      <header class="chart-modal-header">
+        <div class="chart-modal-title">
+          <h3 bind:this={modalNameEl}>{chartModalOwner.name}</h3>
+        </div>
+        <button class="chart-modal-close" onclick={closeChartModal}>✕</button>
+      </header>
+      <div class="chart-modal-body">
+        <AssetScreenerChart
+          entityId={chartModalOwner.entityId}
+          entityName={chartModalOwner.name}
+          assetClassName={chartAssetClassName}
+          trackerSlug={chartTrackerSlug}
+          filteredAssetCount={chartModalOwner.filteredAssets}
+          statusFilter={selectedClasses[0]?.filters?.statuses}
+        />
+      </div>
+    </div>
   {/if}
 
   {#if showEditModal && editAssetClass}
@@ -810,5 +962,76 @@
 
   .btn-visualize:hover {
     background: var(--gem-teal, #2a7f8f);
+  }
+
+  /* ── Fullscreen chart modal ──────────────────── */
+  .chart-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 9998;
+    opacity: 0; /* anime.js controls entrance */
+  }
+
+  .chart-modal {
+    position: fixed;
+    inset: 5vh 5vw;
+    background: var(--color-bg-primary, #fff);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-radius: 8px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    opacity: 0; /* anime.js controls entrance */
+    will-change: transform, opacity;
+  }
+
+  .chart-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--color-border, #e5e7eb);
+    flex-shrink: 0;
+  }
+
+  .chart-modal-title h3 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    font-family: Georgia, serif;
+  }
+
+  .chart-modal-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--color-text-tertiary);
+    font-size: 20px;
+    padding: 4px 8px;
+    line-height: 1;
+  }
+
+  .chart-modal-close:hover {
+    color: var(--color-text-primary);
+  }
+
+  .chart-modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0;
+    min-height: 0;
+  }
+
+  /* Override chart's internal max-height so it fills the modal */
+  .chart-modal-body :global(.sticky-section) {
+    max-height: none;
+    height: 100%;
+    border: none;
+    border-radius: 0;
   }
 </style>

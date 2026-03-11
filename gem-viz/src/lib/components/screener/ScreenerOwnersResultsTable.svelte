@@ -1,15 +1,10 @@
 <script lang="ts">
-  import AssetScreenerChart from '$lib/components/screener/AssetScreenerChart.svelte';
-
   export let filteredOwners = [];
   export let classDescription = '';
   export let searchQuery = '';
-  export let expandedOwnerId: string | null = null;
-  export let assetClassName = '';
-  export let trackerSlug = '';
   export let viewMode: 'all' | 'filtered' = 'all';
   export let selectedOwnerCount = 0;
-  export let onToggleExpanded: (_entityId: string) => void;
+  export let onToggleExpanded: (_entityId: string, _event?: MouseEvent) => void;
   export let onClearSearch: () => void;
 </script>
 
@@ -18,21 +13,18 @@
     <thead>
       <tr>
         <th class="th-company">Company</th>
-        <th class="th-count">Total Assets</th>
-        <th class="th-count" title="Assets matching current class and status filters">Matching</th>
+        <th class="th-count">Total Projects</th>
+        <th class="th-count" title="Projects matching {classDescription}">Matching</th>
       </tr>
     </thead>
     <tbody>
       {#each filteredOwners as owner, idx (owner.entityId || owner.name)}
-        {@const isExpanded = expandedOwnerId === owner.entityId}
         <tr
           class="owner-row"
-          class:expanded={isExpanded}
           class:even={idx % 2 === 0}
-          onclick={() => onToggleExpanded(owner.entityId)}
+          onclick={(e) => onToggleExpanded(owner.entityId, e)}
         >
           <td class="td-company">
-            <span class="arrow" class:open={isExpanded}></span>
             <span class="owner-name">{owner.name}</span>
           </td>
           <td class="td-count">
@@ -44,19 +36,6 @@
             >
           </td>
         </tr>
-        {#if isExpanded}
-          <tr class="detail-row">
-            <td colspan="3" class="detail-cell">
-              <AssetScreenerChart
-                entityId={owner.entityId}
-                entityName={owner.name}
-                {assetClassName}
-                {trackerSlug}
-                filteredAssetCount={owner.filteredAssets}
-              />
-            </td>
-          </tr>
-        {/if}
       {:else}
         <tr>
           <td colspan="3" class="empty-cell">
@@ -131,22 +110,10 @@
     background: var(--color-gray-50, #f8fafc);
   }
 
-  .owner-row.expanded {
-    background: rgba(42, 127, 143, 0.06);
-  }
-
-  .owner-row.expanded:hover {
-    background: rgba(42, 127, 143, 0.08);
-  }
-
   td {
     padding: 10px 12px;
     border-bottom: 1px solid var(--color-gray-100, #f1f5f9);
     vertical-align: middle;
-  }
-
-  .owner-row.expanded td {
-    border-bottom-color: transparent;
   }
 
   /* ── Company cell ───────────────────────────── */
@@ -154,32 +121,6 @@
     display: flex;
     align-items: center;
     gap: 8px;
-  }
-
-  .arrow {
-    display: inline-block;
-    width: 0;
-    height: 0;
-    border-style: solid;
-    border-width: 4px 0 4px 6px;
-    border-color: transparent transparent transparent var(--color-gray-300, #cbd5e1);
-    transition:
-      transform 150ms ease,
-      border-color 150ms ease;
-    flex-shrink: 0;
-  }
-
-  .arrow.open {
-    transform: rotate(90deg);
-    border-left-color: var(--gem-teal, #2a7f8f);
-  }
-
-  .owner-row:hover .arrow {
-    border-left-color: var(--color-gray-500, #64748b);
-  }
-
-  .owner-row:hover .arrow.open {
-    border-left-color: var(--gem-teal, #2a7f8f);
   }
 
   .owner-name {
@@ -209,20 +150,6 @@
   .count-match {
     color: var(--color-text-secondary, #475569);
     font-weight: 600;
-  }
-
-  /* ── Expanded detail ────────────────────────── */
-  .detail-row {
-    background: var(--color-gray-50, #f8fafc);
-  }
-
-  .detail-row:hover {
-    background: var(--color-gray-50, #f8fafc);
-  }
-
-  .detail-cell {
-    padding: 0 !important;
-    border-bottom: 2px solid var(--color-gray-200, #e2e8f0);
   }
 
   /* ── Empty state ────────────────────────────── */
