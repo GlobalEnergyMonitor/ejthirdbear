@@ -82,7 +82,8 @@ export const LAYOUT = {
   subsidiaryMarkHeight: 19,
   subsidiaryMinHeight: 112,
   yPadding: 40,
-  assetsX: 500,
+  assetsX: 532,
+  regionPadding: 32, // keeps region right edge fixed as assetsX shifts right
   assetSpacing: 9,
   assetMarkHeightSingle: 16,
   assetMarkHeightCombined: 26,
@@ -359,12 +360,12 @@ export function buildSubsidiaryGroups(chartData: ScreenerChartData): SubsidiaryG
     return subData;
   });
 
-  // Compute layout heights
-  let y = 0;
+  // Compute layout heights — start at yPadding/2 (= MARGIN.top in the render) so the
+  // first region's bezier top lands exactly at y=0 in the SVG (bottom of the sticky header)
+  let y = LAYOUT.yPadding / 2;
   for (const d of subsidiariesData) {
     d.top = y;
     const nLocations = d.locations.length;
-
     for (let j = 0; j < d.locations.length; j++) {
       const loc = d.locations[j];
       const nUnits = loc.units.length;

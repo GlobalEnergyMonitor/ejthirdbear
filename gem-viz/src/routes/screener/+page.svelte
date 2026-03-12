@@ -64,13 +64,6 @@
 
   const selectedClass = $derived(selectedClassId ? getAssetClassById(selectedClassId) : null);
 
-  /** Svelte action: scroll element into view on mount */
-  function scrollIntoNearestView(node) {
-    requestAnimationFrame(() => {
-      node.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    });
-  }
-
   // Is a class selectable? Must map to at least one known UI tracker.
   function isEnabled(ac) {
     if (ac.trackers.length === 0) return false;
@@ -363,7 +356,7 @@
 
   <section class="support-cta" aria-label="Screener feedback and requests">
     <div class="support-text">
-      <h2>Need another asset class?</h2>
+      <h2>Not seeing what you need?</h2>
       <p>
         If a class is missing, send a request and include your use case. You can also share general
         screener feedback.
@@ -377,7 +370,6 @@
 
   <!-- Filter panel when class is selected -->
   {#if selectedClass}
-    <div use:scrollIntoNearestView></div>
     <AssetClassExpansion
       assetClass={selectedClass}
       bind:subClassChecks

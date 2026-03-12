@@ -31,7 +31,7 @@ export function subsidiaryPath(
   const p = d3Path();
   const xS = 0;
   const yS = d.top;
-  const xE = LAYOUT.subsidX + LAYOUT.assetsX - LAYOUT.assetSpacing * 2;
+  const xE = LAYOUT.subsidX + LAYOUT.assetsX - LAYOUT.regionPadding - LAYOUT.assetSpacing * 2;
   const yE = d.bottom;
   const radius = LAYOUT.yPadding;
   const xSU = xS;
@@ -101,7 +101,7 @@ export function drawSubsidiaryLabels(
     .data(data)
     .join('g')
     .attr('class', 'subsidiary-label')
-    .attr('transform', (d) => `translate(${LAYOUT.subsidX}, ${d.top + 12})`);
+    .attr('transform', (d) => `translate(${LAYOUT.subsidX}, ${d.top + 26})`);
 
   // Ownership pie circle background
   items
@@ -177,11 +177,11 @@ export function drawSubsidiaryLabels(
     });
 
   // Mini bar charts + intermediary path hints
+  // Bars are placed to the right of the name/pie area; intermediary hint goes below the name
+  const BAR_X = 200;
   items.each(function (d) {
-    const wrapped = nameWrapped.get(d.id) || false;
-    const barY = markR + 42 + (wrapped ? LINE_HEIGHT : 0);
-    drawMiniBarChartsForItem(select(this), d, barY);
-    drawIntermediaryPathForItem(select(this), d, barY + 28);
+    drawMiniBarChartsForItem(select(this), d, markR - 4, BAR_X);
+    drawIntermediaryPathForItem(select(this), d, markR * 2 + 18);
   });
 }
 
@@ -192,7 +192,8 @@ export function drawSubsidiaryLabels(
 function drawMiniBarChartsForItem(
   item: Selection<SVGGElement, SubsidiaryGroupData, null, undefined>,
   d: SubsidiaryGroupData,
-  startY: number
+  startY: number,
+  startX = 0
 ): void {
   const scaleW = scaleLinear().domain([0, 1]).range([0, 160]);
   const BAR_HEIGHT = 7;
@@ -202,16 +203,16 @@ function drawMiniBarChartsForItem(
   const trackerGroup = item
     .append('g')
     .attr('class', 'bar-group-tracker')
-    .attr('transform', `translate(0, ${startY})`);
+    .attr('transform', `translate(${startX}, ${startY})`);
 
   trackerGroup
     .append('text')
     .attr('dy', '-0.4em')
-    .style('font-size', '8px')
+    .style('font-size', '0.55rem')
     .style('font-weight', 500)
     .style('text-transform', 'uppercase')
     .style('letter-spacing', '0.07em')
-    .style('fill', colors.gray400)
+    .style('fill', 'rgb(121, 121, 117)')
     .text('TYPE');
 
   const trackerBars = trackerGroup
@@ -245,16 +246,16 @@ function drawMiniBarChartsForItem(
   const statusGroup = item
     .append('g')
     .attr('class', 'bar-group-status')
-    .attr('transform', `translate(0, ${startY + BAR_HEIGHT + 14})`);
+    .attr('transform', `translate(${startX}, ${startY + BAR_HEIGHT + 20})`);
 
   statusGroup
     .append('text')
     .attr('dy', '-0.4em')
-    .style('font-size', '8px')
+    .style('font-size', '0.55rem')
     .style('font-weight', 500)
     .style('text-transform', 'uppercase')
     .style('letter-spacing', '0.07em')
-    .style('fill', colors.gray400)
+    .style('fill', 'rgb(121, 121, 117)')
     .text('STATUS');
 
   const statusBars = statusGroup
@@ -334,7 +335,7 @@ function drawIntermediaryPathForItem(
   if (!intermediary) return;
 
   const radius = LAYOUT.yPadding;
-  const endWidth = LAYOUT.assetsX - LAYOUT.subsidX - radius - 20;
+  const endWidth = LAYOUT.assetsX - LAYOUT.regionPadding - LAYOUT.subsidX - radius - 20;
   const COL_HINT = '#61615c';
 
   const g = item.append('g').attr('class', 'intermediary-path-group');
@@ -376,27 +377,22 @@ function drawIntermediaryPathForItem(
   }
 
   g.append('text')
-    .attr('transform', `translate(${radius - 10}, ${startY + radius + 5})`)
+    .attr('transform', `translate(${radius - 10}, ${startY + radius + 14})`)
     .style('font-size', '8px')
     .style('font-weight', 500)
     .style('font-style', 'italic')
     .style('letter-spacing', '0.03em')
     .style('fill', COL_HINT)
-    .selectAll('tspan')
-    .data(
+    .text(
       intermediary.total_descendants === 1
-        ? ['Assets are directly', 'owned by intermediary']
-        : ['(Some) assets are owned', 'through other intermediaries']
-    )
-    .join('tspan')
-    .attr('x', 0)
-    .attr('y', (_d, i) => `${-2.5 + i * 1.2}em`)
-    .text((t) => t);
+        ? 'Assets are directly owned by intermediary'
+        : '(Some) assets are owned through other intermediaries'
+    );
 
   if (intermediary.total_descendants > 1) {
     const fold = g
       .append('g')
-      .attr('transform', `translate(${radius - 2}, ${startY + radius + 10})`);
+      .attr('transform', `translate(${radius - 2}, ${startY + radius + 34})`);
     fold
       .append('rect')
       .attr('x', -8)

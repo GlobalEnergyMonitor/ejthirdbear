@@ -27,6 +27,8 @@
     filteredAssetCount = null,
     /** Optional: only show assets whose raw status is in this list */
     statusFilter = undefined,
+    /** Optional: only show assets whose tracker matches one of these names */
+    trackerFilter = undefined,
     onDataLoaded = undefined,
     onContainerReady = undefined,
   } = $props();
@@ -44,6 +46,9 @@
   let trackerLegend = $state([]);
   let statusLegend = $state([]);
   let prospectiveLegend = $state(false);
+  // Mirrors the colorField logic in screener-chart-render.ts:
+  // use tracker coloring unless there's ≤1 tracker type AND >1 status to differentiate
+  const colorByTracker = $derived(!(trackerLegend.length <= 1 && statusLegend.length > 1));
   let intermediarySummaries = $state([]);
   let destroyed = false;
 
@@ -107,6 +112,22 @@
         }
       }
 
+      // Apply tracker filter if provided
+      if (trackerFilter && trackerFilter.length > 0) {
+        const allowed = new Set(trackerFilter);
+        const matchTracker = (u) => allowed.has(u.tracker);
+        chartData.assets = chartData.assets.filter(matchTracker);
+        chartData.directlyOwned = chartData.directlyOwned.filter(matchTracker);
+        for (const [subId, units] of chartData.subsidiariesMatched) {
+          const filtered = units.filter(matchTracker);
+          if (filtered.length === 0) {
+            chartData.subsidiariesMatched.delete(subId);
+          } else {
+            chartData.subsidiariesMatched.set(subId, filtered);
+          }
+        }
+      }
+
       if (chartData.assets.length === 0) {
         isEmpty = true;
         loading = false;
@@ -142,20 +163,26 @@
       const rawStatuses = chartData.assets
         .map((a) => String(a.status || '').toLowerCase())
         .filter(Boolean);
-      const allProspective =
+      const allPlanned =
         rawStatuses.length > 0 && rawStatuses.every((s) => prospectiveStatuses.includes(s));
-      prospectiveLegend = allProspective;
+      prospectiveLegend = allPlanned;
 
-      if (allProspective) {
+      if (allPlanned) {
         const items = [];
         for (const [color, { descript, statuses }] of statusColorsProspective) {
           if (statuses.some((s) => rawStatuses.includes(s))) {
-            items.push({ label: descript, color, kind: 'prospective-detail' });
+            items.push({ label: descript, color, kind: 'planned-detail' });
           }
         }
-        statusLegend = items;
-      } else {
-        const order = ['operating', 'prospective', 'retired', 'cancelled', 'unknown'];
+        // If no granular match (e.g. API returned aggregate 'planned'), fall through to normal legend
+        if (items.length > 0) {
+          statusLegend = items;
+        } else {
+          prospectiveLegend = false;
+        }
+      }
+      if (!prospectiveLegend) {
+        const order = ['operating', 'planned', 'retired', 'cancelled', 'unknown'];
         const aggregated = Array.from(
           new Set(chartData.assets.map((a) => a.status_agg).filter(Boolean))
         ).sort((a, b) => order.indexOf(a) - order.indexOf(b));
@@ -313,15 +340,15 @@
   </div>
 
   <div id="legend-container" class:hidden={loading || !!error || isEmpty}>
-    <div id="legend-container-status" class="legend-container">
+    <div id="legend-container-status" class="legend-container" class:tracker-colored={colorByTracker}>
       <p class="title">Asset Status <span>(top-right icons)</span></p>
       <div id="legend-status" class="legend" class:single={trackerLegend.length === 0}>
         {#each statusLegend as item}
           <div class="legend-item">
             <span class="legend-dot-wrap">
-              <span class="legend-bubble" style="background-color:{item.color};"></span>
+              <span class="legend-bubble" style={colorByTracker ? '' : `background-color:${item.color};`}></span>
               {#if !prospectiveLegend}
-                {#if item.kind === 'prospective'}
+                {#if item.kind === 'planned'}
                   <span class="legend-mark proposed"></span>
                 {:else if item.kind === 'retired'}
                   <span class="legend-mark cross retired">✕</span>
@@ -342,7 +369,9 @@
         <div id="legend-type" class="legend">
           {#each trackerLegend as item}
             <div class="legend-item">
-              <span class="legend-bubble" style="background-color:{item.color};"></span>
+              {#if colorByTracker}
+                <span class="legend-bubble" style="background-color:{item.color};"></span>
+              {/if}
               <span class="legend-label">{item.label}</span>
             </div>
           {/each}
@@ -629,5 +658,23 @@
 
   .legend-label {
     text-transform: capitalize;
+  }
+
+  /* When assets are colored by tracker type, show status legend circles as grey outlines.
+     Shrink by 1.5px (stroke is centered on the path, so 0.75px bleeds inward on each side). */
+  .tracker-colored .legend-bubble {
+    background-color: transparent;
+    border: 1.5px solid #9ca3af;
+    width: 11.5px;
+    height: 11.5px;
+  }
+
+  .tracker-colored .legend-mark.proposed {
+    background: #9ca3af;
+  }
+
+  .tracker-colored .legend-mark.cross.retired,
+  .tracker-colored .legend-mark.cross.cancelled {
+    color: #9ca3af;
   }
 </style>

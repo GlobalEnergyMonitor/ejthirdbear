@@ -28,8 +28,8 @@
     assetClassName = 'assets',
     sortByOwnershipPct = true,
     includeUnitNames = false,
-    /** Default active status groups (operating + prospective by default) */
-    defaultStatuses = ['operating', 'prospective'],
+    /** Default active status groups (operating + planned by default) */
+    defaultStatuses = ['operating', 'planned'],
   } = $props();
 
   // Status filter state - which status groups are currently visible
@@ -89,6 +89,18 @@
   // Filtered assets based on active status groups
   const assets = $derived(allAssets.filter(passesStatusFilter));
 
+  // Summary string of asset types for the Details line, e.g. "3 Steel Plant, 2 Coal Mine"
+  const assetTypeSummary = $derived.by(() => {
+    const counts = new Map<string, number>();
+    for (const a of assets) {
+      if (a.tracker) counts.set(a.tracker, (counts.get(a.tracker) ?? 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([type, count]) => `${count} ${type}`)
+      .join(', ');
+  });
+
   // Toggle a status group on/off
   function toggleStatus(group) {
     const next = new Set(activeStatuses);
@@ -103,7 +115,7 @@
 
   // Status group counts (from all assets, not filtered)
   const statusGroupCounts = $derived.by(() => {
-    const counts = { operating: 0, prospective: 0, retired: 0, cancelled: 0 };
+    const counts = { operating: 0, planned: 0, retired: 0, cancelled: 0 };
     for (const a of allAssets) {
       const group = regroupStatus(a.status || a.Status);
       if (group in counts) counts[group]++;
@@ -225,7 +237,7 @@
   // Calculate frequency tables for mini bar charts
   function calculateFrequencyTables(units) {
     if (units.length === 0) return { tracker: [], status: [] };
-    const statusOrder = ['operating', 'prospective', 'retired', 'cancelled'];
+    const statusOrder = ['operating', 'planned', 'retired', 'cancelled'];
     return {
       tracker: countFrequency(units, 'tracker'),
       status: countFrequency(
@@ -402,8 +414,8 @@
       <div class="details-wrapper">
         <p class="subtitle">Details</p>
         <p class="details">
-          {assets.length}{assets.length !== allAssets.length ? ` of ${allAssets.length}` : ''}
-          {assetClassName} via {subsidiariesMatched.size} direct subsidiaries
+          {assetTypeSummary || `${assets.length} ${assetClassName}`}{assets.length !== allAssets.length ? ` of ${allAssets.length}` : ''}
+          via {subsidiariesMatched.size} direct subsidiaries
         </p>
       </div>
     </div>
