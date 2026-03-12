@@ -144,15 +144,18 @@ export interface DynamicStatusGroup {
  * Groups with 0 total are excluded.
  */
 export function discoverStatusGroups(facets: Map<string, number>): DynamicStatusGroup[] {
-  // Build a set of all statuses claimed by known groups
+  // Build a set of all statuses claimed by known groups (including group ids themselves)
   const claimedStatuses = new Set<string>();
   for (const sg of STATUS_GROUPS) {
+    claimedStatuses.add(sg.id);
     for (const s of sg.statuses) claimedStatuses.add(s);
   }
 
   // Build known groups from facet data.
   // Include ALL known sub-statuses (even with 0 count) so the Refine
   // toggle appears for groups that have multiple sub-statuses.
+  // Also handle the case where the API returns an aggregate group id (e.g. "planned")
+  // instead of granular sub-statuses — in that case, use it as the sole sub-status.
   const groups: DynamicStatusGroup[] = [];
   for (const sg of STATUS_GROUPS) {
     const statuses: { value: string; count: number }[] = [];
@@ -160,8 +163,18 @@ export function discoverStatusGroups(facets: Map<string, number>): DynamicStatus
       const count = facets.get(s) ?? 0;
       statuses.push({ value: s, count });
     }
-    const totalCount = statuses.reduce((sum, s) => sum + s.count, 0);
-    if (totalCount > 0) {
+    let totalCount = statuses.reduce((sum, s) => sum + s.count, 0);
+    // If the API returned the group id itself as an aggregate status (e.g. "planned": 500),
+    // use that as the sole entry so the group still shows (without granular Refine).
+    const aggregateCount = facets.get(sg.id) ?? 0;
+    if (totalCount === 0 && aggregateCount > 0) {
+      groups.push({
+        id: sg.id,
+        label: sg.label,
+        statuses: [{ value: sg.id, count: aggregateCount }],
+        totalCount: aggregateCount,
+      });
+    } else if (totalCount > 0) {
       groups.push({ id: sg.id, label: sg.label, statuses, totalCount });
     }
   }

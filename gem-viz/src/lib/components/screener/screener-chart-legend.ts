@@ -68,7 +68,7 @@ export function drawLegend(
   }
 
   // Status legend (always shown)
-  const statusData = ['operating', 'prospective', 'retired', 'cancelled'] as const;
+  const statusData = ['operating', 'planned', 'retired', 'cancelled'] as const;
   const statusLegend = legend
     .append('g')
     .attr('class', 'status-legend')
@@ -100,7 +100,7 @@ export function drawLegend(
 
     // Add status icon on the legend circle
     const iconG = item.append('g').attr('transform', `translate(0, 4)`);
-    if (status === 'prospective') {
+    if (status === 'planned') {
       iconG
         .append('circle')
         .attr('cx', circleR * 1.15)
