@@ -62,6 +62,11 @@
       title: 'Visualizations',
       routes: [
         {
+          path: '/controlchain',
+          name: 'GEM ControlChain',
+          description: 'Search assets/entities and explore ownership trees',
+        },
+        {
           path: '/network',
           name: 'Ownership Network',
           description: 'Full ownership network graph',
@@ -73,12 +78,13 @@
     {
       title: 'Reference',
       routes: [
-        { path: '/factsheet', name: 'Factsheets', description: 'Tracker factsheet index' },
+        { path: '/fieldguide', name: 'Tracker FieldGuide', description: 'Tracker field-level documentation' },
         {
-          path: '/factsheet/[tracker]',
-          name: 'Tracker Factsheet',
-          description: 'Individual tracker factsheet',
+          path: '/fieldguide/[tracker]',
+          name: 'Tracker FieldGuide Detail',
+          description: 'Individual tracker field documentation',
         },
+        { path: '/factsheet', name: 'Factsheets (legacy)', description: 'Redirects to FieldGuide' },
         { path: '/presets', name: 'Presets', description: 'Saved query presets' },
         {
           path: '/manifest',

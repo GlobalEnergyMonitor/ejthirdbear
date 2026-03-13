@@ -4,7 +4,7 @@
    * Interactive dashboard with live REST API queries
    */
 
-  import { link, factsheetLink } from '$lib/links';
+  import { link, fieldguideLink } from '$lib/links';
   import TopOwners from '$lib/widgets/TopOwners.svelte';
   import CountryBreakdown from '$lib/widgets/CountryBreakdown.svelte';
   import StatusDistribution from '$lib/widgets/StatusDistribution.svelte';
@@ -99,7 +99,8 @@
     <h3>Dataset Documentation</h3>
     <p>Explore field definitions, data distributions, and sample records for each tracker.</p>
     <div class="cta-links">
-      <a href={factsheetLink('Coal Mine')} class="factsheet-link">Coal Mine Factsheet</a>
+      <a href={fieldguideLink()} class="factsheet-link">Tracker FieldGuide</a>
+      <a href={link('controlchain')} class="factsheet-link secondary">ControlChain</a>
       <a href={link('cards')} class="factsheet-link secondary">Project Cards</a>
     </div>
   </section>

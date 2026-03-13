@@ -5,7 +5,7 @@
   // ============================================================================
 
   // --- IMPORTS ---
-  import { assetLink, entityLink } from '$lib/links';
+  import { assetLink, entityLink, link } from '$lib/links';
   import TrackerGlobeGrid from '$lib/components/tracker/TrackerGlobeGrid.svelte';
   import TrackerIcon from '$lib/components/tracker/TrackerIcon.svelte';
 
@@ -123,6 +123,16 @@
               {asset.name}
             </a>
           {/each}
+        </div>
+      </section>
+
+      <!-- Tools -->
+      <section class="asset-links">
+        <p>Tools</p>
+        <div class="link-list">
+          <a href={link('controlchain')} class="tool-link">ControlChain</a>
+          <a href={link('fieldguide')} class="tool-link">Tracker FieldGuide</a>
+          <a href={link('screener')} class="tool-link">Asset Screener</a>
         </div>
       </section>
     </aside>
