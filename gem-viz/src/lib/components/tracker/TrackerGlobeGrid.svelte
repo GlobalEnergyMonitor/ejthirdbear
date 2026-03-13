@@ -35,6 +35,18 @@
     'south-east': 315,
   };
 
+  // UI display name → API asset_type name used in geojson
+  const UI_TO_API = {
+    'Coal Plant': 'Coal Plant',
+    'Coal Mine': 'Coal Mine',
+    'Gas Plant': 'Oil & Gas Plant',
+    'Oil Pipeline': 'Oil or NGL Pipeline',
+    'Steel Plant': 'Iron & Steel Plant',
+    'Iron Mine': 'Iron Ore Mine',
+    'Bioenergy Power': 'Bioenergy Plant',
+    'Cement Plant': 'Cement or Concrete Plant',
+  };
+
   const trackerLayout = [
     { tracker: 'Coal Plant', slot: 'north-west' },
     { tracker: 'Coal Mine', slot: 'north' },
@@ -74,8 +86,9 @@
     c.total = geojsonData.features.length;
 
     trackerLayout.forEach(({ tracker }) => {
+      const apiName = UI_TO_API[tracker] || tracker;
       c[tracker] = geojsonData.features.filter(
-        (feature) => feature.properties?.tracker === tracker
+        (feature) => feature.properties?.tracker === apiName
       ).length;
     });
 
@@ -160,11 +173,12 @@
     const color = getPointColor(tracker);
     const pointColor = tracker ? color : getAllTrackersColorExpression();
 
-    const data = tracker
+    const apiTracker = tracker ? (UI_TO_API[tracker] || tracker) : null;
+    const data = apiTracker
       ? {
           ...geojsonData,
           features: geojsonData.features.filter(
-            (feature) => feature.properties?.tracker === tracker
+            (feature) => feature.properties?.tracker === apiTracker
           ),
         }
       : geojsonData;
