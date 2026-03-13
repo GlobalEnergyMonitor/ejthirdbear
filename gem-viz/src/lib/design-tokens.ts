@@ -161,6 +161,7 @@ export const statusColorsGranular: Record<string, string> = {
   'operating pre-retirement': '#7F142A',
 
   // Planned (gradient from light to dark red)
+  planned: '#CA4A50', // aggregate status from API
   proposed: '#f4b7b3',
   announced: '#f4b7b3',
   'pre-permit': '#CA4A50',

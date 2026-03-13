@@ -91,7 +91,8 @@
 
   // Summary string of asset types for the Details line, e.g. "3 Steel Plant, 2 Coal Mine"
   const assetTypeSummary = $derived.by(() => {
-    const counts = new Map<string, number>();
+    /** @type {Map<string, number>} */
+    const counts = new Map();
     for (const a of assets) {
       if (a.tracker) counts.set(a.tracker, (counts.get(a.tracker) ?? 0) + 1);
     }
