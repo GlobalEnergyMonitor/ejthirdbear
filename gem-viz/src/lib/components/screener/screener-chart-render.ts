@@ -65,8 +65,11 @@ export function renderChart(
   const trackerSet = new Set(
     chartData.assets.map((a) => a.tracker).filter((t) => t && t !== 'Unknown')
   );
+  const statusSet = new Set(chartData.assets.map((a) => a.status_agg).filter(Boolean));
   const colorField: ColorField =
-    requestedColorField === 'tracker' && trackerSet.size <= 1 ? 'status' : requestedColorField;
+    requestedColorField === 'tracker' && trackerSet.size <= 1 && statusSet.size > 1
+      ? 'status'
+      : requestedColorField;
 
   // Color resolver for units
   const getUnitColor = (unit: ChartUnit): string => {
@@ -96,15 +99,6 @@ export function renderChart(
     .attr('class', 'chart-main')
     .attr('transform', `translate(${MARGIN.left}, ${MARGIN.top})`);
 
-  // --- Vertical connection line ---
-  main
-    .append('path')
-    .attr('d', `M0,-5 L0,${contentHeight - 5}`)
-    .style('fill', 'none')
-    .style('stroke', COL_STROKE)
-    .style('stroke-width', '3.5px')
-    .style('stroke-linecap', 'round');
-
   // --- Draw subsidiary groups ---
   const regionGroup = main.append('g').attr('class', 'regions');
   const labelGroup = main.append('g').attr('class', 'labels');
@@ -115,6 +109,15 @@ export function renderChart(
   drawSubsidiaryLabels(labelGroup, subsidiaryGroups, chartData);
   drawAssetGroups(assetGroup, subsidiaryGroups, getUnitColor, assetHref);
   drawCommonAssetLines(assetGroup, lineGroup, subsidiaryGroups, chartData, contentHeight);
+
+  // --- Vertical connection line (appended last so it renders above regions) ---
+  main
+    .append('path')
+    .attr('d', `M0,-5 L0,${contentHeight - 5}`)
+    .style('fill', 'none')
+    .style('stroke', COL_STROKE)
+    .style('stroke-width', '3.5px')
+    .style('stroke-linecap', 'round');
 
   // --- Legend ---
   if (showLegend) {

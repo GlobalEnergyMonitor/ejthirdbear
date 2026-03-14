@@ -919,7 +919,13 @@ export async function fetchStatusFacets(assetTypeSlug?: string): Promise<Map<str
     facets: true,
     limit: 1,
   });
-  return new Map(Object.entries(res.facets?.status ?? {}));
+  // Normalize keys to lowercase so they match the STATUS_GROUPS statuses
+  const normalized = new Map<string, number>();
+  for (const [k, v] of Object.entries(res.facets?.status ?? {})) {
+    const key = k.toLowerCase();
+    normalized.set(key, (normalized.get(key) ?? 0) + v);
+  }
+  return normalized;
 }
 
 // Export the API base for debugging

@@ -750,6 +750,7 @@
           trackerSlug={chartTrackerSlug}
           filteredAssetCount={chartModalOwner.filteredAssets}
           statusFilter={selectedClasses[0]?.filters?.statuses}
+          trackerFilter={selectedClasses[0]?.gemTrackers}
         />
       </div>
     </div>

@@ -284,8 +284,8 @@ export function aggregateAssetStats(assets: AssetSummary[]): AggregatedStats {
     typeMap.set(type, { count: tEntry.count + 1, capacity: tEntry.capacity + cap });
   }
 
-  // Sort statuses: operating first, then prospective, retired, cancelled, unknown
-  const statusOrder = ['operating', 'prospective', 'retired', 'cancelled', 'unknown'];
+  // Sort statuses: operating first, then planned, retired, cancelled, unknown
+  const statusOrder = ['operating', 'planned', 'retired', 'cancelled', 'unknown'];
   const statusBreakdown = statusOrder
     .filter((g) => statusMap.has(g))
     .map((g) => ({ group: g, ...statusMap.get(g)! }));
@@ -334,8 +334,8 @@ export function generateBriefing(
   }
   const retired = stats.statusBreakdown.find((s) => s.group === 'retired');
   if (retired) parts.push(`${retired.count} are retired`);
-  const prospective = stats.statusBreakdown.find((s) => s.group === 'prospective');
-  if (prospective) parts.push(`${prospective.count} are proposed or under development`);
+  const planned = stats.statusBreakdown.find((s) => s.group === 'planned');
+  if (planned) parts.push(`${planned.count} are proposed or under development`);
   const cancelled = stats.statusBreakdown.find((s) => s.group === 'cancelled');
   if (cancelled) parts.push(`${cancelled.count} are cancelled`);
 

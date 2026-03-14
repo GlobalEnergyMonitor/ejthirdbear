@@ -223,7 +223,7 @@
   --color-status-construction: #7f142a;
   --color-status-pre-construction: #ca4a50;
   --color-status-announced: #f4b7b3;
-  --color-status-prospective: #ca4a50;
+  --color-status-planned: #ca4a50;
 
   /* --- Status Colors (Renewables - Green Scale) --- */
   --color-status-operating-renewable: #348d59;

@@ -216,7 +216,7 @@
           assetClassName: params.get('assetClass') || 'assets',
           sortByOwnershipPct: boolParam(params.get('sortByOwnershipPct')),
           includeUnitNames: boolParam(params.get('includeUnitNames'), false),
-          defaultStatuses: statuses.length ? statuses : ['operating', 'prospective'],
+          defaultStatuses: statuses.length ? statuses : ['operating', 'planned'],
         };
         loading = false;
         return;

@@ -308,7 +308,7 @@
       </dd>
 
       <dt>Status Icons</dt>
-      <dd>Light circle = prospective, X mark = retired/cancelled, no icon = operating</dd>
+      <dd>Light circle = planned, X mark = retired/cancelled, no icon = operating</dd>
     </dl>
 
     <h3>Exporting Data</h3>
@@ -648,7 +648,7 @@
     flex-shrink: 0;
   }
   .status-dot.proposed {
-    background: var(--color-status-prospective);
+    background: var(--color-status-planned);
   }
   .status-dot.operating {
     background: var(--color-status-operating);

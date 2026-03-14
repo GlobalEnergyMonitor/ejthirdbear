@@ -393,7 +393,7 @@ function addStatusIcon(
   const x = center[0] + r * 1.15;
   const y = center[1] - r * 1.15;
 
-  if (status === 'prospective' || status === 'proposed') {
+  if (status === 'planned' || status === 'proposed') {
     // Yellow dot
     el.append('circle')
       .attr('transform', `translate(${x},${y})`)

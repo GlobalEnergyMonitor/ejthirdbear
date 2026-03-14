@@ -148,7 +148,7 @@ export const renewableTrackerColorMap = new Map(Object.entries(renewableTrackerC
 // Aggregated status colors (for fossil/dirty assets)
 export const statusColors: Record<string, string> = {
   operating: '#7F142A', // Deep red - active fossil
-  prospective: '#CA4A50', // Lighter red - planned fossil
+  planned: '#CA4A50', // Lighter red - planned fossil
   retired: '#6e8c91', // Grey-teal - shut down
   cancelled: '#dce3e5', // Light grey - never built
   unknown: '#BECCCF',
@@ -160,7 +160,8 @@ export const statusColorsGranular: Record<string, string> = {
   operating: '#7F142A',
   'operating pre-retirement': '#7F142A',
 
-  // Prospective (gradient from light to dark red)
+  // Planned (gradient from light to dark red)
+  planned: '#CA4A50', // aggregate status from API
   proposed: '#f4b7b3',
   announced: '#f4b7b3',
   'pre-permit': '#CA4A50',
@@ -184,13 +185,16 @@ export const statusColorsGranular: Record<string, string> = {
 // Status groupings
 export const statusGroups = {
   operating: ['operating', 'operating pre-retirement'] as const,
-  prospective: [
+  planned: [
     'proposed',
     'announced',
     'pre-permit',
     'permitted',
     'pre-construction',
     'construction',
+    // TODO: remove once pipeline is fixed — API currently returns aggregate 'planned'
+    // instead of granular sub-statuses for some trackers (e.g. Gas Plants)
+    'planned',
   ] as const,
   retired: ['retired', 'mothballed', 'idle', 'mothballed pre-retirement'] as const,
   cancelled: [
@@ -204,12 +208,12 @@ export const statusGroups = {
 // Status color legend (for viz legends)
 export const statusColorLegend = [
   { color: '#7F142A', label: 'Operating', statuses: statusGroups.operating },
-  { color: '#CA4A50', label: 'Prospective', statuses: statusGroups.prospective },
+  { color: '#CA4A50', label: 'Planned', statuses: statusGroups.planned },
   { color: '#6e8c91', label: 'Retired', statuses: statusGroups.retired },
   { color: '#dce3e5', label: 'Cancelled', statuses: statusGroups.cancelled },
 ];
 
-// Prospective-only legend (more granular)
+// Planned-only legend (more granular)
 export const prospectiveColorLegend = [
   { color: '#f4b7b3', label: 'Proposed/Announced', statuses: ['proposed', 'announced'] },
   {
@@ -695,7 +699,7 @@ export const colorByStatusProspective = new Map(
 // Aggregated status colors as Map (legacy format)
 export const statusColorsMap = new Map([
   ['#7F142A', { descript: 'operating', statuses: statusGroups.operating }],
-  ['#CA4A50', { descript: 'prospective', statuses: statusGroups.prospective }],
+  ['#CA4A50', { descript: 'planned', statuses: statusGroups.planned }],
   ['#6e8c91', { descript: 'retired/mothballed/idle', statuses: statusGroups.retired }],
   ['#dce3e5', { descript: 'cancelled/shelved', statuses: statusGroups.cancelled }],
 ]);
@@ -713,6 +717,8 @@ export const prospectiveStatuses = [
   'construction',
   'proposed',
   'announced',
+  // TODO: remove once pipeline is fixed
+  'planned',
 ];
 
 // =============================================================================
