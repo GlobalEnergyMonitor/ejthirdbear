@@ -25,6 +25,7 @@
   import EntityMicroCard from '$lib/components/cards/EntityMicroCard.svelte';
   import AssetMicroCard from '$lib/components/cards/AssetMicroCard.svelte';
   import ProjectCard from '$lib/components/cards/ProjectCard.svelte';
+  import CoalPlantCard from '$lib/components/cards/CoalPlantCard.svelte';
 
   // Charts
   import Sparkline from '$lib/components/charts/Sparkline.svelte';
@@ -77,7 +78,7 @@
   } from './kitchen-sink-data';
 
   // Featured assets from Observable notebook — for ownership tree parity testing
-  import { getOwnershipGraph } from '$lib/ownership-api';
+  import { getOwnershipGraph, fetchCoalPlantLocation } from '$lib/ownership-api';
   const featuredAssets = new Map([
     ['sinesPowerStation', 'G100000109409'],
     ['BaghlanPowerStation', 'G100001057899'],
@@ -115,6 +116,46 @@
       loadFeaturedAsset(selectedFeaturedAsset);
     }
   });
+
+  // CoalPlantCard test harness
+  const COAL_PRESETS = [
+    { label: 'Boundary Dam',           id: 'L100000100176' },
+    { label: 'Eraring',                id: 'L100000100005' },
+    { label: 'Yancheng Binhai',        id: 'L100000100973' },
+    { label: 'Maritsa 3',              id: 'L100000100136' },
+    { label: 'Gubin Power Project',    id: 'L100000103227' },
+    { label: 'Liuzhi',                 id: 'L100000100463' },
+    { label: 'Worsley Refinery',       id: 'L100000100043' },
+    { label: 'Zhunger Weijiamao',      id: 'L100000100896' },
+    { label: 'Huaiyin',                id: 'L100000100991' },
+    { label: 'Zhenxiong',              id: 'L100000101719' },
+    { label: 'Rovinari',               id: 'L100000103294' },
+    { label: 'Nabinagar Thermal',      id: 'L100000102114' },
+    { label: 'Shanying Cogen',         id: 'L100000101755' },
+    { label: 'Lixin Banji',            id: 'L100000100233' },
+    { label: 'Gansu Huating',          id: 'L100000100340' },
+  ];
+  let coalSelectedPreset = $state('L100000100176');
+  let coalCustomId = $state('');
+  let coalUseCustom = $state(false);
+  let coalLocationId = $derived(coalUseCustom ? coalCustomId : coalSelectedPreset);
+  let coalLocation = $state(null);
+  let coalLoading = $state(false);
+  let coalError = $state('');
+
+  async function loadCoalPlant() {
+    if (!coalLocationId.trim()) return;
+    coalLoading = true;
+    coalError = '';
+    coalLocation = null;
+    try {
+      coalLocation = await fetchCoalPlantLocation(coalLocationId.trim());
+    } catch (e) {
+      coalError = e.message || 'Failed to load';
+    } finally {
+      coalLoading = false;
+    }
+  }
 
   // Toggle states for interactive demos
   let showLoading = $state(false);
@@ -1312,6 +1353,64 @@
   </section>
 
   <!-- ========================================
+       COAL PLANT CARD TEST HARNESS
+       ======================================== -->
+  <section id="coal-plant-card">
+    <h2>CoalPlantCard</h2>
+    <p class="section-intro">
+      Test harness for <code>src/lib/components/cards/CoalPlantCard.svelte</code>.
+    </p>
+    <div class="demo-block">
+      <!-- Preset radio buttons -->
+      <div class="coal-presets">
+        {#each COAL_PRESETS as preset}
+          <label class="coal-preset-label" class:active={!coalUseCustom && coalSelectedPreset === preset.id}>
+            <input
+              type="radio"
+              name="coal-preset"
+              value={preset.id}
+              checked={!coalUseCustom && coalSelectedPreset === preset.id}
+              onchange={() => { coalSelectedPreset = preset.id; coalUseCustom = false; loadCoalPlant(); }}
+            />
+            <span class="coal-preset-name">{preset.label}</span>
+            <span class="coal-preset-id">{preset.id}</span>
+          </label>
+        {/each}
+      </div>
+
+      <!-- Custom ID row -->
+      <div style="display: flex; gap: var(--space-3); align-items: center; margin-top: var(--space-3); margin-bottom: var(--space-4);">
+        <label class="coal-preset-label" class:active={coalUseCustom} style="margin: 0; padding: var(--space-2) var(--space-3);">
+          <input
+            type="radio"
+            name="coal-preset"
+            checked={coalUseCustom}
+            onchange={() => { coalUseCustom = true; }}
+          />
+          <span class="coal-preset-name">Custom</span>
+        </label>
+        <input
+          type="text"
+          bind:value={coalCustomId}
+          placeholder="e.g. L100000103058"
+          onfocus={() => { coalUseCustom = true; }}
+          onkeydown={(e) => e.key === 'Enter' && loadCoalPlant()}
+          style="font-family: var(--font-family-mono); font-size: var(--font-size-sm); padding: var(--space-2) var(--space-3); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-sm); width: 220px;"
+        />
+        <button class="btn" onclick={loadCoalPlant} disabled={coalLoading}>
+          {coalLoading ? 'Loading…' : 'Load'}
+        </button>
+      </div>
+
+      {#if coalError}
+        <p style="color: var(--color-status-retired); font-size: var(--font-size-sm);">{coalError}</p>
+      {:else if coalLocation}
+        <CoalPlantCard units={coalLocation.units} open={true} />
+      {/if}
+    </div>
+  </section>
+
+  <!-- ========================================
        FULL REGISTRY
        ======================================== -->
   <section id="registry">
@@ -1337,6 +1436,40 @@
 </div>
 
 <style>
+  /* ── CoalPlantCard preset picker ── */
+  .coal-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+  }
+  .coal-preset-label {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    user-select: none;
+    transition: border-color 0.1s, background 0.1s;
+  }
+  .coal-preset-label:hover { border-color: #888; }
+  .coal-preset-label.active {
+    border-color: #111;
+    background: #111;
+    color: #fff;
+  }
+  .coal-preset-label input[type="radio"] { display: none; }
+  .coal-preset-name { font-weight: 500; }
+  .coal-preset-id {
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-xs);
+    opacity: 0.6;
+  }
+  .coal-preset-label.active .coal-preset-id { opacity: 0.7; }
+
   .page {
     max-width: 1000px;
     margin: 0 auto;
