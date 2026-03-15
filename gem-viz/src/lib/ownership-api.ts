@@ -930,3 +930,18 @@ export async function fetchStatusFacets(assetTypeSlug?: string): Promise<Map<str
 
 // Export the API base for debugging
 export const getAPIBase = () => API_BASE;
+
+// =============================================================================
+// COAL PLANT LOCATION
+// =============================================================================
+
+import type { CoalPlantLocation } from '$lib/components/cards/coal-plant-types';
+
+/**
+ * Fetch all units for a coal plant by location ID.
+ * Returns top-line plant info plus a units[] array of unit-level data.
+ */
+export async function fetchCoalPlantLocation(locationId: string): Promise<CoalPlantLocation> {
+  _currentReason = `fetchCoalPlantLocation ${locationId}`;
+  return fetchAPI<CoalPlantLocation>(`/locations/${encodeURIComponent(locationId)}`);
+}
