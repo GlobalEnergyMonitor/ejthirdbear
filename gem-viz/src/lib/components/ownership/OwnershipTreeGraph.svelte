@@ -355,6 +355,21 @@
     return list;
   });
 
+  // When a node is frozen, float in-chain owners to top and mark the rest for fading
+  const sortedOwnersList = $derived.by(() => {
+    if (!frozenNodeData) return ownersList;
+    const inChain: typeof ownersList = [];
+    const outOfChain: typeof ownersList = [];
+    for (const o of ownersList) {
+      if (frozenId === o.id || frozenNodeData.nodesTouched.includes(o.id)) {
+        inChain.push(o);
+      } else {
+        outOfChain.push(o);
+      }
+    }
+    return [...inChain, ...outOfChain];
+  });
+
   // Aggregated summaries matching Observable's ownersSummary.byCountry and byType
   const ownersByCountry = $derived.by(() => {
     const map = new Map<string, { combinedShare: number; count: number; ids: string[] }>();
@@ -1267,12 +1282,14 @@
           <div class="tabular-section">
             <h4>Owner Entities</h4>
             <div class="tabular-rows">
-              {#each ownersList as o}
+              {#each sortedOwnersList as o}
                 {@const rowColors = getNodeColors(o.id, rootId, nodes)}
+                {@const inFrozenChain = !frozenNodeData || frozenId === o.id || frozenNodeData.nodesTouched.includes(o.id)}
                 <div
                   class="tabular-row"
                   class:is-frozen-view={frozenId === o.id}
                   class:is-hovered-view={hoveredId === o.id && frozenId !== o.id}
+                  class:faded={frozenNodeData && !inFrozenChain}
                   class:tease-connection={hoverSource === 'graph' &&
                     teaseNode.ownerId === o.nid &&
                     frozenId !== o.id}
@@ -1721,6 +1738,9 @@
   }
   .tabular-row.is-frozen-view {
     font-weight: bold;
+  }
+  .tabular-row.faded {
+    opacity: 0.35;
   }
   .table-row-text {
     pointer-events: none;
