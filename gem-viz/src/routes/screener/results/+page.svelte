@@ -37,7 +37,7 @@
     parseJsonSearchParam,
     type ScreenerRoutePath,
   } from '$lib/screener-url';
-  import { resolveApiSlug, getAPIBase, fetchStatusFacets } from '$lib/ownership-api';
+  import { resolveApiSlug, getAPIBase, fetchStatusFacets, fetchStatusTaxonomy } from '$lib/ownership-api';
   import type { ScreenerSelectedClass } from '$lib/data-config/screener-types';
   import AssetClassExpansion from '$lib/components/tracker/AssetClassExpansion.svelte';
   import { getAssetClassById } from '$lib/data-config/asset-class-definitions';
@@ -465,13 +465,16 @@
       .map((t: string) => resolveApiSlug(gemTrackerToUiTracker(t)))
       .filter(Boolean);
     if (slugs.length > 0) {
-      Promise.all(slugs.map((slug: string) => fetchStatusFacets(slug)))
-        .then((results) => {
+      Promise.all([
+        fetchStatusTaxonomy().catch(() => null),
+        ...slugs.map((slug: string) => fetchStatusFacets(slug)),
+      ])
+        .then(([taxonomy, ...results]) => {
           if (!showEditModal) return;
           const merged = new Map<string, number>();
           for (const fm of results)
             for (const [k, v] of fm) merged.set(k, (merged.get(k) ?? 0) + v);
-          const groups = discoverStatusGroups(merged);
+          const groups = discoverStatusGroups(merged, taxonomy);
           editDynamicStatusGroups = groups;
           // Re-map status checks to discovered groups
           const next: Record<string, boolean> = {};

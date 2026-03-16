@@ -19,7 +19,7 @@
     STATUS_GROUPS,
     discoverStatusGroups,
   } from '$lib/data-config/tracker-schema';
-  import { resolveApiSlug, getAPIBase, fetchStatusFacets } from '$lib/ownership-api';
+  import { resolveApiSlug, getAPIBase, fetchStatusFacets, fetchStatusTaxonomy } from '$lib/ownership-api';
   import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
   // ─── Category display config ────────────────────────────────────────
@@ -123,10 +123,15 @@
         .filter(Boolean);
       if (slugs.length === 0) return;
 
-      // Fetch facets for each tracker, merge counts
+      // Fetch facets and taxonomy in parallel
+      const [taxonomyResult, ...facetResults] = await Promise.all([
+        fetchStatusTaxonomy().catch(() => null),
+        ...slugs.map((slug) => fetchStatusFacets(slug)),
+      ]);
+
+      // Merge facet counts across trackers
       const mergedFacets = new Map();
-      const results = await Promise.all(slugs.map((slug) => fetchStatusFacets(slug)));
-      for (const facetMap of results) {
+      for (const facetMap of facetResults) {
         for (const [status, count] of facetMap) {
           mergedFacets.set(status, (mergedFacets.get(status) ?? 0) + count);
         }
@@ -135,7 +140,7 @@
       // Only update if this class is still selected
       if (selectedClassId !== ac.id) return;
 
-      const groups = discoverStatusGroups(mergedFacets);
+      const groups = discoverStatusGroups(mergedFacets, taxonomyResult);
       dynamicStatusGroups = groups;
 
       // Re-initialize status checkboxes with discovered statuses

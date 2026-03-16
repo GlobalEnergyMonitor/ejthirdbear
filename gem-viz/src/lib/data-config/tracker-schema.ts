@@ -149,25 +149,159 @@ export interface DynamicStatusGroup {
   totalCount: number;
 }
 
+/** Our 4-group UI mapping — which API taxonomy group each UI group pulls from */
+const UI_GROUP_TO_TAXONOMY: Record<string, string[]> = {
+  operating: ['operating'],
+  planned: ['planned'],
+  cancelled: ['retired'], // API groups cancelled/shelved under 'retired'
+  retired: ['retired'],
+};
+
+/** Sub-statuses that belong in our "cancelled" group (not "retired") */
+const CANCELLED_SUB_STATUSES = new Set([
+  'cancelled', 'cancelled-inferred', 'cancelled - inferred 4 y',
+  'shelved', 'shelved-inferred', 'shelved - inferred 2 y',
+]);
+
 /**
- * Build status groups from API facet data.
+ * Build status groups from API facet data, optionally enriched by the taxonomy.
  * Known statuses are placed into their STATUS_GROUPS bucket.
  * Unknown statuses go into an "Other" catch-all.
  * Groups with 0 total are excluded.
+ *
+ * When taxonomy is provided, sub-statuses and descriptions come from the API
+ * instead of hardcoded lists — new sub-statuses added to the backend
+ * automatically appear in the UI.
  */
-export function discoverStatusGroups(facets: Map<string, number>): DynamicStatusGroup[] {
-  // Build a set of all statuses claimed by known groups (including group ids themselves)
+export function discoverStatusGroups(
+  facets: Map<string, number>,
+  taxonomy?: { statuses: Record<string, { label: string; sub_statuses: Record<string, { label: string; description?: string }> }> } | null,
+): DynamicStatusGroup[] {
+  // If taxonomy is available, build groups from it
+  if (taxonomy?.statuses) {
+    return buildGroupsFromTaxonomy(facets, taxonomy.statuses);
+  }
+
+  // Fallback: use hardcoded STATUS_GROUPS
+  return buildGroupsFromHardcoded(facets);
+}
+
+function buildGroupsFromTaxonomy(
+  facets: Map<string, number>,
+  taxonomyStatuses: Record<string, { label: string; sub_statuses: Record<string, { label: string; description?: string }> }>,
+): DynamicStatusGroup[] {
+  // Build a reverse map: sub_status key → which UI group it belongs to
+  // The API taxonomy has 3 groups (operating, planned, retired)
+  // Our UI has 4 (operating, planned, cancelled, retired)
+  // We split the API's "retired" into "cancelled" and "retired" based on CANCELLED_SUB_STATUSES
+
+  const groups: DynamicStatusGroup[] = [];
+  const seenStatuses = new Set<string>();
+
+  for (const uiGroup of STATUS_GROUPS) {
+    const statuses: { value: string; count: number; label?: string; description?: string }[] = [];
+
+    // Gather sub-statuses from taxonomy groups that map to this UI group
+    const taxGroups = UI_GROUP_TO_TAXONOMY[uiGroup.id] || [];
+    for (const taxGroupId of taxGroups) {
+      const taxGroup = taxonomyStatuses[taxGroupId];
+      if (!taxGroup?.sub_statuses) continue;
+
+      for (const [subKey, subMeta] of Object.entries(taxGroup.sub_statuses)) {
+        // Normalize key to our hyphenated convention
+        const normalized = subKey.replace(/_/g, '-');
+        const mapped = mapApiSubStatus(normalized);
+
+        // For the retired taxonomy group, split between cancelled and retired UI groups
+        if (taxGroupId === 'retired') {
+          const isCancelled = CANCELLED_SUB_STATUSES.has(mapped) || CANCELLED_SUB_STATUSES.has(normalized);
+          if (uiGroup.id === 'cancelled' && !isCancelled) continue;
+          if (uiGroup.id === 'retired' && isCancelled) continue;
+        }
+
+        if (seenStatuses.has(mapped)) continue;
+        seenStatuses.add(mapped);
+
+        const count = facets.get(mapped) ?? 0;
+        statuses.push({ value: mapped, count, label: subMeta.label, description: subMeta.description });
+
+        // Enrich descriptions dynamically
+        if (subMeta.description && !STATUS_VALUE_DESCRIPTIONS[mapped]) {
+          STATUS_VALUE_DESCRIPTIONS[mapped] = subMeta.description;
+        }
+      }
+    }
+
+    // Also include any hardcoded sub-statuses not in the taxonomy
+    for (const s of uiGroup.statuses) {
+      if (!seenStatuses.has(s)) {
+        seenStatuses.add(s);
+        const count = facets.get(s) ?? 0;
+        statuses.push({ value: s, count });
+      }
+    }
+
+    const totalCount = statuses.reduce((sum, s) => sum + s.count, 0);
+
+    // Handle aggregate-only fallback
+    const aggregateCount = facets.get(uiGroup.id) ?? 0;
+    if (totalCount === 0 && aggregateCount > 0) {
+      groups.push({
+        id: uiGroup.id,
+        label: uiGroup.label,
+        statuses: [{ value: uiGroup.id, count: aggregateCount }],
+        totalCount: aggregateCount,
+      });
+    } else if (totalCount > 0) {
+      // Filter out zero-count entries for cleaner UI
+      groups.push({
+        id: uiGroup.id,
+        label: uiGroup.label,
+        statuses: statuses.filter((s) => s.count > 0),
+        totalCount,
+      });
+    }
+  }
+
+  // Collect unclaimed statuses into "Other"
+  const otherStatuses: { value: string; count: number }[] = [];
+  for (const [status, count] of facets) {
+    if (!seenStatuses.has(status) && count > 0) {
+      otherStatuses.push({ value: status, count });
+    }
+  }
+  if (otherStatuses.length > 0) {
+    otherStatuses.sort((a, b) => b.count - a.count);
+    groups.push({
+      id: 'other',
+      label: 'Other',
+      statuses: otherStatuses,
+      totalCount: otherStatuses.reduce((sum, s) => sum + s.count, 0),
+    });
+  }
+
+  return groups;
+}
+
+/** Map API snake-case sub-status names to our display convention */
+function mapApiSubStatus(key: string): string {
+  switch (key) {
+    case 'cancelled-inferred': return 'cancelled - inferred 4 y';
+    case 'shelved-inferred': return 'shelved - inferred 2 y';
+    case 'operating-pre-retirement': return 'operating pre-retirement';
+    case 'mothballed-pre-retirement': return 'mothballed pre-retirement';
+    case 'mixed-status': return 'operating';
+    default: return key;
+  }
+}
+
+function buildGroupsFromHardcoded(facets: Map<string, number>): DynamicStatusGroup[] {
   const claimedStatuses = new Set<string>();
   for (const sg of STATUS_GROUPS) {
     claimedStatuses.add(sg.id);
     for (const s of sg.statuses) claimedStatuses.add(s);
   }
 
-  // Build known groups from facet data.
-  // Include ALL known sub-statuses (even with 0 count) so the Refine
-  // toggle appears for groups that have multiple sub-statuses.
-  // Also handle the case where the API returns an aggregate group id (e.g. "planned")
-  // instead of granular sub-statuses — in that case, use it as the sole sub-status.
   const groups: DynamicStatusGroup[] = [];
   for (const sg of STATUS_GROUPS) {
     const statuses: { value: string; count: number }[] = [];
@@ -175,9 +309,7 @@ export function discoverStatusGroups(facets: Map<string, number>): DynamicStatus
       const count = facets.get(s) ?? 0;
       statuses.push({ value: s, count });
     }
-    let totalCount = statuses.reduce((sum, s) => sum + s.count, 0);
-    // If the API returned the group id itself as an aggregate status (e.g. "planned": 500),
-    // use that as the sole entry so the group still shows (without granular Refine).
+    const totalCount = statuses.reduce((sum, s) => sum + s.count, 0);
     const aggregateCount = facets.get(sg.id) ?? 0;
     if (totalCount === 0 && aggregateCount > 0) {
       groups.push({
@@ -191,7 +323,6 @@ export function discoverStatusGroups(facets: Map<string, number>): DynamicStatus
     }
   }
 
-  // Collect unclaimed statuses into "Other"
   const otherStatuses: { value: string; count: number }[] = [];
   for (const [status, count] of facets) {
     if (!claimedStatuses.has(status) && count > 0) {

@@ -940,6 +940,32 @@ export async function fetchStatusFacets(assetTypeSlug?: string): Promise<Map<str
   return normalized;
 }
 
+// =============================================================================
+// STATUS TAXONOMY
+// =============================================================================
+
+export interface StatusTaxonomy {
+  statuses: Record<string, {
+    label: string;
+    sub_statuses: Record<string, { label: string; description?: string }>;
+  }>;
+  raw_value_mappings: Record<string, string>;
+}
+
+let _taxonomyCache: StatusTaxonomy | null = null;
+
+/**
+ * Fetch the canonical status taxonomy from the API.
+ * Cached for the session since the taxonomy rarely changes.
+ */
+export async function fetchStatusTaxonomy(): Promise<StatusTaxonomy> {
+  if (_taxonomyCache) return _taxonomyCache;
+  _currentReason = 'fetchStatusTaxonomy';
+  const data = await fetchAPI<StatusTaxonomy>('/catalog/metadata/status-taxonomy?format=json');
+  _taxonomyCache = data;
+  return data;
+}
+
 // Export the API base for debugging
 export const getAPIBase = () => API_BASE;
 
