@@ -276,6 +276,30 @@ export const ownershipColors = {
   ultimate: '#1D4961', // Primary blue
   edge: '#BECCCF', // Grey
   edgeHighlight: '#FE4F2D', // Orange
+
+  // --- Tree graph palette (converged from Observable to GEM brand) ---
+  treeNavy: '#1D4961', // Labels, text — was #004A63
+  treeTeal: '#004F61', // Asset fills, accents — midnightGreen
+  treeMint: '#9DF7E5', // Hover highlights
+  treeWarmWhite: '#F2F2EB', // Panel backgrounds — gray50
+  treeNodeFill: '#BECCCF', // Default entity node fill — grey
+  treeEdge: '#A5E9E4', // Edge lines — mintDataviz
+  treeEdgeImputed: '#dce3e5', // Imputed/estimated edges — gray200
+  treeMidnight: '#1C1F23', // Dark tooltip bg — gray800
+
+  // --- Entity type colors (ownership graph categories) ---
+  entityGovernment: '#A0AAE5', // purple
+  entityGovernmentDark: '#061F5F', // midnightPurple
+  entityGovernmentLight: '#d0d5f2',
+  entityPublicCorp: '#099ED8', // blue
+  entityPublicCorpDark: '#1D4961', // navy
+  entityPublicCorpLight: '#84cfec',
+  entityPrivate: '#51BF7E', // green
+  entityPrivateDark: '#1D4961', // navy
+  entityPrivateLight: '#95E6AF', // mintGreen
+  entityOther: '#BECCCF', // grey
+  entityOtherDark: '#3a4d51', // gray700
+  entityOtherLight: '#dce3e5', // gray200
 } as const;
 
 // =============================================================================

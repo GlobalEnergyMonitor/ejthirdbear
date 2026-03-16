@@ -1164,7 +1164,7 @@
                       x={mid.x}
                       y={mid.y - 5}
                       class="edge-lbl"
-                      style="fill: {e.imputed_share ? '#6c777a' : C.teal}"
+                      style="fill: {e.imputed_share ? C.edgeImputed : C.teal}"
                       >{Number.isInteger(e.value) ? e.value : e.value.toFixed(1)}%</text
                     >
                   {/if}
@@ -1497,8 +1497,18 @@
 
 <style>
   .ownership-tree {
-    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
-    color: var(--color-text-primary, #1d4961);
+    /* Tree graph color tokens — sourced from design-tokens.ts ownershipColors */
+    --tree-navy: #1D4961;
+    --tree-teal: #004F61;
+    --tree-mint: #9DF7E5;
+    --tree-warm-white: #F2F2EB;
+    --tree-node-fill: #BECCCF;
+    --tree-edge: #A5E9E4;
+    --tree-edge-imputed: #dce3e5;
+    --tree-midnight: #1C1F23;
+
+    font-family: var(--font-family-sans, 'Plus Jakarta Sans', system-ui, sans-serif);
+    color: var(--color-text-primary, var(--tree-navy));
     position: relative;
   }
   .msg {
@@ -1630,20 +1640,20 @@
       opacity 0.25s ease-out;
   }
   .node.hovered circle {
-    stroke: #9df7e5;
+    stroke: var(--tree-mint);
     stroke-width: 2.5;
   }
   .node.frozen circle {
-    stroke: #004f61;
+    stroke: var(--tree-teal);
     stroke-width: 4;
     filter: drop-shadow(0 0 4px rgba(0, 79, 97, 0.4));
   }
   .node.hovered rect {
-    stroke: #9df7e5;
+    stroke: var(--tree-mint);
     stroke-width: 2;
   }
   .node.frozen rect {
-    stroke: #004f61;
+    stroke: var(--tree-teal);
     stroke-width: 3;
     filter: drop-shadow(0 0 4px rgba(0, 79, 97, 0.4));
   }
@@ -1673,7 +1683,7 @@
     letter-spacing: 0.02em;
     font-weight: normal;
     dominant-baseline: hanging;
-    fill: #004a63;
+    fill: var(--tree-navy);
     stroke: #fff;
     stroke-width: 3px;
     stroke-linejoin: round;
@@ -1694,7 +1704,7 @@
   }
   .node.frozen .node-lbl {
     font-weight: 700;
-    fill: #004f61;
+    fill: var(--tree-teal);
   }
   .edge-lbl {
     font-size: 0.7rem;
@@ -1704,8 +1714,8 @@
 
   /* Side panel — matches Observable's #tables-container */
   .panel {
-    background: #fafaf7;
-    border-left: 2px solid #016b83;
+    background: var(--tree-warm-white);
+    border-left: 2px solid var(--tree-teal);
     padding: 20px;
     display: flex;
     flex-direction: column;
@@ -1735,7 +1745,7 @@
     width: 100%;
     padding: 20px;
     border-left: none;
-    border-top: 2px solid #016b83;
+    border-top: 2px solid var(--tree-teal);
     flex-direction: row;
     flex-wrap: wrap;
     gap: 20px 30px;
@@ -1753,7 +1763,7 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: #004a63;
+    color: var(--tree-navy);
   }
   .tabular-rows {
     max-height: 160px;
@@ -1764,7 +1774,7 @@
     line-height: 1.2;
     cursor: pointer;
     padding: 2px 0;
-    color: #004a63;
+    color: var(--tree-navy);
     transition:
       font-weight 0.15s ease-out,
       opacity 0.2s ease-out;
@@ -1789,7 +1799,7 @@
   }
   .tabular-row.tease-connection > .table-row-text::before {
     content: '•';
-    color: #9df7e5;
+    color: var(--tree-mint);
     margin-right: 4px;
   }
 
@@ -1806,7 +1816,7 @@
     align-items: center;
     gap: 6px;
     font-size: 0.75rem;
-    color: #004a63;
+    color: var(--tree-navy);
   }
   .slider-label {
     white-space: nowrap;
@@ -1814,7 +1824,7 @@
   }
   .ownership-slider input[type='range'] {
     width: 100px;
-    accent-color: #016b83;
+    accent-color: var(--tree-teal);
     cursor: pointer;
   }
   /* Floating zoom controls — bottom-right, mapbox/google maps style */
@@ -1840,7 +1850,7 @@
     border: none;
     border-bottom: 1px solid rgba(0, 0, 0, 0.08);
     background: #fff;
-    color: #004a63;
+    color: var(--tree-navy);
     cursor: pointer;
     padding: 0;
     transition: background 0.1s;
@@ -1892,8 +1902,8 @@
   .tooltip {
     position: absolute;
     z-index: 10;
-    background: rgba(29, 73, 97, 0.92);
-    color: #fff;
+    background: rgba(29, 73, 97, 0.92); /* navy with opacity */
+    color: white;
     padding: 6px 10px;
     border-radius: 4px;
     font-size: 11px;
@@ -1925,8 +1935,8 @@
     opacity: 0.8;
   }
   .tooltip.frozen {
-    border-color: #004f61;
-    background: rgba(0, 79, 97, 0.95);
+    border-color: var(--tree-teal);
+    background: rgba(0, 79, 97, 0.95); /* teal with opacity */
   }
   .tooltip-pinned {
     font-size: 9px;
@@ -1997,7 +2007,7 @@
       width: 100%;
       padding: 12px;
       border-left: none;
-      border-top: 2px solid #016b83;
+      border-top: 2px solid var(--tree-teal);
       flex-direction: column;
     }
     .panel-toggle {

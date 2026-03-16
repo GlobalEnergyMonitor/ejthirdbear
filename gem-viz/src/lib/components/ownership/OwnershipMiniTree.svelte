@@ -8,6 +8,7 @@
   import { goto } from '$app/navigation';
   import { entityLink, assetLink } from '$lib/links';
   import { line, curveBasis } from 'd3-shape';
+  import { ownershipColors } from '$lib/design-tokens';
   import type {
     GraphNode,
     GraphEdge,
@@ -32,15 +33,15 @@
 
   let { entityId, entityName, assetFilter = {} }: Props = $props();
 
-  // Colors from Observable
-  const colors = {
-    navy: '#1a3a4a',
-    teal: '#2a7f8f',
-    mint: '#97E6DE',
-    warmWhite: '#fafaf7',
-    nodeFill: '#cce1e6',
-    edge: '#9fc6d0',
-    assetFill: '#e8f4f4',
+  // Colors from design-tokens (GEM brand)
+  const clr = {
+    navy: ownershipColors.treeNavy,
+    teal: ownershipColors.treeTeal,
+    mint: ownershipColors.treeMint,
+    warmWhite: ownershipColors.treeWarmWhite,
+    nodeFill: ownershipColors.treeNodeFill,
+    edge: ownershipColors.treeEdge,
+    assetFill: ownershipColors.entityOtherLight,
   };
 
   // State
@@ -250,7 +251,7 @@
       <svg viewBox="0 0 {gWidth} {gHeight}" preserveAspectRatio="xMidYMid meet">
         <defs>
           <marker id="mini-arr" markerWidth="6" markerHeight="4" refX="5" refY="2" orient="auto">
-            <polygon points="0 0, 6 2, 0 4" fill={colors.edge} />
+            <polygon points="0 0, 6 2, 0 4" fill={clr.edge} />
           </marker>
         </defs>
 
@@ -258,7 +259,7 @@
         {#each layoutEdges as e (e.source + e.target)}
           <path
             d={edgePath(e.points)}
-            stroke={colors.edge}
+            stroke={clr.edge}
             stroke-width="1.5"
             fill="none"
             marker-end="url(#mini-arr)"
@@ -279,8 +280,8 @@
           >
             {#if n.isRoot}
               <!-- Root entity: larger rounded rect -->
-              <rect x={-n.w / 2} y={-n.h / 2} width={n.w} height={n.h} rx="4" fill={colors.navy} />
-              <text fill={colors.warmWhite} class="root-label">{truncate(n.label, 14)}</text>
+              <rect x={-n.w / 2} y={-n.h / 2} width={n.w} height={n.h} rx="4" fill={clr.navy} />
+              <text fill={clr.warmWhite} class="root-label">{truncate(n.label, 14)}</text>
             {:else if n.isAsset}
               <!-- Asset: small pill -->
               <rect
@@ -289,15 +290,15 @@
                 width={n.w}
                 height={n.h}
                 rx="3"
-                fill={colors.assetFill}
-                stroke={colors.teal}
+                fill={clr.assetFill}
+                stroke={clr.teal}
                 stroke-width="1"
               />
-              <text fill={colors.navy} class="asset-label">{truncate(n.label, 20)}</text>
+              <text fill={clr.navy} class="asset-label">{truncate(n.label, 20)}</text>
             {:else}
               <!-- Intermediate entity: circle -->
-              <circle r={12} fill={colors.nodeFill} stroke="white" stroke-width="1.5" />
-              <text y={22} fill={colors.navy} class="entity-label">{truncate(n.label, 12)}</text>
+              <circle r={12} fill={clr.nodeFill} stroke="white" stroke-width="1.5" />
+              <text y={22} fill={clr.navy} class="entity-label">{truncate(n.label, 12)}</text>
             {/if}
           </g>
         {/each}
@@ -313,9 +314,9 @@
 <style>
   .mini-tree {
     padding: 16px;
-    background: #fafaf7;
+    background: var(--color-bg-secondary, #F2F2EB);
     border-radius: 4px;
-    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    font-family: var(--font-family-sans, 'Plus Jakarta Sans', system-ui, sans-serif);
   }
 
   .loading,
@@ -323,12 +324,12 @@
   .empty {
     text-align: center;
     padding: 24px;
-    color: #718096;
+    color: var(--color-text-secondary, #4c6267);
     font-size: 13px;
   }
 
   .error {
-    color: #c53030;
+    color: var(--color-error, #7F142A);
   }
 
   .tree-header {
@@ -341,23 +342,23 @@
 
   .entity-name {
     font-weight: 600;
-    color: #1a3a4a;
+    color: var(--color-text-primary, #1D4961);
     font-size: 14px;
   }
 
   .asset-count {
-    color: #2a7f8f;
+    color: var(--color-text-primary, #1D4961);
     font-size: 13px;
   }
 
   .hidden-note {
-    color: #a0aec0;
+    color: var(--color-text-tertiary, #9EAAAD);
     font-size: 12px;
   }
 
   .graph-container {
     background: white;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--color-border, #dce3e5);
     border-radius: 4px;
     overflow: hidden;
   }
@@ -408,7 +409,7 @@
 
   .view-full {
     font-size: 12px;
-    color: #2a7f8f;
+    color: var(--color-text-primary, #1D4961);
     text-decoration: none;
   }
 

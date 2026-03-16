@@ -4,25 +4,42 @@
 
 import type { GraphNode, LayoutPoint } from '$lib/component-data/graph-types';
 import { line, curveBasis } from 'd3-shape';
+import { ownershipColors } from '$lib/design-tokens';
 
-// Design tokens — matched to Observable notebook
+// Design tokens — sourced from design-tokens.ts (GEM brand)
 export const TREE_COLORS = {
-  navy: '#004A63',
-  teal: '#016B83',
-  mint: '#9DF7E5',
-  warmWhite: '#fafaf7',
-  nodeFill: '#BECCCF',
-  edge: '#74d2cc',
-  edgeImputed: '#d2d2cb',
-  midnight: '#002430',
+  navy: ownershipColors.treeNavy,
+  teal: ownershipColors.treeTeal,
+  mint: ownershipColors.treeMint,
+  warmWhite: ownershipColors.treeWarmWhite,
+  nodeFill: ownershipColors.treeNodeFill,
+  edge: ownershipColors.treeEdge,
+  edgeImputed: ownershipColors.treeEdgeImputed,
+  midnight: ownershipColors.treeMidnight,
 };
 
-// Entity type colors — matched to Observable's colorByOwnershipEntity
+// Entity type colors — sourced from design-tokens.ts (GEM brand)
 export const OWNERSHIP_ENTITY_COLORS: Record<string, { bg: string; fg: string; light: string }> = {
-  Government: { bg: '#A0AAE5', fg: '#1a2351', light: '#d0d5f2' },
-  'Publicly Listed Corp.': { bg: '#099ED8', fg: '#04304a', light: '#84cfec' },
-  'Private Company': { bg: '#65BD8B', fg: '#1a3828', light: '#b2dec5' },
-  Other: { bg: '#BECCCF', fg: '#3a4a4f', light: '#dfe6e7' },
+  Government: {
+    bg: ownershipColors.entityGovernment,
+    fg: ownershipColors.entityGovernmentDark,
+    light: ownershipColors.entityGovernmentLight,
+  },
+  'Publicly Listed Corp.': {
+    bg: ownershipColors.entityPublicCorp,
+    fg: ownershipColors.entityPublicCorpDark,
+    light: ownershipColors.entityPublicCorpLight,
+  },
+  'Private Company': {
+    bg: ownershipColors.entityPrivate,
+    fg: ownershipColors.entityPrivateDark,
+    light: ownershipColors.entityPrivateLight,
+  },
+  Other: {
+    bg: ownershipColors.entityOther,
+    fg: ownershipColors.entityOtherDark,
+    light: ownershipColors.entityOtherLight,
+  },
 };
 
 /** Observable's ownerType classification function. */
@@ -72,7 +89,7 @@ export function getNodeColors(
 ): { bg: string; fg: string; light: string } {
   const orig = nodes.find((n) => n.id === nodeId);
   if (!orig || orig.type === 'asset' || orig.id === rootId) {
-    return { bg: TREE_COLORS.nodeFill, fg: TREE_COLORS.teal, light: '#dfe6e7' };
+    return { bg: TREE_COLORS.nodeFill, fg: TREE_COLORS.teal, light: ownershipColors.entityOtherLight };
   }
   const category = classifyOwnerType(orig);
   return OWNERSHIP_ENTITY_COLORS[category] || OWNERSHIP_ENTITY_COLORS['Other'];
