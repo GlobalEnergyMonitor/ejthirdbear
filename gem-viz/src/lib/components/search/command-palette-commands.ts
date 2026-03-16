@@ -94,6 +94,33 @@ export function createCommands(callbacks: {
       section: 'Navigation',
     },
     {
+      id: 'screener',
+      label: 'Go to Screener',
+      shortcut: 'g s',
+      action: () => goto(link('screener')),
+      section: 'Navigation',
+    },
+    {
+      id: 'controlchain',
+      label: 'Go to ControlChain',
+      action: () => goto(link('controlchain')),
+      section: 'Navigation',
+    },
+    {
+      id: 'fieldguide',
+      label: 'Go to FieldGuide',
+      shortcut: 'g f',
+      action: () => goto(link('fieldguide')),
+      section: 'Navigation',
+    },
+    {
+      id: 'downloads',
+      label: 'Go to Downloads',
+      shortcut: 'g d',
+      action: () => goto(link('downloads')),
+      section: 'Navigation',
+    },
+    {
       id: 'cards',
       label: 'Go to Cards',
       action: () => goto(link('cards')),
@@ -193,8 +220,13 @@ function screenerTrackerCommands(): Command[] {
 export const shortcutMap: Record<string, () => void> = {
   h: () => goto(link('index')),
   e: () => goto(link('explore')),
+  c: () => goto(link('compose')),
+  n: () => goto(link('network')),
   r: () => goto(link('report')),
   x: () => goto(`${link('report')}#export`),
   a: () => goto(link('about')),
   m: () => goto(link('asset/search')),
+  s: () => goto(link('screener')),
+  f: () => goto(link('fieldguide')),
+  d: () => goto(link('downloads')),
 };
