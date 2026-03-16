@@ -267,8 +267,20 @@ async function getOwnersByAssetTypeREST(
         else if (!pointInPolygon([lng, lat], geofence)) passesFilters = false;
       }
 
-      if (passesFilters && statusArray && asset.status) {
-        if (!statusArray.includes(asset.status.toLowerCase())) passesFilters = false;
+      if (passesFilters && statusArray) {
+        // Check both high-level status and granular sub-status
+        const assetStatus = asset.status?.toLowerCase() || '';
+        const assetSubStatus = asset.subStatus?.toLowerCase().replace(/_/g, '-') || '';
+        // Map API sub-status naming to our convention
+        const mappedSubStatus =
+          assetSubStatus === 'cancelled-inferred' ? 'cancelled - inferred 4 y' :
+          assetSubStatus === 'shelved-inferred' ? 'shelved - inferred 2 y' :
+          assetSubStatus === 'operating-pre-retirement' ? 'operating pre-retirement' :
+          assetSubStatus === 'mothballed-pre-retirement' ? 'mothballed pre-retirement' :
+          assetSubStatus;
+        if (!statusArray.includes(assetStatus) && !statusArray.includes(mappedSubStatus)) {
+          passesFilters = false;
+        }
       }
 
       for (const owner of asset.owners) {

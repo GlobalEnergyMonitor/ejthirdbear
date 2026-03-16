@@ -86,6 +86,7 @@ export interface AssetSummary {
   name: string;
   facilityType?: string | null;
   status?: string | null;
+  subStatus?: string | null;
   capacity?: number | null;
   capacityUnit?: string | null;
   country?: string | null;
@@ -380,6 +381,7 @@ function normalizeAsset(raw: RawAsset): AssetSummary {
     ).trim(),
     facilityType: str(['Facility Type', 'Tracker', 'facility_type', 'asset_type']),
     status: str(['Status', 'status', 'operating_status']),
+    subStatus: str(['operating_sub_status', 'sub_status']),
     capacity: num(['Capacity', 'Capacity (MW)', 'capacity', 'capacity_value']),
     capacityUnit: str(['Capacity Unit', 'capacity_unit']),
     country: str(['Country Area', 'Country', 'country']),
@@ -919,11 +921,21 @@ export async function fetchStatusFacets(assetTypeSlug?: string): Promise<Map<str
     facets: true,
     limit: 1,
   });
-  // Normalize keys to lowercase so they match the STATUS_GROUPS statuses
+  // Prefer sub_status facets (granular) over status facets (aggregate)
+  const rawFacets = res.facets?.sub_status ?? res.facets?.status ?? {};
+  // Normalize snake_case keys to hyphenated lowercase to match STATUS_GROUPS
   const normalized = new Map<string, number>();
-  for (const [k, v] of Object.entries(res.facets?.status ?? {})) {
-    const key = k.toLowerCase();
-    normalized.set(key, (normalized.get(key) ?? 0) + v);
+  for (const [k, v] of Object.entries(rawFacets)) {
+    const key = k.toLowerCase().replace(/_/g, '-');
+    // Map API-specific names to our convention
+    const mapped =
+      key === 'cancelled-inferred' ? 'cancelled - inferred 4 y' :
+      key === 'shelved-inferred' ? 'shelved - inferred 2 y' :
+      key === 'operating-pre-retirement' ? 'operating pre-retirement' :
+      key === 'mothballed-pre-retirement' ? 'mothballed pre-retirement' :
+      key === 'mixed-status' ? 'operating' : // mixed status counts as operating
+      key;
+    normalized.set(mapped, (normalized.get(mapped) ?? 0) + v);
   }
   return normalized;
 }

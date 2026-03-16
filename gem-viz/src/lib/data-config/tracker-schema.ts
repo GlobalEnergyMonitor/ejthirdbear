@@ -64,25 +64,31 @@ export function isValidTracker(tracker: string): tracker is TrackerName {
 // =============================================================================
 
 export const STATUS_VALUES = [
+  'abandoned',
   'announced',
   'cancelled',
+  'cancelled - inferred 4 y',
   'construction',
+  'demolished',
   'idle',
   'mothballed',
+  'mothballed pre-retirement',
   'operating',
+  'operating pre-retirement',
   'permitted',
   'pre-construction',
   'pre-permit',
   'proposed',
   'retired',
   'shelved',
+  'shelved - inferred 2 y',
 ] as const;
 
 export type StatusValue = (typeof STATUS_VALUES)[number];
 
 /** Status values grouped into high-level buckets for the screener UI */
 export const STATUS_GROUPS = [
-  { id: 'operating', label: 'Operating', statuses: ['operating'] as StatusValue[] },
+  { id: 'operating', label: 'Operating', statuses: ['operating', 'operating pre-retirement'] as StatusValue[] },
   {
     id: 'planned',
     label: 'Planned',
@@ -95,8 +101,8 @@ export const STATUS_GROUPS = [
       'proposed',
     ] as StatusValue[],
   },
-  { id: 'cancelled', label: 'Cancelled', statuses: ['cancelled', 'shelved'] as StatusValue[] },
-  { id: 'retired', label: 'Retired', statuses: ['retired', 'mothballed', 'idle'] as StatusValue[] },
+  { id: 'cancelled', label: 'Cancelled', statuses: ['cancelled', 'cancelled - inferred 4 y', 'shelved', 'shelved - inferred 2 y'] as StatusValue[] },
+  { id: 'retired', label: 'Retired', statuses: ['retired', 'mothballed', 'mothballed pre-retirement', 'idle', 'abandoned', 'demolished'] as StatusValue[] },
 ] as const;
 
 export type StatusGroup = (typeof STATUS_GROUPS)[number];
@@ -112,18 +118,24 @@ export const STATUS_GROUP_DESCRIPTIONS: Record<string, string> = {
 
 /** Definitions for individual tracker status values shown under Refine */
 export const STATUS_VALUE_DESCRIPTIONS: Record<string, string> = {
+  abandoned: 'Site abandoned with no plans for reuse.',
   announced: 'Publicly announced but not yet permitted or built.',
+  cancelled: 'Project cancelled or failed to advance.',
+  'cancelled - inferred 4 y': 'No activity for 4+ years; inferred cancelled.',
   construction: 'Physically under construction.',
+  demolished: 'Facility has been demolished.',
   idle: 'Temporarily not operating.',
-  mothballed: 'Suspended and preserved for possible restart.',
-  operating: 'Currently operating.',
+  mothballed: 'Deactivated but not retired; may restart.',
+  'mothballed pre-retirement': 'Mothballed with planned retirement.',
+  operating: 'Currently operating or in commercial production.',
+  'operating pre-retirement': 'Operating but scheduled for retirement.',
   permitted: 'Permits secured, construction not yet underway.',
   'pre-construction': 'In development before construction begins.',
   'pre-permit': 'Early-stage development before permits are secured.',
   proposed: 'Proposed project without construction underway.',
   retired: 'Permanently closed or decommissioned.',
-  cancelled: 'Project cancelled.',
   shelved: 'Paused indefinitely or put on hold.',
+  'shelved - inferred 2 y': 'No activity for 2+ years; inferred shelved.',
 };
 
 // =============================================================================
