@@ -41,6 +41,22 @@
 
   let debounceTimer;
 
+  // Search-as-you-type: react to query changes from the bound input
+  $effect(() => {
+    const q = query;
+    const type = searchType;
+    clearTimeout(debounceTimer);
+    if (!q || q.length < 2) {
+      results = [];
+      hasSearched = false;
+      return;
+    }
+    debounceTimer = setTimeout(() => {
+      doSearch(q, type);
+      updateUrl(q, type);
+    }, 300);
+  });
+
   function updateUrl(q, type) {
     const params = new URLSearchParams();
     if (q) params.set('q', q);
