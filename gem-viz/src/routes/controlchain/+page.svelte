@@ -337,6 +337,7 @@
               edges={treeEdges}
               paths={treePaths}
               rootId={treeRootId}
+              direction={treeDirection === 'up' ? 'downstream' : 'upstream'}
               fullWidth={true}
             />
           </div>
@@ -465,7 +466,7 @@
 
   .main-content.has-selection {
     display: grid;
-    grid-template-columns: 360px 1fr;
+    grid-template-columns: 1fr 280px;
     gap: var(--space-5);
     align-items: start;
   }
@@ -473,6 +474,14 @@
   /* Results panel */
   .results-panel {
     min-width: 0;
+  }
+
+  .main-content.has-selection .results-panel {
+    order: 2;
+  }
+
+  .main-content.has-selection .tree-panel {
+    order: 1;
   }
 
   .results-header {
@@ -509,6 +518,10 @@
     overflow: hidden;
     max-height: 600px;
     overflow-y: auto;
+  }
+
+  .main-content.has-selection .results-list {
+    max-height: 70vh;
   }
 
   .results-list li + li {
@@ -678,9 +691,17 @@
   }
 
   /* Responsive */
-  @media (max-width: 900px) {
+  @media (max-width: 768px) {
     .main-content.has-selection {
       grid-template-columns: 1fr;
+    }
+
+    .main-content.has-selection .tree-panel {
+      order: 2;
+    }
+
+    .main-content.has-selection .results-panel {
+      order: 1;
     }
 
     .results-list {
