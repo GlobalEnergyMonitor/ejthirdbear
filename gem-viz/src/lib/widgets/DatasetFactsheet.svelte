@@ -59,7 +59,11 @@
     return nullRow?.count || 0;
   });
 
-  const nullPct = $derived(rowCount === 0 ? 0 : nullCount / rowCount);
+  // Use sample total (sum of all stat counts) for accurate percentages
+  const sampleTotal = $derived(fieldStats.reduce((sum, s) => sum + s.count, 0));
+  const pctBase = $derived(sampleTotal > 0 ? sampleTotal : rowCount);
+
+  const nullPct = $derived(pctBase === 0 ? 0 : nullCount / pctBase);
 
   const uniqueCount = $derived(fieldStats.filter((s) => s.value !== null && s.value !== '').length);
 
@@ -155,24 +159,26 @@
       {#if statsLoading}
         <div class="loading-stats">Loading distribution...</div>
       {:else}
-        {#if nullCount > 0}
-          <div class="null-info">
-            <span class="field-value">Null</span> in {nullCount} rows ({formatPercent(nullPct)})
+        {#if uniqueCount > 0}
+          {#if nullCount > 0}
+            <div class="null-info">
+              <span class="field-value">Null</span> in {nullCount} rows ({formatPercent(nullPct)})
+            </div>
+          {/if}
+
+          <div class="unique-count">{uniqueCount} distinct values:</div>
+
+          <div class="previewer-values-table">
+            {#each fieldStats.filter((s) => s.value !== null && s.value !== '') as stat}
+              <div class="value-row">
+                <span class="field-value">{stat.value}</span>
+                <span class="value-count">
+                  ({stat.count}{pctBase > 0 ? ` rows; ${formatPercent(stat.count / pctBase)}` : ' rows'})
+                </span>
+              </div>
+            {/each}
           </div>
         {/if}
-
-        <div class="unique-count">{uniqueCount} distinct values:</div>
-
-        <div class="previewer-values-table">
-          {#each fieldStats.filter((s) => s.value !== null && s.value !== '') as stat}
-            <div class="value-row">
-              <span class="field-value">{stat.value}</span>
-              <span class="value-count">
-                ({stat.count} rows; {formatPercent(stat.count / rowCount)})
-              </span>
-            </div>
-          {/each}
-        </div>
 
         {#if valueDefinitions.length > 0}
           <h4>{selectedField.columnName} definitions</h4>
@@ -184,6 +190,10 @@
               </div>
             {/each}
           </div>
+        {/if}
+
+        {#if uniqueCount === 0 && valueDefinitions.length === 0}
+          <div class="no-stats">Distribution data not yet available for this field.</div>
         {/if}
       {/if}
     {:else}
@@ -381,5 +391,12 @@
     color: var(--gem-teal);
     font-style: italic;
     padding: 20px;
+  }
+
+  .no-stats {
+    color: var(--gem-teal);
+    font-size: 0.85rem;
+    font-style: italic;
+    margin-top: 8px;
   }
 </style>
