@@ -971,7 +971,8 @@
                 {#each colorConfig.legendItems as item}
                   <span class="legend-item">
                     <svg class="legend-swatch" viewBox="0 0 14 14" width="14" height="14">
-                      <circle cx="7" cy="7" r="6.5" fill={item.bg} />
+                      <circle cx="7" cy="7" r="6" fill={item.bg} stroke={item.bg} stroke-width="1" />
+                      <path d={pieArc(50, 5)} transform="translate(7,7)" fill={item.fg} />
                     </svg>
                     {item.label}
                   </span>
