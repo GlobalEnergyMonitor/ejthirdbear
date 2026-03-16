@@ -170,8 +170,25 @@
     };
   });
 
-  const renderNodes = $derived(renderSubset.nodes);
-  const renderEdges = $derived(renderSubset.edges);
+  // Ownership % filter slider — 0 means show all
+  let minOwnershipPct = $state(0);
+
+  const renderNodes = $derived.by(() => {
+    if (minOwnershipPct <= 0) return renderSubset.nodes;
+    return renderSubset.nodes.filter((n) => {
+      // Always keep asset nodes and the root
+      if (n.type === 'asset' || n.id === rootId) return true;
+      const pct = pathsMap.get(n.entity_id || n.id) || edgePctMap.get(n.entity_id || n.id) || 0;
+      return pct >= minOwnershipPct;
+    });
+  });
+  const filteredNodeIds = $derived(new Set(renderNodes.map((n) => n.id)));
+  const renderEdges = $derived.by(() => {
+    if (minOwnershipPct <= 0) return renderSubset.edges;
+    return renderSubset.edges.filter(
+      (e) => filteredNodeIds.has(e.source) && filteredNodeIds.has(e.target)
+    );
+  });
   const isTrimmedGraph = $derived(renderSubset.trimmed);
   const hiddenNodeCount = $derived(renderSubset.hiddenNodes);
   const hiddenEdgeCount = $derived(renderSubset.hiddenEdges);
@@ -962,6 +979,14 @@
   $effect(() => {
     if (dagre && renderNodes.length > 0) runLayout();
   });
+
+  // Clear frozen state if the pinned node gets filtered out
+  $effect(() => {
+    if (frozenId && !filteredNodeIds.has(frozenId)) {
+      frozenId = null;
+      frozenNodeData = null;
+    }
+  });
 </script>
 
 <div class="ownership-tree" class:compact class:full-width={fullWidthMode}>
@@ -1024,6 +1049,18 @@
                 Estimated
               </span>
             </div>
+            {#if renderSubset.nodes.length > 5}
+              <label class="ownership-slider">
+                <span class="slider-label">Min ownership: {minOwnershipPct > 0 ? `${minOwnershipPct}%` : 'All'}</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="50"
+                  step="1"
+                  bind:value={minOwnershipPct}
+                />
+              </label>
+            {/if}
           </div>
         {/if}
         <div
@@ -1763,6 +1800,22 @@
     align-items: center;
     gap: 12px;
     margin-bottom: 8px;
+  }
+  .ownership-slider {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    color: #004a63;
+  }
+  .slider-label {
+    white-space: nowrap;
+    min-width: 6.5em;
+  }
+  .ownership-slider input[type='range'] {
+    width: 100px;
+    accent-color: #016b83;
+    cursor: pointer;
   }
   /* Floating zoom controls — bottom-right, mapbox/google maps style */
   .zoom-stack {
