@@ -710,8 +710,14 @@
       if (srcPct < 2) return e.imputed_share ? 0.8 : 0.6;
       return 1;
     }
-    // Observable: active path edges get full opacity (1.0)
-    return activeNodeData.edgeIndices.includes(idx) ? 1 : 0.1;
+    // Active path edges get full opacity; frozen paths slightly stronger dim on non-path
+    return activeNodeData.edgeIndices.includes(idx) ? 1 : (frozenNodeData ? 0.06 : 0.1);
+  }
+  // Frozen-chain edges rendered thicker than hover-chain
+  function getEdgeWidthMultiplier(idx: number): number {
+    if (!activeNodeData) return 1;
+    if (!activeNodeData.edgeIndices.includes(idx)) return 1;
+    return frozenNodeData ? 1.4 : 1;
   }
   // Edge labels:
   // - compact: always visible
@@ -1083,7 +1089,7 @@
                   1.75,
                   Math.max(0.9, 0.9 + Math.pow(Math.min(sourcePct, 50) / 50, 2) * 0.85)
                 )}
-                {@const strokeW = baseWidth * scaleFactor}
+                {@const strokeW = baseWidth * scaleFactor * getEdgeWidthMultiplier(idx)}
                 {@const edgeOpacity = isSmall ? (e.imputed_share ? 0.8 : 0.6) : 1}
                 {@const edgeRank = Math.max(sourceNode?.rank ?? 0, targetNode?.rank ?? 0)}
                 <g
@@ -1414,6 +1420,8 @@
           </div>
           {#if isLargeGraph}
             <div class="tooltip-hint">Drag to pan · Ctrl/Cmd + wheel to zoom</div>
+          {:else if frozenId && hoveredId === frozenId}
+            <div class="tooltip-hint">Click to unpin · Double-click to open</div>
           {:else if !hasEverFrozen && !frozenId}
             <div class="tooltip-hint">Click to pin</div>
           {/if}
@@ -1568,11 +1576,12 @@
   }
   .node.hovered circle {
     stroke: #9df7e5;
-    stroke-width: 3;
+    stroke-width: 2.5;
   }
   .node.frozen circle {
     stroke: #004f61;
-    stroke-width: 3;
+    stroke-width: 4;
+    filter: drop-shadow(0 0 4px rgba(0, 79, 97, 0.4));
   }
   .node.hovered rect {
     stroke: #9df7e5;
@@ -1580,7 +1589,8 @@
   }
   .node.frozen rect {
     stroke: #004f61;
-    stroke-width: 2;
+    stroke-width: 3;
+    filter: drop-shadow(0 0 4px rgba(0, 79, 97, 0.4));
   }
   .node.in-chain circle {
     stroke-width: 2;
@@ -1626,6 +1636,10 @@
   }
   .node.hovered .node-lbl {
     font-weight: 600;
+  }
+  .node.frozen .node-lbl {
+    font-weight: 700;
+    fill: #004f61;
   }
   .edge-lbl {
     font-size: 0.7rem;
