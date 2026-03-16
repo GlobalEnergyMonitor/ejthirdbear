@@ -92,9 +92,10 @@
     return fields;
   }
 
-  // CSV metadata (only Coal Mine has a CSV currently)
-  const metadataFiles: Record<string, string> = {
-    'Coal Mine': '/coal-mine-fields-metadata.csv',
+  // API metadata slug mapping (app slug → API catalog slug)
+  const apiMetadataSlugs: Record<string, string> = {
+    'coal-mine': 'coal-mines',
+    'coal-plant': 'coal-plants',
   };
 
   // State
@@ -155,13 +156,51 @@
   }
 
   async function loadFieldsMetadata() {
-    const csvFile = metadataFiles[tracker];
-    if (csvFile) {
+    // Try API catalog metadata first
+    const apiSlug = apiMetadataSlugs[trackerParam];
+    if (apiSlug) {
       try {
-        const response = await fetch(csvFile);
+        const response = await fetch(
+          `https://gem-api.thirdbear.net/catalog/metadata/${apiSlug}?format=json`
+        );
         if (response.ok) {
-          fieldsMetadata = parseCsv(await response.text());
-          return;
+          const data = await response.json();
+          const fields = data.fieldsDetail || [];
+          if (fields.length > 0) {
+            fieldsMetadata = fields.map((f: { name: string; category?: string; definition?: string; allowed_values?: Array<{ value: string; definition?: string }> }) => ({
+              columnName: f.name,
+              category: f.category || 'Other',
+              definition: f.definition || `${f.name} field.`,
+              fieldValue: null,
+              valueDefinition: null,
+            }));
+            // Expand allowed_values into separate rows for enum definitions
+            const expanded: typeof fieldsMetadata = [];
+            for (const f of fields) {
+              expanded.push({
+                columnName: f.name,
+                category: f.category || 'Other',
+                definition: f.definition || `${f.name} field.`,
+                fieldValue: null,
+                valueDefinition: null,
+              });
+              if (f.allowed_values?.length) {
+                for (const v of f.allowed_values) {
+                  if (v.definition) {
+                    expanded.push({
+                      columnName: f.name,
+                      category: f.category || 'Other',
+                      definition: f.definition || '',
+                      fieldValue: v.value,
+                      valueDefinition: v.definition,
+                    });
+                  }
+                }
+              }
+            }
+            fieldsMetadata = expanded;
+            return;
+          }
         }
       } catch {
         // fall through to synthetic
