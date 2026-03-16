@@ -93,9 +93,15 @@
   }
 
   // API metadata slug mapping (app slug → API catalog slug)
+  // All trackers mapped so they auto-pick-up metadata as it's uploaded
   const apiMetadataSlugs: Record<string, string> = {
     'coal-mine': 'coal-mines',
     'coal-plant': 'coal-plants',
+    'gas-plant': 'gas-plants',
+    'iron-mine': 'iron-mines',
+    'steel-plant': 'steel-plants',
+    'gas-pipeline': 'gas-pipelines',
+    'bioenergy': 'bioenergy-plants',
   };
 
   // State
