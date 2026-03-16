@@ -11,6 +11,7 @@
    */
   import { onMount } from 'svelte';
   import { formatCompact, formatPct } from '$lib/format';
+  import { colors } from '$lib/design-tokens';
   import MiniHistogram from '$lib/components/charts/MiniHistogram.svelte';
 
   // Props
@@ -132,11 +133,11 @@
   // Type icon characters (used in preview badge)
   const typeLabels: Record<FieldType, string> = { numeric: '#', enum: '\u2261', text: 'Aa' };
 
-  // Type colors for dot indicators
+  // Type colors for dot indicators — from design-tokens
   const typeColors: Record<FieldType, string> = {
-    numeric: '#016b83',
-    enum: '#fe4f2d',
-    text: '#004a63',
+    numeric: colors.midnightGreen,
+    enum: colors.orange,
+    text: colors.navy,
   };
 
   // Detect field type from category, name, and distribution data
@@ -447,16 +448,16 @@
 
 <style>
   div.factsheet {
-    --navy: #004a63;
-    --mint: #9df7e5;
-    --mintBackground: #9df7e520;
-    --orange: #fe4f2d;
-    --teal: #016b83;
-    --tealBackground: #016b83cc;
-    --midnight: #002430;
-    --warmWhite: #f2f2eb;
-    --white: #ffffff;
-    --deepRed: #7f142a;
+    --navy: #1D4961;
+    --mint: #9DF7E5;
+    --mintBackground: #9DF7E520;
+    --orange: #FE4F2D;
+    --teal: #004F61;
+    --tealBackground: #004F61cc;
+    --midnight: #1C1F23;
+    --warmWhite: #F2F2EB;
+    --white: #FFFFFF;
+    --deepRed: #7F142A;
 
     font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
     display: flex;
