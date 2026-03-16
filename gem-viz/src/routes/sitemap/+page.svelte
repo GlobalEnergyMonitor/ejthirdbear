@@ -106,6 +106,11 @@
         { path: '/embed/asset', name: 'Asset Embed', description: 'Embed an asset card' },
         { path: '/embed/entity', name: 'Entity Embed', description: 'Embed an entity card' },
         {
+          path: '/embed/coal-plant',
+          name: 'Coal Plant Card',
+          description: 'Rich coal plant detail card with 6 tabs',
+        },
+        {
           path: '/embed/viz',
           name: 'Modular Embed',
           description: 'Generic embed for modular visualizations',

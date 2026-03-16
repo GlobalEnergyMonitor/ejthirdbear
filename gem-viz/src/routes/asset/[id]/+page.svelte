@@ -20,6 +20,7 @@
   import Citation from '$lib/components/data/Citation.svelte';
   import DataSourceBadge from '$lib/components/data/DataSourceBadge.svelte';
   import { OwnershipTreeGraph, OwnershipSummaryTables } from '$lib/components/ownership';
+  import TrackerCard from '$lib/components/cards/TrackerCard.svelte';
   import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
   /**
@@ -242,6 +243,11 @@
           </div>
         {/if}
       </div>
+
+      <!-- Tracker-specific detail card (e.g., CoalPlantCard) -->
+      {#if asset}
+        <TrackerCard {asset} />
+      {/if}
 
       <!-- Owners Table -->
       <section class="owners-section">

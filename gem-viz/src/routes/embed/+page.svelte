@@ -151,6 +151,18 @@
       ],
     },
     {
+      name: 'Coal Plant Card',
+      slug: 'coal-plant',
+      description: 'Rich coal plant detail card with 6 tabs: overview, timeline, coal info, emissions & phaseout, ownership, and additional details.',
+      paramKey: 'id',
+      paramLabel: 'Asset or Location ID',
+      placeholder: 'G100000102961',
+      defaultHeight: 700,
+      params: [
+        { key: 'id', desc: 'Required. Asset ID (G-prefix), compound ID (L_G), or location ID (L-prefix).' },
+      ],
+    },
+    {
       name: 'Asset Ring',
       slug: 'asset-ring',
       description: 'Circular visualization of asset distribution by type and status.',

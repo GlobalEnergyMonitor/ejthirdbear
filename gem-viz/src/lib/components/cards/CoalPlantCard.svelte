@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { scaleLinear } from 'd3';
+  import { scaleLinear } from 'd3-scale';
   import type { CoalPlantUnit } from './coal-plant-types';
 
   // ── Props ──────────────────────────────────────────────────────────────────
