@@ -70,6 +70,17 @@
   let assetResults = $state([]);
   let entityResults = $state([]);
 
+  // ID pattern detection: G-prefix (asset) or E-prefix (entity) or pure numeric (asset)
+  const ID_PATTERN = /^[GgEe]?\d{3,}$/;
+  function detectIdType(q) {
+    if (!q || !ID_PATTERN.test(q.trim())) return null;
+    const trimmed = q.trim();
+    const upper = trimmed.toUpperCase();
+    if (upper.startsWith('E')) return { type: 'entity', id: upper };
+    // G-prefix or pure numeric → asset
+    return { type: 'asset', id: upper.startsWith('G') ? upper : trimmed };
+  }
+
   // Recent searches (persisted)
   let recentSearches = $state([]);
 
@@ -94,6 +105,29 @@
     if (!query && validRecent.length > 0) {
       results.push({ type: 'section', label: 'Recent' });
       validRecent.slice(0, 2).forEach((r) => results.push({ ...r, type: 'recent' }));
+    }
+
+    // Direct ID navigation
+    const idMatch = detectIdType(query);
+    if (idMatch) {
+      results.push({ type: 'section', label: 'Direct Lookup' });
+      if (idMatch.type === 'asset') {
+        results.push({
+          type: 'asset',
+          id: idMatch.id,
+          label: `Go to asset ${idMatch.id}`,
+          sublabel: 'Direct ID lookup',
+          action: () => navigateTo('asset', idMatch.id, idMatch.id),
+        });
+      } else {
+        results.push({
+          type: 'entity',
+          id: idMatch.id,
+          label: `Go to entity ${idMatch.id}`,
+          sublabel: 'Direct ID lookup',
+          action: () => navigateTo('entity', idMatch.id, idMatch.id),
+        });
+      }
     }
 
     // Commands (filtered by query)

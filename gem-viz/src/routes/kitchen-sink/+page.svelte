@@ -6,6 +6,8 @@
    * lists the rest organized by category.
    */
 
+  import { onMount } from 'svelte';
+
   // Core UI
   import Skeleton from '$lib/components/feedback/Skeleton.svelte';
   import Spinner from '$lib/components/feedback/Spinner.svelte';
@@ -157,6 +159,52 @@
     }
   }
 
+  // Deep-link: scroll to hash on mount + update hash on scroll
+  let activeSection = $state('');
+
+  onMount(() => {
+    // Scroll to hash fragment on page load
+    const hash = window.location.hash?.slice(1);
+    if (hash) {
+      // Wait for DOM to settle, then scroll
+      requestAnimationFrame(() => {
+        const el = document.getElementById(hash);
+        if (el) {
+          el.scrollIntoView({ behavior: 'instant' });
+          activeSection = hash;
+        }
+      });
+    }
+
+    // Track which section is visible and update URL hash
+    const sections = document.querySelectorAll('section[id]');
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            const id = entry.target.id;
+            activeSection = id;
+            // Update URL hash without triggering scroll
+            history.replaceState(null, '', `#${id}`);
+          }
+        }
+      },
+      { rootMargin: '-80px 0px -60% 0px', threshold: 0 }
+    );
+
+    sections.forEach((s) => observer.observe(s));
+    return () => observer.disconnect();
+  });
+
+  function scrollToSection(id) {
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth' });
+      activeSection = id;
+      history.replaceState(null, '', `#${id}`);
+    }
+  }
+
   // Toggle states for interactive demos
   let showLoading = $state(false);
   let showError = $state(false);
@@ -245,29 +293,38 @@
   <!-- Table of Contents -->
   <nav class="toc">
     <span class="toc-label">Jump to:</span>
-    <a href="#primitives">Primitives</a>
-    <a href="#badges">Badges</a>
-    <a href="#layout">Layout</a>
-    <a href="#cards">Cards</a>
-    <a href="#charts">Charts</a>
-    <a href="#ownership-tree">Ownership Tree</a>
-    <a href="#tables">Tables</a>
-    <a href="#inputs">Inputs</a>
-    <a href="#navigation">Navigation</a>
-    <a href="#states">Loading States</a>
-    <a href="#buttons">Buttons</a>
-    <a href="#typography">Typography</a>
-    <a href="#colors">Colors</a>
-    <a href="#debug">Debug</a>
-    <a href="#complex">Complex</a>
-    <a href="#registry">Full Registry</a>
+    {#each [
+      ['primitives', 'Primitives'],
+      ['badges', 'Badges'],
+      ['layout', 'Layout'],
+      ['cards', 'Cards'],
+      ['charts', 'Charts'],
+      ['ownership-tree', 'Ownership Tree'],
+      ['tables', 'Tables'],
+      ['inputs', 'Inputs'],
+      ['navigation', 'Navigation'],
+      ['states', 'Loading States'],
+      ['buttons', 'Buttons'],
+      ['typography', 'Typography'],
+      ['colors', 'Colors'],
+      ['debug', 'Debug'],
+      ['complex', 'Complex'],
+      ['coal-plant-card', 'Coal Plant Card'],
+      ['registry', 'Full Registry'],
+    ] as [id, label]}
+      <a
+        href="#{id}"
+        class:active={activeSection === id}
+        onclick={(e) => { e.preventDefault(); scrollToSection(id); }}
+      >{label}</a>
+    {/each}
   </nav>
 
   <!-- ========================================
        TYPOGRAPHY REFERENCE
        ======================================== -->
   <section id="typography">
-    <h2>Typography Reference</h2>
+    <h2><a href="#typography" class="section-anchor">#</a>Typography Reference</h2>
     <div class="component-group">
       <div class="type-samples">
         <div class="type-row">
@@ -314,7 +371,7 @@
        COLOR REFERENCE
        ======================================== -->
   <section id="colors">
-    <h2>Color Reference</h2>
+    <h2><a href="#colors" class="section-anchor">#</a>Color Reference</h2>
     <div class="component-group">
       <h3>Text Colors</h3>
       <div class="color-swatches">
@@ -384,7 +441,7 @@
        PRIMITIVES
        ======================================== -->
   <section id="primitives">
-    <h2>Primitives</h2>
+    <h2><a href="#primitives" class="section-anchor">#</a>Primitives</h2>
 
     <div class="component-group">
       <div class="component-header">
@@ -489,7 +546,7 @@
        BADGES
        ======================================== -->
   <section id="badges">
-    <h2>Badges & Attribution</h2>
+    <h2><a href="#badges" class="section-anchor">#</a>Badges & Attribution</h2>
 
     <div class="component-group">
       <div class="component-header">
@@ -535,7 +592,7 @@
        LAYOUT
        ======================================== -->
   <section id="layout">
-    <h2>Layout Components</h2>
+    <h2><a href="#layout" class="section-anchor">#</a>Layout Components</h2>
 
     <div class="component-group">
       <div class="component-header">
@@ -583,7 +640,7 @@
        CARDS
        ======================================== -->
   <section id="cards">
-    <h2>Cards</h2>
+    <h2><a href="#cards" class="section-anchor">#</a>Cards</h2>
 
     <div class="component-group">
       <div class="component-header">
@@ -647,7 +704,7 @@
        CHARTS
        ======================================== -->
   <section id="charts">
-    <h2>Charts & Visualizations</h2>
+    <h2><a href="#charts" class="section-anchor">#</a>Charts & Visualizations</h2>
 
     <div class="component-group">
       <div class="component-header">
@@ -837,7 +894,7 @@
        OWNERSHIP TREE GRAPH
        ======================================== -->
   <section id="ownership-tree">
-    <h2>Ownership Tree Graph</h2>
+    <h2><a href="#ownership-tree" class="section-anchor">#</a>Ownership Tree Graph</h2>
 
     <div class="component-group">
       <div class="component-header">
@@ -995,7 +1052,7 @@
        TABLES
        ======================================== -->
   <section id="tables">
-    <h2>Tables & Data</h2>
+    <h2><a href="#tables" class="section-anchor">#</a>Tables & Data</h2>
 
     <div class="component-group">
       <div class="component-header">
@@ -1026,7 +1083,7 @@
        NAVIGATION
        ======================================== -->
   <section id="navigation">
-    <h2>Navigation & Filtering</h2>
+    <h2><a href="#navigation" class="section-anchor">#</a>Navigation & Filtering</h2>
 
     <div class="component-group">
       <div class="component-header">
@@ -1098,7 +1155,7 @@
        INPUTS
        ======================================== -->
   <section id="inputs">
-    <h2>Inputs & Search</h2>
+    <h2><a href="#inputs" class="section-anchor">#</a>Inputs & Search</h2>
 
     <div class="component-group">
       <div class="component-header">
@@ -1172,7 +1229,7 @@
        LOADING STATES
        ======================================== -->
   <section id="states">
-    <h2>Loading States</h2>
+    <h2><a href="#states" class="section-anchor">#</a>Loading States</h2>
 
     <div class="component-group">
       <div class="component-header">
@@ -1255,7 +1312,7 @@
        BUTTONS
        ======================================== -->
   <section id="buttons">
-    <h2>Buttons</h2>
+    <h2><a href="#buttons" class="section-anchor">#</a>Buttons</h2>
 
     <div class="component-group">
       <div class="component-header">
@@ -1307,7 +1364,7 @@
        DEBUG
        ======================================== -->
   <section id="debug">
-    <h2>Debug & Diagnostics</h2>
+    <h2><a href="#debug" class="section-anchor">#</a>Debug & Diagnostics</h2>
 
     <div class="component-group">
       <div class="component-header">
@@ -1335,7 +1392,7 @@
        COMPLEX COMPONENTS
        ======================================== -->
   <section id="complex">
-    <h2>Complex Components</h2>
+    <h2><a href="#complex" class="section-anchor">#</a>Complex Components</h2>
     <p class="section-intro">
       These components require API data or complex runtime context and can't be demoed with static
       data. See them live on their respective pages.
@@ -1356,7 +1413,7 @@
        COAL PLANT CARD TEST HARNESS
        ======================================== -->
   <section id="coal-plant-card">
-    <h2>CoalPlantCard</h2>
+    <h2><a href="#coal-plant-card" class="section-anchor">#</a>CoalPlantCard</h2>
     <p class="section-intro">
       Test harness for <code>src/lib/components/cards/CoalPlantCard.svelte</code>.
     </p>
@@ -1414,7 +1471,7 @@
        FULL REGISTRY
        ======================================== -->
   <section id="registry">
-    <h2>Full Component Registry</h2>
+    <h2><a href="#registry" class="section-anchor">#</a>Full Component Registry</h2>
     <p class="section-intro">
       All {totalComponentCount} components in the codebase, organized by category.
     </p>
@@ -1529,19 +1586,28 @@
 
   .toc a {
     font-size: var(--font-size-body);
-    color: var(--color-text-secondary);
+    color: var(--color-text-tertiary);
     text-decoration: none;
     padding: var(--space-1) var(--space-2);
+    border-radius: 2px;
+    transition: color 0.15s, background 0.15s;
   }
 
   .toc a:hover {
     color: var(--color-text-primary);
-    text-decoration: underline;
+    background: var(--color-gray-50);
+  }
+
+  .toc a.active {
+    color: var(--color-text-primary);
+    background: var(--color-gray-100);
+    font-weight: 500;
   }
 
   /* Sections */
   section {
-    margin-bottom: var(--space-16);
+    margin-bottom: 80px;
+    padding-top: var(--space-6);
     scroll-margin-top: 60px;
   }
 
@@ -1554,6 +1620,24 @@
     padding-bottom: var(--space-3);
     border-bottom: var(--border-width) solid var(--color-border);
     color: var(--color-text-secondary);
+    position: relative;
+  }
+
+  .section-anchor {
+    color: var(--color-gray-300);
+    text-decoration: none;
+    margin-right: var(--space-2);
+    opacity: 0;
+    transition: opacity 0.15s;
+    font-weight: 400;
+  }
+
+  section h2:hover .section-anchor {
+    opacity: 1;
+  }
+
+  .section-anchor:hover {
+    color: var(--color-text-primary);
   }
 
   .section-intro {
@@ -1564,7 +1648,7 @@
 
   /* Component Groups */
   .component-group {
-    margin-bottom: var(--space-12);
+    margin-bottom: var(--space-16);
   }
 
   .component-header {
