@@ -13,9 +13,9 @@ COPY --from=build /app/build ./build
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/package.json ./
 
-# Data directory — mount a persistent volume here in production
+# Data directory — Fly persistent volume mounts here.
+# The DB is created at runtime via ingest scripts, not baked into the image.
 RUN mkdir -p /app/data
-COPY --from=build /app/data/*.db /app/data/ 2>/dev/null || true
 
 ENV NODE_ENV=production
 ENV PORT=3000
