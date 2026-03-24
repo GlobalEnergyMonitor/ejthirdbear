@@ -1,7 +1,7 @@
 /**
  * Tracker Metadata - Rich descriptions and configuration for tracker pages
  *
- * This file contains extended metadata for each tracker beyond what's in tracker-config.ts.
+ * This file contains extended metadata for each tracker beyond what's in tracker-schema.ts.
  * Used by /tracker and /tracker/[slug] pages.
  */
 
@@ -35,25 +35,54 @@ export interface TrackerMetadata {
   keyFields: string[];
 }
 
-/**
- * Slug to tracker name mapping
- */
-export const slugToTrackerName: Record<string, string> = {
-  'coal-plant': 'Coal Plant',
-  'gas-plant': 'Gas Plant',
-  'coal-mine': 'Coal Mine',
-  'iron-mine': 'Iron Mine',
-  'steel-plant': 'Steel Plant',
-  'gas-pipeline': 'Gas Pipeline',
-  bioenergy: 'Bioenergy Power',
-};
+import {
+  URL_SLUG_TO_TRACKER,
+  TRACKER_TO_URL_SLUG,
+  URL_SLUG_TO_CATALOG_SLUG,
+} from './tracker-schema';
+import { fetchCatalogFieldMeta } from '$lib/catalog-api';
+import type { CatalogTrackerMeta } from '$lib/catalog-api';
+
+/** Slug to tracker name mapping — sourced from tracker-schema.ts */
+export const slugToTrackerName: Record<string, string> = URL_SLUG_TO_TRACKER;
+
+/** Tracker name to slug mapping (reverse) — sourced from tracker-schema.ts */
+export const trackerNameToSlug: Record<string, string> = TRACKER_TO_URL_SLUG;
 
 /**
- * Tracker name to slug mapping (reverse of above)
+ * Enrich tracker metadata from the API.
+ * Only fetches trackers that the /catalog/metadata index says exist,
+ * avoiding 404 noise for trackers not yet documented in the API.
  */
-export const trackerNameToSlug: Record<string, string> = Object.fromEntries(
-  Object.entries(slugToTrackerName).map(([slug, name]) => [name, slug])
-);
+export async function enrichTrackerMetadataFromApi(): Promise<void> {
+  // First, check which metadata docs the API actually has
+  let availableSlugs: Set<string>;
+  try {
+    const res = await fetch(
+      `${import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-api.thirdbear.net'}/catalog/metadata?format=json`
+    );
+    if (!res.ok) return;
+    const index = await res.json();
+    availableSlugs = new Set((index.trackers || []).map((t: { slug: string }) => t.slug));
+  } catch {
+    return; // API unreachable, keep hardcoded
+  }
+
+  for (const [urlSlug, meta] of Object.entries(trackerMetadata)) {
+    const catalogSlug = URL_SLUG_TO_CATALOG_SLUG[urlSlug];
+    if (!catalogSlug || !availableSlugs.has(catalogSlug)) continue;
+    try {
+      const apiMeta: CatalogTrackerMeta | null = await fetchCatalogFieldMeta(catalogSlug);
+      if (apiMeta?.citation) {
+        const c = apiMeta.citation as Record<string, string>;
+        if (c.copyright) meta.citation = c.copyright;
+        else if (c.citation) meta.citation = c.citation;
+      }
+    } catch {
+      // keep hardcoded fallback
+    }
+  }
+}
 
 /**
  * Rich metadata for each tracker

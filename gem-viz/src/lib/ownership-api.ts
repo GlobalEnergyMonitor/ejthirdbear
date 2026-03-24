@@ -1,6 +1,11 @@
 /** Ownership API client — REST API for entity/asset ownership relationships */
 
 import { logApiCall } from './api-log.svelte';
+import {
+  API_SLUG_TO_TYPE as _SCHEMA_SLUG_TO_TYPE,
+  API_TYPE_TO_SLUG as _SCHEMA_TYPE_TO_SLUG,
+  IDENTIFIER_TO_API_SLUG as _SCHEMA_ID_TO_SLUG,
+} from '$lib/data-config/tracker-schema';
 
 // API base URL (env override or production default)
 const API_BASE = import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-api.thirdbear.net'; // Fallback to production API
@@ -565,94 +570,33 @@ export const getEntityGraphDown = (id: string) => getEntityGraph(id, 'down');
 // ============================================================================
 
 /**
- * Mapping from our URL slugs to the API display type names.
- * These are used for client-side matching of facilityType values.
+ * Slug/type maps — sourced from tracker-schema.ts (single source of truth).
+ * These re-exports exist for backward compatibility with existing importers.
+ * Will be replaced by API-driven data from /catalog/metadata/status-taxonomy.
  */
 export const SLUG_TO_API_TYPE: Record<string, string> = {
-  'coal-plant': 'Coal Plant',
-  'gas-plant': 'Oil & Gas Plant',
-  'oil-gas-plant': 'Oil & Gas Plant',
-  'iron-mine': 'Iron Ore Mine',
-  'iron-ore-mine': 'Iron Ore Mine',
-  'steel-plant': 'Iron & Steel Plant',
-  'iron-steel-plant': 'Iron & Steel Plant',
-  'gas-pipeline': 'Natural Gas Transmission Pipeline',
-  'oil-pipeline': 'Oil or NGL Pipeline',
-  'cement-plant': 'Cement or Concrete Plant',
-  bioenergy: 'Bioenergy Plant',
-  'bioenergy-plant': 'Bioenergy Plant',
+  ..._SCHEMA_SLUG_TO_TYPE,
+  // Backward-compat aliases (old URL slugs → API types)
+  'gas-plant': _SCHEMA_SLUG_TO_TYPE['oil-gas-plant'],
+  'iron-mine': _SCHEMA_SLUG_TO_TYPE['iron-ore-mine'],
+  'steel-plant': _SCHEMA_SLUG_TO_TYPE['iron-steel-plant'],
+  bioenergy: _SCHEMA_SLUG_TO_TYPE['bioenergy-plant'],
 };
 
-/** Reverse mapping: API type → our slug */
-export const API_TYPE_TO_SLUG: Record<string, string> = Object.fromEntries(
-  Object.entries(SLUG_TO_API_TYPE).map(([slug, apiType]) => [apiType, slug])
-);
-
-/** Also map our tracker display names to API types */
-const TRACKER_NAME_TO_API_TYPE: Record<string, string> = {
-  'Coal Plant': 'Coal Plant',
-  'Gas Plant': 'Oil & Gas Plant',
-  'Oil & Gas Plant': 'Oil & Gas Plant',
-  'Iron Mine': 'Iron Ore Mine',
-  'Iron Ore Mine': 'Iron Ore Mine',
-  'Steel Plant': 'Iron & Steel Plant',
-  'Iron & Steel Plant': 'Iron & Steel Plant',
-  'Gas Pipeline': 'Natural Gas Transmission Pipeline',
-  'Natural Gas Transmission Pipeline': 'Natural Gas Transmission Pipeline',
-  'Bioenergy Power': 'Bioenergy Plant',
-  'Bioenergy Plant': 'Bioenergy Plant',
-  'Oil Pipeline': 'Oil or NGL Pipeline',
-  'Oil or NGL Pipeline': 'Oil or NGL Pipeline',
-  'Cement Plant': 'Cement or Concrete Plant',
-  'Cement or Concrete Plant': 'Cement or Concrete Plant',
-};
+export const API_TYPE_TO_SLUG: Record<string, string> = { ..._SCHEMA_TYPE_TO_SLUG };
 
 /** Resolve any tracker identifier (slug, display name, or API type) to API display type name */
 export function resolveApiAssetType(tracker: string): string {
-  return SLUG_TO_API_TYPE[tracker] || TRACKER_NAME_TO_API_TYPE[tracker] || tracker;
+  return (
+    SLUG_TO_API_TYPE[tracker] ||
+    (_SCHEMA_ID_TO_SLUG[tracker] && SLUG_TO_API_TYPE[_SCHEMA_ID_TO_SLUG[tracker]]) ||
+    tracker
+  );
 }
-
-/**
- * Map from any identifier to the API slug format used in ?asset_type= filter.
- * Accepts: old slugs, tracker display names, API display names, or API slugs.
- */
-const IDENTIFIER_TO_API_SLUG: Record<string, string> = {
-  // Our old URL slugs
-  'coal-plant': 'coal-plant',
-  'gas-plant': 'oil-gas-plant',
-  'iron-mine': 'iron-ore-mine',
-  'steel-plant': 'iron-steel-plant',
-  'gas-pipeline': 'gas-pipeline',
-  bioenergy: 'bioenergy-plant',
-  // API slugs (identity)
-  'oil-gas-plant': 'oil-gas-plant',
-  'iron-ore-mine': 'iron-ore-mine',
-  'iron-steel-plant': 'iron-steel-plant',
-  'bioenergy-plant': 'bioenergy-plant',
-  'cement-plant': 'cement-plant',
-  'oil-pipeline': 'oil-pipeline',
-  // Tracker display names
-  'Coal Plant': 'coal-plant',
-  'Gas Plant': 'oil-gas-plant',
-  'Iron Mine': 'iron-ore-mine',
-  'Steel Plant': 'iron-steel-plant',
-  'Gas Pipeline': 'gas-pipeline',
-  'Bioenergy Power': 'bioenergy-plant',
-  'Oil Pipeline': 'oil-pipeline',
-  'Cement Plant': 'cement-plant',
-  // API display names
-  'Oil & Gas Plant': 'oil-gas-plant',
-  'Iron Ore Mine': 'iron-ore-mine',
-  'Iron & Steel Plant': 'iron-steel-plant',
-  'Bioenergy Plant': 'bioenergy-plant',
-  'Natural Gas Transmission Pipeline': 'gas-pipeline',
-  'Oil or NGL Pipeline': 'oil-pipeline',
-  'Cement or Concrete Plant': 'cement-plant',
-};
 
 /** Resolve any tracker identifier to the API slug used in ?asset_type= filter */
 export function resolveApiSlug(tracker: string): string | null {
-  return IDENTIFIER_TO_API_SLUG[tracker] ?? null;
+  return _SCHEMA_ID_TO_SLUG[tracker] ?? null;
 }
 
 // ============================================================================
@@ -929,42 +873,28 @@ export async function fetchStatusFacets(assetTypeSlug?: string): Promise<Map<str
     const key = k.toLowerCase().replace(/_/g, '-');
     // Map API-specific names to our convention
     const mapped =
-      key === 'cancelled-inferred' ? 'cancelled - inferred 4 y' :
-      key === 'shelved-inferred' ? 'shelved - inferred 2 y' :
-      key === 'operating-pre-retirement' ? 'operating pre-retirement' :
-      key === 'mothballed-pre-retirement' ? 'mothballed pre-retirement' :
-      key === 'mixed-status' ? 'operating' : // mixed status counts as operating
-      key;
+      key === 'cancelled-inferred'
+        ? 'cancelled - inferred 4 y'
+        : key === 'shelved-inferred'
+          ? 'shelved - inferred 2 y'
+          : key === 'operating-pre-retirement'
+            ? 'operating pre-retirement'
+            : key === 'mothballed-pre-retirement'
+              ? 'mothballed pre-retirement'
+              : key === 'mixed-status'
+                ? 'operating' // mixed status counts as operating
+                : key;
     normalized.set(mapped, (normalized.get(mapped) ?? 0) + v);
   }
   return normalized;
 }
 
 // =============================================================================
-// STATUS TAXONOMY
+// STATUS TAXONOMY — re-exported from catalog-api.ts (single source of truth)
 // =============================================================================
 
-export interface StatusTaxonomy {
-  statuses: Record<string, {
-    label: string;
-    sub_statuses: Record<string, { label: string; description?: string }>;
-  }>;
-  raw_value_mappings: Record<string, string>;
-}
-
-let _taxonomyCache: StatusTaxonomy | null = null;
-
-/**
- * Fetch the canonical status taxonomy from the API.
- * Cached for the session since the taxonomy rarely changes.
- */
-export async function fetchStatusTaxonomy(): Promise<StatusTaxonomy> {
-  if (_taxonomyCache) return _taxonomyCache;
-  _currentReason = 'fetchStatusTaxonomy';
-  const data = await fetchAPI<StatusTaxonomy>('/catalog/metadata/status-taxonomy?format=json');
-  _taxonomyCache = data;
-  return data;
-}
+export { fetchCatalogTaxonomy as fetchStatusTaxonomy } from '$lib/catalog-api';
+export type { StatusTaxonomy } from '$lib/catalog-api';
 
 // Export the API base for debugging
 export const getAPIBase = () => API_BASE;

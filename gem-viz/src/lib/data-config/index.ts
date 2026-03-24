@@ -2,33 +2,45 @@
  * GEM Data Configuration Module
  *
  * Central registry for:
- * - Tracker metadata and field mappings (tracker-config.ts)
+ * - Tracker schema and status taxonomy (tracker-schema.ts)
  * - Asset class definitions and rules (asset-classes.ts)
- * - Standardized field access helpers (field-mappings.ts)
  * - Data source documentation (data-sources.ts)
- *
- * This module encodes the Ownership Data Processing and Access Plan
- * into executable, type-safe code structures.
- *
- * Usage:
- *   import { getTrackerConfig, getAssetClass, getOperatingStatus } from '$lib/data-config';
- *   const coalPlantConfig = getTrackerConfig('Coal Plant');
- *   const status = getOperatingStatus('Coal Plant', assetRecord);
  */
 
-// Export tracker configuration and utilities
+// Export tracker schema (single source of truth)
 export {
-  getTrackerConfig,
-  getAllTrackerNames,
-  getTrackersByType,
-  getCapacityFields,
-  normalizeStatus,
-  constructAssetName,
-  extractLocation,
-  type TrackerFieldMapping,
-  type OperatingStatus,
-  trackerConfigs,
-} from './tracker-config';
+  TRACKERS,
+  TRACKER_TO_ASSET_TYPE,
+  TRACKER_ID_FIELD,
+  API_SLUG_TO_TYPE,
+  API_TYPE_TO_SLUG,
+  API_TYPE_TO_TRACKER,
+  TRACKER_TO_URL_SLUG,
+  URL_SLUG_TO_TRACKER,
+  IDENTIFIER_TO_API_SLUG,
+  getAssetTypeForTracker,
+  getIdFieldForTracker,
+  isValidTracker,
+  STATUS_VALUES,
+  STATUS_GROUPS,
+  STATUS_TO_GROUP,
+  STATUS_GROUP_DESCRIPTIONS,
+  STATUS_VALUE_DESCRIPTIONS,
+  FOSSIL_TRACKERS,
+  PROSPECTIVE_STATUSES,
+  discoverStatusGroups,
+  normalizeSubStatus,
+  matchesStatusFilter,
+  COUNTRIES,
+  initFromApi,
+  getApiTaxonomy,
+  fetchLiveCountries,
+  type TrackerName,
+  type StatusValue,
+  type StatusGroup,
+  type DynamicStatusGroup,
+  type Country,
+} from './tracker-schema';
 
 // Export asset class definitions and matching logic
 export {
@@ -42,24 +54,6 @@ export {
   type AssetClassDefinition,
   type AssetClassRelevantFields,
 } from './asset-classes';
-
-// Export field mapping utilities
-export {
-  getAssetIdByTracker,
-  getAssetName,
-  getOperatingStatus,
-  getLocation,
-  getCapacity,
-  deepKeyLookup,
-  categorizeStatus,
-  getTrackerFieldNames,
-  validateRecordForTracker,
-  getFieldDescription,
-  fieldDescriptions,
-  type NormalizedOperatingStatus,
-  type LocationData,
-  type CapacityData,
-} from './field-mappings';
 
 // Export data source documentation
 export {

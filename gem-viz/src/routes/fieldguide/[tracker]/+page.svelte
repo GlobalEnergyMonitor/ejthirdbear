@@ -18,6 +18,7 @@
   import { getTrackerColor } from '$lib/design-tokens';
   import PageHeader from '$lib/components/nav/PageHeader.svelte';
   import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
+  import { getFieldsForTracker } from '$lib/catalog-field-meta';
 
   // URL param
   const trackerParam = $derived($page.params.tracker);
@@ -27,82 +28,8 @@
   const meta = $derived(trackerMetadata[trackerParam]);
   const color = $derived(getTrackerColor(tracker));
 
-  // Field descriptions for generating synthetic metadata
-  const fieldDescriptions: Record<string, { category: string; definition: string }> = {
-    Status: { category: 'Main', definition: 'Current operating status of the asset.' },
-    Country: { category: 'Geography', definition: 'Country where the asset is located.' },
-    Countries: { category: 'Geography', definition: 'Countries the pipeline passes through.' },
-    Owner: { category: 'Ownership', definition: 'Primary owner or operator.' },
-    'Immediate Owner Entity Name': {
-      category: 'Ownership',
-      definition: 'Direct ownership entity name.',
-    },
-    'Start year': {
-      category: 'Age',
-      definition: 'Year the asset began or is planned to begin operation.',
-    },
-    'Capacity (MW)': { category: 'Size', definition: 'Generating capacity in megawatts.' },
-    'Capacity (Mtpa)': {
-      category: 'Size',
-      definition: 'Production capacity in million tonnes per annum.',
-    },
-    'Design capacity (ttpa)': {
-      category: 'Size',
-      definition: 'Design production capacity in thousand tonnes per annum.',
-    },
-    'Nominal crude steel capacity (ttpa)': {
-      category: 'Size',
-      definition: 'Nominal crude steel production capacity in thousand tonnes per annum.',
-    },
-    'CapacityBcm/y': {
-      category: 'Size',
-      definition: 'Pipeline capacity in billion cubic meters per year.',
-    },
-    'Fuel type': { category: 'Details', definition: 'Type of fuel used by the plant.' },
-    Technology: { category: 'Details', definition: 'Technology or process type used.' },
-    'Mine type': {
-      category: 'Details',
-      definition: 'Type of mining operation (surface, underground, etc.).',
-    },
-    Feedstock: { category: 'Details', definition: 'Primary feedstock material for bioenergy.' },
-    'Asset Name': { category: 'Names', definition: 'Name of the asset or project.' },
-    '% Share of Ownership': { category: 'Ownership', definition: 'Percentage ownership stake.' },
-  };
-
-  // Generate field metadata from tracker keyFields config
-  function generateFieldsMetadata() {
-    if (!meta) return [];
-    const fields: Array<{ columnName: string; category: string; definition: string }> = [];
-    for (const fieldName of meta.keyFields) {
-      const desc = fieldDescriptions[fieldName];
-      fields.push({
-        columnName: fieldName,
-        category: desc?.category || 'Other',
-        definition: desc?.definition || `${fieldName} field.`,
-      });
-    }
-    // Add common fields
-    const included = new Set(fields.map((f) => f.columnName));
-    for (const fieldName of ['Country', 'Immediate Owner Entity Name', '% Share of Ownership']) {
-      if (!included.has(fieldName)) {
-        const desc = fieldDescriptions[fieldName];
-        if (desc) fields.push({ columnName: fieldName, category: desc.category, definition: desc.definition });
-      }
-    }
-    return fields;
-  }
-
-  // API metadata slug mapping (app slug → API catalog slug)
-  // All trackers mapped so they auto-pick-up metadata as it's uploaded
-  const apiMetadataSlugs: Record<string, string> = {
-    'coal-mine': 'coal-mines',
-    'coal-plant': 'coal-plants',
-    'gas-plant': 'gas-plants',
-    'iron-mine': 'iron-mines',
-    'steel-plant': 'steel-plants',
-    'gas-pipeline': 'gas-pipelines',
-    'bioenergy': 'bioenergy-plants',
-  };
+  // Field metadata is fetched from the API via catalog-field-meta.ts
+  // (API first, hardcoded fallback for resilience)
 
   // State
   let fieldsMetadata = $state<
@@ -129,90 +56,9 @@
     }>
   >([]);
 
-  // Parse CSV (for Coal Mine)
-  function parseCsv(text: string) {
-    const lines = text.split('\n');
-    return lines
-      .slice(1)
-      .filter((line) => line.trim())
-      .map((line) => {
-        const values: string[] = [];
-        let current = '';
-        let inQuotes = false;
-        for (let i = 0; i < line.length; i++) {
-          const char = line[i];
-          if (char === '"') {
-            inQuotes = !inQuotes;
-          } else if (char === ',' && !inQuotes) {
-            values.push(current.trim());
-            current = '';
-          } else {
-            current += char;
-          }
-        }
-        values.push(current.trim());
-        return {
-          columnName: values[0] || '',
-          category: values[1] || '',
-          definition: values[4] || '',
-          fieldValue: values[3] || null,
-          valueDefinition: values[3] ? values[4] : null,
-        };
-      });
-  }
-
   async function loadFieldsMetadata() {
-    // Try API catalog metadata first
-    const apiSlug = apiMetadataSlugs[trackerParam];
-    if (apiSlug) {
-      try {
-        const response = await fetch(
-          `https://gem-api.thirdbear.net/catalog/metadata/${apiSlug}?format=json`
-        );
-        if (response.ok) {
-          const data = await response.json();
-          const fields = data.fieldsDetail || [];
-          if (fields.length > 0) {
-            fieldsMetadata = fields.map((f: { name: string; category?: string; definition?: string; allowed_values?: Array<{ value: string; definition?: string }> }) => ({
-              columnName: f.name,
-              category: f.category || 'Other',
-              definition: f.definition || `${f.name} field.`,
-              fieldValue: null,
-              valueDefinition: null,
-            }));
-            // Expand allowed_values into separate rows for enum definitions
-            const expanded: typeof fieldsMetadata = [];
-            for (const f of fields) {
-              expanded.push({
-                columnName: f.name,
-                category: f.category || 'Other',
-                definition: f.definition || `${f.name} field.`,
-                fieldValue: null,
-                valueDefinition: null,
-              });
-              if (f.allowed_values?.length) {
-                for (const v of f.allowed_values) {
-                  if (v.definition) {
-                    expanded.push({
-                      columnName: f.name,
-                      category: f.category || 'Other',
-                      definition: f.definition || '',
-                      fieldValue: v.value,
-                      valueDefinition: v.definition,
-                    });
-                  }
-                }
-              }
-            }
-            fieldsMetadata = expanded;
-            return;
-          }
-        }
-      } catch {
-        // fall through to synthetic
-      }
-    }
-    fieldsMetadata = generateFieldsMetadata();
+    const fields = await getFieldsForTracker(trackerParam, true);
+    fieldsMetadata = fields;
   }
 
   async function loadSampleAssets() {

@@ -205,7 +205,7 @@ export const DerivedDatasets: Record<string, GEMDataset> = {
   trackerMetadata: {
     name: 'Tracker Metadata Manifest',
     description: 'Column names, data types, descriptions, and metadata for all tracker fields',
-    url: 'src/lib/data-config/tracker-config.ts',
+    url: 'src/lib/data-config/tracker-schema.ts',
     version: '1.0',
     lastUpdated: '2025-12-14',
     notes: 'Centralized schema definition - source of truth for field mappings',
@@ -221,6 +221,41 @@ export const DerivedDatasets: Record<string, GEMDataset> = {
     notes: 'Matcher functions for each asset class',
   },
 };
+
+/**
+ * Fetch live data sources from the API.
+ * Returns source files, asset types, row counts, and load timestamps.
+ * Falls back to hardcoded TrackerDatasets on error.
+ */
+export async function getLiveDataSources(): Promise<
+  Array<{
+    source_file: string;
+    asset_type: string;
+    row_count: number | null;
+    load_timestamp: string;
+  }>
+> {
+  try {
+    const { fetchCatalogSources } = await import('$lib/catalog-api');
+    const data = await fetchCatalogSources();
+    if (data?.results?.length) {
+      return data.results.map((s) => ({
+        source_file: s.source_file,
+        asset_type: s.asset_type,
+        row_count: s.row_count_output,
+        load_timestamp: s.load_timestamp,
+      }));
+    }
+  } catch {
+    // fall through
+  }
+  return Object.values(TrackerDatasets).map((d) => ({
+    source_file: d.name,
+    asset_type: d.description,
+    row_count: null,
+    load_timestamp: d.lastUpdated,
+  }));
+}
 
 /**
  * Get all datasets in a category

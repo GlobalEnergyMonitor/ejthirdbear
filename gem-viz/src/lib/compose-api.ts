@@ -17,6 +17,7 @@ import {
   type AssetSummary,
   type PaginatedResponse,
 } from './ownership-api';
+import { isCoarseStatus, displayStatusToApiKey } from './data-config/tracker-schema';
 import { logApiCall } from './api-log.svelte';
 // Shared types for compose page
 export interface FacetOption {
@@ -208,6 +209,7 @@ interface FilterState {
 interface ApiParams {
   asset_type?: string[];
   status?: string[];
+  sub_status?: string[];
   country?: string[];
   q?: string;
 }
@@ -225,6 +227,9 @@ function buildMultiQuery(
   }
   if (params.status) {
     for (const v of params.status) sp.append('status', v);
+  }
+  if (params.sub_status) {
+    for (const v of params.sub_status) sp.append('sub_status', v);
   }
   if (params.country) {
     for (const v of params.country) sp.append('country', v);
@@ -255,11 +260,24 @@ export function filtersToApiParams(filters: FilterState): ApiParams {
     if (slugs.length > 0) params.asset_type = slugs;
   }
 
-  // Status: combine OR + AND selections
-  // API is case-sensitive — always send lowercase
+  // Status: split into ?status= (coarse: operating/planned/retired)
+  // and ?sub_status= (granular: announced, construction, etc.)
+  // The API has two separate filter params — sending "announced" to ?status= returns 0.
   const allStatuses = [...(filters.statuses || []), ...(filters.statusesAnd || [])];
   if (allStatuses.length > 0) {
-    params.status = allStatuses.map((s) => s.toLowerCase());
+    const coarse: string[] = [];
+    const sub: string[] = [];
+    for (const s of allStatuses) {
+      const lower = s.toLowerCase();
+      if (isCoarseStatus(lower)) {
+        coarse.push(lower);
+      } else {
+        const apiKey = displayStatusToApiKey(lower);
+        if (apiKey) sub.push(apiKey);
+      }
+    }
+    if (coarse.length > 0) params.status = coarse;
+    if (sub.length > 0) params.sub_status = sub;
   }
 
   // Country: combine OR + AND selections

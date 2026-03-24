@@ -12,6 +12,8 @@
   const api = $derived(data?.api);
   const trackerConfigs = $derived(data?.trackerConfigs || []);
   const dataSources = $derived(data?.dataSources || { ownership: [], trackers: [], derived: [] });
+  const liveSources = $derived(data?.liveSources || []);
+  const apiMeta = $derived(data?.apiMeta || null);
   const dataVersionInfo = $derived(data?.dataVersionInfo || null);
   const meta = $derived(data?.meta || { generatedAt: '', loadTime: null, error: null });
 
@@ -63,47 +65,70 @@
     </div>
   </section>
 
+  <!-- Live API Data -->
+  {#if apiMeta}
+    <section id="api-live">
+      <h2>Live API Database</h2>
+      <p class="section-desc">From <code>/metadata</code> endpoint — real-time database stats.</p>
+      <div class="api-card">
+        <div><strong>API Version:</strong> {apiMeta.version}</div>
+        <div><strong>Git:</strong> {apiMeta.git_branch}@{apiMeta.git_commit}</div>
+        <div><strong>Assets:</strong> {formatNumber(apiMeta.database.asset_count)}</div>
+        <div><strong>Entities:</strong> {formatNumber(apiMeta.database.entity_count)}</div>
+        <div>
+          <strong>Ownership relationships:</strong>
+          {formatNumber(apiMeta.database.ownership_relationships)}
+        </div>
+        <div><strong>Sources:</strong> {apiMeta.database.source_count}</div>
+        <div><strong>DB size:</strong> {apiMeta.database.size_mb} MB</div>
+        <div><strong>Asset types:</strong> {apiMeta.database.asset_types.join(', ')}</div>
+      </div>
+    </section>
+  {/if}
+
+  <!-- Live Sources -->
+  {#if liveSources.length > 0}
+    <section id="live-sources">
+      <h2>Live Data Sources</h2>
+      <p class="section-desc">
+        From <code>/catalog/sources</code> — tracker spreadsheets loaded into the API.
+      </p>
+      <table class="probe-table">
+        <thead>
+          <tr><th>Source File</th><th>Asset Type</th><th>Rows</th><th>Loaded</th></tr>
+        </thead>
+        <tbody>
+          {#each liveSources as src}
+            <tr>
+              <td><code>{src.source_file}</code></td>
+              <td>{src.asset_type}</td>
+              <td>{formatNumber(src.row_count)}</td>
+              <td>{new Date(src.load_timestamp).toLocaleDateString()}</td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    </section>
+  {/if}
+
   <!-- Tracker Configs -->
   <section id="tracker-configs">
     <h2>Tracker Configurations</h2>
     <p class="section-desc">Field mappings for each asset tracker type.</p>
 
-    {#each trackerConfigs as { name, config }}
+    {#each trackerConfigs as { name, assetType, idField }}
       <article class="config-card">
         <h3>{name}</h3>
-        {#if config}
-          <dl class="config-list">
-            <div>
-              <dt>Asset Type</dt>
-              <dd>{config.assetType}</dd>
-            </div>
-            <div>
-              <dt>ID Field</dt>
-              <dd><code>{config.idField}</code></dd>
-            </div>
-            <div>
-              <dt>Name Fields</dt>
-              <dd><code>{JSON.stringify(config.nameFields)}</code></dd>
-            </div>
-            <div>
-              <dt>Capacity Field</dt>
-              <dd><code>{config.capacityField || '—'}</code> ({config.capacityUnit || '—'})</dd>
-            </div>
-            <div>
-              <dt>Status Field</dt>
-              <dd><code>{config.statusField}</code></dd>
-            </div>
-            <div>
-              <dt>Source Tab</dt>
-              <dd>{config.sourceTab}</dd>
-            </div>
-          </dl>
-          {#if config.docsRef}
-            <p class="docs-ref">{config.docsRef}</p>
-          {/if}
-        {:else}
-          <p class="no-data">No configuration found</p>
-        {/if}
+        <dl class="config-list">
+          <div>
+            <dt>API Asset Type</dt>
+            <dd>{assetType}</dd>
+          </div>
+          <div>
+            <dt>ID Field</dt>
+            <dd><code>{idField}</code></dd>
+          </div>
+        </dl>
       </article>
     {/each}
   </section>

@@ -9,14 +9,23 @@
     STATUS_GROUPS,
     STATUS_GROUP_DESCRIPTIONS,
     STATUS_VALUE_DESCRIPTIONS,
+    fetchLiveCountries,
   } from '$lib/data-config/tracker-schema';
   import type { DynamicStatusGroup } from '$lib/data-config/tracker-schema';
   import type { AssetClass, SubClassGroup } from '$lib/data-config/asset-class-definitions';
   import { ArrowRight, Search as SearchIcon, X } from 'lucide-svelte';
   import { track } from '$lib/analytics';
+  import { onMount } from 'svelte';
   import { slide, fade } from 'svelte/transition';
   import CountryMultiSelect from '$lib/components/screener/CountryMultiSelect.svelte';
   import GeoFenceInput from '$lib/components/screener/GeoFenceInput.svelte';
+
+  // Live countries from API facets, falls back to hardcoded COUNTRIES
+  let countries = $state<readonly string[]>(COUNTRIES);
+  onMount(async () => {
+    const live = await fetchLiveCountries();
+    if (live.length > 0) countries = live;
+  });
 
   interface Props {
     assetClass: AssetClass;
@@ -399,7 +408,7 @@
               <p class="step-hint">
                 Leave empty to include all countries. You can proceed without filtering.
               </p>
-              <CountryMultiSelect bind:selected={geoFilters} countries={COUNTRIES} />
+              <CountryMultiSelect bind:selected={geoFilters} {countries} />
               <GeoFenceInput bind:geofence />
             </div>
           {/if}

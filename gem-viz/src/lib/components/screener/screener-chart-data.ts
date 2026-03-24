@@ -16,6 +16,7 @@ export interface ChartUnit {
   name: string;
   tracker: string;
   status: string;
+  subStatus: string;
   status_agg: string;
   spotlightOwnershipSharePct: number;
   directlyOwnedBySpotlightOwner: boolean;
@@ -227,6 +228,7 @@ export async function fetchChartData(
     const name = detail?.name || graphNode?.Name || assetId;
     const tracker = detail?.facilityType || 'Unknown';
     const status = detail?.status || 'unknown';
+    const subStatus = detail?.subStatus || '';
     const pct = getOwnershipPct(assetId);
 
     // Extract locationID from compound ID (L_G → L part)
@@ -240,6 +242,7 @@ export async function fetchChartData(
       name,
       tracker,
       status,
+      subStatus,
       status_agg: getStatusGroup(status) || 'unknown',
       spotlightOwnershipSharePct: pct,
       directlyOwnedBySpotlightOwner: isDirect,

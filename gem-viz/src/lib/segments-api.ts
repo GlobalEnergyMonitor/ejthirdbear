@@ -3,6 +3,8 @@
  * Fetches pre-defined asset classes/segments from the GEM API
  */
 
+import { IDENTIFIER_TO_API_SLUG, URL_SLUG_TO_TRACKER } from '$lib/data-config/tracker-schema';
+
 const SEGMENTS_API_URL = 'https://gem-api.thirdbear.net/segments?format=json';
 
 export interface Segment {
@@ -19,16 +21,12 @@ export interface SegmentsResponse {
   segments: Segment[];
 }
 
-// Map our tracker slugs to API asset_type values
-const trackerToAssetType: Record<string, string[]> = {
-  'coal-plant': ['coal-plant'],
-  'gas-plant': ['oil-gas-plant'],
-  'coal-mine': ['coal-mine'],
-  'iron-mine': ['iron-mine'],
-  'steel-plant': ['steel-plant'],
-  'gas-pipeline': ['gas-pipeline'],
-  bioenergy: ['bioenergy'],
-};
+// Map our tracker slugs to API asset_type values (derived from tracker-schema)
+const trackerToAssetType: Record<string, string[]> = Object.fromEntries(
+  Object.entries(IDENTIFIER_TO_API_SLUG)
+    .filter(([key]) => key.includes('-') || key === 'bioenergy') // only slug-format keys
+    .map(([slug, apiSlug]) => [slug, [apiSlug]])
+);
 
 let cachedSegments: Segment[] | null = null;
 
@@ -87,16 +85,7 @@ export function getSegmentScreenerUrl(segment: Segment, baseUrl: string = ''): s
   url.searchParams.forEach((value, key) => {
     if (key === 'asset_type') {
       // Map asset_type back to tracker name
-      const trackerMap: Record<string, string> = {
-        'coal-plant': 'Coal Plant',
-        'oil-gas-plant': 'Gas Plant',
-        'coal-mine': 'Coal Mine',
-        'iron-mine': 'Iron Mine',
-        'steel-plant': 'Steel Plant',
-        'gas-pipeline': 'Gas Pipeline',
-        bioenergy: 'Bioenergy Power',
-      };
-      params.set('tracker', trackerMap[value] || value);
+      params.set('tracker', URL_SLUG_TO_TRACKER[value] || value);
     } else {
       params.set(key, value);
     }

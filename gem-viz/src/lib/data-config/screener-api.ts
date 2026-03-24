@@ -31,6 +31,7 @@ import { browser } from '$app/environment';
 import { getAPIBase } from '$lib/ownership-api';
 import { logApiCall } from '$lib/api-log.svelte';
 import { pointInPolygon } from '$lib/geo-utils';
+import { matchesStatusFilter } from '$lib/data-config/tracker-schema';
 
 // =============================================================================
 // GEM TRACKER NAME → UI TRACKER NAME BRIDGE
@@ -41,12 +42,9 @@ import { pointInPolygon } from '$lib/geo-utils';
  * UI TrackerName values that the API understands.
  * Most are identity; only two differ.
  */
-const GEM_TO_UI_TRACKER: Record<string, string> = {
-  'Oil & Gas Plant': 'Gas Plant',
-  'Iron & Steel Plant': 'Steel Plant',
-  'Oil or NGL Pipeline': 'Oil Pipeline',
-  'Cement or Concrete Plant': 'Cement Plant',
-};
+import { API_TYPE_TO_TRACKER } from '$lib/data-config/tracker-schema';
+
+const GEM_TO_UI_TRACKER: Record<string, string> = API_TYPE_TO_TRACKER;
 
 export function gemTrackerToUiTracker(gemName: string): string {
   return GEM_TO_UI_TRACKER[gemName] ?? gemName;
@@ -268,17 +266,7 @@ async function getOwnersByAssetTypeREST(
       }
 
       if (passesFilters && statusArray) {
-        // Check both high-level status and granular sub-status
-        const assetStatus = asset.status?.toLowerCase() || '';
-        const assetSubStatus = asset.subStatus?.toLowerCase().replace(/_/g, '-') || '';
-        // Map API sub-status naming to our convention
-        const mappedSubStatus =
-          assetSubStatus === 'cancelled-inferred' ? 'cancelled - inferred 4 y' :
-          assetSubStatus === 'shelved-inferred' ? 'shelved - inferred 2 y' :
-          assetSubStatus === 'operating-pre-retirement' ? 'operating pre-retirement' :
-          assetSubStatus === 'mothballed-pre-retirement' ? 'mothballed pre-retirement' :
-          assetSubStatus;
-        if (!statusArray.includes(assetStatus) && !statusArray.includes(mappedSubStatus)) {
+        if (!matchesStatusFilter(asset.status, asset.subStatus, statusArray)) {
           passesFilters = false;
         }
       }

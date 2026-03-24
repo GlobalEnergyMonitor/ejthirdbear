@@ -3,6 +3,7 @@
  */
 
 import { listAssets, resolveApiSlug } from '$lib/ownership-api';
+import { API_TYPE_TO_SLUG } from '$lib/data-config/tracker-schema';
 import {
   API_BASE,
   fetchApiJson,
@@ -224,24 +225,13 @@ async function getTrackerSummary(args: ToolArgs): Promise<ToolResult> {
   const typeFacets = baseFacets?.asset_type || {};
   const statusFacets = baseFacets?.status || {};
 
-  const slugMap: Record<string, string> = {
-    'Coal Plant': 'coal-plant',
-    'Oil & Gas Plant': 'oil-gas-plant',
-    'Bioenergy Plant': 'bioenergy-plant',
-    'Natural Gas Transmission Pipeline': 'gas-pipeline',
-    'Cement or Concrete Plant': 'cement-plant',
-    'Oil or NGL Pipeline': 'oil-pipeline',
-    'Iron & Steel Plant': 'iron-steel-plant',
-    'Iron Ore Mine': 'iron-ore-mine',
-  };
-
   const topTypes = Object.entries(typeFacets)
     .sort((a, b) => (b[1] as number) - (a[1] as number))
     .slice(0, 4);
 
   const perTypeStatus = await Promise.all(
     topTypes.map(async ([typeName]) => {
-      const slug = slugMap[typeName];
+      const slug = API_TYPE_TO_SLUG[typeName];
       if (!slug) return { typeName, statuses: {} };
       const raw = await fetchApiJson(
         `${API_BASE}/assets?facets=true&limit=1&asset_type=${encodeURIComponent(slug)}&format=json`

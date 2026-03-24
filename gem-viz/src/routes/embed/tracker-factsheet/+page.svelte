@@ -17,82 +17,7 @@
     trackerMetadata,
     type TrackerMetadata,
   } from '$lib/data-config/tracker-metadata';
-
-  // Field descriptions for generating synthetic metadata
-  const fieldDescriptions: Record<string, { category: string; definition: string }> = {
-    Status: { category: 'Main', definition: 'Current operating status of the asset.' },
-    Country: { category: 'Geography', definition: 'Country where the asset is located.' },
-    Countries: { category: 'Geography', definition: 'Countries the pipeline passes through.' },
-    Owner: { category: 'Ownership', definition: 'Primary owner or operator.' },
-    'Immediate Owner Entity Name': {
-      category: 'Ownership',
-      definition: 'Direct ownership entity name.',
-    },
-    'Start year': {
-      category: 'Age',
-      definition: 'Year the asset began or is planned to begin operation.',
-    },
-    'Capacity (MW)': { category: 'Size', definition: 'Generating capacity in megawatts.' },
-    'Capacity (Mtpa)': {
-      category: 'Size',
-      definition: 'Production capacity in million tonnes per annum.',
-    },
-    'Design capacity (ttpa)': {
-      category: 'Size',
-      definition: 'Design production capacity in thousand tonnes per annum.',
-    },
-    'Nominal crude steel capacity (ttpa)': {
-      category: 'Size',
-      definition: 'Nominal crude steel production capacity in thousand tonnes per annum.',
-    },
-    'CapacityBcm/y': {
-      category: 'Size',
-      definition: 'Pipeline capacity in billion cubic meters per year.',
-    },
-    'Fuel type': { category: 'Details', definition: 'Type of fuel used by the plant.' },
-    Technology: { category: 'Details', definition: 'Technology or process type used.' },
-    'Mine type': {
-      category: 'Details',
-      definition: 'Type of mining operation (surface, underground, etc.).',
-    },
-    Feedstock: { category: 'Details', definition: 'Primary feedstock material for bioenergy.' },
-    'Asset Name': { category: 'Names', definition: 'Name of the asset or project.' },
-    '% Share of Ownership': { category: 'Ownership', definition: 'Percentage ownership stake.' },
-  };
-
-  // Generate synthetic field metadata from tracker keyFields
-  function generateSyntheticFields(meta: TrackerMetadata) {
-    const fields: Array<{ columnName: string; category: string; definition: string }> = [];
-    for (const fieldName of meta.keyFields) {
-      const desc = fieldDescriptions[fieldName];
-      fields.push({
-        columnName: fieldName,
-        category: desc?.category || 'Other',
-        definition: desc?.definition || `${fieldName} field.`,
-      });
-    }
-    // Add common fields not already included
-    const included = new Set(fields.map((f) => f.columnName));
-    const extras = ['Country', 'Immediate Owner Entity Name', '% Share of Ownership'];
-    for (const fieldName of extras) {
-      if (!included.has(fieldName)) {
-        const desc = fieldDescriptions[fieldName];
-        if (desc) {
-          fields.push({
-            columnName: fieldName,
-            category: desc.category,
-            definition: desc.definition,
-          });
-        }
-      }
-    }
-    return fields;
-  }
-
-  // Map tracker to metadata CSV file
-  const metadataFiles: Record<string, string> = {
-    'Coal Mine': `${base}/coal-mine-fields-metadata.csv`,
-  };
+  import { getFieldsForTracker } from '$lib/catalog-field-meta';
 
   // Parse URL parameters
   const trackerSlug = $derived($page.url.searchParams.get('tracker') || '');
@@ -101,7 +26,6 @@
 
   const tracker = $derived(slugToTrackerName[trackerSlug] || trackerSlug);
   const metadata = $derived(trackerMetadata[trackerSlug] as TrackerMetadata | undefined);
-  const metadataFile = $derived(metadataFiles[tracker] || null);
   const maxHeight = $derived(heightParam ? parseInt(heightParam, 10) : 500);
   const title = $derived(titleParam || `${tracker} Fields`);
 
@@ -118,59 +42,8 @@
   let loading = $state(true);
   let error = $state<string | null>(null);
 
-  // Load field metadata from CSV, falling back to synthetic fields
   async function loadFieldsMetadata() {
-    // If we have a CSV, try to load it
-    if (metadataFile) {
-      try {
-        const response = await fetch(metadataFile);
-        if (response.ok) {
-          const text = await response.text();
-          const lines = text.split('\n');
-
-          fieldsMetadata = lines
-            .slice(1)
-            .filter((line) => line.trim())
-            .map((line) => {
-              const values: string[] = [];
-              let current = '';
-              let inQuotes = false;
-
-              for (let i = 0; i < line.length; i++) {
-                const char = line[i];
-                if (char === '"') {
-                  inQuotes = !inQuotes;
-                } else if (char === ',' && !inQuotes) {
-                  values.push(current.trim());
-                  current = '';
-                } else {
-                  current += char;
-                }
-              }
-              values.push(current.trim());
-
-              return {
-                columnName: values[0] || '',
-                category: values[1] || '',
-                definition: values[4] || '',
-                fieldValue: values[3] || null,
-                valueDefinition: values[3] ? values[4] : null,
-              };
-            });
-
-          loading = false;
-          return;
-        }
-      } catch (err) {
-        if (import.meta.env.DEV)
-          console.warn('CSV load failed, falling back to synthetic fields:', err);
-      }
-    }
-
-    // Fall back to synthetic fields from tracker metadata
-    if (metadata) {
-      fieldsMetadata = generateSyntheticFields(metadata);
-    }
+    fieldsMetadata = await getFieldsForTracker(trackerSlug, true);
     loading = false;
   }
 

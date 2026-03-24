@@ -4,6 +4,7 @@
    * Three sections: Investigation Cart exports, Bulk dataset downloads, Filtered export links.
    */
   import { link } from '$lib/links';
+  import { API_SLUG_TO_TYPE } from '$lib/data-config/tracker-schema';
   import { investigationCart } from '$lib/investigationCart';
   import {
     fetchCombinedCSV,
@@ -65,16 +66,7 @@
   }
 
   // --- Bulk Downloads ---
-  const TRACKER_SLUGS = [
-    { slug: 'coal-plant', label: 'Coal Plant' },
-    { slug: 'oil-gas-plant', label: 'Oil & Gas Plant' },
-    { slug: 'bioenergy-plant', label: 'Bioenergy Plant' },
-    { slug: 'gas-pipeline', label: 'Gas Pipeline' },
-    { slug: 'cement-plant', label: 'Cement Plant' },
-    { slug: 'oil-pipeline', label: 'Oil Pipeline' },
-    { slug: 'iron-steel-plant', label: 'Iron & Steel Plant' },
-    { slug: 'iron-ore-mine', label: 'Iron Ore Mine' },
-  ];
+  const TRACKER_SLUGS = Object.entries(API_SLUG_TO_TYPE).map(([slug, label]) => ({ slug, label }));
 
   /** @type {Map<string, number>} */
   let assetCounts = $state(new Map());

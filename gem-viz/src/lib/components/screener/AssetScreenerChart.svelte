@@ -16,6 +16,7 @@
   } from '$lib/design-tokens';
   import { fetchChartData, buildSubsidiaryGroups } from './screener-chart-data';
   import { renderChart } from './screener-chart-render';
+  import { matchesStatusFilter } from '$lib/data-config/tracker-schema';
   import Spinner from '$lib/components/feedback/Spinner.svelte';
 
   // Props
@@ -96,10 +97,10 @@
       // Record pre-filter total for "additional assets" calculation
       totalAssetsPreFilter = chartData.assets.length;
 
-      // Apply status filter if provided
+      // Apply status filter if provided (checks both status and sub-status)
       if (statusFilter && statusFilter.length > 0) {
-        const allowed = new Set(statusFilter.map((s) => s.toLowerCase()));
-        const matchStatus = (u) => allowed.has((u.status || '').toLowerCase());
+        const allowed = statusFilter.map((s) => s.toLowerCase());
+        const matchStatus = (u) => matchesStatusFilter(u.status, u.subStatus, allowed);
         chartData.assets = chartData.assets.filter(matchStatus);
         chartData.directlyOwned = chartData.directlyOwned.filter(matchStatus);
         for (const [subId, units] of chartData.subsidiariesMatched) {

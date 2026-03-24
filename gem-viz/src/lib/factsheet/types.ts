@@ -60,24 +60,15 @@ export interface FieldStats {
   count: number;
 }
 
-/** Status groupings for badge colors */
-export const STATUS_GROUPS: Record<string, string> = {
-  announced: 'planned',
-  'pre-permit': 'planned',
-  permitted: 'planned',
-  construction: 'planned',
-  proposed: 'planned',
-  cancelled: 'cancelled',
-  shelved: 'cancelled',
-  operating: 'operating',
-  mothballed: 'retired',
-  retired: 'retired',
-} as const;
+import { STATUS_TO_GROUP } from '$lib/data-config/tracker-schema';
+
+/** Status groupings for badge colors — sourced from tracker-schema.ts */
+export const STATUS_GROUPS: Record<string, string> = STATUS_TO_GROUP;
 
 /** Get status group for an asset status */
 export function getStatusGroup(status: string | undefined): string {
   if (!status) return 'unknown';
-  return STATUS_GROUPS[status.toLowerCase()] || 'unknown';
+  return STATUS_TO_GROUP[status.toLowerCase()] || 'unknown';
 }
 
 /** Check if asset is a mine based on tracker or fields */

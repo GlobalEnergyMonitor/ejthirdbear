@@ -183,26 +183,25 @@ export const statusColorsGranular: Record<string, string> = {
 };
 
 // Status groupings
+/**
+ * Status groupings — sourced from tracker-schema.ts (single source of truth).
+ * Will be replaced by API-driven data from /catalog/metadata/status-taxonomy.
+ */
+import {
+  STATUS_GROUPS as _SCHEMA_STATUS_GROUPS,
+  FOSSIL_TRACKERS as _SCHEMA_FOSSIL_TRACKERS,
+  PROSPECTIVE_STATUSES as _SCHEMA_PROSPECTIVE_STATUSES,
+} from '$lib/data-config/tracker-schema';
+
 export const statusGroups = {
-  operating: ['operating', 'operating pre-retirement'] as const,
+  operating: _SCHEMA_STATUS_GROUPS[0].statuses as readonly string[],
   planned: [
-    'proposed',
-    'announced',
-    'pre-permit',
-    'permitted',
-    'pre-construction',
-    'construction',
-    // TODO: remove once pipeline is fixed — API currently returns aggregate 'planned'
-    // instead of granular sub-statuses for some trackers (e.g. Gas Plants)
+    ..._SCHEMA_STATUS_GROUPS[1].statuses,
+    // API aggregate fallback — some trackers return 'planned' instead of granular sub-statuses
     'planned',
-  ] as const,
-  retired: ['retired', 'mothballed', 'idle', 'mothballed pre-retirement'] as const,
-  cancelled: [
-    'cancelled',
-    'shelved',
-    'cancelled - inferred 4 y',
-    'shelved - inferred 2 y',
-  ] as const,
+  ] as readonly string[],
+  retired: _SCHEMA_STATUS_GROUPS[3].statuses as readonly string[],
+  cancelled: _SCHEMA_STATUS_GROUPS[2].statuses as readonly string[],
 } as const;
 
 // Status color legend (for viz legends)
@@ -732,18 +731,9 @@ export const statusColorsMap = new Map([
 // 10. STATUS/TRACKER LISTS
 // =============================================================================
 
-export const fossilTrackers = ['Coal Plant', 'Gas Plant', 'Coal Mine', 'Gas Pipeline'];
+export const fossilTrackers = [..._SCHEMA_FOSSIL_TRACKERS];
 
-export const prospectiveStatuses = [
-  'permitted',
-  'pre-permit',
-  'pre-construction',
-  'construction',
-  'proposed',
-  'announced',
-  // TODO: remove once pipeline is fixed
-  'planned',
-];
+export const prospectiveStatuses: string[] = [..._SCHEMA_PROSPECTIVE_STATUSES];
 
 // =============================================================================
 // AGGREGATED EXPORTS (for legacy imports from ownership-theme)

@@ -45,10 +45,10 @@
     hasLocations = geoAssets.length > 0;
   });
 
-  // Map color lookup — handles both tracker-config names and API facility type names
+  // Map color lookup — handles both tracker names and API facility type names
   function getMarkerColor(tracker: string): string {
     if (trackerToMapColor[tracker]) return trackerToMapColor[tracker];
-    // Fallback for API facility type names that differ from tracker-config names
+    // Fallback for API facility type names that differ from UI tracker names
     const apiNameMap: Record<string, string> = {
       'Oil & Gas Plant': trackerToMapColor['Gas Plant'] || colors.gray500,
       'Bioenergy Plant': trackerToMapColor['Bioenergy Power'] || colors.gray500,

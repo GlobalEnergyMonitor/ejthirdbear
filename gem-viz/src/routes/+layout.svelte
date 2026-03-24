@@ -11,6 +11,7 @@
   import { onMount } from 'svelte';
   import { beforeNavigate, afterNavigate } from '$app/navigation';
   import { initAnalytics, trackPageView } from '$lib/analytics';
+  import { initFromApi } from '$lib/data-config/tracker-schema';
   import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
   let { children } = $props();
@@ -18,7 +19,11 @@
   // Clear API call log on route change so it only shows calls for the current page
   beforeNavigate(() => clearApiLog());
 
-  onMount(() => initAnalytics());
+  onMount(() => {
+    initAnalytics();
+    // Populate taxonomy data from API (non-blocking, enriches hardcoded fallbacks)
+    initFromApi();
+  });
 
   // Track page views (skip embeds to avoid inflating counts)
   afterNavigate(({ to }) => {
