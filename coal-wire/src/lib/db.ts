@@ -9,8 +9,13 @@ const DB_PATH = path.resolve('data/coalwire.db');
 export function getDb() {
   if (building) return null;
   if (!db) {
-    db = new Database(DB_PATH, { readonly: true });
-    db.pragma('journal_mode = WAL');
+    try {
+      db = new Database(DB_PATH, { readonly: true });
+      db.pragma('journal_mode = WAL');
+    } catch {
+      // DB file doesn't exist yet — app runs fine without it
+      return null;
+    }
   }
   return db;
 }
