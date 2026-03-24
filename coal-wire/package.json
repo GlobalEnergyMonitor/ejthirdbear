@@ -1,0 +1,31 @@
+{
+  "name": "coal-wire-search",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "seed": "node scripts/seed-fixtures.js",
+    "ingest": "node scripts/ingest.js",
+    "ingest:local": "node scripts/ingest-local.js",
+    "embeddings": "node scripts/generate-embeddings.js",
+    "tags": "node scripts/extract-tags.js",
+    "pipeline": "npm run ingest:local -- $1 && npm run tags && npm run embeddings"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-node": "^5.4.0",
+    "@sveltejs/kit": "^2.48.5",
+    "@sveltejs/vite-plugin-svelte": "^6.2.1",
+    "@types/better-sqlite3": "^7.6.13",
+    "svelte": "^5.34.7",
+    "svelte-check": "^4.2.1",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^3.8.1",
+    "better-sqlite3": "^11.9.1"
+  }
+}
