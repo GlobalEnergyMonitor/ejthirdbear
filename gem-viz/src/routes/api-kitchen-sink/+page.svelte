@@ -6,8 +6,15 @@
     STATUS_VALUES,
   } from '$lib/data-config/tracker-schema';
 
-  const API_BASE = 'https://gem-api.thirdbear.net';
+  // Use unproxied API to bypass Cloudflare caching layer
+  const API_BASE = 'https://gem-ownership-api.fly.dev';
   const TIMEOUT_MS = 15_000;
+
+  /** Append a cache-busting param to any URL string */
+  function bustCache(url) {
+    const sep = url.includes('?') ? '&' : '?';
+    return `${url}${sep}_cb=${Date.now()}`;
+  }
 
   const API_SLUGS = API_SLUG_TO_TYPE;
   const TRACKER_SLUG_MAP = IDENTIFIER_TO_API_SLUG;
@@ -88,7 +95,7 @@
     const url = `${API_BASE}/assets?${params}`;
     const start = Date.now();
     try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
+      const res = await fetch(bustCache(url), { signal: AbortSignal.timeout(TIMEOUT_MS) });
       if (!res.ok)
         return {
           slug,
@@ -141,7 +148,7 @@
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-      const res = await fetch(url, { signal: controller.signal });
+      const res = await fetch(bustCache(url), { signal: controller.signal });
       clearTimeout(timer);
       const durationMs = Date.now() - start;
 
@@ -241,9 +248,39 @@
     }));
 
     const failedTypes = baseProbes.filter((p) => !p.ok);
-    const zeroCountStatuses = statusProbes.filter((p) => p.ok && p.total === 0);
+    // Only flag zero-count probes as problems if we EXPECTED data there
+    // (i.e., the facets say that combo exists). Zero where facets also say zero = expected.
+    const zeroCountStatuses = statusProbes.filter((p) => {
+      if (!p.ok || p.total !== 0) return false;
+      // Parse "status=operating" or "sub_status=announced" from the status field
+      const match = p.status?.match(/^(status|sub_status)=(.+)$/);
+      if (!match) return true; // can't parse, flag it
+      const [, paramType, paramValue] = match;
+      const typeFacets = facetDetails[p.slug]?.facets;
+      if (!typeFacets) return true; // no facet data, flag it
+      // Check if this combo actually exists in the API facets
+      const facetBucket = paramType === 'status' ? typeFacets.status : typeFacets.sub_status;
+      if (!facetBucket || Object.keys(facetBucket).length === 0) {
+        // No facet data at all for this type (e.g. iron-steel-plant has null statuses)
+        // Flag once at type level, not per-status
+        return false;
+      }
+      // Only flag if the facets SAY this value exists but we got zero
+      return paramValue in facetBucket;
+    });
     const slugResolutionFailures = slugResolution.filter((s) => !s.resolvedOk);
     const assetClassFailures = assetClasses.filter((ac) => ac.trackerSlugs.some((ts) => !ts.ok));
+
+    // Find asset types with no status data at all (e.g. iron-steel-plant)
+    const typesWithNoStatusData = Object.entries(facetDetails)
+      .filter(([, fd]) => {
+        const f = fd?.facets;
+        if (!f) return false;
+        const statusKeys = f.status ? Object.keys(f.status) : [];
+        const subStatusKeys = f.sub_status ? Object.keys(f.sub_status) : [];
+        return statusKeys.length === 0 && subStatusKeys.length === 0 && (fd.total ?? 0) > 0;
+      })
+      .map(([slug]) => ({ slug, displayName: API_SLUGS[slug] || slug, total: facetDetails[slug]?.total }));
 
     return {
       timestamp: new Date().toISOString(),
@@ -264,9 +301,11 @@
           total: statusProbes.length,
           healthy: statusProbes.filter((p) => p.ok).length,
           zeroCount: zeroCountStatuses.length,
+          expectedZeros: statusProbes.filter((p) => p.ok && p.total === 0).length - zeroCountStatuses.length,
         },
         slugResolution: { total: slugResolution.length, failures: slugResolutionFailures.length },
         assetClasses: { total: assetClasses.length, withFailures: assetClassFailures.length },
+        typesWithNoStatusData: typesWithNoStatusData.length,
       },
       baseProbes,
       statusMatrix: statusProbes,
@@ -298,8 +337,14 @@
             .join('\n'),
           expected: `Valid asset_type slug for each tracker in this class`,
         })),
+        ...typesWithNoStatusData.map((t) => ({
+          message: `"${t.slug}" has ${t.total?.toLocaleString()} assets but NO status/sub_status data — all status fields are null`,
+          url: `${API_BASE}/assets?asset_type=${t.slug}&format=json&limit=1&facets=true`,
+          expected: `Status facets populated for ${t.displayName}`,
+          severity: 'data-gap',
+        })),
         ...zeroCountStatuses.map((p) => ({
-          message: `We asked for ${p.slug} + status=${p.status} and got zero results — might be the wrong status string`,
+          message: `Facets say ${p.slug} has "${p.status}" data, but query returned zero — possible API filtering bug`,
           url: p.url,
           expected: `At least 1 ${p.displayName} with status "${p.status}"`,
         })),
@@ -327,10 +372,10 @@
       let globalFacets = null;
       try {
         const [taxRes, facetRes] = await Promise.all([
-          fetch(`${API_BASE}/catalog/metadata/status-taxonomy?format=json`, {
+          fetch(bustCache(`${API_BASE}/catalog/metadata/status-taxonomy?format=json`), {
             signal: AbortSignal.timeout(TIMEOUT_MS),
           }),
-          fetch(`${API_BASE}/assets?format=json&limit=1&facets=true`, {
+          fetch(bustCache(`${API_BASE}/assets?format=json&limit=1&facets=true`), {
             signal: AbortSignal.timeout(TIMEOUT_MS),
           }),
         ]);
@@ -424,20 +469,20 @@
               facets: 'true',
             });
             try {
-              const res = await fetch(`${API_BASE}/assets?${params}`, {
+              const res = await fetch(bustCache(`${API_BASE}/assets?${params}`), {
                 signal: AbortSignal.timeout(TIMEOUT_MS),
               });
               if (res.ok) {
                 const d = await res.json();
-                return { slug, facets: d.facets || {} };
+                return { slug, facets: d.facets || {}, total: d.total ?? 0 };
               }
             } catch {
               /* ignore */
             }
-            return { slug, facets: {} };
+            return { slug, facets: {}, total: 0 };
           })
         );
-        for (const { slug, facets } of facetProbes) facetDetails[slug] = facets;
+        for (const { slug, facets, total } of facetProbes) facetDetails[slug] = { facets, total };
       }
 
       // Final data with everything
@@ -625,7 +670,7 @@
 
     <!-- Summary Cards -->
     <section class="summary-cards" in:fade={{ duration: 300, delay: 100 }}>
-      {#each [{ value: `${data.summary.assetTypes.healthy}/${data.summary.assetTypes.total}`, label: 'Slugs Connected', warn: false, href: '#slugs' }, ...(data.summary.statusProbes.total > 0 ? [{ value: `${data.summary.statusProbes.healthy}/${data.summary.statusProbes.total}`, label: 'Status Queries OK', warn: false, href: '#status-matrix' }, { value: data.summary.statusProbes.zeroCount, label: 'Empty Responses', warn: data.summary.statusProbes.zeroCount > 0, href: '#status-matrix' }] : []), { value: data.summary.slugResolution.failures, label: 'Name Mismatches', warn: data.summary.slugResolution.failures > 0, href: '#name-resolution' }, { value: data.summary.assetClasses.withFailures, label: 'Broken Class Defs', warn: data.summary.assetClasses.withFailures > 0, href: '#asset-classes' }] as card, i (card.label)}
+      {#each [{ value: `${data.summary.assetTypes.healthy}/${data.summary.assetTypes.total}`, label: 'Slugs Connected', warn: false, href: '#slugs' }, ...(data.summary.statusProbes.total > 0 ? [{ value: `${data.summary.statusProbes.healthy}/${data.summary.statusProbes.total}`, label: 'Status Queries OK', warn: false, href: '#status-matrix' }, { value: data.summary.statusProbes.zeroCount, label: 'Unexpected Zeros', warn: data.summary.statusProbes.zeroCount > 0, href: '#status-matrix' }, { value: data.summary.statusProbes.expectedZeros ?? 0, label: 'Expected Zeros (no data for combo)', warn: false, href: '#facets' }] : []), ...(data.summary.typesWithNoStatusData > 0 ? [{ value: data.summary.typesWithNoStatusData, label: 'Types Missing Status Data', warn: true, href: '#facets' }] : []), { value: data.summary.slugResolution.failures, label: 'Name Mismatches', warn: data.summary.slugResolution.failures > 0, href: '#name-resolution' }, { value: data.summary.assetClasses.withFailures, label: 'Broken Class Defs', warn: data.summary.assetClasses.withFailures > 0, href: '#asset-classes' }] as card, i (card.label)}
         <a
           class="card"
           class:warn={card.warn}
@@ -859,11 +904,13 @@
           type.
         </p>
         <div class="facet-grid">
-          {#each Object.entries(data.facetDetails) as [slug, facets], si}
+          {#each Object.entries(data.facetDetails) as [slug, fd], si}
+            {@const facets = fd?.facets ?? fd ?? {}}
+            {@const total = fd?.total ?? null}
             <div class="facet-card" in:fly={{ y: 12, duration: 250, delay: 420 + si * 50 }}>
               <div class="facet-card-header">
                 <code>{slug}</code>
-                <span class="facet-card-meta">{Object.keys(facets).length} facets</span>
+                <span class="facet-card-meta">{total != null ? `${total.toLocaleString()} assets · ` : ''}{Object.keys(facets).length} facets</span>
               </div>
               {#each Object.entries(facets) as [category, values]}
                 <div class="facet-section">

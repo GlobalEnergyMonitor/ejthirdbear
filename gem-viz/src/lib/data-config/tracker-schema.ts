@@ -127,6 +127,7 @@ export function getIdFieldForTracker(tracker: string): string | null {
 /** The 8 canonical API slugs → API display type names */
 export const API_SLUG_TO_TYPE: Record<string, string> = {
   'coal-plant': 'Coal Plant',
+  'coal-mine': 'Coal Mine',
   'oil-gas-plant': 'Oil & Gas Plant',
   'bioenergy-plant': 'Bioenergy Plant',
   'gas-pipeline': 'Natural Gas Transmission Pipeline',
