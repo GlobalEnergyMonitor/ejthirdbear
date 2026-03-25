@@ -9,7 +9,6 @@
   const theme = $derived(params?.get('theme') ?? 'light');
   const padding = $derived(params?.get('padding') ?? '16');
   const maxWidth = $derived(params?.get('maxWidth') ?? '100%');
-  const fontFamily = $derived(params?.get('font') ?? '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif');
   const autoHeight = $derived(params?.get('autoHeight') !== 'false');
 
   let container: HTMLElement;
@@ -34,7 +33,6 @@
   class:dark={theme === 'dark'}
   style:padding="{padding}px"
   style:max-width={maxWidth}
-  style:font-family={fontFamily}
 >
   {@render children()}
 </div>
@@ -43,19 +41,20 @@
   .embed-shell {
     margin: 0;
     box-sizing: border-box;
-    color: #1a1a1a;
+    font-family: var(--font-family);
+    color: var(--color-text-primary);
     background: transparent;
     width: 100%;
   }
 
   .embed-shell.dark {
-    color: #e0e0e0;
-    background: #1a1a1a;
+    color: var(--color-gray-200);
+    background: var(--gem-navy);
   }
 
   .embed-shell.dark :global(mark) {
     background: #5c4b00;
-    color: #fff;
+    color: var(--color-bg-primary);
   }
 
   :global(body) {

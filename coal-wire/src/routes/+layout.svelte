@@ -1,4 +1,5 @@
 <script lang="ts">
+  import '$lib/gem-styles.css';
   let { children } = $props();
 </script>
 
@@ -7,8 +8,8 @@
 <style>
   :global(body) {
     margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: #fafafa;
-    color: #1a1a1a;
+    font-family: var(--font-family);
+    background: var(--color-bg-secondary);
+    color: var(--color-text-primary);
   }
 </style>

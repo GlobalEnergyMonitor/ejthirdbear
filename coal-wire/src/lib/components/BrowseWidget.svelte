@@ -61,12 +61,13 @@
   }
 
   .browse-title {
-    font-size: 0.85rem;
+    font-size: var(--font-size-base);
+    font-family: var(--font-family-data);
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: #888;
+    color: var(--color-text-tertiary);
     margin: 0 0 0.6rem;
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold);
   }
 
   .issue-list {
@@ -76,7 +77,7 @@
   }
 
   .issue-list li + li {
-    border-top: 1px solid #eee;
+    border-top: 1px solid var(--color-border-light);
   }
 
   .issue-list a {
@@ -86,32 +87,34 @@
     padding: 0.45rem 0;
     text-decoration: none;
     color: inherit;
-    font-size: 0.82rem;
+    font-size: var(--font-size-base);
   }
 
   .compact .issue-list a {
-    font-size: 0.75rem;
+    font-size: var(--font-size-sm);
     padding: 0.35rem 0;
   }
 
   .issue-list a:hover {
-    background: #f8f8f8;
+    background: var(--color-bg-hover);
   }
 
   .issue-num {
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold);
+    font-family: var(--font-family-data);
     min-width: 2.5rem;
-    color: #555;
+    color: var(--color-text-secondary);
   }
 
   .issue-date {
-    color: #777;
+    color: var(--color-text-secondary);
     flex: 1;
   }
 
   .issue-count {
-    color: #aaa;
-    font-size: 0.72rem;
+    color: var(--color-text-tertiary);
+    font-family: var(--font-family-data);
+    font-size: var(--font-size-xs);
   }
 
   .loading-items {
@@ -122,10 +125,10 @@
 
   .skeleton {
     height: 2rem;
-    background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+    background: linear-gradient(90deg, var(--color-bg-tertiary) 25%, var(--color-border) 50%, var(--color-bg-tertiary) 75%);
     background-size: 200% 100%;
     animation: shimmer 1.5s infinite;
-    border-radius: 4px;
+    border-radius: var(--radius-md);
   }
 
   @keyframes shimmer {

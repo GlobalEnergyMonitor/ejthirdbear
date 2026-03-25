@@ -1,7 +1,7 @@
 {
   "name": "coal-wire-search",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite dev",
@@ -12,7 +12,9 @@
     "ingest:local": "node scripts/ingest-local.js",
     "embeddings": "node scripts/generate-embeddings.js",
     "tags": "node scripts/extract-tags.js",
-    "pipeline": "npm run ingest:local -- $1 && npm run tags && npm run embeddings"
+    "fetch": "node scripts/fetch-mailchimp.js",
+    "pipeline": "npm run ingest:local -- $1 && npm run tags && npm run embeddings",
+    "update": "node scripts/fetch-mailchimp.js $1 --resume && rm -f data/coalwire.db && npm run pipeline -- data/coalwire-fetched.json"
   },
   "devDependencies": {
     "@sveltejs/adapter-node": "^5.4.0",

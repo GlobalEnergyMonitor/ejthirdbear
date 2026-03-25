@@ -136,10 +136,8 @@
     {#if tunerOpen}
       <div class="tuner-panel">
         <SearchTuner
-          bind:bm25Weight
           bind:section
           {sections}
-          {hasEmbeddings}
           bind:dateFrom
           bind:dateTo
           bind:country
@@ -199,20 +197,22 @@
     width: 100%;
     padding: 0.6rem 0.75rem;
     font-size: 0.95rem;
-    border: 1.5px solid #ccc;
-    border-radius: 6px;
+    font-family: var(--font-family);
+    border: 1.5px solid var(--color-border);
+    border-radius: var(--radius-lg);
     outline: none;
     box-sizing: border-box;
-    font-family: inherit;
+    color: var(--color-text-primary);
+    background: var(--color-bg-primary);
   }
 
   input[type='search']:focus {
-    border-color: #666;
+    border-color: var(--color-text-secondary);
   }
 
   .compact input[type='search'] {
     padding: 0.45rem 0.6rem;
-    font-size: 0.85rem;
+    font-size: var(--font-size-base);
   }
 
   .spinner {
@@ -222,8 +222,8 @@
     transform: translateY(-50%);
     width: 14px;
     height: 14px;
-    border: 2px solid #ddd;
-    border-top-color: #555;
+    border: 2px solid var(--color-border);
+    border-top-color: var(--color-text-secondary);
     border-radius: 50%;
     animation: spin 0.6s linear infinite;
   }
@@ -236,21 +236,21 @@
   .tuner-toggle {
     background: none;
     border: none;
-    color: #999;
-    font-size: 0.72rem;
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-xs);
     cursor: pointer;
     padding: 0.25rem 0;
-    font-family: inherit;
+    font-family: var(--font-family);
   }
 
   .tuner-toggle:hover {
-    color: #555;
+    color: var(--color-text-secondary);
   }
 
   .tuner-panel {
-    background: #fafafa;
-    border: 1px solid #eee;
-    border-radius: 8px;
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border-light);
+    border-radius: var(--radius-lg);
     padding: 0.7rem;
     margin-bottom: 0.5rem;
   }
@@ -258,7 +258,7 @@
   /* Results */
   .result {
     padding: 0.6rem 0;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--color-border-light);
   }
 
   .compact .result {
@@ -268,45 +268,39 @@
   .result-meta {
     display: flex;
     gap: 0.5rem;
-    font-size: 0.7rem;
-    color: #999;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
     margin-bottom: 0.15rem;
   }
 
   .issue {
-    font-weight: 600;
-    color: #666;
+    font-weight: var(--font-weight-semibold);
+    font-family: var(--font-family-data);
+    color: var(--color-text-secondary);
   }
 
   .section-tag {
-    background: #f0f0f0;
+    background: var(--color-bg-tertiary);
     padding: 0 4px;
-    border-radius: 2px;
+    border-radius: var(--radius-sm);
   }
 
   .match-tag {
-    font-size: 0.65rem;
+    font-size: var(--font-size-xs);
+    font-family: var(--font-family-data);
     padding: 1px 5px;
-    border-radius: 3px;
-  }
-
-  .match-tag.hybrid {
-    background: #e8f5e9;
-    color: #2e7d32;
-  }
-
-  .match-tag.semantic {
-    background: #e3f2fd;
-    color: #1565c0;
+    border-radius: var(--radius-sm);
+    background: var(--color-bg-tertiary);
+    color: var(--color-text-tertiary);
   }
 
   .result-title {
     font-size: 0.88rem;
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold);
   }
 
   .compact .result-title {
-    font-size: 0.82rem;
+    font-size: var(--font-size-base);
   }
 
   .result-title a {
@@ -319,26 +313,26 @@
   }
 
   .snippet {
-    font-size: 0.8rem;
-    color: #555;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
     line-height: 1.45;
     margin-top: 0.15rem;
   }
 
   .compact .snippet {
-    font-size: 0.75rem;
+    font-size: var(--font-size-sm);
   }
 
   .snippet :global(mark) {
-    background: #fff3b0;
+    background: var(--color-highlight);
     padding: 0 2px;
-    border-radius: 2px;
+    border-radius: var(--radius-sm);
   }
 
   .no-results {
     text-align: center;
-    color: #999;
+    color: var(--color-text-tertiary);
     padding: 1.5rem 0;
-    font-size: 0.85rem;
+    font-size: var(--font-size-base);
   }
 </style>

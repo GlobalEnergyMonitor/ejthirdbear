@@ -5,9 +5,12 @@
   import { formatDate } from '$lib/format';
   import { downloadCSV, copyToClipboard } from '$lib/export';
   import type { SearchResult, SearchStats, IssueInfo, TagCount } from '$lib/db';
+  import type { DebugInfo } from '$lib/search';
+
+  type ResultWithDebug = SearchResult & { debug?: DebugInfo };
 
   let query = $state('');
-  let results = $state<SearchResult[]>([]);
+  let results = $state<ResultWithDebug[]>([]);
   let loading = $state(false);
   let searched = $state(false);
   let stats = $state<SearchStats | null>(null);
@@ -26,6 +29,7 @@
   let countries = $state<TagCount[]>([]);
   let topics = $state<TagCount[]>([]);
   let tunerOpen = $state(false);
+  let debugMode = $state(false);
 
   let searchInput: HTMLInputElement;
   let debounceTimer: ReturnType<typeof setTimeout>;
@@ -86,6 +90,7 @@
       if (dateTo) params.set('to', dateTo);
       if (country) params.set('country', country);
       if (topic) params.set('topic', topic);
+      if (debugMode) params.set('debug', 'true');
 
       // Update URL for shareable links + back/forward nav
       const shareUrl = new URL(window.location.href);
@@ -146,7 +151,7 @@
   </header>
 
   <div class="search-box">
-    <svg class="search-icon" viewBox="0 0 20 20" fill="currentColor" width="18" height="18">
+    <svg class="search-icon" viewBox="0 0 20 20" fill="currentColor" width="18" height="18" aria-hidden="true">
       <path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clip-rule="evenodd" />
     </svg>
     <input
@@ -156,31 +161,35 @@
       oninput={onInput}
       onkeydown={handleKeydown}
       placeholder="Search coal wire archives…"
+      aria-label="Search Coal Wire archives"
     />
     {#if loading}
       <span class="spinner"></span>
     {/if}
     {#if query}
-      <button class="clear-btn" onclick={() => { query = ''; results = []; searched = false; }}>
+      <button class="clear-btn" onclick={() => { query = ''; results = []; searched = false; }} aria-label="Clear search">
         ✕
       </button>
     {/if}
   </div>
 
-  <button class="tuner-toggle" onclick={() => tunerOpen = !tunerOpen}>
-    <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
-      <path d="M17 2.75a.75.75 0 00-1.5 0v5.5a.75.75 0 001.5 0v-5.5zM17 15.75a.75.75 0 00-1.5 0v1.5a.75.75 0 001.5 0v-1.5zM3.75 15a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5a.75.75 0 01.75-.75zM4.5 2.75a.75.75 0 00-1.5 0v5.5a.75.75 0 001.5 0v-5.5zM10 11a.75.75 0 01.75.75v5.5a.75.75 0 01-1.5 0v-5.5A.75.75 0 0110 11zM10.75 2.75a.75.75 0 00-1.5 0v1.5a.75.75 0 001.5 0v-1.5zM10 5a2 2 0 100 4 2 2 0 000-4zM3.75 10a2 2 0 100 4 2 2 0 000-4zM16.25 10a2 2 0 100 4 2 2 0 000-4z" />
-    </svg>
-    {tunerOpen ? 'Hide search options' : 'Search options'}
-  </button>
+  <div class="controls-row">
+    <button class="tuner-toggle" onclick={() => tunerOpen = !tunerOpen} aria-expanded={tunerOpen}>
+      <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14" aria-hidden="true">
+        <path d="M17 2.75a.75.75 0 00-1.5 0v5.5a.75.75 0 001.5 0v-5.5zM17 15.75a.75.75 0 00-1.5 0v1.5a.75.75 0 001.5 0v-1.5zM3.75 15a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5a.75.75 0 01.75-.75zM4.5 2.75a.75.75 0 00-1.5 0v5.5a.75.75 0 001.5 0v-5.5zM10 11a.75.75 0 01.75.75v5.5a.75.75 0 01-1.5 0v-5.5A.75.75 0 0110 11zM10.75 2.75a.75.75 0 00-1.5 0v1.5a.75.75 0 001.5 0v-1.5zM10 5a2 2 0 100 4 2 2 0 000-4zM3.75 10a2 2 0 100 4 2 2 0 000-4zM16.25 10a2 2 0 100 4 2 2 0 000-4z" />
+      </svg>
+      {tunerOpen ? 'Hide search options' : 'Search options'}
+    </button>
+    <button class="tuner-toggle" onclick={() => { debugMode = !debugMode; if (searched) doSearch(); }}>
+      {debugMode ? 'Hide scoring' : 'Show scoring'}
+    </button>
+  </div>
 
   {#if tunerOpen}
     <div class="tuner-panel">
       <SearchTuner
-        bind:bm25Weight
         bind:section
         {sections}
-        {hasEmbeddings}
         bind:dateFrom
         bind:dateTo
         bind:country
@@ -201,22 +210,13 @@
         {#if results.length > 0}
           <span class="results-actions">
             <button onclick={() => downloadCSV(results)}>Export CSV</button>
-            <button onclick={async () => {
-              const url = new URL(window.location.href);
-              url.searchParams.set('q', query);
-              if (section) url.searchParams.set('section', section);
-              if (country) url.searchParams.set('country', country);
-              if (topic) url.searchParams.set('topic', topic);
-              const ok = await copyToClipboard(url.toString());
-              if (ok) alert('Link copied!');
-            }}>Copy link</button>
           </span>
         {/if}
       {/if}
     </div>
   {/if}
 
-  <div class="results">
+  <div class="results" aria-live="polite" aria-label="Search results">
     {#if searched && !loading && results.length === 0}
       <div class="no-results">
         <p>No results for "<strong>{query}</strong>"</p>
@@ -227,7 +227,11 @@
     {#each results as result, i}
       <article class="result" class:selected={i === selectedIdx}>
         <div class="result-meta">
-          <a href="/issue/{result.issue_number}" class="issue">#{result.issue_number}</a>
+          {#if result.url}
+            <a href={result.url} target="_blank" rel="noopener" class="issue">#{result.issue_number}</a>
+          {:else}
+            <span class="issue">#{result.issue_number}</span>
+          {/if}
           <span class="date">{formatDate(result.date)}</span>
           {#if result.section}
             <span class="section">{result.section}</span>
@@ -248,6 +252,30 @@
         {#if result.snippet}
           <p class="snippet">{@html result.snippet}</p>
         {/if}
+        {#if debugMode && result.debug}
+          <table class="receipt">
+            <tbody>
+              {#if result.debug.bm25_position != null}
+                <tr><td>BM25 rank</td><td>#{result.debug.bm25_position}</td></tr>
+                <tr><td>BM25 score</td><td>{result.debug.bm25_score != null ? (result.debug.bm25_score < 0.001 ? result.debug.bm25_score.toExponential(2) : result.debug.bm25_score.toFixed(4)) : '—'}</td></tr>
+              {:else}
+                <tr><td>BM25 rank</td><td>—</td></tr>
+              {/if}
+              {#if result.debug.semantic_position != null}
+                <tr><td>Semantic rank</td><td>#{result.debug.semantic_position}</td></tr>
+                <tr><td>Cosine sim</td><td>{result.debug.semantic_score?.toFixed(4) ?? '—'}</td></tr>
+              {:else}
+                <tr><td>Semantic rank</td><td>—</td></tr>
+              {/if}
+              <tr class="receipt-rule"><td colspan="2"></td></tr>
+              {#if result.debug.explanation?.includes('penalized')}
+                <tr><td>Penalty</td><td>{result.debug.explanation.match(/missing "([^"]+)"/)?.[0] ?? 'partial match'}</td></tr>
+              {/if}
+              <tr class="receipt-total"><td>RRF total</td><td>{result.debug.rrf_score?.toFixed(6) ?? result.debug.bm25_score?.toFixed(6) ?? '—'}</td></tr>
+              <tr><td>Wt</td><td>{(bm25Weight * 100).toFixed(0)}% word / {((1 - bm25Weight) * 100).toFixed(0)}% meaning</td></tr>
+            </tbody>
+          </table>
+        {/if}
       </article>
     {/each}
   </div>
@@ -257,7 +285,7 @@
       <h2>Recent Issues</h2>
       <div class="issues-list">
         {#each recentIssues as issue}
-          <a href="/issue/{issue.issue_number}" class="issue-card">
+          <a href={issue.url || `https://globalenergymonitor.org/coalwire/`} target="_blank" rel="noopener" class="issue-card">
             <span class="issue-num">#{issue.issue_number}</span>
             <span class="issue-date">{formatDate(issue.date)}</span>
             <span class="issue-count">{issue.article_count} items</span>
@@ -272,60 +300,59 @@
   main {
     max-width: 720px;
     margin: 0 auto;
-    padding: 3rem 1rem 4rem;
+    padding: var(--space-12) var(--space-6) var(--space-16);
   }
 
   header {
-    text-align: center;
-    margin-bottom: 2rem;
+    margin-bottom: var(--space-10);
   }
 
   h1 {
-    font-size: 1.6rem;
-    margin: 0 0 0.3rem;
-    letter-spacing: -0.02em;
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-bold);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wide, 0.02em);
+    margin: 0 0 var(--space-2);
   }
 
   .subtitle {
-    color: #777;
+    color: var(--color-text-secondary);
     margin: 0;
-    font-size: 0.85rem;
+    font-size: var(--font-size-sm);
   }
 
   .date-range {
-    color: #999;
+    color: var(--color-text-tertiary);
   }
 
-  /* Search box */
   .search-box {
     position: relative;
-    margin-bottom: 0.4rem;
+    margin-bottom: var(--space-2);
   }
 
   .search-icon {
     position: absolute;
-    left: 0.85rem;
+    left: var(--space-3);
     top: 50%;
     transform: translateY(-50%);
-    color: #aaa;
+    color: var(--color-text-tertiary);
     pointer-events: none;
   }
 
   input[type='search'] {
     width: 100%;
-    padding: 0.7rem 2.5rem 0.7rem 2.5rem;
-    font-size: 1rem;
-    border: 1.5px solid #ddd;
-    border-radius: 10px;
+    padding: var(--space-3) var(--space-10) var(--space-3) var(--space-10);
+    font-size: var(--font-size-base);
+    font-family: var(--font-family);
+    border: 1px solid var(--color-border);
     outline: none;
-    transition: border-color 0.15s, box-shadow 0.15s;
     box-sizing: border-box;
-    background: #fff;
+    background: var(--color-bg-primary);
+    color: var(--color-text-primary);
   }
 
   input[type='search']:focus {
-    border-color: #888;
-    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.04);
+    border-color: var(--color-text-primary);
   }
 
   input[type='search']::-webkit-search-cancel-button {
@@ -334,31 +361,27 @@
 
   .clear-btn {
     position: absolute;
-    right: 0.7rem;
+    right: var(--space-3);
     top: 50%;
     transform: translateY(-50%);
     border: none;
     background: none;
-    color: #999;
+    color: var(--color-text-tertiary);
     cursor: pointer;
-    font-size: 0.85rem;
-    padding: 0.25rem;
+    font-size: var(--font-size-sm);
+    padding: var(--space-1);
     line-height: 1;
-  }
-
-  .clear-btn:hover {
-    color: #333;
   }
 
   .spinner {
     position: absolute;
-    right: 2.2rem;
+    right: var(--space-8);
     top: 50%;
     transform: translateY(-50%);
-    width: 16px;
-    height: 16px;
-    border: 2px solid #ddd;
-    border-top-color: #555;
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--color-border);
+    border-top-color: var(--color-text-primary);
     border-radius: 50%;
     animation: spin 0.6s linear infinite;
   }
@@ -367,214 +390,192 @@
     to { transform: translateY(-50%) rotate(360deg); }
   }
 
-  /* Tuner */
-  .tuner-toggle {
+  .controls-row {
     display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    background: none;
-    border: none;
-    color: #999;
-    font-size: 0.75rem;
-    cursor: pointer;
-    padding: 0.2rem 0;
-    font-family: inherit;
-    margin-bottom: 0.5rem;
+    gap: var(--space-4);
+    margin-bottom: var(--space-3);
   }
 
-  .tuner-toggle:hover {
-    color: #555;
+  .tuner-toggle {
+    display: inline;
+    background: none;
+    border: none;
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-xs);
+    font-family: var(--font-family-data);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    padding: 0;
   }
 
   .tuner-panel {
-    background: #fff;
-    border: 1px solid #eee;
-    border-radius: 10px;
-    padding: 0.85rem;
-    margin-bottom: 1rem;
+    border-top: 1px solid var(--color-border);
+    padding: var(--space-4) 0;
+    margin-bottom: var(--space-3);
   }
 
-  /* Results */
   .results-header {
     display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.8rem;
-    color: #999;
-    margin-bottom: 0.5rem;
-    padding: 0 0.25rem;
+    align-items: baseline;
+    gap: var(--space-2);
+    font-size: var(--font-size-xs);
+    font-family: var(--font-family-data);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-text-tertiary);
+    margin-bottom: var(--space-2);
   }
 
   .results-actions {
     display: flex;
-    gap: 0.3rem;
+    gap: var(--space-3);
     margin-left: auto;
   }
 
   .results-actions button {
     background: none;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    color: #777;
-    font-size: 0.7rem;
-    padding: 0.2rem 0.5rem;
+    border: none;
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-xs);
+    font-family: var(--font-family-data);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
     cursor: pointer;
-    font-family: inherit;
-  }
-
-  .results-actions button:hover {
-    border-color: #aaa;
-    color: #333;
+    padding: 0;
+    text-decoration: underline;
   }
 
   .result {
-    padding: 0.85rem 0.75rem;
-    border-radius: 8px;
-    transition: background 0.1s;
-  }
-
-  .result:hover, .result.selected {
-    background: #f0f0f0;
-  }
-
-  .result + .result {
-    border-top: 1px solid #eee;
+    padding: var(--space-4) 0;
+    border-top: 1px solid var(--color-border-light);
   }
 
   .result-meta {
     display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    font-size: 0.75rem;
-    color: #999;
-    margin-bottom: 0.2rem;
+    align-items: baseline;
+    gap: var(--space-2);
+    font-size: var(--font-size-xs);
+    font-family: var(--font-family-data);
+    color: var(--color-text-tertiary);
+    margin-bottom: var(--space-1);
   }
 
   .issue {
-    font-weight: 600;
-    color: #666;
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text-tertiary);
     text-decoration: none;
   }
 
-  .issue:hover {
-    color: #333;
-    text-decoration: underline;
-  }
-
-  .section {
-    background: #f0f0f0;
-    padding: 1px 6px;
-    border-radius: 3px;
-    font-size: 0.7rem;
-  }
-
-  .match-type {
-    font-size: 0.65rem;
-    padding: 1px 5px;
-    border-radius: 3px;
-    letter-spacing: 0.02em;
-  }
-
-  .match-type.hybrid {
-    background: #e8f5e9;
-    color: #2e7d32;
-  }
-
-  .match-type.semantic {
-    background: #e3f2fd;
-    color: #1565c0;
+  .section, .match-type {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
   }
 
   h3 {
-    margin: 0.15rem 0;
-    font-size: 0.95rem;
-    font-weight: 600;
+    margin: 0;
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+    line-height: 1.35;
   }
 
   h3 a {
-    color: #1a1a1a;
+    color: var(--color-text-primary);
     text-decoration: none;
   }
 
-  h3 a:hover {
-    text-decoration: underline;
-  }
-
   .snippet {
-    margin: 0.2rem 0 0;
-    font-size: 0.82rem;
-    color: #555;
+    margin: var(--space-1) 0 0;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
     line-height: 1.5;
   }
 
   .snippet :global(mark) {
-    background: #fff3b0;
-    padding: 0 2px;
-    border-radius: 2px;
+    background: var(--color-highlight);
+    padding: 0 1px;
   }
 
   .no-results {
     text-align: center;
-    padding: 3rem 0;
+    padding: var(--space-12) 0;
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-sm);
   }
 
-  .no-results p {
-    margin: 0.25rem 0;
-    color: #888;
+  .no-results p { margin: var(--space-1) 0; }
+
+  .receipt {
+    margin-top: var(--space-2);
+    border-collapse: collapse;
+    font-family: var(--font-family-data);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+    line-height: 1;
   }
 
-  .hint {
-    font-size: 0.82rem;
-  }
+  .receipt td { padding: 1px 0; }
+  .receipt td:first-child { padding-right: var(--space-6); white-space: nowrap; }
+  .receipt td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+  .receipt-rule td { border-bottom: 1px dashed var(--color-border); padding-bottom: 2px; }
+  .receipt-rule + tr td { padding-top: 3px; }
+  .receipt-total td { font-weight: var(--font-weight-bold); color: var(--color-text-primary); padding-top: 2px; }
 
-  /* Recent issues */
   .recent {
-    margin-top: 2rem;
+    margin-top: var(--space-10);
+    border-top: 1px solid var(--color-border);
+    padding-top: var(--space-4);
   }
 
   .recent h2 {
-    font-size: 0.9rem;
-    color: #888;
+    font-size: var(--font-size-xs);
+    font-family: var(--font-family-data);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text-tertiary);
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin: 0 0 0.75rem;
+    letter-spacing: 0.06em;
+    margin: 0 0 var(--space-4);
   }
 
   .issues-list {
     display: flex;
     flex-direction: column;
-    gap: 2px;
   }
 
   .issue-card {
     display: flex;
-    align-items: center;
-    gap: 1rem;
-    padding: 0.6rem 0.75rem;
-    border-radius: 6px;
+    align-items: baseline;
+    gap: var(--space-4);
+    padding: var(--space-2) 0;
+    border-top: 1px solid var(--color-border-light);
     text-decoration: none;
-    color: #333;
-    transition: background 0.1s;
-  }
-
-  .issue-card:hover {
-    background: #f0f0f0;
+    color: var(--color-text-primary);
+    font-size: var(--font-size-sm);
   }
 
   .issue-num {
-    font-weight: 600;
-    font-size: 0.85rem;
-    min-width: 3rem;
+    font-weight: var(--font-weight-semibold);
+    font-family: var(--font-family-data);
+    min-width: 2.5rem;
+    color: var(--color-text-tertiary);
   }
 
   .issue-date {
-    font-size: 0.82rem;
-    color: #777;
+    color: var(--color-text-secondary);
   }
 
   .issue-count {
-    font-size: 0.75rem;
-    color: #aaa;
+    font-family: var(--font-family-data);
+    color: var(--color-text-tertiary);
     margin-left: auto;
+  }
+
+  @media (max-width: 600px) {
+    main { padding: var(--space-6) var(--space-4) var(--space-12); }
+    h1 { font-size: var(--font-size-xl); }
+    input[type='search'] { font-size: 16px; }
+    .result-meta { flex-wrap: wrap; }
+    .results-header { flex-wrap: wrap; }
+    .results-actions { margin-left: 0; }
   }
 </style>

@@ -10,8 +10,8 @@ export const GET: RequestHandler = ({ url }) => {
     return json({ articles, issue_number: parseInt(issueNum) });
   }
 
-  const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '50'), 200);
-  const offset = parseInt(url.searchParams.get('offset') ?? '0');
+  const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '50') || 50, 200);
+  const offset = Math.max(0, parseInt(url.searchParams.get('offset') ?? '0') || 0);
   const issues = browseIssues(limit, offset);
   return json({ issues });
 };

@@ -19,16 +19,16 @@
   h1 {
     font-size: 3rem;
     margin: 0;
-    color: #ccc;
+    color: var(--color-text-tertiary);
   }
 
   p {
-    color: #888;
+    color: var(--color-text-secondary);
     margin: 0.5rem 0 1.5rem;
   }
 
   a {
-    color: #555;
-    font-size: 0.85rem;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-base);
   }
 </style>

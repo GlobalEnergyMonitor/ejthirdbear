@@ -88,16 +88,17 @@
   }
 
   .related-title {
-    font-size: 0.85rem;
+    font-size: var(--font-size-base);
+    font-family: var(--font-family-data);
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: #888;
+    color: var(--color-text-tertiary);
     margin: 0 0 0.6rem;
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold);
   }
 
   .compact .related-title {
-    font-size: 0.75rem;
+    font-size: var(--font-size-sm);
   }
 
   .related-list {
@@ -107,7 +108,7 @@
   }
 
   .related-list li {
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--color-border-light);
   }
 
   .related-list a {
@@ -123,25 +124,26 @@
 
   .item-title {
     display: block;
-    font-size: 0.85rem;
-    font-weight: 500;
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-medium);
     line-height: 1.35;
   }
 
   .compact .item-title {
-    font-size: 0.78rem;
+    font-size: var(--font-size-sm);
   }
 
   .item-meta {
     display: block;
-    font-size: 0.7rem;
-    color: #999;
+    font-size: var(--font-size-xs);
+    font-family: var(--font-family-data);
+    color: var(--color-text-tertiary);
     margin-top: 0.1rem;
   }
 
   .empty {
-    color: #999;
-    font-size: 0.82rem;
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-base);
     text-align: center;
     padding: 1rem 0;
   }
@@ -155,10 +157,10 @@
 
   .skeleton {
     height: 2.5rem;
-    background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+    background: linear-gradient(90deg, var(--color-bg-tertiary) 25%, var(--color-border) 50%, var(--color-bg-tertiary) 75%);
     background-size: 200% 100%;
     animation: shimmer 1.5s infinite;
-    border-radius: 4px;
+    border-radius: var(--radius-md);
   }
 
   @keyframes shimmer {
