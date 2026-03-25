@@ -10,7 +10,6 @@
    */
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
-  import { base } from '$app/paths';
   import DatasetFactsheet from '$lib/widgets/DatasetFactsheet.svelte';
   import {
     slugToTrackerName,

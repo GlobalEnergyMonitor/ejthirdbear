@@ -1,7 +1,7 @@
 {
   "name": "gem-viz",
   "private": true,
-  "version": "0.5.1",
+  "version": "0.5.2",
   "type": "module",
   "scripts": {
     "dev": "NODE_ENV=development vite dev",
@@ -21,7 +21,8 @@
     "geojson": "node scripts/generate-geojson.js",
     "spot-check": "node scripts/spot-check.js",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "build:widgets": "vite build --config vite.widgets.config.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

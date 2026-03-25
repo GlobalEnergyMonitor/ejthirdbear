@@ -129,29 +129,7 @@
   .embed-wrapper {
     width: 100%;
     max-width: 600px;
-    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
   }
 
-  .embed-loading {
-    padding: 2rem;
-    text-align: center;
-    color: #666;
-    font-size: 0.875rem;
-  }
-
-  .embed-error {
-    padding: 1.5rem;
-    background: #fef2f2;
-    border: 1px solid #fca5a5;
-    border-radius: 8px;
-    color: #991b1b;
-    font-size: 0.875rem;
-  }
-
-  .embed-hint {
-    margin-top: 0.5rem;
-    font-size: 0.75rem;
-    font-family: monospace;
-    color: #666;
-  }
+  /* loading/error/hint styles provided by EmbedShell */
 </style>

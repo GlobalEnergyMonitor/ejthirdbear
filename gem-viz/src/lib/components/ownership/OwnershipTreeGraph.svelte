@@ -42,6 +42,8 @@
     fullWidth?: boolean;
     /** Optional label for the root asset (passed by some callers, reserved for future use) */
     assetName?: string;
+    /** Optional navigation callback — used by dynamic embeds instead of goto() */
+    onNavigate?: (url: string) => void;
   }
 
   let {
@@ -52,6 +54,7 @@
     compact = false,
     direction = 'auto',
     fullWidth = false,
+    onNavigate,
   }: Props = $props();
 
   let dagre: typeof import('dagre') | null = null;
@@ -695,7 +698,8 @@
 
   function dblClickNode(n: LayoutNode) {
     track('graph', 'navigate-entity', n.id);
-    goto(n.isAsset ? assetLink(n.id) : entityLink(n.id));
+    const url = n.isAsset ? assetLink(n.id) : entityLink(n.id);
+    onNavigate ? onNavigate(url) : goto(url);
   }
 
   // Hover only allowed when unfrozen OR when hovering a node in the frozen path
@@ -1349,8 +1353,8 @@
                       hasEverFrozen = true;
                     }
                   }}
-                  ondblclick={() => goto(entityLink(o.nid))}
-                  onkeydown={(ev) => ev.key === 'Enter' && goto(entityLink(o.nid))}
+                  ondblclick={() => { const u = entityLink(o.nid); onNavigate ? onNavigate(u) : goto(u); }}
+                  onkeydown={(ev) => { if (ev.key === 'Enter') { const u = entityLink(o.nid); onNavigate ? onNavigate(u) : goto(u); } }}
                 >
                   <span class="table-row-text">{o.name} ({o.pct.toFixed(1)}%)</span>
                 </div>

@@ -4,7 +4,6 @@
    * Renders a single visualization component by name with URL params.
    */
   import { page } from '$app/stores';
-  import { base } from '$app/paths';
 
   import OwnershipFlower from '$lib/components/network/OwnershipFlower.svelte';
   import AssetScreener from '$lib/components/screener/AssetScreener.svelte';

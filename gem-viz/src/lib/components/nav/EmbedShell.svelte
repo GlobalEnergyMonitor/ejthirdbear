@@ -14,17 +14,78 @@
     autoHeight = true,
     embedId = '',
     branding = false,
+    linkBase = '',
+    linkTarget = '_blank',
     children,
   } = $props();
+
+  // ── Link rewriting for CMS embeds (Drupal etc.) ──
+  // When linkBase is set, all internal links are rewritten to point to the
+  // CMS wrapper pages instead of gem-viz routes.
+  // linkBase: e.g. "https://drupal-site.com/data-tools" or "/data-tools"
+  // linkTarget: "_blank" (default), "_top" (navigate parent frame), "_self"
+
+  function isInternalHref(href) {
+    if (!href) return false;
+    if (href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('javascript:')) return false;
+    if (/^https?:\/\//i.test(href)) return false;
+    return true;
+  }
+
+  function rewriteHref(href) {
+    if (!linkBase) return href;
+    // Strip trailing slash from linkBase, ensure href starts with /
+    const base = linkBase.replace(/\/+$/, '');
+    const path = href.startsWith('/') ? href : '/' + href;
+    return base + path;
+  }
+
+  function handleLinkClick(e) {
+    if (!linkBase) return;
+    const anchor = e.target.closest('a');
+    if (!anchor) return;
+    const href = anchor.getAttribute('href');
+    if (!isInternalHref(href)) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    const newUrl = rewriteHref(href);
+
+    if (linkTarget === '_top' && window.parent !== window) {
+      window.top.location.href = newUrl;
+    } else if (linkTarget === '_self') {
+      window.location.href = newUrl;
+    } else {
+      window.open(newUrl, '_blank', 'noopener,noreferrer');
+    }
+  }
 
   // Preserve embed query params when navigating within the iframe.
   // Without this, clicking a breadcrumb link in /cards?embed=true would
   // navigate to /explore (no embed param) and show full app chrome inside the iframe.
-  const EMBED_PARAMS = ['embed', 'embedId', 'theme', 'padding', 'autoHeight', 'branding'];
+  const EMBED_PARAMS = ['embed', 'embedId', 'theme', 'padding', 'autoHeight', 'branding', 'linkBase', 'linkTarget'];
 
   beforeNavigate((nav) => {
     if (nav.willUnload) return;
     if (!nav.to?.url) return;
+
+    // If linkBase is set, intercept all internal goto() navigations and
+    // redirect to the CMS wrapper URL instead.
+    if (linkBase) {
+      nav.cancel();
+      const path = nav.to.url.pathname + nav.to.url.search + nav.to.url.hash;
+      const newUrl = rewriteHref(path);
+
+      if (linkTarget === '_top' && window.parent !== window) {
+        window.top.location.href = newUrl;
+      } else if (linkTarget === '_self') {
+        window.location.href = newUrl;
+      } else {
+        window.open(newUrl, '_blank', 'noopener,noreferrer');
+      }
+      return;
+    }
+
     if (nav.to.url.searchParams.has('embed')) return;
 
     const from = nav.from?.url;
@@ -83,7 +144,9 @@
   });
 </script>
 
-<div class="embed-container" class:dark={theme === 'dark'} style="padding: {padding}px;">
+<!-- svelte-ignore a11y_click_events_have_key_events -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="embed-container" class:dark={theme === 'dark'} style="padding: {padding}px;" onclick={handleLinkClick}>
   {@render children()}
   {#if branding}
     <footer class="gem-branding">

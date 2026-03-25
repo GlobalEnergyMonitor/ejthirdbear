@@ -26,6 +26,8 @@
     showOwnership?: boolean;
     interactive?: boolean;
     maxUnits?: number;
+    /** Optional navigation callback — used by dynamic embeds instead of goto() */
+    onNavigate?: (url: string) => void;
   }
 
   let {
@@ -36,6 +38,7 @@
     showOwnership = true,
     interactive = true,
     maxUnits = 24,
+    onNavigate,
   }: Props = $props();
 
   let svgEl: SVGSVGElement | null = $state(null);
@@ -78,7 +81,8 @@
 
   function handleUnitClick(asset: Asset) {
     if (interactive) {
-      goto(assetLink(asset.id));
+      const url = assetLink(asset.id);
+      onNavigate ? onNavigate(url) : goto(url);
     }
   }
 

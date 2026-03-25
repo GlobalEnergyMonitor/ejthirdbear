@@ -19,7 +19,7 @@
   import { colorByTracker, colors } from '$lib/design-tokens';
   import { fetchAssetBasics, fetchOwnerPortfolio } from '$lib/component-data/schema';
 
-  /** @type {{ ownerId?: string | null, portfolio?: any, size?: 'small' | 'medium' | 'large', showLabels?: boolean, showTitle?: boolean, title?: string }} */
+  /** @type {{ ownerId?: string | null, portfolio?: any, size?: 'small' | 'medium' | 'large', showLabels?: boolean, showTitle?: boolean, title?: string, onNavigate?: (url: string) => void }} */
   let {
     ownerId = null,
     portfolio: prebakedPortfolio = null,
@@ -27,6 +27,7 @@
     showLabels = true,
     showTitle = true,
     title: propsTitle = '',
+    onNavigate,
   } = $props();
 
   // Size presets
@@ -56,7 +57,8 @@
   // Navigate to entity page when clicked
   function handleFlowerClick() {
     if (resolvedOwnerId) {
-      goto(entityLink(resolvedOwnerId));
+      const url = entityLink(resolvedOwnerId);
+      onNavigate ? onNavigate(url) : goto(url);
     }
   }
 

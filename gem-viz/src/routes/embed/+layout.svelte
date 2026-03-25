@@ -16,8 +16,10 @@
   const autoHeight = $derived($page.url.searchParams.get('autoHeight') !== 'false');
   const embedId = $derived($page.url.searchParams.get('embedId') || '');
   const branding = $derived($page.url.searchParams.get('branding') === 'true');
+  const linkBase = $derived($page.url.searchParams.get('linkBase') || '');
+  const linkTarget = $derived($page.url.searchParams.get('linkTarget') || '_blank');
 </script>
 
-<EmbedShell {theme} {padding} {autoHeight} {embedId} {branding}>
+<EmbedShell {theme} {padding} {autoHeight} {embedId} {branding} {linkBase} {linkTarget}>
   {@render children()}
 </EmbedShell>

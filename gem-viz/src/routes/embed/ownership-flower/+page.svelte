@@ -76,7 +76,7 @@
       This entity owns subsidiaries but no direct assets. Try the <a
         href="/embed/entity?id={entityId}"
         target="_blank"
-        rel="noopener">Entity Card</a
+        rel="noopener noreferrer">Entity Card</a
       > embed for subsidiary details.
     </p>
   </div>

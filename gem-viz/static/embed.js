@@ -1,19 +1,29 @@
 /* eslint-env browser */
 /**
- * GEM Embed Loader v2
+ * GEM Embed Loader v3
  * Drop-in script for embedding GEM visualizations on any page.
  *
- * Usage:
+ * Supports two modes:
+ *   - iframe (default): Creates an iframe pointing to the embed route
+ *   - dynamic: Renders widget directly in the page via Shadow DOM (no iframe)
+ *
+ * Usage (iframe — default):
  *   <div class="gem-embed" data-src="/embed/entity?id=E12345"></div>
- *   <script src="https://gem-viz-staging.fly.dev/embed.js"></script>
+ *   <script src="https://gem-viz.fly.dev/embed.js"></script>
+ *
+ * Usage (dynamic — no iframe):
+ *   <div class="gem-embed" data-src="/embed/entity?id=E12345" data-mode="dynamic"></div>
+ *   <script src="https://gem-viz.fly.dev/embed.js"></script>
  *
  * Features:
- *   - Loading skeleton while iframe initializes
- *   - IntersectionObserver: iframes only created when scrolled into view
+ *   - Loading skeleton while content initializes
+ *   - IntersectionObserver: embeds only created when scrolled into view
  *   - Auto dark-mode detection (prefers-color-scheme)
  *   - Double-init guard (safe to include script multiple times)
  *   - Load timeout with fallback link after 15s
- *   - postMessage auto-resize from embedded content
+ *   - postMessage auto-resize from embedded content (iframe mode)
+ *   - Shadow DOM CSS isolation (dynamic mode)
+ *   - Automatic iframe fallback if dynamic mode fails
  */
 (function () {
   // Double-init guard
@@ -83,6 +93,110 @@
   // Track which embeds have loaded (for timeout cleanup)
   var loadedEmbeds = {};
 
+  // ==========================================================================
+  // DYNAMIC MODE — Shadow DOM + widget JS chunks
+  // ==========================================================================
+
+  var widgetModulePromise = null;
+
+  /**
+   * Load the widget module from the server (cached).
+   * Returns the { configure, mountWidget, parseSrc } exports.
+   */
+  var loadWidgetModule = function () {
+    if (widgetModulePromise) return widgetModulePromise;
+    var widgetUrl = baseUrl + '/widgets/index.js';
+    widgetModulePromise = import(/* webpackIgnore: true */ widgetUrl).catch(function (err) {
+      widgetModulePromise = null; // allow retry
+      throw err;
+    });
+    return widgetModulePromise;
+  };
+
+  /**
+   * Create a dynamic (non-iframe) embed using Shadow DOM.
+   * Falls back to iframe mode on failure.
+   */
+  var createDynamic = function (container, index) {
+    var dataSrc = container.getAttribute('data-src');
+    if (!dataSrc) return;
+
+    if (container.getAttribute('data-gem-initialized')) return;
+    container.setAttribute('data-gem-initialized', 'true');
+
+    var embedId = container.getAttribute('data-embed-id') || 'gem-embed-' + (index + 1);
+    container.setAttribute('data-embed-id', embedId);
+
+    var height = container.getAttribute('data-height') || '400';
+    var themeAttr = container.getAttribute('data-theme');
+    var paramsAttr = container.getAttribute('data-params');
+    var dynLinkBase = container.getAttribute('data-link-base');
+    var dynLinkTarget = container.getAttribute('data-link-target');
+
+    var theme = themeAttr || (prefersDark ? 'dark' : 'light');
+
+    // Show loading skeleton
+    container.innerHTML = '';
+    showLoading(container, parseInt(height, 10));
+
+    // Load the widget module and mount
+    loadWidgetModule()
+      .then(function (mod) {
+        // Configure API endpoints
+        mod.configure({ appBase: baseUrl || undefined });
+
+        // Parse data-src to get widget type + props
+        var parsed = mod.parseSrc(dataSrc);
+        if (!parsed.type) {
+          throw new Error('Could not parse widget type from: ' + dataSrc);
+        }
+
+        // Merge extra params from data-params attribute
+        if (paramsAttr) {
+          var trimmed = paramsAttr.trim();
+          try {
+            var extra = trimmed.startsWith('{')
+              ? JSON.parse(trimmed)
+              : Object.fromEntries(new URLSearchParams(trimmed.startsWith('?') ? trimmed.slice(1) : trimmed));
+            Object.keys(extra).forEach(function (k) {
+              if (extra[k] != null && !(k in parsed.props)) {
+                parsed.props[k] = extra[k];
+              }
+            });
+          } catch (_e) { /* ignore invalid params */ }
+        }
+
+        // Add theme and link rewriting props
+        parsed.props.theme = theme;
+        if (dynLinkBase) parsed.props.linkBase = dynLinkBase;
+        if (dynLinkTarget) parsed.props.linkTarget = dynLinkTarget;
+
+        // Create Shadow DOM
+        var shadow = container.attachShadow({ mode: 'open' });
+
+        // Remove loading skeleton (it's in the light DOM)
+        var loadingEl = container.querySelector('.' + EMBED_CLASS + '-loading');
+        if (loadingEl) loadingEl.remove();
+
+        // Mark as loaded
+        loadedEmbeds[embedId] = true;
+
+        // Mount widget into shadow root
+        return mod.mountWidget(shadow, parsed.type, parsed.props);
+      })
+      .catch(function (err) {
+        console.warn('[GEM Embed] Dynamic mode failed, falling back to iframe:', err.message || err);
+        // Reset and fall back to iframe
+        container.removeAttribute('data-gem-initialized');
+        container.innerHTML = '';
+        createIframe(container, index);
+      });
+  };
+
+  // ==========================================================================
+  // IFRAME MODE (existing behavior)
+  // ==========================================================================
+
   var createIframe = function (container, index) {
     var dataSrc = container.getAttribute('data-src');
     if (!dataSrc) return;
@@ -102,6 +216,8 @@
     var paddingAttr = container.getAttribute('data-padding');
     var paramsAttr = container.getAttribute('data-params');
     var brandingAttr = container.getAttribute('data-branding');
+    var linkBaseAttr = container.getAttribute('data-link-base');
+    var linkTargetAttr = container.getAttribute('data-link-target');
     var allowAttr = container.getAttribute('data-allow');
     var sandboxAttr = container.getAttribute('data-sandbox');
 
@@ -128,6 +244,12 @@
     }
     if (brandingAttr && !url.searchParams.has('branding')) {
       url.searchParams.set('branding', brandingAttr);
+    }
+    if (linkBaseAttr && !url.searchParams.has('linkBase')) {
+      url.searchParams.set('linkBase', linkBaseAttr);
+    }
+    if (linkTargetAttr && !url.searchParams.has('linkTarget')) {
+      url.searchParams.set('linkTarget', linkTargetAttr);
     }
     if (paramsAttr) {
       var trimmed = paramsAttr.trim();
@@ -199,11 +321,19 @@
     }, LOAD_TIMEOUT_MS);
   };
 
-  // Global embed counter for unique IDs
+  // ==========================================================================
+  // INIT — route each embed to the right mode
+  // ==========================================================================
+
   var embedCounter = 0;
 
   var initContainer = function (container) {
-    createIframe(container, embedCounter++);
+    var mode = (container.getAttribute('data-mode') || 'iframe').toLowerCase();
+    if (mode === 'dynamic') {
+      createDynamic(container, embedCounter++);
+    } else {
+      createIframe(container, embedCounter++);
+    }
   };
 
   var init = function () {

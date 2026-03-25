@@ -2,6 +2,9 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { assetLink, entityLink, link } from '$lib/links';
+
+  // Check if linkBase is configured (CMS embed mode)
+  const linkBase = $derived($page.url.searchParams.get('linkBase') || '');
   import AssetSearchBar from '$lib/components/search/AssetSearchBar.svelte';
 
   type SearchMode = {
@@ -122,7 +125,15 @@
 
     if (opensNewTab) {
       updateEmbedUrl(rawQuery, selectedMode);
-      if (target) window.open(target, '_blank', 'noopener,noreferrer');
+      if (target) {
+        // When linkBase is set, use goto() so EmbedShell's beforeNavigate can
+        // rewrite the URL for the CMS. Otherwise, open directly in a new tab.
+        if (linkBase) {
+          goto(target);
+        } else {
+          window.open(target, '_blank', 'noopener,noreferrer');
+        }
+      }
       return;
     }
 

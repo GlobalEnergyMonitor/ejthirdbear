@@ -4,16 +4,39 @@ import idMap from '$lib/server/id-map.json';
 
 const map = idMap as Record<string, string>;
 
-export const GET: RequestHandler = ({ url }) => {
+// CORS: allow dynamic widget embeds on Drupal to call this endpoint
+const ALLOWED_ORIGINS = [
+  'https://globalenergymonitor.org',
+  'https://www.globalenergymonitor.org',
+];
+
+function corsHeaders(request: Request): Record<string, string> {
+  const origin = request.headers.get('origin');
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    return {
+      'Access-Control-Allow-Origin': origin,
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    };
+  }
+  return {};
+}
+
+export const OPTIONS: RequestHandler = ({ request }) => {
+  return new Response(null, { status: 204, headers: corsHeaders(request) });
+};
+
+export const GET: RequestHandler = ({ url, request }) => {
   const ids = url.searchParams.getAll('id');
+  const headers = corsHeaders(request);
 
   if (ids.length === 0) {
-    return json({ error: 'Missing id parameter' }, { status: 400 });
+    return json({ error: 'Missing id parameter' }, { status: 400, headers });
   }
 
   if (ids.length === 1) {
     const resolved = map[ids[0]] ?? ids[0];
-    return json({ resolved });
+    return json({ resolved }, { headers });
   }
 
   // Batch mode
@@ -21,5 +44,5 @@ export const GET: RequestHandler = ({ url }) => {
   for (const id of ids) {
     results[id] = map[id] ?? id;
   }
-  return json({ results });
+  return json({ results }, { headers });
 };
