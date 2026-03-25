@@ -76,95 +76,41 @@ function weightedRRF(
   return scores;
 }
 
-/**
- * HTML-escape a string.
- */
 function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 /**
- * Clean content for snippet display: collapse whitespace, strip markdown-ish chars.
- */
-function cleanContent(s: string): string {
-  return s
-    .replace(/\r\n/g, '\n')
-    .replace(/\n{2,}/g, ' ')
-    .replace(/\n/g, ' ')
-    .replace(/\s{2,}/g, ' ')
-    .replace(/^\s+/gm, '')
-    .trim();
-}
-
-/**
- * Generate a snippet from content that highlights query terms.
- * Returns HTML with <mark> tags around whole-word matched terms.
+ * Generate a snippet: find query terms in content, extract a window, highlight matches.
  */
 function generateSnippet(content: string, query: string, maxLen = 220): string {
-  const clean = cleanContent(content);
-  if (!clean || !query) return escapeHtml(clean.slice(0, maxLen)) + '…';
+  // Collapse whitespace
+  const text = content.replace(/\s+/g, ' ').trim();
+  if (!text || !query) return escapeHtml(text.slice(0, maxLen)) + '…';
 
-  // Extract individual query terms (split on whitespace, remove FTS operators)
-  const terms = query
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(t => t.length > 1 && !['and', 'or', 'not', 'near'].includes(t))
-    .map(t => t.replace(/['"*()]/g, ''));
+  const terms = query.toLowerCase().split(/\s+/).filter(t => t.length > 1);
+  if (!terms.length) return escapeHtml(text.slice(0, maxLen)) + '…';
 
-  if (terms.length === 0) return escapeHtml(clean.slice(0, maxLen)) + '…';
-
-  const cleanLower = clean.toLowerCase();
-
-  // Find the best window: position where the most query terms appear as whole words
-  let bestPos = 0;
-  let bestCount = 0;
-
-  for (const term of terms) {
-    // Use word-boundary-aware search for window finding
-    const re = new RegExp(`\\b${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'gi');
-    let m;
-    while ((m = re.exec(cleanLower)) !== null) {
-      const idx = m.index;
-      const windowStart = Math.max(0, idx - 80);
-      const windowEnd = Math.min(clean.length, idx + maxLen - 80);
-      const windowText = cleanLower.slice(windowStart, windowEnd);
-      let count = 0;
-      for (const t of terms) {
-        if (new RegExp(`\\b${t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i').test(windowText)) count++;
-      }
-      if (count > bestCount || (count === bestCount && idx < bestPos)) {
-        bestCount = count;
-        bestPos = Math.max(0, idx - 80);
-      }
-    }
+  // Find first term occurrence
+  const lower = text.toLowerCase();
+  let pos = 0;
+  for (const t of terms) {
+    const i = lower.indexOf(t);
+    if (i !== -1) { pos = Math.max(0, i - 60); break; }
   }
 
-  // Extract window — extend to word boundary
-  const start = bestPos;
-  let end = Math.min(clean.length, start + maxLen);
-  if (end < clean.length) {
-    const nextSpace = clean.indexOf(' ', end);
-    if (nextSpace !== -1 && nextSpace - end < 20) end = nextSpace;
-  }
-  let snippet = clean.slice(start, end);
-  const prefix = start > 0 ? '…' : '';
-  const suffix = end < clean.length ? '…' : '';
+  // Extract window
+  const start = pos;
+  const end = Math.min(text.length, start + maxLen);
+  let snip = escapeHtml(text.slice(start, end));
 
-  // Escape HTML
-  snippet = escapeHtml(snippet);
-
-  // Highlight whole-word matches only (word boundary before, lookahead allows partial suffix)
-  for (const term of terms) {
-    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    // Match term at a word boundary — highlight the full word containing the term
-    const re = new RegExp(`\\b(${escaped}\\w*)`, 'gi');
-    snippet = snippet.replace(re, '<mark>$1</mark>');
+  // Highlight
+  for (const t of terms) {
+    const e = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    snip = snip.replace(new RegExp(`\\b(${e}\\w*)`, 'gi'), '<mark>$1</mark>');
   }
 
-  return prefix + snippet + suffix;
+  return (start > 0 ? '…' : '') + snip + (end < text.length ? '…' : '');
 }
 
 export interface BM25Options {

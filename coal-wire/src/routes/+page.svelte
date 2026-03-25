@@ -3,14 +3,23 @@
   import { page } from '$app/state';
   import SearchTuner from '$lib/components/SearchTuner.svelte';
   import { formatDate } from '$lib/format';
-  import { downloadCSV, copyToClipboard } from '$lib/export';
   import type { SearchResult, SearchStats, IssueInfo, TagCount } from '$lib/db';
   import type { DebugInfo } from '$lib/search';
 
-  type ResultWithDebug = SearchResult & { debug?: DebugInfo };
+  type ResultWithDebug = SearchResult & { debug?: DebugInfo; content?: string };
 
   let query = $state('');
   let results = $state<ResultWithDebug[]>([]);
+  let expanded = $state<Set<number>>(new Set());
+  let sortBy = $state<'relevance' | 'date'>('relevance');
+
+  const sortedResults = $derived.by(() => {
+    if (sortBy === 'date') {
+      return [...results].sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
+    }
+    return results;
+  });
+
   let loading = $state(false);
   let searched = $state(false);
   let stats = $state<SearchStats | null>(null);
@@ -175,13 +184,10 @@
 
   <div class="controls-row">
     <button class="tuner-toggle" onclick={() => tunerOpen = !tunerOpen} aria-expanded={tunerOpen}>
-      <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14" aria-hidden="true">
-        <path d="M17 2.75a.75.75 0 00-1.5 0v5.5a.75.75 0 001.5 0v-5.5zM17 15.75a.75.75 0 00-1.5 0v1.5a.75.75 0 001.5 0v-1.5zM3.75 15a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5a.75.75 0 01.75-.75zM4.5 2.75a.75.75 0 00-1.5 0v5.5a.75.75 0 001.5 0v-5.5zM10 11a.75.75 0 01.75.75v5.5a.75.75 0 01-1.5 0v-5.5A.75.75 0 0110 11zM10.75 2.75a.75.75 0 00-1.5 0v1.5a.75.75 0 001.5 0v-1.5zM10 5a2 2 0 100 4 2 2 0 000-4zM3.75 10a2 2 0 100 4 2 2 0 000-4zM16.25 10a2 2 0 100 4 2 2 0 000-4z" />
-      </svg>
-      {tunerOpen ? 'Hide search options' : 'Search options'}
+      {tunerOpen ? 'Hide filters' : 'Filters'}
     </button>
     <button class="tuner-toggle" onclick={() => { debugMode = !debugMode; if (searched) doSearch(); }}>
-      {debugMode ? 'Hide scoring' : 'Show scoring'}
+      {debugMode ? 'Hide scoring' : 'Scoring'}
     </button>
   </div>
 
@@ -208,9 +214,9 @@
       {:else}
         <span>{results.length} result{results.length !== 1 ? 's' : ''}</span>
         {#if results.length > 0}
-          <span class="results-actions">
-            <button onclick={() => downloadCSV(results)}>Export CSV</button>
-          </span>
+          <button class="sort-toggle" onclick={() => sortBy = sortBy === 'relevance' ? 'date' : 'relevance'}>
+            {sortBy === 'relevance' ? 'Sort by date' : 'Sort by relevance'}
+          </button>
         {/if}
       {/if}
     </div>
@@ -224,7 +230,7 @@
       </div>
     {/if}
 
-    {#each results as result, i}
+    {#each sortedResults as result, i}
       <article class="result" class:selected={i === selectedIdx}>
         <div class="result-meta">
           {#if result.url}
@@ -249,8 +255,20 @@
             {result.title}
           {/if}
         </h3>
-        {#if result.snippet}
-          <p class="snippet">{@html result.snippet}</p>
+        {#if result.content}
+          {@const text = result.content.replace(/[ \t]*\n[ \t]*/g, '\n').replace(/\n{2,}/g, '\n\n').trim()}
+          {@const terms = query.split(/\s+/).filter(t => t.length > 1).map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')}
+          {@const html = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(terms ? new RegExp(`\\b(${terms})\\w*`, 'gi') : /(?!x)x/, '<mark>$&</mark>')}
+          <div class="body" class:open={expanded.has(result.id)}>{@html html}</div>
+        {:else if result.snippet}
+          <div class="body">{@html result.snippet}</div>
+        {/if}
+        {#if result.content}
+          <button class="expand-toggle" onclick={() => {
+            const s = new Set(expanded);
+            if (s.has(result.id)) s.delete(result.id); else s.add(result.id);
+            expanded = s;
+          }}>{expanded.has(result.id) ? 'Less' : 'More'}</button>
         {/if}
         {#if debugMode && result.debug}
           <table class="receipt">
@@ -297,285 +315,131 @@
 </main>
 
 <style>
-  main {
-    max-width: 720px;
-    margin: 0 auto;
-    padding: var(--space-12) var(--space-6) var(--space-16);
+  /* -- All interactive text uses one shared style -- */
+  .tuner-toggle, .sort-toggle, .expand-toggle {
+    background: none; border: none; padding: 0; cursor: pointer;
+    font: var(--font-weight-semibold) var(--font-size-xs) var(--font-family-data);
+    text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--color-text-tertiary);
   }
 
-  header {
-    margin-bottom: var(--space-10);
-  }
+  /* -- Layout -- */
+  main { max-width: 580px; margin: 0 auto; padding: 32px 24px 64px; }
+  header { margin-bottom: 16px; }
 
+  /* -- Type hierarchy: 3 tiers -- */
   h1 {
-    font-size: var(--font-size-2xl);
-    font-weight: var(--font-weight-bold);
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-wide, 0.02em);
-    margin: 0 0 var(--space-2);
+    font: var(--font-weight-bold) 15px/1.2 var(--font-family);
+    text-transform: uppercase; letter-spacing: 0.06em;
+    margin: 0 0 4px; color: var(--color-text-primary);
   }
-
-  .subtitle {
-    color: var(--color-text-secondary);
-    margin: 0;
-    font-size: var(--font-size-sm);
+  .subtitle, .date-range {
+    font: 10px/1.4 var(--font-family-data);
+    color: var(--color-text-tertiary); letter-spacing: 0.02em; margin: 0;
   }
+  h3 { font: var(--font-weight-semibold) 13px/1.35 var(--font-family); margin: 0; }
+  h3 a { color: var(--color-text-primary); text-decoration: none; }
 
-  .date-range {
-    color: var(--color-text-tertiary);
-  }
-
-  .search-box {
-    position: relative;
-    margin-bottom: var(--space-2);
-  }
-
+  /* -- Search input -- */
+  .search-box { position: relative; margin-bottom: 4px; }
   .search-icon {
-    position: absolute;
-    left: var(--space-3);
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--color-text-tertiary);
-    pointer-events: none;
+    position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+    color: var(--color-text-tertiary); pointer-events: none; width: 13px; height: 13px;
   }
-
   input[type='search'] {
-    width: 100%;
-    padding: var(--space-3) var(--space-10) var(--space-3) var(--space-10);
-    font-size: var(--font-size-base);
-    font-family: var(--font-family);
-    border: 1px solid var(--color-border);
-    outline: none;
-    box-sizing: border-box;
-    background: var(--color-bg-primary);
-    color: var(--color-text-primary);
+    width: 100%; padding: 7px 32px 7px 30px;
+    font: 13px var(--font-family); border: 1px solid var(--color-border);
+    outline: none; box-sizing: border-box;
+    background: var(--color-bg-primary); color: var(--color-text-primary);
   }
-
-  input[type='search']:focus {
-    border-color: var(--color-text-primary);
-  }
-
-  input[type='search']::-webkit-search-cancel-button {
-    display: none;
-  }
-
+  input[type='search']:focus { border-color: var(--color-text-primary); }
+  input[type='search']::-webkit-search-cancel-button { display: none; }
   .clear-btn {
-    position: absolute;
-    right: var(--space-3);
-    top: 50%;
-    transform: translateY(-50%);
-    border: none;
-    background: none;
-    color: var(--color-text-tertiary);
-    cursor: pointer;
-    font-size: var(--font-size-sm);
-    padding: var(--space-1);
-    line-height: 1;
+    position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+    border: none; background: none; color: var(--color-text-tertiary);
+    cursor: pointer; font-size: 10px; padding: 4px; line-height: 1;
   }
-
   .spinner {
-    position: absolute;
-    right: var(--space-8);
-    top: 50%;
-    transform: translateY(-50%);
-    width: 14px;
-    height: 14px;
-    border: 2px solid var(--color-border);
-    border-top-color: var(--color-text-primary);
-    border-radius: 50%;
+    position: absolute; right: 28px; top: 50%; transform: translateY(-50%);
+    width: 11px; height: 11px; border: 1.5px solid var(--color-border);
+    border-top-color: var(--color-text-primary); border-radius: 50%;
     animation: spin 0.6s linear infinite;
   }
+  @keyframes spin { to { transform: translateY(-50%) rotate(360deg); } }
 
-  @keyframes spin {
-    to { transform: translateY(-50%) rotate(360deg); }
-  }
+  /* -- Controls -- */
+  .controls-row { display: flex; gap: 12px; margin-bottom: 8px; }
+  .tuner-panel { border-top: 1px solid var(--color-border-light); padding: 10px 0 8px; margin-bottom: 4px; }
 
-  .controls-row {
-    display: flex;
-    gap: var(--space-4);
-    margin-bottom: var(--space-3);
-  }
-
-  .tuner-toggle {
-    display: inline;
-    background: none;
-    border: none;
-    color: var(--color-text-tertiary);
-    font-size: var(--font-size-xs);
-    font-family: var(--font-family-data);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    cursor: pointer;
-    padding: 0;
-  }
-
-  .tuner-panel {
-    border-top: 1px solid var(--color-border);
-    padding: var(--space-4) 0;
-    margin-bottom: var(--space-3);
-  }
-
+  /* -- Results chrome -- */
   .results-header {
-    display: flex;
-    align-items: baseline;
-    gap: var(--space-2);
-    font-size: var(--font-size-xs);
-    font-family: var(--font-family-data);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
+    display: flex; align-items: baseline; gap: 6px;
+    font: var(--font-weight-semibold) var(--font-size-xs) var(--font-family-data);
+    text-transform: uppercase; letter-spacing: 0.04em;
     color: var(--color-text-tertiary);
-    margin-bottom: var(--space-2);
+    padding-bottom: 6px; margin-bottom: 0;
+    border-bottom: 1px solid var(--color-border-light);
   }
+  .sort-toggle { margin-left: auto; }
 
-  .results-actions {
-    display: flex;
-    gap: var(--space-3);
-    margin-left: auto;
-  }
-
-  .results-actions button {
-    background: none;
-    border: none;
-    color: var(--color-text-tertiary);
-    font-size: var(--font-size-xs);
-    font-family: var(--font-family-data);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    cursor: pointer;
-    padding: 0;
-    text-decoration: underline;
-  }
-
-  .result {
-    padding: var(--space-4) 0;
-    border-top: 1px solid var(--color-border-light);
-  }
-
+  /* -- Result items -- */
+  .result { padding: 10px 0; border-bottom: 1px solid var(--color-border-light); }
   .result-meta {
-    display: flex;
-    align-items: baseline;
-    gap: var(--space-2);
-    font-size: var(--font-size-xs);
-    font-family: var(--font-family-data);
-    color: var(--color-text-tertiary);
-    margin-bottom: var(--space-1);
+    display: flex; align-items: baseline; gap: 6px;
+    font: var(--font-size-xs) var(--font-family-data);
+    color: var(--color-text-tertiary); margin-bottom: 2px;
   }
-
-  .issue {
-    font-weight: var(--font-weight-semibold);
-    color: var(--color-text-tertiary);
-    text-decoration: none;
+  .issue { font-weight: var(--font-weight-semibold); color: var(--color-text-tertiary); text-decoration: none; }
+  .section, .match-type { color: var(--color-text-tertiary); }
+  .body {
+    margin: 4px 0 0; font-size: 13px; color: var(--color-text-secondary); line-height: 1.55;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
   }
+  .body.open { display: block; -webkit-line-clamp: unset; overflow: visible; white-space: pre-line; }
+  .body :global(mark) { background: var(--color-highlight); padding: 0 1px; }
+  .expand-toggle { margin-top: 3px; }
 
-  .section, .match-type {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-tertiary);
-  }
+  /* -- Empty state -- */
+  .no-results { text-align: center; padding: 40px 0; color: var(--color-text-tertiary); font-size: 12px; }
+  .no-results p { margin: 4px 0; }
 
-  h3 {
-    margin: 0;
-    font-size: var(--font-size-base);
-    font-weight: var(--font-weight-semibold);
-    line-height: 1.35;
-  }
-
-  h3 a {
-    color: var(--color-text-primary);
-    text-decoration: none;
-  }
-
-  .snippet {
-    margin: var(--space-1) 0 0;
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
-    line-height: 1.5;
-  }
-
-  .snippet :global(mark) {
-    background: var(--color-highlight);
-    padding: 0 1px;
-  }
-
-  .no-results {
-    text-align: center;
-    padding: var(--space-12) 0;
-    color: var(--color-text-tertiary);
-    font-size: var(--font-size-sm);
-  }
-
-  .no-results p { margin: var(--space-1) 0; }
-
+  /* -- Score receipt -- */
   .receipt {
-    margin-top: var(--space-2);
-    border-collapse: collapse;
-    font-family: var(--font-family-data);
-    font-size: var(--font-size-xs);
-    color: var(--color-text-tertiary);
-    line-height: 1;
+    margin-top: 4px; border-collapse: collapse;
+    font: var(--font-size-xs) var(--font-family-data);
+    color: var(--color-text-tertiary); line-height: 1;
   }
-
   .receipt td { padding: 1px 0; }
-  .receipt td:first-child { padding-right: var(--space-6); white-space: nowrap; }
+  .receipt td:first-child { padding-right: 16px; white-space: nowrap; }
   .receipt td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
   .receipt-rule td { border-bottom: 1px dashed var(--color-border); padding-bottom: 2px; }
-  .receipt-rule + tr td { padding-top: 3px; }
-  .receipt-total td { font-weight: var(--font-weight-bold); color: var(--color-text-primary); padding-top: 2px; }
+  .receipt-rule + tr td { padding-top: 2px; }
+  .receipt-total td { font-weight: var(--font-weight-bold); color: var(--color-text-primary); }
 
-  .recent {
-    margin-top: var(--space-10);
-    border-top: 1px solid var(--color-border);
-    padding-top: var(--space-4);
-  }
-
+  /* -- Recent issues -- */
+  .recent { margin-top: 32px; border-top: 1px solid var(--color-border); padding-top: 10px; }
   .recent h2 {
-    font-size: var(--font-size-xs);
-    font-family: var(--font-family-data);
-    font-weight: var(--font-weight-semibold);
-    color: var(--color-text-tertiary);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    margin: 0 0 var(--space-4);
+    font: var(--font-weight-semibold) var(--font-size-xs) var(--font-family-data);
+    color: var(--color-text-tertiary); text-transform: uppercase;
+    letter-spacing: 0.04em; margin: 0 0 8px;
   }
-
-  .issues-list {
-    display: flex;
-    flex-direction: column;
-  }
-
+  .issues-list { display: flex; flex-direction: column; }
   .issue-card {
-    display: flex;
-    align-items: baseline;
-    gap: var(--space-4);
-    padding: var(--space-2) 0;
-    border-top: 1px solid var(--color-border-light);
-    text-decoration: none;
-    color: var(--color-text-primary);
-    font-size: var(--font-size-sm);
+    display: flex; align-items: baseline; gap: 10px;
+    padding: 4px 0; border-bottom: 1px solid var(--color-border-light);
+    text-decoration: none; color: var(--color-text-primary); font-size: 12px;
   }
-
   .issue-num {
-    font-weight: var(--font-weight-semibold);
-    font-family: var(--font-family-data);
-    min-width: 2.5rem;
-    color: var(--color-text-tertiary);
+    font: var(--font-weight-semibold) 12px var(--font-family-data);
+    min-width: 2.5rem; color: var(--color-text-tertiary);
   }
-
-  .issue-date {
-    color: var(--color-text-secondary);
-  }
-
-  .issue-count {
-    font-family: var(--font-family-data);
-    color: var(--color-text-tertiary);
-    margin-left: auto;
-  }
+  .issue-date { color: var(--color-text-secondary); }
+  .issue-count { font-family: var(--font-family-data); color: var(--color-text-tertiary); margin-left: auto; }
 
   @media (max-width: 600px) {
-    main { padding: var(--space-6) var(--space-4) var(--space-12); }
-    h1 { font-size: var(--font-size-xl); }
+    main { padding: 20px 16px 48px; }
     input[type='search'] { font-size: 16px; }
     .result-meta { flex-wrap: wrap; }
     .results-header { flex-wrap: wrap; }
-    .results-actions { margin-left: 0; }
   }
 </style>

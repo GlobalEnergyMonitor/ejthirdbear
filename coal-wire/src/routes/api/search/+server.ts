@@ -42,8 +42,5 @@ export const GET: RequestHandler = async ({ url }) => {
     debug,
   });
 
-  // Strip content field from response (large, not needed by client)
-  const cleaned = results.map(({ content, ...rest }) => rest);
-
-  return json({ results: cleaned, query: q, mode, bm25Weight, debug });
+  return json({ results, query: q, mode, bm25Weight, debug });
 };

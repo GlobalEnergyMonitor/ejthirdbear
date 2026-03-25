@@ -1,7 +1,7 @@
 {
   "name": "coal-wire-search",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
     "dev": "vite dev",
@@ -28,6 +28,7 @@
   },
   "dependencies": {
     "@huggingface/transformers": "^3.8.1",
-    "better-sqlite3": "^11.9.1"
+    "better-sqlite3": "^11.9.1",
+    "umap-js": "^1.4.0"
   }
 }
