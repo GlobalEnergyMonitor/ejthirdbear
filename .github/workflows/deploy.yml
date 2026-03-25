@@ -57,9 +57,18 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.DO_SPACES_SECRET_KEY }}
           AWS_DEFAULT_REGION: us-east-1
 
+      - name: Deploy to Fly.io staging
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Fly deploy staging
+        run: flyctl deploy --config fly.staging.toml --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
       - name: Deployment summary
         run: |
           VERSION=${{ steps.version.outputs.version }}
           echo "## Deployment Complete" >> $GITHUB_STEP_SUMMARY
           echo "**Version:** v${VERSION}" >> $GITHUB_STEP_SUMMARY
-          echo "**URL:** https://${DO_SPACES_BUCKET}.${DO_SPACES_REGION}.digitaloceanspaces.com/gem-viz/v${VERSION}/" >> $GITHUB_STEP_SUMMARY
+          echo "**DO Spaces:** https://${DO_SPACES_BUCKET}.${DO_SPACES_REGION}.digitaloceanspaces.com/gem-viz/v${VERSION}/" >> $GITHUB_STEP_SUMMARY
+          echo "**Fly staging:** https://gem-viz-staging.fly.dev/" >> $GITHUB_STEP_SUMMARY
