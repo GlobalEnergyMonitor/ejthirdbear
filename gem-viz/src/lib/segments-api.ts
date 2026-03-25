@@ -4,8 +4,9 @@
  */
 
 import { IDENTIFIER_TO_API_SLUG, URL_SLUG_TO_TRACKER } from '$lib/data-config/tracker-schema';
+import { getAPIBase } from '$lib/ownership-api';
 
-const SEGMENTS_API_URL = 'https://gem-api.thirdbear.net/segments?format=json';
+const getSegmentsUrl = () => `${getAPIBase()}/segments?format=json`;
 
 export interface Segment {
   id: string;
@@ -39,7 +40,7 @@ export async function fetchSegments(): Promise<Segment[]> {
   }
 
   try {
-    const response = await fetch(SEGMENTS_API_URL);
+    const response = await fetch(getSegmentsUrl());
     if (!response.ok) {
       throw new Error(`Failed to fetch segments: ${response.status}`);
     }
@@ -70,7 +71,7 @@ export async function getSegmentsForTracker(trackerSlug: string): Promise<Segmen
  * Build a full API URL for a segment
  */
 export function getSegmentApiUrl(segment: Segment): string {
-  return `https://gem-api.thirdbear.net${segment.href}`;
+  return `${getAPIBase()}${segment.href}`;
 }
 
 /**
@@ -78,7 +79,7 @@ export function getSegmentApiUrl(segment: Segment): string {
  */
 export function getSegmentScreenerUrl(segment: Segment, baseUrl: string = ''): string {
   // Parse the query params from the href
-  const url = new URL(`https://gem-api.thirdbear.net${segment.href}`);
+  const url = new URL(`${getAPIBase()}${segment.href}`);
   const params = new URLSearchParams();
 
   // Map API params to our screener params

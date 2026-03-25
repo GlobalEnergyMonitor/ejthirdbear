@@ -11,6 +11,7 @@ import {
 } from '$lib/ownership-api';
 
 import type { GraphNode, GraphEdge, OwnershipPathEntry } from '$lib/component-data/graph-types';
+import { PROSPECTIVE_STATUSES } from '$lib/data-config/tracker-schema';
 
 export interface ReportSummary {
   totalAssets: number;
@@ -85,10 +86,10 @@ export async function queryEntityPortfolios(
     const trackerSet = new Set(assetList.map((a) => a.facilityType).filter(Boolean));
     const operating = assetList.filter((a) => a.status?.toLowerCase() === 'operating').length;
     const proposed = assetList.filter((a) =>
-      ['proposed', 'announced', 'pre-permit', 'permitted'].includes(a.status?.toLowerCase() || '')
+      PROSPECTIVE_STATUSES.includes(a.status?.toLowerCase() as any)
     ).length;
-    const construction = assetList.filter((a) =>
-      ['construction', 'under construction'].includes(a.status?.toLowerCase() || '')
+    const construction = assetList.filter(
+      (a) => a.status?.toLowerCase() === 'construction'
     ).length;
 
     results.push({
@@ -385,9 +386,7 @@ export async function queryTrackerBreakdown(
     const existing = trackerMap.get(tracker);
 
     const isOperating = status === 'operating' ? 1 : 0;
-    const isProposed = ['proposed', 'announced', 'pre-permit', 'permitted'].includes(status)
-      ? 1
-      : 0;
+    const isProposed = PROSPECTIVE_STATUSES.includes(status as any) ? 1 : 0;
 
     if (existing) {
       existing.asset_count++;

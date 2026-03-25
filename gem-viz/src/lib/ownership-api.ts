@@ -5,6 +5,7 @@ import {
   API_SLUG_TO_TYPE as _SCHEMA_SLUG_TO_TYPE,
   API_TYPE_TO_SLUG as _SCHEMA_TYPE_TO_SLUG,
   IDENTIFIER_TO_API_SLUG as _SCHEMA_ID_TO_SLUG,
+  normalizeSubStatus,
 } from '$lib/data-config/tracker-schema';
 
 // API base URL (env override or production default)
@@ -123,15 +124,8 @@ export interface OwnershipTraceNode {
   type: 'entity' | 'asset';
 }
 
-export interface OwnershipTracePath {
-  terminal: OwnershipTraceNode;
-  path: Array<{ node: OwnershipTraceNode; share?: number }>;
-}
-
-export interface OwnershipTraceResponse {
-  root: OwnershipTraceNode;
-  terminals: OwnershipTracePath[];
-}
+// OwnershipTracePath and OwnershipTraceResponse removed — the /trace/ endpoints
+// exist in the API but we use /ownership/graph instead (richer data).
 
 export interface GraphNode {
   id: string;
@@ -509,13 +503,8 @@ export async function getEntityOwned(entityId: string): Promise<DirectOwned[]> {
   }));
 }
 
-/** Trace ownership in given direction to all terminal nodes */
-function traceEntity(entityId: string, dir: 'up' | 'down'): Promise<OwnershipTraceResponse> {
-  _currentReason = `traceEntity ${dir} ${entityId}`;
-  return fetchAPI(`/entities/${encodeURIComponent(entityId)}/trace/${dir}`);
-}
-export const traceEntityUp = (id: string) => traceEntity(id, 'up');
-export const traceEntityDown = (id: string) => traceEntity(id, 'down');
+// traceEntityUp / traceEntityDown removed — we use /ownership/graph instead.
+// The /entities/{id}/trace/{up|down} endpoints still exist in the API if needed.
 
 // Raw shape returned by /entities/{id}/graph/{direction}
 interface RawEntityGraph {
@@ -572,7 +561,6 @@ export const getEntityGraphDown = (id: string) => getEntityGraph(id, 'down');
 /**
  * Slug/type maps — sourced from tracker-schema.ts (single source of truth).
  * These re-exports exist for backward compatibility with existing importers.
- * Will be replaced by API-driven data from /catalog/metadata/status-taxonomy.
  */
 export const SLUG_TO_API_TYPE: Record<string, string> = {
   ..._SCHEMA_SLUG_TO_TYPE,
@@ -867,23 +855,11 @@ export async function fetchStatusFacets(assetTypeSlug?: string): Promise<Map<str
   });
   // Prefer sub_status facets (granular) over status facets (aggregate)
   const rawFacets = res.facets?.sub_status ?? res.facets?.status ?? {};
-  // Normalize snake_case keys to hyphenated lowercase to match STATUS_GROUPS
+  // Normalize snake_case keys to our display convention via normalizeSubStatus
   const normalized = new Map<string, number>();
   for (const [k, v] of Object.entries(rawFacets)) {
-    const key = k.toLowerCase().replace(/_/g, '-');
-    // Map API-specific names to our convention
-    const mapped =
-      key === 'cancelled-inferred'
-        ? 'cancelled - inferred 4 y'
-        : key === 'shelved-inferred'
-          ? 'shelved - inferred 2 y'
-          : key === 'operating-pre-retirement'
-            ? 'operating pre-retirement'
-            : key === 'mothballed-pre-retirement'
-              ? 'mothballed pre-retirement'
-              : key === 'mixed-status'
-                ? 'operating' // mixed status counts as operating
-                : key;
+    const mapped = normalizeSubStatus(k);
+    if (!mapped) continue;
     normalized.set(mapped, (normalized.get(mapped) ?? 0) + v);
   }
   return normalized;

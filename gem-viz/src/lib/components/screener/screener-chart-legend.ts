@@ -5,6 +5,7 @@
 
 import { type Selection } from 'd3';
 import { colors, statusColors, getTrackerColor } from '$lib/design-tokens';
+import { STATUS_GROUPS } from '$lib/data-config/tracker-schema';
 import type { ScreenerChartData } from './screener-chart-data';
 import { LAYOUT } from './screener-chart-data';
 import { drawCross } from './screener-chart-assets';
@@ -68,7 +69,7 @@ export function drawLegend(
   }
 
   // Status legend (always shown)
-  const statusData = ['operating', 'planned', 'retired', 'cancelled'] as const;
+  const statusData = STATUS_GROUPS.map((g) => g.id);
   const statusLegend = legend
     .append('g')
     .attr('class', 'status-legend')

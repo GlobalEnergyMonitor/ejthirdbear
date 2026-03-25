@@ -19,8 +19,6 @@ export {
   getEntity,
   getEntityOwners,
   getEntityOwned,
-  traceEntityUp,
-  traceEntityDown,
   getEntityGraphUp,
   getEntityGraphDown,
   // Asset operations

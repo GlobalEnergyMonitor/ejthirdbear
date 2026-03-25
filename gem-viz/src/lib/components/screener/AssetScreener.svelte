@@ -20,6 +20,7 @@
     statusColorLegend,
   } from '$lib/design-tokens';
   import { cleanAssetName, wrapTextLines } from './screener-utils';
+  import { STATUS_GROUPS } from '$lib/data-config/tracker-schema';
 
   // Props - can receive pre-fetched portfolio data or fetch its own
   let {
@@ -29,7 +30,9 @@
     sortByOwnershipPct = true,
     includeUnitNames = false,
     /** Default active status groups (operating + planned by default) */
-    defaultStatuses = ['operating', 'planned'],
+    defaultStatuses = STATUS_GROUPS.filter((g) => g.id === 'operating' || g.id === 'planned').map(
+      (g) => g.id
+    ),
   } = $props();
 
   // Status filter state - which status groups are currently visible
@@ -238,7 +241,7 @@
   // Calculate frequency tables for mini bar charts
   function calculateFrequencyTables(units) {
     if (units.length === 0) return { tracker: [], status: [] };
-    const statusOrder = ['operating', 'planned', 'retired', 'cancelled'];
+    const statusOrder = STATUS_GROUPS.map((g) => g.id);
     return {
       tracker: countFrequency(units, 'tracker'),
       status: countFrequency(

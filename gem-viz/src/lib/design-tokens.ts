@@ -182,26 +182,27 @@ export const statusColorsGranular: Record<string, string> = {
   'shelved - inferred 2 y': '#BECCCF',
 };
 
-// Status groupings
-/**
- * Status groupings — sourced from tracker-schema.ts (single source of truth).
- * Will be replaced by API-driven data from /catalog/metadata/status-taxonomy.
- */
+// Status groupings — sourced from tracker-schema.ts (single source of truth).
+// The API taxonomy (/catalog/metadata/status-taxonomy) is the primary source;
+// these hardcoded groups serve as fallback.
 import {
   STATUS_GROUPS as _SCHEMA_STATUS_GROUPS,
   FOSSIL_TRACKERS as _SCHEMA_FOSSIL_TRACKERS,
   PROSPECTIVE_STATUSES as _SCHEMA_PROSPECTIVE_STATUSES,
 } from '$lib/data-config/tracker-schema';
 
+const _findGroup = (id: string) =>
+  (_SCHEMA_STATUS_GROUPS.find((g) => g.id === id)?.statuses ?? []) as readonly string[];
+
 export const statusGroups = {
-  operating: _SCHEMA_STATUS_GROUPS[0].statuses as readonly string[],
+  operating: _findGroup('operating'),
   planned: [
-    ..._SCHEMA_STATUS_GROUPS[1].statuses,
+    ..._findGroup('planned'),
     // API aggregate fallback — some trackers return 'planned' instead of granular sub-statuses
     'planned',
   ] as readonly string[],
-  retired: _SCHEMA_STATUS_GROUPS[3].statuses as readonly string[],
-  cancelled: _SCHEMA_STATUS_GROUPS[2].statuses as readonly string[],
+  retired: _findGroup('retired'),
+  cancelled: _findGroup('cancelled'),
 } as const;
 
 // Status color legend (for viz legends)

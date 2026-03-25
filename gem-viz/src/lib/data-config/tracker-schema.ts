@@ -25,11 +25,17 @@ export async function initFromApi(): Promise<void> {
   const taxonomy = await fetchCatalogTaxonomy();
   if (taxonomy) {
     _apiTaxonomy = taxonomy;
-    // API descriptions override hardcoded — if they tweak copy on the backend, we show it
-    for (const group of Object.values(taxonomy.statuses)) {
-      for (const [, sub] of Object.entries(group.sub_statuses)) {
-        if (sub.description && sub.label) {
-          STATUS_VALUE_DESCRIPTIONS[sub.label.toLowerCase()] = sub.description;
+    // Rebuild STATUS_TO_GROUP and STATUS_VALUE_DESCRIPTIONS from API taxonomy.
+    // This ensures new statuses added to the backend automatically get group
+    // assignments and descriptions without a frontend deploy.
+    for (const [groupId, group] of Object.entries(taxonomy.statuses)) {
+      for (const [subKey, sub] of Object.entries(group.sub_statuses)) {
+        const normalized = normalizeSubStatus(subKey);
+        if (normalized) {
+          STATUS_TO_GROUP[normalized] = groupId;
+        }
+        if (sub.description && normalized) {
+          STATUS_VALUE_DESCRIPTIONS[normalized] = sub.description;
         }
       }
     }
@@ -248,18 +254,26 @@ export const STATUS_VALUES = [
   'cancelled - inferred 4 y',
   'construction',
   'demolished',
+  'historic landmark',
   'idle',
+  'mixed status',
   'mothballed',
   'mothballed pre-retirement',
   'operating',
   'operating pre-retirement',
+  'other',
   'permitted',
   'pre-construction',
   'pre-permit',
   'proposed',
+  'reclamation',
+  'rehabilitation',
+  'renewable energy site',
+  'repurpose',
   'retired',
   'shelved',
   'shelved - inferred 2 y',
+  'unknown',
 ] as const;
 
 export type StatusValue = (typeof STATUS_VALUES)[number];
@@ -269,7 +283,7 @@ export const STATUS_GROUPS = [
   {
     id: 'operating',
     label: 'Operating',
-    statuses: ['operating', 'operating pre-retirement'] as StatusValue[],
+    statuses: ['operating', 'operating pre-retirement', 'mixed status'] as StatusValue[],
   },
   {
     id: 'planned',
@@ -281,6 +295,7 @@ export const STATUS_GROUPS = [
       'pre-construction',
       'pre-permit',
       'proposed',
+      'unknown',
     ] as StatusValue[],
   },
   {
@@ -303,6 +318,12 @@ export const STATUS_GROUPS = [
       'idle',
       'abandoned',
       'demolished',
+      'historic landmark',
+      'other',
+      'reclamation',
+      'rehabilitation',
+      'renewable energy site',
+      'repurpose',
     ] as StatusValue[],
   },
 ] as const;
@@ -337,6 +358,29 @@ export const PROSPECTIVE_STATUSES = [
   'planned',
 ] as const;
 
+/** Statuses in each group — derived from STATUS_GROUPS for easy set-based lookups.
+ * Use these instead of hardcoding status strings in components. */
+export const OPERATING_STATUSES = new Set(
+  STATUS_GROUPS.find((g) => g.id === 'operating')?.statuses ?? []
+);
+export const PLANNED_STATUSES = new Set(
+  STATUS_GROUPS.find((g) => g.id === 'planned')?.statuses ?? []
+);
+export const CANCELLED_STATUSES = new Set(
+  STATUS_GROUPS.find((g) => g.id === 'cancelled')?.statuses ?? []
+);
+export const RETIRED_STATUSES = new Set(
+  STATUS_GROUPS.find((g) => g.id === 'retired')?.statuses ?? []
+);
+
+/** Canonical display order for status groups (operating first, then planned, cancelled, retired). */
+export const STATUS_GROUP_ORDER = STATUS_GROUPS.map((g) => g.id);
+
+/** Map a status string to its group id. Uses STATUS_TO_GROUP with fallback. */
+export function getStatusGroupId(status: string): string {
+  return STATUS_TO_GROUP[status.toLowerCase()] || 'unknown';
+}
+
 /** Short help text for the high-level status groups shown in the screener modal */
 export const STATUS_GROUP_DESCRIPTIONS: Record<string, string> = {
   operating: 'Assets currently operating or producing.',
@@ -348,24 +392,32 @@ export const STATUS_GROUP_DESCRIPTIONS: Record<string, string> = {
 
 /** Definitions for individual tracker status values shown under Refine */
 export const STATUS_VALUE_DESCRIPTIONS: Record<string, string> = {
-  abandoned: 'Site abandoned with no plans for reuse.',
+  abandoned: 'Closed site that has been abandoned.',
   announced: 'Publicly announced but not yet permitted or built.',
   cancelled: 'Project cancelled or failed to advance.',
-  'cancelled - inferred 4 y': 'No activity for 4+ years; inferred cancelled.',
+  'cancelled - inferred 4 y': 'Inferred cancelled based on four years without progress.',
   construction: 'Physically under construction.',
   demolished: 'Facility has been demolished.',
+  'historic landmark': 'Closed site designated as a historic landmark.',
   idle: 'Temporarily not operating.',
-  mothballed: 'Deactivated but not retired; may restart.',
-  'mothballed pre-retirement': 'Mothballed with planned retirement.',
-  operating: 'Currently operating or in commercial production.',
-  'operating pre-retirement': 'Operating but scheduled for retirement.',
+  'mixed status': 'Pipeline with mixed operating statuses across segments.',
+  mothballed: 'Deactivated or put into an inactive state; may restart.',
+  'mothballed pre-retirement': 'Deactivated ahead of planned retirement.',
+  operating: 'Currently in commercial operation.',
+  'operating pre-retirement': 'Still operating but scheduled for retirement.',
+  other: 'Closed site with other post-closure status.',
   permitted: 'Permits secured, construction not yet underway.',
-  'pre-construction': 'In development before construction begins.',
-  'pre-permit': 'Early-stage development before permits are secured.',
-  proposed: 'Proposed project without construction underway.',
-  retired: 'Permanently closed or decommissioned.',
-  shelved: 'Paused indefinitely or put on hold.',
-  'shelved - inferred 2 y': 'No activity for 2+ years; inferred shelved.',
+  'pre-construction': 'Actively moving toward permitting and construction.',
+  'pre-permit': 'Moving toward permitting but not yet fully permitted.',
+  proposed: 'Project has been proposed.',
+  reclamation: 'Closed site undergoing reclamation.',
+  rehabilitation: 'Closed site undergoing rehabilitation.',
+  'renewable energy site': 'Closed site converted to renewable energy use.',
+  repurpose: 'Closed site being repurposed for other uses.',
+  retired: 'Permanently decommissioned or converted.',
+  shelved: 'Proposed project not moving forward but not formally cancelled.',
+  'shelved - inferred 2 y': 'Inferred shelved based on two years without progress.',
+  unknown: 'Operating status is unknown.',
 };
 
 // =============================================================================
@@ -391,6 +443,12 @@ export function normalizeSubStatus(raw: string | null | undefined): string {
       return 'operating pre-retirement';
     case 'mothballed-pre-retirement':
       return 'mothballed pre-retirement';
+    case 'historic-landmark':
+      return 'historic landmark';
+    case 'renewable-energy-site':
+      return 'renewable energy site';
+    case 'mixed-status':
+      return 'mixed status';
     default:
       return s;
   }
@@ -406,9 +464,6 @@ export const API_COARSE_STATUSES = ['operating', 'planned', 'retired'] as const;
  *
  * Our UI uses names like "cancelled - inferred 4 y" but the API expects
  * "cancelled_inferred" in `?sub_status=`. This is the reverse of normalizeSubStatus().
- *
- * Returns null if the value doesn't map to any known API sub_status
- * (e.g. "abandoned" and "demolished" don't exist in the API).
  */
 const DISPLAY_TO_API_SUB_STATUS: Record<string, string> = {
   'cancelled - inferred 4 y': 'cancelled_inferred',
@@ -417,8 +472,10 @@ const DISPLAY_TO_API_SUB_STATUS: Record<string, string> = {
   'mothballed pre-retirement': 'mothballed_pre_retirement',
   'pre-construction': 'pre_construction',
   'pre-permit': 'pre_permit',
-  'mixed-status': 'mixed_status',
-  // These exist in the API as-is (no transform needed)
+  'mixed status': 'mixed_status',
+  'historic landmark': 'historic_landmark',
+  'renewable energy site': 'renewable_energy_site',
+  // Single-word statuses — same in API and display
   operating: 'operating',
   retired: 'retired',
   cancelled: 'cancelled',
@@ -430,6 +487,12 @@ const DISPLAY_TO_API_SUB_STATUS: Record<string, string> = {
   shelved: 'shelved',
   idle: 'idle',
   unknown: 'unknown',
+  abandoned: 'abandoned',
+  demolished: 'demolished',
+  other: 'other',
+  reclamation: 'reclamation',
+  rehabilitation: 'rehabilitation',
+  repurpose: 'repurpose',
 };
 
 /**
@@ -481,23 +544,14 @@ export interface DynamicStatusGroup {
   totalCount: number;
 }
 
-/** Our 4-group UI mapping — which API taxonomy group each UI group pulls from */
+/** Our 4-group UI mapping — which API taxonomy group each UI group pulls from.
+ * The API taxonomy now has 4 groups matching ours exactly. */
 const UI_GROUP_TO_TAXONOMY: Record<string, string[]> = {
   operating: ['operating'],
   planned: ['planned'],
-  cancelled: ['retired'], // API groups cancelled/shelved under 'retired'
+  cancelled: ['cancelled'],
   retired: ['retired'],
 };
-
-/** Sub-statuses that belong in our "cancelled" group (not "retired") */
-const CANCELLED_SUB_STATUSES = new Set([
-  'cancelled',
-  'cancelled-inferred',
-  'cancelled - inferred 4 y',
-  'shelved',
-  'shelved-inferred',
-  'shelved - inferred 2 y',
-]);
 
 /**
  * Build status groups from API facet data, optionally enriched by the taxonomy.
@@ -534,10 +588,8 @@ function buildGroupsFromTaxonomy(
     { label: string; sub_statuses: Record<string, { label: string; description?: string }> }
   >
 ): DynamicStatusGroup[] {
-  // Build a reverse map: sub_status key → which UI group it belongs to
-  // The API taxonomy has 3 groups (operating, planned, retired)
-  // Our UI has 4 (operating, planned, cancelled, retired)
-  // We split the API's "retired" into "cancelled" and "retired" based on CANCELLED_SUB_STATUSES
+  // The API taxonomy now has 4 groups matching our 4 UI groups exactly.
+  // Each UI group maps 1:1 to a taxonomy group via UI_GROUP_TO_TAXONOMY.
 
   const groups: DynamicStatusGroup[] = [];
   const seenStatuses = new Set<string>();
@@ -552,17 +604,7 @@ function buildGroupsFromTaxonomy(
       if (!taxGroup?.sub_statuses) continue;
 
       for (const [subKey, subMeta] of Object.entries(taxGroup.sub_statuses)) {
-        // Normalize key to our hyphenated convention
-        const normalized = subKey.replace(/_/g, '-');
-        const mapped = mapApiSubStatus(normalized);
-
-        // For the retired taxonomy group, split between cancelled and retired UI groups
-        if (taxGroupId === 'retired') {
-          const isCancelled =
-            CANCELLED_SUB_STATUSES.has(mapped) || CANCELLED_SUB_STATUSES.has(normalized);
-          if (uiGroup.id === 'cancelled' && !isCancelled) continue;
-          if (uiGroup.id === 'retired' && isCancelled) continue;
-        }
+        const mapped = normalizeSubStatus(subKey);
 
         if (seenStatuses.has(mapped)) continue;
         seenStatuses.add(mapped);
@@ -633,22 +675,9 @@ function buildGroupsFromTaxonomy(
   return groups;
 }
 
-/** Map API snake-case sub-status names to our display convention */
+/** @deprecated Use normalizeSubStatus instead — this is kept for backwards compat */
 function mapApiSubStatus(key: string): string {
-  switch (key) {
-    case 'cancelled-inferred':
-      return 'cancelled - inferred 4 y';
-    case 'shelved-inferred':
-      return 'shelved - inferred 2 y';
-    case 'operating-pre-retirement':
-      return 'operating pre-retirement';
-    case 'mothballed-pre-retirement':
-      return 'mothballed pre-retirement';
-    case 'mixed-status':
-      return 'operating';
-    default:
-      return key;
-  }
+  return normalizeSubStatus(key);
 }
 
 function buildGroupsFromHardcoded(facets: Map<string, number>): DynamicStatusGroup[] {

@@ -6,6 +6,7 @@
 
 import { getOwnershipGraph, getAsset, type GraphNode, type AssetSummary } from '$lib/ownership-api';
 import { getStatusGroup } from '$lib/design-tokens';
+import { STATUS_GROUPS } from '$lib/data-config/tracker-schema';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -418,7 +419,7 @@ export function buildSubsidiaryGroups(chartData: ScreenerChartData): SubsidiaryG
     }
 
     // Status bars
-    const statusOrder = ['proposed', 'operating', 'retired', 'cancelled', 'unknown'];
+    const statusOrder = [...STATUS_GROUPS.map((g) => g.id), 'unknown'];
     const statusData: BarDatum[] = Array.from(statusFreq, ([status, count]) => ({
       status,
       count,

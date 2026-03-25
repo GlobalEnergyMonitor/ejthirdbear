@@ -5,6 +5,7 @@
 
 import { getAsset, getEntityGraphDown, type AssetSummary } from '$lib/ownership-api';
 import { getStatusGroup, statusColors } from '$lib/design-tokens';
+import { STATUS_GROUPS } from '$lib/data-config/tracker-schema';
 import { formatCapacity } from '$lib/format';
 
 export interface PreflightStats {
@@ -284,8 +285,8 @@ export function aggregateAssetStats(assets: AssetSummary[]): AggregatedStats {
     typeMap.set(type, { count: tEntry.count + 1, capacity: tEntry.capacity + cap });
   }
 
-  // Sort statuses: operating first, then planned, retired, cancelled, unknown
-  const statusOrder = ['operating', 'planned', 'retired', 'cancelled', 'unknown'];
+  // Sort statuses by canonical group order
+  const statusOrder = [...STATUS_GROUPS.map((g) => g.id), 'unknown'];
   const statusBreakdown = statusOrder
     .filter((g) => statusMap.has(g))
     .map((g) => ({ group: g, ...statusMap.get(g)! }));

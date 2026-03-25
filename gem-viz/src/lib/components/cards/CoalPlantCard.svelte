@@ -1,6 +1,13 @@
 <script lang="ts">
   import { scaleLinear } from 'd3-scale';
   import type { CoalPlantUnit } from './coal-plant-types';
+  import {
+    OPERATING_STATUSES,
+    PLANNED_STATUSES,
+    CANCELLED_STATUSES,
+    RETIRED_STATUSES,
+    getStatusGroupId,
+  } from '$lib/data-config/tracker-schema';
 
   // ── Props ──────────────────────────────────────────────────────────────────
 
@@ -21,9 +28,7 @@
     'announced', 'proposed', 'mothballed', 'shelved', 'cancelled', 'retired',
   ];
 
-  const DEVELOPMENT_STATUSES = new Set([
-    'construction', 'permitted', 'pre-permit', 'pre-construction', 'announced', 'proposed',
-  ]);
+  const DEVELOPMENT_STATUSES = PLANNED_STATUSES;
 
   // 1.5°C phaseout dates by subregion
   // TODO: confirm exact mapping with GEM data team
@@ -115,7 +120,7 @@
   // Plant age: max across operating/mothballed units
   const plantAge = $derived.by(() => {
     const ages = units
-      .filter(u => ['operating', 'mothballed'].includes(u.coal_plant_fields.status))
+      .filter(u => OPERATING_STATUSES.has(u.coal_plant_fields.status) || u.coal_plant_fields.status === 'mothballed')
       .map(u => parseInt(u.coal_plant_fields.plant_age_years ?? '0'))
       .filter(a => a > 0);
     return ages.length ? Math.max(...ages) : null;
@@ -162,7 +167,7 @@
 
   const remainingLifetime = $derived.by(() => {
     const vals = units
-      .filter(u => ['operating', 'mothballed'].includes(u.coal_plant_fields.status))
+      .filter(u => OPERATING_STATUSES.has(u.coal_plant_fields.status) || u.coal_plant_fields.status === 'mothballed')
       .map(u => parseInt(u.coal_plant_fields.remaining_plant_lifetime_years ?? ''))
       .filter(v => !isNaN(v) && v > 0);
     return vals.length ? Math.max(...vals) : null;
@@ -180,9 +185,10 @@
   const phaseout15C = $derived(PHASEOUT_1_5C[f?.subregion ?? ''] ?? 2040);
 
   const alignmentStatus = $derived.by((): 'aligned' | 'needs-acceleration' | 'not-aligned' | null => {
-    const activeUnits = units.filter(u =>
-      !['retired', 'cancelled', 'shelved'].includes(u.coal_plant_fields.status)
-    );
+    const activeUnits = units.filter(u => {
+      const s = u.coal_plant_fields.status;
+      return !RETIRED_STATUSES.has(s) && !CANCELLED_STATUSES.has(s);
+    });
     if (activeUnits.length === 0) return null;
     const allRetireByPhaseout = activeUnits.every(u => {
       const yr = parseInt(u.coal_plant_fields.planned_retirement ?? '');
@@ -358,11 +364,9 @@
   }
 
   function statusClass(status: string): string {
-    if (status === 'operating') return 'operating';
-    if (status === 'retired') return 'retired';
-    if (['cancelled', 'shelved'].includes(status)) return 'cancelled';
-    if (status === 'mothballed') return 'mothballed';
-    return 'planned';
+    const group = getStatusGroupId(status);
+    if (group === 'retired' && status === 'mothballed') return 'mothballed';
+    return group;
   }
 
   function capitalize(s: string): string {

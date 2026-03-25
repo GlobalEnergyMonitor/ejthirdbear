@@ -17,7 +17,11 @@ import {
   type AssetSummary,
   type PaginatedResponse,
 } from './ownership-api';
-import { isCoarseStatus, displayStatusToApiKey } from './data-config/tracker-schema';
+import {
+  isCoarseStatus,
+  displayStatusToApiKey,
+  API_SLUG_TO_TYPE,
+} from './data-config/tracker-schema';
 import { logApiCall } from './api-log.svelte';
 // Shared types for compose page
 export interface FacetOption {
@@ -744,20 +748,17 @@ export const STATIC_COLUMNS = [
   'Share',
 ];
 
-/** Static tracker column availability (all API asset types have capacity) */
+/** Tracker column availability — derived from canonical API_SLUG_TO_TYPE.
+ *  All API asset types have capacity and share; startYear not yet in API. */
 export const STATIC_TRACKER_COLUMNS: Record<
   string,
   { hasCapacity: boolean; hasStartYear: boolean; hasShare: boolean }
-> = {
-  'Coal Plant': { hasCapacity: true, hasStartYear: false, hasShare: true },
-  'Oil & Gas Plant': { hasCapacity: true, hasStartYear: false, hasShare: true },
-  'Iron Ore Mine': { hasCapacity: true, hasStartYear: false, hasShare: true },
-  'Iron & Steel Plant': { hasCapacity: true, hasStartYear: false, hasShare: true },
-  'Natural Gas Transmission Pipeline': { hasCapacity: true, hasStartYear: false, hasShare: true },
-  'Oil or NGL Pipeline': { hasCapacity: true, hasStartYear: false, hasShare: true },
-  'Cement or Concrete Plant': { hasCapacity: true, hasStartYear: false, hasShare: true },
-  'Bioenergy Plant': { hasCapacity: true, hasStartYear: false, hasShare: true },
-};
+> = Object.fromEntries(
+  Object.values(API_SLUG_TO_TYPE).map((typeName) => [
+    typeName,
+    { hasCapacity: true, hasStartYear: false, hasShare: true },
+  ])
+);
 
 /**
  * Get the cache key for server-side filter params.

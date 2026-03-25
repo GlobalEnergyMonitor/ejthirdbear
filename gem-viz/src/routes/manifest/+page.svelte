@@ -14,8 +14,21 @@
   const dataSources = $derived(data?.dataSources || { ownership: [], trackers: [], derived: [] });
   const liveSources = $derived(data?.liveSources || []);
   const apiMeta = $derived(data?.apiMeta || null);
+  const fieldMappings = $derived(data?.fieldMappings || []);
+  const statusTaxonomy = $derived(data?.statusTaxonomy || null);
   const dataVersionInfo = $derived(data?.dataVersionInfo || null);
   const meta = $derived(data?.meta || { generatedAt: '', loadTime: null, error: null });
+
+  // Group field mappings by asset type for display
+  const fieldMappingsByType = $derived.by(() => {
+    const groups = {};
+    for (const fm of fieldMappings) {
+      const key = fm.asset_type || 'Unknown';
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(fm);
+    }
+    return groups;
+  });
 
   // Helpers
   function formatNumber(n) {
@@ -49,6 +62,8 @@
     <h2>Contents</h2>
     <ul>
       <li><a href="#api-info">Ownership API</a></li>
+      <li><a href="#status-taxonomy">Status Taxonomy</a></li>
+      <li><a href="#field-mappings">Field Mappings ({fieldMappings.length})</a></li>
       <li><a href="#tracker-configs">Tracker Configs ({trackerConfigs.length})</a></li>
       <li><a href="#data-sources">Data Source Registry</a></li>
       <li><a href="#version-info">Version Info</a></li>
@@ -108,6 +123,64 @@
           {/each}
         </tbody>
       </table>
+    </section>
+  {/if}
+
+  <!-- Status Taxonomy -->
+  {#if statusTaxonomy?.statuses}
+    <section id="status-taxonomy">
+      <h2>Status Taxonomy</h2>
+      <p class="section-desc">
+        From <code>/catalog/metadata/status-taxonomy</code> — canonical status groups and sub-statuses.
+      </p>
+      {#each Object.entries(statusTaxonomy.statuses) as [groupId, group]}
+        <article class="config-card">
+          <h3>{group.label}</h3>
+          <table class="probe-table">
+            <thead>
+              <tr><th>Sub-Status</th><th>Description</th></tr>
+            </thead>
+            <tbody>
+              {#each Object.entries(group.sub_statuses) as [key, sub]}
+                <tr>
+                  <td><code>{key}</code></td>
+                  <td>{sub.description || '—'}</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </article>
+      {/each}
+    </section>
+  {/if}
+
+  <!-- Field Mappings -->
+  {#if fieldMappings.length > 0}
+    <section id="field-mappings">
+      <h2>Field Mappings</h2>
+      <p class="section-desc">
+        From <code>/catalog/field-mappings</code> — how source spreadsheet columns map to normalized API fields.
+      </p>
+      {#each Object.entries(fieldMappingsByType) as [assetType, mappings]}
+        <article class="config-card">
+          <h3>{assetType}</h3>
+          <table class="probe-table">
+            <thead>
+              <tr><th>Normalized Field</th><th>Original Column</th><th>Type</th><th>Notes</th></tr>
+            </thead>
+            <tbody>
+              {#each mappings as fm}
+                <tr>
+                  <td><code>{fm.normalized_field}</code></td>
+                  <td>{fm.original_field}</td>
+                  <td>{fm.mapping_type}</td>
+                  <td>{fm.notes || '—'}</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </article>
+      {/each}
     </section>
   {/if}
 

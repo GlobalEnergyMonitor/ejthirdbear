@@ -15,21 +15,15 @@
     trackerMetadata,
     slugToTrackerName,
   } from '$lib/data-config/tracker-metadata';
+  import { URL_SLUG_TO_TRACKER } from '$lib/data-config/tracker-schema';
   import PageHeader from '$lib/components/nav/PageHeader.svelte';
   import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
   // Get tracker from URL param
   const trackerParam = $derived($page.params.tracker);
 
-  // Map URL slugs to tracker names
-  const trackerMap: Record<string, string> = {
-    'coal-mine': 'Coal Mine',
-    'coal-plant': 'Coal Plant',
-    'gas-plant': 'Gas Plant',
-    'steel-plant': 'Steel Plant',
-    'iron-mine': 'Iron Mine',
-    bioenergy: 'Bioenergy Power',
-  };
+  // Map URL slugs to tracker names — from canonical tracker-schema.ts
+  const trackerMap: Record<string, string> = URL_SLUG_TO_TRACKER;
 
   // Map tracker to metadata CSV file
   const metadataFiles: Record<string, string> = {

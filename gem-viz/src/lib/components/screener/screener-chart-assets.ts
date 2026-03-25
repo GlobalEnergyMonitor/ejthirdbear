@@ -14,6 +14,7 @@ import {
   type BaseType,
 } from 'd3';
 import { colors, statusColors } from '$lib/design-tokens';
+import { PLANNED_STATUSES } from '$lib/data-config/tracker-schema';
 import type {
   ScreenerChartData,
   SubsidiaryGroupData,
@@ -393,8 +394,8 @@ function addStatusIcon(
   const x = center[0] + r * 1.15;
   const y = center[1] - r * 1.15;
 
-  if (status === 'planned' || status === 'proposed') {
-    // Yellow dot
+  if (status === 'planned' || PLANNED_STATUSES.has(status)) {
+    // Yellow dot for planned/prospective
     el.append('circle')
       .attr('transform', `translate(${x},${y})`)
       .attr('r', r * 0.275)

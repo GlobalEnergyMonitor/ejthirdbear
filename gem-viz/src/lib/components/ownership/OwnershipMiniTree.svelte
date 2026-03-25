@@ -9,6 +9,7 @@
   import { entityLink, assetLink } from '$lib/links';
   import { line, curveBasis } from 'd3-shape';
   import { ownershipColors } from '$lib/design-tokens';
+  import { getAPIBase } from '$lib/ownership-api';
   import type {
     GraphNode,
     GraphEdge,
@@ -62,7 +63,7 @@
       // Fetch entity's owned assets/subsidiaries
       const cleanId = entityId.startsWith('E') ? entityId.slice(1) : entityId;
       const res = await fetch(
-        `https://gem-api.thirdbear.net/ownership/graph?root=E${cleanId}&direction=down&max_depth=4`
+        `${getAPIBase()}/ownership/graph?root=E${cleanId}&direction=down&max_depth=4&format=json`
       );
       if (!res.ok) throw new Error(`API error: ${res.status}`);
       const data: OwnershipGraphAPIResponse = await res.json();
