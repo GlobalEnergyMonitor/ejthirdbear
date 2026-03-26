@@ -37,12 +37,15 @@
   let loading = $state(false);
   let error = $state('');
 
+  // Detect if we're inside an iframe — if so, hide the test harness chrome
+  let isEmbedded = $state(false);
+
   // Embed code
   let copied = $state(false);
   let embedId = $state(initialId);
 
   function embedSnippet(id: string) {
-    const p = `/embed/coal-plant-test?id=${id}`;
+    const p = `/embed/coal-plant?id=${id}`;
     return `<div class="gem-embed" data-src="${p}" data-height="900">\n<script src="https://gem-viz.fly.dev/embed.js"><` + `/script>\n</div>`;
   }
 
@@ -74,7 +77,10 @@
     }
   }
 
-  onMount(() => load());
+  onMount(() => {
+    isEmbedded = window.self !== window.top;
+    load();
+  });
 </script>
 
 <svelte:head>
@@ -82,49 +88,51 @@
   <meta name="robots" content="noindex" />
 </svelte:head>
 
-<div class="test-wrapper">
-  <div class="controls">
-    <div class="presets">
-      {#each COAL_PRESETS as preset}
-        <label class="preset-btn" class:active={!useCustom && selectedPreset === preset.id}>
+<div class="test-wrapper" class:embedded={isEmbedded}>
+  {#if !isEmbedded}
+    <div class="controls">
+      <div class="presets">
+        {#each COAL_PRESETS as preset}
+          <label class="preset-btn" class:active={!useCustom && selectedPreset === preset.id}>
+            <input
+              type="radio"
+              name="preset"
+              value={preset.id}
+              checked={!useCustom && selectedPreset === preset.id}
+              onchange={() => { selectedPreset = preset.id; useCustom = false; load(); }}
+            />
+            <span class="preset-name">{preset.label}</span>
+            <span class="preset-id">{preset.id}</span>
+          </label>
+        {/each}
+      </div>
+
+      <div class="custom-row">
+        <label class="preset-btn custom-btn" class:active={useCustom}>
           <input
             type="radio"
             name="preset"
-            value={preset.id}
-            checked={!useCustom && selectedPreset === preset.id}
-            onchange={() => { selectedPreset = preset.id; useCustom = false; load(); }}
+            checked={useCustom}
+            onchange={() => { useCustom = true; }}
           />
-          <span class="preset-name">{preset.label}</span>
-          <span class="preset-id">{preset.id}</span>
+          <span class="preset-name">Custom</span>
         </label>
-      {/each}
-    </div>
-
-    <div class="custom-row">
-      <label class="preset-btn custom-btn" class:active={useCustom}>
         <input
-          type="radio"
-          name="preset"
-          checked={useCustom}
-          onchange={() => { useCustom = true; }}
+          class="id-input"
+          type="text"
+          bind:value={customId}
+          placeholder="e.g. L100000103058"
+          onfocus={() => { useCustom = true; }}
+          onkeydown={(e) => e.key === 'Enter' && load()}
         />
-        <span class="preset-name">Custom</span>
-      </label>
-      <input
-        class="id-input"
-        type="text"
-        bind:value={customId}
-        placeholder="e.g. L100000103058"
-        onfocus={() => { useCustom = true; }}
-        onkeydown={(e) => e.key === 'Enter' && load()}
-      />
-      <button class="load-btn" onclick={load} disabled={loading}>
-        {loading ? 'Loading…' : 'Load'}
-      </button>
+        <button class="load-btn" onclick={load} disabled={loading}>
+          {loading ? 'Loading…' : 'Load'}
+        </button>
+      </div>
     </div>
-  </div>
+  {/if}
 
-  <div class="main-area">
+  <div class="main-area" class:embedded={isEmbedded}>
     <div class="card-area">
       {#if loading}
         <div class="status">Loading…</div>
@@ -135,29 +143,31 @@
       {/if}
     </div>
 
-    <div class="embed-sidebar">
-      <h3 class="sidebar-heading">Embed Code</h3>
-      <p class="sidebar-desc">Copy this snippet to embed the coal plant explorer (with preset buttons) on any page. The <code>id</code> sets the initially loaded plant.</p>
+    {#if !isEmbedded}
+      <div class="embed-sidebar">
+        <h3 class="sidebar-heading">Embed Code</h3>
+        <p class="sidebar-desc">Copy this snippet to embed the coal plant card on any page. The <code>id</code> sets the initially loaded plant.</p>
 
-      <h4 class="param-heading">Parameters</h4>
-      <table class="param-table">
-        <tbody>
-          <tr><td><code>id</code></td><td>G-prefix, compound L_G, or L-prefix ID</td></tr>
-        </tbody>
-      </table>
+        <h4 class="param-heading">Parameters</h4>
+        <table class="param-table">
+          <tbody>
+            <tr><td><code>id</code></td><td>G-prefix, compound L_G, or L-prefix ID</td></tr>
+          </tbody>
+        </table>
 
-      <h4 class="param-heading">Current ID</h4>
-      <div class="current-id">{embedId}</div>
+        <h4 class="param-heading">Current ID</h4>
+        <div class="current-id">{embedId}</div>
 
-      <div class="code-block">
-        <button class="cp-btn" class:ok={copied} onclick={copy}>
-          {copied ? 'Copied' : 'Copy'}
-        </button>
-        <pre>{embedSnippet(embedId)}</pre>
+        <div class="code-block">
+          <button class="cp-btn" class:ok={copied} onclick={copy}>
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+          <pre>{embedSnippet(embedId)}</pre>
+        </div>
+
+        <p class="sidebar-note">Embed script hosted at <code>gem-viz.fly.dev</code>. See the <a href="/embed">full widget catalog</a> for global options.</p>
       </div>
-
-      <p class="sidebar-note">Embed script hosted at <code>gem-viz.fly.dev</code>. See the <a href="/embed">full widget catalog</a> for global options.</p>
-    </div>
+    {/if}
   </div>
 </div>
 
@@ -246,6 +256,13 @@
     grid-template-columns: 1fr 280px;
     gap: 2rem;
     align-items: start;
+  }
+  .main-area.embedded {
+    grid-template-columns: 1fr;
+  }
+  .test-wrapper.embedded {
+    padding: 0;
+    max-width: 900px;
   }
 
   /* ── Card area ───────────────────────────────────── */
