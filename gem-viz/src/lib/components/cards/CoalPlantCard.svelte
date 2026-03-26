@@ -1,6 +1,8 @@
 <script lang="ts">
   import { scaleLinear } from 'd3-scale';
   import type { CoalPlantUnit } from './coal-plant-types';
+  import OwnershipTreeGraph from '$lib/components/ownership/OwnershipTreeGraph.svelte';
+  import type { GraphNode, GraphEdge, OwnershipPathEntry } from '$lib/component-data/graph-types';
   import {
     OPERATING_STATUSES,
     PLANNED_STATUSES,
@@ -313,6 +315,32 @@
   const TABS = ['Overview', 'Timeline', 'Coal Information', 'Emissions & Phaseout', 'Ownership', 'Additional Details'] as const;
   type TabName = (typeof TABS)[number];
   let activeTab = $state<TabName>('Overview');
+
+  // ── Ownership tree (lazy-loaded on first tab activation) ───────────────────
+
+  let ownershipNodes = $state<GraphNode[]>([]);
+  let ownershipEdges = $state<GraphEdge[]>([]);
+  let ownershipPaths = $state<Record<string, OwnershipPathEntry[]>>({});
+  let ownershipLoading = $state(false);
+  let ownershipError = $state<string | null>(null);
+  let ownershipFetched = $state(false);
+
+  $effect(() => {
+    if (activeTab !== 'Ownership' || ownershipFetched || !units[0]) return;
+    ownershipFetched = true;
+    ownershipLoading = true;
+    import('$lib/ownership-api').then(({ getOwnershipGraph }) =>
+      getOwnershipGraph({ root: units[0].asset_id, direction: 'up', max_depth: 3 })
+    ).then(result => {
+      ownershipNodes = result.nodes || [];
+      ownershipEdges = result.edges || [];
+      ownershipPaths = result.paths || {};
+    }).catch(err => {
+      ownershipError = err instanceof Error ? err.message : 'Failed to load ownership data';
+    }).finally(() => {
+      ownershipLoading = false;
+    });
+  });
 
   // ── Timeline chart ─────────────────────────────────────────────────────────
 
@@ -853,11 +881,24 @@
 
       <!-- ── Ownership ──────────────────────────────────────────────────── -->
       <div class="tab-panel" class:active={activeTab === 'Ownership'}>
-        <p class="narrative muted">
-          <!-- TODO: embed AssetOwnershipTree component once available -->
-          Ownership visualization coming soon.
-        </p>
-
+        {#if ownershipLoading}
+          <div class="ownership-status">Loading ownership data…</div>
+        {:else if ownershipError}
+          <div class="ownership-status error">{ownershipError}</div>
+        {:else if ownershipNodes.length > 1}
+          <div class="ownership-tree-wrap">
+            <OwnershipTreeGraph
+              nodes={ownershipNodes}
+              edges={ownershipEdges}
+              paths={ownershipPaths}
+              rootId={units[0]?.asset_id}
+              direction="downstream"
+              fullWidth={true}
+            />
+          </div>
+        {:else if ownershipFetched}
+          <div class="ownership-status">No ownership data available</div>
+        {/if}
       </div><!-- /Ownership -->
 
       <!-- ── Additional Details ─────────────────────────────────────────── -->
@@ -1160,6 +1201,14 @@
     margin-bottom: 0.75rem;
   }
   .timeline-wrap { width: 100%; overflow-x: auto; }
+
+  /* ── Ownership tab ────────────────────────────────── */
+  .ownership-status {
+    font-size: 0.82rem;
+    color: #888;
+    padding: 1rem 0;
+  }
+  .ownership-status.error { color: #b00; }
   .timeline-svg { display: block; }
   .tl-tooltip {
     position: fixed;
