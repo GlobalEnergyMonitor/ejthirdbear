@@ -9,7 +9,7 @@ import {
 } from '$lib/data-config/tracker-schema';
 
 // API base URL (env override or production default)
-const API_BASE = import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-ownership-api.fly.dev'; // TODO: switch back to https://gem-api.thirdbear.net when it's back up
+const API_BASE = import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-api.thirdbear.net'; // Fallback to production API
 
 // Default timeout for API requests (30 seconds)
 const API_TIMEOUT_MS = 30_000;
