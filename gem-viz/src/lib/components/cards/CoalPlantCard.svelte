@@ -83,6 +83,21 @@
     return chips;
   });
 
+  // Per-unit pills (same color coding as compact topline chips)
+  const unitPills = $derived(units.map(u => {
+    const status = u.coal_plant_fields.status;
+    const capacity = Math.round(parseFloat(u.coal_plant_fields.capacity_megawatts || '0'));
+    let cls: string;
+    if (OPERATING_STATUSES.has(status)) cls = 'chip-operating';
+    else if (DEVELOPMENT_STATUSES.has(status)) cls = 'chip-planned';
+    else if (status === 'mothballed') cls = 'chip-mothballed';
+    else if (RETIRED_STATUSES.has(status)) cls = 'chip-retired';
+    else cls = 'chip-cancelled';
+    return { name: u.coal_plant_fields.unit_name, capacity, cls, status };
+  }));
+
+  let unitsExpanded = $state(units.length === 1);
+
   // Group units by status for plant summary table
   const statusGroups = $derived.by(() => {
     const groups = new Map<string, { count: number; capacity: number; technologies: Set<string> }>();
@@ -153,6 +168,29 @@
     const sum = units.reduce((s, u) => s + parseFloat(u.coal_plant_fields.lifetime_co2_million_tonnes ?? '0'), 0);
     return sum > 0 ? sum : null;
   });
+
+  const unitEmissions = $derived(units
+    .map(u => {
+      const annual = parseFloat(u.coal_plant_fields.annual_co2_million_tonnes__annum ?? '');
+      const lifetime = parseFloat(u.coal_plant_fields.lifetime_co2_million_tonnes ?? '');
+      const status = u.coal_plant_fields.status;
+      let cls: string;
+      if (OPERATING_STATUSES.has(status)) cls = 'chip-operating';
+      else if (DEVELOPMENT_STATUSES.has(status)) cls = 'chip-planned';
+      else if (status === 'mothballed') cls = 'chip-mothballed';
+      else if (RETIRED_STATUSES.has(status)) cls = 'chip-retired';
+      else cls = 'chip-cancelled';
+      return {
+        name: u.coal_plant_fields.unit_name,
+        annual: isNaN(annual) ? null : annual,
+        lifetime: isNaN(lifetime) ? null : lifetime,
+        cls,
+      };
+    })
+    .filter(u => u.annual != null || u.lifetime != null)
+  );
+
+  let emissionsExpanded = $state(false);
 
   const capacityFactor = $derived.by(() => {
     const raw = parseFloat(f?.capacity_factor ?? '');
@@ -278,10 +316,25 @@
 
   // ── Timeline chart ─────────────────────────────────────────────────────────
 
-  const TL = { labelW: 90, badgeW: 130, rowH: 52, barH: 8, axisH: 28, viewW: 860 };
+  const TL = { labelW: 90, badgeW: 130, rowH: 52, barH: 8, axisH: 28 };
+  const TL_MIN_W = 560; // minimum before horizontal scroll kicks in
+
+  let tlContainerW = $state(860);
+  let tlWrapEl = $state<HTMLDivElement | null>(null);
+
+  $effect(() => {
+    if (!tlWrapEl) return;
+    const ro = new ResizeObserver(entries => {
+      const w = entries[0]?.contentRect.width;
+      if (w && w > 0) tlContainerW = Math.max(w, TL_MIN_W);
+    });
+    ro.observe(tlWrapEl);
+    return () => ro.disconnect();
+  });
 
   const timeline = $derived.by(() => {
-    const barAreaW = TL.viewW - TL.labelW - TL.badgeW;
+    const viewW = tlContainerW;
+    const barAreaW = viewW - TL.labelW - TL.badgeW;
     const allYears = units.flatMap(u => {
       const cpf = u.coal_plant_fields;
       const start = parseInt(cpf.start_year ?? '');
@@ -337,6 +390,8 @@
         capacity: Math.round(parseFloat(cpf.capacity_megawatts ?? '0')),
         status: cpf.status,
         plannedRetirement: cpf.planned_retirement,
+        startY: hasStart ? startY : null,
+        retiredYear: !isNaN(retiredY) && retiredY > 1900 ? retiredY : null,
         startX,
         barWidth,
         solidWidth,
@@ -351,6 +406,37 @@
     const svgH = TL.axisH + units.length * TL.rowH + 8;
     return { scale, ticks, rows, nowX, svgH, barAreaW };
   });
+
+  // ── Timeline tooltip ───────────────────────────────────────────────────────
+
+  let tlTooltip = $state<{ text: string; x: number; y: number } | null>(null);
+  let hoveredRowIndex = $state<number | null>(null);
+
+  function rowTooltip(row: (typeof timeline.rows)[number]): string {
+    const cap = row.capacity ? `${row.capacity} MW` : null;
+    const header = cap ? `${row.unitName} · ${cap}` : row.unitName;
+    const status = row.status.charAt(0).toUpperCase() + row.status.slice(1);
+    const lines = [header];
+    if (row.startY) {
+      if (row.retiredYear) {
+        const yrs = row.retiredYear - row.startY;
+        lines.push(`${status} · ${row.startY}–${row.retiredYear} (${yrs} yr)`);
+      } else if (row.plannedRetirement) {
+        lines.push(`${status} since ${row.startY}`);
+        lines.push(`Planned retirement: ${row.plannedRetirement}`);
+      } else if (row.isOpenEnded) {
+        lines.push(`${status} since ${row.startY}`);
+        lines.push(`No planned retirement date recorded`);
+      } else {
+        lines.push(`${status} since ${row.startY}`);
+      }
+    } else {
+      lines.push(status);
+      if (row.plannedRetirement) lines.push(`Planned retirement: ${row.plannedRetirement}`);
+      else lines.push(`No start year recorded`);
+    }
+    return lines.join('\n');
+  }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -407,11 +493,11 @@
       {/each}
     </nav>
 
-    <!-- Tab content -->
-    <div class="tab-content">
+    <!-- Tab content (grid-stacked so all tabs are measured; only active is visible) -->
+    <div class="tabs-wrapper">
 
       <!-- ── Overview ──────────────────────────────────────────────────── -->
-      {#if activeTab === 'Overview'}
+      <div class="tab-panel" class:active={activeTab === 'Overview'}>
         {#if overviewNarrative}
           <p class="narrative">{overviewNarrative}</p>
         {/if}
@@ -430,15 +516,13 @@
             <div class="field-label">Primary Owner(s)</div>
             <div class="field-value">{primaryOwner ?? '—'}</div>
           </div>
-          {#if plantAge}
-            <div class="overview-section">
-              <div class="field-label">
-                Plant age
-                <span class="info-dot" data-tip="Age since the first operating unit began commercial operation">i</span>
-              </div>
-              <div class="field-value">{plantAge} years</div>
+          <div class="overview-section">
+            <div class="field-label">
+              Plant age
+              <span class="info-dot" data-tip="Age since the first operating unit began commercial operation">i</span>
             </div>
-          {/if}
+            <div class="field-value">{plantAge ? `${plantAge} years` : '—'}</div>
+          </div>
         </div>
 
         <div class="summary-section">
@@ -463,18 +547,43 @@
           </div>
         </div>
 
-      <!-- ── Units ──────────────────────────────────────────────────────── -->
-      {:else if activeTab === 'Timeline'}
+        <div class="units-section">
+          <button
+            class="units-toggle"
+            onclick={() => (unitsExpanded = !unitsExpanded)}
+            aria-expanded={unitsExpanded}
+          >
+            <span class="summary-heading" style="margin:0">Units ({units.length})</span>
+            <span class="units-toggle-icon">{unitsExpanded ? '▲' : '▼'}</span>
+          </button>
+          {#if unitsExpanded}
+            <div class="unit-pills">
+              {#each unitPills as pill}
+                <span class="unit-pill {pill.cls}">
+                  <span class="pill-name">{pill.name}</span>
+                  <span class="pill-cap">{formatMW(pill.capacity)}</span>
+                </span>
+              {/each}
+            </div>
+          {/if}
+        </div>
+
+      </div><!-- /Overview -->
+
+      <!-- ── Timeline ──────────────────────────────────────────────────── -->
+      <div class="tab-panel" class:active={activeTab === 'Timeline'}>
         <p class="narrative">{unitsNarrative}</p>
         <div class="timeline-heading">Operational Timeline by Unit</div>
 
-        <div class="timeline-wrap">
+        <div class="timeline-wrap" bind:this={tlWrapEl}>
           <svg
             class="timeline-svg"
-            viewBox="0 0 {TL.viewW} {timeline.svgH}"
-            width="100%"
+            viewBox="0 0 {tlContainerW} {timeline.svgH}"
+            width={tlContainerW}
+            height={timeline.svgH}
             role="img"
             aria-label="Operational timeline for {plantName}"
+            onmouseleave={() => { tlTooltip = null; hoveredRowIndex = null; }}
           >
             <defs>
               <!-- Gradients for open-ended bars (no retirement date). Each fades to transparent
@@ -520,82 +629,103 @@
             {#each timeline.rows as row, i}
               {@const rowY = TL.axisH + i * TL.rowH}
               {@const barY = rowY + (TL.rowH - TL.barH) / 2}
+              {@const dimmed = hoveredRowIndex !== null && hoveredRowIndex !== i}
 
-              <!-- Label: unit name + capacity -->
-              <text x={TL.labelW - 8} y={rowY + TL.rowH * 0.38} class="tl-unit-name" text-anchor="end">{row.unitName}</text>
-              <text x={TL.labelW - 8} y={rowY + TL.rowH * 0.65} class="tl-unit-cap" text-anchor="end">{row.capacity} MW</text>
+              <!-- Visual group: pointer-events disabled so hit rect above catches all events -->
+              <g pointer-events="none" style="opacity: {dimmed ? 0.15 : 1}; transition: opacity 0.15s;">
 
-              <!-- Bar or dot -->
-              {#if row.isDot && row.startX !== null}
-                <circle
-                  cx={TL.labelW + row.startX}
-                  cy={barY + TL.barH / 2}
-                  r="4"
-                  class="tl-dot tl-bar-{statusClass(row.status)}"
-                />
-              {:else if row.startX !== null && row.barWidth !== null}
-                <!-- Solid portion -->
-                {#if (row.solidWidth ?? 0) > 0}
-                  <rect
-                    x={TL.labelW + row.startX}
-                    y={barY}
-                    width={row.solidWidth}
-                    height={TL.barH}
-                    rx={TL.barH / 2}
-                    class="tl-bar tl-bar-{statusClass(row.status)}"
+                <!-- Label: unit name + capacity -->
+                <text x={TL.labelW - 8} y={rowY + TL.rowH * 0.38} class="tl-unit-name" text-anchor="end">{row.unitName}</text>
+                <text x={TL.labelW - 8} y={rowY + TL.rowH * 0.65} class="tl-unit-cap" text-anchor="end">{row.capacity} MW</text>
+
+                <!-- Bar or dot -->
+                {#if row.isDot && row.startX !== null}
+                  <circle
+                    cx={TL.labelW + row.startX}
+                    cy={barY + TL.barH / 2}
+                    r="4"
+                    class="tl-dot tl-bar-{statusClass(row.status)}"
                   />
-                {/if}
-                <!-- Planned retirement: dashed bar from now to that year (data-backed endpoint) -->
-                {#if row.isFuture && row.hasKnownEnd && row.barWidth > (row.solidWidth ?? 0)}
-                  {@const futureX = TL.labelW + row.startX + (row.solidWidth ?? 0)}
-                  {@const futureW = row.barWidth - (row.solidWidth ?? 0)}
-                  <rect
-                    x={futureX}
-                    y={barY}
-                    width={futureW}
-                    height={TL.barH}
-                    rx={TL.barH / 2}
-                    class="tl-bar tl-bar-future"
-                    stroke-dasharray="4 3"
-                  />
-                {/if}
-                <!-- Open-ended: fading gradient bar from now to the chart's right edge -->
-                {#if row.isOpenEnded}
-                  {@const openStartX = TL.labelW + row.startX + (row.solidWidth ?? 0)}
-                  {@const openW = TL.labelW + timeline.barAreaW - openStartX}
-                  {#if openW > 0}
+                {:else if row.startX !== null && row.barWidth !== null}
+                  <!-- Solid portion -->
+                  {#if (row.solidWidth ?? 0) > 0}
                     <rect
-                      x={openStartX}
+                      x={TL.labelW + row.startX}
                       y={barY}
-                      width={openW}
+                      width={row.solidWidth}
                       height={TL.barH}
                       rx={TL.barH / 2}
-                      fill="url(#grad-open-{i})"
+                      class="tl-bar tl-bar-{statusClass(row.status)}"
                     />
                   {/if}
-                {/if}
-              {/if}
-
-              <!-- Status badge (right side) -->
-              <foreignObject
-                x={TL.labelW + timeline.barAreaW + 8}
-                y={rowY + 6}
-                width={TL.badgeW - 8}
-                height={TL.rowH - 6}
-              >
-                <div xmlns="http://www.w3.org/1999/xhtml" class="tl-badge-wrap">
-                  <span class="status-badge badge-{statusClass(row.status)}">{capitalize(row.status)}</span>
-                  {#if row.plannedRetirement}
-                    <span class="tl-planned-note">Planned retirement<br />in {row.plannedRetirement}</span>
+                  <!-- Planned retirement: dashed bar from now to that year (data-backed endpoint) -->
+                  {#if row.isFuture && row.hasKnownEnd && row.barWidth > (row.solidWidth ?? 0)}
+                    {@const futureX = TL.labelW + row.startX + (row.solidWidth ?? 0)}
+                    {@const futureW = row.barWidth - (row.solidWidth ?? 0)}
+                    <rect
+                      x={futureX}
+                      y={barY}
+                      width={futureW}
+                      height={TL.barH}
+                      rx={TL.barH / 2}
+                      class="tl-bar tl-bar-future"
+                      stroke-dasharray="4 3"
+                    />
                   {/if}
-                </div>
-              </foreignObject>
+                  <!-- Open-ended: fading gradient bar from now to the chart's right edge -->
+                  {#if row.isOpenEnded}
+                    {@const openStartX = TL.labelW + row.startX + (row.solidWidth ?? 0)}
+                    {@const openW = TL.labelW + timeline.barAreaW - openStartX}
+                    {#if openW > 0}
+                      <rect
+                        x={openStartX}
+                        y={barY}
+                        width={openW}
+                        height={TL.barH}
+                        rx={TL.barH / 2}
+                        fill="url(#grad-open-{i})"
+                      />
+                    {/if}
+                  {/if}
+                {/if}
+
+                <!-- Status badge (right side) -->
+                <foreignObject
+                  x={TL.labelW + timeline.barAreaW + 8}
+                  y={rowY + 6}
+                  width={TL.badgeW - 8}
+                  height={TL.rowH - 6}
+                >
+                  <div xmlns="http://www.w3.org/1999/xhtml" class="tl-badge-wrap">
+                    <span class="status-badge badge-{statusClass(row.status)}">{capitalize(row.status)}</span>
+                    {#if row.plannedRetirement}
+                      <span class="tl-planned-note">Planned retirement<br />in {row.plannedRetirement}</span>
+                    {/if}
+                  </div>
+                </foreignObject>
+
+              </g>
+
+              <!-- Hit target rendered last so it sits on top in z-order -->
+              <rect
+                x={0}
+                y={rowY}
+                width={tlContainerW}
+                height={TL.rowH}
+                fill="transparent"
+                style="cursor: default;"
+                onmouseenter={(e) => { hoveredRowIndex = i; tlTooltip = { text: rowTooltip(row), x: e.clientX, y: e.clientY }; }}
+                onmousemove={(e) => { if (tlTooltip) tlTooltip = { text: tlTooltip.text, x: e.clientX, y: e.clientY }; }}
+                onmouseleave={() => { hoveredRowIndex = null; tlTooltip = null; }}
+              />
             {/each}
           </svg>
         </div>
 
+      </div><!-- /Timeline -->
+
       <!-- ── Coal Information ────────────────────────────────────────────── -->
-      {:else if activeTab === 'Coal Information'}
+      <div class="tab-panel" class:active={activeTab === 'Coal Information'}>
         <div class="coal-grid">
           <div class="coal-section">
             <div class="field-label">Coal Type(s)</div>
@@ -631,8 +761,10 @@
           </div>
         </div>
 
+      </div><!-- /Coal Information -->
+
       <!-- ── Emissions & Phaseout ───────────────────────────────────────── -->
-      {:else if activeTab === 'Emissions & Phaseout'}
+      <div class="tab-panel" class:active={activeTab === 'Emissions & Phaseout'}>
         {#if alignmentStatus}
           <div class="alignment-banner alignment-{alignmentStatus}">
             {#if alignmentStatus === 'aligned'}
@@ -655,10 +787,8 @@
             {:else}
               <div class="field-value muted">None on record</div>
             {/if}
-            {#if remainingLifetime}
-              <div class="field-label" style="margin-top:1rem;">Estimated remaining lifetime</div>
-              <div class="field-value">{remainingLifetime} years</div>
-            {/if}
+            <div class="field-label" style="margin-top:1rem;">Estimated remaining lifetime</div>
+            <div class="field-value">{remainingLifetime ? `${remainingLifetime} years` : '—'}</div>
           </div>
 
           <div class="emissions-section">
@@ -680,35 +810,58 @@
                 {formatCO2(annualCO2) ?? '—'} per annum
                 ({formatCO2(lifetimeCO2) ?? '—'} lifetime
                 <span class="info-dot info-dot-inline" data-tip="Assumes a 35-year plant lifetime from commissioning. See gem.wiki for methodology.">i</span>)
+                {#if unitEmissions.length > 1}
+                  <button
+                    class="emissions-expand-btn"
+                    onclick={() => (emissionsExpanded = !emissionsExpanded)}
+                    aria-expanded={emissionsExpanded}
+                  >{emissionsExpanded ? '▲ hide units' : '▼ by unit'}</button>
+                {/if}
               {:else}
                 —
               {/if}
             </div>
-
-            {#if emissionFactor}
-              <div class="field-label" style="margin-top:1rem;">CO₂ emission factor</div>
-              <div class="field-value">{emissionFactor}</div>
+            {#if emissionsExpanded && unitEmissions.length > 1}
+              <div class="unit-emissions-list">
+                {#each unitEmissions as u}
+                  <div class="unit-emission-row">
+                    <span class="unit-emission-dot {u.cls}"></span>
+                    <span class="unit-emission-name">{u.name}</span>
+                    <span class="unit-emission-vals">
+                      {formatCO2(u.annual) ?? '—'}/yr
+                      · {formatCO2(u.lifetime) ?? '—'} lifetime
+                    </span>
+                  </div>
+                {/each}
+              </div>
             {/if}
 
-            {#if !isInDevelopment && capacityFactor != null}
+            <div class="field-label" style="margin-top:1rem;">CO₂ emission factor</div>
+            <div class="field-value">{emissionFactor ?? '—'}</div>
+
+            {#if !isInDevelopment}
               <div class="field-label" style="margin-top:1rem;">
                 Capacity factor
                 <span class="info-dot" data-tip="Country coal fleet average, based on GEM and Ember data. See gem.wiki for methodology.">i</span>
               </div>
-              <div class="field-value">{capacityFactor}% (country coal fleet average)</div>
+              <div class="field-value">{capacityFactor != null ? `${capacityFactor}% (country coal fleet average)` : '—'}</div>
             {/if}
           </div>
         </div>
 
+      </div><!-- /Emissions & Phaseout -->
+
       <!-- ── Ownership ──────────────────────────────────────────────────── -->
-      {:else if activeTab === 'Ownership'}
+      <div class="tab-panel" class:active={activeTab === 'Ownership'}>
         <p class="narrative muted">
           <!-- TODO: embed AssetOwnershipTree component once available -->
           Ownership visualization coming soon.
         </p>
 
+      </div><!-- /Ownership -->
+
       <!-- ── Additional Details ─────────────────────────────────────────── -->
-      {:else if activeTab === 'Additional Details'}
+      <div class="tab-panel" class:active={activeTab === 'Additional Details'}>
         {#if additionalDetails.length > 0}
           <dl class="details-list">
             {#each additionalDetails as row}
@@ -721,9 +874,9 @@
         {:else}
           <p class="narrative muted">No additional fields with data for this plant.</p>
         {/if}
-      {/if}
+      </div><!-- /Additional Details -->
 
-    </div><!-- /tab-content -->
+    </div><!-- /tabs-wrapper -->
 
     <!-- Footer -->
     <footer class="card-footer">
@@ -734,6 +887,12 @@
     </footer>
 
   </div><!-- /card-full -->
+
+  {#if tlTooltip}
+    <div class="tl-tooltip" style="left:{tlTooltip.x + 14}px; top:{tlTooltip.y + 10}px;">
+      {tlTooltip.text}
+    </div>
+  {/if}
 </details>
 
 <style>
@@ -801,6 +960,7 @@
     padding: 0 1.75rem;
     border-bottom: 1px solid rgba(0,0,0,0.1);
     overflow-x: auto;
+    overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
   }
   .tab-btn {
@@ -819,9 +979,28 @@
   .tab-btn.active { color: #111; border-bottom-color: #111; font-weight: 600; }
 
   /* ── Tab content ──────────────────────────────────────── */
-  .tab-content {
+  /* Grid-stacking: all panels occupy the same cell so the wrapper
+     naturally takes the height of the tallest tab. Each panel scrolls
+     independently if it exceeds 80vh. Inactive panels are hidden but
+     still contribute to the measured height. */
+  .tabs-wrapper {
+    display: grid;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .tab-panel {
+    grid-area: 1 / 1;
+    min-width: 0;
     padding: 1.5rem 1.75rem;
     min-height: 220px;
+    max-height: 80vh;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+  .tab-panel:not(.active) {
+    visibility: hidden;
+    pointer-events: none;
+    overflow: hidden;
   }
   .narrative {
     font-size: 0.9rem;
@@ -943,6 +1122,36 @@
     padding-bottom: 0.4rem;
   }
 
+  /* ── Unit pills (Overview tab) ───────────────────────── */
+  .units-section {
+    margin-top: 1.5rem;
+  }
+  .units-toggle {
+    all: unset;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
+  .units-toggle:hover .summary-heading { text-decoration: underline; }
+  .units-toggle-icon { font-size: 0.6rem; color: #888; }
+  .unit-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+  .unit-pill {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0.3rem 0.65rem;
+    border-radius: 999px;
+    line-height: 1.3;
+  }
+  .pill-name { font-size: 0.6rem; font-weight: 700; letter-spacing: 0.04em; }
+  .pill-cap  { font-size: 0.78rem; font-weight: 400; }
+
   /* ── Units / Timeline tab ─────────────────────────────── */
   .timeline-heading {
     font-size: 0.8rem;
@@ -951,7 +1160,21 @@
     margin-bottom: 0.75rem;
   }
   .timeline-wrap { width: 100%; overflow-x: auto; }
-  .timeline-svg { display: block; min-width: 500px; }
+  .timeline-svg { display: block; }
+  .tl-tooltip {
+    position: fixed;
+    z-index: 1000;
+    background: rgba(20, 20, 20, 0.93);
+    color: #fff;
+    border-radius: 5px;
+    padding: 7px 11px;
+    font-size: 0.72rem;
+    line-height: 1.6;
+    pointer-events: none;
+    white-space: pre-line;
+    max-width: 240px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
 
   /* SVG timeline elements — must be :global since they're inside SVG */
   :global(.tl-axis-label) {
@@ -1015,10 +1238,53 @@
 
   .emissions-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 2rem;
   }
   .emissions-section { display: flex; flex-direction: column; }
+
+  .emissions-expand-btn {
+    all: unset;
+    cursor: pointer;
+    font-size: 0.72rem;
+    color: #888;
+    margin-left: 0.4rem;
+    white-space: nowrap;
+  }
+  .emissions-expand-btn:hover { color: #333; }
+
+  .unit-emissions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin-top: 0.6rem;
+  }
+  .unit-emission-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.82rem;
+    color: #333;
+  }
+  .unit-emission-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  /* Reuse chip background colors for the dot */
+  .unit-emission-dot.chip-operating  { background: #7F142A; }
+  .unit-emission-dot.chip-planned    { background: #CA4A50; }
+  .unit-emission-dot.chip-retired,
+  .unit-emission-dot.chip-cancelled,
+  .unit-emission-dot.chip-mothballed { background: #bbb; }
+
+  .unit-emission-name {
+    font-weight: 600;
+    min-width: 60px;
+    white-space: nowrap;
+  }
+  .unit-emission-vals { color: #555; }
 
   /* ── Additional Details tab ──────────────────────────── */
   .details-list {
