@@ -262,7 +262,7 @@
       const values = [
         ...new Set(
           units
-            .map(u => (u.coal_plant_fields as Record<string, string | null>)[key])
+            .map(u => (u.coal_plant_fields as unknown as Record<string, string | null>)[key])
             .filter((v): v is string => !!v && v !== 'null' && v !== 'not found')
         ),
       ];

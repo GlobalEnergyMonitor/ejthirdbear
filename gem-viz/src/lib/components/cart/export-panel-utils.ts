@@ -489,21 +489,8 @@ export function serializeSVG(container: HTMLElement): string | null {
   return new XMLSerializer().serializeToString(clone);
 }
 
-// CSV column definitions for export
-const CSV_COLUMNS = [
-  'asset_id',
-  'asset_name',
-  'asset_type',
-  'status',
-  'country',
-  'latitude',
-  'longitude',
-  'capacity',
-  'capacity_unit',
-  'owner_name',
-  'owner_entity_id',
-  'ownership_share',
-];
+// Reuse the same column definitions
+const CSV_COLUMNS = ASSET_CSV_COLUMNS;
 
 function assetToCSVRows(asset: AssetSummary): string[][] {
   const owners = asset.owners || [];

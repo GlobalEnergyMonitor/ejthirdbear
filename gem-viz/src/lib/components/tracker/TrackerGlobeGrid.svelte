@@ -8,6 +8,7 @@
   import 'maplibre-gl/dist/maplibre-gl.css';
   import { assetPath } from '$lib/links';
   import { trackerColors as trackerPalette } from '$lib/design-tokens';
+  import { NATURAL_EARTH_COUNTRIES } from '$lib/map-config';
 
   // State
   let geojsonData = $state(null);
@@ -193,7 +194,7 @@
         sources: {
           countries: {
             type: 'geojson',
-            data: 'https://d2ad6b4ur7yvpq.cloudfront.net/naturalearth-3.3.0/ne_110m_admin_0_countries.geojson',
+            data: NATURAL_EARTH_COUNTRIES,
           },
         },
         light: {

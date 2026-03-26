@@ -50,7 +50,8 @@
   let trackerBreakdown = $state([]);
   let countryBreakdown = $state([]);
 
-  const BASEMAP_STYLE_URL = 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json';
+  import { BASEMAP_VOYAGER } from '$lib/map-config';
+  const BASEMAP_STYLE_URL = BASEMAP_VOYAGER;
   const ASSET_SOURCE_ID = 'asset-points';
   const ASSET_GLOW_LAYER_ID = 'asset-points-glow';
   const ASSET_LAYER_ID = 'asset-points-core';

@@ -13,6 +13,7 @@ export interface ScreenerSelectedClass {
   name?: string;
   description?: string;
   tracker?: string;
+  gemTrackers?: string[];
   filters?: {
     status?: string;
     statuses?: string[];

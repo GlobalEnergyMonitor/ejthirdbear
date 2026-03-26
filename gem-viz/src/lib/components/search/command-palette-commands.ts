@@ -5,8 +5,8 @@
 
 import { goto } from '$app/navigation';
 import { link } from '$lib/links';
-
 import { buildScreenerUrl } from '$lib/screener-url';
+import { TRACKER_TO_ASSET_TYPE, TRACKER_TO_URL_SLUG } from '$lib/data-config/tracker-schema';
 
 export interface Command {
   id: string;
@@ -190,28 +190,24 @@ export function createCommands(callbacks: {
  * Generate screener commands for each base tracker
  */
 function screenerTrackerCommands(): Command[] {
-  const trackers = [
-    { id: 'coal-plants', label: 'Coal Plants', tracker: 'Coal Plant' },
-    { id: 'gas-plants', label: 'Gas Plants', tracker: 'Oil & Gas Plant' },
-    { id: 'coal-mines', label: 'Coal Mines', tracker: 'Coal Mine' },
-    { id: 'steel-plants', label: 'Iron & Steel Plants', tracker: 'Iron & Steel Plant' },
-    { id: 'iron-mines', label: 'Iron Mines', tracker: 'Iron Mine' },
-    { id: 'gas-pipelines', label: 'Gas Pipelines', tracker: 'Natural Gas Transmission Pipeline' },
-    { id: 'oil-pipelines', label: 'Oil Pipelines', tracker: 'Oil or NGL Pipeline' },
-    { id: 'bioenergy-power', label: 'Bioenergy Power', tracker: 'Bioenergy Power' },
-  ];
-
-  return trackers.map((t) => ({
-    id: `screener-${t.id}`,
-    label: t.label,
-    action: () => {
-      const classes = JSON.stringify([
-        { id: t.id, name: t.label, tracker: t.tracker, gemTrackers: [t.tracker] },
-      ]);
-      goto(buildScreenerUrl('screener/results', { classes }));
-    },
-    section: 'Screener',
-  }));
+  // Derive from canonical tracker definitions
+  return Object.entries(TRACKER_TO_ASSET_TYPE).map(([uiName, apiType]) => {
+    const slug = TRACKER_TO_URL_SLUG[uiName] || uiName.toLowerCase().replace(/ /g, '-');
+    // Pluralize slug for screener class ID (e.g. 'coal-plant' → 'coal-plants')
+    const id = slug.endsWith('y') ? slug.slice(0, -1) + 'ies' : slug + 's';
+    const label = uiName + (uiName.endsWith('s') || uiName.endsWith('y') ? '' : 's');
+    return {
+      id: `screener-${id}`,
+      label,
+      action: () => {
+        const classes = JSON.stringify([
+          { id, name: label, tracker: apiType, gemTrackers: [apiType] },
+        ]);
+        goto(buildScreenerUrl('screener/results', { classes }));
+      },
+      section: 'Screener',
+    };
+  });
 }
 
 /**

@@ -1,14 +1,12 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import idMap from '$lib/server/id-map.json';
+import { GEM_CORS_ORIGINS } from '$lib/external-links';
 
 const map = idMap as Record<string, string>;
 
 // CORS: allow dynamic widget embeds on Drupal to call this endpoint
-const ALLOWED_ORIGINS = [
-  'https://globalenergymonitor.org',
-  'https://www.globalenergymonitor.org',
-];
+const ALLOWED_ORIGINS = GEM_CORS_ORIGINS;
 
 function corsHeaders(request: Request): Record<string, string> {
   const origin = request.headers.get('origin');

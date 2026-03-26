@@ -5,6 +5,7 @@
 
 import maplibregl from 'maplibre-gl';
 import { colorByTracker, colors } from '$lib/design-tokens';
+import { BASEMAP_POSITRON } from '$lib/map-config';
 
 // Suggested queries for quick start
 export const SUGGESTIONS = [
@@ -219,7 +220,7 @@ export function createMapAction(mapInstances: Map<string, maplibregl.Map>) {
     setTimeout(() => {
       const map = new maplibregl.Map({
         container,
-        style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
+        style: BASEMAP_POSITRON,
         center: [0, 20],
         zoom: 1,
         maxZoom: 12,

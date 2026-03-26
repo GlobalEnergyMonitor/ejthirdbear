@@ -42,6 +42,7 @@ import {
 } from './tracker-schema';
 import { fetchCatalogFieldMeta } from '$lib/catalog-api';
 import type { CatalogTrackerMeta } from '$lib/catalog-api';
+import { gemTrackerPage, gemTrackerRepo } from '$lib/external-links';
 
 /** Slug to tracker name mapping — sourced from tracker-schema.ts */
 export const slugToTrackerName: Record<string, string> = URL_SLUG_TO_TRACKER;
@@ -95,8 +96,8 @@ export const trackerMetadata: Record<string, TrackerMetadata> = {
       'Comprehensive database of coal-fired power plants worldwide, tracking capacity, ownership, and operating status from announcement through retirement.',
     color: '#4a4a4a',
     externalLinks: {
-      gemPage: 'https://globalenergymonitor.org/projects/global-coal-plant-tracker/',
-      github: 'https://github.com/GlobalEnergyMonitor/coal-plant-tracker',
+      gemPage: gemTrackerPage('coal-plant'),
+      github: gemTrackerRepo('coal-plant')!,
     },
     citation:
       'Global Energy Monitor, Global Coal Plant Tracker, May 2025 release. Distributed under a Creative Commons Attribution 4.0 International License.',
@@ -110,7 +111,7 @@ export const trackerMetadata: Record<string, TrackerMetadata> = {
       'Tracks gas-fired power generation facilities globally, including LNG terminals and combined-cycle plants, with detailed ownership and capacity data.',
     color: '#1D4961',
     externalLinks: {
-      gemPage: 'https://globalenergymonitor.org/projects/global-gas-plant-tracker/',
+      gemPage: gemTrackerPage('gas-plant'),
     },
     citation:
       'Global Energy Monitor, Global Gas Plant Tracker, May 2025 release. Distributed under a Creative Commons Attribution 4.0 International License.',
@@ -124,8 +125,8 @@ export const trackerMetadata: Record<string, TrackerMetadata> = {
       'Documents coal mining operations and proposed projects worldwide, tracking production capacity, mine type, and ownership structures.',
     color: '#2c3e50',
     externalLinks: {
-      gemPage: 'https://globalenergymonitor.org/projects/global-coal-mine-tracker/',
-      github: 'https://github.com/GlobalEnergyMonitor/coal-mine-tracker',
+      gemPage: gemTrackerPage('coal-mine'),
+      github: gemTrackerRepo('coal-mine')!,
     },
     citation:
       'Global Energy Monitor, Global Coal Mine Tracker, May 2025 release. Distributed under a Creative Commons Attribution 4.0 International License.',
@@ -139,7 +140,7 @@ export const trackerMetadata: Record<string, TrackerMetadata> = {
       'Tracks iron ore mining operations globally, providing data on extraction capacity, ownership, and development status.',
     color: '#8b4513',
     externalLinks: {
-      gemPage: 'https://globalenergymonitor.org/projects/global-iron-mine-tracker/',
+      gemPage: gemTrackerPage('iron-mine'),
     },
     citation:
       'Global Energy Monitor, Global Iron Mine Tracker, May 2025 release. Distributed under a Creative Commons Attribution 4.0 International License.',
@@ -153,7 +154,7 @@ export const trackerMetadata: Record<string, TrackerMetadata> = {
       'Comprehensive database of steel manufacturing facilities worldwide, tracking crude steel capacity, production technology, and ownership.',
     color: '#5a6a7a',
     externalLinks: {
-      gemPage: 'https://globalenergymonitor.org/projects/global-steel-plant-tracker/',
+      gemPage: gemTrackerPage('steel-plant'),
     },
     citation:
       'Global Energy Monitor, Global Steel Plant Tracker, May 2025 release. Distributed under a Creative Commons Attribution 4.0 International License.',
@@ -167,7 +168,7 @@ export const trackerMetadata: Record<string, TrackerMetadata> = {
       'Documents natural gas pipeline infrastructure globally, tracking pipeline length, capacity, and cross-border connections.',
     color: '#1D4961',
     externalLinks: {
-      gemPage: 'https://globalenergymonitor.org/projects/global-gas-pipeline-tracker/',
+      gemPage: gemTrackerPage('gas-pipeline'),
     },
     citation:
       'Global Energy Monitor, Global Gas Pipeline Tracker, May 2025 release. Distributed under a Creative Commons Attribution 4.0 International License.',
@@ -181,7 +182,7 @@ export const trackerMetadata: Record<string, TrackerMetadata> = {
       'Tracks bioenergy power generation facilities including biomass, biogas, and waste-to-energy plants with capacity and feedstock data.',
     color: '#2d5a3d',
     externalLinks: {
-      gemPage: 'https://globalenergymonitor.org/projects/global-bioenergy-power-tracker/',
+      gemPage: gemTrackerPage('bioenergy'),
     },
     citation:
       'Global Energy Monitor, Global Bioenergy Power Tracker, May 2025 release. Distributed under a Creative Commons Attribution 4.0 International License.',

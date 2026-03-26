@@ -4,18 +4,13 @@
    */
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
-  import { link, fieldguideLink } from '$lib/links';
+  import { link, fieldguideLink, factsheetLink } from '$lib/links';
   import PageHeader from '$lib/components/nav/PageHeader.svelte';
+  import { TRACKER_TO_URL_SLUG } from '$lib/data-config/tracker-schema';
 
-  const trackers = [
-    { slug: 'coal-mine', name: 'Coal Mine', available: true },
-    { slug: 'coal-plant', name: 'Coal Plant', available: true },
-    { slug: 'gas-plant', name: 'Gas Plant', available: true },
-    { slug: 'steel-plant', name: 'Steel Plant', available: true },
-    { slug: 'iron-mine', name: 'Iron Mine', available: true },
-    { slug: 'gas-pipeline', name: 'Gas Pipeline', available: true },
-    { slug: 'bioenergy', name: 'Bioenergy Power', available: true },
-  ];
+  const trackers = Object.entries(TRACKER_TO_URL_SLUG).map(([name, slug]) => ({
+    slug, name, available: true,
+  }));
 
   onMount(() => {
     // Redirect to new FieldGuide page

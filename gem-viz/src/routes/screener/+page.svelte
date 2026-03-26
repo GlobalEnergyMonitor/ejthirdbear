@@ -20,6 +20,7 @@
     discoverStatusGroups,
   } from '$lib/data-config/tracker-schema';
   import { resolveApiSlug, getAPIBase, fetchStatusFacets, fetchStatusTaxonomy } from '$lib/ownership-api';
+  import { GEM_DATA_EMAIL } from '$lib/external-links';
   import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
   // ─── Category display config ────────────────────────────────────────
@@ -262,7 +263,7 @@
   function buildMailto(subject, bodyLines) {
     const subjectEncoded = encodeURIComponent(subject);
     const bodyEncoded = encodeURIComponent(bodyLines.join('\n'));
-    return `mailto:data@globalenergymonitor.org?subject=${subjectEncoded}&body=${bodyEncoded}`;
+    return `mailto:${GEM_DATA_EMAIL}?subject=${subjectEncoded}&body=${bodyEncoded}`;
   }
 
   const requestAssetClassHref = $derived.by(() =>

@@ -7,6 +7,7 @@
    */
   import { onMount } from 'svelte';
   import { beforeNavigate, goto } from '$app/navigation';
+  import { GEM_DOMAIN } from '$lib/external-links';
 
   let {
     theme = 'light',
@@ -150,7 +151,7 @@
   {@render children()}
   {#if branding}
     <footer class="gem-branding">
-      <a href="https://globalenergymonitor.org" target="_blank" rel="noopener">
+      <a href={GEM_DOMAIN} target="_blank" rel="noopener">
         Powered by Global Energy Monitor
       </a>
     </footer>

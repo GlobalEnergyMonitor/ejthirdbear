@@ -11,6 +11,8 @@
  * Section: "Data sources"
  */
 
+import { gemTrackerRepo, GEM_DATA_EMAIL, GEM_OWNERSHIP_ISSUES, GEM_OWNERSHIP_DOCS } from '$lib/external-links';
+
 /**
  * GEM Published Dataset reference
  */
@@ -97,7 +99,7 @@ export const TrackerDatasets: Record<string, GEMDataset> = {
   coalPlant: {
     name: 'Coal Plant Tracker',
     description: 'Global coal-fired power plants and generating units',
-    url: 'https://github.com/GlobalEnergyMonitor/coal_plant_tracker',
+    url: gemTrackerRepo('coal-plant')!,
     version: 'v2.0',
     lastUpdated: '2025-11-15',
     rowCount: 3500,
@@ -107,7 +109,7 @@ export const TrackerDatasets: Record<string, GEMDataset> = {
   gasPlant: {
     name: 'Gas Plant Tracker',
     description: 'Global natural gas power plants and generating units',
-    url: 'https://github.com/GlobalEnergyMonitor/gas_plant_tracker',
+    url: gemTrackerRepo('gas-plant')!,
     version: 'v2.0',
     lastUpdated: '2025-11-15',
     rowCount: 5000,
@@ -117,7 +119,7 @@ export const TrackerDatasets: Record<string, GEMDataset> = {
   coalMine: {
     name: 'Coal Mine Tracker',
     description: 'Global coal mining operations and complexes',
-    url: 'https://github.com/GlobalEnergyMonitor/coal_mine_tracker',
+    url: gemTrackerRepo('coal-mine')!,
     version: 'v1.5',
     lastUpdated: '2025-10-01',
     rowCount: 600,
@@ -127,7 +129,7 @@ export const TrackerDatasets: Record<string, GEMDataset> = {
   ironMine: {
     name: 'Iron Ore Mine Tracker',
     description: 'Global iron ore mining operations',
-    url: 'https://github.com/GlobalEnergyMonitor/iron_mine_tracker',
+    url: gemTrackerRepo('iron-mine')!,
     version: 'v1.0',
     lastUpdated: '2025-09-01',
     rowCount: 350,
@@ -137,7 +139,7 @@ export const TrackerDatasets: Record<string, GEMDataset> = {
   steelPlant: {
     name: 'Steel Plant Tracker',
     description: 'Global steel production facilities',
-    url: 'https://github.com/GlobalEnergyMonitor/steel_plant_tracker',
+    url: gemTrackerRepo('steel-plant')!,
     version: 'v1.5',
     lastUpdated: '2025-10-15',
     rowCount: 500,
@@ -147,7 +149,7 @@ export const TrackerDatasets: Record<string, GEMDataset> = {
   cementPlant: {
     name: 'Cement and Concrete Tracker',
     description: 'Global cement and concrete production facilities',
-    url: 'https://github.com/GlobalEnergyMonitor/cement_tracker',
+    url: gemTrackerRepo('cement-plant')!,
     version: 'v1.0',
     lastUpdated: '2025-09-01',
     rowCount: 2000,
@@ -157,7 +159,7 @@ export const TrackerDatasets: Record<string, GEMDataset> = {
   gasPipeline: {
     name: 'Gas Infrastructure Tracker',
     description: 'Global natural gas transmission pipelines and infrastructure',
-    url: 'https://github.com/GlobalEnergyMonitor/gas_infrastructure_tracker',
+    url: gemTrackerRepo('gas-pipeline')!,
     version: 'v1.0',
     lastUpdated: '2025-08-01',
     rowCount: 1200,
@@ -167,7 +169,7 @@ export const TrackerDatasets: Record<string, GEMDataset> = {
   oilPipeline: {
     name: 'Oil & NGL Pipeline Tracker',
     description: 'Global oil and natural gas liquid transmission pipelines',
-    url: 'https://github.com/GlobalEnergyMonitor/oil_pipeline_tracker',
+    url: gemTrackerRepo('oil-pipeline')!,
     version: 'v1.0',
     lastUpdated: '2025-08-01',
     rowCount: 800,
@@ -177,7 +179,7 @@ export const TrackerDatasets: Record<string, GEMDataset> = {
   bioenergy: {
     name: 'Bioenergy Power Tracker',
     description: 'Global biomass and biogas power generation facilities',
-    url: 'https://github.com/GlobalEnergyMonitor/bioenergy_tracker',
+    url: gemTrackerRepo('bioenergy')!,
     version: 'v1.0',
     lastUpdated: '2025-07-01',
     rowCount: 1000,
@@ -296,13 +298,13 @@ export const dataVersionInfo = {
   lastVerificationDate: '2025-12-14',
 
   /** Contact for data questions */
-  dataContact: 'data@globalenergymonitor.org',
+  dataContact: GEM_DATA_EMAIL,
 
   /** Issue tracking for data quality issues */
-  issueTracker: 'https://github.com/GlobalEnergyMonitor/Ownership_External_Dataset/issues',
+  issueTracker: GEM_OWNERSHIP_ISSUES,
 
   /** Data documentation and schema */
-  documentation: 'https://github.com/GlobalEnergyMonitor/Ownership_External_Dataset',
+  documentation: GEM_OWNERSHIP_DOCS,
 
   /** Notes about this release */
   releaseNotes: `

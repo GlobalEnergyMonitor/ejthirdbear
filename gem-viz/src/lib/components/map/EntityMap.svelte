@@ -8,6 +8,7 @@
   import { onMount } from 'svelte';
   import maplibregl from 'maplibre-gl';
   import 'maplibre-gl/dist/maplibre-gl.css';
+  import { BASEMAP_POSITRON } from '$lib/map-config';
   import { trackerToMapColor, colors } from '$lib/design-tokens';
   import type { SpotlightAsset } from '$lib/ownership-data';
 
@@ -65,7 +66,7 @@
 
     map = new maplibregl.Map({
       container: mapContainer,
-      style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
+      style: BASEMAP_POSITRON,
       center: [0, 20],
       zoom: 1.5,
       maxZoom: 12,

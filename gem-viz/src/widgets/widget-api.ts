@@ -119,7 +119,7 @@ function toNumber(value: unknown): number | null {
   return null;
 }
 
-function pickKey<T extends Record<string, unknown>>(obj: T, keys: string[]): unknown {
+function pickKey<T extends Record<string, unknown>>(obj: T, keys: readonly string[]): unknown {
   for (const key of keys) {
     if (obj[key] !== undefined && obj[key] !== null && obj[key] !== '') return obj[key];
   }
@@ -187,40 +187,46 @@ interface RawEntity { [key: string]: unknown }
 interface RawAsset { [key: string]: unknown }
 
 import type { EntitySummary, AssetSummary, AssetOwner, PaginatedResponse } from '$lib/ownership-api';
+import {
+  FK_ID, FK_NAME, FK_FACILITY_TYPE, FK_STATUS, FK_SUB_STATUS,
+  FK_CAPACITY, FK_CAPACITY_UNIT, FK_COUNTRY, FK_LATITUDE, FK_LONGITUDE,
+  FK_OWNER, FK_OWNER_ENTITY_ID, FK_PARENT, FK_PARENT_ENTITY_ID,
+  FK_ENTITY_ID, FK_ENTITY_NAME, FK_FULL_NAME, FK_HQ_COUNTRY,
+} from '$lib/field-keys';
 
 function normalizeEntity(raw: RawEntity): EntitySummary | null {
-  const idRaw = pickKey(raw, ['Entity ID', 'GEM Entity ID', 'entity_id', 'id']);
+  const idRaw = pickKey(raw, FK_ENTITY_ID);
   const id = extractEntityId(idRaw) || String(idRaw || '').trim();
   if (!id) return null;
-  const str = (keys: string[]) => { const v = pickKey(raw, keys); return v ? String(v) : null; };
+  const str = (keys: readonly string[]) => { const v = pickKey(raw, keys); return v ? String(v) : null; };
   return {
     id,
-    name: String(pickKey(raw, ['Name', 'Entity Name', 'entity_name', 'name']) || id).trim() || id,
-    fullName: str(['Full Name', 'full_name']),
-    headquartersCountry: str(['Headquarters Country', 'Headquarters country', 'headquarters_country']),
+    name: String(pickKey(raw, FK_ENTITY_NAME) || id).trim() || id,
+    fullName: str(FK_FULL_NAME),
+    headquartersCountry: str(FK_HQ_COUNTRY),
     raw,
   };
 }
 
 function normalizeAsset(raw: RawAsset): AssetSummary {
-  const str = (keys: string[]) => { const v = pickKey(raw, keys); return v ? String(v) : null; };
-  const num = (keys: string[]) => toNumber(pickKey(raw, keys));
-  const id = String(pickKey(raw, ['GEM Unit Phase ID', 'GEM Unit ID', 'GEM unit ID', 'gem_unit_id', 'asset_id', 'id']) || '').trim();
+  const str = (keys: readonly string[]) => { const v = pickKey(raw, keys); return v ? String(v) : null; };
+  const num = (keys: readonly string[]) => toNumber(pickKey(raw, keys));
+  const id = String(pickKey(raw, FK_ID) || '').trim();
   return {
     id,
-    name: String(pickKey(raw, ['Facility Name', 'Project', 'Unit Name', 'asset_name', 'name']) || id).trim(),
-    facilityType: str(['Facility Type', 'Tracker', 'facility_type', 'asset_type']),
-    status: str(['Status', 'status', 'operating_status']),
-    subStatus: str(['operating_sub_status', 'sub_status']),
-    capacity: num(['Capacity', 'Capacity (MW)', 'capacity', 'capacity_value']),
-    capacityUnit: str(['Capacity Unit', 'capacity_unit']),
-    country: str(['Country Area', 'Country', 'country']),
-    latitude: num(['Latitude', 'lat', 'latitude']),
-    longitude: num(['Longitude', 'lon', 'longitude']),
-    ownerName: str(['Owner', 'Immediate Project Owner', 'owner']),
-    ownerEntityId: extractEntityId(pickKey(raw, ['Owner GEM Entity ID', 'Immediate Project Owner GEM Entity ID', 'owner_entity_id'])),
-    parentName: str(['Parent', 'parent']),
-    parentEntityId: extractEntityId(pickKey(raw, ['Parent GEM Entity ID', 'parent_entity_id'])),
+    name: String(pickKey(raw, FK_NAME) || id).trim(),
+    facilityType: str(FK_FACILITY_TYPE),
+    status: str(FK_STATUS),
+    subStatus: str(FK_SUB_STATUS),
+    capacity: num(FK_CAPACITY),
+    capacityUnit: str(FK_CAPACITY_UNIT),
+    country: str(FK_COUNTRY),
+    latitude: num(FK_LATITUDE),
+    longitude: num(FK_LONGITUDE),
+    ownerName: str(FK_OWNER),
+    ownerEntityId: extractEntityId(pickKey(raw, FK_OWNER_ENTITY_ID)),
+    parentName: str(FK_PARENT),
+    parentEntityId: extractEntityId(pickKey(raw, FK_PARENT_ENTITY_ID)),
     owners: normalizeOwners(raw),
     raw,
   };

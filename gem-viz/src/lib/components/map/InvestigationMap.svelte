@@ -8,6 +8,7 @@
   import { onMount } from 'svelte';
   import maplibregl from 'maplibre-gl';
   import 'maplibre-gl/dist/maplibre-gl.css';
+  import { BASEMAP_POSITRON } from '$lib/map-config';
   import { colorByTracker, colors } from '$lib/design-tokens';
   import { getAsset, getEntityOwned, type AssetSummary } from '$lib/ownership-api';
   import AssetMicroCard from '$lib/components/cards/AssetMicroCard.svelte';
@@ -98,7 +99,7 @@
 
     map = new maplibregl.Map({
       container: mapContainer,
-      style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
+      style: BASEMAP_POSITRON,
       center: [0, 20],
       zoom: 1.5,
       maxZoom: 12,

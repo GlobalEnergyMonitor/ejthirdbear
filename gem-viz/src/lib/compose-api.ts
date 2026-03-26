@@ -23,6 +23,10 @@ import {
   API_SLUG_TO_TYPE,
 } from './data-config/tracker-schema';
 import { logApiCall } from './api-log.svelte';
+import {
+  FK_FACILITY_TYPE, FK_STATUS, FK_CAPACITY, FK_CAPACITY_UNIT,
+  FK_COUNTRY, FK_LATITUDE, FK_LONGITUDE, FK_OWNER,
+} from '$lib/field-keys';
 // Shared types for compose page
 export interface FacetOption {
   value: string;
@@ -162,15 +166,15 @@ function normalizeAssetRaw(raw: Record<string, unknown>): AssetSummary {
   return {
     id,
     name: String(raw.asset_name || raw.name || id).trim(),
-    facilityType: str(['asset_type', 'Facility Type', 'Tracker', 'facility_type']),
-    status: str(['operating_status', 'Status', 'status']),
-    capacity: num(['capacity_value', 'Capacity', 'Capacity (MW)', 'capacity']),
-    capacityUnit: str(['capacity_unit', 'Capacity Unit']),
-    country: str(['country', 'Country Area', 'Country']),
+    facilityType: str([...FK_FACILITY_TYPE].reverse()),
+    status: str([...FK_STATUS].reverse()),
+    capacity: num([...FK_CAPACITY].reverse()),
+    capacityUnit: str([...FK_CAPACITY_UNIT].reverse()),
+    country: str([...FK_COUNTRY].reverse()),
     stateProvince: str(['state_province', 'Subnational unit (province, state)', 'State']),
-    latitude: num(['latitude', 'Latitude', 'lat']),
-    longitude: num(['longitude', 'Longitude', 'lon']),
-    ownerName: owners?.[0]?.name || str(['owner', 'Owner']),
+    latitude: num([...FK_LATITUDE].reverse()),
+    longitude: num([...FK_LONGITUDE].reverse()),
+    ownerName: owners?.[0]?.name || str([...FK_OWNER].reverse()),
     ownerEntityId: owners?.[0]?.entityId || null,
     parentName: null,
     parentEntityId: null,
@@ -192,6 +196,8 @@ interface FilterState {
   statusesAnd: string[];
   countries: string[];
   countriesAnd: string[];
+  stateProvinces: string[];
+  stateProvincesAnd: string[];
   ownerCountries: string[];
   ownerCountriesAnd: string[];
   owners: string[];

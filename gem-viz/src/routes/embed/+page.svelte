@@ -32,7 +32,8 @@
 
   function snippet(w) {
     const p = `/embed/${w.slug}?${w.key}=${w.val}`;
-    return `<div class="gem-embed" data-src="${p}" data-height="${w.h}">\n<script src="https://gem-viz.fly.dev/embed.js"><` + `/script>\n</div>`;
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    return `<div class="gem-embed" data-src="${p}" data-height="${w.h}">\n<script src="${origin}/embed.js"><` + `/script>\n</div>`;
   }
 
   async function copy(text, key) {

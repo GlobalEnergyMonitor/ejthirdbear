@@ -359,17 +359,18 @@ export const PROSPECTIVE_STATUSES = [
 ] as const;
 
 /** Statuses in each group — derived from STATUS_GROUPS for easy set-based lookups.
- * Use these instead of hardcoding status strings in components. */
-export const OPERATING_STATUSES = new Set(
+ * Use these instead of hardcoding status strings in components.
+ * Typed as Set<string> so callers don't need to narrow API strings to StatusValue. */
+export const OPERATING_STATUSES: Set<string> = new Set(
   STATUS_GROUPS.find((g) => g.id === 'operating')?.statuses ?? []
 );
-export const PLANNED_STATUSES = new Set(
+export const PLANNED_STATUSES: Set<string> = new Set(
   STATUS_GROUPS.find((g) => g.id === 'planned')?.statuses ?? []
 );
-export const CANCELLED_STATUSES = new Set(
+export const CANCELLED_STATUSES: Set<string> = new Set(
   STATUS_GROUPS.find((g) => g.id === 'cancelled')?.statuses ?? []
 );
-export const RETIRED_STATUSES = new Set(
+export const RETIRED_STATUSES: Set<string> = new Set(
   STATUS_GROUPS.find((g) => g.id === 'retired')?.statuses ?? []
 );
 

@@ -51,16 +51,10 @@
 
   const year = new Date().getFullYear();
 
-  // GEM tracker URLs
-  const trackerUrls = {
-    'Coal Plant': 'https://globalenergymonitor.org/projects/global-coal-plant-tracker/',
-    'Coal Mine': 'https://globalenergymonitor.org/projects/global-coal-mine-tracker/',
-    'Gas Plant': 'https://globalenergymonitor.org/projects/global-gas-plant-tracker/',
-    'Steel Plant': 'https://globalenergymonitor.org/projects/global-steel-plant-tracker/',
-    'Iron Mine': 'https://globalenergymonitor.org/projects/global-iron-mine-tracker/',
-    Bioenergy: 'https://globalenergymonitor.org/projects/global-bioenergy-power-tracker/',
-    'Oil/Gas': 'https://globalenergymonitor.org/projects/global-oil-gas-extraction-tracker/',
-  };
+  import { TRACKER_CITATION_URLS, GEM_DOMAIN } from '$lib/external-links';
+
+  // GEM tracker URLs (centralized in external-links.ts)
+  const trackerUrls = TRACKER_CITATION_URLS;
 
   // Get relevant tracker URLs
   const relevantTrackers = $derived(
@@ -73,13 +67,13 @@
       relevantTrackers.length === 1
         ? relevantTrackers[0].name + ' data'
         : 'Energy infrastructure ownership data'
-    }. Retrieved ${citationDate}, from https://globalenergymonitor.org/`
+    }. Retrieved ${citationDate}, from ${GEM_DOMAIN}/`
   );
 
   const academicCitation = $derived(
     `Global Energy Monitor. ${year}. "${
       relevantTrackers.length === 1 ? relevantTrackers[0].name : 'Energy Infrastructure'
-    } Ownership Database." Accessed ${citationDate}. https://globalenergymonitor.org/`
+    } Ownership Database." Accessed ${citationDate}. ${GEM_DOMAIN}/`
   );
 
   let copied = $state(false);
@@ -100,7 +94,7 @@
   <footer class="citation-footer">
     <div class="citation-content">
       <p class="source">
-        Data: <a href="https://globalenergymonitor.org/" target="_blank" rel="noopener"
+        Data: <a href="{GEM_DOMAIN}/" target="_blank" rel="noopener"
           >Global Energy Monitor</a
         >
         {#if relevantTrackers.length > 0}
@@ -135,7 +129,7 @@
   </footer>
 {:else if variant === 'compact'}
   <span class="citation-compact">
-    Source: <a href="https://globalenergymonitor.org/" target="_blank" rel="noopener"
+    Source: <a href="{GEM_DOMAIN}/" target="_blank" rel="noopener"
       >Global Energy Monitor</a
     >
     ({citationDate})
@@ -147,7 +141,7 @@
     <div class="source-info">
       <p>
         This data is provided by <a
-          href="https://globalenergymonitor.org/"
+          href="{GEM_DOMAIN}/"
           target="_blank"
           rel="noopener">Global Energy Monitor</a
         >, a nonprofit research organization cataloging fossil fuel and renewable energy projects
