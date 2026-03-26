@@ -23,3 +23,11 @@
 <EmbedShell {theme} {padding} {autoHeight} {embedId} {branding} {linkBase} {linkTarget}>
   {@render children()}
 </EmbedShell>
+
+<style>
+  /* Override app.css html/body backgrounds so embeds are transparent
+     and inherit the host page's background color */
+  :global(html), :global(body) {
+    background: transparent !important;
+  }
+</style>

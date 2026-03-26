@@ -161,7 +161,7 @@
 <style>
   .embed-container {
     min-height: 100vh;
-    background: var(--color-bg-primary);
+    background: transparent;
     display: flex;
     flex-direction: column;
     align-items: center;
