@@ -37,7 +37,7 @@
   let loading = $state(false);
   let error = $state('');
 
-  // Detect if we're inside an iframe — if so, hide the test harness chrome
+  // Detect if we're inside an iframe — if so, hide only the embed code sidebar
   let isEmbedded = $state(false);
 
   // Embed code
@@ -89,48 +89,46 @@
 </svelte:head>
 
 <div class="test-wrapper" class:embedded={isEmbedded}>
-  {#if !isEmbedded}
-    <div class="controls">
-      <div class="presets">
-        {#each COAL_PRESETS as preset}
-          <label class="preset-btn" class:active={!useCustom && selectedPreset === preset.id}>
-            <input
-              type="radio"
-              name="preset"
-              value={preset.id}
-              checked={!useCustom && selectedPreset === preset.id}
-              onchange={() => { selectedPreset = preset.id; useCustom = false; load(); }}
-            />
-            <span class="preset-name">{preset.label}</span>
-            <span class="preset-id">{preset.id}</span>
-          </label>
-        {/each}
-      </div>
-
-      <div class="custom-row">
-        <label class="preset-btn custom-btn" class:active={useCustom}>
+  <div class="controls">
+    <div class="presets">
+      {#each COAL_PRESETS as preset}
+        <label class="preset-btn" class:active={!useCustom && selectedPreset === preset.id}>
           <input
             type="radio"
             name="preset"
-            checked={useCustom}
-            onchange={() => { useCustom = true; }}
+            value={preset.id}
+            checked={!useCustom && selectedPreset === preset.id}
+            onchange={() => { selectedPreset = preset.id; useCustom = false; load(); }}
           />
-          <span class="preset-name">Custom</span>
+          <span class="preset-name">{preset.label}</span>
+          <span class="preset-id">{preset.id}</span>
         </label>
-        <input
-          class="id-input"
-          type="text"
-          bind:value={customId}
-          placeholder="e.g. L100000103058"
-          onfocus={() => { useCustom = true; }}
-          onkeydown={(e) => e.key === 'Enter' && load()}
-        />
-        <button class="load-btn" onclick={load} disabled={loading}>
-          {loading ? 'Loading…' : 'Load'}
-        </button>
-      </div>
+      {/each}
     </div>
-  {/if}
+
+    <div class="custom-row">
+      <label class="preset-btn custom-btn" class:active={useCustom}>
+        <input
+          type="radio"
+          name="preset"
+          checked={useCustom}
+          onchange={() => { useCustom = true; }}
+        />
+        <span class="preset-name">Custom</span>
+      </label>
+      <input
+        class="id-input"
+        type="text"
+        bind:value={customId}
+        placeholder="e.g. L100000103058"
+        onfocus={() => { useCustom = true; }}
+        onkeydown={(e) => e.key === 'Enter' && load()}
+      />
+      <button class="load-btn" onclick={load} disabled={loading}>
+        {loading ? 'Loading…' : 'Load'}
+      </button>
+    </div>
+  </div>
 
   <div class="main-area" class:embedded={isEmbedded}>
     <div class="card-area">
