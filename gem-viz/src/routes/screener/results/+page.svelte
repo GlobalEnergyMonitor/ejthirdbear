@@ -34,6 +34,7 @@
   } from '$lib/data-config/screener-api';
   import {
     buildScreenerUrl,
+    writeScreenerHash,
     parseJsonSearchParam,
     type ScreenerRoutePath,
   } from '$lib/screener-url';
@@ -44,9 +45,18 @@
   import type { AssetClass } from '$lib/data-config/asset-class-definitions';
   import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
+  // Embed mode: ?embed=true hides page chrome; state mirrored to hash for shareability
+  const isEmbed = $derived($page.url.searchParams.get('embed') === 'true');
+
   // URL params
   const classesParam = $derived($page.url.searchParams.get('classes') || '');
   const ownersParam = $derived($page.url.searchParams.get('owners') || '');
+
+  // Keep hash in sync with query params when embedded
+  $effect(() => {
+    if (!isEmbed) return;
+    writeScreenerHash({ classes: classesParam || undefined, owners: ownersParam || undefined });
+  });
 
   // Parse selected owner IDs (comma-separated entity IDs)
   const selectedOwnerIds = $derived.by(() => {
@@ -406,10 +416,11 @@
   function removeAssetClass(index: number) {
     if (index < 0) return;
     const classes = selectedClasses.filter((_, i) => i !== index);
+    const embedSuffix = isEmbed ? (classes.length === 0 ? '?embed=true' : '&embed=true') : '';
     if (classes.length === 0) {
-      goto(buildScreenerUrl('screener'));
+      goto(buildScreenerUrl('screener') + embedSuffix);
     } else {
-      goto(buildScreenerUrl('screener/results', { classes: JSON.stringify(classes) }));
+      goto(buildScreenerUrl('screener/results', { classes: JSON.stringify(classes) }) + embedSuffix);
     }
   }
 
@@ -569,6 +580,7 @@
   {classesParam}
   {ownersParam}
   maxWidth="wide"
+  showStepNav={!isEmbed}
 >
   {#snippet headerRight()}
     <AssetClassesPanel

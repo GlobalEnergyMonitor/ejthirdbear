@@ -13,7 +13,9 @@
   import DebugPanel from '$lib/components/feedback/DebugPanel.svelte';
   import { ALL_ASSET_CLASSES, getAssetClassById } from '$lib/data-config/asset-class-definitions';
   import { gemTrackerToUiTracker } from '$lib/data-config/screener-api';
-  import { buildScreenerUrl } from '$lib/screener-url';
+  import { buildScreenerUrl, readScreenerHash, writeScreenerHash } from '$lib/screener-url';
+  import { page } from '$app/stores';
+  import { onMount } from 'svelte';
   import {
     isValidTracker,
     STATUS_GROUPS,
@@ -221,15 +223,49 @@
     ];
   }
 
+  const isEmbed = $derived($page.url.searchParams.get('embed') === 'true');
+
   function navigateTo(path) {
     const classData = buildClassData();
     if (classData.length === 0) return;
-    goto(
-      buildScreenerUrl(path.startsWith('/') ? path.slice(1) : path, {
-        classes: JSON.stringify(classData),
-      })
-    );
+    const classesJson = JSON.stringify(classData);
+    // In embed mode, stay on screener routes but pass embed=true through
+    const targetPath = path.startsWith('/') ? path.slice(1) : path;
+    const url = buildScreenerUrl(targetPath, { classes: classesJson });
+    goto(isEmbed ? url + (url.includes('?') ? '&' : '?') + 'embed=true' : url);
   }
+
+  // Sync state → hash when embedded (for shareable links)
+  $effect(() => {
+    if (!isEmbed) return;
+    if (!selectedClassId) { writeScreenerHash({}); return; }
+    const classData = buildClassData();
+    writeScreenerHash({ classes: JSON.stringify(classData) });
+  });
+
+  onMount(() => {
+    if (!isEmbed) return;
+    // Restore from hash when embedded
+    const h = readScreenerHash();
+    if (h.classes) {
+      try {
+        const parsed = JSON.parse(h.classes);
+        const first = parsed?.[0];
+        if (first?.id || first?.assetClassId) {
+          const classId = first.id || first.assetClassId;
+          // selectClass will init defaults; then we patch from parsed state
+          selectClass(classId);
+          // Status restore happens via fetchStatusFacetsForClass, but we patch
+          // geoFilters immediately
+          if (first.filters?.geography) {
+            geoFilters = Array.isArray(first.filters.geography)
+              ? first.filters.geography
+              : [first.filters.geography];
+          }
+        }
+      } catch { /* ignore */ }
+    }
+  });
 
   // Build the REST API URL that will be called for this config
   const restUrl = $derived.by(() => {
@@ -310,6 +346,14 @@
   />
 </svelte:head>
 
+{#if isEmbed}
+  <!-- Embed mode: no chrome, hash-synced state -->
+  <div class="screener-embed-shell">
+    <div class="embed-topbar">
+      <span class="embed-status">{selectionSummary || 'Select an asset class'}</span>
+    </div>
+    <div class="picker-section">
+{:else}
 <ScreenerLayout
   currentStep={1}
   subtitle="Evaluate companies' ownership stakes in classes of fossil fuel assets. Start by selecting an asset class below."
@@ -435,9 +479,32 @@
       </div>
     </DebugPanel>
   {/if}
+
+{#if isEmbed}
+    </div><!-- /picker-section -->
+  </div><!-- /screener-embed-shell -->
+{:else}
 </ScreenerLayout>
+{/if}
 
 <style>
+  /* Embed shell */
+  .screener-embed-shell {
+    width: 100%;
+    font-family: var(--font-family);
+  }
+  .embed-topbar {
+    padding: var(--space-2) var(--space-4);
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-bg-secondary);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    font-style: italic;
+  }
+  .screener-embed-shell .picker-section {
+    padding: var(--space-4) var(--space-5) 0;
+  }
+
   /* Selection badge */
   .selection-badge {
     display: grid;

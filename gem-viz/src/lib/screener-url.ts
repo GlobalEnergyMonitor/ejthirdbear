@@ -94,3 +94,38 @@ export function parseJsonSearchParam<T>(paramValue: string): T | null {
     }
   }
 }
+
+/** Same as buildScreenerUrl but routes to /embed/screener/* paths */
+export function buildEmbedScreenerUrl(
+  path: 'embed/screener' | 'embed/screener/owners' | 'embed/screener/results',
+  params: ScreenerUrlParams = {}
+): string {
+  return buildScreenerUrl(path as ScreenerRoutePath, params);
+}
+
+/**
+ * Read/write screener state as URL hash params (for Drupal iframe embedding).
+ * Hash is never sent to server so Drupal never sees state changes.
+ * Format: #classes=<encoded>&owners=<ids>
+ */
+export function readScreenerHash(): ScreenerUrlParams {
+  if (typeof window === 'undefined') return {};
+  const raw = window.location.hash.slice(1);
+  if (!raw) return {};
+  const p = new URLSearchParams(raw);
+  return {
+    classes: p.get('classes') || null,
+    owners: p.get('owners') || null,
+    q: p.get('q') || null,
+  };
+}
+
+export function writeScreenerHash(params: ScreenerUrlParams) {
+  if (typeof window === 'undefined') return;
+  const p = new URLSearchParams();
+  if (params.classes) p.set('classes', params.classes);
+  if (params.owners) p.set('owners', params.owners);
+  if (params.q) p.set('q', params.q);
+  const hash = p.toString();
+  history.replaceState(null, '', hash ? '#' + hash : location.pathname + location.search);
+}
