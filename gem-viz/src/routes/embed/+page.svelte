@@ -2,10 +2,7 @@
   import { base } from '$app/paths';
 
   const widgets = [
-    // ── Screener ──
-    { name: 'Asset Class Screener', slug: 'screener', desc: 'Stateful asset class screener with status, sub-class, and geography filters. State stored in URL hash for Drupal iframe compatibility.', hash: 'class=coal-plant&statuses=operating,planned', h: 500,
-      params: [{ k: '#class', d: 'Asset class ID (e.g. coal-plant)' }, { k: '#statuses', d: 'Comma-separated statuses (e.g. operating,planned)' }, { k: '#geo', d: 'Comma-separated countries' }, { k: '#sub', d: 'Comma-separated sub-class IDs' }] },
-    // ── Dataset ──
+    // ── Top ──
     { name: 'Tracker Factsheet', slug: 'tracker-factsheet', desc: 'Two-column metadata explorer with field definitions.', key: 'tracker', val: 'coal-plant', h: 550,
       params: [{ k: 'tracker', d: 'coal-plant, gas-plant, steel-plant, etc.' }, { k: 'title', d: 'Title override' }, { k: 'height', d: 'Max height (default: 500)' }],
       samples: [
@@ -14,9 +11,6 @@
         { label: 'Steel Plant', val: 'steel-plant' },
         { label: 'Gas Pipeline', val: 'gas-pipeline' },
       ] },
-    // ── Asset cards ──
-    { name: 'Asset Card', slug: 'asset', desc: 'Asset profile with status, metadata, and owners.', key: 'id', val: 'L100000104168_G100000100057', h: 500,
-      params: [{ k: 'id', d: 'Asset ID / GEM unit ID' }, { k: 'showOwners', d: 'Owners list (default: true)' }, { k: 'showMap', d: 'Map (default: false)' }] },
     { name: 'Project Card', slug: 'project-card', desc: 'Tabbed asset detail with ownership tree and location map.', key: 'id', val: 'G100001000201', h: 700,
       params: [{ k: 'id', d: 'Asset ID / GEM unit ID' }, { k: 'showOwnership', d: 'Ownership tree (default: true)' }, { k: 'showMap', d: 'Map (default: true)' }],
       samples: [
@@ -32,6 +26,12 @@
         { label: 'Belchatow', val: 'G100001000201' },
         { label: 'Kusile', val: 'G100001000489' },
       ] },
+    // ── Asset cards ──
+    { name: 'Asset Card', slug: 'asset', desc: 'Asset profile with status, metadata, and owners.', key: 'id', val: 'L100000104168_G100000100057', h: 500,
+      params: [{ k: 'id', d: 'Asset ID / GEM unit ID' }, { k: 'showOwners', d: 'Owners list (default: true)' }, { k: 'showMap', d: 'Map (default: false)' }] },
+    // ── Screener ──
+    { name: 'Asset Class Screener', slug: 'screener', desc: 'Stateful asset class screener with status, sub-class, and geography filters. State stored in URL hash — works in Drupal iframes without touching parent URL.', hash: 'class=coal-plant&statuses=operating,planned', h: 700,
+      params: [{ k: '#class', d: 'Asset class ID (e.g. coal-plant)' }, { k: '#statuses', d: 'Comma-separated statuses (e.g. operating,planned)' }, { k: '#geo', d: 'Comma-separated countries' }, { k: '#sub', d: 'Comma-separated sub-class IDs' }] },
     // ── Entity cards ──
     { name: 'Entity Card', slug: 'entity', desc: 'Entity profile with ownership flower and asset list.', key: 'id', val: 'E100001000558', h: 600,
       params: [{ k: 'id', d: 'Entity ID' }, { k: 'showFlower', d: 'Flower (default: true)' }, { k: 'showAssets', d: 'Asset list (default: true)' }, { k: 'showMap', d: 'Map (default: false)' }, { k: 'maxAssets', d: 'Max assets (default: 10)' }],
