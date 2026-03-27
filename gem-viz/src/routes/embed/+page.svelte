@@ -2,6 +2,10 @@
   import { base } from '$app/paths';
 
   const widgets = [
+    // ── Screener ──
+    { name: 'Asset Class Screener', slug: 'screener', desc: 'Stateful asset class screener with status, sub-class, and geography filters. State stored in URL hash for Drupal iframe compatibility.', hash: 'class=coal-plant&statuses=operating,planned', h: 500,
+      params: [{ k: '#class', d: 'Asset class ID (e.g. coal-plant)' }, { k: '#statuses', d: 'Comma-separated statuses (e.g. operating,planned)' }, { k: '#geo', d: 'Comma-separated countries' }, { k: '#sub', d: 'Comma-separated sub-class IDs' }] },
+    // ── Dataset ──
     { name: 'Tracker Factsheet', slug: 'tracker-factsheet', desc: 'Two-column metadata explorer with field definitions.', key: 'tracker', val: 'coal-plant', h: 550,
       params: [{ k: 'tracker', d: 'coal-plant, gas-plant, steel-plant, etc.' }, { k: 'title', d: 'Title override' }, { k: 'height', d: 'Max height (default: 500)' }],
       samples: [
@@ -10,13 +14,7 @@
         { label: 'Steel Plant', val: 'steel-plant' },
         { label: 'Gas Pipeline', val: 'gas-pipeline' },
       ] },
-    { name: 'Entity Card', slug: 'entity', desc: 'Entity profile with ownership flower and asset list.', key: 'id', val: 'E100001000558', h: 600,
-      params: [{ k: 'id', d: 'Entity ID' }, { k: 'showFlower', d: 'Flower (default: true)' }, { k: 'showAssets', d: 'Asset list (default: true)' }, { k: 'showMap', d: 'Map (default: false)' }, { k: 'maxAssets', d: 'Max assets (default: 10)' }],
-      samples: [
-        { label: 'BlackRock', val: 'E100001000558' },
-        { label: 'China Energy', val: 'E100000001926' },
-        { label: 'Vanguard', val: 'E100001000562' },
-      ] },
+    // ── Asset cards ──
     { name: 'Asset Card', slug: 'asset', desc: 'Asset profile with status, metadata, and owners.', key: 'id', val: 'L100000104168_G100000100057', h: 500,
       params: [{ k: 'id', d: 'Asset ID / GEM unit ID' }, { k: 'showOwners', d: 'Owners list (default: true)' }, { k: 'showMap', d: 'Map (default: false)' }] },
     { name: 'Project Card', slug: 'project-card', desc: 'Tabbed asset detail with ownership tree and location map.', key: 'id', val: 'G100001000201', h: 700,
@@ -34,6 +32,14 @@
         { label: 'Belchatow', val: 'G100001000201' },
         { label: 'Kusile', val: 'G100001000489' },
       ] },
+    // ── Entity cards ──
+    { name: 'Entity Card', slug: 'entity', desc: 'Entity profile with ownership flower and asset list.', key: 'id', val: 'E100001000558', h: 600,
+      params: [{ k: 'id', d: 'Entity ID' }, { k: 'showFlower', d: 'Flower (default: true)' }, { k: 'showAssets', d: 'Asset list (default: true)' }, { k: 'showMap', d: 'Map (default: false)' }, { k: 'maxAssets', d: 'Max assets (default: 10)' }],
+      samples: [
+        { label: 'BlackRock', val: 'E100001000558' },
+        { label: 'China Energy', val: 'E100000001926' },
+        { label: 'Vanguard', val: 'E100001000562' },
+      ] },
     { name: 'Ownership Flower', slug: 'ownership-flower', desc: 'Radial visualization of portfolio composition by tracker type.', key: 'entityId', val: 'E100000001926', h: 520,
       params: [{ k: 'entityId', d: 'Entity ID' }, { k: 'size', d: 'small / medium / large' }, { k: 'showLabels', d: 'Labels (default: true)' }, { k: 'showTitle', d: 'Title (default: true)' }],
       samples: [
@@ -41,7 +47,7 @@
         { label: 'BlackRock', val: 'E100001000558' },
         { label: 'Vanguard', val: 'E100001000562' },
       ] },
-    { name: 'Ownership Graph', slug: 'ownership-graph', desc: 'Interactive ownership hierarchy tree, upstream or downstream.', key: 'entityId', val: 'E100001000558', h: 600,
+    { name: 'Control Chain', slug: 'ownership-graph', desc: 'Interactive control chain tree, upstream or downstream.', key: 'entityId', val: 'E100001000558', h: 600,
       params: [{ k: 'entityId', d: 'Entity ID' }, { k: 'direction', d: 'up (default) or down' }] },
     { name: 'Ultimate Owners', slug: 'ultimate-owners', desc: 'Terminal ancestors at the top of the ownership chain.', key: 'entityId', val: 'E100001000558', h: 400,
       params: [{ k: 'entityId', d: 'Entity ID' }] },
@@ -49,6 +55,7 @@
       params: [{ k: 'entityId', d: 'Entity ID' }, { k: 'height', d: 'Height in px (default: 500)' }, { k: 'maxHops', d: 'Max hops (default: 3)' }] },
     { name: 'Asset Ring', slug: 'asset-ring', desc: 'Circular distribution of assets by type and status.', key: 'entityId', val: 'E100000001926', h: 500,
       params: [{ k: 'entityId', d: 'Entity ID' }, { k: 'maxAssets', d: 'Max assets (default: 150)' }] },
+    // ── Utility ──
     { name: 'Search', slug: 'asset-search', desc: 'Configurable search bar with asset, owner, and universal modes.', key: 'q', val: '', h: 140,
       params: [{ k: 'q', d: 'Initial query' }, { k: 'modes', d: 'asset, owner, universal' }, { k: 'mode', d: 'Default mode' }, { k: 'open', d: 'self or new-tab' }] },
   ];
@@ -60,10 +67,13 @@
     return selected[w.slug] ?? w.val;
   }
 
-  function src(w) { return `${base}/embed/${w.slug}?${w.key}=${activeVal(w)}`; }
+  function src(w) {
+    if (w.hash) return `${base}/embed/${w.slug}#${w.hash}`;
+    return `${base}/embed/${w.slug}?${w.key}=${activeVal(w)}`;
+  }
 
   function snippet(w) {
-    const p = `/embed/${w.slug}?${w.key}=${activeVal(w)}`;
+    const p = w.hash ? `/embed/${w.slug}#${w.hash}` : `/embed/${w.slug}?${w.key}=${activeVal(w)}`;
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     return `<div class="gem-embed" data-src="${p}" data-height="${w.h}">\n<script src="${origin}/embed.js"><` + `/script>\n</div>`;
   }
