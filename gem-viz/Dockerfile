@@ -13,7 +13,7 @@ ENV PUBLIC_OWNERSHIP_API_BASE_URL=$PUBLIC_OWNERSHIP_API_BASE_URL
 ENV PUBLIC_SITE_URL=$PUBLIC_SITE_URL
 
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 
 COPY . .
 
@@ -25,7 +25,7 @@ FROM node:20-slim
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm install --omit=dev
 
 # Copy built app, static files, and custom server
 COPY --from=builder /app/build ./build

@@ -171,10 +171,14 @@
           <div class="unique-count">{uniqueCount} distinct values:</div>
           <div class="previewer-values-table">
             {#each fieldStats.filter((s) => s.value !== null && s.value !== '') as stat}
+              {@const barPct = pctBase > 0 ? (stat.count / pctBase) * 100 : 0}
               <div class="value-row">
                 <span class="field-value">{stat.value}</span>
+                <span class="value-bar-wrap">
+                  <span class="value-bar" style="width: {barPct.toFixed(1)}%"></span>
+                </span>
                 <span class="value-count">
-                  ({stat.count}{pctBase > 0 ? ` rows; ${formatPercent(stat.count / pctBase)}` : ' rows'})
+                  {stat.count}{pctBase > 0 ? ` (${formatPercent(stat.count / pctBase)})` : ''}
                 </span>
               </div>
             {/each}
@@ -276,10 +280,14 @@
 
           <div class="previewer-values-table">
             {#each fieldStats.filter((s) => s.value !== null && s.value !== '') as stat}
+              {@const barPct = pctBase > 0 ? (stat.count / pctBase) * 100 : 0}
               <div class="value-row">
                 <span class="field-value">{stat.value}</span>
+                <span class="value-bar-wrap">
+                  <span class="value-bar" style="width: {barPct.toFixed(1)}%"></span>
+                </span>
                 <span class="value-count">
-                  ({stat.count}{pctBase > 0 ? ` rows; ${formatPercent(stat.count / pctBase)}` : ' rows'})
+                  {stat.count}{pctBase > 0 ? ` (${formatPercent(stat.count / pctBase)})` : ''}
                 </span>
               </div>
             {/each}
@@ -469,14 +477,37 @@
   }
 
   .value-row {
+    display: grid;
+    grid-template-columns: minmax(80px, 1fr) 1fr auto;
+    align-items: center;
+    gap: var(--space-2);
     font-size: var(--font-size-sm);
     padding: var(--space-1) 0;
     border-bottom: 1px solid var(--color-border);
   }
 
+  .value-bar-wrap {
+    height: 8px;
+    background: var(--color-bg-secondary);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+  }
+
+  .value-bar {
+    display: block;
+    height: 100%;
+    background: var(--gem-teal);
+    border-radius: var(--radius-full);
+    min-width: 2px;
+    transition: width 0.2s ease;
+  }
+
   .value-count {
-    color: var(--gem-teal);
+    color: var(--color-text-tertiary);
     font-size: var(--font-size-xs);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    text-align: right;
   }
 
   .value-def-row {
