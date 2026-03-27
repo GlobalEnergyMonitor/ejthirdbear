@@ -128,8 +128,8 @@
         },
         {
           path: '/embed/ownership-graph',
-          name: 'Ownership Graph',
-          description: 'Hierarchical ownership graph',
+          name: 'Control Chain',
+          description: 'Interactive control chain tree',
         },
         {
           path: '/embed/tracker-factsheet',

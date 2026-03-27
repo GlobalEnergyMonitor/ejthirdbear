@@ -1,10 +1,8 @@
 {
-  "version": "da9093a",
-  "commit": "da9093a",
-  "message": "feat: enable Flourish-style embeds for any page via ?embed=true",
-  "author": "EJ Fox",
-  "timestamp": "2026-03-05T04:51:03.661Z",
-  "deployed": "2026-03-05T04:51:03.661Z",
-  "buildTime": "3/4/2026, 11:51:03 PM",
-  "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.3.3"
+  "version": "0.7.2",
+  "commit": "3564f83",
+  "message": "fix: restore pipelines in globe + screener embed step nav + field description links",
+  "timestamp": "2026-03-27T19:44:24.801Z",
+  "deployed": "2026-03-27T19:44:24.801Z",
+  "buildTime": "3/27/2026, 3:44:24 PM"
 }

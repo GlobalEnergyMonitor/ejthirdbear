@@ -1,5 +1,6 @@
 <script>
   import { base } from '$app/paths';
+  import SiteNav from '$lib/components/nav/SiteNav.svelte';
 
   const widgets = [
     // ── Top ──
@@ -29,6 +30,9 @@
     // ── Asset cards ──
     { name: 'Asset Card', slug: 'asset', desc: 'Asset profile with status, metadata, and owners.', key: 'id', val: 'L100000104168_G100000100057', h: 500,
       params: [{ k: 'id', d: 'Asset ID / GEM unit ID' }, { k: 'showOwners', d: 'Owners list (default: true)' }, { k: 'showMap', d: 'Map (default: false)' }] },
+    // ── ControlChain ──
+    { name: 'ControlChain Search', slug: 'controlchain', desc: 'Full search → results → ownership tree flow. State stored in URL hash — Drupal-safe deep links.', hash: 'q=Medupi&type=assets', h: 700,
+      params: [{ k: '#q', d: 'Initial search query' }, { k: '#type', d: 'all (default), assets, or entities' }] },
     // ── Screener ──
     { name: 'Asset Class Screener', slug: 'screener', desc: 'Stateful asset class screener with status, sub-class, and geography filters. State stored in URL hash — works in Drupal iframes without touching parent URL.', hash: 'class=coal-plant&statuses=operating,planned', h: 700,
       params: [{ k: '#class', d: 'Asset class ID (e.g. coal-plant)' }, { k: '#statuses', d: 'Comma-separated statuses (e.g. operating,planned)' }, { k: '#geo', d: 'Comma-separated countries' }, { k: '#sub', d: 'Comma-separated sub-class IDs' }] },
@@ -48,7 +52,7 @@
         { label: 'Vanguard', val: 'E100001000562' },
       ] },
     { name: 'Control Chain', slug: 'ownership-graph', desc: 'Interactive control chain tree, upstream or downstream.', key: 'entityId', val: 'E100001000558', h: 600,
-      params: [{ k: 'entityId', d: 'Entity ID' }, { k: 'direction', d: 'up (default) or down' }] },
+      params: [{ k: 'entityId', d: 'Entity ID' }, { k: 'direction', d: 'down (default) or up' }] },
     { name: 'Ultimate Owners', slug: 'ultimate-owners', desc: 'Terminal ancestors at the top of the ownership chain.', key: 'entityId', val: 'E100001000558', h: 400,
       params: [{ k: 'entityId', d: 'Entity ID' }] },
     { name: 'Network Graph', slug: 'network-3d', desc: 'Force-directed ownership network.', key: 'entityId', val: 'E100001000558', h: 600,
@@ -90,6 +94,8 @@
   <title>Widget Specimens — Global Energy Monitor</title>
   <meta name="description" content="Embeddable widget catalog for Global Energy Monitor." />
 </svelte:head>
+
+<SiteNav />
 
 <div class="specimens">
   <header>

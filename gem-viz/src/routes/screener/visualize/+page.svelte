@@ -25,6 +25,7 @@
   // Get params from URL
   const classesParam = $derived($page.url.searchParams.get('classes') || '');
   const ownersParam = $derived($page.url.searchParams.get('owners') || '');
+  const isEmbed = $derived($page.url.searchParams.get('embed') === 'true');
 
   // Parse owner IDs
   const ownerIds = $derived(ownersParam ? ownersParam.split(',') : []);
@@ -345,7 +346,7 @@
   />
 </svelte:head>
 
-<ScreenerLayout currentStep={4} subtitle={subtitle()} {classesParam} {ownersParam} maxWidth="wide">
+<ScreenerLayout currentStep={4} subtitle={subtitle()} {classesParam} {ownersParam} maxWidth="wide" {isEmbed}>
   {#snippet headerRight()}
     {#if owners.length > 1}
       <button class="text-link" onclick={() => (showOwnerPicker = true)}>

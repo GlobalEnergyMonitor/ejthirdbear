@@ -28,6 +28,7 @@
 
   // Get selected classes from URL params
   const classesParam = $derived($page.url.searchParams.get('classes') || '');
+  const isEmbed = $derived($page.url.searchParams.get('embed') === 'true');
 
   // Parse selected classes for example companies feature
   const selectedClasses = $derived.by((): ScreenerSelectedClass[] => {
@@ -293,6 +294,7 @@
 
 <ScreenerLayout
   currentStep={2}
+  {isEmbed}
   subtitle="Search for a company to see their ownership stakes, assets, and corporate network."
   {classesParam}
 >

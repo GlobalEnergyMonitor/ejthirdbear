@@ -20,6 +20,7 @@
    *   currentStep?: 1 | 2 | 3 | 4,
    *   subtitle?: string,
    *   showStepNav?: boolean,
+   *   isEmbed?: boolean,
    *   classesParam?: string,
    *   ownersParam?: string,
    *   maxWidth?: 'narrow' | 'default' | 'wide',
@@ -33,6 +34,7 @@
     currentStep = 1,
     subtitle = '',
     showStepNav = true,
+    isEmbed = false,
     classesParam = '',
     ownersParam = '',
     maxWidth = 'default',
@@ -53,7 +55,7 @@
 <main class="screener-page">
   <div class="screener-layout {maxWidthClass}">
     {#if showStepNav}
-      <ScreenerStepNav {currentStep} classesParam={derivedClassesParam} {ownersParam} />
+      <ScreenerStepNav {currentStep} classesParam={derivedClassesParam} {ownersParam} {isEmbed} />
     {/if}
 
     <header class="screener-header">

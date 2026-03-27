@@ -767,7 +767,7 @@
   let graphWrapEl = $state<HTMLDivElement | null>(null);
 
   // SVG margins (matching Observable)
-  const svgMargins = { top: 20, right: 30, bottom: 20, left: 40 };
+  const svgMargins = { top: 20, right: 30, bottom: 60, left: 40 };
   const fullW = $derived(gWidth + svgMargins.left + svgMargins.right);
   const fullH = $derived(gHeight + svgMargins.top + svgMargins.bottom);
 

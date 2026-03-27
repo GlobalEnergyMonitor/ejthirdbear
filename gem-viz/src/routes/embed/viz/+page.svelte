@@ -93,7 +93,7 @@
         const entityId = params.get('entityId');
         if (!entityId) throw new Error('Missing required parameter: entityId');
 
-        const direction = params.get('direction') || 'up';
+        const direction = params.get('direction') || 'down';
         const fetchFn = direction === 'down' ? getEntityGraphDown : getEntityGraphUp;
         const graphData = await fetchFn(entityId);
 

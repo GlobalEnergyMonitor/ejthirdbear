@@ -30,6 +30,14 @@
     title = 'Dataset Fields',
   } = $props();
 
+  function linkifyDefinition(text: string): string {
+    if (!text) return '';
+    return text.replace(
+      /(https?:\/\/[^\s"<>]+)/g,
+      '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>'
+    );
+  }
+
   // Use API-provided category order when available, fall back to order-of-appearance from fields
   const effectiveCategories = $derived(
     categoriesOrdered.length > 0
@@ -149,7 +157,7 @@
       <button type="button" class="modal-close" onclick={closeModal} aria-label="Close">✕</button>
     </div>
     <div class="mobile-modal-body">
-      <div class="field-definition">{selectedField.definition}</div>
+      <div class="field-definition">{@html linkifyDefinition(selectedField.definition)}</div>
 
       {#if statsLoading}
         <div class="loading-stats">Loading distribution...</div>
@@ -253,7 +261,7 @@
   <div class="dataset-previewer">
     {#if selectedField}
       <h4>Field: {selectedField.columnName}</h4>
-      <div class="field-definition">{selectedField.definition}</div>
+      <div class="field-definition">{@html linkifyDefinition(selectedField.definition)}</div>
 
       {#if statsLoading}
         <div class="loading-stats">Loading distribution...</div>
@@ -423,7 +431,7 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 180px;
+    max-width: 280px;
     vertical-align: top;
     transition: all var(--transition-base, 0.15s ease);
   }
@@ -459,6 +467,11 @@
     font-size: var(--font-size-base);
     line-height: var(--line-height-normal);
     color: var(--color-text-primary);
+  }
+
+  .field-definition :global(a) {
+    color: var(--gem-teal);
+    word-break: break-all;
   }
 
   .null-info {

@@ -106,6 +106,15 @@
     </div>
   {/if}
 
+  <!-- Controls -->
+  <div class="controls">
+    <label class="bins-control">
+      <span class="bins-label">Bins</span>
+      <input type="range" min="2" max="40" step="1" bind:value={numBins} />
+      <span class="bins-value">{numBins}</span>
+    </label>
+  </div>
+
   <!-- Histogram bars -->
   <div class="bars">
     {#each bins as bin}
@@ -118,15 +127,6 @@
         <span class="bar-count">{fmtCount(bin.count)} ({pct(bin.count)})</span>
       </div>
     {/each}
-  </div>
-
-  <!-- Controls -->
-  <div class="controls">
-    <label class="bins-control">
-      <span class="bins-label">Bins</span>
-      <input type="range" min="2" max="40" step="1" bind:value={numBins} />
-      <span class="bins-value">{numBins}</span>
-    </label>
   </div>
 
   <div class="summary">
@@ -231,9 +231,9 @@
 
   /* Controls */
   .controls {
-    padding-top: var(--space-3);
-    border-top: 1px solid var(--color-border);
-    margin-top: var(--space-1);
+    padding-bottom: var(--space-3);
+    border-bottom: 1px solid var(--color-border);
+    margin-bottom: var(--space-1);
   }
 
   .bins-control {

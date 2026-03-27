@@ -5,7 +5,7 @@
    *
    * URL params:
    *   entityId - Required. Entity ID to display
-   *   direction - Optional. "up" or "down" (default: "up")
+   *   direction - Optional. "up" or "down" (default: "down")
    *   compact - Optional. "true" or "false" (default: "false")
    */
   import { page } from '$app/stores';
@@ -16,7 +16,7 @@
   import { errorMessage, boolParam } from '../embed-utils';
 
   const entityId = $derived($page.url.searchParams.get('entityId'));
-  const direction = $derived($page.url.searchParams.get('direction') || 'up');
+  const direction = $derived($page.url.searchParams.get('direction') || 'down');
   const compact = $derived(boolParam($page.url.searchParams.get('compact'), false));
 
   // State
@@ -43,7 +43,7 @@
 </script>
 
 <svelte:head>
-  <title>Ownership Graph — {graphData?.rootEntityName || entityId || 'GEM Embed'}</title>
+  <title>Control Chain — {graphData?.rootEntityName || entityId || 'GEM Embed'}</title>
   <meta name="robots" content="noindex" />
 </svelte:head>
 
@@ -54,7 +54,7 @@
     <div class="embed-error">
       <p>{error}</p>
       {#if !entityId}
-        <p class="embed-hint">Example: ?entityId=E100000000650&direction=up</p>
+        <p class="embed-hint">Example: ?entityId=E100000000650&direction=down</p>
       {/if}
     </div>
   {:else if graphData?.nodes?.length > 1}

@@ -93,19 +93,21 @@
   function toFeatureCollection(assets) {
     return {
       type: 'FeatureCollection',
-      features: assets.map((asset) => ({
-        type: 'Feature',
-        geometry: {
-          type: 'Point',
-          coordinates: [asset.lon, asset.lat],
-        },
-        properties: {
-          id: asset.id,
-          name: asset.name,
-          tracker: asset.tracker,
-          country: asset.country,
-        },
-      })),
+      features: assets
+        .filter((a) => a.hasCoords)
+        .map((asset) => ({
+          type: 'Feature',
+          geometry: {
+            type: 'Point',
+            coordinates: [asset.lon, asset.lat],
+          },
+          properties: {
+            id: asset.id,
+            name: asset.name,
+            tracker: asset.tracker,
+            country: asset.country,
+          },
+        })),
     };
   }
 
@@ -129,25 +131,27 @@
       });
 
       loadingPhase = 'Processing records...';
-      allAssets = (geojson.features || [])
-        .filter(
-          (f) =>
-            f.geometry?.coordinates &&
-            f.geometry.coordinates.length >= 2 &&
-            isFinite(f.geometry.coordinates[0]) &&
-            isFinite(f.geometry.coordinates[1]) &&
-            f.geometry.coordinates[1] >= -90 &&
-            f.geometry.coordinates[1] <= 90
-        )
-        .map((f) => ({
+      allAssets = (geojson.features || []).map((f) => {
+        const coords = f.geometry?.coordinates;
+        const hasCoords =
+          coords &&
+          coords.length >= 2 &&
+          isFinite(coords[0]) &&
+          isFinite(coords[1]) &&
+          coords[1] >= -90 &&
+          coords[1] <= 90;
+        return {
           id: f.properties?.id || f.properties?.['GEM location ID'] || '',
           name: f.properties?.name || f.properties?.Project || f.properties?.id || '',
           tracker: f.properties?.tracker || '',
           country: f.properties?.country || '',
-          lat: f.geometry.coordinates[1],
-          lon: f.geometry.coordinates[0],
-        }));
+          lat: hasCoords ? coords[1] : null,
+          lon: hasCoords ? coords[0] : null,
+          hasCoords,
+        };
+      });
 
+      // Build facets from ALL assets (including pipeline assets with no map coords)
       trackerFacets = buildFacets(allAssets, 'tracker');
       countryFacets = buildFacets(allAssets, 'country', 200);
 

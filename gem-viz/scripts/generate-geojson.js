@@ -82,9 +82,9 @@ async function generateGeoJSON() {
       for (const asset of results) {
         const lat = parseFloat(asset.latitude);
         const lon = parseFloat(asset.longitude);
-        if (isNaN(lat) || isNaN(lon)) continue;
+        const hasCoords = !isNaN(lat) && !isNaN(lon);
 
-        const id = asset.id || asset.gem_id || `${lat}_${lon}`;
+        const id = asset.asset_id || asset.id || asset.gem_id || `${slug}_${offset}`;
         if (seen.has(id)) continue;
         seen.add(id);
 
@@ -94,16 +94,15 @@ async function generateGeoJSON() {
           properties: {
             id,
             'GEM location ID': id,
-            lat,
-            lon,
+            lat: hasCoords ? lat : null,
+            lon: hasCoords ? lon : null,
             country: asset.country || null,
             state: asset.state || asset.subnational_unit || null,
             tracker: asset.asset_type || slug,
           },
-          geometry: {
-            type: 'Point',
-            coordinates: [lon, lat],
-          },
+          geometry: hasCoords
+            ? { type: 'Point', coordinates: [lon, lat] }
+            : null,
         });
       }
 

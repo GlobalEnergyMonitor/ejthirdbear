@@ -377,7 +377,7 @@
 
         <div class="section-block">
           <h3>
-            Upstream Ownership
+            Upstream Control Chain
             {@render embedBtn(`/embed/ownership-graph?entityId=${entityId}&direction=up`)}
           </h3>
           <OwnershipTreeGraph
@@ -412,7 +412,7 @@
       {#if graphDown?.nodes?.length > 1}
         <div class="section-block">
           <h3>
-            Downstream Ownership
+            Downstream Control Chain
             {@render embedBtn(`/embed/ownership-graph?entityId=${entityId}&direction=down`)}
           </h3>
           <OwnershipTreeGraph

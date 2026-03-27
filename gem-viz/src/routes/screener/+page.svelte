@@ -9,6 +9,7 @@
 
   import { goto } from '$app/navigation';
   import ScreenerLayout from '$lib/components/nav/ScreenerLayout.svelte';
+  import ScreenerStepNav from '$lib/components/nav/ScreenerStepNav.svelte';
   import AssetClassExpansion from '$lib/components/tracker/AssetClassExpansion.svelte';
   import DebugPanel from '$lib/components/feedback/DebugPanel.svelte';
   import { ALL_ASSET_CLASSES, getAssetClassById } from '$lib/data-config/asset-class-definitions';
@@ -225,6 +226,11 @@
 
   const isEmbed = $derived($page.url.searchParams.get('embed') === 'true');
 
+  // Serialized classes param for the step nav (needs selected class to navigate forward)
+  const classesParamForNav = $derived(
+    selectedClass ? JSON.stringify(buildClassData()) : ''
+  );
+
   function navigateTo(path) {
     const classData = buildClassData();
     if (classData.length === 0) return;
@@ -346,29 +352,7 @@
   />
 </svelte:head>
 
-{#if isEmbed}
-  <!-- Embed mode: no chrome, hash-synced state -->
-  <div class="screener-embed-shell">
-    <div class="embed-topbar">
-      <span class="embed-status">{selectionSummary || 'Select an asset class'}</span>
-    </div>
-    <div class="picker-section">
-{:else}
-<ScreenerLayout
-  currentStep={1}
-  subtitle="Evaluate companies' ownership stakes in classes of fossil fuel assets. Start by selecting an asset class below."
->
-  {#snippet headerRight()}
-    <div class="selection-badge" class:has-selection={selectedClass}>
-      {#if selectedClass}
-        <span class="selection-text">{selectionSummary}</span>
-        <button class="clear-btn" onclick={clearSelection}>&times;</button>
-      {:else}
-        <span class="selection-text">None selected yet</span>
-      {/if}
-    </div>
-  {/snippet}
-
+{#snippet pickerBody()}
   <!-- Asset class tile picker -->
   <div class="picker-section">
     <div class="picker-search">
@@ -479,12 +463,31 @@
       </div>
     </DebugPanel>
   {/if}
+{/snippet}
 
 {#if isEmbed}
-    </div><!-- /picker-section -->
-  </div><!-- /screener-embed-shell -->
+  <!-- Embed mode: no chrome, hash-synced state -->
+  <div class="screener-embed-shell">
+    <ScreenerStepNav currentStep={1} classesParam={classesParamForNav} isEmbed={true} />
+    {@render pickerBody()}
+  </div>
 {:else}
-</ScreenerLayout>
+  <ScreenerLayout
+    currentStep={1}
+    subtitle="Evaluate companies' ownership stakes in classes of fossil fuel assets. Start by selecting an asset class below."
+  >
+    {#snippet headerRight()}
+      <div class="selection-badge" class:has-selection={selectedClass}>
+        {#if selectedClass}
+          <span class="selection-text">{selectionSummary}</span>
+          <button class="clear-btn" onclick={clearSelection}>&times;</button>
+        {:else}
+          <span class="selection-text">None selected yet</span>
+        {/if}
+      </div>
+    {/snippet}
+    {@render pickerBody()}
+  </ScreenerLayout>
 {/if}
 
 <style>
@@ -492,14 +495,6 @@
   .screener-embed-shell {
     width: 100%;
     font-family: var(--font-family);
-  }
-  .embed-topbar {
-    padding: var(--space-2) var(--space-4);
-    border-bottom: 1px solid var(--color-border);
-    background: var(--color-bg-secondary);
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
-    font-style: italic;
   }
   .screener-embed-shell .picker-section {
     padding: var(--space-4) var(--space-5) 0;

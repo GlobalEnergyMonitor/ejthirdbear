@@ -10,10 +10,11 @@
    * @type {{
    *   currentStep: number,
    *   classesParam?: string,
-   *   ownersParam?: string
+   *   ownersParam?: string,
+   *   isEmbed?: boolean
    * }}
    */
-  let { currentStep = 1, classesParam = '', ownersParam = '' } = $props();
+  let { currentStep = 1, classesParam = '', ownersParam = '', isEmbed = false } = $props();
 
   const steps = [
     { num: 1, label: 'Asset Classes', path: 'screener' },
@@ -23,10 +24,11 @@
   ];
 
   function getStepUrl(step) {
-    return buildScreenerUrl(step.path, {
+    const url = buildScreenerUrl(step.path, {
       classes: classesParam || undefined,
       owners: step.num >= 3 ? ownersParam || undefined : undefined,
     });
+    return isEmbed ? url + (url.includes('?') ? '&' : '?') + 'embed=true' : url;
   }
 
   function isCompleted(stepNum) {

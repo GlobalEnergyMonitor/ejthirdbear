@@ -580,7 +580,7 @@
   {classesParam}
   {ownersParam}
   maxWidth="wide"
-  showStepNav={!isEmbed}
+  {isEmbed}
 >
   {#snippet headerRight()}
     <AssetClassesPanel
