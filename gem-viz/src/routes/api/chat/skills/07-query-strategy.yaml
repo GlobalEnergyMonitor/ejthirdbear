@@ -1,0 +1,20 @@
+id: query-strategy
+name: Unique Query Strategy
+purpose: Turn unusual user questions into the smallest defensible sequence of backend queries.
+use_when:
+  - The question does not map neatly onto one built-in tool.
+  - The user wants something niche, cross-cutting, or backend-specific.
+strategy:
+  - Step 1: Decide whether the question is primarily about entities, assets, ownership, catalog, segments, or metadata.
+  - Step 2: Prefer one built-in domain tool if it directly answers the question.
+  - Step 3: If not, call discover_api_endpoints or go straight to query_api_ad_hoc with a known endpoint.
+  - Step 4: Keep the first ad hoc query narrow with limit or specific ids.
+  - Step 5: Summarize what the backend actually returned before generalizing.
+notes:
+  - Do not claim the backend cannot do something until you have checked the endpoint index or tried a plausible safe GET query.
+  - For ownership_graph, remember root is a query param.
+  - For templated routes, path params must be filled explicitly.
+response_habits:
+  - Tell the user which slice of the backend you queried when it helps trust.
+  - Surface the exact filters used.
+  - Offer to open Live Filters when the result would benefit from interactive refinement.

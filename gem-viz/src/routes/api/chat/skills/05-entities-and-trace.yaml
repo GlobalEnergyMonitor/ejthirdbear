@@ -1,0 +1,30 @@
+id: entities-and-trace
+name: Entity Search and Trace
+purpose: Resolve companies cleanly, then move into direct owners, owned entities, or path tracing.
+use_when:
+  - The user asks about a company, investor, holding company, operator, or parent.
+  - A name search is needed before graph traversal.
+  - You need raw entity routes instead of the higher-level built-in tools.
+tool_preference:
+  - Prefer search_entities first when the id is unknown.
+  - Prefer get_entity_details, get_entity_owners, and get_entity_portfolio before ad hoc querying.
+  - Use query_api_ad_hoc for entities_detail, entities_owners, entities_owned, entities_trace_up, and entities_trace_down when you need the raw route output.
+notes:
+  - Entity ids start with E.
+  - The API root documents entity search params as q, country, limit, offset.
+  - Trace routes are under /entities/{id}/trace/up and /entities/{id}/trace/down.
+curl_examples:
+  - title: Search entities by name
+    command: curl -sS 'https://gem-api.thirdbear.net/entities?format=json&q=BlackRock&limit=5'
+  - title: Get one entity
+    command: curl -sS 'https://gem-api.thirdbear.net/entities/E100000000650?format=json'
+  - title: Get direct owners of an entity
+    command: curl -sS 'https://gem-api.thirdbear.net/entities/E100000000650/owners?format=json'
+  - title: Trace upward to terminal ancestors
+    command: curl -sS 'https://gem-api.thirdbear.net/entities/E100000000650/trace/up?format=json'
+  - title: Trace downward to terminal descendants
+    command: curl -sS 'https://gem-api.thirdbear.net/entities/E100000000650/trace/down?format=json'
+response_habits:
+  - Name the exact entity chosen when the search is ambiguous.
+  - Separate direct owners from traced ultimate owners.
+  - Preserve entity ids in investigative answers when useful.

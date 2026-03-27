@@ -22,6 +22,43 @@ export async function fetchApiJson(url: string): Promise<Record<string, unknown>
   return response.json();
 }
 
+/** Build a URL with repeated query params for arrays and JSON formatting by default. */
+export function buildApiUrl(
+  path: string,
+  params?: Record<string, unknown>,
+  includeJsonFormat: boolean = true
+): string {
+  const url = new URL(path.startsWith('http') ? path : `${API_BASE}${path}`);
+
+  if (includeJsonFormat && !url.searchParams.has('format')) {
+    url.searchParams.set('format', 'json');
+  }
+
+  if (params) {
+    for (const [key, value] of Object.entries(params)) {
+      if (value == null || value === '') continue;
+
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          if (item != null && item !== '') {
+            url.searchParams.append(key, String(item));
+          }
+        }
+        continue;
+      }
+
+      if (typeof value === 'boolean') {
+        url.searchParams.set(key, value ? 'true' : 'false');
+        continue;
+      }
+
+      url.searchParams.set(key, String(value));
+    }
+  }
+
+  return url.toString();
+}
+
 /** Clamp a numeric limit to a safe range */
 export function clampLimit(value: unknown, defaultVal: number, max: number): number {
   const n = typeof value === 'number' ? value : defaultVal;

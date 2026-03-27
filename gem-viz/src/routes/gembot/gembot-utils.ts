@@ -29,8 +29,13 @@ export function formatToolName(name: string): string {
 }
 
 export function getToolIcon(_name: string): string {
-  // Minimal indicator - no emoji
-  return '›';
+  switch (_name) {
+    case 'discover_api_endpoints':
+    case 'query_api_ad_hoc':
+      return 'API';
+    default:
+      return '›';
+  }
 }
 
 // Format tool args for display
@@ -88,6 +93,14 @@ export function getToolSummary(toolName: string, args?: Record<string, unknown>)
       return args?.entity_id ? `Country breakdown: ${args.entity_id}` : 'Get country breakdown';
     case 'generate_map':
       return args?.title ? `Map: ${args.title}` : 'Generate map';
+    case 'discover_api_endpoints':
+      return args?.query ? `API index: ${args.query}` : 'Browse API index';
+    case 'query_api_ad_hoc':
+      return args?.endpoint_key
+        ? `API query: ${args.endpoint_key}`
+        : args?.path
+          ? `API query: ${args.path}`
+          : 'Run API query';
     case 'get_status_breakdown':
       return args?.entity_id ? `Status breakdown: ${args.entity_id}` : 'Get status breakdown';
     case 'get_tracker_summary':

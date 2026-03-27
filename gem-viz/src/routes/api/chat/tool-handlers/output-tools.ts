@@ -3,6 +3,7 @@
  */
 
 import { getEntity, getAsset, listAssets, resolveApiSlug } from '$lib/ownership-api';
+import { emptyFilterState } from '$lib/filter-state';
 import { type ToolArgs, type ToolResult, type ToolHandler } from './tool-utils';
 
 async function generateScreenerUrl(args: ToolArgs): Promise<ToolResult> {
@@ -198,7 +199,105 @@ async function generateMap(args: ToolArgs): Promise<ToolResult> {
   };
 }
 
+async function openComposeControl(args: ToolArgs): Promise<ToolResult> {
+  const filters = emptyFilterState();
+  const readList = (value: unknown) => {
+    if (Array.isArray(value)) {
+      return value
+        .map((item) => (typeof item === 'string' ? item.trim() : ''))
+        .filter(Boolean);
+    }
+    if (typeof value === 'string' && value.trim()) {
+      return [value.trim()];
+    }
+    return [];
+  };
+  const readNumber = (value: unknown) => {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value === 'string' && value.trim()) {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+  };
+
+  filters.trackers = readList(args.trackers);
+  filters.statuses = readList(args.statuses);
+  filters.countries = readList(args.countries);
+  filters.stateProvinces = readList(args.state_provinces);
+  filters.ownerCountries = readList(args.owner_countries);
+  filters.owners = readList(args.owners);
+  filters.capacityMin = readNumber(args.capacity_min);
+  filters.capacityMax = readNumber(args.capacity_max);
+  filters.shareMin = readNumber(args.share_min);
+  filters.shareMax = readNumber(args.share_max);
+  filters.startYearMin = readNumber(args.start_year_min);
+  filters.startYearMax = readNumber(args.start_year_max);
+  filters.search = typeof args.search === 'string' ? args.search.trim() : '';
+
+  if (
+    filters.capacityMin != null &&
+    filters.capacityMax != null &&
+    filters.capacityMin > filters.capacityMax
+  ) {
+    [filters.capacityMin, filters.capacityMax] = [filters.capacityMax, filters.capacityMin];
+  }
+  if (
+    filters.shareMin != null &&
+    filters.shareMax != null &&
+    filters.shareMin > filters.shareMax
+  ) {
+    [filters.shareMin, filters.shareMax] = [filters.shareMax, filters.shareMin];
+  }
+  if (
+    filters.startYearMin != null &&
+    filters.startYearMax != null &&
+    filters.startYearMin > filters.startYearMax
+  ) {
+    [filters.startYearMin, filters.startYearMax] = [filters.startYearMax, filters.startYearMin];
+  }
+
+  const mode =
+    args.mode === 'merge' || args.mode === 'clear' || args.mode === 'replace'
+      ? args.mode
+      : 'replace';
+  const focus = args.focus === 'results' ? 'results' : 'filters';
+  const activeCount = [
+    filters.trackers.length,
+    filters.statuses.length,
+    filters.countries.length,
+    filters.stateProvinces.length,
+    filters.ownerCountries.length,
+    filters.owners.length,
+    filters.capacityMin != null || filters.capacityMax != null ? 1 : 0,
+    filters.shareMin != null || filters.shareMax != null ? 1 : 0,
+    filters.startYearMin != null || filters.startYearMax != null ? 1 : 0,
+    filters.search ? 1 : 0,
+  ].reduce((sum, count) => sum + count, 0);
+
+  return {
+    success: true,
+    data: {
+      type: 'compose_control',
+      mode,
+      focus,
+      title:
+        typeof args.panel_title === 'string' && args.panel_title.trim()
+          ? args.panel_title.trim()
+          : 'Compose Control Deck',
+      message:
+        typeof args.message === 'string' && args.message.trim()
+          ? args.message.trim()
+          : activeCount > 0
+            ? `Applied ${activeCount} compose filter${activeCount === 1 ? '' : 's'} in the embedded control deck.`
+            : 'Opened the embedded compose control deck.',
+      filters,
+    },
+  };
+}
+
 export const outputHandlers: Record<string, ToolHandler> = {
   generate_screener_url: generateScreenerUrl,
   generate_map: generateMap,
+  open_compose_control: openComposeControl,
 };

@@ -10,6 +10,7 @@ import { assetHandlers } from './tool-handlers/asset-tools';
 import { analyticsHandlers } from './tool-handlers/analytics-tools';
 import { outputHandlers } from './tool-handlers/output-tools';
 import { cartHandlers } from './tool-handlers/cart-tools';
+import { apiExplorerHandlers } from './tool-handlers/api-explorer-tools';
 
 const handlers: Record<string, ToolHandler> = {
   ...entityHandlers,
@@ -17,6 +18,7 @@ const handlers: Record<string, ToolHandler> = {
   ...analyticsHandlers,
   ...outputHandlers,
   ...cartHandlers,
+  ...apiExplorerHandlers,
 };
 
 export async function executeTool(

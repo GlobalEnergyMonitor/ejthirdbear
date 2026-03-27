@@ -1,0 +1,22 @@
+id: compose-handoff
+name: Compose Handoff
+purpose: Move from chat answers into the embedded Compose UI when the user wants live filters, sliders, or a reusable result table.
+use_when:
+  - The user says open compose, open filters, move sliders, or tune the results interactively.
+  - A static answer should turn into a live dataset slice.
+tool_preference:
+  - Use open_compose_control with the smallest useful filter set.
+  - Keep panel_title and message short and literal.
+notes:
+  - Prefer countries, statuses, trackers, owners, capacity range, share range, start year, and search.
+  - Do not open the deck unless it materially helps the user interact with the data.
+example_filters:
+  - intent: Operating coal plants in India
+    payload:
+      trackers: [Coal Plant]
+      countries: [India]
+      statuses: [operating]
+  - intent: Assets owned by BlackRock above 500 MW
+    payload:
+      owners: [BlackRock]
+      capacity_min: 500

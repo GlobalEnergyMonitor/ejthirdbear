@@ -1,0 +1,24 @@
+id: ownership-graph
+name: Ownership Graph Tracing
+purpose: Trace control upward or downward when the user asks who owns what, what a company controls, or how a network is connected.
+use_when:
+  - The user asks for ultimate owners, direct owners, subsidiaries, or graph-style relationships.
+  - A single asset or entity needs ownership context beyond direct owners[].
+tool_preference:
+  - Prefer get_entity_owners, get_entity_portfolio, or get_ownership_graph first.
+  - Use query_api_ad_hoc if you need the raw API graph shape.
+notes:
+  - The endpoint registry lists /ownership/graph with query params root, direction, and max_depth.
+  - This route takes root as a query param, not a path segment.
+  - Direction values are up or down; max_depth should stay modest unless the user asks for exhaustive traversal.
+curl_examples:
+  - title: Trace one entity downward
+    command: curl -sS 'https://gem-api.thirdbear.net/ownership/graph?format=json&root=E100000000650&direction=down&max_depth=1'
+  - title: Trace one entity upward
+    command: curl -sS 'https://gem-api.thirdbear.net/ownership/graph?format=json&root=E100000000650&direction=up&max_depth=3'
+  - title: Get direct owners of an entity
+    command: curl -sS 'https://gem-api.thirdbear.net/entities/E100000000650/owners?format=json'
+response_habits:
+  - Separate direct ownership from ultimate control.
+  - Quote percentages exactly when the API provides them.
+  - Flag imputed or partial ownership when the graph implies uncertainty.
