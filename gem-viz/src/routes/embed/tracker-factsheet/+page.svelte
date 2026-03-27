@@ -16,7 +16,8 @@
     trackerMetadata,
     type TrackerMetadata,
   } from '$lib/data-config/tracker-metadata';
-  import { getFieldsForTracker } from '$lib/catalog-field-meta';
+  import { getTrackerFieldData } from '$lib/catalog-field-meta';
+  import { URL_SLUG_TO_CATALOG_SLUG } from '$lib/data-config/tracker-schema';
 
   // Parse URL parameters
   const trackerSlug = $derived($page.url.searchParams.get('tracker') || '');
@@ -27,6 +28,7 @@
   const metadata = $derived(trackerMetadata[trackerSlug] as TrackerMetadata | undefined);
   const maxHeight = $derived(heightParam ? parseInt(heightParam, 10) : 500);
   const title = $derived(titleParam || `${tracker} Fields`);
+  const catalogSlug = $derived(URL_SLUG_TO_CATALOG_SLUG[trackerSlug] ?? '');
 
   // State
   let fieldsMetadata = $state<
@@ -38,22 +40,22 @@
       valueDefinition?: string | null;
     }>
   >([]);
+  let categoriesOrdered = $state<string[]>([]);
   let loading = $state(true);
   let error = $state<string | null>(null);
 
   async function loadFieldsMetadata() {
-    fieldsMetadata = await getFieldsForTracker(trackerSlug, true);
+    const { fields, categoriesOrdered: cats } = await getTrackerFieldData(trackerSlug);
+    fieldsMetadata = fields;
+    if (cats.length) categoriesOrdered = cats;
     loading = false;
   }
 
   onMount(() => {
-    if (metadata) {
+    if (trackerSlug) {
       loadFieldsMetadata();
-    } else if (!trackerSlug) {
-      error = 'Missing required parameter: tracker';
-      loading = false;
     } else {
-      error = `Unknown tracker: ${trackerSlug}`;
+      error = 'Missing required parameter: tracker';
       loading = false;
     }
   });
@@ -72,24 +74,17 @@
   {:else if error}
     <div class="embed-error">
       <p>{error}</p>
-      {#if !trackerSlug}
-        <p class="embed-hint">Example: ?tracker=coal-mine</p>
-        <p class="embed-hint">Available trackers: {validTrackers.join(', ')}</p>
-      {/if}
-    </div>
-  {:else if fieldsMetadata.length === 0}
-    <div class="embed-error">
-      <p>No metadata found for {tracker}</p>
+      <p class="embed-hint">Example: ?tracker=coal-mine</p>
+      <p class="embed-hint">Available: {validTrackers.join(', ')}</p>
     </div>
   {:else}
-    <DatasetFactsheet {tracker} {fieldsMetadata} {title} />
+    <DatasetFactsheet {tracker} {fieldsMetadata} {categoriesOrdered} {catalogSlug} {title} />
   {/if}
 </div>
 
 <style>
   .factsheet-embed {
     width: 100%;
-    max-width: 900px;
   }
 
   .factsheet-embed :global(.factsheet) {
