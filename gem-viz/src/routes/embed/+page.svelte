@@ -3,17 +3,44 @@
 
   const widgets = [
     { name: 'Tracker Factsheet', slug: 'tracker-factsheet', desc: 'Two-column metadata explorer with field definitions.', key: 'tracker', val: 'coal-plant', h: 550,
-      params: [{ k: 'tracker', d: 'coal-plant, gas-plant, steel-plant, etc.' }, { k: 'title', d: 'Title override' }, { k: 'height', d: 'Max height (default: 500)' }] },
+      params: [{ k: 'tracker', d: 'coal-plant, gas-plant, steel-plant, etc.' }, { k: 'title', d: 'Title override' }, { k: 'height', d: 'Max height (default: 500)' }],
+      samples: [
+        { label: 'Coal Plant', val: 'coal-plant' },
+        { label: 'Gas Plant', val: 'gas-plant' },
+        { label: 'Steel Plant', val: 'steel-plant' },
+        { label: 'Gas Pipeline', val: 'gas-pipeline' },
+      ] },
     { name: 'Entity Card', slug: 'entity', desc: 'Entity profile with ownership flower and asset list.', key: 'id', val: 'E100001000558', h: 600,
-      params: [{ k: 'id', d: 'Entity ID' }, { k: 'showFlower', d: 'Flower (default: true)' }, { k: 'showAssets', d: 'Asset list (default: true)' }, { k: 'showMap', d: 'Map (default: false)' }, { k: 'maxAssets', d: 'Max assets (default: 10)' }] },
+      params: [{ k: 'id', d: 'Entity ID' }, { k: 'showFlower', d: 'Flower (default: true)' }, { k: 'showAssets', d: 'Asset list (default: true)' }, { k: 'showMap', d: 'Map (default: false)' }, { k: 'maxAssets', d: 'Max assets (default: 10)' }],
+      samples: [
+        { label: 'BlackRock', val: 'E100001000558' },
+        { label: 'China Energy', val: 'E100000001926' },
+        { label: 'Vanguard', val: 'E100001000562' },
+      ] },
     { name: 'Asset Card', slug: 'asset', desc: 'Asset profile with status, metadata, and owners.', key: 'id', val: 'L100000104168_G100000100057', h: 500,
       params: [{ k: 'id', d: 'Asset ID / GEM unit ID' }, { k: 'showOwners', d: 'Owners list (default: true)' }, { k: 'showMap', d: 'Map (default: false)' }] },
     { name: 'Project Card', slug: 'project-card', desc: 'Tabbed asset detail with ownership tree and location map.', key: 'id', val: 'G100001000201', h: 700,
-      params: [{ k: 'id', d: 'Asset ID / GEM unit ID' }, { k: 'showOwnership', d: 'Ownership tree (default: true)' }, { k: 'showMap', d: 'Map (default: true)' }] },
+      params: [{ k: 'id', d: 'Asset ID / GEM unit ID' }, { k: 'showOwnership', d: 'Ownership tree (default: true)' }, { k: 'showMap', d: 'Map (default: true)' }],
+      samples: [
+        { label: 'Belchatow (Coal)', val: 'G100001000201' },
+        { label: 'Datang Tuoketuo (Coal)', val: 'G100000102961' },
+        { label: 'Surgutskaya GRES-2 (Gas)', val: 'G100001002347' },
+        { label: 'ArcelorMittal Ghent (Steel)', val: 'G100001004521' },
+      ] },
     { name: 'Coal Plant Card', slug: 'coal-plant', desc: 'Six-tab coal plant detail: overview, timeline, coal, emissions, ownership, additional.', key: 'id', val: 'G100000102961', h: 700,
-      params: [{ k: 'id', d: 'G-prefix, compound L_G, or L-prefix ID' }] },
+      params: [{ k: 'id', d: 'G-prefix, compound L_G, or L-prefix ID' }],
+      samples: [
+        { label: 'Datang Tuoketuo', val: 'G100000102961' },
+        { label: 'Belchatow', val: 'G100001000201' },
+        { label: 'Kusile', val: 'G100001000489' },
+      ] },
     { name: 'Ownership Flower', slug: 'ownership-flower', desc: 'Radial visualization of portfolio composition by tracker type.', key: 'entityId', val: 'E100000001926', h: 520,
-      params: [{ k: 'entityId', d: 'Entity ID' }, { k: 'size', d: 'small / medium / large' }, { k: 'showLabels', d: 'Labels (default: true)' }, { k: 'showTitle', d: 'Title (default: true)' }] },
+      params: [{ k: 'entityId', d: 'Entity ID' }, { k: 'size', d: 'small / medium / large' }, { k: 'showLabels', d: 'Labels (default: true)' }, { k: 'showTitle', d: 'Title (default: true)' }],
+      samples: [
+        { label: 'China Energy', val: 'E100000001926' },
+        { label: 'BlackRock', val: 'E100001000558' },
+        { label: 'Vanguard', val: 'E100001000562' },
+      ] },
     { name: 'Ownership Graph', slug: 'ownership-graph', desc: 'Interactive ownership hierarchy tree, upstream or downstream.', key: 'entityId', val: 'E100001000558', h: 600,
       params: [{ k: 'entityId', d: 'Entity ID' }, { k: 'direction', d: 'up (default) or down' }] },
     { name: 'Ultimate Owners', slug: 'ultimate-owners', desc: 'Terminal ancestors at the top of the ownership chain.', key: 'entityId', val: 'E100001000558', h: 400,
@@ -27,11 +54,16 @@
   ];
 
   let copied = $state({});
+  let selected = $state({});
 
-  function src(w) { return `${base}/embed/${w.slug}?${w.key}=${w.val}`; }
+  function activeVal(w) {
+    return selected[w.slug] ?? w.val;
+  }
+
+  function src(w) { return `${base}/embed/${w.slug}?${w.key}=${activeVal(w)}`; }
 
   function snippet(w) {
-    const p = `/embed/${w.slug}?${w.key}=${w.val}`;
+    const p = `/embed/${w.slug}?${w.key}=${activeVal(w)}`;
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     return `<div class="gem-embed" data-src="${p}" data-height="${w.h}">\n<script src="${origin}/embed.js"><` + `/script>\n</div>`;
   }
@@ -76,6 +108,17 @@
 
       <div class="specimen-body">
         <div class="preview">
+          {#if w.samples}
+            <div class="sample-picker">
+              {#each w.samples as s}
+                <button
+                  class="sample-btn"
+                  class:active={activeVal(w) === s.val}
+                  onclick={() => { selected[w.slug] = s.val; }}
+                >{s.label}</button>
+              {/each}
+            </div>
+          {/if}
           <iframe
             src={src(w)}
             title={w.name}
@@ -239,6 +282,31 @@
     background: var(--color-bg-secondary);
   }
   .preview iframe { display: block; border: none; }
+
+  .sample-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    border-bottom: 1px solid var(--color-border);
+    padding: 0.25rem 0.5rem;
+    background: var(--color-bg-primary);
+  }
+  .sample-btn {
+    padding: 0.1875rem 0.625rem;
+    font-size: 0.625rem;
+    font-family: var(--font-family-mono);
+    border: 1px solid transparent;
+    background: none;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    border-radius: 2px;
+  }
+  .sample-btn:hover { color: var(--color-text-primary); background: var(--color-bg-secondary); }
+  .sample-btn.active {
+    color: var(--color-text-primary);
+    border-color: var(--color-border);
+    background: var(--color-bg-secondary);
+  }
 
   /* ── Sidebar ── */
   .sidebar h3 {

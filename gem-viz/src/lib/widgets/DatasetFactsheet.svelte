@@ -198,7 +198,6 @@
         {/if}
 
         {#if uniqueCount === 0 && valueDefinitions.length === 0}
-          <div class="no-stats">Distribution data not yet available for this field.</div>
         {/if}
       {/if}
     </div>
@@ -307,7 +306,6 @@
         {/if}
 
         {#if uniqueCount === 0 && valueDefinitions.length === 0}
-          <div class="no-stats">Distribution data not yet available for this field.</div>
         {/if}
       {/if}
     {:else}
@@ -336,8 +334,8 @@
 
   .dataset-fields {
     color: var(--gem-teal);
-    max-width: 485px;
-    min-width: 300px;
+    flex: 1;
+    min-width: 0;
     max-height: 500px;
     overflow-y: auto;
     padding: var(--space-5);
@@ -351,14 +349,14 @@
     background-color: var(--color-bg-secondary);
     border-left: var(--space-1) solid var(--gem-teal);
     padding: var(--space-5);
-    width: 400px;
-    min-width: 300px;
+    flex: 1;
+    min-width: 0;
     max-height: 500px;
     overflow-y: auto;
   }
 
   .dataset-previewer .previewer-values-table {
-    margin-left: var(--space-3);
+    margin-left: 0;
   }
 
   .field-value {
@@ -478,7 +476,7 @@
 
   .value-row {
     display: grid;
-    grid-template-columns: minmax(80px, 1fr) 1fr auto;
+    grid-template-columns: minmax(80px, max-content) 1fr auto;
     align-items: center;
     gap: var(--space-2);
     font-size: var(--font-size-sm);
