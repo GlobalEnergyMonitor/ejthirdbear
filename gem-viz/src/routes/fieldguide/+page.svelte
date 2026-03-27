@@ -7,13 +7,32 @@
   import { link } from '$lib/links';
   import { getAssetTypeCounts, API_TYPE_TO_SLUG } from '$lib/ownership-api';
   import { trackerMetadata } from '$lib/data-config/tracker-metadata';
+  import { CATALOG_SLUG_TO_URL_SLUG } from '$lib/data-config/tracker-schema';
+  import { fetchCatalogIndex } from '$lib/catalog-api';
   import { getTrackerColor } from '$lib/design-tokens';
   import PageHeader from '$lib/components/nav/PageHeader.svelte';
   import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
   let trackerCounts = $state<Map<string, number>>(new Map());
+  // API-ordered list of URL slugs for trackers that have metadata.
+  // Falls back to all hardcoded slugs if the API is unreachable.
+  let availableTrackerSlugs = $state<string[]>(Object.keys(trackerMetadata));
 
   onMount(async () => {
+    // Fetch ordered tracker list from API
+    try {
+      const index = await fetchCatalogIndex();
+      if (index?.trackers?.length) {
+        const slugs = index.trackers
+          .map((t) => CATALOG_SLUG_TO_URL_SLUG[t.slug])
+          .filter((s): s is string => !!s && !!trackerMetadata[s]);
+        if (slugs.length) availableTrackerSlugs = slugs;
+      }
+    } catch {
+      // keep hardcoded fallback
+    }
+
+    // Fetch asset counts (optional)
     try {
       const apiCounts = await getAssetTypeCounts();
       const mapped = new Map<string, number>();
@@ -28,8 +47,6 @@
       // counts are optional
     }
   });
-
-  const allTrackerSlugs = Object.keys(trackerMetadata);
 
   function formatNumber(n: number): string {
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -57,7 +74,7 @@
   />
 
   <div class="tracker-grid">
-    {#each allTrackerSlugs as slug}
+    {#each availableTrackerSlugs as slug}
       {@const meta = trackerMetadata[slug]}
       {@const count = trackerCounts.get(meta.name)}
       {@const color = getTrackerColor(meta.name)}
@@ -70,7 +87,6 @@
             {#if count && count > 0}
               <span class="asset-count">{formatNumber(count)} assets</span>
             {/if}
-            <span class="field-count">{meta.keyFields.length} key fields</span>
           </div>
         </div>
         <div class="card-footer">

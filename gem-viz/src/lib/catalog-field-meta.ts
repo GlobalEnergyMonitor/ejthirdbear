@@ -17,8 +17,10 @@ export interface FieldMeta {
   category: string;
   definition: string;
   dataType?: string;
+  dataSubType?: string;
   unit?: string;
   codeFriendlyName?: string;
+  histogramWeight?: number;
   allowedValues?: string[] | Array<{ value: string; definition?: string }>;
   valuesDefinitions?: Record<string, string>;
   fieldValue?: string | null;
@@ -114,6 +116,32 @@ export async function getFieldsForTracker(
   return getFallbackFields();
 }
 
+/**
+ * Fetch both fields and the API-provided category order for a tracker.
+ * Use this in FieldGuide pages so category groupings respect the tracker
+ * team's intended ordering. Falls back to order-of-appearance from fieldsDetail.
+ */
+export async function getTrackerFieldData(trackerSlug: string): Promise<{
+  fields: FieldMeta[];
+  categoriesOrdered: string[];
+}> {
+  const catalogSlug = TRACKER_TO_CATALOG_SLUG[trackerSlug];
+  if (catalogSlug) {
+    try {
+      const apiData = await fetchCatalogFieldMeta(catalogSlug);
+      if (apiData?.fieldsDetail?.length) {
+        return {
+          fields: mapApiFields(apiData.fieldsDetail, true),
+          categoriesOrdered: apiData.fieldCategoriesOrdered ?? [],
+        };
+      }
+    } catch {
+      // fall through to fallback
+    }
+  }
+  return { fields: getFallbackFields(), categoriesOrdered: [] };
+}
+
 function mapApiFields(fields: CatalogFieldDetail[], expandValues: boolean): FieldMeta[] {
   if (!expandValues) {
     return fields.map((f) => ({
@@ -121,8 +149,10 @@ function mapApiFields(fields: CatalogFieldDetail[], expandValues: boolean): Fiel
       category: f.category || 'Other',
       definition: f.definition || `${f.name} field.`,
       dataType: f.data_type,
+      dataSubType: f.data_sub_type,
       unit: f.unit_name_short,
       codeFriendlyName: f.code_friendly_name,
+      histogramWeight: (f as any).histogram_weight,
       allowedValues: f.allowed_values,
       valuesDefinitions: f.values_definitions,
     }));
@@ -136,6 +166,7 @@ function mapApiFields(fields: CatalogFieldDetail[], expandValues: boolean): Fiel
       category: f.category || 'Other',
       definition: f.definition || `${f.name} field.`,
       dataType: f.data_type,
+      dataSubType: f.data_sub_type,
       unit: f.unit_name_short,
       codeFriendlyName: f.code_friendly_name,
       fieldValue: null,

@@ -166,6 +166,11 @@ export const URL_SLUG_TO_CATALOG_SLUG: Record<string, string> = {
   'cement-plant': 'cement-plants',
 };
 
+/** Catalog slug → URL slug (reverse of URL_SLUG_TO_CATALOG_SLUG) */
+export const CATALOG_SLUG_TO_URL_SLUG: Record<string, string> = Object.fromEntries(
+  Object.entries(URL_SLUG_TO_CATALOG_SLUG).map(([urlSlug, catSlug]) => [catSlug, urlSlug])
+);
+
 /** UI tracker name → URL slug (for /tracker/ pages) */
 export const TRACKER_TO_URL_SLUG: Record<string, string> = {
   'Coal Plant': 'coal-plant',

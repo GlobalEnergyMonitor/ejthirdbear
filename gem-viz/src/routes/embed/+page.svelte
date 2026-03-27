@@ -2,6 +2,8 @@
   import { base } from '$app/paths';
 
   const widgets = [
+    { name: 'Tracker Factsheet', slug: 'tracker-factsheet', desc: 'Two-column metadata explorer with field definitions.', key: 'tracker', val: 'coal-plant', h: 550,
+      params: [{ k: 'tracker', d: 'coal-plant, gas-plant, steel-plant, etc.' }, { k: 'title', d: 'Title override' }, { k: 'height', d: 'Max height (default: 500)' }] },
     { name: 'Entity Card', slug: 'entity', desc: 'Entity profile with ownership flower and asset list.', key: 'id', val: 'E100001000558', h: 600,
       params: [{ k: 'id', d: 'Entity ID' }, { k: 'showFlower', d: 'Flower (default: true)' }, { k: 'showAssets', d: 'Asset list (default: true)' }, { k: 'showMap', d: 'Map (default: false)' }, { k: 'maxAssets', d: 'Max assets (default: 10)' }] },
     { name: 'Asset Card', slug: 'asset', desc: 'Asset profile with status, metadata, and owners.', key: 'id', val: 'L100000104168_G100000100057', h: 500,
@@ -22,8 +24,6 @@
       params: [{ k: 'entityId', d: 'Entity ID' }, { k: 'maxAssets', d: 'Max assets (default: 150)' }] },
     { name: 'Search', slug: 'asset-search', desc: 'Configurable search bar with asset, owner, and universal modes.', key: 'q', val: '', h: 140,
       params: [{ k: 'q', d: 'Initial query' }, { k: 'modes', d: 'asset, owner, universal' }, { k: 'mode', d: 'Default mode' }, { k: 'open', d: 'self or new-tab' }] },
-    { name: 'Tracker Factsheet', slug: 'tracker-factsheet', desc: 'Two-column metadata explorer with field definitions.', key: 'tracker', val: 'coal-plant', h: 550,
-      params: [{ k: 'tracker', d: 'coal-plant, gas-plant, steel-plant, etc.' }, { k: 'title', d: 'Title override' }, { k: 'height', d: 'Max height (default: 500)' }] },
   ];
 
   let copied = $state({});

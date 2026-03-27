@@ -15,10 +15,12 @@
     trackerNameToSlug,
     trackerMetadata,
   } from '$lib/data-config/tracker-metadata';
+  import { CATALOG_SLUG_TO_URL_SLUG, URL_SLUG_TO_CATALOG_SLUG } from '$lib/data-config/tracker-schema';
+  import { fetchCatalogIndex } from '$lib/catalog-api';
   import { getTrackerColor } from '$lib/design-tokens';
   import PageHeader from '$lib/components/nav/PageHeader.svelte';
   import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
-  import { getFieldsForTracker } from '$lib/catalog-field-meta';
+  import { getTrackerFieldData } from '$lib/catalog-field-meta';
 
   // URL param
   const trackerParam = $derived($page.params.tracker);
@@ -41,6 +43,7 @@
       valueDefinition?: string | null;
     }>
   >([]);
+  let categoriesOrdered = $state<string[]>([]);
   let sampleAssets = $state<
     Array<{
       id: string;
@@ -57,8 +60,9 @@
   >([]);
 
   async function loadFieldsMetadata() {
-    const fields = await getFieldsForTracker(trackerParam, true);
+    const { fields, categoriesOrdered: cats } = await getTrackerFieldData(trackerParam);
     fieldsMetadata = fields;
+    if (cats.length) categoriesOrdered = cats;
   }
 
   async function loadSampleAssets() {
@@ -92,12 +96,25 @@
     }
   }
 
-  onMount(() => {
+  onMount(async () => {
+    // Fetch API-ordered tracker list for tabs
+    try {
+      const index = await fetchCatalogIndex();
+      if (index?.trackers?.length) {
+        const slugs = index.trackers
+          .map((t) => CATALOG_SLUG_TO_URL_SLUG[t.slug])
+          .filter((s): s is string => !!s && !!trackerMetadata[s]);
+        if (slugs.length) availableSlugs = slugs;
+      }
+    } catch {
+      // keep hardcoded fallback
+    }
+
     Promise.all([loadFieldsMetadata(), loadSampleAssets()]);
   });
 
-  // Tracker nav (for switching between trackers)
-  const allSlugs = Object.keys(trackerMetadata);
+  // Tracker nav — driven by API, falls back to hardcoded
+  let availableSlugs = $state<string[]>(Object.keys(trackerMetadata));
 
   const info = $derived(
     meta
@@ -135,7 +152,7 @@
 
   <!-- Tracker switcher tabs -->
   <nav class="tracker-tabs" aria-label="Switch tracker">
-    {#each allSlugs as slug}
+    {#each availableSlugs as slug}
       {@const m = trackerMetadata[slug]}
       <a
         href={link(`fieldguide/${slug}`)}
@@ -150,7 +167,13 @@
 
   <!-- Main content: field explorer -->
   <section class="fieldguide-content" style="--accent: {color}">
-    <DatasetFactsheet {tracker} {fieldsMetadata} title="{info.title} Fields" />
+    <DatasetFactsheet
+      {tracker}
+      {fieldsMetadata}
+      {categoriesOrdered}
+      catalogSlug={URL_SLUG_TO_CATALOG_SLUG[trackerParam] ?? ''}
+      title="{info.title} Fields"
+    />
   </section>
 
   <!-- Sample assets -->

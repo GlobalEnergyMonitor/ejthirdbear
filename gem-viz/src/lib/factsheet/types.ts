@@ -80,17 +80,3 @@ export function isMineAsset(asset: Partial<Asset>): boolean {
   );
 }
 
-/** Category display order for factsheet */
-export const CATEGORIES_ORDERED = [
-  'IDs',
-  'Names',
-  'Geography',
-  'Main',
-  'Size',
-  'Age',
-  'Details',
-  'Reference',
-  'Ownership',
-  'End users',
-  'Methane',
-] as const;

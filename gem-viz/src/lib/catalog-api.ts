@@ -58,6 +58,7 @@ export interface CatalogFieldDetail {
   allowed_values?: string[] | Array<{ value: string; definition?: string }>;
   values_definitions?: Record<string, string>;
   present_in_tabs?: string[];
+  histogram_weight?: number;
 }
 
 export interface CatalogTrackerMeta {
@@ -65,6 +66,15 @@ export interface CatalogTrackerMeta {
   sources?: { sheetId?: string; tabs?: string[] };
   fieldCategoriesOrdered?: string[];
   fieldsDetail?: CatalogFieldDetail[];
+}
+
+export interface CatalogIndexTracker {
+  slug: string;
+  name?: string;
+}
+
+export interface CatalogIndex {
+  trackers: CatalogIndexTracker[];
 }
 
 export interface ApiMetadata {
@@ -118,6 +128,11 @@ export async function fetchCatalogSources(): Promise<{ results: CatalogSource[] 
   return cachedFetch<{ results: CatalogSource[] }>('sources', '/catalog/sources?format=json');
 }
 
+/** Fetch the catalog index — ordered list of trackers that have metadata. */
+export async function fetchCatalogIndex(): Promise<CatalogIndex | null> {
+  return cachedFetch<CatalogIndex>('catalog-index', '/catalog/metadata?format=json');
+}
+
 /** Fetch field metadata for a specific tracker (e.g. 'coal-mines'). */
 export async function fetchCatalogFieldMeta(
   catalogSlug: string
@@ -135,6 +150,29 @@ export async function fetchCatalogFieldMappings(): Promise<{
   return cachedFetch<{ results: CatalogFieldMapping[] }>(
     'field-mappings',
     '/catalog/field-mappings?format=json'
+  );
+}
+
+export interface NumericFieldStats {
+  field: string;
+  name: string;
+  definition?: string;
+  data_type: string;
+  total_rows: number;
+  null_count: number;
+  non_null_count: number;
+  unique_count: number;
+  values: number[]; // pre-sorted ascending, nulls excluded
+}
+
+/** Fetch numeric field stats (pre-sorted values array) for histogram binning. */
+export async function fetchNumericFieldStats(
+  catalogSlug: string,
+  codeFriendlyName: string
+): Promise<NumericFieldStats | null> {
+  return cachedFetch<NumericFieldStats>(
+    `field-stats:${catalogSlug}:${codeFriendlyName}`,
+    `/catalog/metadata/${catalogSlug}/fields/${codeFriendlyName}/stats`
   );
 }
 

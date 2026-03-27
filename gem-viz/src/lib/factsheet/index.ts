@@ -5,7 +5,7 @@
 
 // Types
 export type { Asset, PercentileData, FieldInfo, FieldStats } from './types';
-export { STATUS_GROUPS, CATEGORIES_ORDERED, getStatusGroup, isMineAsset } from './types';
+export { STATUS_GROUPS, getStatusGroup, isMineAsset } from './types';
 
 // Queries
 export {
