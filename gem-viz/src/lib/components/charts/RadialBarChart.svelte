@@ -1,7 +1,6 @@
 <script lang="ts">
   import { arc as d3Arc } from 'd3-shape';
   import { scaleLinear } from 'd3-scale';
-  import { colors } from '$lib/design-tokens';
 
   interface DataItem {
     label: string;
@@ -54,7 +53,7 @@
 
     const totalRingsWidth = data.length * ringWidth + (data.length - 1) * ringGap;
     const outerMax = Math.min(cx, cy) - 4;
-    const innerMin = outerMax - totalRingsWidth;
+    const _innerMin = outerMax - totalRingsWidth;
 
     return data
       .map((d, i) => {

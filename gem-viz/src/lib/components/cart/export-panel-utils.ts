@@ -4,9 +4,9 @@
  */
 
 import { getAsset, getEntityGraphDown, type AssetSummary } from '$lib/ownership-api';
-import { getStatusGroup, statusColors } from '$lib/design-tokens';
+import { getStatusGroup } from '$lib/design-tokens';
 import { STATUS_GROUPS } from '$lib/data-config/tracker-schema';
-import { formatCapacity } from '$lib/format';
+import { formatCapacity } from '$lib/utils/format';
 
 export interface PreflightStats {
   ok: boolean;

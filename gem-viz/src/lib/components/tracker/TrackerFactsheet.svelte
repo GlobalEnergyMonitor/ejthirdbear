@@ -10,7 +10,7 @@
    * - Top-N with overflow count for high-cardinality fields
    */
   import { onMount } from 'svelte';
-  import { formatCompact, formatPct } from '$lib/format';
+  import { formatCompact, formatPct } from '$lib/utils/format';
   import { colors } from '$lib/design-tokens';
   import MiniHistogram from '$lib/components/charts/MiniHistogram.svelte';
 
@@ -448,16 +448,16 @@
 
 <style>
   div.factsheet {
-    --navy: #1D4961;
-    --mint: #9DF7E5;
-    --mintBackground: #9DF7E520;
-    --orange: #FE4F2D;
-    --teal: #004F61;
-    --tealBackground: #004F61cc;
-    --midnight: #1C1F23;
-    --warmWhite: #F2F2EB;
-    --white: #FFFFFF;
-    --deepRed: #7F142A;
+    --navy: #1d4961;
+    --mint: #9df7e5;
+    --mintBackground: #9df7e520;
+    --orange: #fe4f2d;
+    --teal: #004f61;
+    --tealBackground: #004f61cc;
+    --midnight: #1c1f23;
+    --warmWhite: #f2f2eb;
+    --white: #ffffff;
+    --deepRed: #7f142a;
 
     font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
     display: flex;

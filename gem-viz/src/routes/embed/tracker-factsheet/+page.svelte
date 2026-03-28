@@ -25,7 +25,7 @@
   const heightParam = $derived($page.url.searchParams.get('height'));
 
   const tracker = $derived(slugToTrackerName[trackerSlug] || trackerSlug);
-  const metadata = $derived(trackerMetadata[trackerSlug] as TrackerMetadata | undefined);
+  const _metadata = $derived(trackerMetadata[trackerSlug] as TrackerMetadata | undefined);
   const maxHeight = $derived(heightParam ? parseInt(heightParam, 10) : 500);
   const title = $derived(titleParam || `${tracker} Fields`);
   const catalogSlug = $derived(URL_SLUG_TO_CATALOG_SLUG[trackerSlug] ?? '');

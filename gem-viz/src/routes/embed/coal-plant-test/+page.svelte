@@ -6,27 +6,27 @@
   import CoalPlantCard from '$lib/components/cards/CoalPlantCard.svelte';
 
   const COAL_PRESETS = [
-    { label: 'Boundary Dam',        id: 'L100000100176' },
-    { label: 'Eraring',             id: 'L100000100005' },
-    { label: 'Yancheng Binhai',     id: 'L100000100973' },
-    { label: 'Maritsa 3',           id: 'L100000100136' },
+    { label: 'Boundary Dam', id: 'L100000100176' },
+    { label: 'Eraring', id: 'L100000100005' },
+    { label: 'Yancheng Binhai', id: 'L100000100973' },
+    { label: 'Maritsa 3', id: 'L100000100136' },
     { label: 'Gubin Power Project', id: 'L100000103227' },
-    { label: 'Liuzhi',              id: 'L100000100463' },
-    { label: 'Worsley Refinery',    id: 'L100000100043' },
-    { label: 'Zhunger Weijiamao',   id: 'L100000100896' },
-    { label: 'Huaiyin',             id: 'L100000100991' },
-    { label: 'Zhenxiong',           id: 'L100000101719' },
-    { label: 'Rovinari',            id: 'L100000103294' },
-    { label: 'Nabinagar Thermal',   id: 'L100000102114' },
-    { label: 'Shanying Cogen',      id: 'L100000101755' },
-    { label: 'Lixin Banji',         id: 'L100000100233' },
-    { label: 'Gansu Huating',       id: 'L100000100340' },
+    { label: 'Liuzhi', id: 'L100000100463' },
+    { label: 'Worsley Refinery', id: 'L100000100043' },
+    { label: 'Zhunger Weijiamao', id: 'L100000100896' },
+    { label: 'Huaiyin', id: 'L100000100991' },
+    { label: 'Zhenxiong', id: 'L100000101719' },
+    { label: 'Rovinari', id: 'L100000103294' },
+    { label: 'Nabinagar Thermal', id: 'L100000102114' },
+    { label: 'Shanying Cogen', id: 'L100000101755' },
+    { label: 'Lixin Banji', id: 'L100000100233' },
+    { label: 'Gansu Huating', id: 'L100000100340' },
   ];
 
   // If ?id= param is provided, use it as the initial selection
   const urlId = $page.url.searchParams.get('id');
   const initialId = urlId && urlId.trim() ? urlId.trim() : COAL_PRESETS[0].id;
-  const isPreset = COAL_PRESETS.some(p => p.id === initialId);
+  const isPreset = COAL_PRESETS.some((p) => p.id === initialId);
 
   let selectedPreset = $state(isPreset ? initialId : COAL_PRESETS[0].id);
   let useCustom = $state(!isPreset && !!urlId);
@@ -46,19 +46,28 @@
 
   function embedSnippet(id: string) {
     const p = `/embed/coal-plant?id=${id}`;
-    return `<div class="gem-embed" data-src="${p}" data-height="900">\n<script src="https://gem-viz.fly.dev/embed.js"><` + `/script>\n</div>`;
+    return (
+      `<div class="gem-embed" data-src="${p}" data-height="900">\n<script src="https://gem-viz.fly.dev/embed.js"><` +
+      `/script>\n</div>`
+    );
   }
 
   async function copy() {
     const text = embedSnippet(embedId);
-    try { await navigator.clipboard.writeText(text); }
-    catch {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
       const t = Object.assign(document.createElement('textarea'), { value: text });
       t.style.cssText = 'position:fixed;opacity:0';
-      document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove();
+      document.body.appendChild(t);
+      t.select();
+      document.execCommand('copy');
+      t.remove();
     }
     copied = true;
-    setTimeout(() => { copied = false; }, 2000);
+    setTimeout(() => {
+      copied = false;
+    }, 2000);
   }
 
   async function load() {
@@ -98,7 +107,11 @@
             name="preset"
             value={preset.id}
             checked={!useCustom && selectedPreset === preset.id}
-            onchange={() => { selectedPreset = preset.id; useCustom = false; load(); }}
+            onchange={() => {
+              selectedPreset = preset.id;
+              useCustom = false;
+              load();
+            }}
           />
           <span class="preset-name">{preset.label}</span>
           <span class="preset-id">{preset.id}</span>
@@ -112,7 +125,9 @@
           type="radio"
           name="preset"
           checked={useCustom}
-          onchange={() => { useCustom = true; }}
+          onchange={() => {
+            useCustom = true;
+          }}
         />
         <span class="preset-name">Custom</span>
       </label>
@@ -121,7 +136,9 @@
         type="text"
         bind:value={customId}
         placeholder="e.g. L100000103058"
-        onfocus={() => { useCustom = true; }}
+        onfocus={() => {
+          useCustom = true;
+        }}
         onkeydown={(e) => e.key === 'Enter' && load()}
       />
       <button class="load-btn" onclick={load} disabled={loading}>
@@ -144,7 +161,10 @@
     {#if !isEmbedded}
       <div class="embed-sidebar">
         <h3 class="sidebar-heading">Embed Code</h3>
-        <p class="sidebar-desc">Copy this snippet to embed the coal plant card on any page. The <code>id</code> sets the initially loaded plant.</p>
+        <p class="sidebar-desc">
+          Copy this snippet to embed the coal plant card on any page. The <code>id</code> sets the initially
+          loaded plant.
+        </p>
 
         <h4 class="param-heading">Parameters</h4>
         <table class="param-table">
@@ -163,7 +183,10 @@
           <pre>{embedSnippet(embedId)}</pre>
         </div>
 
-        <p class="sidebar-note">Embed script hosted at <code>gem-viz.fly.dev</code>. See the <a href="/embed">full widget catalog</a> for global options.</p>
+        <p class="sidebar-note">
+          Embed script hosted at <code>gem-viz.fly.dev</code>. See the
+          <a href="/embed">full widget catalog</a> for global options.
+        </p>
       </div>
     {/if}
   </div>
@@ -198,17 +221,37 @@
     border-radius: 6px;
     cursor: pointer;
     background: #fafafa;
-    transition: border-color 0.12s, background 0.12s;
+    transition:
+      border-color 0.12s,
+      background 0.12s;
     line-height: 1.3;
   }
-  .preset-btn input[type="radio"] { display: none; }
-  .preset-btn:hover { border-color: #999; background: #f0f0f0; }
-  .preset-btn.active { border-color: #111; background: #111; }
+  .preset-btn input[type='radio'] {
+    display: none;
+  }
+  .preset-btn:hover {
+    border-color: #999;
+    background: #f0f0f0;
+  }
+  .preset-btn.active {
+    border-color: #111;
+    background: #111;
+  }
   .preset-btn.active .preset-name,
-  .preset-btn.active .preset-id { color: #fff; }
+  .preset-btn.active .preset-id {
+    color: #fff;
+  }
 
-  .preset-name { font-size: 0.8rem; font-weight: 600; color: #111; }
-  .preset-id   { font-size: 0.68rem; color: #888; font-family: 'SF Mono', monospace; }
+  .preset-name {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #111;
+  }
+  .preset-id {
+    font-size: 0.68rem;
+    color: #888;
+    font-family: 'SF Mono', monospace;
+  }
 
   /* ── Custom row ──────────────────────────────────── */
   .custom-row {
@@ -233,7 +276,9 @@
     width: 220px;
     outline: none;
   }
-  .id-input:focus { border-color: #111; }
+  .id-input:focus {
+    border-color: #111;
+  }
 
   .load-btn {
     padding: 0.4rem 0.9rem;
@@ -245,8 +290,13 @@
     font-weight: 600;
     cursor: pointer;
   }
-  .load-btn:disabled { opacity: 0.5; cursor: default; }
-  .load-btn:not(:disabled):hover { background: #333; }
+  .load-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+  .load-btn:not(:disabled):hover {
+    background: #333;
+  }
 
   /* ── Main layout ─────────────────────────────────── */
   .main-area {
@@ -273,7 +323,9 @@
     color: #666;
     padding: 1rem 0;
   }
-  .status.error { color: #b00; }
+  .status.error {
+    color: #b00;
+  }
 
   /* ── Embed sidebar ───────────────────────────────── */
   .embed-sidebar {
@@ -321,7 +373,9 @@
     border-collapse: collapse;
     margin-bottom: 0;
   }
-  .param-table tr { border-bottom: 1px solid #eee; }
+  .param-table tr {
+    border-bottom: 1px solid #eee;
+  }
   .param-table td {
     padding: 0.25rem 0;
     font-size: 0.78rem;
@@ -332,7 +386,9 @@
     padding-right: 0.75rem;
     white-space: nowrap;
   }
-  .param-table td:last-child { color: #666; }
+  .param-table td:last-child {
+    color: #666;
+  }
   .param-table code {
     font-family: 'SF Mono', monospace;
     font-size: 0.68rem;
@@ -383,8 +439,14 @@
     border-radius: 3px;
     cursor: pointer;
   }
-  .cp-btn:hover { background: #444; }
-  .cp-btn.ok { background: #1a3a2a; border-color: #34a853; color: #34a853; }
+  .cp-btn:hover {
+    background: #444;
+  }
+  .cp-btn.ok {
+    background: #1a3a2a;
+    border-color: #34a853;
+    color: #34a853;
+  }
 
   .sidebar-note {
     font-size: 0.72rem;
@@ -396,11 +458,19 @@
     font-family: 'SF Mono', monospace;
     font-size: 0.68rem;
   }
-  .sidebar-note a { color: #555; }
-  .sidebar-note a:hover { color: #111; }
+  .sidebar-note a {
+    color: #555;
+  }
+  .sidebar-note a:hover {
+    color: #111;
+  }
 
   @media (max-width: 800px) {
-    .main-area { grid-template-columns: 1fr; }
-    .card-area { min-height: 300px; }
+    .main-area {
+      grid-template-columns: 1fr;
+    }
+    .card-area {
+      min-height: 300px;
+    }
   }
 </style>

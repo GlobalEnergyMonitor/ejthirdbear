@@ -11,7 +11,12 @@
  * Section: "Data sources"
  */
 
-import { gemTrackerRepo, GEM_DATA_EMAIL, GEM_OWNERSHIP_ISSUES, GEM_OWNERSHIP_DOCS } from '$lib/external-links';
+import {
+  gemTrackerRepo,
+  GEM_DATA_EMAIL,
+  GEM_OWNERSHIP_ISSUES,
+  GEM_OWNERSHIP_DOCS,
+} from '$lib/external-links';
 
 /**
  * GEM Published Dataset reference
@@ -238,7 +243,7 @@ export async function getLiveDataSources(): Promise<
   }>
 > {
   try {
-    const { fetchCatalogSources } = await import('$lib/catalog-api');
+    const { fetchCatalogSources } = await import('$lib/api/catalog-api');
     const data = await fetchCatalogSources();
     if (data?.results?.length) {
       return data.results.map((s) => ({

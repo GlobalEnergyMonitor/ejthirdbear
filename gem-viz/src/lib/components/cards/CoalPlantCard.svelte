@@ -26,8 +26,17 @@
   const CURRENT_YEAR = new Date().getFullYear();
 
   const STATUS_ORDER = [
-    'operating', 'construction', 'permitted', 'pre-permit', 'pre-construction',
-    'announced', 'proposed', 'mothballed', 'shelved', 'cancelled', 'retired',
+    'operating',
+    'construction',
+    'permitted',
+    'pre-permit',
+    'pre-construction',
+    'announced',
+    'proposed',
+    'mothballed',
+    'shelved',
+    'cancelled',
+    'retired',
   ];
 
   const DEVELOPMENT_STATUSES = PLANNED_STATUSES;
@@ -53,9 +62,11 @@
   const locationStr = $derived.by(() => {
     const parts: string[] = [];
     if (f?.location) parts.push(f.location);
-    if (f?.local_area && !parts.some(p => p.includes(f.local_area!))) parts.push(f.local_area);
-    if (f?.subnational_unit && !parts.some(p => p.includes(f.subnational_unit!))) parts.push(f.subnational_unit);
-    if (f?.country_area && !parts.some(p => p.includes(f.country_area))) parts.push(f.country_area);
+    if (f?.local_area && !parts.some((p) => p.includes(f.local_area!))) parts.push(f.local_area);
+    if (f?.subnational_unit && !parts.some((p) => p.includes(f.subnational_unit!)))
+      parts.push(f.subnational_unit);
+    if (f?.country_area && !parts.some((p) => p.includes(f.country_area)))
+      parts.push(f.country_area);
     return parts.join(', ') || units[0]?.country || '';
   });
 
@@ -75,37 +86,45 @@
   const compactChips = $derived.by(() => {
     const chips: { label: string; capacity: number; cls: string }[] = [];
     const opCap = units
-      .filter(u => u.coal_plant_fields.status === 'operating')
+      .filter((u) => u.coal_plant_fields.status === 'operating')
       .reduce((s, u) => s + parseFloat(u.coal_plant_fields.capacity_megawatts || '0'), 0);
     const plannedCap = units
-      .filter(u => DEVELOPMENT_STATUSES.has(u.coal_plant_fields.status))
+      .filter((u) => DEVELOPMENT_STATUSES.has(u.coal_plant_fields.status))
       .reduce((s, u) => s + parseFloat(u.coal_plant_fields.capacity_megawatts || '0'), 0);
-    if (opCap > 0) chips.push({ label: 'OPERATING', capacity: Math.round(opCap), cls: 'chip-operating' });
-    if (plannedCap > 0) chips.push({ label: 'PLANNED', capacity: Math.round(plannedCap), cls: 'chip-planned' });
+    if (opCap > 0)
+      chips.push({ label: 'OPERATING', capacity: Math.round(opCap), cls: 'chip-operating' });
+    if (plannedCap > 0)
+      chips.push({ label: 'PLANNED', capacity: Math.round(plannedCap), cls: 'chip-planned' });
     return chips;
   });
 
   // Per-unit pills (same color coding as compact topline chips)
-  const unitPills = $derived(units.map(u => {
-    const status = u.coal_plant_fields.status;
-    const capacity = Math.round(parseFloat(u.coal_plant_fields.capacity_megawatts || '0'));
-    let cls: string;
-    if (OPERATING_STATUSES.has(status)) cls = 'chip-operating';
-    else if (DEVELOPMENT_STATUSES.has(status)) cls = 'chip-planned';
-    else if (status === 'mothballed') cls = 'chip-mothballed';
-    else if (RETIRED_STATUSES.has(status)) cls = 'chip-retired';
-    else cls = 'chip-cancelled';
-    return { name: u.coal_plant_fields.unit_name, capacity, cls, status };
-  }));
+  const unitPills = $derived(
+    units.map((u) => {
+      const status = u.coal_plant_fields.status;
+      const capacity = Math.round(parseFloat(u.coal_plant_fields.capacity_megawatts || '0'));
+      let cls: string;
+      if (OPERATING_STATUSES.has(status)) cls = 'chip-operating';
+      else if (DEVELOPMENT_STATUSES.has(status)) cls = 'chip-planned';
+      else if (status === 'mothballed') cls = 'chip-mothballed';
+      else if (RETIRED_STATUSES.has(status)) cls = 'chip-retired';
+      else cls = 'chip-cancelled';
+      return { name: u.coal_plant_fields.unit_name, capacity, cls, status };
+    })
+  );
 
   let unitsExpanded = $state(units.length === 1);
 
   // Group units by status for plant summary table
   const statusGroups = $derived.by(() => {
-    const groups = new Map<string, { count: number; capacity: number; technologies: Set<string> }>();
+    const groups = new Map<
+      string,
+      { count: number; capacity: number; technologies: Set<string> }
+    >();
     for (const unit of units) {
       const status = unit.coal_plant_fields.status;
-      if (!groups.has(status)) groups.set(status, { count: 0, capacity: 0, technologies: new Set() });
+      if (!groups.has(status))
+        groups.set(status, { count: 0, capacity: 0, technologies: new Set() });
       const g = groups.get(status)!;
       g.count++;
       g.capacity += parseFloat(unit.coal_plant_fields.capacity_megawatts || '0');
@@ -127,69 +146,88 @@
   const primaryOwner = $derived.by(() => {
     const owner = f?.owner;
     if (!owner) return null;
-    return owner
-      .split(';')
-      .map(o => o.replace(/\s*\[[\d.]+%\]\s*/g, '').trim())
-      .filter(Boolean)
-      .join(', ') || null;
+    return (
+      owner
+        .split(';')
+        .map((o) => o.replace(/\s*\[[\d.]+%\]\s*/g, '').trim())
+        .filter(Boolean)
+        .join(', ') || null
+    );
   });
 
   // Plant age: max across operating/mothballed units
   const plantAge = $derived.by(() => {
     const ages = units
-      .filter(u => OPERATING_STATUSES.has(u.coal_plant_fields.status) || u.coal_plant_fields.status === 'mothballed')
-      .map(u => parseInt(u.coal_plant_fields.plant_age_years ?? '0'))
-      .filter(a => a > 0);
+      .filter(
+        (u) =>
+          OPERATING_STATUSES.has(u.coal_plant_fields.status) ||
+          u.coal_plant_fields.status === 'mothballed'
+      )
+      .map((u) => parseInt(u.coal_plant_fields.plant_age_years ?? '0'))
+      .filter((a) => a > 0);
     return ages.length ? Math.max(...ages) : null;
   });
 
   // Coal Information tab
-  const coalTypes = $derived([...new Set(units.map(u => u.coal_plant_fields.coal_type).filter(Boolean))] as string[]);
-  const coalSources = $derived([...new Set(units.map(u => u.coal_plant_fields.coal_source).filter(Boolean))] as string[]);
+  const coalTypes = $derived([
+    ...new Set(units.map((u) => u.coal_plant_fields.coal_type).filter(Boolean)),
+  ] as string[]);
+  const coalSources = $derived([
+    ...new Set(units.map((u) => u.coal_plant_fields.coal_source).filter(Boolean)),
+  ] as string[]);
 
   const chpValue = $derived.by(() => {
-    const vals = [...new Set(units.map(u => u.coal_plant_fields.cogeneration).filter(Boolean))];
+    const vals = [...new Set(units.map((u) => u.coal_plant_fields.cogeneration).filter(Boolean))];
     if (vals.includes('yes')) return 'Yes';
     if (vals.includes('no')) return 'No';
     return null;
   });
 
-  const captiveValues = $derived(
-    [...new Set(units.map(u => u.coal_plant_fields.captive).filter(v => v && v !== 'null'))] as string[]
-  );
+  const captiveValues = $derived([
+    ...new Set(units.map((u) => u.coal_plant_fields.captive).filter((v) => v && v !== 'null')),
+  ] as string[]);
 
   // Emissions & Phaseout tab
-  const isInDevelopment = $derived(units.some(u => DEVELOPMENT_STATUSES.has(u.coal_plant_fields.status)));
+  const isInDevelopment = $derived(
+    units.some((u) => DEVELOPMENT_STATUSES.has(u.coal_plant_fields.status))
+  );
 
   const annualCO2 = $derived.by(() => {
-    const sum = units.reduce((s, u) => s + parseFloat(u.coal_plant_fields.annual_co2_million_tonnes__annum ?? '0'), 0);
+    const sum = units.reduce(
+      (s, u) => s + parseFloat(u.coal_plant_fields.annual_co2_million_tonnes__annum ?? '0'),
+      0
+    );
     return sum > 0 ? sum : null;
   });
 
   const lifetimeCO2 = $derived.by(() => {
-    const sum = units.reduce((s, u) => s + parseFloat(u.coal_plant_fields.lifetime_co2_million_tonnes ?? '0'), 0);
+    const sum = units.reduce(
+      (s, u) => s + parseFloat(u.coal_plant_fields.lifetime_co2_million_tonnes ?? '0'),
+      0
+    );
     return sum > 0 ? sum : null;
   });
 
-  const unitEmissions = $derived(units
-    .map(u => {
-      const annual = parseFloat(u.coal_plant_fields.annual_co2_million_tonnes__annum ?? '');
-      const lifetime = parseFloat(u.coal_plant_fields.lifetime_co2_million_tonnes ?? '');
-      const status = u.coal_plant_fields.status;
-      let cls: string;
-      if (OPERATING_STATUSES.has(status)) cls = 'chip-operating';
-      else if (DEVELOPMENT_STATUSES.has(status)) cls = 'chip-planned';
-      else if (status === 'mothballed') cls = 'chip-mothballed';
-      else if (RETIRED_STATUSES.has(status)) cls = 'chip-retired';
-      else cls = 'chip-cancelled';
-      return {
-        name: u.coal_plant_fields.unit_name,
-        annual: isNaN(annual) ? null : annual,
-        lifetime: isNaN(lifetime) ? null : lifetime,
-        cls,
-      };
-    })
-    .filter(u => u.annual != null || u.lifetime != null)
+  const unitEmissions = $derived(
+    units
+      .map((u) => {
+        const annual = parseFloat(u.coal_plant_fields.annual_co2_million_tonnes__annum ?? '');
+        const lifetime = parseFloat(u.coal_plant_fields.lifetime_co2_million_tonnes ?? '');
+        const status = u.coal_plant_fields.status;
+        let cls: string;
+        if (OPERATING_STATUSES.has(status)) cls = 'chip-operating';
+        else if (DEVELOPMENT_STATUSES.has(status)) cls = 'chip-planned';
+        else if (status === 'mothballed') cls = 'chip-mothballed';
+        else if (RETIRED_STATUSES.has(status)) cls = 'chip-retired';
+        else cls = 'chip-cancelled';
+        return {
+          name: u.coal_plant_fields.unit_name,
+          annual: isNaN(annual) ? null : annual,
+          lifetime: isNaN(lifetime) ? null : lifetime,
+          cls,
+        };
+      })
+      .filter((u) => u.annual != null || u.lifetime != null)
   );
 
   let emissionsExpanded = $state(false);
@@ -201,22 +239,33 @@
 
   const plannedRetirements = $derived(
     units
-      .filter(u => u.coal_plant_fields.planned_retirement)
-      .map(u => ({ name: u.coal_plant_fields.unit_name, year: u.coal_plant_fields.planned_retirement! }))
+      .filter((u) => u.coal_plant_fields.planned_retirement)
+      .map((u) => ({
+        name: u.coal_plant_fields.unit_name,
+        year: u.coal_plant_fields.planned_retirement!,
+      }))
   );
 
   const remainingLifetime = $derived.by(() => {
     const vals = units
-      .filter(u => OPERATING_STATUSES.has(u.coal_plant_fields.status) || u.coal_plant_fields.status === 'mothballed')
-      .map(u => parseInt(u.coal_plant_fields.remaining_plant_lifetime_years ?? ''))
-      .filter(v => !isNaN(v) && v > 0);
+      .filter(
+        (u) =>
+          OPERATING_STATUSES.has(u.coal_plant_fields.status) ||
+          u.coal_plant_fields.status === 'mothballed'
+      )
+      .map((u) => parseInt(u.coal_plant_fields.remaining_plant_lifetime_years ?? ''))
+      .filter((v) => !isNaN(v) && v > 0);
     return vals.length ? Math.max(...vals) : null;
   });
 
   const emissionFactor = $derived.by(() => {
-    const vals = [...new Set(
-      units.map(u => u.coal_plant_fields.emission_factor_co2).filter((v): v is string => !!v && v !== 'null')
-    )];
+    const vals = [
+      ...new Set(
+        units
+          .map((u) => u.coal_plant_fields.emission_factor_co2)
+          .filter((v): v is string => !!v && v !== 'null')
+      ),
+    ];
     return vals.length ? vals.join(', ') : null;
   });
 
@@ -224,20 +273,23 @@
   const netZeroCommitment = $derived(f?.['net-zero_commitment'] ?? f?.net_zero_year ?? null);
   const phaseout15C = $derived(PHASEOUT_1_5C[f?.subregion ?? ''] ?? 2040);
 
-  const alignmentStatus = $derived.by((): 'aligned' | 'needs-acceleration' | 'not-aligned' | null => {
-    const activeUnits = units.filter(u => {
-      const s = u.coal_plant_fields.status;
-      return !RETIRED_STATUSES.has(s) && !CANCELLED_STATUSES.has(s);
-    });
-    if (activeUnits.length === 0) return null;
-    const allRetireByPhaseout = activeUnits.every(u => {
-      const yr = parseInt(u.coal_plant_fields.planned_retirement ?? '');
-      return !isNaN(yr) && yr <= phaseout15C;
-    });
-    if (allRetireByPhaseout) return 'aligned';
-    if (phaseoutCommitment && parseInt(phaseoutCommitment) <= phaseout15C) return 'needs-acceleration';
-    return 'not-aligned';
-  });
+  const alignmentStatus = $derived.by(
+    (): 'aligned' | 'needs-acceleration' | 'not-aligned' | null => {
+      const activeUnits = units.filter((u) => {
+        const s = u.coal_plant_fields.status;
+        return !RETIRED_STATUSES.has(s) && !CANCELLED_STATUSES.has(s);
+      });
+      if (activeUnits.length === 0) return null;
+      const allRetireByPhaseout = activeUnits.every((u) => {
+        const yr = parseInt(u.coal_plant_fields.planned_retirement ?? '');
+        return !isNaN(yr) && yr <= phaseout15C;
+      });
+      if (allRetireByPhaseout) return 'aligned';
+      if (phaseoutCommitment && parseInt(phaseoutCommitment) <= phaseout15C)
+        return 'needs-acceleration';
+      return 'not-aligned';
+    }
+  );
 
   // Narrative sentences
   const overviewNarrative = $derived.by((): string | null => {
@@ -245,7 +297,7 @@
       const yearsText = plantAge >= 40 ? 'over 40' : `${plantAge}`;
       return `${plantName} has been operating for ${yearsText} years.`;
     }
-    if (units.some(u => DEVELOPMENT_STATUSES.has(u.coal_plant_fields.status))) {
+    if (units.some((u) => DEVELOPMENT_STATUSES.has(u.coal_plant_fields.status))) {
       return `${plantName} is a proposed coal plant in ${f?.country_area ?? units[0]?.country ?? ''}.`;
     }
     return null;
@@ -265,7 +317,7 @@
       const r = plannedRetirements[0];
       sentence += ` ${r.name} is planned to be retired in ${r.year}.`;
     } else if (plannedRetirements.length > 1) {
-      sentence += ` Planned retirements: ${plannedRetirements.map(r => `${r.name} (${r.year})`).join(', ')}.`;
+      sentence += ` Planned retirements: ${plannedRetirements.map((r) => `${r.name} (${r.year})`).join(', ')}.`;
     }
     return sentence;
   });
@@ -273,28 +325,53 @@
   // ── Additional Details tab ─────────────────────────────────────────────────
 
   // Fields displayed in other tabs — excluded from Additional Details
-  const USED_FIELDS = new Set([
-    'plant_name', 'unit_name', 'status', 'capacity_megawatts', 'start_year',
-    'retired_year', 'planned_retirement', 'phaseout_commitment', 'net-zero_commitment',
-    'net_zero_year', 'combustion_technology', 'coal_type', 'coal_source', 'cogeneration',
-    'captive', 'owner', 'annual_co2_million_tonnes__annum', 'lifetime_co2_million_tonnes',
-    'capacity_factor', 'plant_age_years', 'wiki_url', 'location', 'subnational_unit',
-    'local_area', 'country_area', 'subregion', 'database', 'latitude', 'longitude',
-    'remaining_plant_lifetime_years', 'emission_factor_co2', 'location_accuracy',
+  const _USED_FIELDS = new Set([
+    'plant_name',
+    'unit_name',
+    'status',
+    'capacity_megawatts',
+    'start_year',
+    'retired_year',
+    'planned_retirement',
+    'phaseout_commitment',
+    'net-zero_commitment',
+    'net_zero_year',
+    'combustion_technology',
+    'coal_type',
+    'coal_source',
+    'cogeneration',
+    'captive',
+    'owner',
+    'annual_co2_million_tonnes__annum',
+    'lifetime_co2_million_tonnes',
+    'capacity_factor',
+    'plant_age_years',
+    'wiki_url',
+    'location',
+    'subnational_unit',
+    'local_area',
+    'country_area',
+    'subregion',
+    'database',
+    'latitude',
+    'longitude',
+    'remaining_plant_lifetime_years',
+    'emission_factor_co2',
+    'location_accuracy',
   ]);
 
   const FIELD_LABELS: Record<string, string> = {
-    alternate_fuel:               'Alternate fuel',
-    captive_industry_use:         'Captive industry use',
-    captive_residential_use:      'Captive residential use',
-    parent:                       'Parent company',
-    parent_gem_entity_id:         'Parent GEM ID',
-    owner_gem_entity_id:          'Owner GEM ID',
-    heat_rate_btu:                'Heat rate (BTU/kWh)',
-    major_area:                   'Major area',
-    region:                       'Region',
-    gem_location_id:              'GEM location ID',
-    gem_unit_phase_id:            'GEM unit/phase ID',
+    alternate_fuel: 'Alternate fuel',
+    captive_industry_use: 'Captive industry use',
+    captive_residential_use: 'Captive residential use',
+    parent: 'Parent company',
+    parent_gem_entity_id: 'Parent GEM ID',
+    owner_gem_entity_id: 'Owner GEM ID',
+    heat_rate_btu: 'Heat rate (BTU/kWh)',
+    major_area: 'Major area',
+    region: 'Region',
+    gem_location_id: 'GEM location ID',
+    gem_unit_phase_id: 'GEM unit/phase ID',
   };
 
   const additionalDetails = $derived.by(() => {
@@ -302,7 +379,7 @@
       const values = [
         ...new Set(
           units
-            .map(u => (u.coal_plant_fields as unknown as Record<string, string | null>)[key])
+            .map((u) => (u.coal_plant_fields as unknown as Record<string, string | null>)[key])
             .filter((v): v is string => !!v && v !== 'null' && v !== 'not found')
         ),
       ];
@@ -312,7 +389,14 @@
 
   // ── Tabs ───────────────────────────────────────────────────────────────────
 
-  const TABS = ['Overview', 'Timeline', 'Coal Information', 'Emissions & Phaseout', 'Ownership', 'Additional Details'] as const;
+  const TABS = [
+    'Overview',
+    'Timeline',
+    'Coal Information',
+    'Emissions & Phaseout',
+    'Ownership',
+    'Additional Details',
+  ] as const;
   type TabName = (typeof TABS)[number];
   let activeTab = $state<TabName>('Overview');
 
@@ -329,17 +413,21 @@
     if (activeTab !== 'Ownership' || ownershipFetched || !units[0]) return;
     ownershipFetched = true;
     ownershipLoading = true;
-    import('$lib/ownership-api').then(({ getOwnershipGraph }) =>
-      getOwnershipGraph({ root: units[0].asset_id, direction: 'up', max_depth: 3 })
-    ).then(result => {
-      ownershipNodes = result.nodes || [];
-      ownershipEdges = result.edges || [];
-      ownershipPaths = result.paths || {};
-    }).catch(err => {
-      ownershipError = err instanceof Error ? err.message : 'Failed to load ownership data';
-    }).finally(() => {
-      ownershipLoading = false;
-    });
+    import('$lib/ownership-api')
+      .then(({ getOwnershipGraph }) =>
+        getOwnershipGraph({ root: units[0].asset_id, direction: 'up', max_depth: 3 })
+      )
+      .then((result) => {
+        ownershipNodes = result.nodes || [];
+        ownershipEdges = result.edges || [];
+        ownershipPaths = result.paths || {};
+      })
+      .catch((err) => {
+        ownershipError = err instanceof Error ? err.message : 'Failed to load ownership data';
+      })
+      .finally(() => {
+        ownershipLoading = false;
+      });
   });
 
   // ── Timeline chart ─────────────────────────────────────────────────────────
@@ -352,7 +440,7 @@
 
   $effect(() => {
     if (!tlWrapEl) return;
-    const ro = new ResizeObserver(entries => {
+    const ro = new ResizeObserver((entries) => {
       const w = entries[0]?.contentRect.width;
       if (w && w > 0) tlContainerW = Math.max(w, TL_MIN_W);
     });
@@ -363,16 +451,19 @@
   const timeline = $derived.by(() => {
     const viewW = tlContainerW;
     const barAreaW = viewW - TL.labelW - TL.badgeW;
-    const allYears = units.flatMap(u => {
+    const allYears = units.flatMap((u) => {
       const cpf = u.coal_plant_fields;
       const start = parseInt(cpf.start_year ?? '');
       const retiredY = parseInt(cpf.retired_year ?? '');
       const plannedRetY = parseInt(cpf.planned_retirement ?? '');
       // Only use data-backed years for domain; open-ended units extend to chart edge separately
-      const end = !isNaN(retiredY) && retiredY > 1900 ? retiredY
-        : !isNaN(plannedRetY) && plannedRetY > 1900 ? plannedRetY
-        : CURRENT_YEAR;
-      return [start, end].filter(y => y > 1900 && y < 2200);
+      const end =
+        !isNaN(retiredY) && retiredY > 1900
+          ? retiredY
+          : !isNaN(plannedRetY) && plannedRetY > 1900
+            ? plannedRetY
+            : CURRENT_YEAR;
+      return [start, end].filter((y) => y > 1900 && y < 2200);
     });
     const minYear = allYears.length ? Math.min(...allYears) : CURRENT_YEAR - 20;
     const maxYear = allYears.length ? Math.max(...allYears, CURRENT_YEAR + 5) : CURRENT_YEAR + 10;
@@ -394,13 +485,15 @@
       const plannedRetY = parseInt(cpf.planned_retirement ?? '');
 
       const hasKnownEnd =
-        (!isNaN(retiredY) && retiredY > 1900) ||
-        (!isNaN(plannedRetY) && plannedRetY > 1900);
+        (!isNaN(retiredY) && retiredY > 1900) || (!isNaN(plannedRetY) && plannedRetY > 1900);
 
       // For bar geometry: use data years only; open-ended bars are rendered as a separate gradient rect
-      const endY = !isNaN(retiredY) && retiredY > 1900 ? retiredY
-        : !isNaN(plannedRetY) && plannedRetY > 1900 ? plannedRetY
-        : CURRENT_YEAR;
+      const endY =
+        !isNaN(retiredY) && retiredY > 1900
+          ? retiredY
+          : !isNaN(plannedRetY) && plannedRetY > 1900
+            ? plannedRetY
+            : CURRENT_YEAR;
 
       const hasStart = !isNaN(startY) && startY > 1900;
       const hasEnd = !isNaN(endY) && endY > 1900;
@@ -411,7 +504,8 @@
       const isFuture = hasEnd && endY > CURRENT_YEAR;
       const solidWidth = hasStart && isFuture ? Math.max(0, nowX - scale(startY)) : barWidth;
       // Open-ended: operating/mothballed/construction with no retirement data
-      const isOpenEnded = !hasKnownEnd && ['operating', 'mothballed', 'construction'].includes(cpf.status);
+      const isOpenEnded =
+        !hasKnownEnd && ['operating', 'mothballed', 'construction'].includes(cpf.status);
 
       return {
         unitName: cpf.unit_name,
@@ -507,7 +601,6 @@
 
   <!-- ── Full card ───────────────────────────────────────────────────────── -->
   <div class="card-full">
-
     <!-- Tab bar -->
     <nav class="tab-bar" role="tablist">
       {#each TABS as tab}
@@ -516,14 +609,13 @@
           class:active={activeTab === tab}
           role="tab"
           aria-selected={activeTab === tab}
-          onclick={() => (activeTab = tab)}
-        >{tab}</button>
+          onclick={() => (activeTab = tab)}>{tab}</button
+        >
       {/each}
     </nav>
 
     <!-- Tab content (grid-stacked so all tabs are measured; only active is visible) -->
     <div class="tabs-wrapper">
-
       <!-- ── Overview ──────────────────────────────────────────────────── -->
       <div class="tab-panel" class:active={activeTab === 'Overview'}>
         {#if overviewNarrative}
@@ -547,7 +639,10 @@
           <div class="overview-section">
             <div class="field-label">
               Plant age
-              <span class="info-dot" data-tip="Age since the first operating unit began commercial operation">i</span>
+              <span
+                class="info-dot"
+                data-tip="Age since the first operating unit began commercial operation">i</span
+              >
             </div>
             <div class="field-value">{plantAge ? `${plantAge} years` : '—'}</div>
           </div>
@@ -565,7 +660,9 @@
             {#each statusGroups as group}
               <div class="summary-row">
                 <span>
-                  <span class="status-badge badge-{statusClass(group.status)}">{capitalize(group.status)}</span>
+                  <span class="status-badge badge-{statusClass(group.status)}"
+                    >{capitalize(group.status)}</span
+                  >
                 </span>
                 <span>{formatMW(group.capacity)}</span>
                 <span>{group.count} unit{group.count === 1 ? '' : 's'}</span>
@@ -595,8 +692,8 @@
             </div>
           {/if}
         </div>
-
-      </div><!-- /Overview -->
+      </div>
+      <!-- /Overview -->
 
       <!-- ── Timeline ──────────────────────────────────────────────────── -->
       <div class="tab-panel" class:active={activeTab === 'Timeline'}>
@@ -611,7 +708,10 @@
             height={timeline.svgH}
             role="img"
             aria-label="Operational timeline for {plantName}"
-            onmouseleave={() => { tlTooltip = null; hoveredRowIndex = null; }}
+            onmouseleave={() => {
+              tlTooltip = null;
+              hoveredRowIndex = null;
+            }}
           >
             <defs>
               <!-- Gradients for open-ended bars (no retirement date). Each fades to transparent
@@ -622,8 +722,20 @@
                   {@const rightEdgeX = TL.labelW + timeline.barAreaW}
                   {@const fadeW = Math.min(20, rightEdgeX - solidEndX)}
                   {@const fadeStart = rightEdgeX - fadeW}
-                  {@const barColor = row.status === 'mothballed' ? '#bbb' : row.status === 'operating' ? '#111' : '#CA4A50'}
-                  <linearGradient id="grad-open-{i}" x1={fadeStart} y1="0" x2={rightEdgeX} y2="0" gradientUnits="userSpaceOnUse">
+                  {@const barColor =
+                    row.status === 'mothballed'
+                      ? '#bbb'
+                      : row.status === 'operating'
+                        ? '#111'
+                        : '#CA4A50'}
+                  <linearGradient
+                    id="grad-open-{i}"
+                    x1={fadeStart}
+                    y1="0"
+                    x2={rightEdgeX}
+                    y2="0"
+                    gradientUnits="userSpaceOnUse"
+                  >
                     <stop offset="0%" stop-color={barColor} stop-opacity="0.3" />
                     <stop offset="100%" stop-color={barColor} stop-opacity="0" />
                   </linearGradient>
@@ -637,19 +749,23 @@
                 x={TL.labelW + tick.x}
                 y={TL.axisH - 8}
                 class="tl-axis-label"
-                text-anchor="middle"
-              >{tick.year}</text>
+                text-anchor="middle">{tick.year}</text
+              >
               <line
-                x1={TL.labelW + tick.x} y1={TL.axisH - 4}
-                x2={TL.labelW + tick.x} y2={timeline.svgH - 4}
+                x1={TL.labelW + tick.x}
+                y1={TL.axisH - 4}
+                x2={TL.labelW + tick.x}
+                y2={timeline.svgH - 4}
                 class="tl-gridline"
               />
             {/each}
 
             <!-- Now marker -->
             <line
-              x1={TL.labelW + timeline.nowX} y1={TL.axisH - 4}
-              x2={TL.labelW + timeline.nowX} y2={timeline.svgH - 4}
+              x1={TL.labelW + timeline.nowX}
+              y1={TL.axisH - 4}
+              x2={TL.labelW + timeline.nowX}
+              y2={timeline.svgH - 4}
               class="tl-now-line"
             />
 
@@ -660,11 +776,23 @@
               {@const dimmed = hoveredRowIndex !== null && hoveredRowIndex !== i}
 
               <!-- Visual group: pointer-events disabled so hit rect above catches all events -->
-              <g pointer-events="none" style="opacity: {dimmed ? 0.15 : 1}; transition: opacity 0.15s;">
-
+              <g
+                pointer-events="none"
+                style="opacity: {dimmed ? 0.15 : 1}; transition: opacity 0.15s;"
+              >
                 <!-- Label: unit name + capacity -->
-                <text x={TL.labelW - 8} y={rowY + TL.rowH * 0.38} class="tl-unit-name" text-anchor="end">{row.unitName}</text>
-                <text x={TL.labelW - 8} y={rowY + TL.rowH * 0.65} class="tl-unit-cap" text-anchor="end">{row.capacity} MW</text>
+                <text
+                  x={TL.labelW - 8}
+                  y={rowY + TL.rowH * 0.38}
+                  class="tl-unit-name"
+                  text-anchor="end">{row.unitName}</text
+                >
+                <text
+                  x={TL.labelW - 8}
+                  y={rowY + TL.rowH * 0.65}
+                  class="tl-unit-cap"
+                  text-anchor="end">{row.capacity} MW</text
+                >
 
                 <!-- Bar or dot -->
                 {#if row.isDot && row.startX !== null}
@@ -725,13 +853,16 @@
                   height={TL.rowH - 6}
                 >
                   <div xmlns="http://www.w3.org/1999/xhtml" class="tl-badge-wrap">
-                    <span class="status-badge badge-{statusClass(row.status)}">{capitalize(row.status)}</span>
+                    <span class="status-badge badge-{statusClass(row.status)}"
+                      >{capitalize(row.status)}</span
+                    >
                     {#if row.plannedRetirement}
-                      <span class="tl-planned-note">Planned retirement<br />in {row.plannedRetirement}</span>
+                      <span class="tl-planned-note"
+                        >Planned retirement<br />in {row.plannedRetirement}</span
+                      >
                     {/if}
                   </div>
                 </foreignObject>
-
               </g>
 
               <!-- Hit target rendered last so it sits on top in z-order -->
@@ -742,15 +873,23 @@
                 height={TL.rowH}
                 fill="transparent"
                 style="cursor: default;"
-                onmouseenter={(e) => { hoveredRowIndex = i; tlTooltip = { text: rowTooltip(row), x: e.clientX, y: e.clientY }; }}
-                onmousemove={(e) => { if (tlTooltip) tlTooltip = { text: tlTooltip.text, x: e.clientX, y: e.clientY }; }}
-                onmouseleave={() => { hoveredRowIndex = null; tlTooltip = null; }}
+                onmouseenter={(e) => {
+                  hoveredRowIndex = i;
+                  tlTooltip = { text: rowTooltip(row), x: e.clientX, y: e.clientY };
+                }}
+                onmousemove={(e) => {
+                  if (tlTooltip) tlTooltip = { text: tlTooltip.text, x: e.clientX, y: e.clientY };
+                }}
+                onmouseleave={() => {
+                  hoveredRowIndex = null;
+                  tlTooltip = null;
+                }}
               />
             {/each}
           </svg>
         </div>
-
-      </div><!-- /Timeline -->
+      </div>
+      <!-- /Timeline -->
 
       <!-- ── Coal Information ────────────────────────────────────────────── -->
       <div class="tab-panel" class:active={activeTab === 'Coal Information'}>
@@ -782,14 +921,20 @@
           <div class="coal-section">
             <div class="field-label">
               Captive
-              <span class="info-dot" data-tip="A captive plant generates power primarily for a specific industrial user rather than the public grid.">i</span>
+              <span
+                class="info-dot"
+                data-tip="A captive plant generates power primarily for a specific industrial user rather than the public grid."
+                >i</span
+              >
             </div>
-            <div class="field-value">{captiveValues.length > 0 ? captiveValues.join(', ') : 'Unknown'}</div>
+            <div class="field-value">
+              {captiveValues.length > 0 ? captiveValues.join(', ') : 'Unknown'}
+            </div>
             <!-- TODO: Add "XX% of plants in {country} are captive" once country-level stats are available -->
           </div>
         </div>
-
-      </div><!-- /Coal Information -->
+      </div>
+      <!-- /Coal Information -->
 
       <!-- ── Emissions & Phaseout ───────────────────────────────────────── -->
       <div class="tab-panel" class:active={activeTab === 'Emissions & Phaseout'}>
@@ -831,19 +976,27 @@
           <div class="emissions-section">
             <div class="field-label">
               {isInDevelopment ? 'Projected CO₂ emissions' : 'CO₂ emissions'}
-              <span class="info-dot" data-tip="Estimated using capacity, capacity factor, heat rate, and emission factor. See gem.wiki for methodology.">i</span>
+              <span
+                class="info-dot"
+                data-tip="Estimated using capacity, capacity factor, heat rate, and emission factor. See gem.wiki for methodology."
+                >i</span
+              >
             </div>
             <div class="field-value">
               {#if annualCO2 || lifetimeCO2}
-                {formatCO2(annualCO2) ?? '—'} per annum
-                ({formatCO2(lifetimeCO2) ?? '—'} lifetime
-                <span class="info-dot info-dot-inline" data-tip="Assumes a 35-year plant lifetime from commissioning. See gem.wiki for methodology.">i</span>)
+                {formatCO2(annualCO2) ?? '—'} per annum ({formatCO2(lifetimeCO2) ?? '—'} lifetime
+                <span
+                  class="info-dot info-dot-inline"
+                  data-tip="Assumes a 35-year plant lifetime from commissioning. See gem.wiki for methodology."
+                  >i</span
+                >)
                 {#if unitEmissions.length > 1}
                   <button
                     class="emissions-expand-btn"
                     onclick={() => (emissionsExpanded = !emissionsExpanded)}
                     aria-expanded={emissionsExpanded}
-                  >{emissionsExpanded ? '▲ hide units' : '▼ by unit'}</button>
+                    >{emissionsExpanded ? '▲ hide units' : '▼ by unit'}</button
+                  >
                 {/if}
               {:else}
                 —
@@ -856,8 +1009,7 @@
                     <span class="unit-emission-dot {u.cls}"></span>
                     <span class="unit-emission-name">{u.name}</span>
                     <span class="unit-emission-vals">
-                      {formatCO2(u.annual) ?? '—'}/yr
-                      · {formatCO2(u.lifetime) ?? '—'} lifetime
+                      {formatCO2(u.annual) ?? '—'}/yr · {formatCO2(u.lifetime) ?? '—'} lifetime
                     </span>
                   </div>
                 {/each}
@@ -870,14 +1022,20 @@
             {#if !isInDevelopment}
               <div class="field-label" style="margin-top:1rem;">
                 Capacity factor
-                <span class="info-dot" data-tip="Country coal fleet average, based on GEM and Ember data. See gem.wiki for methodology.">i</span>
+                <span
+                  class="info-dot"
+                  data-tip="Country coal fleet average, based on GEM and Ember data. See gem.wiki for methodology."
+                  >i</span
+                >
               </div>
-              <div class="field-value">{capacityFactor != null ? `${capacityFactor}% (country coal fleet average)` : '—'}</div>
+              <div class="field-value">
+                {capacityFactor != null ? `${capacityFactor}% (country coal fleet average)` : '—'}
+              </div>
             {/if}
           </div>
         </div>
-
-      </div><!-- /Emissions & Phaseout -->
+      </div>
+      <!-- /Emissions & Phaseout -->
 
       <!-- ── Ownership ──────────────────────────────────────────────────── -->
       <div class="tab-panel" class:active={activeTab === 'Ownership'}>
@@ -899,7 +1057,8 @@
         {:else if ownershipFetched}
           <div class="ownership-status">No ownership data available</div>
         {/if}
-      </div><!-- /Ownership -->
+      </div>
+      <!-- /Ownership -->
 
       <!-- ── Additional Details ─────────────────────────────────────────── -->
       <div class="tab-panel" class:active={activeTab === 'Additional Details'}>
@@ -915,9 +1074,10 @@
         {:else}
           <p class="narrative muted">No additional fields with data for this plant.</p>
         {/if}
-      </div><!-- /Additional Details -->
-
-    </div><!-- /tabs-wrapper -->
+      </div>
+      <!-- /Additional Details -->
+    </div>
+    <!-- /tabs-wrapper -->
 
     <!-- Footer -->
     <footer class="card-footer">
@@ -926,8 +1086,8 @@
         · <a href={wikiUrl} target="_blank" rel="noopener noreferrer">Learn more on the GEM Wiki</a>
       {/if}
     </footer>
-
-  </div><!-- /card-full -->
+  </div>
+  <!-- /card-full -->
 
   {#if tlTooltip}
     <div class="tl-tooltip" style="left:{tlTooltip.x + 14}px; top:{tlTooltip.y + 10}px;">
@@ -956,7 +1116,9 @@
     list-style: none;
     user-select: none;
   }
-  .card-compact::-webkit-details-marker { display: none; }
+  .card-compact::-webkit-details-marker {
+    display: none;
+  }
 
   .compact-name {
     margin: 0;
@@ -984,22 +1146,46 @@
     border-radius: 999px;
     line-height: 1.3;
   }
-  .chip-status { font-size: 0.6rem; font-weight: 700; letter-spacing: 0.04em; }
-  .chip-capacity { font-size: 0.78rem; font-weight: 400; }
-  .chip-operating  { background: #7F142A; color: #fff; }
-  .chip-planned    { background: #CA4A50; color: #fff; }
-  .chip-retired    { background: #e0e0e0; color: #333; }
-  .chip-cancelled  { background: #e0e0e0; color: #333; }
-  .chip-mothballed { background: #e0e0e0; color: #333; }
+  .chip-status {
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+  }
+  .chip-capacity {
+    font-size: 0.78rem;
+    font-weight: 400;
+  }
+  .chip-operating {
+    background: #7f142a;
+    color: #fff;
+  }
+  .chip-planned {
+    background: #ca4a50;
+    color: #fff;
+  }
+  .chip-retired {
+    background: #e0e0e0;
+    color: #333;
+  }
+  .chip-cancelled {
+    background: #e0e0e0;
+    color: #333;
+  }
+  .chip-mothballed {
+    background: #e0e0e0;
+    color: #333;
+  }
 
   /* ── Full card ────────────────────────────────────────── */
-  .card-full { border-top: 1px solid rgba(0,0,0,0.08); }
+  .card-full {
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
+  }
 
   /* ── Tab bar ──────────────────────────────────────────── */
   .tab-bar {
     display: flex;
     padding: 0 1.75rem;
-    border-bottom: 1px solid rgba(0,0,0,0.1);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
     overflow-x: auto;
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
@@ -1013,11 +1199,19 @@
     color: #666;
     border-bottom: 2px solid transparent;
     white-space: nowrap;
-    transition: color 0.15s, border-color 0.15s;
+    transition:
+      color 0.15s,
+      border-color 0.15s;
     margin-bottom: -1px;
   }
-  .tab-btn:hover { color: #111; }
-  .tab-btn.active { color: #111; border-bottom-color: #111; font-weight: 600; }
+  .tab-btn:hover {
+    color: #111;
+  }
+  .tab-btn.active {
+    color: #111;
+    border-bottom-color: #111;
+    font-weight: 600;
+  }
 
   /* ── Tab content ──────────────────────────────────────── */
   /* Grid-stacking: all panels occupy the same cell so the wrapper
@@ -1049,7 +1243,10 @@
     margin: 0 0 1.5rem;
     line-height: 1.6;
   }
-  .narrative.muted { color: #999; font-style: italic; }
+  .narrative.muted {
+    color: #999;
+    font-style: italic;
+  }
 
   /* ── Shared field styles ──────────────────────────────── */
   .field-label {
@@ -1061,9 +1258,18 @@
     align-items: center;
     gap: 0.3rem;
   }
-  .field-value { font-size: 0.9rem; color: #222; }
-  .field-value.muted { color: #999; }
-  .field-coords { font-size: 0.75rem; color: #aaa; margin-top: 0.1rem; }
+  .field-value {
+    font-size: 0.9rem;
+    color: #222;
+  }
+  .field-value.muted {
+    color: #999;
+  }
+  .field-coords {
+    font-size: 0.75rem;
+    color: #aaa;
+    margin-top: 0.1rem;
+  }
 
   .info-dot {
     display: inline-flex;
@@ -1124,11 +1330,26 @@
     font-weight: 600;
     white-space: nowrap;
   }
-  .badge-operating  { background: #7F142A; color: #fff; }
-  .badge-planned    { background: #CA4A50; color: #fff; }
-  .badge-retired    { background: #e0e0e0; color: #444; }
-  .badge-cancelled  { background: #e0e0e0; color: #444; }
-  .badge-mothballed { background: #e0e0e0; color: #444; }
+  .badge-operating {
+    background: #7f142a;
+    color: #fff;
+  }
+  .badge-planned {
+    background: #ca4a50;
+    color: #fff;
+  }
+  .badge-retired {
+    background: #e0e0e0;
+    color: #444;
+  }
+  .badge-cancelled {
+    background: #e0e0e0;
+    color: #444;
+  }
+  .badge-mothballed {
+    background: #e0e0e0;
+    color: #444;
+  }
 
   /* ── Overview tab ─────────────────────────────────────── */
   .overview-grid {
@@ -1148,18 +1369,20 @@
     grid-template-columns: 150px 110px 80px 1fr;
     gap: 0;
     padding: 0.5rem 0;
-    border-bottom: 1px solid rgba(0,0,0,0.06);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
     font-size: 0.85rem;
     align-items: center;
   }
-  .summary-row:last-child { border-bottom: none; }
+  .summary-row:last-child {
+    border-bottom: none;
+  }
   .summary-header {
     font-size: 0.7rem;
     font-weight: 600;
     color: #666;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    border-bottom: 1px solid rgba(0,0,0,0.15);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.15);
     padding-bottom: 0.4rem;
   }
 
@@ -1175,8 +1398,13 @@
     gap: 0.5rem;
     margin-bottom: 0.75rem;
   }
-  .units-toggle:hover .summary-heading { text-decoration: underline; }
-  .units-toggle-icon { font-size: 0.6rem; color: #888; }
+  .units-toggle:hover .summary-heading {
+    text-decoration: underline;
+  }
+  .units-toggle-icon {
+    font-size: 0.6rem;
+    color: #888;
+  }
   .unit-pills {
     display: flex;
     flex-wrap: wrap;
@@ -1190,8 +1418,15 @@
     border-radius: 999px;
     line-height: 1.3;
   }
-  .pill-name { font-size: 0.6rem; font-weight: 700; letter-spacing: 0.04em; }
-  .pill-cap  { font-size: 0.78rem; font-weight: 400; }
+  .pill-name {
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+  }
+  .pill-cap {
+    font-size: 0.78rem;
+    font-weight: 400;
+  }
 
   /* ── Units / Timeline tab ─────────────────────────────── */
   .timeline-heading {
@@ -1200,7 +1435,10 @@
     color: #111;
     margin-bottom: 0.75rem;
   }
-  .timeline-wrap { width: 100%; overflow-x: auto; }
+  .timeline-wrap {
+    width: 100%;
+    overflow-x: auto;
+  }
 
   /* ── Ownership tab ────────────────────────────────── */
   .ownership-status {
@@ -1208,8 +1446,12 @@
     color: #888;
     padding: 1rem 0;
   }
-  .ownership-status.error { color: #b00; }
-  .timeline-svg { display: block; }
+  .ownership-status.error {
+    color: #b00;
+  }
+  .timeline-svg {
+    display: block;
+  }
   .tl-tooltip {
     position: fixed;
     z-index: 1000;
@@ -1231,8 +1473,14 @@
     font-size: 11px;
     fill: #888;
   }
-  :global(.tl-gridline) { stroke: #ebebeb; stroke-width: 1; }
-  :global(.tl-now-line) { stroke: #ccc; stroke-width: 1; }
+  :global(.tl-gridline) {
+    stroke: #ebebeb;
+    stroke-width: 1;
+  }
+  :global(.tl-now-line) {
+    stroke: #ccc;
+    stroke-width: 1;
+  }
   :global(.tl-unit-name) {
     font-family: var(--gem-font, system-ui, sans-serif);
     font-size: 11px;
@@ -1244,14 +1492,32 @@
     font-size: 10px;
     fill: #999;
   }
-  :global(.tl-bar) { fill: #111; }
-  :global(.tl-bar.tl-bar-retired)    { fill: #bbb; }
-  :global(.tl-bar.tl-bar-mothballed) { fill: #bbb; }
-  :global(.tl-bar.tl-bar-cancelled)  { fill: #ccc; }
-  :global(.tl-bar.tl-bar-planned)    { fill: #CA4A50; }
-  :global(.tl-bar.tl-bar-future) { fill: none; stroke: #111; stroke-width: 2; }
-  :global(.tl-dot)               { fill: #111; }
-  :global(.tl-dot.tl-bar-mothballed) { fill: #bbb; }
+  :global(.tl-bar) {
+    fill: #111;
+  }
+  :global(.tl-bar.tl-bar-retired) {
+    fill: #bbb;
+  }
+  :global(.tl-bar.tl-bar-mothballed) {
+    fill: #bbb;
+  }
+  :global(.tl-bar.tl-bar-cancelled) {
+    fill: #ccc;
+  }
+  :global(.tl-bar.tl-bar-planned) {
+    fill: #ca4a50;
+  }
+  :global(.tl-bar.tl-bar-future) {
+    fill: none;
+    stroke: #111;
+    stroke-width: 2;
+  }
+  :global(.tl-dot) {
+    fill: #111;
+  }
+  :global(.tl-dot.tl-bar-mothballed) {
+    fill: #bbb;
+  }
 
   .tl-badge-wrap {
     display: flex;
@@ -1281,16 +1547,28 @@
     font-weight: 500;
     margin-bottom: 1.5rem;
   }
-  .alignment-aligned           { background: #f0fdf4; color: #166534; }
-  .alignment-needs-acceleration { background: #fffbeb; color: #92400e; }
-  .alignment-not-aligned       { background: #fff7ed; color: #9a3412; }
+  .alignment-aligned {
+    background: #f0fdf4;
+    color: #166534;
+  }
+  .alignment-needs-acceleration {
+    background: #fffbeb;
+    color: #92400e;
+  }
+  .alignment-not-aligned {
+    background: #fff7ed;
+    color: #9a3412;
+  }
 
   .emissions-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 2rem;
   }
-  .emissions-section { display: flex; flex-direction: column; }
+  .emissions-section {
+    display: flex;
+    flex-direction: column;
+  }
 
   .emissions-expand-btn {
     all: unset;
@@ -1300,7 +1578,9 @@
     margin-left: 0.4rem;
     white-space: nowrap;
   }
-  .emissions-expand-btn:hover { color: #333; }
+  .emissions-expand-btn:hover {
+    color: #333;
+  }
 
   .unit-emissions-list {
     display: flex;
@@ -1322,18 +1602,26 @@
     flex-shrink: 0;
   }
   /* Reuse chip background colors for the dot */
-  .unit-emission-dot.chip-operating  { background: #7F142A; }
-  .unit-emission-dot.chip-planned    { background: #CA4A50; }
+  .unit-emission-dot.chip-operating {
+    background: #7f142a;
+  }
+  .unit-emission-dot.chip-planned {
+    background: #ca4a50;
+  }
   .unit-emission-dot.chip-retired,
   .unit-emission-dot.chip-cancelled,
-  .unit-emission-dot.chip-mothballed { background: #bbb; }
+  .unit-emission-dot.chip-mothballed {
+    background: #bbb;
+  }
 
   .unit-emission-name {
     font-weight: 600;
     min-width: 60px;
     white-space: nowrap;
   }
-  .unit-emission-vals { color: #555; }
+  .unit-emission-vals {
+    color: #555;
+  }
 
   /* ── Additional Details tab ──────────────────────────── */
   .details-list {
@@ -1348,10 +1636,12 @@
     grid-template-columns: 220px 1fr;
     gap: 0 1.5rem;
     padding: 0.45rem 0;
-    border-bottom: 1px solid rgba(0,0,0,0.06);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
     align-items: baseline;
   }
-  .details-row:last-child { border-bottom: none; }
+  .details-row:last-child {
+    border-bottom: none;
+  }
   .details-row dt {
     font-size: 0.78rem;
     font-weight: 600;
@@ -1367,19 +1657,32 @@
   /* ── Footer ───────────────────────────────────────────── */
   .card-footer {
     padding: 0.75rem 1.75rem;
-    border-top: 1px solid rgba(0,0,0,0.08);
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
     font-size: 0.75rem;
     color: #888;
   }
-  .card-footer a { color: #555; text-decoration: underline; }
-  .card-footer a:hover { color: #111; }
+  .card-footer a {
+    color: #555;
+    text-decoration: underline;
+  }
+  .card-footer a:hover {
+    color: #111;
+  }
 
   /* ── Responsive ───────────────────────────────────────── */
   @media (max-width: 700px) {
     .overview-grid,
     .coal-grid,
-    .emissions-grid { grid-template-columns: 1fr; }
-    .summary-row { grid-template-columns: 110px 90px 65px 1fr; font-size: 0.8rem; }
-    .tab-btn { padding: 0.75rem 0.75rem; font-size: 0.8rem; }
+    .emissions-grid {
+      grid-template-columns: 1fr;
+    }
+    .summary-row {
+      grid-template-columns: 110px 90px 65px 1fr;
+      font-size: 0.8rem;
+    }
+    .tab-btn {
+      padding: 0.75rem 0.75rem;
+      font-size: 0.8rem;
+    }
   }
 </style>

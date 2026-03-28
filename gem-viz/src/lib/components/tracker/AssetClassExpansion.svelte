@@ -181,7 +181,7 @@
   // ── Modal helpers ─────────────────────────────────────────────────
 
   // Is the next step optional? (i.e. geography)
-  const nextStepIsOptional = $derived(
+  const _nextStepIsOptional = $derived(
     currentStep < steps.length - 1 && steps[currentStep + 1]?.optional === true
   );
 

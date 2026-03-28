@@ -5,7 +5,7 @@
    * Shows top N items with their relative counts
    */
 
-  import { formatCompact } from '$lib/format';
+  import { formatCompact } from '$lib/utils/format';
   import { colors } from '$lib/design-tokens';
 
   let {

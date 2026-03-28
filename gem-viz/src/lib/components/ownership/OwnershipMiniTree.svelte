@@ -315,7 +315,7 @@
 <style>
   .mini-tree {
     padding: 16px;
-    background: var(--color-bg-secondary, #F2F2EB);
+    background: var(--color-bg-secondary, #f2f2eb);
     border-radius: 4px;
     font-family: var(--font-family-sans, 'Plus Jakarta Sans', system-ui, sans-serif);
   }
@@ -330,7 +330,7 @@
   }
 
   .error {
-    color: var(--color-error, #7F142A);
+    color: var(--color-error, #7f142a);
   }
 
   .tree-header {
@@ -343,17 +343,17 @@
 
   .entity-name {
     font-weight: 600;
-    color: var(--color-text-primary, #1D4961);
+    color: var(--color-text-primary, #1d4961);
     font-size: 14px;
   }
 
   .asset-count {
-    color: var(--color-text-primary, #1D4961);
+    color: var(--color-text-primary, #1d4961);
     font-size: 13px;
   }
 
   .hidden-note {
-    color: var(--color-text-tertiary, #9EAAAD);
+    color: var(--color-text-tertiary, #9eaaad);
     font-size: 12px;
   }
 
@@ -410,7 +410,7 @@
 
   .view-full {
     font-size: 12px;
-    color: var(--color-text-primary, #1D4961);
+    color: var(--color-text-primary, #1d4961);
     text-decoration: none;
   }
 

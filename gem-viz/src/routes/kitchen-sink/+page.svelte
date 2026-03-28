@@ -121,21 +121,21 @@
 
   // CoalPlantCard test harness
   const COAL_PRESETS = [
-    { label: 'Boundary Dam',           id: 'L100000100176' },
-    { label: 'Eraring',                id: 'L100000100005' },
-    { label: 'Yancheng Binhai',        id: 'L100000100973' },
-    { label: 'Maritsa 3',              id: 'L100000100136' },
-    { label: 'Gubin Power Project',    id: 'L100000103227' },
-    { label: 'Liuzhi',                 id: 'L100000100463' },
-    { label: 'Worsley Refinery',       id: 'L100000100043' },
-    { label: 'Zhunger Weijiamao',      id: 'L100000100896' },
-    { label: 'Huaiyin',                id: 'L100000100991' },
-    { label: 'Zhenxiong',              id: 'L100000101719' },
-    { label: 'Rovinari',               id: 'L100000103294' },
-    { label: 'Nabinagar Thermal',      id: 'L100000102114' },
-    { label: 'Shanying Cogen',         id: 'L100000101755' },
-    { label: 'Lixin Banji',            id: 'L100000100233' },
-    { label: 'Gansu Huating',          id: 'L100000100340' },
+    { label: 'Boundary Dam', id: 'L100000100176' },
+    { label: 'Eraring', id: 'L100000100005' },
+    { label: 'Yancheng Binhai', id: 'L100000100973' },
+    { label: 'Maritsa 3', id: 'L100000100136' },
+    { label: 'Gubin Power Project', id: 'L100000103227' },
+    { label: 'Liuzhi', id: 'L100000100463' },
+    { label: 'Worsley Refinery', id: 'L100000100043' },
+    { label: 'Zhunger Weijiamao', id: 'L100000100896' },
+    { label: 'Huaiyin', id: 'L100000100991' },
+    { label: 'Zhenxiong', id: 'L100000101719' },
+    { label: 'Rovinari', id: 'L100000103294' },
+    { label: 'Nabinagar Thermal', id: 'L100000102114' },
+    { label: 'Shanying Cogen', id: 'L100000101755' },
+    { label: 'Lixin Banji', id: 'L100000100233' },
+    { label: 'Gansu Huating', id: 'L100000100340' },
   ];
   let coalSelectedPreset = $state('L100000100176');
   let coalCustomId = $state('');
@@ -293,30 +293,15 @@
   <!-- Table of Contents -->
   <nav class="toc">
     <span class="toc-label">Jump to:</span>
-    {#each [
-      ['primitives', 'Primitives'],
-      ['badges', 'Badges'],
-      ['layout', 'Layout'],
-      ['cards', 'Cards'],
-      ['charts', 'Charts'],
-      ['ownership-tree', 'Ownership Tree'],
-      ['tables', 'Tables'],
-      ['inputs', 'Inputs'],
-      ['navigation', 'Navigation'],
-      ['states', 'Loading States'],
-      ['buttons', 'Buttons'],
-      ['typography', 'Typography'],
-      ['colors', 'Colors'],
-      ['debug', 'Debug'],
-      ['complex', 'Complex'],
-      ['coal-plant-card', 'Coal Plant Card'],
-      ['registry', 'Full Registry'],
-    ] as [id, label]}
+    {#each [['primitives', 'Primitives'], ['badges', 'Badges'], ['layout', 'Layout'], ['cards', 'Cards'], ['charts', 'Charts'], ['ownership-tree', 'Ownership Tree'], ['tables', 'Tables'], ['inputs', 'Inputs'], ['navigation', 'Navigation'], ['states', 'Loading States'], ['buttons', 'Buttons'], ['typography', 'Typography'], ['colors', 'Colors'], ['debug', 'Debug'], ['complex', 'Complex'], ['coal-plant-card', 'Coal Plant Card'], ['registry', 'Full Registry']] as [id, label]}
       <a
         href="#{id}"
         class:active={activeSection === id}
-        onclick={(e) => { e.preventDefault(); scrollToSection(id); }}
-      >{label}</a>
+        onclick={(e) => {
+          e.preventDefault();
+          scrollToSection(id);
+        }}>{label}</a
+      >
     {/each}
   </nav>
 
@@ -1421,13 +1406,20 @@
       <!-- Preset radio buttons -->
       <div class="coal-presets">
         {#each COAL_PRESETS as preset}
-          <label class="coal-preset-label" class:active={!coalUseCustom && coalSelectedPreset === preset.id}>
+          <label
+            class="coal-preset-label"
+            class:active={!coalUseCustom && coalSelectedPreset === preset.id}
+          >
             <input
               type="radio"
               name="coal-preset"
               value={preset.id}
               checked={!coalUseCustom && coalSelectedPreset === preset.id}
-              onchange={() => { coalSelectedPreset = preset.id; coalUseCustom = false; loadCoalPlant(); }}
+              onchange={() => {
+                coalSelectedPreset = preset.id;
+                coalUseCustom = false;
+                loadCoalPlant();
+              }}
             />
             <span class="coal-preset-name">{preset.label}</span>
             <span class="coal-preset-id">{preset.id}</span>
@@ -1436,13 +1428,21 @@
       </div>
 
       <!-- Custom ID row -->
-      <div style="display: flex; gap: var(--space-3); align-items: center; margin-top: var(--space-3); margin-bottom: var(--space-4);">
-        <label class="coal-preset-label" class:active={coalUseCustom} style="margin: 0; padding: var(--space-2) var(--space-3);">
+      <div
+        style="display: flex; gap: var(--space-3); align-items: center; margin-top: var(--space-3); margin-bottom: var(--space-4);"
+      >
+        <label
+          class="coal-preset-label"
+          class:active={coalUseCustom}
+          style="margin: 0; padding: var(--space-2) var(--space-3);"
+        >
           <input
             type="radio"
             name="coal-preset"
             checked={coalUseCustom}
-            onchange={() => { coalUseCustom = true; }}
+            onchange={() => {
+              coalUseCustom = true;
+            }}
           />
           <span class="coal-preset-name">Custom</span>
         </label>
@@ -1450,7 +1450,9 @@
           type="text"
           bind:value={coalCustomId}
           placeholder="e.g. L100000103058"
-          onfocus={() => { coalUseCustom = true; }}
+          onfocus={() => {
+            coalUseCustom = true;
+          }}
           onkeydown={(e) => e.key === 'Enter' && loadCoalPlant()}
           style="font-family: var(--font-family-mono); font-size: var(--font-size-sm); padding: var(--space-2) var(--space-3); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-sm); width: 220px;"
         />
@@ -1460,7 +1462,9 @@
       </div>
 
       {#if coalError}
-        <p style="color: var(--color-status-retired); font-size: var(--font-size-sm);">{coalError}</p>
+        <p style="color: var(--color-status-retired); font-size: var(--font-size-sm);">
+          {coalError}
+        </p>
       {:else if coalLocation}
         <CoalPlantCard units={coalLocation.units} open={true} />
       {/if}
@@ -1510,22 +1514,32 @@
     cursor: pointer;
     font-size: var(--font-size-sm);
     user-select: none;
-    transition: border-color 0.1s, background 0.1s;
+    transition:
+      border-color 0.1s,
+      background 0.1s;
   }
-  .coal-preset-label:hover { border-color: #888; }
+  .coal-preset-label:hover {
+    border-color: #888;
+  }
   .coal-preset-label.active {
     border-color: #111;
     background: #111;
     color: #fff;
   }
-  .coal-preset-label input[type="radio"] { display: none; }
-  .coal-preset-name { font-weight: 500; }
+  .coal-preset-label input[type='radio'] {
+    display: none;
+  }
+  .coal-preset-name {
+    font-weight: 500;
+  }
   .coal-preset-id {
     font-family: var(--font-family-mono);
     font-size: var(--font-size-xs);
     opacity: 0.6;
   }
-  .coal-preset-label.active .coal-preset-id { opacity: 0.7; }
+  .coal-preset-label.active .coal-preset-id {
+    opacity: 0.7;
+  }
 
   .page {
     max-width: 1000px;
@@ -1590,7 +1604,9 @@
     text-decoration: none;
     padding: var(--space-1) var(--space-2);
     border-radius: 2px;
-    transition: color 0.15s, background 0.15s;
+    transition:
+      color 0.15s,
+      background 0.15s;
   }
 
   .toc a:hover {

@@ -15,8 +15,11 @@
     trackerNameToSlug,
     trackerMetadata,
   } from '$lib/data-config/tracker-metadata';
-  import { CATALOG_SLUG_TO_URL_SLUG, URL_SLUG_TO_CATALOG_SLUG } from '$lib/data-config/tracker-schema';
-  import { fetchCatalogIndex } from '$lib/catalog-api';
+  import {
+    CATALOG_SLUG_TO_URL_SLUG,
+    URL_SLUG_TO_CATALOG_SLUG,
+  } from '$lib/data-config/tracker-schema';
+  import { fetchCatalogIndex } from '$lib/api/catalog-api';
   import { getTrackerColor } from '$lib/design-tokens';
   import PageHeader from '$lib/components/nav/PageHeader.svelte';
   import SeoMeta from '$lib/components/nav/SeoMeta.svelte';

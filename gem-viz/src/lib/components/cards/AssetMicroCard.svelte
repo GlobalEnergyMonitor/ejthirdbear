@@ -8,7 +8,7 @@
   import { assetLink } from '$lib/links';
   import { colorByTracker, colorByStatus } from '$lib/design-tokens';
   import TrackerIcon from '$lib/components/tracker/TrackerIcon.svelte';
-  import { formatCapacityNullable as formatCapacity } from '$lib/format';
+  import { formatCapacityNullable as formatCapacity } from '$lib/utils/format';
   import { RASTER_TILE_URL } from '$lib/map-config';
 
   let {
@@ -37,7 +37,9 @@
   // Static map tile URL — zoom level 6 gives good regional context
   const miniMapUrl = $derived(
     latitude && longitude
-      ? RASTER_TILE_URL.replace('{z}', String(latLngToTile(latitude, longitude, 6).z)).replace('{x}', String(latLngToTile(latitude, longitude, 6).x)).replace('{y}', String(latLngToTile(latitude, longitude, 6).y))
+      ? RASTER_TILE_URL.replace('{z}', String(latLngToTile(latitude, longitude, 6).z))
+          .replace('{x}', String(latLngToTile(latitude, longitude, 6).x))
+          .replace('{y}', String(latLngToTile(latitude, longitude, 6).y))
       : null
   );
   const miniMapPixelOffset = $derived(

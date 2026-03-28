@@ -30,7 +30,7 @@
 import { browser } from '$app/environment';
 import { getAPIBase } from '$lib/ownership-api';
 import { logApiCall } from '$lib/api-log.svelte';
-import { pointInPolygon } from '$lib/geo-utils';
+import { pointInPolygon } from '$lib/utils/geo-utils';
 import { matchesStatusFilter } from '$lib/data-config/tracker-schema';
 
 // =============================================================================

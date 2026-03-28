@@ -22,7 +22,12 @@
     STATUS_GROUPS,
     discoverStatusGroups,
   } from '$lib/data-config/tracker-schema';
-  import { resolveApiSlug, getAPIBase, fetchStatusFacets, fetchStatusTaxonomy } from '$lib/ownership-api';
+  import {
+    resolveApiSlug,
+    getAPIBase,
+    fetchStatusFacets,
+    fetchStatusTaxonomy,
+  } from '$lib/ownership-api';
   import { GEM_DATA_EMAIL } from '$lib/external-links';
   import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
@@ -227,9 +232,7 @@
   const isEmbed = $derived($page.url.searchParams.get('embed') === 'true');
 
   // Serialized classes param for the step nav (needs selected class to navigate forward)
-  const classesParamForNav = $derived(
-    selectedClass ? JSON.stringify(buildClassData()) : ''
-  );
+  const classesParamForNav = $derived(selectedClass ? JSON.stringify(buildClassData()) : '');
 
   function navigateTo(path) {
     const classData = buildClassData();
@@ -244,7 +247,10 @@
   // Sync state → hash when embedded (for shareable links)
   $effect(() => {
     if (!isEmbed) return;
-    if (!selectedClassId) { writeScreenerHash({}); return; }
+    if (!selectedClassId) {
+      writeScreenerHash({});
+      return;
+    }
     const classData = buildClassData();
     writeScreenerHash({ classes: JSON.stringify(classData) });
   });
@@ -269,7 +275,9 @@
               : [first.filters.geography];
           }
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
   });
 

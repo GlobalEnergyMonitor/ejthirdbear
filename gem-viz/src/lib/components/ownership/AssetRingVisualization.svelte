@@ -27,7 +27,7 @@
     interactive?: boolean;
     maxUnits?: number;
     /** Optional navigation callback — used by dynamic embeds instead of goto() */
-    onNavigate?: (url: string) => void;
+    onNavigate?: (_url: string) => void;
   }
 
   let {

@@ -418,7 +418,10 @@
       <div class="details-wrapper">
         <p class="subtitle">Details</p>
         <p class="details">
-          {assetTypeSummary || `${assets.length} ${assetClassName}`}{assets.length !== allAssets.length ? ` of ${allAssets.length}` : ''}
+          {assetTypeSummary || `${assets.length} ${assetClassName}`}{assets.length !==
+          allAssets.length
+            ? ` of ${allAssets.length}`
+            : ''}
           via {subsidiariesMatched.size} direct subsidiaries
         </p>
       </div>

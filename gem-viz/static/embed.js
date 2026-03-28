@@ -40,7 +40,7 @@
       var url = new URL(script.src);
       var basePath = url.pathname.replace(/\/embed\.js$/, '');
       return url.origin + basePath;
-    } catch (_e) {
+    } catch {
       return '';
     }
   };
@@ -163,7 +163,7 @@
                 parsed.props[k] = extra[k];
               }
             });
-          } catch (_e) { /* ignore invalid params */ }
+          } catch { /* ignore invalid params */ }
         }
 
         // Add theme and link rewriting props
@@ -260,7 +260,7 @@
             if (entry[1] === undefined || entry[1] === null) return;
             if (!url.searchParams.has(entry[0])) url.searchParams.set(entry[0], '' + entry[1]);
           });
-        } catch (_e) {
+        } catch {
           // Ignore invalid JSON params
         }
       } else {
@@ -271,7 +271,7 @@
           extraParams.forEach(function (value, key) {
             if (!url.searchParams.has(key)) url.searchParams.set(key, value);
           });
-        } catch (_e) {
+        } catch {
           // Ignore invalid query params
         }
       }

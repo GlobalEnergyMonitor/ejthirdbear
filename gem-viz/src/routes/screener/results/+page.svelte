@@ -38,7 +38,12 @@
     parseJsonSearchParam,
     type ScreenerRoutePath,
   } from '$lib/screener-url';
-  import { resolveApiSlug, getAPIBase, fetchStatusFacets, fetchStatusTaxonomy } from '$lib/ownership-api';
+  import {
+    resolveApiSlug,
+    getAPIBase,
+    fetchStatusFacets,
+    fetchStatusTaxonomy,
+  } from '$lib/ownership-api';
   import type { ScreenerSelectedClass } from '$lib/data-config/screener-types';
   import AssetClassExpansion from '$lib/components/tracker/AssetClassExpansion.svelte';
   import { getAssetClassById } from '$lib/data-config/asset-class-definitions';
@@ -142,7 +147,8 @@
   // Search/filter for journalists with watchlists
   let searchQuery = $state('');
   // Modal state for ownership chart
-  let chartModalOwner: { entityId: string; name: string; filteredAssets?: number } | null = $state(null);
+  let chartModalOwner: { entityId: string; name: string; filteredAssets?: number } | null =
+    $state(null);
   let modalOriginRect: DOMRect | null = $state(null);
   let modalNameEl: HTMLElement | undefined = $state();
   let modalEl: HTMLElement | undefined = $state();
@@ -420,7 +426,9 @@
     if (classes.length === 0) {
       goto(buildScreenerUrl('screener') + embedSuffix);
     } else {
-      goto(buildScreenerUrl('screener/results', { classes: JSON.stringify(classes) }) + embedSuffix);
+      goto(
+        buildScreenerUrl('screener/results', { classes: JSON.stringify(classes) }) + embedSuffix
+      );
     }
   }
 
@@ -557,7 +565,11 @@
   }
 </script>
 
-<svelte:window onkeydown={(e) => { if (e.key === 'Escape' && chartModalOwner) closeChartModal(); }} />
+<svelte:window
+  onkeydown={(e) => {
+    if (e.key === 'Escape' && chartModalOwner) closeChartModal();
+  }}
+/>
 
 <svelte:head>
   <title>Screener Results — Global Energy Monitor</title>
@@ -750,7 +762,13 @@
       onclick={closeChartModal}
       role="presentation"
     ></div>
-    <div class="chart-modal" bind:this={modalEl} role="dialog" aria-modal="true" aria-label="{chartModalOwner.name} ownership chart">
+    <div
+      class="chart-modal"
+      bind:this={modalEl}
+      role="dialog"
+      aria-modal="true"
+      aria-label="{chartModalOwner.name} ownership chart"
+    >
       <header class="chart-modal-header">
         <div class="chart-modal-title">
           <h3 bind:this={modalNameEl}>{chartModalOwner.name}</h3>
@@ -790,7 +808,8 @@
     {#if visualizeOwnerIds.length > 0 && !loading}
       <div class="visualize-footer">
         <span class="footer-summary">
-          {visualizeOwnerIds.length} {visualizeOwnerIds.length === 1 ? 'company' : 'companies'} selected
+          {visualizeOwnerIds.length}
+          {visualizeOwnerIds.length === 1 ? 'company' : 'companies'} selected
         </span>
         <a href={visualizeUrl} class="btn-visualize">Continue to Visualize</a>
       </div>

@@ -94,9 +94,7 @@
   <footer class="citation-footer">
     <div class="citation-content">
       <p class="source">
-        Data: <a href="{GEM_DOMAIN}/" target="_blank" rel="noopener"
-          >Global Energy Monitor</a
-        >
+        Data: <a href="{GEM_DOMAIN}/" target="_blank" rel="noopener">Global Energy Monitor</a>
         {#if relevantTrackers.length > 0}
           <span class="tracker-links">
             ({#each relevantTrackers as tracker, i}
@@ -129,9 +127,7 @@
   </footer>
 {:else if variant === 'compact'}
   <span class="citation-compact">
-    Source: <a href="{GEM_DOMAIN}/" target="_blank" rel="noopener"
-      >Global Energy Monitor</a
-    >
+    Source: <a href="{GEM_DOMAIN}/" target="_blank" rel="noopener">Global Energy Monitor</a>
     ({citationDate})
   </span>
 {:else if variant === 'full'}
@@ -140,10 +136,8 @@
 
     <div class="source-info">
       <p>
-        This data is provided by <a
-          href="{GEM_DOMAIN}/"
-          target="_blank"
-          rel="noopener">Global Energy Monitor</a
+        This data is provided by <a href="{GEM_DOMAIN}/" target="_blank" rel="noopener"
+          >Global Energy Monitor</a
         >, a nonprofit research organization cataloging fossil fuel and renewable energy projects
         worldwide.
       </p>

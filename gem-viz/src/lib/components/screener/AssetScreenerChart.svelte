@@ -259,9 +259,7 @@
         {#if loading}
           <span class="loading-hint">loading…</span>
         {:else}
-          via {directSubsidiaries} direct {directSubsidiaries === 1
-            ? 'subsidiary'
-            : 'subsidiaries'}
+          via {directSubsidiaries} direct {directSubsidiaries === 1 ? 'subsidiary' : 'subsidiaries'}
         {/if}
       </p>
     </div>
@@ -341,13 +339,20 @@
   </div>
 
   <div id="legend-container" class:hidden={loading || !!error || isEmpty}>
-    <div id="legend-container-status" class="legend-container" class:tracker-colored={colorByTracker}>
+    <div
+      id="legend-container-status"
+      class="legend-container"
+      class:tracker-colored={colorByTracker}
+    >
       <p class="title">Asset Status <span>(top-right icons)</span></p>
       <div id="legend-status" class="legend" class:single={trackerLegend.length === 0}>
         {#each statusLegend as item}
           <div class="legend-item">
             <span class="legend-dot-wrap">
-              <span class="legend-bubble" style={colorByTracker ? '' : `background-color:${item.color};`}></span>
+              <span
+                class="legend-bubble"
+                style={colorByTracker ? '' : `background-color:${item.color};`}
+              ></span>
               {#if !prospectiveLegend}
                 {#if item.kind === 'planned'}
                   <span class="legend-mark proposed"></span>

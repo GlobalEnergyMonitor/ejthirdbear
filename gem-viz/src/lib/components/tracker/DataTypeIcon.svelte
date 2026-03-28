@@ -34,11 +34,7 @@
   });
 </script>
 
-<span
-  class="data-type-icon"
-  title="{icon.label} field"
-  aria-label="{icon.label} field"
->
+<span class="data-type-icon" title="{icon.label} field" aria-label="{icon.label} field">
   <svelte:component this={icon.component} {size} strokeWidth={2} />
 </span>
 

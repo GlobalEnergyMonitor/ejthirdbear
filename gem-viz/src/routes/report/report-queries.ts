@@ -86,11 +86,11 @@ export async function queryEntityPortfolios(
     const trackerSet = new Set(assetList.map((a) => a.facilityType).filter(Boolean));
     const operating = assetList.filter((a) => a.status?.toLowerCase() === 'operating').length;
     const proposed = assetList.filter((a) =>
-      PROSPECTIVE_STATUSES.includes(a.status?.toLowerCase() as any)
+      PROSPECTIVE_STATUSES.includes(
+        a.status?.toLowerCase() as (typeof PROSPECTIVE_STATUSES)[number]
+      )
     ).length;
-    const construction = assetList.filter(
-      (a) => a.status?.toLowerCase() === 'construction'
-    ).length;
+    const construction = assetList.filter((a) => a.status?.toLowerCase() === 'construction').length;
 
     results.push({
       entity_id: entityId,
@@ -386,7 +386,11 @@ export async function queryTrackerBreakdown(
     const existing = trackerMap.get(tracker);
 
     const isOperating = status === 'operating' ? 1 : 0;
-    const isProposed = PROSPECTIVE_STATUSES.includes(status as any) ? 1 : 0;
+    const isProposed = PROSPECTIVE_STATUSES.includes(
+      status as (typeof PROSPECTIVE_STATUSES)[number]
+    )
+      ? 1
+      : 0;
 
     if (existing) {
       existing.asset_count++;

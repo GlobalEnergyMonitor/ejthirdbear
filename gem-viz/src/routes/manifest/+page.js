@@ -12,7 +12,11 @@ import {
   getLiveDataSources,
 } from '$lib/data-config/data-sources';
 import { TRACKERS, TRACKER_TO_ASSET_TYPE, TRACKER_ID_FIELD } from '$lib/data-config/tracker-schema';
-import { fetchApiMetadata, fetchCatalogFieldMappings, fetchCatalogTaxonomy } from '$lib/catalog-api';
+import {
+  fetchApiMetadata,
+  fetchCatalogFieldMappings,
+  fetchCatalogTaxonomy,
+} from '$lib/api/catalog-api';
 import { env } from '$env/dynamic/public';
 
 /** @type {import('./$types').PageLoad} */

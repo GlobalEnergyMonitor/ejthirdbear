@@ -20,7 +20,7 @@
 
 import { writable, get } from 'svelte/store';
 import { browser } from '$app/environment';
-import { isValidSlug, sanitizeName } from './slug';
+import { isValidSlug, sanitizeName } from './utils/slug';
 import { STORAGE_KEY_EXPORT_LIST } from './constants';
 
 export interface ExportAsset {

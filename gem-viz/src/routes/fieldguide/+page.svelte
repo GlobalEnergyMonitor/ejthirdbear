@@ -8,7 +8,7 @@
   import { getAssetTypeCounts, API_TYPE_TO_SLUG } from '$lib/ownership-api';
   import { trackerMetadata } from '$lib/data-config/tracker-metadata';
   import { CATALOG_SLUG_TO_URL_SLUG } from '$lib/data-config/tracker-schema';
-  import { fetchCatalogIndex } from '$lib/catalog-api';
+  import { fetchCatalogIndex } from '$lib/api/catalog-api';
   import { getTrackerColor } from '$lib/design-tokens';
   import PageHeader from '$lib/components/nav/PageHeader.svelte';
   import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
@@ -65,10 +65,7 @@
 
 <div class="page">
   <PageHeader
-    breadcrumbs={[
-      { label: 'Home', href: link('index') },
-      { label: 'Tracker FieldGuide' },
-    ]}
+    breadcrumbs={[{ label: 'Home', href: link('index') }, { label: 'Tracker FieldGuide' }]}
     title="Tracker FieldGuide"
     lead="Explore field-level documentation, data distributions, and sample records for each tracker dataset."
   />
@@ -92,7 +89,13 @@
         <div class="card-footer">
           <span class="view-link">View FieldGuide</span>
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path
+              d="M6 3l5 5-5 5"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
           </svg>
         </div>
       </a>
@@ -124,7 +127,9 @@
     overflow: hidden;
     text-decoration: none;
     color: inherit;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    transition:
+      transform 0.15s ease,
+      box-shadow 0.15s ease;
   }
 
   .tracker-card:hover {

@@ -40,8 +40,8 @@ import {
   TRACKER_TO_URL_SLUG,
   URL_SLUG_TO_CATALOG_SLUG,
 } from './tracker-schema';
-import { fetchCatalogFieldMeta } from '$lib/catalog-api';
-import type { CatalogTrackerMeta } from '$lib/catalog-api';
+import { fetchCatalogFieldMeta } from '$lib/api/catalog-api';
+import type { CatalogTrackerMeta } from '$lib/api/catalog-api';
 import { gemTrackerPage, gemTrackerRepo } from '$lib/external-links';
 
 /** Slug to tracker name mapping — sourced from tracker-schema.ts */

@@ -1,9 +1,7 @@
 import type { Handle } from '@sveltejs/kit';
-import { embedQuery } from '$lib/embeddings';
 
-// Warm up the embedding model on server start so first search isn't slow.
-// This runs in the background — doesn't block startup.
-embedQuery('warmup').catch(() => {});
+// Model warmup disabled — loads lazily on first semantic search request
+// to avoid OOM on small Fly.io machines.
 
 export const handle: Handle = async ({ event, resolve }) => {
   const response = await resolve(event);
@@ -13,6 +11,9 @@ export const handle: Handle = async ({ event, resolve }) => {
   if (path.startsWith('/embed/')) {
     response.headers.delete('x-frame-options');
     response.headers.set('content-security-policy', 'frame-ancestors *');
+  } else if (!path.startsWith('/api/')) {
+    // Non-embed, non-API routes: prevent clickjacking
+    response.headers.set('x-frame-options', 'DENY');
   }
 
   // API routes: allow CORS for Drupal or other origins

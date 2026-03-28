@@ -6,12 +6,7 @@
   import ComposeVizDashboard from '$lib/components/compose/ComposeVizDashboard.svelte';
   import ComposeAssetTooltip from '$lib/components/compose/ComposeAssetTooltip.svelte';
 
-  let {
-    state,
-    title = 'Live Filters',
-    note = '',
-    onClose = () => {},
-  } = $props();
+  let { state, title = 'Live Filters', note = '', onClose = () => {} } = $props();
 </script>
 
 <aside class="compose-deck">
@@ -32,7 +27,7 @@
 
     <div class="compose-deck__layout">
       <div class="compose-deck__filters">
-        <ComposeFilterPanel bind:state={state} />
+        <ComposeFilterPanel bind:state />
       </div>
 
       <section class="compose-deck__results">

@@ -5,7 +5,7 @@
  * Eliminates 4 copy-pasted fieldDescriptions objects across page files.
  */
 
-import { fetchCatalogFieldMeta, type CatalogFieldDetail } from './catalog-api';
+import { fetchCatalogFieldMeta, type CatalogFieldDetail } from './api/catalog-api';
 import { URL_SLUG_TO_CATALOG_SLUG } from '$lib/data-config/tracker-schema';
 
 // =============================================================================
@@ -152,7 +152,7 @@ function mapApiFields(fields: CatalogFieldDetail[], expandValues: boolean): Fiel
       dataSubType: f.data_sub_type,
       unit: f.unit_name_short,
       codeFriendlyName: f.code_friendly_name,
-      histogramWeight: (f as any).histogram_weight,
+      histogramWeight: (f as unknown as { histogram_weight?: number }).histogram_weight,
       allowedValues: f.allowed_values,
       valuesDefinitions: f.values_definitions,
     }));

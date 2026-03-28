@@ -174,7 +174,7 @@
     const color = getPointColor(tracker);
     const pointColor = tracker ? color : getAllTrackersColorExpression();
 
-    const apiTracker = tracker ? (UI_TO_API[tracker] || tracker) : null;
+    const apiTracker = tracker ? UI_TO_API[tracker] || tracker : null;
     const data = apiTracker
       ? {
           ...geojsonData,

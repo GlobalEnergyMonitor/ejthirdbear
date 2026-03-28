@@ -28,4 +28,4 @@ export {
   formatMtCO2,
   formatValueWithUnit,
   shorten,
-} from '$lib/format';
+} from '$lib/utils/format';

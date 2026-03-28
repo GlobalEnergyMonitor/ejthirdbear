@@ -89,7 +89,11 @@ export function getNodeColors(
 ): { bg: string; fg: string; light: string } {
   const orig = nodes.find((n) => n.id === nodeId);
   if (!orig || orig.type === 'asset' || orig.id === rootId) {
-    return { bg: TREE_COLORS.nodeFill, fg: TREE_COLORS.teal, light: ownershipColors.entityOtherLight };
+    return {
+      bg: TREE_COLORS.nodeFill,
+      fg: TREE_COLORS.teal,
+      light: ownershipColors.entityOtherLight,
+    };
   }
   const category = classifyOwnerType(orig);
   return OWNERSHIP_ENTITY_COLORS[category] || OWNERSHIP_ENTITY_COLORS['Other'];

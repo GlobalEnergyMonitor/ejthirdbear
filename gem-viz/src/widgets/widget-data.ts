@@ -4,15 +4,7 @@
  * that uses widget-api.ts instead of ownership-api.ts.
  */
 
-import {
-  getEntity,
-  getEntityGraphDown,
-  getOwnershipGraph,
-  type AssetSummary,
-  type GraphNode,
-  type GraphEdge,
-  type EntityGraphResponse,
-} from './widget-api';
+import { getEntity, getOwnershipGraph, type GraphNode } from './widget-api';
 
 // ============================================================================
 // TYPES
@@ -45,7 +37,9 @@ export interface EmbedPortfolio {
  * Load entity portfolio via graph endpoint.
  * Uses the same /ownership/graph?direction=down approach as the main app.
  */
-export async function loadEntityPortfolio(entityId: string): Promise<{ portfolio: EmbedPortfolio }> {
+export async function loadEntityPortfolio(
+  entityId: string
+): Promise<{ portfolio: EmbedPortfolio }> {
   // Fetch entity details + downstream graph in parallel
   const [entity, graphDown] = await Promise.all([
     getEntity(entityId),

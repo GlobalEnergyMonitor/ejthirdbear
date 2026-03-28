@@ -5,7 +5,7 @@
    * Updates reactively as data changes
    */
 
-  import { formatCompact, formatSI } from '$lib/format';
+  import { formatCompact, formatSI } from '$lib/utils/format';
 
   let {
     data = [],

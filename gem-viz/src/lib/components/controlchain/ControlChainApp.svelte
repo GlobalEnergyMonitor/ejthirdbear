@@ -18,43 +18,47 @@
   let { initialQuery = '', initialType = 'all', onStateChange } = $props();
 
   const modes = [
-    { id: 'all',      label: 'All',      placeholder: 'Search by name, ID, owner, or country...' },
-    { id: 'assets',   label: 'Assets',   placeholder: 'Search assets by name...' },
+    { id: 'all', label: 'All', placeholder: 'Search by name, ID, owner, or country...' },
+    { id: 'assets', label: 'Assets', placeholder: 'Search assets by name...' },
     { id: 'entities', label: 'Entities', placeholder: 'Search entities by name...' },
   ];
 
   const examples = [
-    { name: 'Eskom',       kind: 'entity', q: 'Eskom' },
+    { name: 'Eskom', kind: 'entity', q: 'Eskom' },
     { name: 'Adani Power', kind: 'entity', q: 'Adani Power' },
-    { name: 'Medupi',      kind: 'asset',  q: 'Medupi' },
-    { name: 'NTPC',        kind: 'entity', q: 'NTPC' },
+    { name: 'Medupi', kind: 'asset', q: 'Medupi' },
+    { name: 'NTPC', kind: 'entity', q: 'NTPC' },
   ];
 
-  let searchType  = $state(initialType);
-  let query       = $state(initialQuery);
+  let searchType = $state(initialType);
+  let query = $state(initialQuery);
 
-  let results     = $state(/** @type {any[]} */ ([]));
-  let searching   = $state(false);
+  let results = $state(/** @type {any[]} */ ([]));
+  let searching = $state(false);
   let searchError = $state('');
   let hasSearched = $state(false);
 
-  let selected      = $state(null);
-  let treeNodes     = $state([]);
-  let treeEdges     = $state([]);
-  let treePaths     = $state({});
-  let treeRootId    = $state('');
-  let loadingTree   = $state(false);
-  let treeError     = $state('');
+  let selected = $state(null);
+  let treeNodes = $state([]);
+  let treeEdges = $state([]);
+  let treePaths = $state({});
+  let treeRootId = $state('');
+  let loadingTree = $state(false);
+  let treeError = $state('');
   let treeDirection = $state('auto');
-  let modalOpen     = $state(false);
+  let modalOpen = $state(false);
 
   let debounceTimer;
 
   $effect(() => {
-    const q    = query;
+    const q = query;
     const type = searchType;
     clearTimeout(debounceTimer);
-    if (!q || q.length < 2) { results = []; hasSearched = false; return; }
+    if (!q || q.length < 2) {
+      results = [];
+      hasSearched = false;
+      return;
+    }
     debounceTimer = setTimeout(() => {
       doSearch(q, type);
       onStateChange?.(q, type);
@@ -62,7 +66,11 @@
   });
 
   async function doSearch(q, type) {
-    if (!q || q.length < 2) { results = []; hasSearched = false; return; }
+    if (!q || q.length < 2) {
+      results = [];
+      hasSearched = false;
+      return;
+    }
     searching = true;
     searchError = '';
     hasSearched = true;
@@ -71,14 +79,26 @@
       if (type === 'all' || type === 'assets') {
         const r = await listAssets({ q, limit: 20 });
         for (const a of r.results) {
-          merged.push({ id: a.id, name: a.name, kind: 'asset', country: a.country, status: a.status, asset_type: a.facilityType });
+          merged.push({
+            id: a.id,
+            name: a.name,
+            kind: 'asset',
+            country: a.country,
+            status: a.status,
+            asset_type: a.facilityType,
+          });
         }
       }
       if (type === 'all' || type === 'entities') {
         const r = await listEntities({ q, limit: 20 });
         for (const e of r.results) {
           const rec = /** @type {any} */ (e);
-          merged.push({ id: rec.id || rec.entity_id, name: rec.name || rec.Name, kind: 'entity', country: rec.country || rec.hq_country });
+          merged.push({
+            id: rec.id || rec.entity_id,
+            name: rec.name || rec.Name,
+            kind: 'entity',
+            country: rec.country || rec.hq_country,
+          });
         }
       }
       results = merged;
@@ -95,7 +115,11 @@
     searchType = mode || 'all';
     clearTimeout(debounceTimer);
     onStateChange?.(q, searchType);
-    if (!q || q.length < 2) { results = []; hasSearched = false; return; }
+    if (!q || q.length < 2) {
+      results = [];
+      hasSearched = false;
+      return;
+    }
     debounceTimer = setTimeout(() => doSearch(q, searchType), 200);
   }
 
@@ -129,9 +153,9 @@
     treeDirection = direction;
     try {
       const graph = await getOwnershipGraph({ root: item.id, direction, max_depth: 5 });
-      treeNodes  = graph.nodes  || [];
-      treeEdges  = graph.edges  || [];
-      treePaths  = graph.paths  || {};
+      treeNodes = graph.nodes || [];
+      treeEdges = graph.edges || [];
+      treePaths = graph.paths || {};
       treeRootId = graph.root?.id || item.id;
     } catch (err) {
       treeError = err.message || 'Failed to load ownership tree';
@@ -173,7 +197,11 @@
       <div class="cc-examples">
         {#each examples as ex}
           <button class="cc-chip" onclick={() => searchExample(ex)}>
-            <span class="cc-kind" class:asset={ex.kind === 'asset'} class:entity={ex.kind === 'entity'}>{ex.kind}</span>
+            <span
+              class="cc-kind"
+              class:asset={ex.kind === 'asset'}
+              class:entity={ex.kind === 'entity'}>{ex.kind}</span
+            >
             {ex.name}
           </button>
         {/each}
@@ -195,7 +223,9 @@
   {#if results.length > 0}
     <div class="cc-results-panel">
       <div class="cc-results-header">
-        <span class="cc-results-count">{results.length} result{results.length !== 1 ? 's' : ''}</span>
+        <span class="cc-results-count"
+          >{results.length} result{results.length !== 1 ? 's' : ''}</span
+        >
       </div>
       <ul class="cc-results-list">
         {#each results as item (item.id)}
@@ -205,7 +235,11 @@
               class:selected={selected?.id === item.id}
               onclick={() => selectResult(item)}
             >
-              <span class="cc-result-kind" class:asset={item.kind === 'asset'} class:entity={item.kind === 'entity'}>
+              <span
+                class="cc-result-kind"
+                class:asset={item.kind === 'asset'}
+                class:entity={item.kind === 'entity'}
+              >
                 {item.kind === 'asset' ? 'Asset' : 'Entity'}
               </span>
               <div class="cc-result-info">
@@ -222,7 +256,13 @@
                 </span>
               </div>
               <svg class="cc-result-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <path
+                  d="M6 3l5 5-5 5"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
               </svg>
             </button>
           </li>
@@ -242,7 +282,9 @@
       <div class="cc-modal-header">
         <div>
           <h2>{selected.name}</h2>
-          <span class="cc-modal-sub">{treeDirection === 'up' ? 'WHO OWNS THIS?' : 'WHAT DOES THIS OWN?'}</span>
+          <span class="cc-modal-sub"
+            >{treeDirection === 'up' ? 'WHO OWNS THIS?' : 'WHAT DOES THIS OWN?'}</span
+          >
         </div>
         <button class="cc-modal-close" onclick={closeModal} aria-label="Close">✕</button>
       </div>
@@ -316,7 +358,7 @@
   }
   .cc-chip:hover {
     border-color: var(--gem-navy, #1d4961);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   }
   .cc-kind {
     font-size: 10px;
@@ -326,8 +368,14 @@
     padding: 1px 6px;
     border-radius: 3px;
   }
-  .cc-kind.asset   { background: #e8f5e9; color: #2e7d32; }
-  .cc-kind.entity  { background: #e3f2fd; color: #1565c0; }
+  .cc-kind.asset {
+    background: #e8f5e9;
+    color: #2e7d32;
+  }
+  .cc-kind.entity {
+    background: #e3f2fd;
+    color: #1565c0;
+  }
 
   /* Error / status */
   .cc-error {
@@ -335,7 +383,8 @@
     font-size: var(--font-size-sm);
     margin: var(--space-2) 0;
   }
-  .cc-status, .cc-tree-loading {
+  .cc-status,
+  .cc-tree-loading {
     display: flex;
     align-items: center;
     gap: var(--space-3);
@@ -352,7 +401,11 @@
     animation: cc-spin 0.6s linear infinite;
     flex-shrink: 0;
   }
-  @keyframes cc-spin { to { transform: rotate(360deg); } }
+  @keyframes cc-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
 
   .cc-no-results {
     color: var(--color-text-secondary);
@@ -362,7 +415,9 @@
   }
 
   /* Results */
-  .cc-results-panel { min-width: 0; }
+  .cc-results-panel {
+    min-width: 0;
+  }
   .cc-results-header {
     display: flex;
     align-items: center;
@@ -402,7 +457,9 @@
     font-size: var(--font-size-sm);
     transition: background 0.1s;
   }
-  .cc-result:hover { background: var(--color-bg-secondary); }
+  .cc-result:hover {
+    background: var(--color-bg-secondary);
+  }
   .cc-result.selected {
     background: rgba(29, 73, 97, 0.06);
     border-left: 3px solid var(--gem-navy, #1d4961);
@@ -416,8 +473,14 @@
     border-radius: 3px;
     flex-shrink: 0;
   }
-  .cc-result-kind.asset  { background: #e8f5e9; color: #2e7d32; }
-  .cc-result-kind.entity { background: #e3f2fd; color: #1565c0; }
+  .cc-result-kind.asset {
+    background: #e8f5e9;
+    color: #2e7d32;
+  }
+  .cc-result-kind.entity {
+    background: #e3f2fd;
+    color: #1565c0;
+  }
   .cc-result-info {
     flex: 1;
     min-width: 0;
@@ -444,7 +507,8 @@
     font-size: 11px;
     color: var(--color-text-secondary);
   }
-  .cc-result-type, .cc-result-country {
+  .cc-result-type,
+  .cc-result-country {
     font-size: 11px;
     color: var(--color-text-tertiary);
   }
@@ -464,7 +528,7 @@
     inset: 0;
     width: 100vw;
     max-width: none;
-    background: rgba(0,0,0,0.5);
+    background: rgba(0, 0, 0, 0.5);
     z-index: 1000;
     display: flex;
     align-items: center;
@@ -479,7 +543,7 @@
     max-height: 90vh;
     min-height: 80vh;
     overflow: auto;
-    box-shadow: 0 24px 64px rgba(0,0,0,0.2);
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.2);
   }
   .cc-modal-header {
     display: flex;
@@ -530,7 +594,10 @@
   }
 
   /* Tree inside modal: chart 70% | panel 30% */
-  .cc-tree-wrap { width: 100%; min-width: 0; }
+  .cc-tree-wrap {
+    width: 100%;
+    min-width: 0;
+  }
 
   .cc-tree-wrap :global(.ownership-tree),
   .cc-tree-wrap :global(.graph-area),

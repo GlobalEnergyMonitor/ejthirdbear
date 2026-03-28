@@ -16,16 +16,22 @@ import {
   getAPIBase,
   type AssetSummary,
   type PaginatedResponse,
-} from './ownership-api';
+} from '$lib/ownership-api';
 import {
   isCoarseStatus,
   displayStatusToApiKey,
   API_SLUG_TO_TYPE,
-} from './data-config/tracker-schema';
-import { logApiCall } from './api-log.svelte';
+} from '$lib/data-config/tracker-schema';
+import { logApiCall } from '$lib/api-log.svelte';
 import {
-  FK_FACILITY_TYPE, FK_STATUS, FK_CAPACITY, FK_CAPACITY_UNIT,
-  FK_COUNTRY, FK_LATITUDE, FK_LONGITUDE, FK_OWNER,
+  FK_FACILITY_TYPE,
+  FK_STATUS,
+  FK_CAPACITY,
+  FK_CAPACITY_UNIT,
+  FK_COUNTRY,
+  FK_LATITUDE,
+  FK_LONGITUDE,
+  FK_OWNER,
 } from '$lib/field-keys';
 // Shared types for compose page
 export interface FacetOption {
@@ -408,7 +414,7 @@ function assetToComposeRow(asset: AssetSummary): ComposeRow {
     tracker: asset.facilityType || '',
     status: asset.status || '',
     country: asset.country || '',
-    state_province: (asset as any).stateProvince || '',
+    state_province: asset.stateProvince || '',
     capacity_mw: asset.capacity ?? null,
     owner: firstOwner?.name || asset.ownerName || '',
     owner_id: firstOwner?.entityId || asset.ownerEntityId || '',
@@ -497,7 +503,7 @@ export function clientSideFilter(assets: AssetSummary[], filters: FilterState): 
       ...(filters.stateProvincesAnd || []),
     ];
     if (allStateProvinces.length) {
-      const sp = (asset as any).stateProvince || '';
+      const sp = asset.stateProvince || '';
       if (!allStateProvinces.includes(sp)) return false;
     }
 
@@ -626,7 +632,7 @@ export function deriveOwnerFacets(assets: AssetSummary[]): FacetOption[] {
 export function deriveStateProvinceFacets(assets: AssetSummary[]): FacetOption[] {
   const counts = new Map<string, number>();
   for (const asset of assets) {
-    const sp = (asset as any).stateProvince;
+    const sp = asset.stateProvince;
     if (sp) counts.set(sp, (counts.get(sp) || 0) + 1);
   }
   return Array.from(counts.entries())

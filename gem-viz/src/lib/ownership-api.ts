@@ -8,10 +8,24 @@ import {
   normalizeSubStatus,
 } from '$lib/data-config/tracker-schema';
 import {
-  FK_ID, FK_NAME, FK_FACILITY_TYPE, FK_STATUS, FK_SUB_STATUS,
-  FK_CAPACITY, FK_CAPACITY_UNIT, FK_COUNTRY, FK_LATITUDE, FK_LONGITUDE,
-  FK_OWNER, FK_OWNER_ENTITY_ID, FK_PARENT, FK_PARENT_ENTITY_ID,
-  FK_ENTITY_ID, FK_ENTITY_NAME, FK_FULL_NAME, FK_HQ_COUNTRY,
+  FK_ID,
+  FK_NAME,
+  FK_FACILITY_TYPE,
+  FK_STATUS,
+  FK_SUB_STATUS,
+  FK_CAPACITY,
+  FK_CAPACITY_UNIT,
+  FK_COUNTRY,
+  FK_LATITUDE,
+  FK_LONGITUDE,
+  FK_OWNER,
+  FK_OWNER_ENTITY_ID,
+  FK_PARENT,
+  FK_PARENT_ENTITY_ID,
+  FK_ENTITY_ID,
+  FK_ENTITY_NAME,
+  FK_FULL_NAME,
+  FK_HQ_COUNTRY,
 } from '$lib/field-keys';
 
 // API base URL (env override or production default)
@@ -416,7 +430,8 @@ function normalizePaginated<T>(raw: T[] | PaginatedResponse<T>): PaginatedRespon
 
 // Build query string from an object, skipping nullish values.
 // Supports arrays: repeated keys for multi-value params (e.g. country=X&country=Y).
-function buildQuery(
+// Also used by src/widgets/widget-api.ts (imported from here).
+export function buildQuery(
   params?: Record<string, string | number | string[] | undefined | null>
 ): string {
   if (!params) return '';
@@ -855,8 +870,8 @@ export async function fetchStatusFacets(assetTypeSlug?: string): Promise<Map<str
 // STATUS TAXONOMY — re-exported from catalog-api.ts (single source of truth)
 // =============================================================================
 
-export { fetchCatalogTaxonomy as fetchStatusTaxonomy } from '$lib/catalog-api';
-export type { StatusTaxonomy } from '$lib/catalog-api';
+export { fetchCatalogTaxonomy as fetchStatusTaxonomy } from '$lib/api/catalog-api';
+export type { StatusTaxonomy } from '$lib/api/catalog-api';
 
 // Export the API base for debugging
 export const getAPIBase = () => API_BASE;

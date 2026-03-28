@@ -4,64 +4,199 @@
 
   const widgets = [
     // ── Top ──
-    { name: 'Tracker Factsheet', slug: 'tracker-factsheet', desc: 'Two-column metadata explorer with field definitions.', key: 'tracker', val: 'coal-plant', h: 550,
-      params: [{ k: 'tracker', d: 'coal-plant, gas-plant, steel-plant, etc.' }, { k: 'title', d: 'Title override' }, { k: 'height', d: 'Max height (default: 500)' }],
+    {
+      name: 'Tracker Factsheet',
+      slug: 'tracker-factsheet',
+      desc: 'Two-column metadata explorer with field definitions.',
+      key: 'tracker',
+      val: 'coal-plant',
+      h: 550,
+      params: [
+        { k: 'tracker', d: 'coal-plant, gas-plant, steel-plant, etc.' },
+        { k: 'title', d: 'Title override' },
+        { k: 'height', d: 'Max height (default: 500)' },
+      ],
       samples: [
         { label: 'Coal Plant', val: 'coal-plant' },
         { label: 'Gas Plant', val: 'gas-plant' },
         { label: 'Steel Plant', val: 'steel-plant' },
         { label: 'Gas Pipeline', val: 'gas-pipeline' },
-      ] },
-    { name: 'Project Card', slug: 'project-card', desc: 'Tabbed asset detail with ownership tree and location map.', key: 'id', val: 'G100001000201', h: 700,
-      params: [{ k: 'id', d: 'Asset ID / GEM unit ID' }, { k: 'showOwnership', d: 'Ownership tree (default: true)' }, { k: 'showMap', d: 'Map (default: true)' }],
+      ],
+    },
+    {
+      name: 'Project Card',
+      slug: 'project-card',
+      desc: 'Tabbed asset detail with ownership tree and location map.',
+      key: 'id',
+      val: 'G100001000201',
+      h: 700,
+      params: [
+        { k: 'id', d: 'Asset ID / GEM unit ID' },
+        { k: 'showOwnership', d: 'Ownership tree (default: true)' },
+        { k: 'showMap', d: 'Map (default: true)' },
+      ],
       samples: [
         { label: 'Belchatow (Coal)', val: 'G100001000201' },
         { label: 'Datang Tuoketuo (Coal)', val: 'G100000102961' },
         { label: 'Surgutskaya GRES-2 (Gas)', val: 'G100001002347' },
         { label: 'ArcelorMittal Ghent (Steel)', val: 'G100001004521' },
-      ] },
-    { name: 'Coal Plant Card', slug: 'coal-plant', desc: 'Six-tab coal plant detail: overview, timeline, coal, emissions, ownership, additional.', key: 'id', val: 'G100000102961', h: 700,
+      ],
+    },
+    {
+      name: 'Coal Plant Card',
+      slug: 'coal-plant',
+      desc: 'Six-tab coal plant detail: overview, timeline, coal, emissions, ownership, additional.',
+      key: 'id',
+      val: 'G100000102961',
+      h: 700,
       params: [{ k: 'id', d: 'G-prefix, compound L_G, or L-prefix ID' }],
       samples: [
         { label: 'Datang Tuoketuo', val: 'G100000102961' },
         { label: 'Belchatow', val: 'G100001000201' },
         { label: 'Kusile', val: 'G100001000489' },
-      ] },
+      ],
+    },
     // ── Asset cards ──
-    { name: 'Asset Card', slug: 'asset', desc: 'Asset profile with status, metadata, and owners.', key: 'id', val: 'L100000104168_G100000100057', h: 500,
-      params: [{ k: 'id', d: 'Asset ID / GEM unit ID' }, { k: 'showOwners', d: 'Owners list (default: true)' }, { k: 'showMap', d: 'Map (default: false)' }] },
+    {
+      name: 'Asset Card',
+      slug: 'asset',
+      desc: 'Asset profile with status, metadata, and owners.',
+      key: 'id',
+      val: 'L100000104168_G100000100057',
+      h: 500,
+      params: [
+        { k: 'id', d: 'Asset ID / GEM unit ID' },
+        { k: 'showOwners', d: 'Owners list (default: true)' },
+        { k: 'showMap', d: 'Map (default: false)' },
+      ],
+    },
     // ── ControlChain ──
-    { name: 'ControlChain Search', slug: 'controlchain', desc: 'Full search → results → ownership tree flow. State stored in URL hash — Drupal-safe deep links.', hash: 'q=Medupi&type=assets', h: 700,
-      params: [{ k: '#q', d: 'Initial search query' }, { k: '#type', d: 'all (default), assets, or entities' }] },
+    {
+      name: 'ControlChain Search',
+      slug: 'controlchain',
+      desc: 'Full search → results → ownership tree flow. State stored in URL hash — Drupal-safe deep links.',
+      hash: 'q=Medupi&type=assets',
+      h: 700,
+      params: [
+        { k: '#q', d: 'Initial search query' },
+        { k: '#type', d: 'all (default), assets, or entities' },
+      ],
+    },
     // ── Screener ──
-    { name: 'Asset Class Screener', slug: 'screener', desc: 'Stateful asset class screener with status, sub-class, and geography filters. State stored in URL hash — works in Drupal iframes without touching parent URL.', hash: 'class=coal-plant&statuses=operating,planned', h: 700,
-      params: [{ k: '#class', d: 'Asset class ID (e.g. coal-plant)' }, { k: '#statuses', d: 'Comma-separated statuses (e.g. operating,planned)' }, { k: '#geo', d: 'Comma-separated countries' }, { k: '#sub', d: 'Comma-separated sub-class IDs' }] },
+    {
+      name: 'Asset Class Screener',
+      slug: 'screener',
+      desc: 'Stateful asset class screener with status, sub-class, and geography filters. State stored in URL hash — works in Drupal iframes without touching parent URL.',
+      hash: 'class=coal-plant&statuses=operating,planned',
+      h: 700,
+      params: [
+        { k: '#class', d: 'Asset class ID (e.g. coal-plant)' },
+        { k: '#statuses', d: 'Comma-separated statuses (e.g. operating,planned)' },
+        { k: '#geo', d: 'Comma-separated countries' },
+        { k: '#sub', d: 'Comma-separated sub-class IDs' },
+      ],
+    },
     // ── Entity cards ──
-    { name: 'Entity Card', slug: 'entity', desc: 'Entity profile with ownership flower and asset list.', key: 'id', val: 'E100001000558', h: 600,
-      params: [{ k: 'id', d: 'Entity ID' }, { k: 'showFlower', d: 'Flower (default: true)' }, { k: 'showAssets', d: 'Asset list (default: true)' }, { k: 'showMap', d: 'Map (default: false)' }, { k: 'maxAssets', d: 'Max assets (default: 10)' }],
+    {
+      name: 'Entity Card',
+      slug: 'entity',
+      desc: 'Entity profile with ownership flower and asset list.',
+      key: 'id',
+      val: 'E100001000558',
+      h: 600,
+      params: [
+        { k: 'id', d: 'Entity ID' },
+        { k: 'showFlower', d: 'Flower (default: true)' },
+        { k: 'showAssets', d: 'Asset list (default: true)' },
+        { k: 'showMap', d: 'Map (default: false)' },
+        { k: 'maxAssets', d: 'Max assets (default: 10)' },
+      ],
       samples: [
         { label: 'BlackRock', val: 'E100001000558' },
         { label: 'China Energy', val: 'E100000001926' },
         { label: 'Vanguard', val: 'E100001000562' },
-      ] },
-    { name: 'Ownership Flower', slug: 'ownership-flower', desc: 'Radial visualization of portfolio composition by tracker type.', key: 'entityId', val: 'E100000001926', h: 520,
-      params: [{ k: 'entityId', d: 'Entity ID' }, { k: 'size', d: 'small / medium / large' }, { k: 'showLabels', d: 'Labels (default: true)' }, { k: 'showTitle', d: 'Title (default: true)' }],
+      ],
+    },
+    {
+      name: 'Ownership Flower',
+      slug: 'ownership-flower',
+      desc: 'Radial visualization of portfolio composition by tracker type.',
+      key: 'entityId',
+      val: 'E100000001926',
+      h: 520,
+      params: [
+        { k: 'entityId', d: 'Entity ID' },
+        { k: 'size', d: 'small / medium / large' },
+        { k: 'showLabels', d: 'Labels (default: true)' },
+        { k: 'showTitle', d: 'Title (default: true)' },
+      ],
       samples: [
         { label: 'China Energy', val: 'E100000001926' },
         { label: 'BlackRock', val: 'E100001000558' },
         { label: 'Vanguard', val: 'E100001000562' },
-      ] },
-    { name: 'Control Chain', slug: 'ownership-graph', desc: 'Interactive control chain tree, upstream or downstream.', key: 'entityId', val: 'E100001000558', h: 600,
-      params: [{ k: 'entityId', d: 'Entity ID' }, { k: 'direction', d: 'down (default) or up' }] },
-    { name: 'Ultimate Owners', slug: 'ultimate-owners', desc: 'Terminal ancestors at the top of the ownership chain.', key: 'entityId', val: 'E100001000558', h: 400,
-      params: [{ k: 'entityId', d: 'Entity ID' }] },
-    { name: 'Network Graph', slug: 'network-3d', desc: 'Force-directed ownership network.', key: 'entityId', val: 'E100001000558', h: 600,
-      params: [{ k: 'entityId', d: 'Entity ID' }, { k: 'height', d: 'Height in px (default: 500)' }, { k: 'maxHops', d: 'Max hops (default: 3)' }] },
-    { name: 'Asset Ring', slug: 'asset-ring', desc: 'Circular distribution of assets by type and status.', key: 'entityId', val: 'E100000001926', h: 500,
-      params: [{ k: 'entityId', d: 'Entity ID' }, { k: 'maxAssets', d: 'Max assets (default: 150)' }] },
+      ],
+    },
+    {
+      name: 'Control Chain',
+      slug: 'ownership-graph',
+      desc: 'Interactive control chain tree, upstream or downstream.',
+      key: 'entityId',
+      val: 'E100001000558',
+      h: 600,
+      params: [
+        { k: 'entityId', d: 'Entity ID' },
+        { k: 'direction', d: 'down (default) or up' },
+      ],
+    },
+    {
+      name: 'Ultimate Owners',
+      slug: 'ultimate-owners',
+      desc: 'Terminal ancestors at the top of the ownership chain.',
+      key: 'entityId',
+      val: 'E100001000558',
+      h: 400,
+      params: [{ k: 'entityId', d: 'Entity ID' }],
+    },
+    {
+      name: 'Network Graph',
+      slug: 'network-3d',
+      desc: 'Force-directed ownership network.',
+      key: 'entityId',
+      val: 'E100001000558',
+      h: 600,
+      params: [
+        { k: 'entityId', d: 'Entity ID' },
+        { k: 'height', d: 'Height in px (default: 500)' },
+        { k: 'maxHops', d: 'Max hops (default: 3)' },
+      ],
+    },
+    {
+      name: 'Asset Ring',
+      slug: 'asset-ring',
+      desc: 'Circular distribution of assets by type and status.',
+      key: 'entityId',
+      val: 'E100000001926',
+      h: 500,
+      params: [
+        { k: 'entityId', d: 'Entity ID' },
+        { k: 'maxAssets', d: 'Max assets (default: 150)' },
+      ],
+    },
     // ── Utility ──
-    { name: 'Search', slug: 'asset-search', desc: 'Configurable search bar with asset, owner, and universal modes.', key: 'q', val: '', h: 140,
-      params: [{ k: 'q', d: 'Initial query' }, { k: 'modes', d: 'asset, owner, universal' }, { k: 'mode', d: 'Default mode' }, { k: 'open', d: 'self or new-tab' }] },
+    {
+      name: 'Search',
+      slug: 'asset-search',
+      desc: 'Configurable search bar with asset, owner, and universal modes.',
+      key: 'q',
+      val: '',
+      h: 140,
+      params: [
+        { k: 'q', d: 'Initial query' },
+        { k: 'modes', d: 'asset, owner, universal' },
+        { k: 'mode', d: 'Default mode' },
+        { k: 'open', d: 'self or new-tab' },
+      ],
+    },
   ];
 
   let copied = $state({});
@@ -79,14 +214,27 @@
   function snippet(w) {
     const p = w.hash ? `/embed/${w.slug}#${w.hash}` : `/embed/${w.slug}?${w.key}=${activeVal(w)}`;
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    return `<div class="gem-embed" data-src="${p}" data-height="${w.h}">\n<script src="${origin}/embed.js"><` + `/script>\n</div>`;
+    return (
+      `<div class="gem-embed" data-src="${p}" data-height="${w.h}">\n<script src="${origin}/embed.js"><` +
+      `/script>\n</div>`
+    );
   }
 
   async function copy(text, key) {
-    try { await navigator.clipboard.writeText(text); }
-    catch { const t = Object.assign(document.createElement('textarea'), { value: text }); t.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); }
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const t = Object.assign(document.createElement('textarea'), { value: text });
+      t.style.cssText = 'position:fixed;opacity:0';
+      document.body.appendChild(t);
+      t.select();
+      document.execCommand('copy');
+      t.remove();
+    }
     copied[key] = true;
-    setTimeout(() => { copied[key] = false; }, 2000);
+    setTimeout(() => {
+      copied[key] = false;
+    }, 2000);
   }
 </script>
 
@@ -130,8 +278,10 @@
                 <button
                   class="sample-btn"
                   class:active={activeVal(w) === s.val}
-                  onclick={() => { selected[w.slug] = s.val; }}
-                >{s.label}</button>
+                  onclick={() => {
+                    selected[w.slug] = s.val;
+                  }}>{s.label}</button
+                >
               {/each}
             </div>
           {/if}
@@ -170,19 +320,49 @@
   <section class="appendix">
     <div class="rule"></div>
     <h2>Global Options</h2>
-    <p class="appendix-note">Applied via <code>data-*</code> attributes on the embed container or as URL parameters.</p>
+    <p class="appendix-note">
+      Applied via <code>data-*</code> attributes on the embed container or as URL parameters.
+    </p>
     <table class="options">
       <thead><tr><th>Attribute</th><th>URL Param</th><th>Description</th></tr></thead>
       <tbody>
         <tr><td><code>data-src</code></td><td></td><td>Embed path or full URL (required)</td></tr>
         <tr><td><code>data-height</code></td><td></td><td>Height in px (default: 600)</td></tr>
-        <tr><td><code>data-theme</code></td><td><code>theme</code></td><td>"light" or "dark" (auto-detects from host page)</td></tr>
-        <tr><td><code>data-branding</code></td><td><code>branding</code></td><td>"true" to show "Powered by GEM" footer</td></tr>
-        <tr><td><code>data-link-base</code></td><td><code>linkBase</code></td><td>CMS link rewrite base. Internal links prefixed with this URL.</td></tr>
-        <tr><td><code>data-link-target</code></td><td><code>linkTarget</code></td><td>Where rewritten links open: "_blank" (default), "_top", "_self"</td></tr>
-        <tr><td><code>data-padding</code></td><td><code>padding</code></td><td>Container padding in px (default: 16)</td></tr>
-        <tr><td><code>data-params</code></td><td></td><td>Extra params as querystring or JSON object</td></tr>
-        <tr><td><code>data-mode</code></td><td></td><td>"iframe" (default) or "dynamic" (Shadow DOM, no iframe)</td></tr>
+        <tr
+          ><td><code>data-theme</code></td><td><code>theme</code></td><td
+            >"light" or "dark" (auto-detects from host page)</td
+          ></tr
+        >
+        <tr
+          ><td><code>data-branding</code></td><td><code>branding</code></td><td
+            >"true" to show "Powered by GEM" footer</td
+          ></tr
+        >
+        <tr
+          ><td><code>data-link-base</code></td><td><code>linkBase</code></td><td
+            >CMS link rewrite base. Internal links prefixed with this URL.</td
+          ></tr
+        >
+        <tr
+          ><td><code>data-link-target</code></td><td><code>linkTarget</code></td><td
+            >Where rewritten links open: "_blank" (default), "_top", "_self"</td
+          ></tr
+        >
+        <tr
+          ><td><code>data-padding</code></td><td><code>padding</code></td><td
+            >Container padding in px (default: 16)</td
+          ></tr
+        >
+        <tr
+          ><td><code>data-params</code></td><td></td><td
+            >Extra params as querystring or JSON object</td
+          ></tr
+        >
+        <tr
+          ><td><code>data-mode</code></td><td></td><td
+            >"iframe" (default) or "dynamic" (Shadow DOM, no iframe)</td
+          ></tr
+        >
       </tbody>
     </table>
   </section>
@@ -198,7 +378,11 @@
   }
 
   /* ── Header ── */
-  .rule { height: 1px; background: var(--color-text-primary); margin: 1rem 0; }
+  .rule {
+    height: 1px;
+    background: var(--color-text-primary);
+    margin: 1rem 0;
+  }
 
   header h1 {
     font-size: 1.75rem;
@@ -241,7 +425,9 @@
     text-decoration: none;
     white-space: nowrap;
   }
-  .toc-list a:hover { color: var(--color-text-primary); }
+  .toc-list a:hover {
+    color: var(--color-text-primary);
+  }
 
   /* ── Specimen ── */
   .specimen {
@@ -297,7 +483,10 @@
     border: 1px solid var(--color-border);
     background: var(--color-bg-secondary);
   }
-  .preview iframe { display: block; border: none; }
+  .preview iframe {
+    display: block;
+    border: none;
+  }
 
   .sample-picker {
     display: flex;
@@ -317,7 +506,10 @@
     cursor: pointer;
     border-radius: 2px;
   }
-  .sample-btn:hover { color: var(--color-text-primary); background: var(--color-bg-secondary); }
+  .sample-btn:hover {
+    color: var(--color-text-primary);
+    background: var(--color-bg-secondary);
+  }
   .sample-btn.active {
     color: var(--color-text-primary);
     border-color: var(--color-border);
@@ -333,13 +525,17 @@
     color: var(--color-text-tertiary);
     margin: 1rem 0 0.375rem;
   }
-  .sidebar h3:first-of-type { margin-top: 0; }
+  .sidebar h3:first-of-type {
+    margin-top: 0;
+  }
 
   .meta-params {
     width: 100%;
     border-collapse: collapse;
   }
-  .meta-params tr { border-bottom: 1px solid var(--color-border-light); }
+  .meta-params tr {
+    border-bottom: 1px solid var(--color-border-light);
+  }
   .meta-params td {
     padding: 0.25rem 0;
     font-size: 0.8125rem;
@@ -350,7 +546,9 @@
     padding-right: 0.75rem;
     white-space: nowrap;
   }
-  .meta-params td:last-child { color: var(--color-text-secondary); }
+  .meta-params td:last-child {
+    color: var(--color-text-secondary);
+  }
   .meta-params code {
     font-family: var(--font-family-mono);
     font-size: 0.6875rem;
@@ -388,11 +586,19 @@
     color: var(--color-gray-300);
     cursor: pointer;
   }
-  .cp:hover { background: var(--color-gray-700); }
-  .cp.ok { background: #1a3a2a; border-color: #34a853; color: #34a853; }
+  .cp:hover {
+    background: var(--color-gray-700);
+  }
+  .cp.ok {
+    background: #1a3a2a;
+    border-color: #34a853;
+    color: #34a853;
+  }
 
   /* ── Appendix ── */
-  .appendix { margin-top: 2rem; }
+  .appendix {
+    margin-top: 2rem;
+  }
   .appendix h2 {
     font-size: 1.125rem;
     font-weight: 300;
@@ -405,7 +611,10 @@
     color: var(--color-text-secondary);
     margin: 0 0 1rem;
   }
-  .appendix-note code { font-family: var(--font-family-mono); font-size: 0.6875rem; }
+  .appendix-note code {
+    font-family: var(--font-family-mono);
+    font-size: 0.6875rem;
+  }
 
   .options {
     width: 100%;
@@ -433,8 +642,14 @@
   }
 
   @media (max-width: 900px) {
-    .specimens { padding: 2rem 1rem 4rem; }
-    .specimen-body { grid-template-columns: 1fr; }
-    header h1 { font-size: 1.25rem; }
+    .specimens {
+      padding: 2rem 1rem 4rem;
+    }
+    .specimen-body {
+      grid-template-columns: 1fr;
+    }
+    header h1 {
+      font-size: 1.25rem;
+    }
   }
 </style>

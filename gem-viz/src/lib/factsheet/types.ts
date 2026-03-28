@@ -79,4 +79,3 @@ export function isMineAsset(asset: Partial<Asset>): boolean {
     asset.miningMethod != null
   );
 }
-

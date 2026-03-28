@@ -27,7 +27,7 @@ export function createCommands(callbacks: {
   copyCurrentId: () => void;
   copyUrl: () => void;
 }): Command[] {
-  const { close, toggleHelp, copyCurrentId, copyUrl } = callbacks;
+  const { close: _close, toggleHelp, copyCurrentId, copyUrl } = callbacks;
 
   return [
     // Navigation

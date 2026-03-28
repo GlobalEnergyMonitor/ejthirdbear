@@ -12,9 +12,8 @@
   import { goto } from '$app/navigation';
   import maplibregl from 'maplibre-gl';
   import 'maplibre-gl/dist/maplibre-gl.css';
-  import { link, assetPath, assetLink } from '$lib/links';
+  import { assetPath, assetLink } from '$lib/links';
   import { colors, colorByTracker } from '$lib/design-tokens';
-  import DataSourceBadge from '$lib/components/data/DataSourceBadge.svelte';
   import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
   // DOM refs
@@ -32,7 +31,7 @@
 
   // Data state
   let filteredAssets = $state([]);
-  let filteredCount = $state(0);
+  let _filteredCount = $state(0);
 
   // Filter state
   let selectedTrackers = $state([]);
@@ -44,7 +43,7 @@
   let countryFacets = $state([]);
 
   // Stats
-  let queryTime = $state(0);
+  let _queryTime = $state(0);
 
   // Microvis data
   let trackerBreakdown = $state([]);
@@ -62,10 +61,10 @@
     return countryFacets.filter((facet) => facet.value.toLowerCase().includes(needle));
   });
 
-  const visibleCountriesCount = $derived(
+  const _visibleCountriesCount = $derived(
     new Set(filteredAssets.map((a) => a.country).filter(Boolean)).size
   );
-  const visibleTrackerCount = $derived(
+  const _visibleTrackerCount = $derived(
     new Set(filteredAssets.map((a) => a.tracker).filter(Boolean)).size
   );
 
@@ -179,7 +178,7 @@
     }
 
     filteredAssets = assets;
-    filteredCount = assets.length;
+    _filteredCount = assets.length;
 
     function breakdownBy(field, limit = 6) {
       const counts = new Map();
@@ -196,7 +195,7 @@
     trackerBreakdown = breakdownBy('tracker', 6);
     countryBreakdown = breakdownBy('country', 6);
 
-    queryTime = Math.round(performance.now() - start);
+    _queryTime = Math.round(performance.now() - start);
     updateMapData();
   }
 

@@ -89,12 +89,10 @@
   }
 
   let dlSlug = $state('');
-  let dlFormat = $state('');
   let dlProgress = $state('');
 
   async function bulkDownload(slug, format) {
     dlSlug = slug;
-    dlFormat = format;
     dlProgress = 'Fetching...';
     try {
       const allAssets = [];
@@ -124,7 +122,6 @@
     } finally {
       setTimeout(() => {
         dlSlug = '';
-        dlFormat = '';
         dlProgress = '';
       }, 3000);
     }

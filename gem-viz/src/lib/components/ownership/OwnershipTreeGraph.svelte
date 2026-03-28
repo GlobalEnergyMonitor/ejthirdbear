@@ -43,7 +43,7 @@
     /** Optional label for the root asset (passed by some callers, reserved for future use) */
     assetName?: string;
     /** Optional navigation callback — used by dynamic embeds instead of goto() */
-    onNavigate?: (url: string) => void;
+    onNavigate?: (_url: string) => void;
   }
 
   let {
@@ -428,7 +428,7 @@
   const hoveredLayoutNode = $derived(
     hoveredId ? layoutNodes.find((n) => n.id === hoveredId) : null
   );
-  const maxOwnerPct = $derived(ownersList.length > 0 ? ownersList[0].pct : 100);
+  const _maxOwnerPct = $derived(ownersList.length > 0 ? ownersList[0].pct : 100);
 
   // Data-driven narrative text for the context panel
   const narrativeText = $derived.by(() =>
@@ -747,7 +747,7 @@
       return 1;
     }
     // Active path edges get full opacity; frozen paths slightly stronger dim on non-path
-    return activeNodeData.edgeIndices.includes(idx) ? 1 : (frozenNodeData ? 0.06 : 0.1);
+    return activeNodeData.edgeIndices.includes(idx) ? 1 : frozenNodeData ? 0.06 : 0.1;
   }
   // Frozen-chain edges rendered thicker than hover-chain
   function getEdgeWidthMultiplier(idx: number): number {
@@ -1015,7 +1015,14 @@
                 {#each colorConfig.legendItems as item}
                   <span class="legend-item">
                     <svg class="legend-swatch" viewBox="0 0 14 14" width="14" height="14">
-                      <circle cx="7" cy="7" r="6" fill={item.bg} stroke={item.bg} stroke-width="1" />
+                      <circle
+                        cx="7"
+                        cy="7"
+                        r="6"
+                        fill={item.bg}
+                        stroke={item.bg}
+                        stroke-width="1"
+                      />
                       <path d={pieArc(50, 5)} transform="translate(7,7)" fill={item.fg} />
                     </svg>
                     {item.label}
@@ -1055,14 +1062,10 @@
             </div>
             {#if renderSubset.nodes.length > 5}
               <label class="ownership-slider">
-                <span class="slider-label">Min ownership: {minOwnershipPct > 0 ? `${minOwnershipPct}%` : 'All'}</span>
-                <input
-                  type="range"
-                  min="0"
-                  max="50"
-                  step="1"
-                  bind:value={minOwnershipPct}
-                />
+                <span class="slider-label"
+                  >Min ownership: {minOwnershipPct > 0 ? `${minOwnershipPct}%` : 'All'}</span
+                >
+                <input type="range" min="0" max="50" step="1" bind:value={minOwnershipPct} />
               </label>
             {/if}
           </div>
@@ -1324,8 +1327,11 @@
             <h4>Owner Entities</h4>
             <div class="tabular-rows">
               {#each sortedOwnersList as o}
-                {@const rowColors = getNodeColors(o.id, rootId, nodes)}
-                {@const inFrozenChain = !frozenNodeData || frozenId === o.id || frozenNodeData.nodesTouched.includes(o.id)}
+                {@const _rowColors = getNodeColors(o.id, rootId, nodes)}
+                {@const inFrozenChain =
+                  !frozenNodeData ||
+                  frozenId === o.id ||
+                  frozenNodeData.nodesTouched.includes(o.id)}
                 <div
                   class="tabular-row"
                   class:is-frozen-view={frozenId === o.id}
@@ -1353,8 +1359,16 @@
                       hasEverFrozen = true;
                     }
                   }}
-                  ondblclick={() => { const u = entityLink(o.nid); onNavigate ? onNavigate(u) : goto(u); }}
-                  onkeydown={(ev) => { if (ev.key === 'Enter') { const u = entityLink(o.nid); onNavigate ? onNavigate(u) : goto(u); } }}
+                  ondblclick={() => {
+                    const u = entityLink(o.nid);
+                    onNavigate ? onNavigate(u) : goto(u);
+                  }}
+                  onkeydown={(ev) => {
+                    if (ev.key === 'Enter') {
+                      const u = entityLink(o.nid);
+                      onNavigate ? onNavigate(u) : goto(u);
+                    }
+                  }}
                 >
                   <span class="table-row-text">{o.name} ({o.pct.toFixed(1)}%)</span>
                 </div>
@@ -1502,14 +1516,14 @@
 <style>
   .ownership-tree {
     /* Tree graph color tokens — sourced from design-tokens.ts ownershipColors */
-    --tree-navy: #1D4961;
-    --tree-teal: #004F61;
-    --tree-mint: #9DF7E5;
-    --tree-warm-white: #F2F2EB;
-    --tree-node-fill: #BECCCF;
-    --tree-edge: #A5E9E4;
+    --tree-navy: #1d4961;
+    --tree-teal: #004f61;
+    --tree-mint: #9df7e5;
+    --tree-warm-white: #f2f2eb;
+    --tree-node-fill: #becccf;
+    --tree-edge: #a5e9e4;
     --tree-edge-imputed: #dce3e5;
-    --tree-midnight: #1C1F23;
+    --tree-midnight: #1c1f23;
 
     font-family: var(--font-family-sans, 'Plus Jakarta Sans', system-ui, sans-serif);
     color: var(--color-text-primary, var(--tree-navy));

@@ -15,7 +15,7 @@ export interface TrackerCardConfig {
   /** Dynamic import for the card Svelte component */
   loadComponent: () => Promise<{ default: Component }>;
   /** Fetch tracker-specific data; returns props object for the component, or null to skip */
-  fetchProps: (asset: AssetSummary) => Promise<Record<string, unknown> | null>;
+  fetchProps: (_asset: AssetSummary) => Promise<Record<string, unknown> | null>;
   /** Display label for the section heading */
   label: string;
 }

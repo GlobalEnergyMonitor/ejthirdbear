@@ -18,7 +18,14 @@ type ApiIndexEntry = {
 };
 
 const API_INDEX_PATH = '/';
-const ALLOWED_PREFIXES = ['/entities', '/assets', '/ownership', '/catalog', '/segments', '/metadata'];
+const ALLOWED_PREFIXES = [
+  '/entities',
+  '/assets',
+  '/ownership',
+  '/catalog',
+  '/segments',
+  '/metadata',
+];
 
 let cachedApiIndex: Record<string, ApiIndexEntry> | null = null;
 

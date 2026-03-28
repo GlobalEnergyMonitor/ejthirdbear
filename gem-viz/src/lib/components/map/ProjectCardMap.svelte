@@ -8,7 +8,7 @@
   import 'maplibre-gl/dist/maplibre-gl.css';
   import { BASEMAP_POSITRON } from '$lib/map-config';
 
-  let { lat, lon, name = '' } = $props<{ lat: number; lon: number; name?: string }>();
+  let { lat, lon, name: _name = '' } = $props<{ lat: number; lon: number; name?: string }>();
 
   let container: HTMLDivElement;
   let map: maplibregl.Map | null = null;

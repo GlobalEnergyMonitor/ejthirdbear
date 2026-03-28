@@ -3,7 +3,7 @@
   import RangeSlider from '$lib/components/table/RangeSlider.svelte';
   import { trackerColors } from '$lib/design-tokens';
 
-  let { state = $bindable(), presetsHref = '/presets' } = $props();
+  let { state = $bindable(), presetsHref: _presetsHref = '/presets' } = $props();
 </script>
 
 <aside class="filter-panel">

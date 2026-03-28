@@ -13,7 +13,7 @@
  */
 
 import slugify from 'slugify';
-import { MAX_SLUG_LENGTH, MAX_NAME_LENGTH } from './constants';
+import { MAX_SLUG_LENGTH, MAX_NAME_LENGTH } from '$lib/constants';
 
 export function slugifyId(input: string | undefined | null): string {
   if (!input) return '';

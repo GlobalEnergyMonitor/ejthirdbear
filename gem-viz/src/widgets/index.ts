@@ -1,7 +1,55 @@
 /**
  * GEM Widget System — Entry point for dynamic (non-iframe) embeds.
  *
- * Usage from embed.js or direct:
+ * ## What is this?
+ * A Shadow DOM widget system that renders GEM visualizations directly into a
+ * host page without an iframe. Components are Svelte 5, isolated in shadow
+ * roots, and lazy-loaded per widget type.
+ *
+ * ## Two embed systems
+ * - **iframe embeds** (`src/routes/embed/*`): each route is a full SvelteKit
+ *   page rendered in an <iframe>. Simple, fully isolated, works everywhere.
+ * - **dynamic widgets** (`src/widgets/`): Svelte components mounted directly
+ *   into the host page DOM via Shadow DOM. No iframe — better UX (no resize
+ *   jank), but requires JS and CORS-compatible API.
+ *
+ * `static/embed.js` selects the mode: `data-mode="dynamic"` → widgets,
+ * default → iframe. If dynamic mount fails it falls back to iframe.
+ *
+ * ## Build pipeline
+ * `src/widgets/` is compiled by a separate Vite entry point (see
+ * `vite.config.js` widget build). Output lands in `static/widgets/` as
+ * ES module chunks. The main SvelteKit build does NOT include these files.
+ * Shared dependencies (Svelte runtime, etc.) are bundled into the widget
+ * chunks so they work standalone.
+ *
+ * ## How embed.js uses this
+ * 1. `embed.js` is loaded on the host page (Drupal, WordPress, etc.).
+ * 2. For `data-mode="dynamic"` elements it imports
+ *    `{baseUrl}/widgets/index.js` as a dynamic ES module.
+ * 3. Calls `configure({ apiBase, appBase })` then `parseSrc(dataSrc)` to
+ *    extract the widget type + props from the `data-src` URL.
+ * 4. Calls `mountWidget(shadowRoot, type, props)` which lazy-loads the
+ *    matching Svelte component chunk and mounts it.
+ * 5. CSS design tokens are injected into the shadow root via `widget-styles.ts`;
+ *    Google Fonts are injected once into the host `<head>`.
+ *
+ * ## widget-api.ts / widget-data.ts
+ * Standalone counterparts of `ownership-api.ts` / `ownership-data.ts`.
+ * No SvelteKit dependencies (`$app/*`, `import.meta.env`). API base URL is
+ * configurable via `configure()` for cross-origin use from any CMS.
+ *
+ * ## Adding a new widget type
+ * 1. Create `src/widgets/GemMyWidget.svelte` (accepts typed `$props()`).
+ * 2. Add an entry to `WIDGET_MAP` below:
+ *      'my-widget': () => import('./GemMyWidget.svelte'),
+ * 3. The key becomes the URL path segment: `/embed/my-widget?...`.
+ *    `parseSrc()` maps URL params → props automatically; add a remap
+ *    rule in `parseSrc()` if param names differ from prop names.
+ * 4. Add a matching iframe route at `src/routes/embed/my-widget/+page.svelte`
+ *    if you also want iframe-mode support (recommended).
+ *
+ * ## Direct usage
  *   import { configure, mountWidget } from '/widgets/index.js';
  *   configure({ apiBase: 'https://gem-api.thirdbear.net' });
  *   const shadow = el.attachShadow({ mode: 'open' });
@@ -16,7 +64,7 @@ import { injectStyles } from './widget-styles';
 // WIDGET REGISTRY — lazy-loaded chunks
 // ============================================================================
 
-const WIDGET_MAP: Record<string, () => Promise<{ default: any }>> = {
+const WIDGET_MAP: Record<string, () => Promise<{ default: unknown }>> = {
   entity: () => import('./GemEntityCard.svelte'),
   asset: () => import('./GemAssetCard.svelte'),
   'ownership-flower': () => import('./GemOwnershipFlower.svelte'),
@@ -48,7 +96,7 @@ export function configure(opts: { apiBase?: string; appBase?: string }) {
 // ============================================================================
 
 /** Track mounted widget instances for cleanup */
-const mountedWidgets = new WeakMap<ShadowRoot, any>();
+const mountedWidgets = new WeakMap<ShadowRoot, unknown>();
 
 /**
  * Mount a widget into a Shadow DOM root.
@@ -61,7 +109,7 @@ const mountedWidgets = new WeakMap<ShadowRoot, any>();
 export async function mountWidget(
   shadowRoot: ShadowRoot,
   widgetType: string,
-  props: Record<string, any>
+  props: Record<string, unknown>
 ): Promise<void> {
   const loader = WIDGET_MAP[widgetType];
   if (!loader) {
@@ -106,7 +154,7 @@ export function unmountWidget(shadowRoot: ShadowRoot): void {
  * e.g., "/embed/entity?id=E12345&showFlower=true"
  *   → { type: 'entity', props: { entityId: 'E12345', showFlower: true } }
  */
-export function parseSrc(dataSrc: string): { type: string; props: Record<string, any> } {
+export function parseSrc(dataSrc: string): { type: string; props: Record<string, unknown> } {
   let url: URL;
   try {
     url = new URL(dataSrc, 'https://placeholder');
@@ -119,18 +167,27 @@ export function parseSrc(dataSrc: string): { type: string; props: Record<string,
   const type = pathMatch?.[1] || '';
 
   // Convert URL params to props
-  const props: Record<string, any> = {};
+  const props: Record<string, unknown> = {};
   url.searchParams.forEach((value, key) => {
     // Skip embed-shell params
     if (['embed', 'embedId', 'autoHeight', 'branding', 'padding'].includes(key)) return;
 
     // Parse booleans
-    if (value === 'true') { props[key] = true; return; }
-    if (value === 'false') { props[key] = false; return; }
+    if (value === 'true') {
+      props[key] = true;
+      return;
+    }
+    if (value === 'false') {
+      props[key] = false;
+      return;
+    }
 
     // Parse numbers
     const num = Number(value);
-    if (!isNaN(num) && value.trim() !== '') { props[key] = num; return; }
+    if (!isNaN(num) && value.trim() !== '') {
+      props[key] = num;
+      return;
+    }
 
     props[key] = value;
   });

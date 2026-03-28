@@ -9,7 +9,7 @@
   import PageHeader from '$lib/components/nav/PageHeader.svelte';
   import Spinner from '$lib/components/feedback/Spinner.svelte';
   import { trackerMetadata } from '$lib/data-config/tracker-metadata';
-  import { fetchSegments, getSegmentApiUrl, type Segment } from '$lib/segments-api';
+  import { fetchSegments, getSegmentApiUrl, type Segment } from '$lib/api/segments-api';
   import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
   // State

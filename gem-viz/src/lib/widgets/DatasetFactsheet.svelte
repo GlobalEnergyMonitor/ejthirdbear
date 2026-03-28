@@ -16,7 +16,7 @@
     formatPercent,
     type FieldInfo,
   } from '$lib/factsheet';
-  import { fetchNumericFieldStats, type NumericFieldStats } from '$lib/catalog-api';
+  import { fetchNumericFieldStats, type NumericFieldStats } from '$lib/api/catalog-api';
   import FieldHistogram from '$lib/components/charts/FieldHistogram.svelte';
   import DataTypeIcon from '$lib/components/tracker/DataTypeIcon.svelte';
   import LoadingWrapper from '$lib/components/feedback/LoadingWrapper.svelte';
@@ -150,8 +150,19 @@
 
 <!-- Mobile modal overlay -->
 {#if modalOpen && selectedField}
-  <div class="mobile-modal-backdrop" onclick={closeModal} role="button" tabindex="-1" aria-label="Close field detail"></div>
-  <div class="mobile-modal" role="dialog" aria-modal="true" aria-label="Field detail: {selectedField.columnName}">
+  <div
+    class="mobile-modal-backdrop"
+    onclick={closeModal}
+    role="button"
+    tabindex="-1"
+    aria-label="Close field detail"
+  ></div>
+  <div
+    class="mobile-modal"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Field detail: {selectedField.columnName}"
+  >
     <div class="mobile-modal-header">
       <h4>Field: {selectedField.columnName}</h4>
       <button type="button" class="modal-close" onclick={closeModal} aria-label="Close">✕</button>
@@ -205,8 +216,7 @@
           </div>
         {/if}
 
-        {#if uniqueCount === 0 && valueDefinitions.length === 0}
-        {/if}
+        {#if uniqueCount === 0 && valueDefinitions.length === 0}{/if}
       {/if}
     </div>
   </div>
@@ -313,8 +323,7 @@
           </div>
         {/if}
 
-        {#if uniqueCount === 0 && valueDefinitions.length === 0}
-        {/if}
+        {#if uniqueCount === 0 && valueDefinitions.length === 0}{/if}
       {/if}
     {:else}
       <div class="placeholder">Click field-name bubbles to see details</div>

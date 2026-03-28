@@ -133,7 +133,7 @@
       <p class="section-desc">
         From <code>/catalog/metadata/status-taxonomy</code> — canonical status groups and sub-statuses.
       </p>
-      {#each Object.entries(statusTaxonomy.statuses) as [groupId, group]}
+      {#each Object.entries(statusTaxonomy.statuses) as [_groupId, group]}
         <article class="config-card">
           <h3>{group.label}</h3>
           <table class="probe-table">
@@ -159,7 +159,8 @@
     <section id="field-mappings">
       <h2>Field Mappings</h2>
       <p class="section-desc">
-        From <code>/catalog/field-mappings</code> — how source spreadsheet columns map to normalized API fields.
+        From <code>/catalog/field-mappings</code> — how source spreadsheet columns map to normalized
+        API fields.
       </p>
       {#each Object.entries(fieldMappingsByType) as [assetType, mappings]}
         <article class="config-card">

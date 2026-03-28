@@ -23,6 +23,8 @@
   <meta name="robots" content="noindex" />
 </svelte:head>
 
-<div style="padding: 2rem; color: var(--color-text-tertiary); font-family: var(--font-family); font-size: 0.875rem;">
+<div
+  style="padding: 2rem; color: var(--color-text-tertiary); font-family: var(--font-family); font-size: 0.875rem;"
+>
   Loading screener…
 </div>

@@ -46,7 +46,7 @@ import {
   STATIC_COLUMNS,
   STATIC_TRACKER_COLUMNS,
   type ComposeRow,
-} from '$lib/compose-api';
+} from '$lib/api/compose-api';
 import type { AssetSummary } from '$lib/ownership-api';
 import { trackerColors } from '$lib/design-tokens';
 import {
@@ -100,9 +100,7 @@ function cloneFilters(filters: any) {
 
 function normalizeStringArray(value: unknown): string[] {
   if (Array.isArray(value)) {
-    return value
-      .map((item) => (typeof item === 'string' ? item.trim() : ''))
-      .filter(Boolean);
+    return value.map((item) => (typeof item === 'string' ? item.trim() : '')).filter(Boolean);
   }
   if (typeof value === 'string' && value.trim()) {
     return [value.trim()];
@@ -379,12 +377,10 @@ export class ComposeState {
   // Constructor (sets up effects)
   // =========================================================================
 
-  constructor(
-    {
-      routeBase = `${base}/compose`,
-      syncUrl = true,
-    }: { routeBase?: string; syncUrl?: boolean } = {}
-  ) {
+  constructor({
+    routeBase = `${base}/compose`,
+    syncUrl = true,
+  }: { routeBase?: string; syncUrl?: boolean } = {}) {
     this.routeBase = routeBase;
     this.syncUrl = syncUrl;
 
@@ -730,8 +726,7 @@ export class ComposeState {
     }
 
     if ('search' in nextFilters) {
-      merged.search =
-        typeof nextFilters.search === 'string' ? nextFilters.search.trim() : '';
+      merged.search = typeof nextFilters.search === 'string' ? nextFilters.search.trim() : '';
     }
 
     this.filters = merged;

@@ -1,7 +1,7 @@
 <script>
   import { tick } from 'svelte';
-  import { formatCount } from '$lib/format';
-  import { staggerIn, timing, shouldAnimate } from '$lib/animations';
+  import { formatCount } from '$lib/utils/format';
+  import { staggerIn, timing, shouldAnimate } from '$lib/utils/animations';
 
   /**
    * @type {{

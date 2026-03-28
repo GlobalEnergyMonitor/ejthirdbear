@@ -4,7 +4,7 @@
    * Supports Polygon, LineString, Feature, and FeatureCollection inputs.
    */
   import { slide } from 'svelte/transition';
-  import { parseGeoFence } from '$lib/geo-utils';
+  import { parseGeoFence } from '$lib/utils/geo-utils';
 
   interface Props {
     geofence: number[][] | null;

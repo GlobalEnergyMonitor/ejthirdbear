@@ -7,7 +7,7 @@ import globals from 'globals';
 
 export default [
   {
-    ignores: ['dist/**', 'node_modules/**', '.svelte-kit/**', 'build/**'],
+    ignores: ['dist/**', 'node_modules/**', '.svelte-kit/**', 'build/**', 'static/widgets/**'],
   },
   js.configs.recommended,
   {
@@ -68,6 +68,53 @@ export default [
       'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       'no-console': 'off',
       '@typescript-eslint/no-explicit-any': 'warn',
+    },
+  },
+  {
+    // Widget system — Shadow DOM / dynamic embeds (browser globals, no SvelteKit deps)
+    files: ['src/widgets/**/*.ts'],
+    plugins: {
+      '@typescript-eslint': tsPlugin,
+    },
+    languageOptions: {
+      parser: tsParser,
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: {
+        ...globals.browser,
+        ...globals.es2021,
+      },
+    },
+    rules: {
+      'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      'no-console': 'off',
+      '@typescript-eslint/no-explicit-any': 'warn',
+      // TypeScript handles undefined-reference checking; no-undef produces false
+      // positives for DOM TypeScript types like RequestInit, RequestInfo, etc.
+      'no-undef': 'off',
+    },
+  },
+  {
+    // Widget Svelte components
+    files: ['src/widgets/**/*.svelte'],
+    plugins: {
+      svelte: sveltePlugin,
+    },
+    languageOptions: {
+      parser: svelteParser,
+      parserOptions: {
+        parser: tsParser,
+      },
+      globals: {
+        ...globals.browser,
+        ...globals.es2021,
+      },
+    },
+    rules: {
+      'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      'no-console': 'off',
+      'svelte/no-unused-svelte-ignore': 'warn',
+      'svelte/no-at-html-tags': 'off',
     },
   },
   {

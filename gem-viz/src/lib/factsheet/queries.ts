@@ -259,14 +259,14 @@ export async function fetchFieldStats(
 
     // Map common metadata field names to top-level AssetSummary properties
     // (these fields are extracted from raw by the API and won't appear in asset.raw)
-    const topLevelMap: Record<string, (a: AssetSummary) => unknown> = {
-      'Status': (a) => a.status,
-      'Country': (a) => a.country,
+    const topLevelMap: Record<string, (_a: AssetSummary) => unknown> = {
+      Status: (a) => a.status,
+      Country: (a) => a.country,
       'Country / Area': (a) => a.country,
-      'Countries': (a) => a.country,
+      Countries: (a) => a.country,
       'Capacity (MW)': (a) => a.capacity,
       'Capacity (Mtpa)': (a) => a.capacity,
-      'Owner': (a) => a.ownerName ?? a.owners?.[0]?.name,
+      Owner: (a) => a.ownerName ?? a.owners?.[0]?.name,
       'Immediate Owner Entity Name': (a) => a.ownerName ?? a.owners?.[0]?.name,
       'Asset Name': (a) => a.name,
       'Mine Name': (a) => a.name,

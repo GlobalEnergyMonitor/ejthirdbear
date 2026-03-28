@@ -6,14 +6,18 @@
 
 import { getAppBase } from './widget-api';
 
-const FONTS_URL = 'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@400;500;600;700&display=swap';
+const FONTS_URL =
+  'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@400;500;600;700&display=swap';
 
 let fontsInjected = false;
 
 /** Inject Google Fonts into the host page <head> (idempotent) */
 export function ensureFonts() {
   if (fontsInjected || typeof document === 'undefined') return;
-  if (document.querySelector(`link[href="${FONTS_URL}"]`)) { fontsInjected = true; return; }
+  if (document.querySelector(`link[href="${FONTS_URL}"]`)) {
+    fontsInjected = true;
+    return;
+  }
   const link = document.createElement('link');
   link.rel = 'stylesheet';
   link.href = FONTS_URL;
@@ -161,11 +165,11 @@ export async function loadFullCSS(): Promise<string> {
   if (fullCssPromise) return fullCssPromise;
 
   fullCssPromise = fetch(`${getAppBase()}/widgets/shared-styles.css`)
-    .then(r => {
+    .then((r) => {
       if (!r.ok) throw new Error(`Failed to load widget CSS: ${r.status}`);
       return r.text();
     })
-    .then(css => {
+    .then((css) => {
       // Remap :root to :host for Shadow DOM
       fullCssCache = css.replace(/:root\b/g, ':host');
       return fullCssCache;
@@ -191,7 +195,7 @@ export function injectStyles(shadowRoot: ShadowRoot): void {
   shadowRoot.prepend(style);
 
   // Upgrade to full CSS in background
-  loadFullCSS().then(css => {
+  loadFullCSS().then((css) => {
     if (css !== FALLBACK_CSS) {
       style.textContent = css;
     }

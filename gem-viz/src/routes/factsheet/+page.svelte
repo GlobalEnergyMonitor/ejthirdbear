@@ -9,7 +9,9 @@
   import { TRACKER_TO_URL_SLUG } from '$lib/data-config/tracker-schema';
 
   const trackers = Object.entries(TRACKER_TO_URL_SLUG).map(([name, slug]) => ({
-    slug, name, available: true,
+    slug,
+    name,
+    available: true,
   }));
 
   onMount(() => {

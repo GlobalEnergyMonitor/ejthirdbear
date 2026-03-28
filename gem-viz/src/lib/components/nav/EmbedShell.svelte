@@ -28,7 +28,8 @@
 
   function isInternalHref(href) {
     if (!href) return false;
-    if (href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('javascript:')) return false;
+    if (href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('javascript:'))
+      return false;
     if (/^https?:\/\//i.test(href)) return false;
     return true;
   }
@@ -64,7 +65,16 @@
   // Preserve embed query params when navigating within the iframe.
   // Without this, clicking a breadcrumb link in /cards?embed=true would
   // navigate to /explore (no embed param) and show full app chrome inside the iframe.
-  const EMBED_PARAMS = ['embed', 'embedId', 'theme', 'padding', 'autoHeight', 'branding', 'linkBase', 'linkTarget'];
+  const EMBED_PARAMS = [
+    'embed',
+    'embedId',
+    'theme',
+    'padding',
+    'autoHeight',
+    'branding',
+    'linkBase',
+    'linkTarget',
+  ];
 
   beforeNavigate((nav) => {
     if (nav.willUnload) return;
@@ -147,13 +157,16 @@
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="embed-container" class:dark={theme === 'dark'} style="padding: {padding}px;" onclick={handleLinkClick}>
+<div
+  class="embed-container"
+  class:dark={theme === 'dark'}
+  style="padding: {padding}px;"
+  onclick={handleLinkClick}
+>
   {@render children()}
   {#if branding}
     <footer class="gem-branding">
-      <a href={GEM_DOMAIN} target="_blank" rel="noopener">
-        Powered by Global Energy Monitor
-      </a>
+      <a href={GEM_DOMAIN} target="_blank" rel="noopener"> Powered by Global Energy Monitor </a>
     </footer>
   {/if}
 </div>

@@ -424,6 +424,7 @@ export const treeGraphLarge = (() => {
     entity_id: 'L01',
     headquarters_country: countries[0],
     entity_type: entityTypes[0],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any);
   edges.push({ source: 'L01', target: rootId, value: 100 });
   paths['L01'] = [{ route: ['L01', rootId], cumulative_pct: 100 }];
@@ -436,6 +437,7 @@ export const treeGraphLarge = (() => {
     entity_id: 'L02',
     headquarters_country: countries[0],
     entity_type: entityTypes[4],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any);
   edges.push({ source: 'L02', target: 'L01', value: 100 });
   paths['L02'] = [{ route: ['L02', 'L01', rootId], cumulative_pct: 100 }];
@@ -451,6 +453,7 @@ export const treeGraphLarge = (() => {
       entity_id: id,
       headquarters_country: countries[i % countries.length],
       entity_type: entityTypes[i % entityTypes.length],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
     edges.push({ source: id, target: 'L01', value: pct });
     paths[id] = [{ route: [id, 'L01', rootId], cumulative_pct: pct }];

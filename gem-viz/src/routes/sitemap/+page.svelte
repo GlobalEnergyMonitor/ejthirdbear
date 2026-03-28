@@ -78,7 +78,11 @@
     {
       title: 'Reference',
       routes: [
-        { path: '/fieldguide', name: 'Tracker FieldGuide', description: 'Tracker field-level documentation' },
+        {
+          path: '/fieldguide',
+          name: 'Tracker FieldGuide',
+          description: 'Tracker field-level documentation',
+        },
         {
           path: '/fieldguide/[tracker]',
           name: 'Tracker FieldGuide Detail',

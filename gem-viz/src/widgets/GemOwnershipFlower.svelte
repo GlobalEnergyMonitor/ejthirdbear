@@ -5,7 +5,6 @@
    */
   import { onMount } from 'svelte';
   import { loadEntityPortfolio, errorMessage, type EmbedPortfolio } from './widget-data';
-  import { entityLink } from './widget-links';
   import OwnershipFlower from '$lib/components/network/OwnershipFlower.svelte';
 
   type FlowerSize = 'small' | 'medium' | 'large';

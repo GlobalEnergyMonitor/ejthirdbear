@@ -37,11 +37,12 @@ function initDb() {
       content TEXT NOT NULL,
       url TEXT,
       links TEXT DEFAULT '[]',
-      wp_post_id INTEGER UNIQUE
+      wp_post_id INTEGER
     );
 
     CREATE INDEX IF NOT EXISTS idx_articles_issue ON articles(issue_number);
     CREATE INDEX IF NOT EXISTS idx_articles_date ON articles(date);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_articles_dedup ON articles(wp_post_id, section) WHERE wp_post_id IS NOT NULL;
 
     CREATE VIRTUAL TABLE IF NOT EXISTS articles_fts USING fts5(
       title, section, content, url, links,
@@ -133,26 +134,43 @@ function splitSections(text) {
 function ingestJson(db, filePath) {
   const data = JSON.parse(readFileSync(filePath, 'utf-8'));
   const insert = db.prepare(`
-    INSERT OR IGNORE INTO articles (issue_number, title, date, section, content, url, links)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT OR IGNORE INTO articles (issue_number, title, date, section, content, url, links, wp_post_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
+
+  let total = 0;
+  let skipped = 0;
 
   const batch = db.transaction((rows) => {
     for (const r of rows) {
-      insert.run(
-        r.issue_number ?? null,
-        r.title ?? 'Untitled',
-        r.date ?? null,
-        r.section ?? '',
-        r.content ?? '',
-        r.url ?? null,
-        JSON.stringify(r.links ?? [])
-      );
+      // Support both formats: simple (issue_number) and fetched (issueNumber)
+      const issueNum = r.issue_number ?? r.issueNumber ?? null;
+      const content = r.content ?? '';
+      const url = r.url ?? r.wpUrl ?? r.archiveUrl ?? null;
+      const wpId = r.wp_post_id ?? r.wpPostId ?? null;
+
+      // Skip entries with no meaningful content
+      if (!content || content.length < 50) { skipped++; continue; }
+
+      const sections = splitSections(content);
+      for (const sec of sections) {
+        insert.run(
+          issueNum,
+          r.title ?? 'Untitled',
+          r.date ?? null,
+          sec.section,
+          sec.text,
+          url,
+          JSON.stringify(r.links ?? []),
+          wpId
+        );
+        total++;
+      }
     }
   });
 
   batch(data);
-  console.log(`Ingested ${data.length} articles from JSON.`);
+  console.log(`Ingested ${total} article sections from ${data.length} JSON entries. (${skipped} skipped)`);
 }
 
 function ingestHtmlDir(db, dirPath) {
@@ -191,6 +209,17 @@ function ingestHtmlDir(db, dirPath) {
   console.log(`Ingested ${total} article sections from ${files.length} HTML files.`);
 }
 
+/**
+ * Extract text from a WXR field, handling both plain text and CDATA blocks.
+ */
+function wxrText(item, tagName) {
+  // Try CDATA first, then plain text
+  const cdataRe = new RegExp(`<${tagName}><!\\[CDATA\\[([\\s\\S]*?)\\]\\]></${tagName}>`);
+  const plainRe = new RegExp(`<${tagName}>([^<]*)</${tagName}>`);
+  const m = item.match(cdataRe) || item.match(plainRe);
+  return m ? m[1] : null;
+}
+
 function ingestXml(db, filePath) {
   const xml = readFileSync(filePath, 'utf-8');
 
@@ -202,31 +231,39 @@ function ingestXml(db, filePath) {
   `);
 
   let total = 0;
+  let skipped = 0;
 
   const batch = db.transaction(() => {
     for (const item of items) {
-      // Only process coalwire posts
-      const slugMatch = item.match(/<wp:post_name>([^<]+)<\/wp:post_name>/);
-      if (!slugMatch || !slugMatch[1].includes('coalwire')) continue;
+      // Only process coalwire post type
+      const postType = wxrText(item, 'wp:post_type');
+      if (postType !== 'coalwire') continue;
 
-      const titleMatch = item.match(/<title>([^<]*)<\/title>/);
-      const title = titleMatch ? titleMatch[1] : 'Untitled';
+      // Skip drafts
+      const status = wxrText(item, 'wp:status');
+      if (status !== 'publish') { skipped++; continue; }
+
+      const title = wxrText(item, 'title') || 'Untitled';
       const issueNum = extractIssueNumber(title);
 
-      const dateMatch = item.match(/<wp:post_date>([^<]+)<\/wp:post_date>/);
-      const date = dateMatch ? dateMatch[1].split(' ')[0] : null;
+      const rawDate = wxrText(item, 'wp:post_date');
+      const date = rawDate ? rawDate.split(' ')[0] : null;
 
       const contentMatch = item.match(/<content:encoded><!\[CDATA\[([\s\S]*?)\]\]><\/content:encoded>/);
       const rawHtml = contentMatch ? contentMatch[1] : '';
 
+      // <link> is plain text (not CDATA)
       const linkMatch = item.match(/<link>([^<]+)<\/link>/);
-      const url = linkMatch ? linkMatch[1] : null;
+      const url = linkMatch ? linkMatch[1].replace(/&#038;/g, '&') : null;
 
-      const wpIdMatch = item.match(/<wp:post_id>(\d+)<\/wp:post_id>/);
-      const wpId = wpIdMatch ? parseInt(wpIdMatch[1]) : null;
+      const wpIdRaw = wxrText(item, 'wp:post_id');
+      const wpId = wpIdRaw ? parseInt(wpIdRaw) : null;
 
       const links = extractLinks(rawHtml);
       const text = stripHtml(rawHtml);
+
+      if (!text || text.length < 20) { skipped++; continue; }
+
       const sections = splitSections(text);
 
       for (const sec of sections) {
@@ -237,7 +274,7 @@ function ingestXml(db, filePath) {
   });
 
   batch();
-  console.log(`Ingested ${total} article sections from WordPress XML export.`);
+  console.log(`Ingested ${total} article sections from WordPress XML export. (${skipped} skipped)`);
 }
 
 function main() {

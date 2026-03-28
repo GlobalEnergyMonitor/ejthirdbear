@@ -17,11 +17,7 @@
     theme?: 'light' | 'dark';
   }
 
-  let {
-    assetId,
-    showOwners = true,
-    theme = 'light',
-  }: Props = $props();
+  let { assetId, showOwners = true, theme = 'light' }: Props = $props();
 
   let loading = $state(true);
   let error = $state<string | null>(null);
@@ -122,38 +118,87 @@
 </div>
 
 <style>
-  .asset-embed { width: 100%; max-width: 500px; font-family: var(--font-family); }
-  .asset-header { margin-bottom: var(--space-3); }
-  h1 { font-size: var(--font-size-xl); font-weight: 600; margin: 0 0 var(--space-1) 0; }
-  .asset-id { font-size: var(--font-size-sm); font-family: var(--font-family-mono); color: var(--color-text-tertiary); margin: 0; }
+  .asset-embed {
+    width: 100%;
+    max-width: 500px;
+    font-family: var(--font-family);
+  }
+  .asset-header {
+    margin-bottom: var(--space-3);
+  }
+  h1 {
+    font-size: var(--font-size-xl);
+    font-weight: 600;
+    margin: 0 0 var(--space-1) 0;
+  }
+  .asset-id {
+    font-size: var(--font-size-sm);
+    font-family: var(--font-family-mono);
+    color: var(--color-text-tertiary);
+    margin: 0;
+  }
   .meta-row {
-    display: flex; flex-wrap: wrap; gap: var(--space-2);
-    margin-bottom: var(--space-4); padding-bottom: var(--space-4);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-bottom: var(--space-4);
+    padding-bottom: var(--space-4);
     border-bottom: var(--border-width) solid var(--color-border);
   }
   .meta-chip {
-    display: inline-flex; align-items: center; gap: 4px;
-    padding: 2px 8px; font-size: var(--font-size-sm);
-    background: var(--color-bg-tertiary); border: var(--border-width) solid var(--color-border);
-    text-transform: uppercase; letter-spacing: var(--tracking-wide);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    font-size: var(--font-size-sm);
+    background: var(--color-bg-tertiary);
+    border: var(--border-width) solid var(--color-border);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
   }
-  .meta-chip.status { border-left: 3px solid var(--status-color); }
+  .meta-chip.status {
+    border-left: 3px solid var(--status-color);
+  }
   h2 {
-    font-size: var(--font-size-sm); font-weight: 600; text-transform: uppercase;
-    letter-spacing: var(--tracking-caps); color: var(--color-text-tertiary); margin: 0 0 var(--space-2) 0;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-caps);
+    color: var(--color-text-tertiary);
+    margin: 0 0 var(--space-2) 0;
   }
-  .owners-list { display: flex; flex-direction: column; gap: var(--space-1); }
+  .owners-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
   .owner-row {
-    display: flex; justify-content: space-between; align-items: center;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     padding: var(--space-2) var(--space-3);
-    background: var(--color-bg-secondary); border: var(--border-width) solid var(--color-border-light);
-    text-decoration: none; color: inherit; font-size: var(--font-size-body);
+    background: var(--color-bg-secondary);
+    border: var(--border-width) solid var(--color-border-light);
+    text-decoration: none;
+    color: inherit;
+    font-size: var(--font-size-body);
     transition: border-color var(--transition-fast);
   }
-  .owner-row:hover { border-color: var(--color-border-dark); }
-  .owner-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .owner-row:hover {
+    border-color: var(--color-border-dark);
+  }
+  .owner-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .owner-share {
-    display: flex; align-items: center; gap: 4px;
-    font-size: var(--font-size-sm); color: var(--color-text-secondary); font-variant-numeric: tabular-nums;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    font-variant-numeric: tabular-nums;
   }
 </style>

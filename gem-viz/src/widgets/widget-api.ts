@@ -8,8 +8,8 @@ import {
   API_SLUG_TO_TYPE as _SCHEMA_SLUG_TO_TYPE,
   API_TYPE_TO_SLUG as _SCHEMA_TYPE_TO_SLUG,
   IDENTIFIER_TO_API_SLUG as _SCHEMA_ID_TO_SLUG,
-  normalizeSubStatus,
 } from '$lib/data-config/tracker-schema';
+import { buildQuery } from '$lib/ownership-api';
 
 // Re-export types from ownership-api so widget wrappers can import from one place
 export type {
@@ -36,8 +36,12 @@ export function configure(opts: { apiBase?: string; appBase?: string }) {
   if (opts.appBase) _appBase = opts.appBase.replace(/\/$/, '');
 }
 
-export function getApiBase() { return _apiBase; }
-export function getAppBase() { return _appBase; }
+export function getApiBase() {
+  return _apiBase;
+}
+export function getAppBase() {
+  return _appBase;
+}
 
 // ============================================================================
 // API CLIENT (no api-log dependency)
@@ -46,7 +50,10 @@ export function getAppBase() { return _appBase; }
 const API_TIMEOUT_MS = 30_000;
 
 class WidgetAPIError extends Error {
-  constructor(public _status: number, message: string) {
+  constructor(
+    public _status: number,
+    message: string
+  ) {
     super(message);
     this.name = 'WidgetAPIError';
   }
@@ -90,7 +97,9 @@ async function _doFetch<T>(url: string, options?: RequestInit): Promise<T> {
         if (errorBody && !errorBody.startsWith('<!')) {
           errorMessage = `API error (${response.status}): ${errorBody.slice(0, 200)}`;
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       throw new WidgetAPIError(response.status, errorMessage);
     }
 
@@ -137,23 +146,6 @@ function extractEntityId(value: unknown): string | null {
 
 const pct = (v?: number) => (typeof v === 'number' ? v : null);
 
-function buildQuery(params?: Record<string, string | number | string[] | undefined | null>): string {
-  if (!params) return '';
-  const sp = new URLSearchParams();
-  for (const [k, v] of Object.entries(params)) {
-    if (v == null || v === '') continue;
-    if (Array.isArray(v)) {
-      for (const item of v) {
-        if (item != null && item !== '') sp.append(k, String(item));
-      }
-    } else {
-      sp.set(k, String(v));
-    }
-  }
-  const q = sp.toString();
-  return q ? `?${q}` : '';
-}
-
 // ============================================================================
 // RESOLVE ASSET ID (uses absolute URL to gem-viz.fly.dev)
 // ============================================================================
@@ -175,7 +167,9 @@ export async function resolveAssetId(assetId: string): Promise<string> {
         return resolved;
       }
     }
-  } catch { /* fallback: return as-is */ }
+  } catch {
+    /* fallback: return as-is */
+  }
   return assetId;
 }
 
@@ -183,22 +177,48 @@ export async function resolveAssetId(assetId: string): Promise<string> {
 // NORMALIZE (same as ownership-api.ts)
 // ============================================================================
 
-interface RawEntity { [key: string]: unknown }
-interface RawAsset { [key: string]: unknown }
+interface RawEntity {
+  [key: string]: unknown;
+}
+interface RawAsset {
+  [key: string]: unknown;
+}
 
-import type { EntitySummary, AssetSummary, AssetOwner, PaginatedResponse } from '$lib/ownership-api';
+import type {
+  EntitySummary,
+  AssetSummary,
+  AssetOwner,
+  PaginatedResponse,
+} from '$lib/ownership-api';
 import {
-  FK_ID, FK_NAME, FK_FACILITY_TYPE, FK_STATUS, FK_SUB_STATUS,
-  FK_CAPACITY, FK_CAPACITY_UNIT, FK_COUNTRY, FK_LATITUDE, FK_LONGITUDE,
-  FK_OWNER, FK_OWNER_ENTITY_ID, FK_PARENT, FK_PARENT_ENTITY_ID,
-  FK_ENTITY_ID, FK_ENTITY_NAME, FK_FULL_NAME, FK_HQ_COUNTRY,
+  FK_ID,
+  FK_NAME,
+  FK_FACILITY_TYPE,
+  FK_STATUS,
+  FK_SUB_STATUS,
+  FK_CAPACITY,
+  FK_CAPACITY_UNIT,
+  FK_COUNTRY,
+  FK_LATITUDE,
+  FK_LONGITUDE,
+  FK_OWNER,
+  FK_OWNER_ENTITY_ID,
+  FK_PARENT,
+  FK_PARENT_ENTITY_ID,
+  FK_ENTITY_ID,
+  FK_ENTITY_NAME,
+  FK_FULL_NAME,
+  FK_HQ_COUNTRY,
 } from '$lib/field-keys';
 
 function normalizeEntity(raw: RawEntity): EntitySummary | null {
   const idRaw = pickKey(raw, FK_ENTITY_ID);
   const id = extractEntityId(idRaw) || String(idRaw || '').trim();
   if (!id) return null;
-  const str = (keys: readonly string[]) => { const v = pickKey(raw, keys); return v ? String(v) : null; };
+  const str = (keys: readonly string[]) => {
+    const v = pickKey(raw, keys);
+    return v ? String(v) : null;
+  };
   return {
     id,
     name: String(pickKey(raw, FK_ENTITY_NAME) || id).trim() || id,
@@ -209,7 +229,10 @@ function normalizeEntity(raw: RawEntity): EntitySummary | null {
 }
 
 function normalizeAsset(raw: RawAsset): AssetSummary {
-  const str = (keys: readonly string[]) => { const v = pickKey(raw, keys); return v ? String(v) : null; };
+  const str = (keys: readonly string[]) => {
+    const v = pickKey(raw, keys);
+    return v ? String(v) : null;
+  };
   const num = (keys: readonly string[]) => toNumber(pickKey(raw, keys));
   const id = String(pickKey(raw, FK_ID) || '').trim();
   return {
@@ -244,8 +267,15 @@ function normalizeOwners(raw: RawAsset): AssetOwner[] | undefined {
 }
 
 function normalizePaginated<T>(raw: T[] | PaginatedResponse<T>): PaginatedResponse<T> {
-  if (Array.isArray(raw)) return { total: null, limit: null, offset: null, count: raw.length, results: raw };
-  return { total: raw.total ?? null, limit: raw.limit ?? null, offset: raw.offset ?? null, count: raw.count ?? raw.results?.length ?? 0, results: raw.results ?? [] };
+  if (Array.isArray(raw))
+    return { total: null, limit: null, offset: null, count: raw.length, results: raw };
+  return {
+    total: raw.total ?? null,
+    limit: raw.limit ?? null,
+    offset: raw.offset ?? null,
+    count: raw.count ?? raw.results?.length ?? 0,
+    results: raw.results ?? [],
+  };
 }
 
 // ============================================================================
@@ -257,9 +287,9 @@ export async function getEntity(entityId: string): Promise<EntitySummary | null>
 }
 
 export async function getEntityOwners(entityId: string) {
-  const raw = await fetchAPI<Array<{ owner_entity_id?: string; owner_name?: string; ownership_percentage?: number }>>(
-    `/entities/${encodeURIComponent(entityId)}/owners`
-  );
+  const raw = await fetchAPI<
+    Array<{ owner_entity_id?: string; owner_name?: string; ownership_percentage?: number }>
+  >(`/entities/${encodeURIComponent(entityId)}/owners`);
   return (raw || []).map((r) => ({
     ownerEntityId: extractEntityId(r.owner_entity_id) || String(r.owner_entity_id || ''),
     ownerName: r.owner_name || String(r.owner_entity_id || ''),
@@ -270,7 +300,12 @@ export async function getEntityOwners(entityId: string) {
 interface RawEntityGraph {
   root_entity_id: string;
   root_entity_name: string;
-  nodes: Array<{ entity_id: string; entity_name: string; is_terminal?: boolean; is_root?: boolean }>;
+  nodes: Array<{
+    entity_id: string;
+    entity_name: string;
+    is_terminal?: boolean;
+    is_root?: boolean;
+  }>;
   edges: Array<{ from_entity_id: string; to_entity_id: string; ownership_percentage?: number }>;
   terminal_node_ids?: string[];
 }
@@ -282,18 +317,28 @@ function normalizeEntityGraph(raw: RawEntityGraph): EntityGraphResponse {
     rootEntityId: raw.root_entity_id,
     rootEntityName: raw.root_entity_name,
     nodes: (raw.nodes || []).map((n) => ({
-      id: n.entity_id, Name: n.entity_name, type: 'entity' as const,
-      is_terminal: n.is_terminal, is_root: n.is_root,
+      id: n.entity_id,
+      Name: n.entity_name,
+      type: 'entity' as const,
+      is_terminal: n.is_terminal,
+      is_root: n.is_root,
     })),
     edges: (raw.edges || []).map((e) => ({
-      source: e.from_entity_id, target: e.to_entity_id, value: pct(e.ownership_percentage),
+      source: e.from_entity_id,
+      target: e.to_entity_id,
+      value: pct(e.ownership_percentage),
     })),
     terminalIds: raw.terminal_node_ids || [],
   };
 }
 
-async function getEntityGraph(entityId: string, direction: 'up' | 'down'): Promise<EntityGraphResponse> {
-  const raw = await fetchAPI<RawEntityGraph>(`/entities/${encodeURIComponent(entityId)}/graph/${direction}`);
+async function getEntityGraph(
+  entityId: string,
+  direction: 'up' | 'down'
+): Promise<EntityGraphResponse> {
+  const raw = await fetchAPI<RawEntityGraph>(
+    `/entities/${encodeURIComponent(entityId)}/graph/${direction}`
+  );
   return normalizeEntityGraph(raw);
 }
 
@@ -305,17 +350,27 @@ export const getEntityGraphDown = (id: string) => getEntityGraph(id, 'down');
 // ============================================================================
 
 export async function listAssets(params?: {
-  q?: string; status?: string; country?: string | string[];
-  asset_type?: string; limit?: number; offset?: number; facets?: boolean;
+  q?: string;
+  status?: string;
+  country?: string | string[];
+  asset_type?: string;
+  limit?: number;
+  offset?: number;
+  facets?: boolean;
 }): Promise<PaginatedResponse<AssetSummary> & { facets?: Record<string, Record<string, number>> }> {
   const queryParams: Record<string, string | number | string[] | undefined | null> = {
-    q: params?.q, status: params?.status, country: params?.country,
-    asset_type: params?.asset_type, limit: params?.limit, offset: params?.offset, format: 'json',
+    q: params?.q,
+    status: params?.status,
+    country: params?.country,
+    asset_type: params?.asset_type,
+    limit: params?.limit,
+    offset: params?.offset,
+    format: 'json',
   };
   if (params?.facets) queryParams.facets = 'true';
-  const raw = await fetchAPI<PaginatedResponse<RawAsset> & { facets?: Record<string, Record<string, number>> }>(
-    `/assets${buildQuery(queryParams)}`
-  );
+  const raw = await fetchAPI<
+    PaginatedResponse<RawAsset> & { facets?: Record<string, Record<string, number>> }
+  >(`/assets${buildQuery(queryParams)}`);
   const page = normalizePaginated(raw);
   const facets = !Array.isArray(raw) ? raw.facets : undefined;
   return { ...page, results: page.results.map(normalizeAsset), facets };
@@ -332,7 +387,9 @@ export async function getAsset(assetId: string): Promise<AssetSummary> {
 // ============================================================================
 
 export async function getOwnershipGraph(params: {
-  root: string; direction?: 'up' | 'down'; max_depth?: number;
+  root: string;
+  direction?: 'up' | 'down';
+  max_depth?: number;
 }): Promise<OwnershipGraphResponse> {
   const resolvedRoot = await resolveAssetId(params.root);
   const raw = await fetchAPI<{
@@ -340,7 +397,9 @@ export async function getOwnershipGraph(params: {
     nodes: Array<Record<string, unknown>>;
     edges: OwnershipGraphResponse['edges'];
     paths?: OwnershipGraphResponse['paths'];
-  }>(`/ownership/graph${buildQuery({ root: resolvedRoot, direction: params.direction, max_depth: params.max_depth })}`);
+  }>(
+    `/ownership/graph${buildQuery({ root: resolvedRoot, direction: params.direction, max_depth: params.max_depth })}`
+  );
 
   const root = {
     id: String(raw.root.entity_id || raw.root.asset_id || ''),

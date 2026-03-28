@@ -12,12 +12,12 @@
   import { onMount } from 'svelte';
   import ControlChainApp from '$lib/components/controlchain/ControlChainApp.svelte';
 
-  const qParam    = $page.url.searchParams.get('q')    || '';
+  const qParam = $page.url.searchParams.get('q') || '';
   const typeParam = $page.url.searchParams.get('type') || 'all';
 
   let initialQuery = $state(qParam);
-  let initialType  = $state(typeParam);
-  let mounted      = $state(false);
+  let initialType = $state(typeParam);
+  let mounted = $state(false);
 
   function readHash() {
     if (typeof window === 'undefined') return {};
@@ -37,8 +37,8 @@
 
   onMount(() => {
     const h = readHash();
-    initialQuery = h.q    || qParam;
-    initialType  = h.type || typeParam;
+    initialQuery = h.q || qParam;
+    initialType = h.type || typeParam;
     mounted = true;
   });
 </script>

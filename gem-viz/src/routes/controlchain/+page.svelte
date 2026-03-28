@@ -7,7 +7,7 @@
   import ControlChainApp from '$lib/components/controlchain/ControlChainApp.svelte';
 
   const initialQuery = $page.url.searchParams.get('q') || '';
-  const initialType  = $page.url.searchParams.get('type') || 'all';
+  const initialType = $page.url.searchParams.get('type') || 'all';
 
   function onStateChange(q, type) {
     const params = new URLSearchParams();

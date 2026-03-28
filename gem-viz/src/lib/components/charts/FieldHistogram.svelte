@@ -8,7 +8,7 @@
 
   let {
     values = [] as number[],
-    histogramWeight = 0.5,
+    histogramWeight: _histogramWeight = 0.5,
     unit = '',
     nullCount = 0,
     totalRows = 0,
@@ -19,7 +19,8 @@
 
   // Binary search: index of first element >= target
   function lowerBound(arr: number[], target: number): number {
-    let lo = 0, hi = arr.length;
+    let lo = 0,
+      hi = arr.length;
     while (lo < hi) {
       const mid = (lo + hi) >> 1;
       if (arr[mid] < target) lo = mid + 1;
@@ -65,9 +66,7 @@
       const from = lowerBound(values, lo);
       const to = isLast ? values.length : lowerBound(values, hi);
       const count = to - from;
-      const label = isLast
-        ? `${fmtNum(lo)} – ${fmtNum(hi)}`
-        : `${fmtNum(lo)} – <${fmtNum(hi)}`;
+      const label = isLast ? `${fmtNum(lo)} – ${fmtNum(hi)}` : `${fmtNum(lo)} – <${fmtNum(hi)}`;
       result.push({ lo, hi, count, label });
     }
     return result.filter((b) => b.count > 0);
@@ -131,7 +130,8 @@
 
   <div class="summary">
     {fmtCount(nonNullCount)} values · {bins.length} bins
-    {#if unit} · {unit}{/if}
+    {#if unit}
+      · {unit}{/if}
   </div>
 </div>
 

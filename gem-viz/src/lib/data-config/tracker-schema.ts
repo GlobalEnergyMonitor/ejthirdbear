@@ -11,7 +11,7 @@
  * is the primary source. Call initFromApi() at app startup to populate live data.
  */
 
-import { fetchCatalogTaxonomy, fetchCountryFacets, type StatusTaxonomy } from '$lib/catalog-api';
+import { fetchCatalogTaxonomy, fetchCountryFacets, type StatusTaxonomy } from '$lib/api/catalog-api';
 
 // =============================================================================
 // API-DRIVEN STATE (populated by initFromApi)
@@ -679,11 +679,6 @@ function buildGroupsFromTaxonomy(
   }
 
   return groups;
-}
-
-/** @deprecated Use normalizeSubStatus instead — this is kept for backwards compat */
-function mapApiSubStatus(key: string): string {
-  return normalizeSubStatus(key);
 }
 
 function buildGroupsFromHardcoded(facets: Map<string, number>): DynamicStatusGroup[] {

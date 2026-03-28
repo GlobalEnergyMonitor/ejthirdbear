@@ -16,7 +16,7 @@
   import ScreenerExportPanel from '$lib/components/screener/ScreenerExportPanel.svelte';
   import MiniBarChart from '$lib/components/charts/MiniBarChart.svelte';
   import { buildScreenerUrl, parseJsonSearchParam } from '$lib/screener-url';
-  import { formatCapacity } from '$lib/format';
+  import { formatCapacity } from '$lib/utils/format';
   import { formatNumber } from '$lib/components/cart/export-panel-utils';
   import { statusColorsGranular } from '$lib/design-tokens';
   import RangeSlider from '$lib/components/table/RangeSlider.svelte';
@@ -346,7 +346,14 @@
   />
 </svelte:head>
 
-<ScreenerLayout currentStep={4} subtitle={subtitle()} {classesParam} {ownersParam} maxWidth="wide" {isEmbed}>
+<ScreenerLayout
+  currentStep={4}
+  subtitle={subtitle()}
+  {classesParam}
+  {ownersParam}
+  maxWidth="wide"
+  {isEmbed}
+>
   {#snippet headerRight()}
     {#if owners.length > 1}
       <button class="text-link" onclick={() => (showOwnerPicker = true)}>
@@ -377,7 +384,10 @@
       </div>
     {:else if owners.length === 0}
       <div class="empty-state">
-        <p>No entities selected. <button class="text-link" onclick={goBack}>Return to results</button> to select entities.</p>
+        <p>
+          No entities selected. <button class="text-link" onclick={goBack}>Return to results</button
+          > to select entities.
+        </p>
       </div>
     {:else if viewMode === 'single' && selectedOwner}
       <!-- Single owner view -->

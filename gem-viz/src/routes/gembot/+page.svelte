@@ -61,9 +61,7 @@
   let composeDeckInitPromise = $state(null);
   let composeDeckError = $state('');
   let composeDeckTitle = $state('Live Filters');
-  let composeDeckNote = $state(
-    'Use Compose filters here without leaving chat.'
-  );
+  let composeDeckNote = $state('Use Compose filters here without leaving chat.');
 
   // --- Storage ---
   function saveMessages() {
@@ -161,13 +159,6 @@
   const isApiEndpointIndexResult = (toolCall) => toolCall?.result?.type === 'api_endpoint_index';
   const isApiAdHocResult = (toolCall) => toolCall?.result?.type === 'api_ad_hoc_result';
 
-  function formatApiValue(value) {
-    if (typeof value === 'string') return value;
-    if (typeof value === 'number') return value.toLocaleString();
-    if (typeof value === 'boolean') return value ? 'true' : 'false';
-    return String(value);
-  }
-
   function getComposeSummaryLabels(filters = {}) {
     const labels = [];
     const pushList = (values, prefix) => {
@@ -215,9 +206,7 @@
       })
       .catch((error) => {
         composeDeckError =
-          error instanceof Error
-            ? error.message
-            : 'Failed to load live filters. Please try again.';
+          error instanceof Error ? error.message : 'Failed to load live filters. Please try again.';
         throw error;
       })
       .finally(() => {
@@ -231,9 +220,7 @@
   async function openComposeDeck(control = {}) {
     composeDeckOpen = true;
     composeDeckTitle = control.title || 'Live Filters';
-    composeDeckNote =
-      control.message ||
-      'Use Compose filters here without leaving chat.';
+    composeDeckNote = control.message || 'Use Compose filters here without leaving chat.';
 
     let state;
     try {
@@ -397,7 +384,10 @@
         ...messages,
         {
           role: 'assistant',
-          content: err instanceof Error ? `Gembot hit an error: ${err.message}` : 'Gembot hit an unexpected error.',
+          content:
+            err instanceof Error
+              ? `Gembot hit an error: ${err.message}`
+              : 'Gembot hit an unexpected error.',
           error: true,
         },
       ];
@@ -1219,195 +1209,199 @@
           </button>
         </div>
 
-      <!-- Mentioned entities panel - shows when there's content -->
-      {#if mentionedEntities.size > 0 || mentionedAssets.size > 0}
-        <div class="sidebar-panel mentioned-panel">
-          <h4 class="sidebar-panel__title">Discussed</h4>
-          <div class="mentioned-scroll">
-            {#if mentionedEntities.size > 0}
-              <div class="mentioned-group">
-                <span class="mentioned-label">Entities ({mentionedEntities.size})</span>
-                {#each [...mentionedEntities.values()] as entity}
-                  <a
-                    href={entityLink(entity.id)}
-                    class="mentioned-item entity"
-                    target="_blank"
-                    title="Source: {entity.source || 'conversation'}{entity.role
-                      ? ` (${entity.role})`
-                      : ''}"
-                  >
-                    <span class="mentioned-name">{entity.name}</span>
-                    <span class="mentioned-detail">
-                      {#if entity.role}
-                        <span class="mentioned-role">{entity.role}</span>
-                      {/if}
-                      {#if entity.country}
-                        <span class="mentioned-meta">{entity.country}</span>
-                      {/if}
-                      {#if entity.ownershipPct}
-                        <span class="mentioned-pct">{entity.ownershipPct}%</span>
-                      {/if}
-                      {#if entity.assetCount}
-                        <span class="mentioned-meta">{entity.assetCount} assets</span>
-                      {/if}
-                    </span>
-                    <span class="mentioned-source">via {entity.source || 'chat'}</span>
-                  </a>
-                {/each}
-              </div>
-            {/if}
-            {#if mentionedAssets.size > 0}
-              <div class="mentioned-group">
-                <span class="mentioned-label">Assets ({mentionedAssets.size})</span>
-                {#each [...mentionedAssets.values()] as asset}
-                  <a
-                    href={link(`asset/${asset.id}`)}
-                    class="mentioned-item asset"
-                    target="_blank"
-                    title="Source: {asset.source || 'conversation'}"
-                  >
-                    <span class="mentioned-name">{asset.name}</span>
-                    <span class="mentioned-detail">
-                      <span class="mentioned-meta"
-                        >{asset.type}{asset.status ? ` · ${asset.status}` : ''}</span
-                      >
-                      {#if asset.country}
-                        <span class="mentioned-meta">{asset.country}</span>
-                      {/if}
-                      {#if asset.capacity}
+        <!-- Mentioned entities panel - shows when there's content -->
+        {#if mentionedEntities.size > 0 || mentionedAssets.size > 0}
+          <div class="sidebar-panel mentioned-panel">
+            <h4 class="sidebar-panel__title">Discussed</h4>
+            <div class="mentioned-scroll">
+              {#if mentionedEntities.size > 0}
+                <div class="mentioned-group">
+                  <span class="mentioned-label">Entities ({mentionedEntities.size})</span>
+                  {#each [...mentionedEntities.values()] as entity}
+                    <a
+                      href={entityLink(entity.id)}
+                      class="mentioned-item entity"
+                      target="_blank"
+                      title="Source: {entity.source || 'conversation'}{entity.role
+                        ? ` (${entity.role})`
+                        : ''}"
+                    >
+                      <span class="mentioned-name">{entity.name}</span>
+                      <span class="mentioned-detail">
+                        {#if entity.role}
+                          <span class="mentioned-role">{entity.role}</span>
+                        {/if}
+                        {#if entity.country}
+                          <span class="mentioned-meta">{entity.country}</span>
+                        {/if}
+                        {#if entity.ownershipPct}
+                          <span class="mentioned-pct">{entity.ownershipPct}%</span>
+                        {/if}
+                        {#if entity.assetCount}
+                          <span class="mentioned-meta">{entity.assetCount} assets</span>
+                        {/if}
+                      </span>
+                      <span class="mentioned-source">via {entity.source || 'chat'}</span>
+                    </a>
+                  {/each}
+                </div>
+              {/if}
+              {#if mentionedAssets.size > 0}
+                <div class="mentioned-group">
+                  <span class="mentioned-label">Assets ({mentionedAssets.size})</span>
+                  {#each [...mentionedAssets.values()] as asset}
+                    <a
+                      href={link(`asset/${asset.id}`)}
+                      class="mentioned-item asset"
+                      target="_blank"
+                      title="Source: {asset.source || 'conversation'}"
+                    >
+                      <span class="mentioned-name">{asset.name}</span>
+                      <span class="mentioned-detail">
                         <span class="mentioned-meta"
-                          >{asset.capacity} {asset.capacityUnit || 'MW'}</span
+                          >{asset.type}{asset.status ? ` · ${asset.status}` : ''}</span
                         >
-                      {/if}
-                      {#if asset.owner}
-                        <span class="mentioned-meta">Owner: {asset.owner}</span>
-                      {/if}
-                    </span>
-                    <span class="mentioned-source">via {asset.source || 'chat'}</span>
-                  </a>
-                {/each}
-              </div>
-            {/if}
-          </div>
-          <button
-            class="clear-mentioned"
-            onclick={() => {
-              mentionedEntities = new Map();
-              mentionedAssets = new Map();
-            }}
-          >
-            Clear
-          </button>
-        </div>
-      {/if}
-
-      <div class="sidebar-panel">
-        <h4 class="sidebar-panel__title">Quick Searches</h4>
-        <div class="sidebar-panel__list">
-          {#each SUGGESTIONS.slice(0, 3) as suggestion}
-            <button class="chip" onclick={() => sendMessage(suggestion.label)} disabled={isLoading}>
-              {suggestion.icon}
-              {suggestion.label.split(' ').slice(0, 4).join(' ')}...
+                        {#if asset.country}
+                          <span class="mentioned-meta">{asset.country}</span>
+                        {/if}
+                        {#if asset.capacity}
+                          <span class="mentioned-meta"
+                            >{asset.capacity} {asset.capacityUnit || 'MW'}</span
+                          >
+                        {/if}
+                        {#if asset.owner}
+                          <span class="mentioned-meta">Owner: {asset.owner}</span>
+                        {/if}
+                      </span>
+                      <span class="mentioned-source">via {asset.source || 'chat'}</span>
+                    </a>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+            <button
+              class="clear-mentioned"
+              onclick={() => {
+                mentionedEntities = new Map();
+                mentionedAssets = new Map();
+              }}
+            >
+              Clear
             </button>
-          {/each}
-        </div>
-      </div>
+          </div>
+        {/if}
 
-      <div class="sidebar-panel">
-        <h4 class="sidebar-panel__title">Popular Entities</h4>
-        <div class="sidebar-panel__list">
-          {#each QUICK_ENTITIES as entity}
+        <div class="sidebar-panel">
+          <h4 class="sidebar-panel__title">Quick Searches</h4>
+          <div class="sidebar-panel__list">
+            {#each SUGGESTIONS.slice(0, 3) as suggestion}
+              <button
+                class="chip"
+                onclick={() => sendMessage(suggestion.label)}
+                disabled={isLoading}
+              >
+                {suggestion.icon}
+                {suggestion.label.split(' ').slice(0, 4).join(' ')}...
+              </button>
+            {/each}
+          </div>
+        </div>
+
+        <div class="sidebar-panel">
+          <h4 class="sidebar-panel__title">Popular Entities</h4>
+          <div class="sidebar-panel__list">
+            {#each QUICK_ENTITIES as entity}
+              <button
+                class="chip"
+                onclick={() => sendMessage(`Tell me about ${entity.name}'s energy portfolio`)}
+                disabled={isLoading}
+              >
+                {entity.name}
+              </button>
+            {/each}
+          </div>
+        </div>
+
+        <div class="sidebar-panel">
+          <h4 class="sidebar-panel__title">Asset Types</h4>
+          <div class="sidebar-panel__list">
             <button
               class="chip"
-              onclick={() => sendMessage(`Tell me about ${entity.name}'s energy portfolio`)}
+              onclick={() => sendMessage('Show me coal plants')}
+              disabled={isLoading}>Coal Plants</button
+            >
+            <button
+              class="chip"
+              onclick={() => sendMessage('Show me gas pipelines')}
+              disabled={isLoading}>Gas Pipelines</button
+            >
+            <button
+              class="chip"
+              onclick={() => sendMessage('Show me steel plants')}
+              disabled={isLoading}>Steel Plants</button
+            >
+            <button
+              class="chip"
+              onclick={() => sendMessage('Show me coal mines')}
+              disabled={isLoading}>Coal Mines</button
+            >
+          </div>
+        </div>
+
+        <div class="sidebar-panel workflows-section">
+          <h4 class="sidebar-panel__title">Investigation Workflows</h4>
+          <div class="sidebar-panel__list">
+            <button
+              class="workflow-chip"
+              onclick={() =>
+                sendMessage(
+                  'Help me build a watchlist of companies with coal plants in Southeast Asia'
+                )}
               disabled={isLoading}
             >
-              {entity.name}
+              <span class="workflow-title">Build watchlist</span>
+              <span class="workflow-desc">Find companies for investigation</span>
             </button>
-          {/each}
+            <button
+              class="workflow-chip"
+              onclick={() =>
+                sendMessage(
+                  'Which companies are building new coal plants? Give me a screener link to explore'
+                )}
+              disabled={isLoading}
+            >
+              <span class="workflow-title">New coal pipeline</span>
+              <span class="workflow-desc">Construction & proposed assets</span>
+            </button>
+            <button
+              class="workflow-chip"
+              onclick={() => sendMessage('Compare the top 3 biggest gas pipeline owners')}
+              disabled={isLoading}
+            >
+              <span class="workflow-title">Compare players</span>
+              <span class="workflow-desc">Side-by-side analysis</span>
+            </button>
+            <button
+              class="workflow-chip"
+              onclick={() =>
+                sendMessage(
+                  'Show me geographic breakdown of steel plants and create a screener for China'
+                )}
+              disabled={isLoading}
+            >
+              <span class="workflow-title">Geographic analysis</span>
+              <span class="workflow-desc">Country-by-country breakdown</span>
+            </button>
+          </div>
         </div>
-      </div>
 
-      <div class="sidebar-panel">
-        <h4 class="sidebar-panel__title">Asset Types</h4>
-        <div class="sidebar-panel__list">
-          <button
-            class="chip"
-            onclick={() => sendMessage('Show me coal plants')}
-            disabled={isLoading}>Coal Plants</button
-          >
-          <button
-            class="chip"
-            onclick={() => sendMessage('Show me gas pipelines')}
-            disabled={isLoading}>Gas Pipelines</button
-          >
-          <button
-            class="chip"
-            onclick={() => sendMessage('Show me steel plants')}
-            disabled={isLoading}>Steel Plants</button
-          >
-          <button
-            class="chip"
-            onclick={() => sendMessage('Show me coal mines')}
-            disabled={isLoading}>Coal Mines</button
-          >
+        <div class="sidebar-footer">
+          <p class="sidebar-note">
+            Gembot uses GEM's ownership database to answer questions about energy infrastructure
+            worldwide.
+          </p>
+          <a href={link('about')} class="learn-more">Learn more about the data →</a>
         </div>
-      </div>
-
-      <div class="sidebar-panel workflows-section">
-        <h4 class="sidebar-panel__title">Investigation Workflows</h4>
-        <div class="sidebar-panel__list">
-          <button
-            class="workflow-chip"
-            onclick={() =>
-              sendMessage(
-                'Help me build a watchlist of companies with coal plants in Southeast Asia'
-              )}
-            disabled={isLoading}
-          >
-            <span class="workflow-title">Build watchlist</span>
-            <span class="workflow-desc">Find companies for investigation</span>
-          </button>
-          <button
-            class="workflow-chip"
-            onclick={() =>
-              sendMessage(
-                'Which companies are building new coal plants? Give me a screener link to explore'
-              )}
-            disabled={isLoading}
-          >
-            <span class="workflow-title">New coal pipeline</span>
-            <span class="workflow-desc">Construction & proposed assets</span>
-          </button>
-          <button
-            class="workflow-chip"
-            onclick={() => sendMessage('Compare the top 3 biggest gas pipeline owners')}
-            disabled={isLoading}
-          >
-            <span class="workflow-title">Compare players</span>
-            <span class="workflow-desc">Side-by-side analysis</span>
-          </button>
-          <button
-            class="workflow-chip"
-            onclick={() =>
-              sendMessage(
-                'Show me geographic breakdown of steel plants and create a screener for China'
-              )}
-            disabled={isLoading}
-          >
-            <span class="workflow-title">Geographic analysis</span>
-            <span class="workflow-desc">Country-by-country breakdown</span>
-          </button>
-        </div>
-      </div>
-
-      <div class="sidebar-footer">
-        <p class="sidebar-note">
-          Gembot uses GEM's ownership database to answer questions about energy infrastructure
-          worldwide.
-        </p>
-        <a href={link('about')} class="learn-more">Learn more about the data →</a>
-      </div>
       </aside>
     {/if}
   </div>

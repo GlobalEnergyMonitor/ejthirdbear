@@ -10,11 +10,7 @@
   import DatasetFactsheet from '$lib/widgets/DatasetFactsheet.svelte';
   import ProjectCard from '$lib/components/cards/ProjectCard.svelte';
   import { listAssetsByType } from '$lib/ownership-api';
-  import {
-    trackerNameToSlug,
-    trackerMetadata,
-    slugToTrackerName,
-  } from '$lib/data-config/tracker-metadata';
+  import { trackerNameToSlug, trackerMetadata } from '$lib/data-config/tracker-metadata';
   import { URL_SLUG_TO_TRACKER } from '$lib/data-config/tracker-schema';
   import PageHeader from '$lib/components/nav/PageHeader.svelte';
   import SeoMeta from '$lib/components/nav/SeoMeta.svelte';

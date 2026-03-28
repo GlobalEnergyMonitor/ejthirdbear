@@ -226,7 +226,7 @@
 
   // Streaming state — results appear as they arrive
   let baseProbesLive = $state([]);
-  let statusProbesLive = $state([]);
+  let _statusProbesLive = $state([]);
 
   // API-discovered metadata
   let apiMeta = $state(null);
@@ -280,7 +280,11 @@
         const subStatusKeys = f.sub_status ? Object.keys(f.sub_status) : [];
         return statusKeys.length === 0 && subStatusKeys.length === 0 && (fd.total ?? 0) > 0;
       })
-      .map(([slug]) => ({ slug, displayName: API_SLUGS[slug] || slug, total: facetDetails[slug]?.total }));
+      .map(([slug]) => ({
+        slug,
+        displayName: API_SLUGS[slug] || slug,
+        total: facetDetails[slug]?.total,
+      }));
 
     return {
       timestamp: new Date().toISOString(),
@@ -301,7 +305,8 @@
           total: statusProbes.length,
           healthy: statusProbes.filter((p) => p.ok).length,
           zeroCount: zeroCountStatuses.length,
-          expectedZeros: statusProbes.filter((p) => p.ok && p.total === 0).length - zeroCountStatuses.length,
+          expectedZeros:
+            statusProbes.filter((p) => p.ok && p.total === 0).length - zeroCountStatuses.length,
         },
         slugResolution: { total: slugResolution.length, failures: slugResolutionFailures.length },
         assetClasses: { total: assetClasses.length, withFailures: assetClassFailures.length },
@@ -356,7 +361,7 @@
     loading = true;
     error = null;
     baseProbesLive = [];
-    statusProbesLive = [];
+    _statusProbesLive = [];
     apiMeta = null;
     const start = Date.now();
     const timer = setInterval(() => {
@@ -451,7 +456,7 @@
             facets: false,
           }));
           statusProbes.push(...asStatusProbes);
-          statusProbesLive = [...statusProbes];
+          _statusProbesLive = [...statusProbes];
           data = buildData(baseProbes, statusProbes);
         }
       }
@@ -910,7 +915,10 @@
             <div class="facet-card" in:fly={{ y: 12, duration: 250, delay: 420 + si * 50 }}>
               <div class="facet-card-header">
                 <code>{slug}</code>
-                <span class="facet-card-meta">{total != null ? `${total.toLocaleString()} assets · ` : ''}{Object.keys(facets).length} facets</span>
+                <span class="facet-card-meta"
+                  >{total != null ? `${total.toLocaleString()} assets · ` : ''}{Object.keys(facets)
+                    .length} facets</span
+                >
               </div>
               {#each Object.entries(facets) as [category, values]}
                 <div class="facet-section">

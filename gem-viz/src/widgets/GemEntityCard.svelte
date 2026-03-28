@@ -172,27 +172,80 @@
     padding-bottom: var(--space-4);
     border-bottom: var(--border-width) solid var(--color-border);
   }
-  .header-text { flex: 1; }
-  .header-flower { flex-shrink: 0; }
-  h1 { font-size: var(--font-size-xl); font-weight: 600; margin: 0 0 var(--space-1) 0; }
-  .subtitle { font-size: var(--font-size-body); color: var(--color-text-secondary); margin: 0; }
-  .tracker-summary { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-4); }
-  .tracker-chip {
-    display: inline-flex; align-items: center; gap: 4px;
-    padding: 2px 8px; font-size: var(--font-size-sm);
-    background: var(--color-bg-tertiary); border: var(--border-width) solid var(--color-border);
+  .header-text {
+    flex: 1;
   }
-  .asset-list { display: flex; flex-direction: column; gap: var(--space-1); }
+  .header-flower {
+    flex-shrink: 0;
+  }
+  h1 {
+    font-size: var(--font-size-xl);
+    font-weight: 600;
+    margin: 0 0 var(--space-1) 0;
+  }
+  .subtitle {
+    font-size: var(--font-size-body);
+    color: var(--color-text-secondary);
+    margin: 0;
+  }
+  .tracker-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-bottom: var(--space-4);
+  }
+  .tracker-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    font-size: var(--font-size-sm);
+    background: var(--color-bg-tertiary);
+    border: var(--border-width) solid var(--color-border);
+  }
+  .asset-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
   .asset-row {
-    display: flex; align-items: center; gap: var(--space-2);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
     padding: var(--space-2) var(--space-3);
-    background: var(--color-bg-secondary); border: var(--border-width) solid var(--color-border-light);
-    text-decoration: none; color: inherit; font-size: var(--font-size-body);
+    background: var(--color-bg-secondary);
+    border: var(--border-width) solid var(--color-border-light);
+    text-decoration: none;
+    color: inherit;
+    font-size: var(--font-size-body);
     transition: border-color var(--transition-fast);
   }
-  .asset-row:hover { border-color: var(--color-border-dark); }
-  .asset-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .capacity { font-size: var(--font-size-sm); color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; }
-  .more-assets { font-size: var(--font-size-sm); color: var(--color-text-tertiary); text-align: center; margin: var(--space-2) 0 0 0; }
-  h2 { font-size: var(--font-size-sm); font-weight: 600; text-transform: uppercase; letter-spacing: var(--tracking-caps); color: var(--color-text-tertiary); margin: 0 0 var(--space-2) 0; }
+  .asset-row:hover {
+    border-color: var(--color-border-dark);
+  }
+  .asset-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .capacity {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-tertiary);
+    font-variant-numeric: tabular-nums;
+  }
+  .more-assets {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-tertiary);
+    text-align: center;
+    margin: var(--space-2) 0 0 0;
+  }
+  h2 {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-caps);
+    color: var(--color-text-tertiary);
+    margin: 0 0 var(--space-2) 0;
+  }
 </style>

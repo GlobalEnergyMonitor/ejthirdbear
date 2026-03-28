@@ -203,9 +203,7 @@ async function openComposeControl(args: ToolArgs): Promise<ToolResult> {
   const filters = emptyFilterState();
   const readList = (value: unknown) => {
     if (Array.isArray(value)) {
-      return value
-        .map((item) => (typeof item === 'string' ? item.trim() : ''))
-        .filter(Boolean);
+      return value.map((item) => (typeof item === 'string' ? item.trim() : '')).filter(Boolean);
     }
     if (typeof value === 'string' && value.trim()) {
       return [value.trim()];
@@ -242,11 +240,7 @@ async function openComposeControl(args: ToolArgs): Promise<ToolResult> {
   ) {
     [filters.capacityMin, filters.capacityMax] = [filters.capacityMax, filters.capacityMin];
   }
-  if (
-    filters.shareMin != null &&
-    filters.shareMax != null &&
-    filters.shareMin > filters.shareMax
-  ) {
+  if (filters.shareMin != null && filters.shareMax != null && filters.shareMin > filters.shareMax) {
     [filters.shareMin, filters.shareMax] = [filters.shareMax, filters.shareMin];
   }
   if (

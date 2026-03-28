@@ -9,7 +9,7 @@
    * - Live updating
    */
 
-  import { formatCompact } from '$lib/format';
+  import { formatCompact } from '$lib/utils/format';
 
   /**
    * @type {{
