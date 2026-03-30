@@ -319,6 +319,7 @@
         height={TL.rowH}
         fill="transparent"
         style="cursor: default;"
+        role="img"
         onmouseenter={(e) => {
           hoveredRowIndex = i;
           tlTooltip = { text: rowTooltip(row), x: e.clientX, y: e.clientY };

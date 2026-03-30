@@ -19,7 +19,7 @@
       ? trackerParam
       : TRACKERS[3]
   );
-  let selectedTracker = $state<string>(resolvedTracker);
+  let selectedTracker = $state<string>(TRACKERS[3]);
 
   // Sync URL → state when param changes (e.g. back/forward nav)
   $effect(() => {

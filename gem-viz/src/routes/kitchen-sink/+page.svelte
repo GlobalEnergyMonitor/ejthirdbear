@@ -1773,10 +1773,6 @@
     color: var(--color-text-primary);
   }
 
-  .comp-note {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-tertiary);
-  }
 
   /* Typography Reference */
   .type-samples {

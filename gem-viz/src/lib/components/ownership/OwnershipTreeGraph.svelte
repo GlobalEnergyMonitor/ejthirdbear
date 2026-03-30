@@ -1181,6 +1181,7 @@
           class="graph-wrap"
           class:panning={isPanning}
           bind:this={graphWrapEl}
+          role="application"
           onpointerdown={startPan}
           onpointermove={movePan}
           onpointerup={endPan}
@@ -1188,9 +1189,12 @@
           onpointerleave={endPan}
           onwheel={onGraphWheel}
         >
+          <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
           <svg
             viewBox="{vbX} {vbY} {vbW} {vbH}"
             preserveAspectRatio="xMidYMid meet"
+            role="img"
+            aria-label="Ownership tree graph"
             style={isLargeGraph
               ? `width: ${Math.round(graphBaseWidth)}px; min-height: ${Math.round(graphBaseHeight)}px;`
               : !compact
@@ -1202,6 +1206,12 @@
                 ev.target === ev.currentTarget ||
                 (ev.target instanceof Element && ev.target.tagName === 'svg')
               ) {
+                frozenId = null;
+                frozenNodeData = null;
+              }
+            }}
+            onkeydown={(ev) => {
+              if (ev.key === 'Escape') {
                 frozenId = null;
                 frozenNodeData = null;
               }
@@ -1574,17 +1584,6 @@
   }
 
   /* Staggered entrance animation — nodes pop in, edges fade in */
-  .node.entrance {
-    animation: node-enter 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-  }
-  .node.entrance circle,
-  .node.entrance rect {
-    animation: shape-enter 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-    animation-delay: inherit;
-  }
-  .edge.entrance {
-    animation: edge-enter 0.4s ease-out both;
-  }
   @keyframes node-enter {
     from {
       opacity: 0;
@@ -1864,20 +1863,7 @@
     margin-bottom: 0;
   }
 
-  /* Panel toggle — hidden on desktop */
-  .panel-toggle {
-    display: none;
-    width: 100%;
-    padding: 8px 12px;
-    font-size: 12px;
-    font-weight: 500;
-    background: var(--color-bg-secondary, #f5f5f5);
-    border: 1px solid var(--color-border, #e0e0e0);
-    border-radius: 6px;
-    cursor: pointer;
-    color: var(--color-text-primary, #1d4961);
-    margin-bottom: 6px;
-  }
+  /* Panel toggle — moved to OwnershipPanel.svelte */
 
   /* Mobile responsive */
   @media (max-width: 768px) {

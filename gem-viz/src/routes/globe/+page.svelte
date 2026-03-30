@@ -491,65 +491,6 @@
     font-family: var(--font-family-sans);
   }
 
-  .explorer-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: var(--space-3) var(--space-5);
-    background: var(--color-black);
-    color: var(--color-white);
-    flex-shrink: 0;
-  }
-
-  .header-left {
-    display: flex;
-    align-items: center;
-    gap: var(--space-4);
-  }
-
-  .back-link {
-    font-size: var(--font-size-sm);
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-tight);
-    color: rgba(255, 255, 255, 0.6);
-    text-decoration: none;
-  }
-
-  .back-link:hover {
-    color: var(--color-white);
-  }
-
-  h1 {
-    font-size: var(--font-size-lg);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-wide);
-    margin: 0;
-  }
-
-  .header-stats {
-    display: flex;
-    gap: var(--space-6);
-  }
-
-  .stat {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-  }
-
-  .stat-value {
-    font-size: var(--font-size-2xl);
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .stat-label {
-    font-size: var(--font-size-base);
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-tight);
-    opacity: 0.6;
-  }
 
   .explorer-body {
     display: flex;
@@ -825,8 +766,5 @@
       border-bottom: var(--border-width) solid var(--color-border);
     }
 
-    .header-stats {
-      display: none;
-    }
   }
 </style>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import type { CoalPlantUnit } from './coal-plant-types';
   import OwnershipTreeGraph from '$lib/components/ownership/OwnershipTreeGraph.svelte';
   import type { GraphNode, GraphEdge, OwnershipPathEntry } from '$lib/component-data/graph-types';
@@ -120,7 +121,7 @@
     })
   );
 
-  let unitsExpanded = $state(units.length === 1);
+  let unitsExpanded = $state(untrack(() => units.length) === 1);
 
   // Group units by status for plant summary table
   const statusGroups = $derived.by(() => {
@@ -404,7 +405,7 @@
   ] as const;
   type TabName = (typeof TABS)[number];
   let activeTab = $state<TabName>(
-    initialTab && TABS.includes(initialTab as TabName) ? (initialTab as TabName) : 'Overview'
+    untrack(() => initialTab && TABS.includes(initialTab as TabName) ? (initialTab as TabName) : 'Overview')
   );
 
   function switchTab(tab: TabName) {
@@ -464,7 +465,7 @@
   <!-- ── Full card ───────────────────────────────────────────────────────── -->
   <div class="card-full">
     <!-- Tab bar -->
-    <nav class="tab-bar" role="tablist">
+    <div class="tab-bar" role="tablist">
       {#each TABS as tab}
         <button
           class="tab-btn"
@@ -474,7 +475,7 @@
           onclick={() => switchTab(tab)}>{tab}</button
         >
       {/each}
-    </nav>
+    </div>
 
     <!-- Tab content (grid-stacked so all tabs are measured; only active is visible) -->
     <div class="tabs-wrapper">

@@ -1246,10 +1246,6 @@
     margin-bottom: var(--space-4);
   }
 
-  .welcome-state h2 {
-    font-size: var(--font-size-2xl);
-    margin-bottom: var(--space-3);
-  }
 
   /* welcome-text uses global .lead utility */
 
@@ -2117,9 +2113,6 @@
     border-color: var(--color-border);
   }
 
-  .workflows-section h4 {
-    color: var(--gem-navy);
-  }
 
   /* workflow-chips uses sidebar-panel__list from utilities */
 
@@ -2168,10 +2161,6 @@
     flex-direction: column;
   }
 
-  .mentioned-panel h4 {
-    color: var(--color-text-primary);
-    margin-bottom: var(--space-2);
-  }
 
   .mentioned-scroll {
     flex: 1;

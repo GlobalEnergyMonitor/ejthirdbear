@@ -175,6 +175,7 @@
   <div
     class="mobile-modal-backdrop"
     onclick={closeModal}
+    onkeydown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') closeModal(); }}
     role="button"
     tabindex="-1"
     aria-label="Close field detail"
@@ -572,12 +573,6 @@
     padding: var(--space-5);
   }
 
-  .no-stats {
-    color: var(--color-text-tertiary);
-    font-size: var(--font-size-sm);
-    font-style: italic;
-    margin-top: var(--space-2);
-  }
 
   /* Mobile: hide right panel, show modal instead */
   @media (max-width: 640px) {

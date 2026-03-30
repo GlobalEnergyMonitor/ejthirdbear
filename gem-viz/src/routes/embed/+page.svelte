@@ -300,9 +300,11 @@
 
           <h3>Parameters</h3>
           <table class="meta-params">
-            {#each w.params as p}
-              <tr><td><code>{p.k}</code></td><td>{p.d}</td></tr>
-            {/each}
+            <tbody>
+              {#each w.params as p}
+                <tr><td><code>{p.k}</code></td><td>{p.d}</td></tr>
+              {/each}
+            </tbody>
           </table>
 
           <h3>Embed Code</h3>

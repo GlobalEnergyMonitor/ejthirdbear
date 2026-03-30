@@ -144,6 +144,16 @@
                 onFreeze(data.ids[0] || null, data.ids.length > 0 ? { nodesTouched: data.ids, edgeIndices: [] } : null);
               }
             }}
+            onkeydown={(ev) => {
+              if (ev.key === 'Enter' || ev.key === ' ') {
+                ev.preventDefault();
+                if (frozenId && data.ids.includes(frozenId)) {
+                  onFreeze(null, null);
+                } else {
+                  onFreeze(data.ids[0] || null, data.ids.length > 0 ? { nodesTouched: data.ids, edgeIndices: [] } : null);
+                }
+              }
+            }}
           >
             <span class="table-row-text">{country} ({data.count} owner{data.count !== 1 ? 's' : ''})</span>
           </div>
@@ -174,6 +184,16 @@
                 onFreeze(null, null);
               } else {
                 onFreeze(data.ids[0] || null, data.ids.length > 0 ? { nodesTouched: data.ids, edgeIndices: [] } : null);
+              }
+            }}
+            onkeydown={(ev) => {
+              if (ev.key === 'Enter' || ev.key === ' ') {
+                ev.preventDefault();
+                if (frozenId && data.ids.includes(frozenId)) {
+                  onFreeze(null, null);
+                } else {
+                  onFreeze(data.ids[0] || null, data.ids.length > 0 ? { nodesTouched: data.ids, edgeIndices: [] } : null);
+                }
               }
             }}
           >

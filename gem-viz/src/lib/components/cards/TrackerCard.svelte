@@ -64,7 +64,7 @@
     {:else if loadError}
       <p class="tracker-card-status error">{loadError}</p>
     {:else if CardComponent && cardProps}
-      <svelte:component this={CardComponent} {...cardProps} />
+      <CardComponent {...cardProps} />
     {/if}
   </section>
 {/if}

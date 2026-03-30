@@ -9,6 +9,7 @@
    *   onStateChange - Called with (q, type) whenever search state changes
    *                   (caller uses this to update URL params or hash)
    */
+  import { untrack } from 'svelte';
   import { listAssets, listEntities, getOwnershipGraph } from '$lib/ownership-api';
   import AssetSearchBar from '$lib/components/search/AssetSearchBar.svelte';
   import OwnershipTreeGraph from '$lib/components/ownership/OwnershipTreeGraph.svelte';
@@ -30,8 +31,8 @@
     { name: 'NTPC', kind: 'entity', q: 'NTPC' },
   ];
 
-  let searchType = $state(initialType);
-  let query = $state(initialQuery);
+  let searchType = $state(untrack(() => initialType));
+  let query = $state(untrack(() => initialQuery));
 
   let results = $state(/** @type {any[]} */ ([]));
   let searching = $state(false);
@@ -172,8 +173,12 @@
   }
 
   // Run initial search if a query was provided
-  if (initialQuery && initialQuery.length >= 2) {
-    doSearch(initialQuery, initialType);
+  {
+    const q = untrack(() => initialQuery);
+    const t = untrack(() => initialType);
+    if (q && q.length >= 2) {
+      doSearch(q, t);
+    }
   }
 </script>
 
@@ -276,9 +281,8 @@
 
 <!-- Modal — position:fixed covers the viewport (page or iframe) -->
 {#if modalOpen && selected}
-  <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-  <div class="cc-modal-backdrop" onclick={closeModal}>
-    <div class="cc-modal" onclick={(e) => e.stopPropagation()}>
+  <div class="cc-modal-backdrop" onclick={closeModal} onkeydown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') closeModal(); }} role="button" tabindex="-1">
+    <div class="cc-modal" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()} role="dialog" tabindex="-1">
       <div class="cc-modal-header">
         <div>
           <h2>{selected.name}</h2>

@@ -9,8 +9,10 @@
   import StatusIcon from '$lib/components/tracker/StatusIcon.svelte';
   import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
-  let searchType = $state(/** @type {string} */ ($page.url.searchParams.get('type') || 'all'));
-  let query = $state($page.url.searchParams.get('q') || '');
+  const _initSearchType = /** @type {string} */ ($page.url.searchParams.get('type') || 'all');
+  const _initQuery = $page.url.searchParams.get('q') || '';
+  let searchType = $state(_initSearchType);
+  let query = $state(_initQuery);
 
   let results = $state(/** @type {any[]} */ ([]));
   let searching = $state(false);
@@ -163,8 +165,8 @@
   }
 
   // Run initial search if URL has query params
-  if (query) {
-    doSearch(query, searchType);
+  if (_initQuery) {
+    doSearch(_initQuery, _initSearchType);
   }
 </script>
 
