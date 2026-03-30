@@ -1132,6 +1132,18 @@
             {/if}
           </div>
         {/if}
+        {#if frozenId}
+          {@const frozenNode = nodes.find((n) => n.id === frozenId)}
+          <div class="focus-indicator">
+            <span class="focus-label">Focused on: <strong>{frozenNode?.name || frozenNode?.Name || frozenId}</strong></span>
+            <button
+              type="button"
+              class="focus-clear"
+              onclick={() => { frozenId = null; frozenNodeData = null; }}
+              aria-label="Clear focus"
+            >&#10005;</button>
+          </div>
+        {/if}
         <div
           class="graph-wrap"
           class:panning={isPanning}
@@ -1899,15 +1911,50 @@
   .table-row-text {
     pointer-events: none;
   }
-  /* Observable's tease-connection: when hovering a graph node,
-     the matching rows across all 3 sidebar sections get a mint bullet */
+  /* Focus indicator — visible when a path is pinned */
+  .focus-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 10px;
+    background: rgba(0, 79, 97, 0.08);
+    border: 1px solid rgba(0, 79, 97, 0.15);
+    border-radius: 4px;
+    font-size: 0.75rem;
+    color: var(--tree-navy, #1D4961);
+    margin-bottom: 6px;
+    animation: tooltip-in 0.15s ease-out;
+  }
+  .focus-label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .focus-clear {
+    background: none;
+    border: none;
+    color: var(--tree-teal, #004F61);
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 2px 4px;
+    border-radius: 3px;
+    opacity: 0.6;
+  }
+  .focus-clear:hover {
+    opacity: 1;
+    background: rgba(0, 79, 97, 0.1);
+  }
+
+  /* Tease-connection: when hovering a graph node, matching sidebar rows highlight */
   .tabular-row.tease-connection {
     font-weight: 600;
-  }
-  .tabular-row.tease-connection > .table-row-text::before {
-    content: '•';
-    color: var(--tree-mint);
-    margin-right: 4px;
+    background: rgba(157, 247, 229, 0.15);
+    border-left: 3px solid var(--tree-mint, #9DF7E5);
+    padding-left: 5px;
+    border-radius: 0 4px 4px 0;
   }
 
   /* Color toggle & legend */
