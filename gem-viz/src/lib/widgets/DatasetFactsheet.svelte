@@ -28,6 +28,8 @@
     categoriesOrdered = [] as string[],
     catalogSlug = '' as string,
     title = 'Dataset Fields',
+    initialField = '' as string,
+    onFieldSelect = undefined as ((fieldName: string) => void) | undefined,
   } = $props();
 
   function linkifyDefinition(text: string): string {
@@ -114,6 +116,8 @@
     numericStats = null;
     fieldStats = [];
 
+    onFieldSelect?.(field.columnName);
+
     const codeFriendlyName = (field as any).codeFriendlyName as string | undefined;
     const dataType = (field as any).dataType as string | undefined;
 
@@ -136,13 +140,31 @@
     modalOpen = false;
   }
 
+  // Lock body scroll when mobile modal is open
+  $effect(() => {
+    if (typeof document === 'undefined') return;
+    if (modalOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  });
+
   onMount(async () => {
     loading = true;
     rowCount = await fetchRowCount(tracker);
-    // Auto-select first field (Status)
-    const statusField = fieldsMetadata.find((f) => f.columnName === 'Status' && !f.fieldValue);
-    if (statusField) {
-      await loadStats(statusField);
+    // Auto-select field from initialField prop, or default to Status
+    const targetName = initialField || 'Status';
+    const targetField = fieldsMetadata.find((f) => f.columnName === targetName && !f.fieldValue);
+    if (targetField) {
+      // Expand the category so the field is visible
+      if (targetField.category && !expandedCategories.has(targetField.category)) {
+        expandedCategories = new Set([...expandedCategories, targetField.category]);
+      }
+      await loadStats(targetField);
     }
     loading = false;
   });
@@ -163,6 +185,7 @@
     aria-modal="true"
     aria-label="Field detail: {selectedField.columnName}"
   >
+    <div class="drag-handle" aria-hidden="true"></div>
     <div class="mobile-modal-header">
       <h4>Field: {selectedField.columnName}</h4>
       <button type="button" class="modal-close" onclick={closeModal} aria-label="Close">✕</button>
@@ -216,7 +239,6 @@
           </div>
         {/if}
 
-        {#if uniqueCount === 0 && valueDefinitions.length === 0}{/if}
       {/if}
     </div>
   </div>
@@ -323,10 +345,9 @@
           </div>
         {/if}
 
-        {#if uniqueCount === 0 && valueDefinitions.length === 0}{/if}
       {/if}
     {:else}
-      <div class="placeholder">Click field-name bubbles to see details</div>
+      <p class="placeholder">Click field-name bubbles to see details</p>
     {/if}
   </div>
 </div>
@@ -596,6 +617,15 @@
       max-height: 75vh;
       display: flex;
       flex-direction: column;
+    }
+
+    .drag-handle {
+      width: 36px;
+      height: 4px;
+      background: var(--color-border);
+      border-radius: 2px;
+      margin: 8px auto 0;
+      flex-shrink: 0;
     }
 
     .mobile-modal-header {
