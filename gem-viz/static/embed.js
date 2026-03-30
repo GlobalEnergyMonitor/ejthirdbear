@@ -343,7 +343,7 @@
   var embedCounter = 0;
 
   var initContainer = function (container) {
-    var mode = (container.getAttribute('data-mode') || 'iframe').toLowerCase();
+    var mode = (container.getAttribute('data-mode') || 'dynamic').toLowerCase();
     if (mode === 'dynamic') {
       createDynamic(container, embedCounter++);
     } else {
