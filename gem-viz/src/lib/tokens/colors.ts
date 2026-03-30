@@ -260,6 +260,22 @@ export const ownershipColors = {
   entityOtherLight: '#dce3e5',
 } as const;
 
+/**
+ * Country color palette for ownership tree "color by country" mode.
+ * Top 5 countries get distinct colors; additional countries use gray fallback.
+ * Each triple: bg (circle fill), fg (pie arc, dark), light (hover highlight).
+ * TODO: refine these with Nadieh — intentionally garish placeholders for now.
+ */
+export const countryPalette = [
+  { bg: '#E8A87C', fg: '#8B3A0F', light: '#F5D4BC' }, // peach / burnt sienna
+  { bg: '#85B8CB', fg: '#1B4F6B', light: '#C2DCE5' }, // steel blue / dark navy
+  { bg: '#C4A6D6', fg: '#4A2170', light: '#E2D3EB' }, // lavender / deep purple
+  { bg: '#8FC49E', fg: '#1F5C2E', light: '#C7E2CE' }, // sage / forest
+  { bg: '#D4B483', fg: '#6B4C1D', light: '#EAD9C1' }, // sand / dark amber
+] as const;
+
+export const countryGray = { bg: '#BECCCF', fg: '#3a4d51', light: '#dce3e5' } as const;
+
 // =============================================================================
 // 6. LEGACY EXPORTS
 // =============================================================================

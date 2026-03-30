@@ -27,6 +27,9 @@
     pieArc,
     edgePath,
     getNodeColors,
+    COUNTRY_COLORS,
+    COUNTRY_GRAY,
+    type ColorMode,
   } from './ownership-tree-utils';
   import { buildNarrativeText } from './ownership-tree-narrative';
 
@@ -175,6 +178,9 @@
 
   // Ownership % filter slider — 0 means show all
   let minOwnershipPct = $state(0);
+
+  // Color-by mode — entity-type or country
+  let colorMode = $state<ColorMode>('entity-type');
 
   const renderNodes = $derived.by(() => {
     if (minOwnershipPct <= 0) return renderSubset.nodes;
@@ -333,17 +339,27 @@
     return m;
   });
 
-  // Color-by logic: fixed 4-category entity-type coloring matching Observable
+  // Color-by logic: entity-type or country mode
   const colorConfig = $derived.by(() => {
-    const entityNodes = renderNodes.filter((n) => n.type !== 'asset' && n.id !== rootId);
+    if (colorMode === 'country') {
+      const items: Array<{ label: string; bg: string; fg: string; light: string }> = [];
+      let i = 0;
+      for (const [country] of ownersByCountry) {
+        if (country === 'Unknown') continue;
+        const colors = i < COUNTRY_COLORS.length ? COUNTRY_COLORS[i] : COUNTRY_GRAY;
+        items.push({ label: country, ...colors });
+        i++;
+        if (i > 5) break;
+      }
+      return { legendItems: items };
+    }
 
-    // Classify each node into one of the 4 Observable categories
+    // Entity-type mode (default)
+    const entityNodes = renderNodes.filter((n) => n.type !== 'asset' && n.id !== rootId);
     const categoriesPresent = new Set<string>();
     for (const n of entityNodes) {
       categoriesPresent.add(classifyOwnerType(n));
     }
-
-    // Legend items — only show categories that are present in the data
     const legendItems = Object.entries(OWNERSHIP_ENTITY_COLORS)
       .filter(([cat]) => categoriesPresent.has(cat))
       .map(([label, colors]) => ({ label, ...colors }));
@@ -421,6 +437,31 @@
       }
     }
     return [...map.entries()].sort((a, b) => b[1].combinedShare - a[1].combinedShare);
+  });
+
+  // Country ranks for color-by-country mode (top 5 by cumulative ownership %)
+  const countryRanks = $derived.by(() => {
+    const ranks = new Map<string, number>();
+    let i = 0;
+    for (const [country] of ownersByCountry) {
+      if (country === 'Unknown') continue;
+      ranks.set(country, i++);
+    }
+    return ranks;
+  });
+
+  // Smart default: if all entities are the same type, color by country instead
+  const uniqueEntityTypes = $derived(new Set(ownersList.map((o) => o.category)).size);
+  const uniqueCountries = $derived(
+    new Set(ownersList.map((o) => o.country).filter(Boolean)).size
+  );
+
+  $effect(() => {
+    if (uniqueEntityTypes <= 1 && uniqueCountries > 1) {
+      colorMode = 'country';
+    } else {
+      colorMode = 'entity-type';
+    }
   });
 
   // Lookup original GraphNode for tooltip (by hovered layout node id)
@@ -1010,6 +1051,12 @@
                 hidden) for responsive rendering.
               </div>
             {/if}
+            {#if uniqueEntityTypes > 1 && uniqueCountries > 1}
+              <select class="color-mode-select" bind:value={colorMode}>
+                <option value="entity-type">Entity Type</option>
+                <option value="country">Country</option>
+              </select>
+            {/if}
             {#if colorConfig.legendItems.length > 0}
               <div class="color-legend">
                 {#each colorConfig.legendItems as item}
@@ -1231,7 +1278,7 @@
                       >
                     {/if}
                   {:else}
-                    {@const nodeColors = getNodeColors(n.id, rootId, nodes)}
+                    {@const nodeColors = getNodeColors(n.id, rootId, nodes, colorMode, countryRanks)}
                     {@const circlePad = Math.round(nodeR * 0.18)}
                     {@const visualR =
                       n.r -
@@ -1327,7 +1374,7 @@
             <h4>Owner Entities</h4>
             <div class="tabular-rows">
               {#each sortedOwnersList as o}
-                {@const _rowColors = getNodeColors(o.id, rootId, nodes)}
+                {@const _rowColors = getNodeColors(o.id, rootId, nodes, colorMode, countryRanks)}
                 {@const inFrozenChain =
                   !frozenNodeData ||
                   frozenId === o.id ||
@@ -1828,6 +1875,15 @@
     align-items: center;
     gap: 12px;
     margin-bottom: 8px;
+  }
+  .color-mode-select {
+    font-size: 0.75rem;
+    padding: 2px 6px;
+    border: 1px solid var(--tree-edge-imputed, #dce3e5);
+    border-radius: 4px;
+    background: var(--tree-warm-white, #F2F2EB);
+    color: var(--tree-navy, #1D4961);
+    cursor: pointer;
   }
   .ownership-slider {
     display: flex;

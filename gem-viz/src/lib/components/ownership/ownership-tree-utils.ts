@@ -4,7 +4,7 @@
 
 import type { GraphNode, LayoutPoint } from '$lib/component-data/graph-types';
 import { line, curveBasis } from 'd3-shape';
-import { ownershipColors } from '$lib/design-tokens';
+import { ownershipColors, countryPalette, countryGray } from '$lib/design-tokens';
 
 // Design tokens — sourced from design-tokens.ts (GEM brand)
 export const TREE_COLORS = {
@@ -41,6 +41,12 @@ export const OWNERSHIP_ENTITY_COLORS: Record<string, { bg: string; fg: string; l
     light: ownershipColors.entityOtherLight,
   },
 };
+
+// Color-by mode for the ownership tree
+export type ColorMode = 'entity-type' | 'country';
+
+export const COUNTRY_COLORS = countryPalette;
+export const COUNTRY_GRAY = countryGray;
 
 /** Observable's ownerType classification function. */
 export function classifyOwnerType(node: GraphNode): string {
@@ -81,20 +87,30 @@ export function edgePath(pts: LayoutPoint[]): string {
   );
 }
 
-/** Get paired colors for a node using Observable's 4-category classification. */
+/** Get paired colors for a node based on active color mode. */
 export function getNodeColors(
   nodeId: string,
   rootId: string,
-  nodes: GraphNode[]
+  nodes: GraphNode[],
+  mode: ColorMode = 'entity-type',
+  countryRanks?: Map<string, number>
 ): { bg: string; fg: string; light: string } {
   const orig = nodes.find((n) => n.id === nodeId);
   if (!orig || orig.type === 'asset' || orig.id === rootId) {
     return {
       bg: TREE_COLORS.nodeFill,
       fg: TREE_COLORS.teal,
-      light: ownershipColors.entityOtherLight,
+      light: COUNTRY_GRAY.light,
     };
   }
+
+  if (mode === 'country' && countryRanks) {
+    const country = orig.headquarters_country || '';
+    const rank = countryRanks.get(country);
+    if (rank != null && rank < COUNTRY_COLORS.length) return { ...COUNTRY_COLORS[rank] };
+    return { ...COUNTRY_GRAY };
+  }
+
   const category = classifyOwnerType(orig);
   return OWNERSHIP_ENTITY_COLORS[category] || OWNERSHIP_ENTITY_COLORS['Other'];
 }
