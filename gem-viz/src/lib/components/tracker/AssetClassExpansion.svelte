@@ -199,11 +199,6 @@
 
   // ── Modal helpers ─────────────────────────────────────────────────
 
-  // Is the next step optional? (i.e. geography)
-  const _nextStepIsOptional = $derived(
-    currentStep < steps.length - 1 && steps[currentStep + 1]?.optional === true
-  );
-
   // Can the user finish right now? (not blocked by required steps ahead)
   const canFinishNow = $derived.by(() => {
     // Check if all remaining steps are optional

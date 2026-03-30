@@ -316,7 +316,7 @@
   const isEmbed = $derived($page.url.searchParams.get('embed') === 'true');
 
   // Serialized classes param for the step nav (needs selected class to navigate forward)
-  const classesParamForNav = $derived(selectedClass ? JSON.stringify(buildClassData()) : '');
+  const classesParamForNav = $derived(selectedClassId ? JSON.stringify(buildClassData()) : '');
 
   function navigateTo(path) {
     const classData = buildClassData();
@@ -383,8 +383,10 @@
   });
 
   const selectionSummary = $derived.by(() => {
-    if (!selectedClass) return '';
-    const parts = [selectedClass.label].filter(Boolean).join(' ');
+    if (!selectedClassId) return '';
+    const catalogEntry = catalogClasses.find((c) => c.id === selectedClassId);
+    const label = selectedClass?.label ?? catalogEntry?.label ?? selectedClassId;
+    const parts = [label].filter(Boolean).join(' ');
     const geo =
       geoFilters.length === 1
         ? ` in ${geoFilters[0]}`
@@ -529,12 +531,13 @@
   {/if}
 
   <!-- Debug panel -->
-  {#if selectedClass}
+  {#if selectedClassId}
     <DebugPanel title="Query Config">
       <div class="debug-meta">
         <span class="debug-label">Asset Class:</span>
-        <span class="debug-value">{selectedClass.label} ({selectedClass.id})</span>
+        <span class="debug-value">{selectionSummary} ({selectedClassId})</span>
       </div>
+      {#if selectedClass}
       <div class="debug-meta">
         <span class="debug-label">GEM Tracker(s):</span>
         <span class="debug-value">{selectedClass.trackers.join(', ')}</span>
@@ -543,6 +546,7 @@
         <span class="debug-label">UI Tracker:</span>
         <span class="debug-value">{gemTrackerToUiTracker(selectedClass.trackers[0])}</span>
       </div>
+      {/if}
       <div class="debug-meta">
         <span class="debug-label">Statuses:</span>
         <span class="debug-value">{selectedStatuses.join(', ') || 'none'}</span>
@@ -587,8 +591,8 @@
     subtitle="Evaluate companies' ownership stakes in classes of fossil fuel assets. Start by selecting an asset class below."
   >
     {#snippet headerRight()}
-      <div class="selection-badge" class:has-selection={selectedClass}>
-        {#if selectedClass}
+      <div class="selection-badge" class:has-selection={selectedClassId}>
+        {#if selectedClassId}
           <span class="selection-text">{selectionSummary}</span>
           <button class="clear-btn" onclick={clearSelection}>&times;</button>
         {:else}
