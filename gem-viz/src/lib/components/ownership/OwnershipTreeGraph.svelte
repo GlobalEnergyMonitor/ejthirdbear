@@ -29,6 +29,15 @@
     getNodeColors,
     COUNTRY_COLORS,
     COUNTRY_GRAY,
+    SMALL_OWNERSHIP_PCT,
+    MAX_COUNTRY_COLORS,
+    NODE_RADIUS,
+    LARGE_GRAPH_THRESHOLD,
+    ZOOM,
+    GRAPH_MARGIN,
+    OPACITY,
+    DAGRE,
+    PAN_CLICK_THRESHOLD,
     type ColorMode,
   } from './ownership-tree-utils';
   import { buildNarrativeText } from './ownership-tree-narrative';
@@ -218,7 +227,7 @@
   const graphBaseHeight = $derived(Math.max(gHeight, largeGraphMinHeight));
 
   // Large graph threshold — enables scrollable mode with explicit SVG dimensions
-  const isLargeGraph = $derived(!compact && renderNodes.length > 30);
+  const isLargeGraph = $derived(!compact && renderNodes.length > LARGE_GRAPH_THRESHOLD);
 
   // Compute max depth from edge chains (BFS from root)
   const maxDepth = $derived.by(() => {
@@ -269,9 +278,14 @@
   );
 
   // Node radius — matched to Observable's nodeRadius function
-  // Observable: <10 → 28, 10-25 → 22, >25 → 18
   const nodeR = $derived(
-    compact ? 10 : renderNodes.length < 10 ? 28 : renderNodes.length <= 25 ? 22 : 18
+    compact
+      ? NODE_RADIUS.compact
+      : renderNodes.length < 10
+        ? NODE_RADIUS.small
+        : renderNodes.length <= 25
+          ? NODE_RADIUS.medium
+          : NODE_RADIUS.large
   );
 
   // Process paths: compute cumulative ownership % and track which nodes/edges
@@ -358,7 +372,7 @@
         const colors = i < COUNTRY_COLORS.length ? COUNTRY_COLORS[i] : COUNTRY_GRAY;
         items.push({ label: country, ...colors });
         i++;
-        if (i > 5) break;
+        if (i > MAX_COUNTRY_COLORS) break;
       }
       return { legendItems: items };
     }
@@ -574,8 +588,8 @@
     g.setGraph({
       rankdir: graphDirection === 'downstream' ? 'TB' : 'BT',
       nodesep: dynamicNodeSep, // Observable: sizeDependantNodeSeparation
-      ranksep: compact ? 28 : 60, // Observable default: 60
-      edgesep: 0, // Observable default: 0
+      ranksep: compact ? 28 : DAGRE.ranksep,
+      edgesep: DAGRE.edgesep,
       marginx: compact ? 15 : nodeR, // Observable: nodeRadius
       marginy: compact ? 12 : nodeR, // Observable: nodeRadius
     });
@@ -782,26 +796,28 @@
 
   // Path-aware opacity: nodes/edges not on the active (frozen or hovered) path fade
   function getNodeOpacity(n: LayoutNode): number {
-    // Ownership % filter fade — takes priority over other opacity logic
-    if (fadedNodeIds.has(n.id)) return 0.15;
-    if (!activeNodeData) return isLargeGraph ? 0.92 : 1;
-    return n.isAsset || n.id === activeId || activeNodeData.nodesTouched.includes(n.id) ? 1 : 0.1;
+    if (fadedNodeIds.has(n.id)) return OPACITY.fadedNode;
+    if (!activeNodeData) return isLargeGraph ? OPACITY.largeGraphBase : 1;
+    return n.isAsset || n.id === activeId || activeNodeData.nodesTouched.includes(n.id)
+      ? 1
+      : OPACITY.inactiveNode;
   }
   function getEdgeOpacity(idx: number): number {
     const e = layoutEdges[idx];
-    // Ownership % filter fade for edges
-    if (e && fadedEdgeIds.has(`${e.source}->${e.target}`)) return 0.08;
+    if (e && fadedEdgeIds.has(`${e.source}->${e.target}`)) return OPACITY.fadedEdge;
     if (!activeNodeData) {
-      // Observable: per-edge base opacity — small-ownership edges are dimmer
-      if (isLargeGraph) return 0.22;
+      if (isLargeGraph) return OPACITY.largeGraphEdge;
       if (!e) return 1;
       const srcNode = layoutNodes.find((nd) => nd.id === e.source);
       const srcPct = srcNode?.pct ?? 100;
-      if (srcPct < 2) return e.imputed_share ? 0.8 : 0.6;
+      if (srcPct < SMALL_OWNERSHIP_PCT) return e.imputed_share ? 0.8 : 0.6;
       return 1;
     }
-    // Active path edges get full opacity; frozen paths slightly stronger dim on non-path
-    return activeNodeData.edgeIndices.includes(idx) ? 1 : frozenNodeData ? 0.06 : 0.1;
+    return activeNodeData.edgeIndices.includes(idx)
+      ? 1
+      : frozenNodeData
+        ? OPACITY.frozenPathEdge
+        : OPACITY.hoverPathEdge;
   }
   // Frozen-chain edges rendered thicker than hover-chain
   function getEdgeWidthMultiplier(idx: number): number {
@@ -821,7 +837,7 @@
   let graphWrapEl = $state<HTMLDivElement | null>(null);
 
   // SVG margins (matching Observable)
-  const svgMargins = { top: 20, right: 30, bottom: 60, left: 40 };
+  const svgMargins = GRAPH_MARGIN;
   const fullW = $derived(gWidth + svgMargins.left + svgMargins.right);
   const fullH = $derived(gHeight + svgMargins.top + svgMargins.bottom);
 
@@ -863,7 +879,7 @@
       // If pointer barely moved, treat as a background click → clear selection
       const dx = Math.abs(ev.clientX - panStartX);
       const dy = Math.abs(ev.clientY - panStartY);
-      if (isPanning && dx < 4 && dy < 4 && frozenId) {
+      if (isPanning && dx < PAN_CLICK_THRESHOLD && dy < PAN_CLICK_THRESHOLD && frozenId) {
         frozenId = null;
         frozenNodeData = null;
       }
@@ -877,7 +893,7 @@
 
     const curZoom = $zoomSpring;
     const delta = ev.deltaY > 0 ? -0.1 : 0.1;
-    const next = Math.max(0.75, Math.min(8, +(curZoom + delta).toFixed(2)));
+    const next = Math.max(ZOOM.min, Math.min(ZOOM.max, +(curZoom + delta).toFixed(2)));
     if (next === curZoom) return;
 
     // Zoom toward cursor position
@@ -903,7 +919,7 @@
 
   function zoomBy(step: number) {
     const cur = $zoomSpring;
-    const next = Math.max(0.75, Math.min(8, +(cur + step).toFixed(2)));
+    const next = Math.max(ZOOM.min, Math.min(ZOOM.max, +(cur + step).toFixed(2)));
     // Animated zoom toward center (spring handles the transition)
     zoomSpring.set(next);
   }

@@ -6,6 +6,52 @@ import type { GraphNode, LayoutPoint } from '$lib/component-data/graph-types';
 import { line, curveBasis } from 'd3-shape';
 import { ownershipColors, countryPalette, countryGray } from '$lib/design-tokens';
 
+// =============================================================================
+// LAYOUT CONSTANTS — single source of truth for magic numbers
+// =============================================================================
+
+/** Ownership % below this threshold → node rendered at half size */
+export const SMALL_OWNERSHIP_PCT = 2;
+
+/** Max countries shown with distinct colors in country mode (rest → gray) */
+export const MAX_COUNTRY_COLORS = 5;
+
+/** Node radius by graph size: [<10 nodes, 10-25, >25, compact] */
+export const NODE_RADIUS = { small: 28, medium: 22, large: 18, compact: 10 } as const;
+
+/** When graph exceeds this node count, switch to "large graph" mode (dimmer, denser) */
+export const LARGE_GRAPH_THRESHOLD = 30;
+
+/** Zoom range limits */
+export const ZOOM = { min: 0.75, max: 8, wheelStep: 0.1 } as const;
+
+/** SVG margins around the dagre layout */
+export const GRAPH_MARGIN = { top: 20, right: 30, bottom: 60, left: 40 } as const;
+
+/** Opacity values for various node/edge states */
+export const OPACITY = {
+  fadedNode: 0.15,
+  fadedEdge: 0.08,
+  inactiveNode: 0.1,
+  largeGraphBase: 0.92,
+  largeGraphEdge: 0.22,
+  frozenPathEdge: 0.06,
+  hoverPathEdge: 0.1,
+} as const;
+
+/** dagre layout spacing */
+export const DAGRE = { ranksep: 60, edgesep: 0 } as const;
+
+/** Edge weight assignments for dagre priority */
+export const EDGE_WEIGHT = { asset: 3, bothSmall: 1, oneSmall: 2, normal: 3 } as const;
+
+/** Pan vs click distance threshold (pixels) */
+export const PAN_CLICK_THRESHOLD = 4;
+
+// =============================================================================
+// DESIGN TOKENS
+// =============================================================================
+
 // Design tokens — sourced from design-tokens.ts (GEM brand)
 export const TREE_COLORS = {
   navy: ownershipColors.treeNavy,
