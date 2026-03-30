@@ -36,12 +36,18 @@
   function paramList(key: string): string[] {
     const val = param(key);
     if (!val) return [];
-    return val.split(',').map((v) => v.trim()).filter(Boolean);
+    return val
+      .split(',')
+      .map((v) => v.trim())
+      .filter(Boolean);
   }
 
   const vizName = $derived(
-    hashParams['name'] || hashParams['viz'] ||
-    $page.url.searchParams.get('name') || $page.url.searchParams.get('viz') || ''
+    hashParams['name'] ||
+      hashParams['viz'] ||
+      $page.url.searchParams.get('name') ||
+      $page.url.searchParams.get('viz') ||
+      ''
   );
   const searchKey = $derived($page.url.searchParams.toString() + JSON.stringify(hashParams));
 

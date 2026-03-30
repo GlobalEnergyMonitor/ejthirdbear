@@ -44,7 +44,4 @@ export {
 // SMART ASSET FETCHER
 // =============================================================================
 
-export {
-  fetchAssetData,
-  type AssetDataResult,
-} from '$lib/asset-data';
+export { fetchAssetData, type AssetDataResult } from '$lib/asset-data';

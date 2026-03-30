@@ -29,7 +29,7 @@
     catalogSlug = '' as string,
     title = 'Dataset Fields',
     initialField = '' as string,
-    onFieldSelect = undefined as ((fieldName: string) => void) | undefined,
+    onFieldSelect = undefined as ((_name: string) => void) | undefined,
   } = $props();
 
   function linkifyDefinition(text: string): string {
@@ -238,7 +238,6 @@
             {/each}
           </div>
         {/if}
-
       {/if}
     </div>
   </div>
@@ -344,7 +343,6 @@
             {/each}
           </div>
         {/if}
-
       {/if}
     {:else}
       <p class="placeholder">Click field-name bubbles to see details</p>

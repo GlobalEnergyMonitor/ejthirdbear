@@ -406,8 +406,8 @@
     const dimmed: typeof ownersList = [];
     for (const o of ownersList) {
       const isFaded = fadedNodeIds.has(o.id);
-      const outOfChain = frozenNodeData && frozenId !== o.id &&
-        !frozenNodeData.nodesTouched.includes(o.id);
+      const outOfChain =
+        frozenNodeData && frozenId !== o.id && !frozenNodeData.nodesTouched.includes(o.id);
       if (isFaded || outOfChain) {
         dimmed.push(o);
       } else {
@@ -463,9 +463,7 @@
 
   // Smart default: if all entities are the same type, color by country instead
   const uniqueEntityTypes = $derived(new Set(ownersList.map((o) => o.category)).size);
-  const uniqueCountries = $derived(
-    new Set(ownersList.map((o) => o.country).filter(Boolean)).size
-  );
+  const uniqueCountries = $derived(new Set(ownersList.map((o) => o.country).filter(Boolean)).size);
 
   $effect(() => {
     if (uniqueEntityTypes <= 1 && uniqueCountries > 1) {
@@ -1135,13 +1133,18 @@
         {#if frozenId}
           {@const frozenNode = nodes.find((n) => n.id === frozenId)}
           <div class="focus-indicator">
-            <span class="focus-label">Focused on: <strong>{frozenNode?.name || frozenNode?.Name || frozenId}</strong></span>
+            <span class="focus-label"
+              >Focused on: <strong>{frozenNode?.name || frozenNode?.Name || frozenId}</strong></span
+            >
             <button
               type="button"
               class="focus-clear"
-              onclick={() => { frozenId = null; frozenNodeData = null; }}
-              aria-label="Clear focus"
-            >&#10005;</button>
+              onclick={() => {
+                frozenId = null;
+                frozenNodeData = null;
+              }}
+              aria-label="Clear focus">&#10005;</button
+            >
           </div>
         {/if}
         <div
@@ -1267,7 +1270,9 @@
                   class:ownership-faded={isFaded}
                   data-rank={n.rank}
                   transform="translate({n.x},{n.y})"
-                  style="opacity: {entranceAnimDone ? opacity : 0}; pointer-events: {isFaded ? 'none' : 'auto'}"
+                  style="opacity: {entranceAnimDone ? opacity : 0}; pointer-events: {isFaded
+                    ? 'none'
+                    : 'auto'}"
                   role="button"
                   tabindex={isFaded ? -1 : 0}
                   onclick={() => clickNode(n)}
@@ -1307,7 +1312,13 @@
                       >
                     {/if}
                   {:else}
-                    {@const nodeColors = getNodeColors(n.id, rootId, nodes, colorMode, countryRanks)}
+                    {@const nodeColors = getNodeColors(
+                      n.id,
+                      rootId,
+                      nodes,
+                      colorMode,
+                      countryRanks
+                    )}
                     {@const circlePad = Math.round(nodeR * 0.18)}
                     {@const visualR =
                       n.r -
@@ -1567,7 +1578,8 @@
 
           {#if isAsset}
             <div class="tooltip-detail">
-              {hn.asset_type || 'Asset'}{#if hn.operating_status} · {hn.operating_status}{/if}
+              {hn.asset_type || 'Asset'}{#if hn.operating_status}
+                · {hn.operating_status}{/if}
             </div>
             {#if hn.capacity_value}
               <div class="tooltip-detail">{hn.capacity_value} {hn.capacity_unit || 'MW'}</div>
@@ -1580,13 +1592,15 @@
               <div class="tooltip-detail">{hqParts.join(' · ')}</div>
             {/if}
             <div class="tooltip-detail">
-              {ownerCategory}{#if hn.legal_entity_type} · {hn.legal_entity_type}{/if}
+              {ownerCategory}{#if hn.legal_entity_type}
+                · {hn.legal_entity_type}{/if}
             </div>
             {#if pct > 0}
               <div class="tooltip-pct">
                 <span class="tooltip-pct-value">{pct.toFixed(1)}%</span> cumulative
                 {#if directPct > 0 && directPct !== pct}
-                  · {directPct.toFixed(1)}% direct{#if isImputed} (est.){/if}
+                  · {directPct.toFixed(1)}% direct{#if isImputed}
+                    (est.){/if}
                 {/if}
               </div>
             {/if}
@@ -1921,7 +1935,7 @@
     border: 1px solid rgba(0, 79, 97, 0.15);
     border-radius: 4px;
     font-size: 0.75rem;
-    color: var(--tree-navy, #1D4961);
+    color: var(--tree-navy, #1d4961);
     margin-bottom: 6px;
     animation: tooltip-in 0.15s ease-out;
   }
@@ -1935,7 +1949,7 @@
   .focus-clear {
     background: none;
     border: none;
-    color: var(--tree-teal, #004F61);
+    color: var(--tree-teal, #004f61);
     cursor: pointer;
     font-size: 14px;
     line-height: 1;
@@ -1952,7 +1966,7 @@
   .tabular-row.tease-connection {
     font-weight: 600;
     background: rgba(157, 247, 229, 0.15);
-    border-left: 3px solid var(--tree-mint, #9DF7E5);
+    border-left: 3px solid var(--tree-mint, #9df7e5);
     padding-left: 5px;
     border-radius: 0 4px 4px 0;
   }
@@ -1970,8 +1984,8 @@
     padding: 2px 6px;
     border: 1px solid var(--tree-edge-imputed, #dce3e5);
     border-radius: 4px;
-    background: var(--tree-warm-white, #F2F2EB);
-    color: var(--tree-navy, #1D4961);
+    background: var(--tree-warm-white, #f2f2eb);
+    color: var(--tree-navy, #1d4961);
     cursor: pointer;
   }
   .ownership-slider {

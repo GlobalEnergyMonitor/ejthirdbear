@@ -404,9 +404,9 @@
     'Additional Details',
   ] as const;
   type TabName = (typeof TABS)[number];
-  const resolvedInitialTab = TABS.find(
-    (t) => t.toLowerCase() === initialTab.toLowerCase()
-  ) as TabName | undefined;
+  const resolvedInitialTab = TABS.find((t) => t.toLowerCase() === initialTab.toLowerCase()) as
+    | TabName
+    | undefined;
   let activeTab = $state<TabName>(resolvedInitialTab ?? 'Overview');
 
   // ── Ownership tree (lazy-loaded on first tab activation) ───────────────────
@@ -618,7 +618,10 @@
           class:active={activeTab === tab}
           role="tab"
           aria-selected={activeTab === tab}
-          onclick={() => { activeTab = tab; onTabChange?.(tab); }}>{tab}</button
+          onclick={() => {
+            activeTab = tab;
+            onTabChange?.(tab);
+          }}>{tab}</button
         >
       {/each}
     </nav>

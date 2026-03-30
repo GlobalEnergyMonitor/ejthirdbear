@@ -134,4 +134,3 @@ export interface LayoutEdge {
   /** Whether this edge's ownership share was imputed (tree graph only) */
   imputed_share?: boolean;
 }
-

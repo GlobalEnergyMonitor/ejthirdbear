@@ -534,4 +534,3 @@ export async function getTopOwners(limit: number = 20): Promise<TopOwner[]> {
     return [];
   }
 }
-

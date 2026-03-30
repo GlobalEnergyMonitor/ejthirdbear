@@ -224,7 +224,9 @@ async function* paginateCatalogUrl(
   }
 
   while (offset < MAX_OFFSET) {
-    const page = await listAssets({ ...paramMap, limit: BATCH, offset } as Parameters<typeof listAssets>[0]);
+    const page = await listAssets({ ...paramMap, limit: BATCH, offset } as Parameters<
+      typeof listAssets
+    >[0]);
     if (!page?.results?.length) break;
     yield page.results;
     if (page.results.length < BATCH) break;

@@ -287,7 +287,8 @@
                     <input
                       type="checkbox"
                       checked={catalogAllChecked}
-                      onchange={(e) => toggleAllCatalogChildren((e.target as HTMLInputElement).checked)}
+                      onchange={(e) =>
+                        toggleAllCatalogChildren((e.target as HTMLInputElement).checked)}
                     />
                     <span class="group-label">All subclasses</span>
                   </label>

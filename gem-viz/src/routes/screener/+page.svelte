@@ -82,9 +82,7 @@
 
   /** Direct children of the currently selected class from catalog */
   const catalogChildren = $derived(
-    selectedClassId
-      ? catalogClasses.filter((c) => c.parent === selectedClassId)
-      : []
+    selectedClassId ? catalogClasses.filter((c) => c.parent === selectedClassId) : []
   );
 
   /** Catalog child IDs that the user has checked (keyed by child.id) */
@@ -171,9 +169,7 @@
       // Resolve API slugs: prefer static class trackers, fall back to catalog URL asset_type
       let slugs = [];
       if (ac?.trackers?.length) {
-        slugs = ac.trackers
-          .map((t) => resolveApiSlug(gemTrackerToUiTracker(t)))
-          .filter(Boolean);
+        slugs = ac.trackers.map((t) => resolveApiSlug(gemTrackerToUiTracker(t))).filter(Boolean);
       } else if (catalogEntry?.url) {
         const params = new URLSearchParams(catalogEntry.url.split('?')[1] ?? '');
         const types = params.getAll('asset_type');
@@ -277,7 +273,12 @@
         .filter((c) => catalogChildChecks[c.id] !== false && c.url)
         .map((c) => c.url);
 
-      catalogUrl = buildCatalogUrl(catalogEntry.url, selectedChildren, selectedStatuses, geoFilters);
+      catalogUrl = buildCatalogUrl(
+        catalogEntry.url,
+        selectedChildren,
+        selectedStatuses,
+        geoFilters
+      );
 
       if (catalogEntry.owners_url) {
         const selectedOwnersChildren = catalogChildren
@@ -506,14 +507,16 @@
   {#if selectedClassId}
     {@const staticAc = getAssetClassById(selectedClassId)}
     {@const catalogEntry = catalogClasses.find((c) => c.id === selectedClassId)}
-    {@const expansionClass = staticAc ?? /** @type {any} */ ({
-      id: selectedClassId,
-      label: catalogEntry?.label ?? selectedClassId,
-      description: '',
-      category: catalogEntry?.category ?? '',
-      trackers: [],
-      availableFilters: { status: true, geography: true },
-    })}
+    {@const expansionClass =
+      staticAc ??
+      /** @type {any} */ ({
+        id: selectedClassId,
+        label: catalogEntry?.label ?? selectedClassId,
+        description: '',
+        category: catalogEntry?.category ?? '',
+        trackers: [],
+        availableFilters: { status: true, geography: true },
+      })}
     <AssetClassExpansion
       assetClass={expansionClass}
       bind:subClassChecks
@@ -538,14 +541,14 @@
         <span class="debug-value">{selectionSummary} ({selectedClassId})</span>
       </div>
       {#if selectedClass}
-      <div class="debug-meta">
-        <span class="debug-label">GEM Tracker(s):</span>
-        <span class="debug-value">{selectedClass.trackers.join(', ')}</span>
-      </div>
-      <div class="debug-meta">
-        <span class="debug-label">UI Tracker:</span>
-        <span class="debug-value">{gemTrackerToUiTracker(selectedClass.trackers[0])}</span>
-      </div>
+        <div class="debug-meta">
+          <span class="debug-label">GEM Tracker(s):</span>
+          <span class="debug-value">{selectedClass.trackers.join(', ')}</span>
+        </div>
+        <div class="debug-meta">
+          <span class="debug-label">UI Tracker:</span>
+          <span class="debug-value">{gemTrackerToUiTracker(selectedClass.trackers[0])}</span>
+        </div>
       {/if}
       <div class="debug-meta">
         <span class="debug-label">Statuses:</span>

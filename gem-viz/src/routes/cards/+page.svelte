@@ -15,7 +15,9 @@
   // Filter state — read from URL, fall back to Coal Plant
   const trackerParam = $derived($page.url.searchParams.get('tracker'));
   const resolvedTracker = $derived(
-    trackerParam && (TRACKERS as readonly string[]).includes(trackerParam) ? trackerParam : TRACKERS[3]
+    trackerParam && (TRACKERS as readonly string[]).includes(trackerParam)
+      ? trackerParam
+      : TRACKERS[3]
   );
   let selectedTracker = $state<string>(resolvedTracker);
 

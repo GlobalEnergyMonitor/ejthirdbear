@@ -382,7 +382,7 @@
               values={histogramData}
               unit={selectedField ? inferUnit(selectedField.columnName) : ''}
               nullCount={totalRows - histogramData.length}
-              totalRows={totalRows}
+              {totalRows}
             />
           {/if}
         {/if}

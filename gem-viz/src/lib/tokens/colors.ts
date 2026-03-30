@@ -162,10 +162,7 @@ const _findGroup = (id: string) =>
 
 export const statusGroups = {
   operating: _findGroup('operating'),
-  planned: [
-    ..._findGroup('planned'),
-    'planned',
-  ] as readonly string[],
+  planned: [..._findGroup('planned'), 'planned'] as readonly string[],
   retired: _findGroup('retired'),
   cancelled: _findGroup('cancelled'),
 } as const;

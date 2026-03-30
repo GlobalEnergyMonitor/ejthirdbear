@@ -243,9 +243,7 @@
         )
       : componentIndex
   );
-  const filteredCategories = $derived([
-    ...new Set(filteredComponentIndex.map((c) => c.category)),
-  ]);
+  const filteredCategories = $derived([...new Set(filteredComponentIndex.map((c) => c.category))]);
 
   // Components that need API/complex context — not demoed live
   const complexComponents = [
@@ -837,7 +835,6 @@
       <pre
         class="code-hint">&lt;MiniHistogram data=&#123;[150, 200, 660, 1000, ...]&#125; label="Capacity" unit="MW" /&gt;</pre>
     </div>
-
   </section>
 
   <!-- ========================================

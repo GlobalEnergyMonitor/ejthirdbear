@@ -1,10 +1,10 @@
 {
-  "version": "b9bfbf7",
-  "commit": "b9bfbf7",
-  "message": "refactor(gem-viz): reorganize lib into api/, tokens/, utils/ subdirectories",
+  "version": "ad4f151",
+  "commit": "ad4f151",
+  "message": "chore(release): v0.7.4",
   "author": "EJ Fox",
-  "timestamp": "2026-03-30T14:10:18.834Z",
-  "deployed": "2026-03-30T14:10:18.834Z",
-  "buildTime": "3/30/2026, 10:10:18 AM",
-  "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.7.2"
+  "timestamp": "2026-03-30T19:40:37.335Z",
+  "deployed": "2026-03-30T19:40:37.335Z",
+  "buildTime": "3/30/2026, 3:40:37 PM",
+  "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.7.4"
 }

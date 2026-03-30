@@ -31,7 +31,6 @@
   // Resolve tracker name from slug
   const tracker = $derived(slugToTrackerName[trackerParam] || trackerParam);
   const meta = $derived(trackerMetadata[trackerParam]);
-  const color = $derived(getTrackerColor(tracker));
 
   // Field metadata is fetched from the API via catalog-field-meta.ts
   // (API first, hardcoded fallback for resilience)
