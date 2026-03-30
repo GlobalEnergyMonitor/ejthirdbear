@@ -46,9 +46,5 @@ export {
 
 export {
   fetchAssetData,
-  isCompoundId,
-  isGPrefixId,
-  isMPrefixId,
-  extractUnitId,
   type AssetDataResult,
 } from '$lib/asset-data';

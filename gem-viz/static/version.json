@@ -1,8 +1,10 @@
 {
-  "version": "0.7.2",
-  "commit": "3564f83",
-  "message": "fix: restore pipelines in globe + screener embed step nav + field description links",
-  "timestamp": "2026-03-27T19:44:24.801Z",
-  "deployed": "2026-03-27T19:44:24.801Z",
-  "buildTime": "3/27/2026, 3:44:24 PM"
+  "version": "b9bfbf7",
+  "commit": "b9bfbf7",
+  "message": "refactor(gem-viz): reorganize lib into api/, tokens/, utils/ subdirectories",
+  "author": "EJ Fox",
+  "timestamp": "2026-03-30T14:10:18.834Z",
+  "deployed": "2026-03-30T14:10:18.834Z",
+  "buildTime": "3/30/2026, 10:10:18 AM",
+  "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.7.2"
 }

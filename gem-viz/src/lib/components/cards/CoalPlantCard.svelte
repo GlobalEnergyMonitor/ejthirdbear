@@ -16,9 +16,15 @@
   let {
     units,
     open = false,
+    initialTab = '',
+    onTabChange = undefined,
   }: {
     units: CoalPlantUnit[];
     open?: boolean;
+    /** Initial tab name to activate on mount (for embed deep-linking) */
+    initialTab?: string;
+    /** Called when the active tab changes (for embed hash state) */
+    onTabChange?: (_tab: string) => void;
   } = $props();
 
   // ── Constants ──────────────────────────────────────────────────────────────
@@ -398,7 +404,10 @@
     'Additional Details',
   ] as const;
   type TabName = (typeof TABS)[number];
-  let activeTab = $state<TabName>('Overview');
+  const resolvedInitialTab = TABS.find(
+    (t) => t.toLowerCase() === initialTab.toLowerCase()
+  ) as TabName | undefined;
+  let activeTab = $state<TabName>(resolvedInitialTab ?? 'Overview');
 
   // ── Ownership tree (lazy-loaded on first tab activation) ───────────────────
 
@@ -609,7 +618,7 @@
           class:active={activeTab === tab}
           role="tab"
           aria-selected={activeTab === tab}
-          onclick={() => (activeTab = tab)}>{tab}</button
+          onclick={() => { activeTab = tab; onTabChange?.(tab); }}>{tab}</button
         >
       {/each}
     </nav>

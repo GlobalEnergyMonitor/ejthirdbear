@@ -51,12 +51,12 @@ export const FALLBACK_CSS = `
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
 
-  --font-size-xs: 10px;
-  --font-size-sm: 12px;
-  --font-size-base: 14px;
-  --font-size-body: 14px;
-  --font-size-md: 16px;
-  --font-size-lg: 18px;
+  --font-size-xs: 12px;
+  --font-size-sm: 14px;
+  --font-size-base: 16px;
+  --font-size-body: 16px;
+  --font-size-md: 18px;
+  --font-size-lg: 20px;
   --font-size-xl: 24px;
   --font-size-2xl: 32px;
 

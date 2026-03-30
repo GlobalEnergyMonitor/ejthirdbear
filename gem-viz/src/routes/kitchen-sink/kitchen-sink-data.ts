@@ -718,7 +718,6 @@ export const componentIndex = [
     category: 'cards',
   },
   // Charts
-  { name: 'MiniFlower', path: 'src/lib/components/charts/MiniFlower.svelte', category: 'charts' },
   {
     name: 'OwnershipPie',
     path: 'src/lib/components/charts/OwnershipPie.svelte',
@@ -735,11 +734,6 @@ export const componentIndex = [
     path: 'src/lib/components/charts/MiniHistogram.svelte',
     category: 'charts',
   },
-  {
-    name: 'RadialBarChart',
-    path: 'src/lib/components/charts/RadialBarChart.svelte',
-    category: 'charts',
-  },
   // Ownership visualizations
   {
     name: 'OwnershipTreeGraph',
@@ -752,18 +746,8 @@ export const componentIndex = [
     category: 'ownership',
   },
   {
-    name: 'OwnershipMiniTree',
-    path: 'src/lib/components/ownership/OwnershipMiniTree.svelte',
-    category: 'ownership',
-  },
-  {
     name: 'AssetOwnershipTree',
     path: 'src/lib/components/ownership/AssetOwnershipTree.svelte',
-    category: 'ownership',
-  },
-  {
-    name: 'IntermediaryMiniGraph',
-    path: 'src/lib/components/ownership/IntermediaryMiniGraph.svelte',
     category: 'ownership',
   },
   {
@@ -858,22 +842,11 @@ export const componentIndex = [
     category: 'states',
   },
   { name: 'DebugPanel', path: 'src/lib/components/feedback/DebugPanel.svelte', category: 'states' },
-  // Buttons
-  {
-    name: 'AddToCartButton',
-    path: 'src/lib/components/cart/AddToCartButton.svelte',
-    category: 'buttons',
-  },
   // Debug
   { name: 'ApiCallLog', path: 'src/lib/components/data/ApiCallLog.svelte', category: 'debug' },
   // Map
   { name: 'AssetMap', path: 'src/lib/components/map/AssetMap.svelte', category: 'map' },
   { name: 'EntityMap', path: 'src/lib/components/map/EntityMap.svelte', category: 'map' },
-  {
-    name: 'InvestigationMap',
-    path: 'src/lib/components/map/InvestigationMap.svelte',
-    category: 'map',
-  },
   { name: 'ProjectCardMap', path: 'src/lib/components/map/ProjectCardMap.svelte', category: 'map' },
   // Tracker
   {

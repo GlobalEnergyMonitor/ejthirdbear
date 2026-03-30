@@ -13,6 +13,7 @@
   } from '$lib/data-config/tracker-schema';
   import type { DynamicStatusGroup } from '$lib/data-config/tracker-schema';
   import type { AssetClass, SubClassGroup } from '$lib/data-config/asset-class-definitions';
+  import type { CatalogAssetClass } from '$lib/api/catalog-api';
   import { ArrowRight, Search as SearchIcon, X } from 'lucide-svelte';
   import { track } from '$lib/analytics';
   import { onMount } from 'svelte';
@@ -42,6 +43,10 @@
     onClose: () => void;
     /** Data-driven status groups from API facets (overrides hardcoded STATUS_GROUPS) */
     dynamicStatusGroups?: DynamicStatusGroup[] | null;
+    /** Direct children from /catalog/asset-classes — when present, replaces static subClasses */
+    catalogChildren?: CatalogAssetClass[];
+    /** Checked state for catalog children: child.id -> boolean */
+    catalogChildChecks?: Record<string, boolean>;
   }
 
   let {
@@ -55,18 +60,32 @@
     onSearchSpecificOwners,
     onClose,
     dynamicStatusGroups = null,
+    catalogChildren = [],
+    catalogChildChecks = $bindable({}),
   }: Props = $props();
 
-  const hasSubClasses = $derived(!!assetClass.subClasses?.length);
-  const hasSubClassGroups = $derived(!!assetClass.subClassGroups?.length);
+  const hasCatalogChildren = $derived(catalogChildren.length > 0);
+  const hasSubClasses = $derived(!hasCatalogChildren && !!assetClass.subClasses?.length);
+  const hasSubClassGroups = $derived(!hasCatalogChildren && !!assetClass.subClassGroups?.length);
   const hasStatusFilter = $derived(!!assetClass.availableFilters.status);
   const isMultiTracker = $derived(assetClass.trackers.length > 1);
   const selectedStatusCount = $derived(Object.values(statusChecks).filter(Boolean).length);
 
+  // Catalog child helpers
+  const catalogAllChecked = $derived(
+    catalogChildren.length > 0 && catalogChildren.every((c) => catalogChildChecks[c.id] !== false)
+  );
+  function toggleAllCatalogChildren(checked: boolean) {
+    const next: Record<string, boolean> = {};
+    for (const c of catalogChildren) next[c.id] = checked;
+    catalogChildChecks = next;
+  }
+
   // ── Wizard steps ───────────────────────────────────────────────────
   const steps = $derived.by(() => {
     const s: { id: string; label: string; optional?: boolean }[] = [];
-    if (hasSubClasses || hasSubClassGroups) s.push({ id: 'subclass', label: 'Subclass' });
+    if (hasCatalogChildren || hasSubClasses || hasSubClassGroups)
+      s.push({ id: 'subclass', label: 'Subclass' });
     if (hasStatusFilter) s.push({ id: 'status', label: 'Status' });
     if (assetClass.availableFilters.geography)
       s.push({ id: 'geography', label: 'Geography', optional: true });
@@ -264,7 +283,43 @@
           style="--offset: {offset};"
         >
           {#if step.id === 'subclass'}
-            <!-- NARROW BY SUBCLASS: grouped (subClassGroups) -->
+            <!-- NARROW BY SUBCLASS: catalog children (server-side, preferred) -->
+            {#if hasCatalogChildren}
+              <div class="filter-section">
+                <span class="section-heading">Narrow by subclass</span>
+                <div class="catalog-select-all">
+                  <label class="group-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={catalogAllChecked}
+                      onchange={(e) => toggleAllCatalogChildren((e.target as HTMLInputElement).checked)}
+                    />
+                    <span class="group-label">All subclasses</span>
+                  </label>
+                </div>
+                <div class="group-row">
+                  {#each catalogChildren as child (child.id)}
+                    <div class="group-item">
+                      <label class="group-checkbox">
+                        <input
+                          type="checkbox"
+                          checked={catalogChildChecks[child.id] !== false}
+                          onchange={(e) => {
+                            catalogChildChecks = {
+                              ...catalogChildChecks,
+                              [child.id]: (e.target as HTMLInputElement).checked,
+                            };
+                          }}
+                        />
+                        <span class="group-label">{child.label}</span>
+                      </label>
+                    </div>
+                  {/each}
+                </div>
+              </div>
+            {/if}
+
+            <!-- NARROW BY SUBCLASS: grouped (subClassGroups) — static fallback -->
             {#if hasSubClassGroups}
               <div class="filter-section">
                 <span class="section-heading">Narrow by subclass</span>
@@ -487,7 +542,7 @@
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: min(640px, 90vw);
+    width: min(780px, 90vw);
     max-height: 80vh;
     background: var(--color-bg-primary, #fff);
     border: 1px solid var(--color-black, #000);

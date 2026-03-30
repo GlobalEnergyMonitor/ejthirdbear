@@ -14,7 +14,6 @@
   import StatusIcon from '$lib/components/tracker/StatusIcon.svelte';
   import TrackerIcon from '$lib/components/tracker/TrackerIcon.svelte';
   import DataSourceBadge from '$lib/components/data/DataSourceBadge.svelte';
-  import AddToCartButton from '$lib/components/cart/AddToCartButton.svelte';
   import LoadingWrapper from '$lib/components/feedback/LoadingWrapper.svelte';
   import ReportLoadingTerminal from '$lib/components/feedback/ReportLoadingTerminal.svelte';
   import Citation from '$lib/components/data/Citation.svelte';
@@ -32,11 +31,8 @@
   // Charts
   import Sparkline from '$lib/components/charts/Sparkline.svelte';
   import MiniBarChart from '$lib/components/charts/MiniBarChart.svelte';
-  import MiniFlower from '$lib/components/charts/MiniFlower.svelte';
   import MiniHistogram from '$lib/components/charts/MiniHistogram.svelte';
   import OwnershipPie from '$lib/components/charts/OwnershipPie.svelte';
-  import RadialBarChart from '$lib/components/charts/RadialBarChart.svelte';
-
   // Ownership & network viz
   import OwnershipTreeGraph from '$lib/components/ownership/OwnershipTreeGraph.svelte';
   import AssetRingVisualization from '$lib/components/ownership/AssetRingVisualization.svelte';
@@ -163,6 +159,23 @@
   let activeSection = $state('');
 
   onMount(() => {
+    // Add copy buttons to all code-hint blocks
+    document.querySelectorAll('pre.code-hint').forEach((pre) => {
+      if (!(pre instanceof HTMLElement)) return;
+      const btn = document.createElement('button');
+      btn.className = 'copy-btn';
+      btn.textContent = 'copy';
+      btn.addEventListener('click', async () => {
+        await navigator.clipboard.writeText(pre.textContent || '');
+        btn.textContent = '✓ copied';
+        setTimeout(() => (btn.textContent = 'copy'), 1500);
+      });
+      pre.style.position = 'relative';
+      btn.style.cssText =
+        'position:absolute;top:6px;right:6px;font-size:11px;padding:2px 6px;border:1px solid #ccc;border-radius:3px;background:#f0f0f0;cursor:pointer;font-family:monospace;color:#555;';
+      pre.appendChild(btn);
+    });
+
     // Scroll to hash fragment on page load
     const hash = window.location.hash?.slice(1);
     if (hash) {
@@ -217,59 +230,87 @@
   // Derived stats
   const liveComponentCount = 30;
   const totalComponentCount = componentIndex.length;
-  const registryCategories = [...new Set(componentIndex.map((c) => c.category))];
+  const _registryCategories = [...new Set(componentIndex.map((c) => c.category))];
+
+  // Registry search/filter
+  let registrySearch = $state('');
+  const filteredComponentIndex = $derived(
+    registrySearch.trim()
+      ? componentIndex.filter(
+          (c) =>
+            c.name.toLowerCase().includes(registrySearch.toLowerCase()) ||
+            c.category.toLowerCase().includes(registrySearch.toLowerCase())
+        )
+      : componentIndex
+  );
+  const filteredCategories = $derived([
+    ...new Set(filteredComponentIndex.map((c) => c.category)),
+  ]);
 
   // Components that need API/complex context — not demoed live
   const complexComponents = [
     {
       name: 'OwnershipFlower',
       path: 'src/lib/components/network/OwnershipFlower.svelte',
-      note: 'Large radial diagram — needs entity API data',
+      what: 'Nadieh Bremer–style radial flower where petal angle encodes tracker mix (by asset count) and petal length encodes total capacity.',
+      api: 'Calls fetchOwnerPortfolio(ownerId) → /ownership/graph?root=…&direction=down. Pass pre-fetched portfolio via portfolio prop to skip the fetch.',
+      usage: `<OwnershipFlower ownerId="E100001000348" size="medium" showLabels />`,
     },
     {
       name: 'MiniNetworkGraph',
       path: 'src/lib/components/network/MiniNetworkGraph.svelte',
-      note: 'Compact force-directed network',
-    },
-    {
-      name: 'OwnershipMiniTree',
-      path: 'src/lib/components/ownership/OwnershipMiniTree.svelte',
-      note: 'Horizontal dagre tree — fetches from API',
+      what: 'Interactive 3-D force-directed network (deck.gl + d3-force-3d) showing the ownership neighborhood around a single entity — nodes are entities/assets, edges are ownership links.',
+      api: 'Calls getOwnershipGraph({ root: entityId, direction: "both", max_depth: maxHops }) from ownership-api.ts.',
+      usage: `<MiniNetworkGraph entityId="E100001000348" maxHops={2} height={300} />`,
     },
     {
       name: 'UltimateOwners',
       path: 'src/lib/components/tracker/UltimateOwners.svelte',
-      note: 'Ownership chain — fetches from API',
+      what: 'Traces ownership chains upward to find terminal ancestor entities and shows effective ownership percentages (multiplied through intermediate holdings).',
+      api: 'Calls getEntityGraphUp(entityId) → /ownership/graph?root=…&direction=up.',
+      usage: `<UltimateOwners entityId="E100001000348" />`,
     },
     {
       name: 'FacetedFilter',
       path: 'src/lib/components/table/FacetedFilter.svelte',
-      note: 'Multi-select facets',
+      what: 'Shopping-style checkbox facet list: selected items float to top with FLIP animation, live-updating counts, search-within-facet, and Shift+click for AND logic.',
+      api: 'Pure UI — no API calls. Caller provides options array with { value, count? }. Bind selected and selectedAnd for two-way state.',
+      usage: `<FacetedFilter label="Status" options={[{value:'operating',count:847}]} bind:selected={statusFilter} />`,
     },
     {
       name: 'CommandPalette',
       path: 'src/lib/components/search/CommandPalette.svelte',
-      note: 'Cmd+K palette',
+      what: 'Cmd+K universal search and command interface (Linear/VS Code–style) — searches assets and entities, runs page navigation commands, and shows recent searches.',
+      api: 'Calls listAssets() and listEntities() from ownership-api.ts on query. Opened/closed via commandPaletteOpen Svelte store.',
+      usage: `<CommandPalette /> <!-- mounted once in layout; toggle via commandPaletteOpen.set(true) -->`,
     },
     {
       name: 'ProjectCardList',
       path: 'src/lib/components/cards/ProjectCardList.svelte',
-      note: 'Paginated list — fetches from API',
+      what: 'Paginated grid of ProjectCards with optional map view and capacity-percentile bars for context within a tracker dataset.',
+      api: 'Calls fetchAssets({ tracker, statusFilter, sortBy, limit }) and fetchCapacities(tracker) from $lib/factsheet.',
+      usage: `<ProjectCardList tracker="Coal Plant" statusFilter={['operating']} sortBy="capacity" limit={5} />`,
     },
     {
       name: 'AssetMap / EntityMap',
       path: 'src/lib/components/map/',
-      note: 'MapLibre-based — needs coordinates + tiles',
+      what: 'MapLibre GL–based maps rendering asset points or entity footprints on a Natural Earth base layer with hover tooltips and click-to-navigate.',
+      api: 'Needs asset coordinate data (latitude/longitude from REST API or points.geojson). Tile config from $lib/map-config.',
+      usage: `<AssetMap assets={assetArray} zoom={2} center={[0, 20]} />`,
     },
     {
       name: 'TrackerGlobeGrid',
       path: 'src/lib/components/tracker/TrackerGlobeGrid.svelte',
-      note: 'Globe visualization — needs GeoJSON',
+      what: 'Hero visualization with a center globe plus 6 surrounding satellite globes, each filtered to one tracker type, spinning in sync via MapLibre.',
+      api: 'Fetches static/points.geojson (~9 MB) and renders point layers filtered by asset_type field.',
+      usage: `<TrackerGlobeGrid /> <!-- self-contained, no props needed -->`,
     },
     {
       name: 'TrackerFactsheet',
       path: 'src/lib/components/tracker/TrackerFactsheet.svelte',
-      note: 'Full tracker page — needs API context',
+      what: 'Dataset field-metadata previewer — shows field categories, definitions, and inline distribution charts (bar charts for enums, histograms for numerics).',
+      api: 'Receives fieldsMetadata array and a fetchDistribution(field) callback; caller supplies both from tracker-specific API calls.',
+      usage: `<TrackerFactsheet tracker="Coal Plant" fieldsMetadata={fields} fetchDistribution={fetchFn} />`,
     },
   ];
 </script>
@@ -693,33 +734,6 @@
 
     <div class="component-group">
       <div class="component-header">
-        <h3>MiniFlower</h3>
-        <code class="file-path">src/lib/components/MiniFlower.svelte</code>
-      </div>
-      <p class="component-desc">
-        Nadieh Bremer-inspired radial petal chart showing tracker distribution by count & capacity
-      </p>
-      <div class="demo-row">
-        {#each realCompanies as company}
-          <div class="demo-item flower-demo">
-            <MiniFlower trackers={company.trackers} size={48} />
-            <span class="demo-label">{company.name.split(' ')[0]}</span>
-          </div>
-        {/each}
-        <div class="demo-item flower-demo">
-          <MiniFlower
-            trackers={[{ tracker: 'Coal Plant', count: 100, capacity: 50000 }]}
-            size={48}
-          />
-          <span class="demo-label">Single type</span>
-        </div>
-      </div>
-      <pre
-        class="code-hint">&lt;MiniFlower trackers=&#123;[&#123;tracker: 'Coal Plant', count: 312, capacity: 142000&#125;]&#125; size=&#123;48&#125; /&gt;</pre>
-    </div>
-
-    <div class="component-group">
-      <div class="component-header">
         <h3>OwnershipPie</h3>
         <code class="file-path">src/lib/components/OwnershipPie.svelte</code>
       </div>
@@ -824,55 +838,6 @@
         class="code-hint">&lt;MiniHistogram data=&#123;[150, 200, 660, 1000, ...]&#125; label="Capacity" unit="MW" /&gt;</pre>
     </div>
 
-    <div class="component-group">
-      <div class="component-header">
-        <h3>RadialBarChart</h3>
-        <code class="file-path">src/lib/components/RadialBarChart.svelte</code>
-      </div>
-      <p class="component-desc">
-        Stacked radial bar chart with concentric arcs — each ring represents a category, arc length
-        encodes value
-      </p>
-      <div class="demo-row">
-        <div class="demo-item flower-demo">
-          <RadialBarChart
-            data={[
-              { label: 'Operating', value: 847 },
-              { label: 'Planned', value: 312 },
-              { label: 'Retired', value: 520 },
-            ]}
-            size={200}
-          />
-          <span class="demo-label">3 categories</span>
-        </div>
-        <div class="demo-item flower-demo">
-          <RadialBarChart
-            data={[
-              { label: 'Coal', value: 14363, color: '#7F142A' },
-              { label: 'Oil & Gas', value: 14407, color: '#CA4A50' },
-              { label: 'Bioenergy', value: 4537, color: '#A0AAE5' },
-              { label: 'Gas Pipeline', value: 4246, color: '#004F61' },
-            ]}
-            size={200}
-          />
-          <span class="demo-label">Tracker counts</span>
-        </div>
-        <div class="demo-item flower-demo">
-          <RadialBarChart
-            data={[
-              { label: 'China', value: 90 },
-              { label: 'India', value: 65 },
-            ]}
-            size={140}
-            ringWidth={24}
-            cornerRadius={4}
-          />
-          <span class="demo-label">Thick rings</span>
-        </div>
-      </div>
-      <pre
-        class="code-hint">&lt;RadialBarChart data=&#123;[&#123;label: 'Operating', value: 847&#125;, ...]&#125; size=&#123;200&#125; /&gt;</pre>
-    </div>
   </section>
 
   <!-- ========================================
@@ -1300,34 +1265,6 @@
     <h2><a href="#buttons" class="section-anchor">#</a>Buttons</h2>
 
     <div class="component-group">
-      <div class="component-header">
-        <h3>AddToCartButton</h3>
-        <code class="file-path">src/lib/components/AddToCartButton.svelte</code>
-      </div>
-      <p class="component-desc">Toggle button for adding entities/assets to investigation cart</p>
-      <div class="demo-row">
-        <div class="demo-item">
-          <AddToCartButton id="E100001000348" name="China Energy" variant="default" />
-          <span class="demo-label">default</span>
-        </div>
-        <div class="demo-item">
-          <AddToCartButton id="E100001000349" name="NTPC Limited" variant="default" size="small" />
-          <span class="demo-label">small</span>
-        </div>
-        <div class="demo-item">
-          <AddToCartButton id="E100001000350" name="Adani Power" variant="icon" />
-          <span class="demo-label">icon</span>
-        </div>
-        <div class="demo-item">
-          <AddToCartButton id="E100001000351" name="TotalEnergies" variant="minimal" />
-          <span class="demo-label">minimal</span>
-        </div>
-      </div>
-      <pre
-        class="code-hint">&lt;AddToCartButton id="E100001000348" name="China Energy" variant="icon" /&gt;</pre>
-    </div>
-
-    <div class="component-group">
       <h3>Global Button Styles</h3>
       <p class="component-desc">Shared button classes from app.css</p>
       <div class="demo-row">
@@ -1383,12 +1320,16 @@
       data. See them live on their respective pages.
     </p>
 
-    <div class="component-index">
+    <div class="complex-list">
       {#each complexComponents as comp}
-        <div class="index-item">
-          <code class="comp-name">{comp.name}</code>
-          <code class="file-path">{comp.path}</code>
-          <span class="comp-note">{comp.note}</span>
+        <div class="complex-item">
+          <div class="complex-header">
+            <code class="comp-name">{comp.name}</code>
+            <code class="file-path">{comp.path}</code>
+          </div>
+          <p class="complex-what">{comp.what}</p>
+          <p class="complex-api"><strong>API:</strong> {comp.api}</p>
+          <pre class="code-hint">{comp.usage}</pre>
         </div>
       {/each}
     </div>
@@ -1480,11 +1421,21 @@
       All {totalComponentCount} components in the codebase, organized by category.
     </p>
 
-    {#each registryCategories as cat}
+    <input
+      type="search"
+      class="registry-search"
+      placeholder="Filter components by name or category…"
+      bind:value={registrySearch}
+    />
+    {#if registrySearch && filteredComponentIndex.length === 0}
+      <p class="registry-empty">No components match "{registrySearch}"</p>
+    {/if}
+
+    {#each filteredCategories as cat}
       <div class="registry-category">
         <h3 class="registry-cat-label">{cat}</h3>
         <div class="component-index">
-          {#each componentIndex.filter((c) => c.category === cat) as comp}
+          {#each filteredComponentIndex.filter((c) => c.category === cat) as comp}
             <div class="index-item">
               <code class="comp-name">{comp.name}</code>
               <code class="file-path">{comp.path}</code>
@@ -1887,6 +1838,28 @@
     font-family: var(--font-family-mono);
   }
 
+  .registry-search {
+    display: block;
+    width: 100%;
+    max-width: 360px;
+    margin-bottom: var(--space-6);
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--font-size-body);
+    font-family: var(--font-family-sans);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-bg-primary, #fff);
+    color: var(--color-text-primary);
+  }
+  .registry-search:focus {
+    outline: none;
+    border-color: var(--gem-primary-blue, #1d4961);
+  }
+  .registry-empty {
+    font-size: var(--font-size-body);
+    color: var(--color-text-tertiary);
+    margin-bottom: var(--space-4);
+  }
   .registry-category {
     margin-bottom: var(--space-6);
   }
@@ -1900,6 +1873,41 @@
   }
   .component-group h3:not(:first-of-type) {
     margin-top: var(--space-8);
+  }
+
+  .complex-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+  .complex-item {
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: var(--space-5);
+  }
+  .complex-header {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-4);
+    margin-bottom: var(--space-3);
+    flex-wrap: wrap;
+  }
+  .complex-what {
+    font-size: var(--font-size-body);
+    color: var(--color-text-primary);
+    margin: 0 0 var(--space-2) 0;
+  }
+  .complex-api {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    margin: 0;
+  }
+  .complex-api strong {
+    color: var(--color-text-tertiary);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: var(--font-size-xs);
+    letter-spacing: var(--tracking-caps);
   }
 
   @media (max-width: 768px) {

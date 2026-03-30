@@ -194,8 +194,51 @@ export async function getOwnersByAssetType(
 }
 
 /**
+ * Async generator that paginates a fully-qualified catalog URL.
+ * Uses listAssets() so results go through normalizeAsset() field mapping.
+ */
+async function* paginateCatalogUrl(
+  baseUrl: string
+): AsyncGenerator<import('$lib/ownership-api').AssetSummary[], void, unknown> {
+  const { listAssets } = await import('$lib/ownership-api');
+  const BATCH = 500;
+  let offset = 0;
+  const MAX_OFFSET = 50000;
+
+  // Parse the catalog URL to extract path params and pass them to listAssets
+  const [, existingQs] = baseUrl.split('?');
+  const existingParams = new URLSearchParams(existingQs ?? '');
+
+  // Collect all params into a plain object for listAssets
+  // listAssets uses buildQuery() which handles repeated keys via arrays
+  const paramMap: Record<string, string | string[]> = {};
+  for (const [key, value] of existingParams.entries()) {
+    const existing = paramMap[key];
+    if (existing === undefined) {
+      paramMap[key] = value;
+    } else if (Array.isArray(existing)) {
+      existing.push(value);
+    } else {
+      paramMap[key] = [existing, value];
+    }
+  }
+
+  while (offset < MAX_OFFSET) {
+    const page = await listAssets({ ...paramMap, limit: BATCH, offset } as Parameters<typeof listAssets>[0]);
+    if (!page?.results?.length) break;
+    yield page.results;
+    if (page.results.length < BATCH) break;
+    offset += BATCH;
+  }
+}
+
+/**
  * REST API implementation: paginate /assets?asset_type={slug} and
  * aggregate owners client-side from the owners[] array on each asset.
+ *
+ * When filters.catalogUrl is present, uses that URL directly (server already
+ * encodes asset_type + subclass + status + country params). Falls back to the
+ * legacy tracker-slug approach otherwise.
  */
 async function getOwnersByAssetTypeREST(
   filters: ScreenerFilters,
@@ -204,11 +247,26 @@ async function getOwnersByAssetTypeREST(
 ): Promise<ScreenerResultsResponse> {
   const { resolveApiSlug, paginateAssetsByType } = await import('$lib/ownership-api');
 
-  // Resolve tracker name → API slug
-  const trackerName = filters.tracker || '';
-  const apiSlug = resolveApiSlug(trackerName);
-  if (!apiSlug) {
-    throw new Error(`Cannot resolve API slug for tracker: ${trackerName}`);
+  // ── Catalog URL fast path ─────────────────────────────────────────
+  // When a catalogUrl is present, skip slug resolution and class matching entirely.
+  // The server has already encoded all subclass/status/country filters in the URL.
+  const catalogUrl = filters.catalogUrl as string | undefined;
+
+  let pageIterator: AsyncGenerator<import('$lib/ownership-api').AssetSummary[], void, unknown>;
+
+  if (catalogUrl) {
+    pageIterator = paginateCatalogUrl(catalogUrl);
+  } else {
+    // Legacy path: resolve tracker name → API slug
+    const trackerName = filters.tracker || '';
+    const apiSlug = resolveApiSlug(trackerName);
+    if (!apiSlug) {
+      throw new Error(`Cannot resolve API slug for tracker: ${trackerName}`);
+    }
+    pageIterator = paginateAssetsByType(apiSlug, {
+      status: undefined,
+      country: filters.country,
+    });
   }
 
   // Accumulate owners: entityId → { name, totalAssetIds (pre-filter), filteredAssetIds (post-filter) }
@@ -219,20 +277,19 @@ async function getOwnersByAssetTypeREST(
   const hasOwnerFilter = filters.ownerIds && filters.ownerIds.length > 0;
   const ownerIdSet = hasOwnerFilter ? new Set(filters.ownerIds) : null;
 
-  // Multi-status filter: use statuses[] array, fall back to singular status
+  // Multi-status filter: only needed for legacy path (catalogUrl encodes status server-side)
   const statusArray =
-    filters.statuses && filters.statuses.length > 0
+    !catalogUrl && filters.statuses && filters.statuses.length > 0
       ? filters.statuses.map((s) => s.toLowerCase())
-      : filters.status
+      : !catalogUrl && filters.status
         ? [filters.status.toLowerCase()]
         : null;
 
-  // Don't pass status to API — some trackers have null status (e.g., Steel Plants).
-  // All status filtering is done client-side to handle null gracefully.
   const geofence = filters.geofence || null;
-  let classMatcher: ((_record: Record<string, unknown>) => boolean) | null = null;
 
-  if (filters.assetClassId) {
+  // Class matcher only needed for legacy path (catalogUrl encodes subclass server-side)
+  let classMatcher: ((_record: Record<string, unknown>) => boolean) | null = null;
+  if (!catalogUrl && filters.assetClassId) {
     const { getAssetClassById, buildClassMatcher } = await import(
       '$lib/data-config/asset-class-definitions'
     );
@@ -246,10 +303,7 @@ async function getOwnersByAssetTypeREST(
   }
 
   let pageCount = 0;
-  for await (const page of paginateAssetsByType(apiSlug, {
-    status: undefined,
-    country: filters.country,
-  })) {
+  for await (const page of pageIterator) {
     pageCount++;
     for (const asset of page) {
       if (classMatcher && !classMatcher(asset.raw || {})) continue;

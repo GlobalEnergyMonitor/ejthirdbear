@@ -145,7 +145,7 @@ export function drawSubsidiaryLabels(
     .attr('y', markR)
     .attr('dy', '0.35em')
     .style('fill', colors.navy)
-    .style('font-size', '13px')
+    .style('font-size', '14px')
     .style('letter-spacing', '0.03em')
     .style('font-weight', 500)
     .each(function (d) {
@@ -165,7 +165,7 @@ export function drawSubsidiaryLabels(
     .append('text')
     .attr('x', labelX)
     .attr('y', (d) => markR + 24 + (nameWrapped.get(d.id) ? LINE_HEIGHT : 0))
-    .style('font-size', '10px')
+    .style('font-size', '12px')
     .style('font-weight', 500)
     .style('font-style', 'italic')
     .style('fill', colors.gray500)
@@ -208,7 +208,7 @@ function drawMiniBarChartsForItem(
   trackerGroup
     .append('text')
     .attr('dy', '-0.4em')
-    .style('font-size', '0.55rem')
+    .style('font-size', '0.75rem')
     .style('font-weight', 500)
     .style('text-transform', 'uppercase')
     .style('letter-spacing', '0.07em')
@@ -251,7 +251,7 @@ function drawMiniBarChartsForItem(
   statusGroup
     .append('text')
     .attr('dy', '-0.4em')
-    .style('font-size', '0.55rem')
+    .style('font-size', '0.75rem')
     .style('font-weight', 500)
     .style('text-transform', 'uppercase')
     .style('letter-spacing', '0.07em')
@@ -303,7 +303,7 @@ function showBarTooltip(
     .append('text')
     .attr('text-anchor', 'middle')
     .attr('dy', '-0.2em')
-    .style('font-size', '8px')
+    .style('font-size', '14px')
     .style('font-weight', 500)
     .style('fill', '#ffffff')
     .text(label);
@@ -378,7 +378,7 @@ function drawIntermediaryPathForItem(
 
   g.append('text')
     .attr('transform', `translate(${radius - 10}, ${startY + radius + 14})`)
-    .style('font-size', '8px')
+    .style('font-size', '14px')
     .style('font-weight', 500)
     .style('font-style', 'italic')
     .style('letter-spacing', '0.03em')
@@ -405,7 +405,7 @@ function drawIntermediaryPathForItem(
     fold
       .append('text')
       .attr('dy', '1em')
-      .style('font-size', '8px')
+      .style('font-size', '14px')
       .style('font-weight', 700)
       .style('letter-spacing', '0.03em')
       .style('fill', colors.teal)

@@ -16,11 +16,11 @@ export const fonts = {
 } as const;
 
 export const fontSizes = {
-  xs: '10px',
-  sm: '12px',
-  base: '14px',
-  md: '16px',
-  lg: '18px',
+  xs: '12px',
+  sm: '14px',
+  base: '16px',
+  md: '18px',
+  lg: '20px',
   xl: '24px',
   '2xl': '32px',
   '3xl': '40px',

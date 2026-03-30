@@ -3,10 +3,12 @@
    * Embeddable Tracker Factsheet
    * Two-column metadata explorer for GEM tracker datasets
    *
-   * URL params:
+   * URL params (all overridable via URL hash for Drupal deep-linking):
    *   tracker - Required. Tracker slug (coal-mine, coal-plant, gas-plant, etc.)
    *   title - Optional. Custom title override
    *   height - Optional. Max height in pixels (default: 500)
+   *
+   * Hash params: tracker, title, height
    */
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
@@ -18,11 +20,12 @@
   } from '$lib/data-config/tracker-metadata';
   import { getTrackerFieldData } from '$lib/catalog-field-meta';
   import { URL_SLUG_TO_CATALOG_SLUG } from '$lib/data-config/tracker-schema';
+  import { readHash } from '../embed-utils';
 
-  // Parse URL parameters
-  const trackerSlug = $derived($page.url.searchParams.get('tracker') || '');
-  const titleParam = $derived($page.url.searchParams.get('title'));
-  const heightParam = $derived($page.url.searchParams.get('height'));
+  // URL params (converted to $state so hash can override on mount)
+  let trackerSlug = $state($page.url.searchParams.get('tracker') || '');
+  let titleParam = $state($page.url.searchParams.get('title'));
+  let heightParam = $state($page.url.searchParams.get('height'));
 
   const tracker = $derived(slugToTrackerName[trackerSlug] || trackerSlug);
   const _metadata = $derived(trackerMetadata[trackerSlug] as TrackerMetadata | undefined);
@@ -52,6 +55,12 @@
   }
 
   onMount(() => {
+    // Read hash — hash params override query params for deep-linking
+    const h = readHash();
+    if (h.tracker) trackerSlug = h.tracker;
+    if (h.title) titleParam = h.title;
+    if (h.height) heightParam = h.height;
+
     if (trackerSlug) {
       loadFieldsMetadata();
     } else {
