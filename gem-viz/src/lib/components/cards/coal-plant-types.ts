@@ -5,6 +5,8 @@
 
 export interface CoalPlantFields {
   plant_name: string;
+  plant_name_2: string | null;
+  plant_name_3: string | null; // comma-separated list of additional names
   unit_name: string;
   status: string;
   capacity_megawatts: string | null;
