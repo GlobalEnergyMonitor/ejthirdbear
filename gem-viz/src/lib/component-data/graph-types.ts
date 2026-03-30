@@ -47,6 +47,13 @@ export interface GraphNode {
   assetType?: string;
   country?: string;
   status?: string;
+  // Extended fields from /ownership/graph API (used in tooltips)
+  full_name?: string;
+  headquarters_subdivision?: string;
+  legal_entity_type?: string;
+  operating_status?: string;
+  capacity_value?: number;
+  capacity_unit?: string;
 }
 
 /**

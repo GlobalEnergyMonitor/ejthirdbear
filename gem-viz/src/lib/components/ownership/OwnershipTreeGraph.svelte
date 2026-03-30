@@ -1533,8 +1533,14 @@
 
       <!-- Tooltip -->
       {#if hoverSource === 'graph' && hoveredId && hoveredGraphNode}
-        {@const isAsset = hoveredGraphNode.type === 'asset' || hoveredId === rootId}
+        {@const hn = hoveredGraphNode}
+        {@const isAsset = hn.type === 'asset' || hoveredId === rootId}
         {@const pct = hoveredLayoutNode?.pct ?? 0}
+        {@const hqParts = [hn.headquarters_country, hn.headquarters_subdivision].filter(Boolean)}
+        {@const ownerCategory = !isAsset ? classifyOwnerType(hn) : ''}
+        {@const edgeToThis = edges.find((e) => e.target === hn.entity_id || e.target === hn.id)}
+        {@const directPct = edgeToThis?.value ?? 0}
+        {@const isImputed = edgeToThis?.imputed_share ?? false}
         <div
           class="tooltip"
           class:frozen={frozenId === hoveredId}
@@ -1544,19 +1550,37 @@
             <div class="tooltip-pinned">Pinned</div>
           {/if}
           <div class="tooltip-name">
-            {hoveredGraphNode.name || hoveredGraphNode.Name || hoveredId}
+            {hn.full_name || hn.name || hn.Name || hoveredId}
           </div>
-          {#if hoveredGraphNode.headquarters_country}
-            <div class="tooltip-detail">{hoveredGraphNode.headquarters_country}</div>
+
+          {#if isAsset}
+            <div class="tooltip-detail">
+              {hn.asset_type || 'Asset'}{#if hn.operating_status} · {hn.operating_status}{/if}
+            </div>
+            {#if hn.capacity_value}
+              <div class="tooltip-detail">{hn.capacity_value} {hn.capacity_unit || 'MW'}</div>
+            {/if}
+            {#if hn.country}
+              <div class="tooltip-detail">{hn.country}</div>
+            {/if}
+          {:else}
+            {#if hqParts.length > 0}
+              <div class="tooltip-detail">{hqParts.join(' · ')}</div>
+            {/if}
+            <div class="tooltip-detail">
+              {ownerCategory}{#if hn.legal_entity_type} · {hn.legal_entity_type}{/if}
+            </div>
+            {#if pct > 0}
+              <div class="tooltip-pct">
+                <span class="tooltip-pct-value">{pct.toFixed(1)}%</span> cumulative
+                {#if directPct > 0 && directPct !== pct}
+                  · {directPct.toFixed(1)}% direct{#if isImputed} (est.){/if}
+                {/if}
+              </div>
+            {/if}
           {/if}
-          {#if hoveredGraphNode.entity_type}
-            <div class="tooltip-detail">{hoveredGraphNode.entity_type}</div>
-          {/if}
-          <div class="tooltip-detail">
-            {isAsset ? 'Asset' : 'Entity'}{#if !isAsset && pct > 0}
-              &middot; {pct.toFixed(1)}%{/if}
-          </div>
-          {#if isLargeGraph}
+
+          {#if isLargeGraph && !frozenId}
             <div class="tooltip-hint">Drag to pan · Ctrl/Cmd + wheel to zoom</div>
           {:else if frozenId && hoveredId === frozenId}
             <div class="tooltip-hint">Click to unpin · Double-click to open</div>
@@ -2036,6 +2060,15 @@
     letter-spacing: 0.5px;
     opacity: 0.6;
     margin-bottom: 2px;
+  }
+  .tooltip-pct {
+    font-size: 10px;
+    margin-top: 2px;
+    opacity: 0.9;
+  }
+  .tooltip-pct-value {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
   }
   .tooltip-hint {
     font-size: 9px;
