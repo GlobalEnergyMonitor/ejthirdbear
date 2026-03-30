@@ -182,21 +182,30 @@
   // Color-by mode — entity-type or country
   let colorMode = $state<ColorMode>('entity-type');
 
-  const renderNodes = $derived.by(() => {
-    if (minOwnershipPct <= 0) return renderSubset.nodes;
-    return renderSubset.nodes.filter((n) => {
-      // Always keep asset nodes and the root
-      if (n.type === 'asset' || n.id === rootId) return true;
+  // Layout always uses ALL nodes — filter only dims, doesn't rebuild dagre
+  const renderNodes = $derived(renderSubset.nodes);
+  const renderEdges = $derived(renderSubset.edges);
+
+  // Nodes below min ownership % are faded (not removed)
+  const fadedNodeIds = $derived.by(() => {
+    if (minOwnershipPct <= 0) return new Set<string>();
+    const faded = new Set<string>();
+    for (const n of renderSubset.nodes) {
+      if (n.type === 'asset' || n.id === rootId) continue;
       const pct = pathsMap.get(n.entity_id || n.id) || edgePctMap.get(n.entity_id || n.id) || 0;
-      return pct >= minOwnershipPct;
-    });
+      if (pct < minOwnershipPct) faded.add(n.id);
+    }
+    return faded;
   });
-  const filteredNodeIds = $derived(new Set(renderNodes.map((n) => n.id)));
-  const renderEdges = $derived.by(() => {
-    if (minOwnershipPct <= 0) return renderSubset.edges;
-    return renderSubset.edges.filter(
-      (e) => filteredNodeIds.has(e.source) && filteredNodeIds.has(e.target)
-    );
+  const fadedEdgeIds = $derived.by(() => {
+    if (fadedNodeIds.size === 0) return new Set<string>();
+    const faded = new Set<string>();
+    for (const e of renderSubset.edges) {
+      if (fadedNodeIds.has(e.source) || fadedNodeIds.has(e.target)) {
+        faded.add(`${e.source}->${e.target}`);
+      }
+    }
+    return faded;
   });
   const isTrimmedGraph = $derived(renderSubset.trimmed);
   const hiddenNodeCount = $derived(renderSubset.hiddenNodes);
@@ -391,19 +400,21 @@
     return list;
   });
 
-  // When a node is frozen, float in-chain owners to top and mark the rest for fading
+  // Reorder owners: highlighted first (by pct desc), then faded/out-of-chain
   const sortedOwnersList = $derived.by(() => {
-    if (!frozenNodeData) return ownersList;
-    const inChain: typeof ownersList = [];
-    const outOfChain: typeof ownersList = [];
+    const highlighted: typeof ownersList = [];
+    const dimmed: typeof ownersList = [];
     for (const o of ownersList) {
-      if (frozenId === o.id || frozenNodeData.nodesTouched.includes(o.id)) {
-        inChain.push(o);
+      const isFaded = fadedNodeIds.has(o.id);
+      const outOfChain = frozenNodeData && frozenId !== o.id &&
+        !frozenNodeData.nodesTouched.includes(o.id);
+      if (isFaded || outOfChain) {
+        dimmed.push(o);
       } else {
-        outOfChain.push(o);
+        highlighted.push(o);
       }
     }
-    return [...inChain, ...outOfChain];
+    return [...highlighted, ...dimmed];
   });
 
   // Aggregated summaries matching Observable's ownersSummary.byCountry and byType
@@ -773,14 +784,18 @@
 
   // Path-aware opacity: nodes/edges not on the active (frozen or hovered) path fade
   function getNodeOpacity(n: LayoutNode): number {
+    // Ownership % filter fade — takes priority over other opacity logic
+    if (fadedNodeIds.has(n.id)) return 0.15;
     if (!activeNodeData) return isLargeGraph ? 0.92 : 1;
     return n.isAsset || n.id === activeId || activeNodeData.nodesTouched.includes(n.id) ? 1 : 0.1;
   }
   function getEdgeOpacity(idx: number): number {
+    const e = layoutEdges[idx];
+    // Ownership % filter fade for edges
+    if (e && fadedEdgeIds.has(`${e.source}->${e.target}`)) return 0.08;
     if (!activeNodeData) {
       // Observable: per-edge base opacity — small-ownership edges are dimmer
       if (isLargeGraph) return 0.22;
-      const e = layoutEdges[idx];
       if (!e) return 1;
       const srcNode = layoutNodes.find((nd) => nd.id === e.source);
       const srcPct = srcNode?.pct ?? 100;
@@ -1025,9 +1040,9 @@
     if (dagre && renderNodes.length > 0) runLayout();
   });
 
-  // Clear frozen state if the pinned node gets filtered out
+  // Clear frozen state if the pinned node gets faded out by ownership filter
   $effect(() => {
-    if (frozenId && !filteredNodeIds.has(frozenId)) {
+    if (frozenId && fadedNodeIds.has(frozenId)) {
       frozenId = null;
       frozenNodeData = null;
     }
@@ -1230,17 +1245,19 @@
                 {@const showLabel = shouldShowLabel(n)}
                 {@const wrapped = wrapText(n.label, labelMaxChars)}
                 {@const pos = n.labelPos || { dx: 0, dy: n.r + 12, below: false, small: false }}
+                {@const isFaded = fadedNodeIds.has(n.id)}
                 {@const opacity = getNodeOpacity(n)}
                 <g
                   class="node"
                   class:hovered={hoveredId === n.id || frozenId === n.id}
                   class:frozen={frozenId === n.id}
                   class:in-chain={nodesToShowText.has(n.id)}
+                  class:ownership-faded={isFaded}
                   data-rank={n.rank}
                   transform="translate({n.x},{n.y})"
-                  style="opacity: {entranceAnimDone ? opacity : 0}"
+                  style="opacity: {entranceAnimDone ? opacity : 0}; pointer-events: {isFaded ? 'none' : 'auto'}"
                   role="button"
-                  tabindex="0"
+                  tabindex={isFaded ? -1 : 0}
                   onclick={() => clickNode(n)}
                   ondblclick={() => dblClickNode(n)}
                   onkeydown={(ev) => ev.key === 'Enter' && dblClickNode(n)}
@@ -1375,6 +1392,7 @@
             <div class="tabular-rows">
               {#each sortedOwnersList as o}
                 {@const _rowColors = getNodeColors(o.id, rootId, nodes, colorMode, countryRanks)}
+                {@const isOwnerFaded = fadedNodeIds.has(o.id)}
                 {@const inFrozenChain =
                   !frozenNodeData ||
                   frozenId === o.id ||
@@ -1383,7 +1401,7 @@
                   class="tabular-row"
                   class:is-frozen-view={frozenId === o.id}
                   class:is-hovered-view={hoveredId === o.id && frozenId !== o.id}
-                  class:faded={frozenNodeData && !inFrozenChain}
+                  class:faded={(frozenNodeData && !inFrozenChain) || isOwnerFaded}
                   class:tease-connection={hoverSource === 'graph' &&
                     teaseNode.ownerId === o.nid &&
                     frozenId !== o.id}
