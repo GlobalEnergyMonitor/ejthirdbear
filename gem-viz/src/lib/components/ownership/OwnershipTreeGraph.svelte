@@ -19,6 +19,8 @@
     LayoutEdge,
     DagreEdge,
   } from '$lib/component-data/graph-types';
+  import OwnershipPanel from './OwnershipPanel.svelte';
+  import OwnershipTooltip from './OwnershipTooltip.svelte';
   import {
     TREE_COLORS as C,
     OWNERSHIP_ENTITY_COLORS,
@@ -775,6 +777,18 @@
     hoveredNodeData = pathsTouchedMap.get(entityId) || null;
     if (ev) updateTooltipPos(ev);
   }
+  // Bridge functions for OwnershipPanel callbacks
+  function handlePanelHover(id: string, data: { nodesTouched: string[]; edgeIndices: number[] } | null) {
+    hoverSource = 'panel';
+    hoveredId = id;
+    hoveredNodeData = data;
+  }
+  function handlePanelFreeze(id: string | null, data: { nodesTouched: string[]; edgeIndices: number[] } | null) {
+    frozenId = id;
+    frozenNodeData = data;
+    if (id) hasEverFrozen = true;
+  }
+
   function handleNodeLeave() {
     hoverSource = null;
     hoveredId = null;
@@ -1417,220 +1431,48 @@
         {/if}
       </div>
 
-      <!-- Side panel — 3 sections matching Observable's tables-container -->
       {#if !compact}
-        <div class="panel" class:open={panelOpen} style="opacity: {entranceAnimDone ? 1 : 0}">
-          <button class="panel-toggle" onclick={() => (panelOpen = !panelOpen)}>
-            {ownersList.length} owner{ownersList.length !== 1 ? 's' : ''}
-            {panelOpen ? '▲' : '▼'}
-          </button>
-
-          <!-- Section 1: Owner Entities -->
-          <div class="tabular-section">
-            <h4>Owner Entities</h4>
-            <div class="tabular-rows">
-              {#each sortedOwnersList as o}
-                {@const _rowColors = getNodeColors(o.id, rootId, nodes, colorMode, countryRanks)}
-                {@const isOwnerFaded = fadedNodeIds.has(o.id)}
-                {@const inFrozenChain =
-                  !frozenNodeData ||
-                  frozenId === o.id ||
-                  frozenNodeData.nodesTouched.includes(o.id)}
-                <div
-                  class="tabular-row"
-                  class:is-frozen-view={frozenId === o.id}
-                  class:is-hovered-view={hoveredId === o.id && frozenId !== o.id}
-                  class:faded={(frozenNodeData && !inFrozenChain) || isOwnerFaded}
-                  class:tease-connection={hoverSource === 'graph' &&
-                    teaseNode.ownerId === o.nid &&
-                    frozenId !== o.id}
-                  role="button"
-                  tabindex="0"
-                  onmouseenter={() => {
-                    if (frozenId && !isNodeInFrozenPath(o.id)) return;
-                    hoverSource = 'panel';
-                    hoveredId = o.id;
-                    hoveredNodeData = pathsTouchedMap.get(o.nid) || null;
-                  }}
-                  onmouseleave={handleNodeLeave}
-                  onclick={() => {
-                    if (frozenId === o.id) {
-                      frozenId = null;
-                      frozenNodeData = null;
-                    } else {
-                      frozenId = o.id;
-                      frozenNodeData = pathsTouchedMap.get(o.nid) || null;
-                      hasEverFrozen = true;
-                    }
-                  }}
-                  ondblclick={() => {
-                    const u = entityLink(o.nid);
-                    onNavigate ? onNavigate(u) : goto(u);
-                  }}
-                  onkeydown={(ev) => {
-                    if (ev.key === 'Enter') {
-                      const u = entityLink(o.nid);
-                      onNavigate ? onNavigate(u) : goto(u);
-                    }
-                  }}
-                >
-                  <span class="table-row-text">{o.name} ({o.pct.toFixed(1)}%)</span>
-                </div>
-              {/each}
-            </div>
-          </div>
-
-          <!-- Section 2: By Headquarter Country -->
-          {#if ownersByCountry.length > 0}
-            <div class="tabular-section">
-              <h4>By Headquarter Country</h4>
-              <div class="tabular-rows">
-                {#each ownersByCountry as [country, data]}
-                  <div
-                    class="tabular-row"
-                    class:is-frozen-view={frozenNodeData &&
-                      frozenNodeData.nodesTouched.length > 0 &&
-                      data.ids.every((id: string) => frozenNodeData!.nodesTouched.includes(id)) &&
-                      data.ids.some(
-                        (id: string) => frozenId === id || frozenNodeData!.nodesTouched.includes(id)
-                      )}
-                    class:tease-connection={hoverSource === 'graph' &&
-                      teaseNode.country === country}
-                    role="button"
-                    tabindex="0"
-                    onmouseenter={() => {
-                      if (frozenId) return;
-                      hoverSource = 'panel';
-                      hoveredId = data.ids[0] || null;
-                      hoveredNodeData =
-                        data.ids.length > 0 ? { nodesTouched: data.ids, edgeIndices: [] } : null;
-                    }}
-                    onmouseleave={handleNodeLeave}
-                    onclick={() => {
-                      if (frozenId && data.ids.includes(frozenId)) {
-                        frozenId = null;
-                        frozenNodeData = null;
-                      } else {
-                        frozenId = data.ids[0] || null;
-                        frozenNodeData =
-                          data.ids.length > 0 ? { nodesTouched: data.ids, edgeIndices: [] } : null;
-                        hasEverFrozen = true;
-                      }
-                    }}
-                  >
-                    <span class="table-row-text"
-                      >{country} ({data.count} owner{data.count !== 1 ? 's' : ''})</span
-                    >
-                  </div>
-                {/each}
-              </div>
-            </div>
-          {/if}
-
-          <!-- Section 3: By Entity Type -->
-          {#if ownersByType.length > 0}
-            <div class="tabular-section">
-              <h4>By Entity Type</h4>
-              <div class="tabular-rows">
-                {#each ownersByType as [type, data]}
-                  <div
-                    class="tabular-row"
-                    class:tease-connection={hoverSource === 'graph' &&
-                      teaseNode.entityType === type}
-                    role="button"
-                    tabindex="0"
-                    onmouseenter={() => {
-                      if (frozenId) return;
-                      hoverSource = 'panel';
-                      hoveredId = data.ids[0] || null;
-                      hoveredNodeData =
-                        data.ids.length > 0 ? { nodesTouched: data.ids, edgeIndices: [] } : null;
-                    }}
-                    onmouseleave={handleNodeLeave}
-                    onclick={() => {
-                      if (frozenId && data.ids.includes(frozenId)) {
-                        frozenId = null;
-                        frozenNodeData = null;
-                      } else {
-                        frozenId = data.ids[0] || null;
-                        frozenNodeData =
-                          data.ids.length > 0 ? { nodesTouched: data.ids, edgeIndices: [] } : null;
-                        hasEverFrozen = true;
-                      }
-                    }}
-                  >
-                    <span class="table-row-text"
-                      >{type} ({data.count} owner{data.count !== 1 ? 's' : ''})</span
-                    >
-                  </div>
-                {/each}
-              </div>
-            </div>
-          {/if}
-        </div>
+        <OwnershipPanel
+          {ownersList}
+          {sortedOwnersList}
+          {ownersByCountry}
+          {ownersByType}
+          {nodes}
+          {rootId}
+          {hoveredId}
+          {frozenId}
+          {frozenNodeData}
+          {hoverSource}
+          {teaseNode}
+          {fadedNodeIds}
+          {pathsTouchedMap}
+          {colorMode}
+          {countryRanks}
+          {panelOpen}
+          {entranceAnimDone}
+          {hasEverFrozen}
+          {onNavigate}
+          onHover={handlePanelHover}
+          onLeave={handleNodeLeave}
+          onFreeze={handlePanelFreeze}
+          onTogglePanel={() => (panelOpen = !panelOpen)}
+          {isNodeInFrozenPath}
+        />
       {/if}
 
-      <!-- Tooltip -->
-      {#if hoverSource === 'graph' && hoveredId && hoveredGraphNode}
-        {@const hn = hoveredGraphNode}
-        {@const isAsset = hn.type === 'asset' || hoveredId === rootId}
-        {@const pct = hoveredLayoutNode?.pct ?? 0}
-        {@const hqParts = [hn.headquarters_country, hn.headquarters_subdivision].filter(Boolean)}
-        {@const ownerCategory = !isAsset ? classifyOwnerType(hn) : ''}
-        {@const edgeToThis = edges.find((e) => e.target === hn.entity_id || e.target === hn.id)}
-        {@const directPct = edgeToThis?.value ?? 0}
-        {@const isImputed = edgeToThis?.imputed_share ?? false}
-        <div
-          class="tooltip"
-          class:frozen={frozenId === hoveredId}
-          style="left: {tooltipX}px; top: {tooltipY}px;"
-        >
-          {#if frozenId === hoveredId}
-            <div class="tooltip-pinned">Pinned</div>
-          {/if}
-          <div class="tooltip-name">
-            {hn.full_name || hn.name || hn.Name || hoveredId}
-          </div>
-
-          {#if isAsset}
-            <div class="tooltip-detail">
-              {hn.asset_type || 'Asset'}{#if hn.operating_status}
-                · {hn.operating_status}{/if}
-            </div>
-            {#if hn.capacity_value}
-              <div class="tooltip-detail">{hn.capacity_value} {hn.capacity_unit || 'MW'}</div>
-            {/if}
-            {#if hn.country}
-              <div class="tooltip-detail">{hn.country}</div>
-            {/if}
-          {:else}
-            {#if hqParts.length > 0}
-              <div class="tooltip-detail">{hqParts.join(' · ')}</div>
-            {/if}
-            <div class="tooltip-detail">
-              {ownerCategory}{#if hn.legal_entity_type}
-                · {hn.legal_entity_type}{/if}
-            </div>
-            {#if pct > 0}
-              <div class="tooltip-pct">
-                <span class="tooltip-pct-value">{pct.toFixed(1)}%</span> cumulative
-                {#if directPct > 0 && directPct !== pct}
-                  · {directPct.toFixed(1)}% direct{#if isImputed}
-                    (est.){/if}
-                {/if}
-              </div>
-            {/if}
-          {/if}
-
-          {#if isLargeGraph && !frozenId}
-            <div class="tooltip-hint">Drag to pan · Ctrl/Cmd + wheel to zoom</div>
-          {:else if frozenId && hoveredId === frozenId}
-            <div class="tooltip-hint">Click to unpin · Double-click to open</div>
-          {:else if !hasEverFrozen && !frozenId}
-            <div class="tooltip-hint">Click to pin</div>
-          {/if}
-        </div>
-      {/if}
+      <OwnershipTooltip
+        {hoveredId}
+        {hoveredGraphNode}
+        {hoveredLayoutNode}
+        {frozenId}
+        {hasEverFrozen}
+        {hoverSource}
+        {tooltipX}
+        {tooltipY}
+        {isLargeGraph}
+        {rootId}
+        {edges}
+      />
     </div>
 
     <!-- Context narrative -->
@@ -1861,86 +1703,6 @@
     dominant-baseline: hanging;
   }
 
-  /* Side panel — matches Observable's #tables-container */
-  .panel {
-    background: var(--tree-warm-white);
-    border-left: 2px solid var(--tree-teal);
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    min-width: 200px;
-    max-width: 260px;
-    align-self: flex-start;
-    max-height: 600px;
-    overflow-y: auto;
-  }
-  .panel.entrance {
-    animation: panel-enter 0.5s ease-out 0.5s both;
-  }
-  @keyframes panel-enter {
-    from {
-      opacity: 0;
-      transform: translateX(12px);
-    }
-    to {
-      opacity: 1;
-      transform: translateX(0);
-    }
-  }
-  .full-width .panel {
-    min-width: 0;
-    max-width: none;
-    width: 100%;
-    padding: 20px;
-    border-left: none;
-    border-top: 2px solid var(--tree-teal);
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 20px 30px;
-  }
-  .tabular-section {
-    min-width: 0;
-  }
-  .full-width .tabular-section {
-    flex: 1;
-    min-width: 180px;
-  }
-  .panel h4 {
-    margin: 0 0 6px;
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--tree-navy);
-  }
-  .tabular-rows {
-    max-height: 160px;
-    overflow-y: auto;
-  }
-  .tabular-row {
-    font-size: 0.8rem;
-    line-height: 1.2;
-    cursor: pointer;
-    padding: 2px 0;
-    color: var(--tree-navy);
-    transition:
-      font-weight 0.15s ease-out,
-      opacity 0.2s ease-out;
-  }
-  .tabular-row:hover,
-  .tabular-row.is-hovered-view {
-    text-decoration: underline;
-  }
-  .tabular-row.is-frozen-view {
-    font-weight: bold;
-  }
-  .tabular-row.faded {
-    opacity: 0.35;
-  }
-  .table-row-text {
-    pointer-events: none;
-  }
   /* Focus indicator — visible when a path is pinned */
   .focus-indicator {
     display: flex;
@@ -1976,15 +1738,6 @@
   .focus-clear:hover {
     opacity: 1;
     background: rgba(0, 79, 97, 0.1);
-  }
-
-  /* Tease-connection: when hovering a graph node, matching sidebar rows highlight */
-  .tabular-row.tease-connection {
-    font-weight: 600;
-    background: rgba(157, 247, 229, 0.15);
-    border-left: 3px solid var(--tree-mint, #9df7e5);
-    padding-left: 5px;
-    border-radius: 0 4px 4px 0;
   }
 
   /* Color toggle & legend */
@@ -2091,69 +1844,6 @@
     height: 8px;
   }
 
-  /* Tooltip */
-  .tooltip {
-    position: absolute;
-    z-index: 10;
-    background: rgba(29, 73, 97, 0.92); /* navy with opacity */
-    color: white;
-    padding: 6px 10px;
-    border-radius: 4px;
-    font-size: 11px;
-    line-height: 1.4;
-    pointer-events: none;
-    white-space: nowrap;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-    max-width: 250px;
-    animation: tooltip-in 0.15s ease-out;
-  }
-  @keyframes tooltip-in {
-    from {
-      opacity: 0;
-      transform: translateY(4px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-  .tooltip-name {
-    font-weight: 600;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .tooltip-detail {
-    font-size: 10px;
-    opacity: 0.8;
-  }
-  .tooltip.frozen {
-    border-color: var(--tree-teal);
-    background: rgba(0, 79, 97, 0.95); /* teal with opacity */
-  }
-  .tooltip-pinned {
-    font-size: 9px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    opacity: 0.6;
-    margin-bottom: 2px;
-  }
-  .tooltip-pct {
-    font-size: 10px;
-    margin-top: 2px;
-    opacity: 0.9;
-  }
-  .tooltip-pct-value {
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-  }
-  .tooltip-hint {
-    font-size: 9px;
-    opacity: 0.5;
-    margin-top: 3px;
-    font-style: italic;
-  }
-
   .narrative {
     font-size: 12px;
     line-height: 1.5;
@@ -2202,28 +1892,6 @@
     }
     .graph-wrap > svg {
       min-height: 250px;
-    }
-    .panel {
-      min-width: unset;
-      max-width: unset;
-      width: 100%;
-      padding: 12px;
-      border-left: none;
-      border-top: 2px solid var(--tree-teal);
-      flex-direction: column;
-    }
-    .panel-toggle {
-      display: block;
-    }
-    .panel .tabular-section {
-      display: none;
-    }
-    .panel.open .tabular-section {
-      display: block;
-    }
-    .tooltip {
-      max-width: 200px;
-      white-space: normal;
     }
     .graph-controls {
       gap: 8px;
