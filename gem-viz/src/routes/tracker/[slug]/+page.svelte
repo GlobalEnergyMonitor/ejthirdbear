@@ -13,7 +13,7 @@
     type TrackerMetadata,
   } from '$lib/data-config/tracker-metadata';
   import { URL_SLUG_TO_CATALOG_SLUG } from '$lib/data-config/tracker-schema';
-  import { fetchNumericFieldStats } from '$lib/api/catalog-api';
+  import { fetchFieldStats } from '$lib/api/catalog-api';
   import TrackerFactsheet from '$lib/components/tracker/TrackerFactsheet.svelte';
   import PageHeader from '$lib/components/nav/PageHeader.svelte';
   import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
@@ -52,72 +52,95 @@
 
   // Field metadata is fetched from the API via catalog-field-meta.ts
 
-  // Map human-readable field names to REST API keys + normalized AssetSummary keys
+  // FieldStatsResult matches what TrackerFactsheet expects
+  interface FieldStatsResult {
+    distribution: Array<{ value: string; count: number; percentage: number }>;
+    totalRows: number;
+    nullCount: number;
+    nonNullCount: number;
+    uniqueCount: number;
+    dataType?: string;
+    dataSubType?: string;
+    unit?: string;
+    sampleValues?: string[];
+    values?: number[];
+  }
+
+  // Map human-readable field names to API code_friendly_name keys
   const FIELD_TO_API_KEY: Record<string, string[]> = {
     Status: ['operating_status', 'status', 'Status'],
     Country: ['country', 'Country'],
-    'Country / Area': ['country', 'Country'],
+    'Country / Area': ['country_area', 'country', 'Country'],
     Countries: ['country', 'Country'],
-    'Capacity (MW)': ['capacity_value', 'capacity', 'Capacity (MW)'],
-    'Capacity (Mtpa)': ['capacity_value', 'capacity', 'Capacity (Mtpa)'],
+    'Capacity (MW)': ['capacity_mw', 'capacity_value', 'capacity'],
+    'Capacity (Mtpa)': ['capacity_mtpa', 'capacity_value', 'capacity'],
     'Nominal crude steel capacity (ttpa)': ['capacity_value', 'capacity'],
     'Nominal iron capacity (ttpa)': ['capacity_value', 'capacity'],
     'CapacityBcm/y': ['capacity_value', 'capacity'],
     'Design capacity (ttpa)': ['capacity_value', 'capacity'],
-    'Asset Name': ['asset_name', 'name', 'Asset Name'],
-    'Asset Type': ['asset_type', 'facilityType', 'Asset Type'],
-    'Fuel type': ['fuel_type', 'Fuel type'],
-    Technology: ['technology', 'Technology'],
-    'Mine type': ['mine_type', 'Mine type'],
-    Feedstock: ['feedstock', 'Feedstock'],
-    'Start year': ['start_year', 'Start year'],
-    'Immediate Owner Entity Name': ['owner_name', 'Immediate Owner Entity Name'],
-    '% Share of Ownership': ['ownership_pct', '% Share of Ownership'],
+    'Asset Name': ['asset_name', 'name'],
+    'Asset Type': ['asset_type', 'facilityType'],
+    'Fuel type': ['fuel_type'],
+    Technology: ['technology'],
+    'Mine type': ['mine_type'],
+    Feedstock: ['feedstock'],
+    'Start year': ['start_year'],
+    'Immediate Owner Entity Name': ['owner_name'],
+    '% Share of Ownership': ['ownership_pct'],
   };
 
-  // Fetch field distribution from REST API (client-side aggregation)
-  async function fetchFieldDistribution(
-    fieldName: string
-  ): Promise<Array<{ value: string; count: number; percentage: number; uniqueCount?: number }>> {
+  // Fetch field stats from the API — returns full metadata + distribution
+  async function fetchFieldDistribution(fieldName: string, codeFriendlyName?: string): Promise<FieldStatsResult> {
+    const empty: FieldStatsResult = {
+      distribution: [], totalRows: 0, nullCount: 0, nonNullCount: 0, uniqueCount: 0,
+    };
+
     try {
-      // Try the stats API first — it has the real unique_count and full value_counts
       const catalogSlug = URL_SLUG_TO_CATALOG_SLUG[slug];
       if (catalogSlug) {
-        const apiKeys = FIELD_TO_API_KEY[fieldName] || [fieldName, fieldName.toLowerCase()];
+        // Prefer code_friendly_name from field metadata, then fall back to hardcoded map
+        const apiKeys = codeFriendlyName
+          ? [codeFriendlyName, ...(FIELD_TO_API_KEY[fieldName] || []), fieldName.toLowerCase()]
+          : (FIELD_TO_API_KEY[fieldName] || [fieldName, fieldName.toLowerCase()]);
         for (const apiKey of apiKeys) {
-          const stats = await fetchNumericFieldStats(catalogSlug, apiKey);
-          if (stats) {
-            // Stats endpoint returns value_counts for categorical, values for numeric
-            const raw = stats as unknown as Record<string, unknown>;
-            const valueCounts = raw.value_counts as Array<{ value: string; count: number }> | undefined;
-            if (valueCounts && valueCounts.length > 0) {
-              const total = valueCounts.reduce((s, v) => s + v.count, 0);
-              const items = valueCounts.slice(0, 50).map((v) => ({
-                value: String(v.value),
-                count: v.count,
-                percentage: total > 0 ? v.count / total : 0,
-                uniqueCount: stats.unique_count,
+          const stats = await fetchFieldStats(catalogSlug, apiKey);
+          if (!stats) continue;
+
+          // Build distribution from value_counts (categorical) or values (numeric)
+          let distribution: FieldStatsResult['distribution'] = [];
+
+          if (stats.value_counts && stats.value_counts.length > 0) {
+            // Use total_rows (incl nulls) as denominator to match Observable notebook
+            const denom = stats.total_rows || stats.value_counts.reduce((s, v) => s + v.count, 0);
+            distribution = stats.value_counts.slice(0, 50).map((v) => ({
+              value: String(v.value),
+              count: v.count,
+              percentage: denom > 0 ? v.count / denom : 0,
+            }));
+          } else if (stats.values && stats.values.length > 0) {
+            const counts = new Map<string, number>();
+            for (const v of stats.values) counts.set(String(v), (counts.get(String(v)) || 0) + 1);
+            const denom = stats.total_rows || stats.values.length;
+            distribution = Array.from(counts.entries())
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 50)
+              .map(([value, count]) => ({
+                value, count, percentage: denom > 0 ? count / denom : 0,
               }));
-              // Tag first item with uniqueCount so component can read it
-              return items;
-            }
-            // Numeric field — values array
-            if (stats.values && stats.values.length > 0) {
-              const counts = new Map<string, number>();
-              for (const v of stats.values) counts.set(String(v), (counts.get(String(v)) || 0) + 1);
-              const total = stats.values.length;
-              const items = Array.from(counts.entries())
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 50)
-                .map(([value, count]) => ({
-                  value,
-                  count,
-                  percentage: total > 0 ? count / total : 0,
-                  uniqueCount: stats.unique_count,
-                }));
-              return items;
-            }
           }
+
+          return {
+            distribution,
+            totalRows: stats.total_rows,
+            nullCount: stats.null_count,
+            nonNullCount: stats.non_null_count,
+            uniqueCount: stats.unique_count,
+            dataType: stats.data_type,
+            dataSubType: stats.data_sub_type,
+            unit: stats.unit_name_short,
+            sampleValues: stats.sample_values,
+            values: stats.values,
+          };
         }
       }
 
@@ -130,31 +153,28 @@
         let value: unknown = null;
         for (const k of apiKeys) {
           const v = raw[k] ?? (asset as unknown as Record<string, unknown>)[k];
-          if (v != null && v !== '') {
-            value = v;
-            break;
-          }
+          if (v != null && v !== '') { value = v; break; }
         }
-        const strValue = value != null && value !== '' ? String(value) : null;
-        if (strValue) {
-          counts.set(strValue, (counts.get(strValue) || 0) + 1);
+        if (value != null && value !== '') {
+          const sv = String(value);
+          counts.set(sv, (counts.get(sv) || 0) + 1);
         }
       }
-
       const total = Array.from(counts.values()).reduce((s, c) => s + c, 0);
-
-      return Array.from(counts.entries())
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 50)
-        .map(([value, count]) => ({
-          value,
-          count,
-          percentage: total > 0 ? count / total : 0,
-        }));
+      return {
+        distribution: Array.from(counts.entries())
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 50)
+          .map(([value, count]) => ({ value, count, percentage: total > 0 ? count / total : 0 })),
+        totalRows: assets.length,
+        nullCount: assets.length - total,
+        nonNullCount: total,
+        uniqueCount: counts.size,
+      };
     } catch (err) {
       if (import.meta.env.DEV) console.warn(`Failed to fetch distribution for ${fieldName}:`, err);
     }
-    return [];
+    return empty;
   }
 
   async function loadFieldsMetadata() {

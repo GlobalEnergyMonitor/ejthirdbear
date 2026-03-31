@@ -160,28 +160,45 @@ export async function fetchCatalogFieldMappings(): Promise<{
   );
 }
 
-export interface NumericFieldStats {
+export interface FieldStats {
   field: string;
   name: string;
   definition?: string;
   data_type: string;
+  data_sub_type?: string;
+  category?: string;
+  is_required?: boolean;
   total_rows: number;
   null_count: number;
   non_null_count: number;
   unique_count: number;
-  values: number[]; // pre-sorted ascending, nulls excluded
+  /** Pre-sorted numeric values (numeric fields only) */
+  values?: number[];
+  /** Value→count pairs sorted descending (categorical/text fields) */
+  value_counts?: Array<{ value: string; count: number }>;
+  /** Random sample values (high-cardinality text fields) */
+  sample_values?: string[];
+  /** Allowed/valid values from metadata */
+  allowed_values?: string[] | null;
+  unit_name_short?: string;
 }
 
-/** Fetch numeric field stats (pre-sorted values array) for histogram binning. */
-export async function fetchNumericFieldStats(
+/** @deprecated Use FieldStats instead */
+export type NumericFieldStats = FieldStats;
+
+/** Fetch field stats — works for any field type (numeric, categorical, text). */
+export async function fetchFieldStats(
   catalogSlug: string,
   codeFriendlyName: string
-): Promise<NumericFieldStats | null> {
-  return cachedFetch<NumericFieldStats>(
+): Promise<FieldStats | null> {
+  return cachedFetch<FieldStats>(
     `field-stats:${catalogSlug}:${codeFriendlyName}`,
     `/catalog/metadata/${catalogSlug}/fields/${codeFriendlyName}/stats`
   );
 }
+
+/** @deprecated Use fetchFieldStats instead */
+export const fetchNumericFieldStats = fetchFieldStats;
 
 /** Fetch deployment metadata — version, git info, DB stats, canonical asset_types list. */
 export async function fetchApiMetadata(): Promise<ApiMetadata | null> {

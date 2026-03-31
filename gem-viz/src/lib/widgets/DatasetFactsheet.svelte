@@ -199,7 +199,7 @@
       {:else if isNumericField && numericStats}
         <FieldHistogram
           values={numericStats.values}
-          histogramWeight={(selectedField as any).histogramWeight ?? 0.5}
+
           unit={(selectedField as any).unit ?? ''}
           nullCount={numericStats.null_count}
           totalRows={numericStats.total_rows}
@@ -301,7 +301,7 @@
         <!-- Numeric field: interactive histogram -->
         <FieldHistogram
           values={numericStats.values}
-          histogramWeight={(selectedField as any).histogramWeight ?? 0.5}
+
           unit={(selectedField as any).unit ?? ''}
           nullCount={numericStats.null_count}
           totalRows={numericStats.total_rows}

@@ -3,85 +3,375 @@
    * FieldHistogram
    * Interactive histogram for numeric fields in the FieldGuide right panel.
    * Accepts a pre-sorted values array from the /fields/{field}/stats API endpoint.
-   * Supports blended quantile/equal-width binning per the Observable prototype.
+   *
+   * Binning algorithm ported from Stephen's Observable notebook (binDataWeightedJenksy1):
+   * - Point mass detection (dominant values get own bins)
+   * - Tail peeling (outlier tails isolated before core binning)
+   * - Jenks natural breaks (DP on bucket histogram, minimizes within-bin SSD)
+   * - Quantile-Jenks blending via weight slider (0 = pure Jenks, 1 = pure quantile)
+   * - IQR-aware magnitude-local step snapping for nice round labels
+   * - Adaptive K/M/B number formatting
    */
 
   let {
     values = [] as number[],
-    histogramWeight: _histogramWeight = 0.5,
     unit = '',
     nullCount = 0,
     totalRows = 0,
   } = $props();
 
-  let numBins = $state(10);
-  const weight = 0.5;
+  let numBins = $state(4);
+  let weight = $state(0.7);
 
-  // Binary search: index of first element >= target
-  function lowerBound(arr: number[], target: number): number {
-    let lo = 0,
-      hi = arr.length;
-    while (lo < hi) {
-      const mid = (lo + hi) >> 1;
-      if (arr[mid] < target) lo = mid + 1;
-      else hi = mid;
-    }
-    return lo;
+  // =========================================================================
+  // Jenks-weighted binning — ported from Observable notebook
+  // =========================================================================
+
+  interface Bin {
+    lo: number;
+    hi: number;
+    count: number;
+    label: string;
   }
 
-  // Compute blended bin edges and counts from pre-sorted values
-  const bins = $derived.by(() => {
+  function quantileFrom(data: number[], q: number): number {
+    const m = data.length;
+    if (m === 0) return 0;
+    const pos = q * (m - 1);
+    const lo = Math.floor(pos);
+    const hi = Math.ceil(pos);
+    return data[lo] + (data[hi] - data[lo]) * (pos - lo);
+  }
+
+  function computeMinStep(r: number): number {
+    const magnitude = Math.pow(10, Math.floor(Math.log10(r)));
+    const normalized = r / magnitude;
+    const raw = magnitude / 10;
+    return normalized >= 5 ? raw * 5 : normalized >= 2 ? raw * 2 : raw;
+  }
+
+  function clean(v: number): number {
+    return parseFloat(v.toPrecision(10));
+  }
+
+  const bins = $derived.by((): Bin[] => {
     if (!values.length || numBins < 1) return [];
 
-    const n = Math.min(numBins, values.length);
-    const min = values[0];
-    const max = values[values.length - 1];
-    if (min === max) {
-      return [{ lo: min, hi: max, count: values.length, label: fmtNum(min) }];
+    const sorted = values; // already pre-sorted from API
+    const n = sorted.length;
+    const dataMin = sorted[0];
+    const dataMax = sorted[n - 1];
+    const range = dataMax - dataMin;
+
+    if (range === 0) {
+      const label = unit ? `${dataMin} ${unit}` : `${dataMin}`;
+      return [{ lo: dataMin, hi: dataMax, count: n, label }];
     }
 
-    // Equal-width edges
-    const ewEdges = Array.from({ length: n + 1 }, (_, i) => min + (max - min) * (i / n));
+    // IQR-aware step computation
+    const q25 = quantileFrom(sorted, 0.25);
+    const q75 = quantileFrom(sorted, 0.75);
+    const iqr = q75 - q25;
+    const referenceRange = iqr > 0 ? iqr : range;
+    const minStep = computeMinStep(referenceRange);
 
-    // Quantile edges (equal-count)
-    const qEdges = Array.from({ length: n + 1 }, (_, i) => {
-      const idx = Math.min(Math.round((i * (values.length - 1)) / n), values.length - 1);
-      return values[idx];
-    });
-
-    // Blend: weight=1 → equal-width, weight=0 → quantile
-    let edges = ewEdges.map((ew, i) => ew * weight + qEdges[i] * (1 - weight));
-
-    // Deduplicate and ensure strictly increasing
-    edges = [...new Set(edges.map((e) => +e.toFixed(6)))].sort((a, b) => a - b);
-    if (edges[0] > min) edges.unshift(min);
-    if (edges[edges.length - 1] < max) edges.push(max);
-
-    const result: { lo: number; hi: number; count: number; label: string }[] = [];
-    for (let i = 0; i < edges.length - 1; i++) {
-      const lo = edges[i];
-      const hi = edges[i + 1];
-      const isLast = i === edges.length - 2;
-      // Count values in [lo, hi) — last bin is [lo, hi] inclusive
-      const from = lowerBound(values, lo);
-      const to = isLast ? values.length : lowerBound(values, hi);
-      const count = to - from;
-      const label = isLast ? `${fmtNum(lo)} – ${fmtNum(hi)}` : `${fmtNum(lo)} – <${fmtNum(hi)}`;
-      result.push({ lo, hi, count, label });
+    function localStep(v: number): number {
+      if (v === 0) return minStep;
+      const valMag = Math.pow(10, Math.floor(Math.log10(Math.abs(v))));
+      return Math.max(minStep, valMag / 10);
     }
-    return result.filter((b) => b.count > 0);
+    function snapToStep(v: number): number {
+      const s = localStep(v);
+      return parseFloat((Math.round(v / s) * s).toPrecision(10));
+    }
+    function snapDown(v: number): number {
+      if (v === 0) return 0;
+      const s = localStep(Math.abs(v));
+      return parseFloat((Math.floor(v / s) * s).toPrecision(10));
+    }
+    function snapUp(v: number): number {
+      if (v === 0) return 0;
+      const s = localStep(Math.abs(v));
+      return parseFloat((Math.ceil(v / s) * s).toPrecision(10));
+    }
+
+    function formatValue(v: number): string {
+      const s = localStep(Math.abs(v) || minStep);
+      const sMag = Math.floor(Math.log10(s));
+      if (sMag >= 9) return (v / 1e9).toPrecision(4).replace(/\.?0+$/, '') + 'B';
+      if (sMag >= 6) return (v / 1e6).toPrecision(4).replace(/\.?0+$/, '') + 'M';
+      if (sMag >= 3) return (v / 1e3).toPrecision(4).replace(/\.?0+$/, '') + 'K';
+      if (sMag >= 0) return Math.round(v).toString();
+      return v.toFixed(Math.max(0, -sMag));
+    }
+
+    // --- Point mass detection ---
+    const fairShare = n / numBins;
+    const valueCounts = new Map<number, number>();
+    for (const v of sorted) valueCounts.set(v, (valueCounts.get(v) || 0) + 1);
+
+    const pointMasses = [...valueCounts.entries()]
+      .filter(([, count]) => count > fairShare * 2)
+      .map(([v, count]) => ({ v, count }))
+      .sort((a, b) => a.v - b.v);
+
+    const pointMassValues = new Set(pointMasses.map((p) => p.v));
+    const remainingData = sorted.filter((v) => !pointMassValues.has(v));
+    const remainingBins = numBins - pointMasses.length;
+
+    if (remainingBins < 1) {
+      return pointMasses.map(({ v, count }) => ({
+        lo: v,
+        hi: v,
+        count,
+        label: unit ? `${formatValue(v)} ${unit}` : formatValue(v),
+      }));
+    }
+
+    const rMin = remainingData.length > 0 ? remainingData[0] : dataMin;
+    const rMax = remainingData.length > 0 ? remainingData[remainingData.length - 1] : dataMax;
+    const outerMin = rMin === 0 ? 0 : snapDown(rMin);
+    const outerMax = snapUp(rMax);
+
+    let boundaries: number[];
+
+    if (numBins <= 2 || remainingBins <= 2) {
+      // Simple equal-width for very few bins
+      const span = outerMax - outerMin;
+      boundaries = Array.from({ length: remainingBins + 1 }, (_, i) =>
+        clean(outerMin + (i / remainingBins) * span)
+      );
+    } else {
+      // --- Tail peeling ---
+      function peelTails(
+        data: number[],
+        availableBins: number,
+        oLo: number,
+        oHi: number,
+        depth = 0
+      ): {
+        leftTails: number[];
+        rightTails: number[];
+        coreLo: number;
+        coreHi: number;
+      } {
+        const maxDepth = availableBins <= 4 ? 0 : 1;
+        if (data.length === 0 || availableBins < 3 || depth > maxDepth) {
+          return { leftTails: [], rightTails: [], coreLo: oLo, coreHi: oHi };
+        }
+
+        const tailQ = Math.min(0.95, 1 - 1 / (availableBins * 1.5));
+        const qRight = quantileFrom(data, tailQ);
+        const qLeft = quantileFrom(data, 1 - tailQ);
+        const span = oHi - oLo;
+        const halfSpan = span / 2;
+        const tailThreshold = 1 / availableBins;
+
+        const hasRight = (oHi - qRight) / span > tailThreshold;
+        const hasLeft = (qLeft - oLo) / span > tailThreshold;
+
+        if (!hasRight && !hasLeft) {
+          return { leftTails: [], rightTails: [], coreLo: oLo, coreHi: oHi };
+        }
+
+        const rightBoundary = hasRight
+          ? clean(snapToStep(availableBins >= 4 ? Math.max(qRight, oHi - halfSpan) : qRight))
+          : null;
+        const leftBoundary = hasLeft
+          ? clean(snapToStep(availableBins >= 4 ? Math.min(qLeft, oLo + halfSpan) : qLeft))
+          : null;
+
+        const coreData = data.filter(
+          (v) => (!hasLeft || v >= leftBoundary!) && (!hasRight || v <= rightBoundary!)
+        );
+
+        const remainingB = availableBins - (hasRight ? 1 : 0) - (hasLeft ? 1 : 0);
+        const coreLo = hasLeft ? leftBoundary! : oLo;
+        const coreHi = hasRight ? rightBoundary! : oHi;
+        const inner = peelTails(coreData, remainingB, coreLo, coreHi, depth + 1);
+
+        return {
+          leftTails: hasLeft ? [leftBoundary!, ...inner.leftTails] : inner.leftTails,
+          rightTails: hasRight ? [...inner.rightTails, rightBoundary!] : inner.rightTails,
+          coreLo: inner.coreLo,
+          coreHi: inner.coreHi,
+        };
+      }
+
+      const { leftTails, rightTails, coreLo, coreHi } = peelTails(
+        remainingData,
+        remainingBins,
+        outerMin,
+        outerMax
+      );
+
+      const tailBinCount = leftTails.length + rightTails.length;
+      const coreBins = remainingBins - tailBinCount;
+
+      // --- Jenks DP on bucket histogram ---
+      const BUCKETS = 500;
+      const bucketWidth = (outerMax - outerMin) / BUCKETS;
+      const bucketCounts = new Array(BUCKETS).fill(0);
+      for (const v of remainingData) {
+        const idx = Math.min(Math.floor((v - outerMin) / bucketWidth), BUCKETS - 1);
+        bucketCounts[idx]++;
+      }
+
+      const bucketEdge = (i: number) => outerMin + i * bucketWidth;
+      const bucketMid = (i: number) => outerMin + (i + 0.5) * bucketWidth;
+
+      const cumCounts = new Array(BUCKETS + 1).fill(0);
+      const cumSum = new Array(BUCKETS + 1).fill(0);
+      const cumSumSq = new Array(BUCKETS + 1).fill(0);
+      for (let i = 0; i < BUCKETS; i++) {
+        const mid = bucketMid(i);
+        cumCounts[i + 1] = cumCounts[i] + bucketCounts[i];
+        cumSum[i + 1] = cumSum[i] + bucketCounts[i] * mid;
+        cumSumSq[i + 1] = cumSumSq[i] + bucketCounts[i] * mid * mid;
+      }
+
+      function countInRange(lo: number, hi: number): number {
+        return cumCounts[hi] - cumCounts[lo];
+      }
+      function withinBinSSD(lo: number, hi: number): number {
+        const c = countInRange(lo, hi);
+        if (c === 0) return 0;
+        const s = cumSum[hi] - cumSum[lo];
+        const sq = cumSumSq[hi] - cumSumSq[lo];
+        return sq - (s * s) / c;
+      }
+
+      const coreLoIdx = Math.min(Math.round((coreLo - outerMin) / bucketWidth), BUCKETS);
+      const coreHiIdx = Math.min(Math.round((coreHi - outerMin) / bucketWidth), BUCKETS);
+
+      let innerBoundaries: number[] = [];
+
+      if (coreBins >= 2) {
+        const N = coreHiIdx - coreLoIdx;
+        const K = coreBins;
+        const lssd = (lo: number, hi: number) => withinBinSSD(coreLoIdx + lo, coreLoIdx + hi);
+
+        const dp = Array.from({ length: K + 1 }, () => new Float64Array(N + 1).fill(Infinity));
+        const backtrack = Array.from({ length: K + 1 }, () => new Int32Array(N + 1));
+
+        dp[0][0] = 0;
+        for (let i = 1; i <= N; i++) {
+          dp[1][i] = lssd(0, i);
+          backtrack[1][i] = 0;
+        }
+        for (let k = 2; k <= K; k++) {
+          for (let i = k; i <= N; i++) {
+            for (let j = k - 1; j < i; j++) {
+              if (dp[k - 1][j] === Infinity) continue;
+              const cost = dp[k - 1][j] + lssd(j, i);
+              if (cost < dp[k][i]) {
+                dp[k][i] = cost;
+                backtrack[k][i] = j;
+              }
+            }
+          }
+        }
+
+        // Backtrack to find break positions
+        const breakBuckets: number[] = [];
+        let pos = N;
+        for (let k = K; k >= 2; k--) {
+          pos = backtrack[k][pos];
+          breakBuckets.unshift(pos);
+        }
+
+        // Raw Jenks breaks
+        const jenksRaw = breakBuckets.map((b) => bucketEdge(coreLoIdx + b));
+
+        // Quantile raw breaks over core data
+        const coreData = remainingData.filter((v) => v >= coreLo && v <= coreHi);
+        const qBreaksRaw = Array.from({ length: coreBins - 1 }, (_, i) =>
+          quantileFrom(coreData, (i + 1) / coreBins)
+        );
+
+        // Blend raw values first (weight=1 → pure quantile, weight=0 → pure Jenks), then snap once
+        innerBoundaries = jenksRaw.map((jRaw, i) => {
+          const blended = jRaw * (1 - weight) + qBreaksRaw[i] * weight;
+          return clean(snapToStep(blended));
+        });
+
+        // Enforce monotonicity
+        for (let i = 1; i < innerBoundaries.length; i++) {
+          if (innerBoundaries[i] <= innerBoundaries[i - 1]) {
+            innerBoundaries[i] = clean(innerBoundaries[i - 1] + localStep(innerBoundaries[i - 1]));
+          }
+        }
+
+        // Snap boundaries near point masses to exact values
+        innerBoundaries = innerBoundaries.map((v) => {
+          for (const { v: pmv } of pointMasses) {
+            if (Math.abs(v - pmv) <= localStep(pmv) * 2) return clean(pmv);
+          }
+          return v;
+        });
+      }
+
+      boundaries = [outerMin, ...leftTails, ...innerBoundaries, ...rightTails, outerMax];
+
+      // Monotonicity forward pass
+      for (let i = 1; i < boundaries.length - 1; i++) {
+        if (boundaries[i] <= boundaries[i - 1]) {
+          boundaries[i] = clean(boundaries[i - 1] + localStep(boundaries[i - 1]));
+        }
+      }
+      // Backward pass
+      for (let i = boundaries.length - 2; i > 0; i--) {
+        if (boundaries[i] >= boundaries[i + 1]) {
+          boundaries[i] = clean(boundaries[i + 1] - localStep(boundaries[i + 1]));
+        }
+      }
+    }
+
+    // --- Count remaining data into bins ---
+    const counts = new Array(remainingBins).fill(0);
+    for (const v of remainingData) {
+      if (v < boundaries[0] || v > boundaries[remainingBins]) continue;
+      if (v === boundaries[remainingBins]) {
+        counts[remainingBins - 1]++;
+        continue;
+      }
+      let lo = 0,
+        hi = remainingBins - 1;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (v < boundaries[mid + 1]) hi = mid;
+        else lo = mid + 1;
+      }
+      counts[lo]++;
+    }
+
+    // --- Merge range bins and point mass bins ---
+    const allBins: Bin[] = [];
+
+    for (let i = 0; i < remainingBins; i++) {
+      if (boundaries[i] >= boundaries[i + 1]) continue;
+      const isLast = i === remainingBins - 1;
+      const hiStr = unit
+        ? `${formatValue(boundaries[i + 1])} ${unit}`
+        : formatValue(boundaries[i + 1]);
+      const label = isLast
+        ? `${formatValue(boundaries[i])} – ${hiStr}`
+        : `${formatValue(boundaries[i])} – <${hiStr}`;
+      allBins.push({ lo: boundaries[i], hi: boundaries[i + 1], count: counts[i], label });
+    }
+
+    for (const { v, count } of pointMasses) {
+      const label = unit ? `${formatValue(v)} ${unit}` : formatValue(v);
+      allBins.push({ lo: v, hi: v, count, label });
+    }
+
+    allBins.sort((a, b) => a.lo - b.lo || a.hi - b.hi);
+    return allBins;
   });
 
   const maxCount = $derived(Math.max(...bins.map((b) => b.count), 1));
   const nonNullCount = $derived(values.length);
   const nullPct = $derived(totalRows > 0 ? nullCount / totalRows : 0);
-
-  function fmtNum(n: number): string {
-    if (Math.abs(n) >= 10000) return n.toLocaleString(undefined, { maximumFractionDigits: 0 });
-    if (Math.abs(n) >= 100) return n.toFixed(1);
-    if (Math.abs(n) >= 1) return n.toFixed(2);
-    return n.toPrecision(3);
-  }
 
   function fmtCount(n: number): string {
     if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
@@ -89,7 +379,9 @@
   }
 
   function pct(n: number): string {
-    return `${((n / (nonNullCount || 1)) * 100).toFixed(1)}%`;
+    // Divide by totalRows (incl. nulls) to match Observable notebook's nUnits denominator
+    const denom = totalRows > 0 ? totalRows : nonNullCount || 1;
+    return `${((n / denom) * 100).toFixed(1)}%`;
   }
 </script>
 
@@ -109,8 +401,13 @@
   <div class="controls">
     <label class="bins-control">
       <span class="bins-label">Bins</span>
-      <input type="range" min="2" max="40" step="1" bind:value={numBins} />
+      <input type="range" min="2" max="12" step="1" bind:value={numBins} />
       <span class="bins-value">{numBins}</span>
+    </label>
+    <label class="bins-control">
+      <span class="bins-label">Weight:</span>
+      <input type="range" min="0" max="1" step="0.05" bind:value={weight} />
+      <span class="bins-value">{weight.toFixed(2)}</span>
     </label>
   </div>
 
@@ -119,7 +416,7 @@
     {#each bins as bin}
       {@const barPct = (bin.count / maxCount) * 100}
       <div class="bar-row">
-        <span class="bar-label">{bin.label}{unit ? ` ${unit}` : ''}</span>
+        <span class="bar-label">{bin.label}</span>
         <span class="bar-wrap">
           <span class="bar" style="width: {barPct.toFixed(1)}%"></span>
         </span>
@@ -191,7 +488,7 @@
 
   .bar-row {
     display: grid;
-    grid-template-columns: 110px 1fr 90px;
+    grid-template-columns: 130px 1fr 90px;
     align-items: center;
     gap: var(--space-2);
   }
@@ -231,6 +528,8 @@
 
   /* Controls */
   .controls {
+    display: flex;
+    gap: var(--space-4);
     padding-bottom: var(--space-3);
     border-bottom: 1px solid var(--color-border);
     margin-bottom: var(--space-1);
@@ -240,8 +539,9 @@
     display: grid;
     grid-template-columns: auto 1fr auto;
     align-items: center;
-    gap: var(--space-3);
+    gap: var(--space-2);
     cursor: pointer;
+    flex: 1;
   }
 
   .bins-label {

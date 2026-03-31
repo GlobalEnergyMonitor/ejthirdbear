@@ -20,7 +20,7 @@
     trackerTitle?: string;
     trackerColor?: string;
     fieldsMetadata?: FieldInfo[];
-    fetchDistribution?: (_field: string) => Promise<FieldDistribution[]>;
+    fetchDistribution?: (_field: string, _codeFriendlyName?: string) => Promise<FieldStatsResult>;
   }
 
   let {
@@ -36,6 +36,11 @@
     columnName: string;
     category: string;
     definition: string;
+    dataType?: string;
+    dataSubType?: string;
+    unit?: string;
+    codeFriendlyName?: string;
+    histogramWeight?: number;
     fieldValue?: string | null;
     valueDefinition?: string | null;
     ownRow?: number;
@@ -45,7 +50,21 @@
     value: string;
     count: number;
     percentage: number;
-    uniqueCount?: number;
+  }
+
+  /** Full stats result from the API — replaces the old array-only return */
+  interface FieldStatsResult {
+    distribution: FieldDistribution[];
+    totalRows: number;
+    nullCount: number;
+    nonNullCount: number;
+    uniqueCount: number;
+    dataType?: string;
+    dataSubType?: string;
+    unit?: string;
+    sampleValues?: string[];
+    /** Pre-sorted numeric values for histogram (only for numeric fields) */
+    values?: number[];
   }
 
   type FieldType = 'numeric' | 'enum' | 'text';
@@ -53,7 +72,7 @@
   // State
   let expandedCategories = $state<Set<string>>(new Set());
   let selectedField = $state<FieldInfo | null>(null);
-  let fieldDistribution = $state<FieldDistribution[]>([]);
+  let fieldStats = $state<FieldStatsResult | null>(null);
   let loadingDistribution = $state(false);
   let mobilePreviewOpen = $state(false);
 
@@ -107,27 +126,24 @@
     return defs;
   });
 
-  // Quick field type guess from category/name alone (no distribution data needed)
-  function guessFieldType(field: FieldInfo): FieldType {
+  // Resolve field type from API metadata (data_type + data_sub_type)
+  // Falls back to heuristic only when metadata is missing
+  function resolveFieldType(field: FieldInfo, stats: FieldStatsResult | null): FieldType {
+    // Prefer API data_type from stats response, then from field metadata
+    const dt = stats?.dataType || field.dataType;
+    const dst = stats?.dataSubType || field.dataSubType;
+    if (dt === 'numeric') return 'numeric';
+    if (dt === 'text' && (dst === 'categorical' || dst === 'ordinal' || dst === 'accuracy'))
+      return 'enum';
+    if (dt === 'boolean') return 'enum';
+    // datetime/year with value_counts → show as enum bars
+    if (dt === 'datetime' && stats?.distribution && stats.distribution.length > 0) return 'enum';
+    if (dt === 'datetime') return 'text';
+    if (dt === 'text') return 'text';
+    // Fallback heuristic when API metadata is absent
     const cat = field.category?.toLowerCase() || '';
-    const name = field.columnName.toLowerCase();
     if (cat === 'size' || cat === 'age') return 'numeric';
-    if (
-      name.includes('capacity') ||
-      name.includes('year') ||
-      name.includes('age') ||
-      name.includes('mw') ||
-      name.includes('mtpa') ||
-      name.includes('ttpa') ||
-      name.includes('co2') ||
-      name.includes('latitude') ||
-      name.includes('longitude')
-    ) {
-      return 'numeric';
-    }
     if (cat === 'main' || cat === 'details') return 'enum';
-    if (cat === 'ids' || cat === 'names' || cat === 'reference' || cat === 'geography')
-      return 'text';
     return 'text';
   }
 
@@ -141,120 +157,37 @@
     text: colors.navy,
   };
 
-  // Detect field type from category, name, and distribution data
-  function detectFieldType(field: FieldInfo, distribution: FieldDistribution[]): FieldType {
-    const cat = field.category?.toLowerCase() || '';
-    const name = field.columnName.toLowerCase();
+  // Convenience: shorthand for distribution array
+  const fieldDistribution = $derived(fieldStats?.distribution ?? []);
 
-    // Size/Age categories are numeric
-    if (cat === 'size' || cat === 'age') return 'numeric';
-
-    // Fields with known numeric patterns
-    if (
-      name.includes('capacity') ||
-      name.includes('year') ||
-      name.includes('age') ||
-      name.includes('mw') ||
-      name.includes('mtpa') ||
-      name.includes('ttpa') ||
-      name.includes('co2') ||
-      name.includes('latitude') ||
-      name.includes('longitude')
-    ) {
-      return 'numeric';
-    }
-
-    // Check if distribution values are mostly numeric
-    if (distribution.length > 0) {
-      const numericCount = distribution.filter(
-        (d) => !isNaN(Number(d.value)) && d.value.trim() !== ''
-      ).length;
-      if (numericCount > distribution.length * 0.7) return 'numeric';
-    }
-
-    // Fields with enum definitions are enum
-    if (selectedFieldValueDefs.length > 0) return 'enum';
-
-    // Main category often has enums (Status, etc.)
-    if (cat === 'main' || cat === 'details') return 'enum';
-
-    return 'text';
-  }
-
-  // Compute numeric stats from distribution
-  function computeNumericStats(distribution: FieldDistribution[]): {
-    min: number;
-    max: number;
-    mean: number;
-    total: number;
-    numericValues: number[];
-  } | null {
-    const numericValues: number[] = [];
-    let weightedSum = 0;
-    let totalCount = 0;
-
-    for (const d of distribution) {
-      const n = Number(d.value);
-      if (!isNaN(n)) {
-        numericValues.push(n);
-        weightedSum += n * d.count;
-        totalCount += d.count;
-      }
-    }
-
-    if (numericValues.length === 0) return null;
-
-    numericValues.sort((a, b) => a - b);
-    return {
-      min: numericValues[0],
-      max: numericValues[numericValues.length - 1],
-      mean: totalCount > 0 ? weightedSum / totalCount : 0,
-      total: totalCount,
-      numericValues,
-    };
-  }
-
-  // Derived: detected field type
+  // Derived: field type from API metadata
   const detectedType = $derived(
-    selectedField ? detectFieldType(selectedField, fieldDistribution) : ('text' as FieldType)
+    selectedField ? resolveFieldType(selectedField, fieldStats) : ('text' as FieldType)
   );
 
-  // Derived: numeric stats (only computed for numeric fields)
-  const numericStats = $derived(
-    detectedType === 'numeric' ? computeNumericStats(fieldDistribution) : null
-  );
+  // Derived: stats straight from API
+  const totalRows = $derived(fieldStats?.totalRows ?? fieldDistribution.reduce((s, d) => s + d.count, 0));
+  const nullCount = $derived(fieldStats?.nullCount ?? 0);
+  const distinctCount = $derived(fieldStats?.uniqueCount ?? fieldDistribution.length);
+  const nullPct = $derived(totalRows > 0 ? nullCount / totalRows : 0);
+  const sampleValues = $derived(fieldStats?.sampleValues ?? []);
 
-  // Derived: total row count from distribution
-  const totalRows = $derived(fieldDistribution.reduce((sum, d) => sum + d.count, 0));
+  // Data type label from API (e.g. "text - categorical", "numeric - measurement")
+  const dataTypeLabel = $derived.by(() => {
+    const dt = fieldStats?.dataType || selectedField?.dataType;
+    const dst = fieldStats?.dataSubType || selectedField?.dataSubType;
+    if (!dt) return '';
+    return dst ? `${dt} - ${dst}` : dt;
+  });
 
-  // Derived: real unique count from API (if available), else fall back to distribution length
-  const distinctCount = $derived(fieldDistribution[0]?.uniqueCount ?? fieldDistribution.length);
+  // Unit from API metadata (e.g. "MW", "years")
+  const fieldUnit = $derived(fieldStats?.unit || selectedField?.unit || '');
 
   // Derived: max count for bar scaling
   const maxCount = $derived(Math.max(...fieldDistribution.map((d) => d.count), 1));
 
-  // Derived: expand aggregated distribution back into raw values for histogram
-  const histogramData = $derived.by(() => {
-    if (detectedType !== 'numeric' || !numericStats) return [];
-    const values: number[] = [];
-    for (const d of fieldDistribution) {
-      const n = Number(d.value);
-      if (!isNaN(n)) {
-        for (let i = 0; i < d.count; i++) values.push(n);
-      }
-    }
-    return values.sort((a, b) => a - b);
-  });
-
-  // Extract unit from field name for histogram label
-  function inferUnit(fieldName: string): string {
-    if (fieldName.includes('(MW)')) return 'MW';
-    if (fieldName.includes('(Mtpa)')) return 'Mtpa';
-    if (fieldName.includes('(ttpa)') || fieldName.includes('ttpa')) return 'ttpa';
-    if (fieldName.includes('Bcm/y')) return 'Bcm/y';
-    if (fieldName.toLowerCase().includes('year')) return '';
-    return '';
-  }
+  // Derived: pre-sorted numeric values for histogram — use API's values[] directly
+  const histogramData = $derived(fieldStats?.values ?? []);
 
   // Toggle category expansion
   function toggleCategory(cat: string) {
@@ -267,16 +200,16 @@
     expandedCategories = newSet;
   }
 
-  // Select a field and load its distribution
+  // Select a field and load its stats
   async function selectField(field: FieldInfo) {
     selectedField = field;
-    fieldDistribution = [];
+    fieldStats = null;
     mobilePreviewOpen = true;
 
     if (fetchDistribution) {
       loadingDistribution = true;
       try {
-        fieldDistribution = await fetchDistribution(field.columnName);
+        fieldStats = await fetchDistribution(field.columnName, field.codeFriendlyName);
       } catch (err) {
         if (import.meta.env.DEV) console.error('Failed to fetch distribution:', err);
       } finally {
@@ -316,7 +249,7 @@
         </button>
         <div class="category-fields">
           {#each fields as field}
-            {@const fieldType = guessFieldType(field)}
+            {@const fieldType = resolveFieldType(field, null)}
             <div class="field-name">
               <button
                 type="button"
@@ -359,40 +292,45 @@
 
       {#if loadingDistribution}
         <div class="loading">Loading distribution...</div>
-      {:else if fieldDistribution.length > 0}
+      {:else if fieldStats}
+        <!-- Null / coverage row (matches Observable notebook) -->
+        {#if nullCount > 0}
+          <div class="coverage-row">
+            <span class="field-value">Null</span> in {formatCompact(nullCount)} rows ({formatPct(nullPct)})
+          </div>
+        {:else if totalRows > 0}
+          <div class="coverage-row full">
+            <span class="field-value">100% coverage</span> (no missing values)
+          </div>
+        {/if}
+
         <!-- Summary stats row -->
         <div class="dist-summary">
           <span class="dist-stat">{formatCompact(totalRows)} rows</span>
           <span class="dist-stat">{distinctCount} distinct</span>
-          {#if detectedType === 'numeric' && numericStats}
-            <span class="dist-stat type-badge numeric"
-              ><span class="type-icon">{typeLabels.numeric}</span> Numeric</span
-            >
-          {:else if detectedType === 'enum'}
-            <span class="dist-stat type-badge enum"
-              ><span class="type-icon">{typeLabels.enum}</span> Enum</span
-            >
-          {:else}
-            <span class="dist-stat type-badge text"
-              ><span class="type-icon">{typeLabels.text}</span> Text</span
-            >
-          {/if}
+          <span class="dist-stat type-badge {detectedType}">
+            <span class="type-icon">{typeLabels[detectedType]}</span>
+            {#if dataTypeLabel}
+              {dataTypeLabel}
+            {:else}
+              {detectedType === 'enum' ? 'Enum' : detectedType === 'numeric' ? 'Numeric' : 'Text'}
+            {/if}
+          </span>
         </div>
 
-        <!-- Numeric range summary + histogram -->
-        {#if detectedType === 'numeric' && numericStats}
-          {#if histogramData.length > 0}
-            <FieldHistogram
-              values={histogramData}
-              unit={selectedField ? inferUnit(selectedField.columnName) : ''}
-              nullCount={totalRows - histogramData.length}
-              {totalRows}
-            />
-          {/if}
+        <!-- Numeric: histogram from pre-sorted API values -->
+        {#if detectedType === 'numeric' && histogramData.length > 0}
+          <FieldHistogram
+            values={histogramData}
+            unit={fieldUnit}
+            {nullCount}
+            {totalRows}
+          />
         {/if}
 
-        <!-- Distribution bars (hidden for numeric fields with histogram) -->
-        {#if !(detectedType === 'numeric' && histogramData.length > 0)}
+        <!-- Categorical / enum: distribution bars with counts -->
+        {#if detectedType === 'enum' && fieldDistribution.length > 0}
+          <div class="distinct-header">{distinctCount} distinct values:</div>
           <div class="dist-bars">
             {#each fieldDistribution.slice(0, MAX_VISIBLE_ITEMS) as item}
               {@const barWidth = (item.count / maxCount) * 100}
@@ -412,6 +350,25 @@
             {/if}
           </div>
         {/if}
+
+        <!-- Text (unstructured): unique count + data type + sample values -->
+        {#if detectedType === 'text'}
+          <div class="text-summary">
+            {distinctCount} unique values from {formatCompact(totalRows - nullCount)}
+            {nullCount > 0 ? 'non-null' : ''} rows
+          </div>
+          {#if dataTypeLabel}
+            <div class="text-summary">
+              <span class="field-value">Data Type</span>: {dataTypeLabel}
+            </div>
+          {/if}
+          {#if sampleValues.length > 0}
+            <div class="sample-values">
+              <span class="field-value">Sample Values</span>:<br />
+              {sampleValues.join(' | ')}
+            </div>
+          {/if}
+        {/if}
       {/if}
 
       {#if selectedFieldValueDefs.length > 0}
@@ -421,7 +378,7 @@
             <div><span class="field-value">{value}</span> {definition}</div>
           {/each}
         </div>
-      {:else if !loadingDistribution && fieldDistribution.length === 0}
+      {:else if !loadingDistribution && !fieldStats}
         <div class="no-enum">No enumerated values for this field.</div>
       {/if}
     {:else}
@@ -432,13 +389,13 @@
 
 <style>
   div.factsheet {
-    --navy: #1d4961;
+    --navy: #004a63;
     --mint: #9df7e5;
     --mintBackground: #9df7e520;
     --orange: #fe4f2d;
-    --teal: #004f61;
-    --tealBackground: #004f61cc;
-    --midnight: #1c1f23;
+    --teal: #016b83;
+    --tealBackground: #016b83cc;
+    --midnight: #002430;
     --warmWhite: #f2f2eb;
     --white: #ffffff;
     --deepRed: #7f142a;
@@ -561,7 +518,7 @@
   div.dataset-fields div.field-name > button.selected {
     background: var(--teal);
     color: var(--white);
-    border-color: var(--teal);
+    border-color: var(--mint);
   }
 
   .category-section.expanded div.field-name > button {
@@ -622,6 +579,39 @@
   .field-definition {
     font-size: 0.95rem;
     line-height: 1.5;
+  }
+
+  /* Coverage / null row */
+  .coverage-row {
+    font-size: 0.85rem;
+    color: var(--navy);
+    opacity: 0.8;
+  }
+
+  .coverage-row.full {
+    color: var(--teal);
+  }
+
+  /* Text field summary and sample values */
+  .text-summary {
+    font-size: 0.85rem;
+    color: var(--navy);
+    opacity: 0.8;
+  }
+
+  .sample-values {
+    font-size: 0.8rem;
+    color: var(--navy);
+    opacity: 0.8;
+    line-height: 1.6;
+    word-break: break-word;
+  }
+
+  /* Distinct values header (matches Observable notebook) */
+  .distinct-header {
+    font-size: 0.85rem;
+    color: var(--navy);
+    margin-top: 4px;
   }
 
   /* Summary stats row */
@@ -740,6 +730,7 @@
   span.field-value {
     color: var(--teal);
     font-weight: bold;
+    text-transform: uppercase;
   }
 
   div.previewer-values-definitions {
@@ -815,9 +806,12 @@
     /* Hide preview content on mobile unless open */
     div.dataset-previewer .preview-heading,
     div.dataset-previewer .field-definition,
+    div.dataset-previewer .coverage-row,
     div.dataset-previewer .dist-summary,
     div.dataset-previewer :global(.field-histogram),
     div.dataset-previewer .dist-bars,
+    div.dataset-previewer .text-summary,
+    div.dataset-previewer .sample-values,
     div.dataset-previewer .loading,
     div.dataset-previewer .no-enum,
     div.dataset-previewer .previewer-values-definitions,
@@ -827,9 +821,12 @@
 
     div.dataset-previewer.mobile-open .preview-heading,
     div.dataset-previewer.mobile-open .field-definition,
+    div.dataset-previewer.mobile-open .coverage-row,
     div.dataset-previewer.mobile-open .dist-summary,
     div.dataset-previewer.mobile-open :global(.field-histogram),
     div.dataset-previewer.mobile-open .dist-bars,
+    div.dataset-previewer.mobile-open .text-summary,
+    div.dataset-previewer.mobile-open .sample-values,
     div.dataset-previewer.mobile-open .loading,
     div.dataset-previewer.mobile-open .no-enum,
     div.dataset-previewer.mobile-open .previewer-values-definitions,
