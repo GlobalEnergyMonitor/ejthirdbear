@@ -108,7 +108,7 @@ async function fetchOneTrackerAggregate(
   const response = await fetch(url);
 
   if (!response.ok) {
-    console.warn(`Aggregate fetch failed: ${url} → ${response.status}`);
+    if (import.meta.env.DEV) console.warn(`Aggregate fetch failed: ${url} → ${response.status}`);
     return [];
   }
 
@@ -220,7 +220,7 @@ function collapseLocationId(
   for (const row of plantRows) {
     const bucketKey = visibleGroupKeys.map(k => String(row[k] ?? '')).join('|||');
     if (!buckets.has(bucketKey)) buckets.set(bucketKey, []);
-    buckets.get(bucketKey)!.push(row.value as number);
+    if (typeof row.value === 'number') buckets.get(bucketKey)!.push(row.value);
   }
 
   const result: AggregateGroup[] = [];

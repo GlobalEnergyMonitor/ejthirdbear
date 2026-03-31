@@ -24,17 +24,7 @@
 
 <style>
   .coal-explorer {
-    display: flex;
-    flex-direction: column;
-    height: 100dvh;
-    overflow: hidden;
     font-family: inherit;
     background: var(--gem-warm-white, #fffffe);
-  }
-
-  .explorer-main {
-    flex: 1;
-    overflow-y: auto;
-    min-height: 0;
   }
 </style>

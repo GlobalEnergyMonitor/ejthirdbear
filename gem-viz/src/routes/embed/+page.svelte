@@ -43,6 +43,24 @@
       ],
     },
     {
+      name: 'Coal Data Explorer',
+      slug: 'coal-data-explorer',
+      desc: 'Sentence-based query builder for coal plants & mines with filters, summary stats, and data table.',
+      key: 'tracker',
+      val: 'coal-plant',
+      h: 800,
+      params: [
+        { k: 'tracker', d: 'coal-plant, coal-mine (comma-separated)' },
+        { k: 'filter.status', d: 'operating, construction, etc.' },
+        { k: 'filter.country_area', d: 'Country name' },
+      ],
+      samples: [
+        { label: 'All coal plants', val: 'coal-plant' },
+        { label: 'Coal mines', val: 'coal-mine' },
+        { label: 'Both', val: 'coal-plant,coal-mine' },
+      ],
+    },
+    {
       name: 'Coal Plant Card',
       slug: 'coal-plant',
       desc: 'Six-tab coal plant detail: overview, timeline, coal, emissions, ownership, additional.',

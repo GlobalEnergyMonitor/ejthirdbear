@@ -413,10 +413,12 @@
     const inSummary = outputMode === 'summary';
     const hasGroupBy = q.query.groupBy.length > 0;
     const hasAggs = q.query.aggregates.length > 0;
-    // Read reactive deps
+    // Read reactive deps so $effect re-runs when these change
     const _trackers = q.query.trackers;
     const _filters = q.query.filters;
     const _granularity = q.query.granularity;
+    const _groupBy = q.query.groupBy;
+    const _aggregates = q.query.aggregates;
 
     if (!inSummary || !hasGroupBy || !hasAggs) {
       untrack(() => { summaryRows = []; summaryError = null; });
@@ -631,7 +633,7 @@
           {/if}
 
         {:else if openPicker === 'country_area'}
-          <input class="search-input" type="text" placeholder="Search countries…" bind:value={countrySearch} />
+          <input class="search-input" type="text" placeholder="Search countries…" aria-label="Search countries" bind:value={countrySearch} />
           <div class="country-list">
             {#each countryDropdown as c}
               {@const sel = (q.query.filters.country_area ?? []).includes(c)}
@@ -1193,9 +1195,6 @@
     border-radius: 6px;
     overflow: auto;
     max-height: 480px;
-    max-width: var(--container-md, 768px);
-    margin-left: auto;
-    margin-right: auto;
   }
   .table-loading {
     padding: var(--space-8, 32px);
