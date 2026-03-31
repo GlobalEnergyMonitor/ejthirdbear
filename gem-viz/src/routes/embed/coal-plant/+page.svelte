@@ -20,17 +20,12 @@
 
   // URL params (converted to $state so hash can override on mount)
   let assetId = $state($page.url.searchParams.get('id'));
-  let initialTab = $state($page.url.searchParams.get('tab') || '');
 
   // State
   let loading = $state(true);
   let error = $state<string | null>(null);
   let units = $state<CoalPlantUnit[]>([]);
   let plantName = $state('');
-
-  function onTabChange(tab: string) {
-    writeHash({ id: assetId, tab });
-  }
 
   /**
    * Resolve any ID format to a location ID:
@@ -59,7 +54,6 @@
     // Read hash — hash params override query params for deep-linking
     const h = readHash();
     if (h.id) assetId = h.id;
-    if (h.tab) initialTab = h.tab;
 
     if (!assetId) {
       error = 'Missing required parameter: id';
@@ -101,7 +95,7 @@
       {/if}
     </div>
   {:else if units.length > 0}
-    <CoalPlantCard {units} open={true} {initialTab} {onTabChange} />
+    <CoalPlantCard {units} open={true} />
   {/if}
 </div>
 

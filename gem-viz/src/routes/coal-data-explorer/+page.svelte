@@ -29,7 +29,7 @@
     height: 100dvh;
     overflow: hidden;
     font-family: inherit;
-    background: #f8f8f8;
+    background: var(--gem-warm-white, #fffffe);
   }
 
   .explorer-main {

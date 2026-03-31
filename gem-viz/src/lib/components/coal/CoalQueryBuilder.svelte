@@ -11,6 +11,7 @@
     getAggregatableFields,
   } from '$lib/data-config/coal-field-schema';
   import { fetchSummaryTable, type SummaryRow } from '$lib/data-config/aggregate-api';
+  import DataTable from '$lib/components/table/DataTable.svelte';
 
   const q = getContext<CoalQueryState>(COAL_QUERY_KEY);
   const API_BASE = import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-api.thirdbear.net';
@@ -193,6 +194,16 @@
     if (mode === 'data') { q.setGroupBy([]); q.setAggregates([]); }
   }
 
+  function clearAll() {
+    q.clearAllFilters();
+    q.setGroupBy([]);
+    q.setAggregates([]);
+    outputMode = 'data';
+    shownFields = [];
+    showTable = false;
+    openPicker = null;
+  }
+
   const groupableFields    = $derived(getGroupableFields(q.query.trackers));
   const aggregatableFields = $derived(getAggregatableFields(q.query.trackers));
 
@@ -282,11 +293,15 @@
     ];
   })());
 
-  function cellVal(row: Record<string, unknown>, col: TableCol): string {
-    const v = row[col.key] ?? (col.altKey ? row[col.altKey] : undefined);
-    if (v == null || v === '') return '—';
-    return String(v);
-  }
+  // DataTable-compatible column definitions
+  const dataTableCols = $derived(
+    tableCols.map(c => ({
+      key: c.key,
+      label: c.label,
+      sortable: true,
+      type: c.key === 'capacity_mw' ? 'number' as const : 'string' as const,
+    }))
+  );
 
   let showTable   = $state(false);
   let tableRows   = $state<Record<string, unknown>[]>([]);
@@ -294,6 +309,19 @@
   let tableHasMore = $state(false);
   let tableLoading = $state(false);
   const PAGE = 50;
+
+  // Normalize rows: resolve altKeys so DataTable can find values by canonical key
+  function normalizeRows(rows: Record<string, unknown>[]): Record<string, unknown>[] {
+    return rows.map(row => {
+      const out = { ...row };
+      for (const col of tableCols) {
+        if (col.altKey && out[col.key] == null && out[col.altKey] != null) {
+          out[col.key] = out[col.altKey];
+        }
+      }
+      return out;
+    });
+  }
 
   // Build /assets URL for records table (always /assets, never aggregate endpoint)
   const assetsUrl = $derived.by(() => {
@@ -311,7 +339,7 @@
     try {
       const url = `${assetsUrl}&limit=${PAGE}&offset=${tableOffset}`;
       const data = await fetch(url).then(r => r.json());
-      const rows = (data.results ?? []) as Record<string, unknown>[];
+      const rows = normalizeRows((data.results ?? []) as Record<string, unknown>[]);
       tableRows = reset ? rows : [...tableRows, ...rows];
       tableOffset = tableRows.length;
       tableHasMore = tableRows.length < (data.total ?? 0);
@@ -476,6 +504,13 @@
 
 <div class="builder">
 
+  <!-- ── Clear all (top-right when filters active) ───────────────────────── -->
+  {#if q.isDirty}
+    <div class="top-bar">
+      <button class="clear-all-btn" onclick={clearAll}>Clear all &times;</button>
+    </div>
+  {/if}
+
   <!-- ── Quick starts ─────────────────────────────────────────────────────── -->
   {#if !q.isDirty}
     <div class="quick-starts">
@@ -565,11 +600,6 @@
     >{openPicker === '__fields' ? '− fewer filters' : '+ add filter'}</button>
 
     <span class="sentence-end">.</span>
-
-    <!-- Clear all (only when filters are active) -->
-    {#if q.isDirty}
-      <button class="clear-all-btn" onclick={() => q.clearAllFilters()}>clear all</button>
-    {/if}
   </div>
 
   <!-- ── Picker panel (stable position, below sentence) ───────────────────── -->
@@ -718,39 +748,34 @@
         <button class="result-btn" class:active={showTable} onclick={toggleTable}>
           {showTable ? 'Hide table' : 'View table'}
         </button>
-        <button class="result-btn" onclick={downloadCsv}>Download CSV</button>
       {/if}
     </div>
   </div>
 
   <!-- ── Table (records mode) ──────────────────────────────────────────────── -->
   {#if outputMode === 'data' && showTable}
-    <div class="table-wrap">
+    <div class="table-section">
       {#if tableLoading && tableRows.length === 0}
         <div class="table-loading">Loading…</div>
       {:else}
-        <table class="data-table">
-          <thead>
-            <tr>
-              {#each tableCols as col}
-                <th>{col.label}</th>
-              {/each}
-            </tr>
-          </thead>
-          <tbody>
-            {#each tableRows as row}
-              <tr>
-                {#each tableCols as col}
-                  <td>{cellVal(row, col)}</td>
-                {/each}
-              </tr>
-            {/each}
-          </tbody>
-        </table>
+        <DataTable
+          columns={dataTableCols}
+          data={tableRows}
+          pageSize={50}
+          showGlobalSearch={true}
+          showColumnFilters={false}
+          showPagination={true}
+          showExport={true}
+          showColumnToggle={false}
+          stickyHeader={true}
+          striped={true}
+        />
         {#if tableHasMore}
-          <button class="load-more-btn" onclick={() => loadTable()} disabled={tableLoading}>
-            {tableLoading ? 'Loading…' : `Load more (${fmt((countResult?.total ?? 0) - tableRows.length)} remaining)`}
-          </button>
+          <div class="load-more-wrap">
+            <button class="load-more-btn" onclick={() => loadTable()} disabled={tableLoading}>
+              {tableLoading ? 'Loading…' : `Load more from API (${fmt((countResult?.total ?? 0) - tableRows.length)} remaining)`}
+            </button>
+          </div>
         {/if}
       {/if}
     </div>
@@ -790,15 +815,17 @@
   {/if}
 
   <!-- ── Debug: API URLs ───────────────────────────────────────────────────── -->
-  <div class="api-url-list">
-    {#each q.apiUrls as url}
-      <div class="api-url-row">
-        <span class="api-url-text" title={url}>{url}</span>
-      </div>
-    {/each}
-    <button class="api-copy-btn" onclick={copyApiUrls}>
-      {apiCopied ? '✓ Copied' : q.apiUrls.length > 1 ? `Copy ${q.apiUrls.length} API URLs` : 'Copy API URL'}
-    </button>
+  <div class="query-footer">
+    <div class="api-url-list">
+      {#each q.apiUrls as url}
+        <div class="api-url-row">
+          <span class="api-url-text" title={url}>{url}</span>
+        </div>
+      {/each}
+      <button class="api-copy-btn" onclick={copyApiUrls}>
+        {apiCopied ? '✓ Copied' : q.apiUrls.length > 1 ? `Copy ${q.apiUrls.length} API URLs` : 'Copy API URL'}
+      </button>
+    </div>
   </div>
 
 </div>
@@ -806,34 +833,47 @@
 <style>
   /* ── Layout ──────────────────────────────────────────────────────────────── */
   .builder {
-    max-width: 720px;
     margin: 0 auto;
-    padding: 2rem 1.5rem 4rem;
+    padding: var(--space-10, 40px) var(--space-6, 24px) var(--space-16, 64px);
     font-family: var(--font-family, 'Plus Jakarta Sans', system-ui, sans-serif);
+  }
+
+  /* Constrain intro/query sections, let table go full-width */
+  .top-bar,
+  .quick-starts,
+  .sentence,
+  .picker-panel,
+  .summary-card,
+  .results-bar,
+  .query-footer {
+    max-width: var(--container-md, 768px);
+    margin-left: auto;
+    margin-right: auto;
   }
 
   /* ── Quick starts ────────────────────────────────────────────────────────── */
   .quick-starts {
-    margin-bottom: 2rem;
+    margin-bottom: var(--space-8, 32px);
   }
   .qs-heading {
-    font-size: 0.7rem;
-    font-weight: 700;
+    font-size: var(--font-size-xs, 10px);
+    font-weight: var(--font-weight-bold, 700);
     text-transform: uppercase;
-    letter-spacing: 0.07em;
+    letter-spacing: var(--tracking-widest, 0.08em);
     color: var(--color-gray-400, #9eaaad);
-    margin: 0 0 0.6rem;
+    margin: 0 0 var(--space-3, 12px);
   }
   .qs-item {
     all: unset;
     display: block;
     cursor: pointer;
     width: 100%;
-    padding: 0.55rem 0.75rem;
-    font-size: 0.92rem;
+    padding: var(--space-3, 12px) var(--space-4, 16px);
+    font-size: var(--font-size-base, 14px);
+    line-height: var(--line-height-relaxed, 1.65);
     color: var(--color-gray-600, #4c6267);
     border-left: 2px solid var(--color-gray-200, #dce3e5);
-    margin-bottom: 0.3rem;
+    margin-bottom: var(--space-1, 4px);
     transition: color 0.12s, border-color 0.12s, background 0.12s;
     border-radius: 0 4px 4px 0;
   }
@@ -850,14 +890,14 @@
 
   /* ── Sentence ────────────────────────────────────────────────────────────── */
   .sentence {
-    font-size: 1.15rem;
-    line-height: 2;
+    font-size: var(--font-size-lg, 18px);
+    line-height: 2.2;
     color: var(--gem-primary-blue, #1d4961);
     margin-bottom: 0;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.3rem;
+    gap: var(--space-2, 8px);
   }
   .word {
     color: var(--color-gray-600, #4c6267);
@@ -869,14 +909,14 @@
   .value-chip {
     display: inline-flex;
     align-items: center;
-    gap: 0.2em;
+    gap: var(--space-1, 4px);
     background: var(--color-gray-100, #eceae3);
     border: 1px solid var(--color-gray-200, #dce3e5);
     border-radius: 4px;
-    padding: 0.1em 0.45em;
-    font-family: var(--font-family-mono, 'Barlow Semi Condensed', sans-serif);
-    font-size: 0.9em;
-    font-weight: 600;
+    padding: 0.15em 0.5em;
+    font-family: var(--font-family-data, 'Barlow Semi Condensed', sans-serif);
+    font-size: var(--font-size-base, 14px);
+    font-weight: var(--font-weight-semibold, 600);
     color: var(--gem-primary-blue, #1d4961);
     white-space: nowrap;
   }
@@ -884,9 +924,9 @@
     all: unset;
     cursor: pointer;
     color: var(--color-gray-400, #9eaaad);
-    font-size: 0.9em;
+    font-size: var(--font-size-sm, 12px);
     line-height: 1;
-    padding: 0 0.05em;
+    padding: 0 2px;
     transition: color 0.1s;
   }
   .chip-x:hover { color: var(--gem-primary-blue, #1d4961); }
@@ -898,13 +938,13 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 18px;
-    height: 18px;
+    width: 20px;
+    height: 20px;
     border-radius: 50%;
     background: var(--color-gray-100, #eceae3);
     border: 1px solid var(--color-gray-200, #dce3e5);
     color: var(--color-gray-600, #4c6267);
-    font-size: 0.8rem;
+    font-size: var(--font-size-sm, 12px);
     line-height: 1;
     flex-shrink: 0;
     transition: background 0.1s, color 0.1s, border-color 0.1s;
@@ -920,27 +960,36 @@
     color: #fff;
   }
 
+  .top-bar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: var(--space-4, 16px);
+  }
   .clear-all-btn {
     all: unset;
     cursor: pointer;
-    font-size: 0.72rem;
-    color: var(--color-gray-400, #9eaaad);
-    text-decoration: underline;
-    text-decoration-color: var(--color-gray-300, #becccf);
-    text-underline-offset: 2px;
+    font-size: var(--font-size-sm, 12px);
+    font-weight: var(--font-weight-semibold, 600);
+    color: var(--gem-orange, #fe4f2d);
+    border: 1px solid var(--gem-orange, #fe4f2d);
+    border-radius: 4px;
+    padding: var(--space-2, 8px) var(--space-4, 16px);
     white-space: nowrap;
-    transition: color 0.1s;
+    transition: background 0.12s, color 0.12s;
   }
-  .clear-all-btn:hover { color: var(--gem-orange, #fe4f2d); }
+  .clear-all-btn:hover {
+    background: var(--gem-orange, #fe4f2d);
+    color: #fff;
+  }
 
   .add-filter-btn {
     all: unset;
     cursor: pointer;
-    font-size: 0.78rem;
+    font-size: var(--font-size-sm, 12px);
     color: var(--color-gray-400, #9eaaad);
     border: 1px dashed var(--color-gray-300, #becccf);
     border-radius: 4px;
-    padding: 0.15em 0.5em;
+    padding: 0.2em 0.6em;
     white-space: nowrap;
     transition: color 0.1s, border-color 0.1s;
   }
@@ -952,7 +1001,7 @@
 
   /* ── Picker panel ────────────────────────────────────────────────────────── */
   .picker-panel {
-    margin-top: 0.75rem;
+    margin-top: var(--space-3, 12px);
     border: 1px solid var(--color-gray-200, #dce3e5);
     border-radius: 8px;
     background: var(--gem-warm-white, #fffffe);
@@ -963,24 +1012,24 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.5rem 0.75rem;
-    background: var(--color-gray-100, #eceae3);
+    padding: var(--space-3, 12px) var(--space-4, 16px);
+    background: #fff;
     border-bottom: 1px solid var(--color-gray-200, #dce3e5);
   }
   .panel-title {
-    font-size: 0.72rem;
-    font-weight: 700;
+    font-size: var(--font-size-xs, 10px);
+    font-weight: var(--font-weight-bold, 700);
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: var(--tracking-wider, 0.04em);
     color: var(--color-gray-600, #4c6267);
   }
   .panel-close {
     all: unset;
     cursor: pointer;
-    font-size: 0.72rem;
-    font-weight: 600;
+    font-size: var(--font-size-sm, 12px);
+    font-weight: var(--font-weight-semibold, 600);
     color: var(--gem-primary-blue, #1d4961);
-    padding: 0.15rem 0.5rem;
+    padding: var(--space-1, 4px) var(--space-3, 12px);
     border: 1px solid var(--color-gray-300, #becccf);
     border-radius: 4px;
     background: #fff;
@@ -989,28 +1038,28 @@
   .panel-close:hover { background: var(--gem-navy-10, #e9eef1); }
 
   .panel-body {
-    padding: 0.75rem;
+    padding: var(--space-4, 16px);
     display: flex;
     flex-wrap: wrap;
-    gap: 0.35rem;
+    gap: var(--space-2, 8px);
     min-height: 48px;
   }
   .panel-body--country {
     flex-direction: column;
     flex-wrap: nowrap;
-    gap: 0.4rem;
-    padding: 0.6rem;
+    gap: var(--space-2, 8px);
+    padding: var(--space-3, 12px);
   }
 
   /* ── Pills ───────────────────────────────────────────────────────────────── */
   .pill {
     all: unset;
     cursor: pointer;
-    padding: 0.25rem 0.65rem;
+    padding: var(--space-2, 8px) var(--space-4, 16px);
     border: 1.5px solid var(--color-gray-200, #dce3e5);
     border-radius: 20px;
-    font-size: 0.78rem;
-    font-weight: 500;
+    font-size: var(--font-size-sm, 12px);
+    font-weight: var(--font-weight-medium, 500);
     color: var(--color-gray-600, #4c6267);
     background: #fff;
     transition: all 0.12s;
@@ -1030,8 +1079,8 @@
   .search-input {
     width: 100%;
     box-sizing: border-box;
-    padding: 0.35rem 0.6rem;
-    font-size: 0.82rem;
+    padding: var(--space-2, 8px) var(--space-3, 12px);
+    font-size: var(--font-size-base, 14px);
     border: 1px solid var(--color-gray-200, #dce3e5);
     border-radius: 5px;
     background: #fff;
@@ -1057,65 +1106,66 @@
     cursor: pointer;
     display: flex;
     align-items: center;
-    gap: 0.4rem;
-    padding: 0.3rem 0.5rem;
-    font-size: 0.82rem;
+    gap: var(--space-2, 8px);
+    padding: var(--space-2, 8px) var(--space-3, 12px);
+    font-size: var(--font-size-sm, 12px);
     color: var(--color-gray-600, #4c6267);
     transition: background 0.07s;
   }
   .country-opt:hover { background: var(--gem-navy-10, #e9eef1); }
-  .country-opt.selected { font-weight: 600; color: var(--gem-primary-blue, #1d4961); }
-  .country-check { width: 1rem; font-size: 0.75rem; flex-shrink: 0; color: var(--gem-primary-blue, #1d4961); }
+  .country-opt.selected { font-weight: var(--font-weight-semibold, 600); color: var(--gem-primary-blue, #1d4961); }
+  .country-check { width: 1rem; font-size: var(--font-size-sm, 12px); flex-shrink: 0; color: var(--gem-primary-blue, #1d4961); }
 
-  .loading-hint { font-size: 0.78rem; color: var(--color-gray-400, #9eaaad); font-style: italic; }
+  .loading-hint { font-size: var(--font-size-sm, 12px); color: var(--color-gray-400, #9eaaad); font-style: italic; }
 
   /* ── Results bar ─────────────────────────────────────────────────────────── */
   .results-bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 1rem;
-    margin-top: 1.25rem;
-    padding: 0.75rem 1rem;
-    background: var(--color-gray-100, #eceae3);
+    gap: var(--space-4, 16px);
+    margin-top: var(--space-6, 24px);
+    padding: var(--space-4, 16px) var(--space-5, 20px);
+    background: #fff;
+    border: 1px solid var(--color-gray-200, #dce3e5);
     border-radius: 6px;
-    min-height: 44px;
+    min-height: 48px;
   }
   .results-count {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    font-size: 0.85rem;
+    gap: var(--space-3, 12px);
+    font-size: var(--font-size-base, 14px);
     color: var(--color-gray-600, #4c6267);
     flex-wrap: wrap;
   }
   .count-item strong {
     color: var(--gem-primary-blue, #1d4961);
-    font-weight: 700;
-    font-size: 1rem;
+    font-weight: var(--font-weight-bold, 700);
+    font-size: var(--font-size-md, 16px);
   }
   .count-total {
-    font-size: 0.78rem;
+    font-size: var(--font-size-sm, 12px);
     color: var(--color-gray-400, #9eaaad);
   }
   .count-loading, .count-empty {
-    font-size: 0.82rem;
+    font-size: var(--font-size-sm, 12px);
     color: var(--color-gray-400, #9eaaad);
     font-style: italic;
   }
 
   .results-actions {
     display: flex;
-    gap: 0.5rem;
+    gap: var(--space-2, 8px);
     flex-shrink: 0;
   }
   .result-btn {
     all: unset;
     cursor: pointer;
-    padding: 0.3rem 0.7rem;
+    padding: var(--space-2, 8px) var(--space-4, 16px);
     border-radius: 4px;
-    font-size: 0.78rem;
-    font-weight: 600;
+    font-size: var(--font-size-sm, 12px);
+    font-weight: var(--font-weight-semibold, 600);
     border: 1px solid var(--color-gray-300, #becccf);
     background: #fff;
     color: var(--gem-primary-blue, #1d4961);
@@ -1132,44 +1182,52 @@
   }
 
   /* ── Table ───────────────────────────────────────────────────────────────── */
+  .table-section {
+    margin-top: var(--space-6, 24px);
+    border-top: 1px solid var(--color-gray-200, #dce3e5);
+    padding-top: var(--space-4, 16px);
+  }
   .table-wrap {
-    margin-top: 0.75rem;
+    margin-top: var(--space-3, 12px);
     border: 1px solid var(--color-gray-200, #dce3e5);
     border-radius: 6px;
     overflow: auto;
     max-height: 480px;
+    max-width: var(--container-md, 768px);
+    margin-left: auto;
+    margin-right: auto;
   }
   .table-loading {
-    padding: 2rem;
+    padding: var(--space-8, 32px);
     text-align: center;
-    font-size: 0.82rem;
+    font-size: var(--font-size-sm, 12px);
     color: var(--color-gray-400, #9eaaad);
     font-style: italic;
   }
   .data-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.78rem;
+    font-size: var(--font-size-sm, 12px);
     font-family: var(--font-family-data, 'Barlow Semi Condensed', sans-serif);
   }
   .data-table th {
     position: sticky;
     top: 0;
-    background: var(--color-gray-100, #eceae3);
+    background: #fff;
     color: var(--color-gray-600, #4c6267);
-    font-weight: 700;
-    font-size: 0.68rem;
+    font-weight: var(--font-weight-bold, 700);
+    font-size: var(--font-size-xs, 10px);
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    padding: 0.5rem 0.75rem;
+    letter-spacing: var(--tracking-wider, 0.04em);
+    padding: var(--space-3, 12px) var(--space-4, 16px);
     text-align: left;
-    border-bottom: 1px solid var(--color-gray-200, #dce3e5);
+    border-bottom: 2px solid var(--color-gray-200, #dce3e5);
     white-space: nowrap;
   }
   .data-table td {
-    padding: 0.4rem 0.75rem;
+    padding: var(--space-2, 8px) var(--space-4, 16px);
     color: var(--gem-primary-blue, #1d4961);
-    border-bottom: 1px solid var(--color-gray-100, #eceae3);
+    border-bottom: 1px solid var(--color-gray-200, #dce3e5);
     max-width: 240px;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1178,72 +1236,77 @@
   .data-table tr:last-child td { border-bottom: none; }
   .data-table tbody tr:hover td { background: var(--gem-navy-10, #e9eef1); }
 
+  .summary-count {
+    padding: var(--space-2, 8px) var(--space-4, 16px);
+    font-size: var(--font-size-sm, 12px);
+    color: var(--color-gray-400, #9eaaad);
+  }
+
+  .load-more-wrap {
+    max-width: var(--container-md, 768px);
+    margin: var(--space-4, 16px) auto 0;
+  }
   .load-more-btn {
     all: unset;
     cursor: pointer;
     display: block;
     width: 100%;
-    padding: 0.6rem;
+    padding: var(--space-3, 12px);
     text-align: center;
-    font-size: 0.78rem;
-    font-weight: 600;
+    font-size: var(--font-size-sm, 12px);
+    font-weight: var(--font-weight-semibold, 600);
     color: var(--gem-primary-blue, #1d4961);
-    background: var(--color-gray-100, #eceae3);
-    border-top: 1px solid var(--color-gray-200, #dce3e5);
+    background: #fff;
+    border: 1px solid var(--color-gray-200, #dce3e5);
+    border-radius: 6px;
     transition: background 0.1s;
     box-sizing: border-box;
   }
   .load-more-btn:hover:not(:disabled) { background: var(--gem-navy-10, #e9eef1); }
   .load-more-btn:disabled { opacity: 0.5; cursor: default; }
 
-  .summary-count {
-    padding: 0.5rem 0.75rem;
-    font-size: 0.75rem;
-    color: var(--color-gray-400, #9eaaad);
-  }
-
   /* ── Summary card (output mode + group by + calculate) ───────────────────── */
   .summary-card {
-    margin-top: 1.5rem;
+    margin-top: var(--space-6, 24px);
     border: 1px solid var(--color-gray-200, #dce3e5);
     border-radius: 8px;
     overflow: hidden;
     transition: border-color 0.2s;
   }
   .summary-card--active {
-    border-color: #099ed8;
+    border-color: var(--gem-primary-blue, #1d4961);
   }
 
   .output-section {
     display: flex;
     align-items: center;
-    gap: 1.25rem;
-    padding: 0.65rem 0.9rem;
-    font-size: 0.82rem;
-    background: var(--color-gray-100, #eceae3);
+    gap: var(--space-5, 20px);
+    padding: var(--space-4, 16px) var(--space-5, 20px);
+    font-size: var(--font-size-base, 14px);
+    background: #fff;
   }
   .summary-card--active .output-section {
-    background: rgba(9, 158, 216, 0.08);
+    background: var(--gem-navy-10, #e9eef1);
   }
 
   .output-label {
-    font-size: 0.72rem;
+    font-size: var(--font-size-xs, 10px);
     color: var(--color-gray-400, #9eaaad);
-    font-weight: 700;
+    font-weight: var(--font-weight-bold, 700);
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    min-width: 72px;
+    letter-spacing: var(--tracking-wider, 0.04em);
+    min-width: 80px;
     flex-shrink: 0;
   }
   .summary-card--active .output-label {
-    color: #006d94;
+    color: var(--gem-primary-blue, #1d4961);
   }
 
   .radio-label {
     display: inline-flex;
     align-items: center;
-    gap: 0.35rem;
-    font-size: 0.82rem;
+    gap: var(--space-2, 8px);
+    font-size: var(--font-size-base, 14px);
     color: var(--color-gray-600, #4c6267);
     cursor: pointer;
     user-select: none;
@@ -1254,105 +1317,102 @@
     height: 14px;
     cursor: pointer;
   }
-  .summary-card--active input[type='radio'] {
-    accent-color: #099ed8;
-  }
 
   .summary-divider {
     height: 1px;
-    background: #b8dff0;
+    background: var(--color-gray-200, #dce3e5);
   }
 
   .summary-section {
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
-    padding: 0.75rem 0.9rem;
-    background: rgba(9, 158, 216, 0.04);
+    gap: var(--space-3, 12px);
+    padding: var(--space-4, 16px) var(--space-5, 20px);
+    background: #fff;
   }
   .summary-row {
     display: flex;
     align-items: flex-start;
-    gap: 1rem;
+    gap: var(--space-4, 16px);
   }
   .value-pills {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.3rem;
+    gap: var(--space-2, 8px);
   }
   .value-pill {
     all: unset;
     cursor: pointer;
-    padding: 0.25rem 0.65rem;
+    padding: var(--space-2, 8px) var(--space-4, 16px);
     border: 1.5px solid var(--color-gray-200, #dce3e5);
     border-radius: 20px;
-    font-size: 0.78rem;
-    font-weight: 500;
+    font-size: var(--font-size-sm, 12px);
+    font-weight: var(--font-weight-medium, 500);
     color: var(--color-gray-600, #4c6267);
     background: #fff;
     transition: all 0.12s;
     white-space: nowrap;
   }
   .value-pill:hover {
-    border-color: #099ed8;
-    color: #006d94;
+    border-color: var(--gem-primary-blue, #1d4961);
+    color: var(--gem-primary-blue, #1d4961);
   }
   .value-pill.active {
-    background: #099ed8;
+    background: var(--gem-primary-blue, #1d4961);
     color: #fff;
-    border-color: #099ed8;
+    border-color: var(--gem-primary-blue, #1d4961);
   }
   .summary-notice {
-    font-size: 0.72rem;
-    color: #6bb8d4;
+    font-size: var(--font-size-xs, 10px);
+    color: var(--color-gray-400, #9eaaad);
     font-style: italic;
-    margin: 0.1rem 0 0;
+    margin: var(--space-1, 4px) 0 0;
   }
 
   /* ── Summary chips in sentence ────────────────────────────────────────────── */
   .value-chip--summary {
-    background: rgba(9, 158, 216, 0.1);
-    border-color: #099ed8;
-    color: #005f7a;
+    background: var(--gem-navy-10, #e9eef1);
+    border-color: var(--gem-primary-blue, #1d4961);
+    color: var(--gem-primary-blue, #1d4961);
   }
   .value-chip--summary .chip-x {
-    color: #6bb8d4;
+    color: var(--color-gray-400, #9eaaad);
   }
   .value-chip--summary .chip-x:hover {
-    color: #005f7a;
+    color: var(--gem-primary-blue, #1d4961);
   }
 
   /* ── API URL (debug) ─────────────────────────────────────────────────────── */
   .api-url-list {
-    margin-top: 3rem;
-    padding-top: 1rem;
+    margin-top: var(--space-12, 48px);
+    padding-top: var(--space-4, 16px);
     border-top: 1px dashed var(--color-gray-200, #dce3e5);
   }
   .api-url-row {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    margin-bottom: 0.2rem;
+    gap: var(--space-3, 12px);
+    margin-bottom: var(--space-1, 4px);
   }
   .api-url-text {
-    font-family: var(--font-family-mono, monospace);
-    font-size: 0.68rem;
-    color: var(--color-gray-500, #6b7f84);
+    font-family: var(--font-family-data, 'Barlow Semi Condensed', sans-serif);
+    font-size: var(--font-size-xs, 10px);
+    color: var(--color-gray-400, #9eaaad);
     word-break: break-all;
   }
   .api-copy-btn {
     all: unset;
     cursor: pointer;
-    font-size: 0.72rem;
-    font-weight: 600;
+    font-size: var(--font-size-xs, 10px);
+    font-weight: var(--font-weight-semibold, 600);
     color: var(--color-gray-600, #4c6267);
     border: 1px solid var(--color-gray-200, #dce3e5);
     border-radius: 4px;
-    padding: 0.2rem 0.5rem;
+    padding: var(--space-1, 4px) var(--space-3, 12px);
     background: #fff;
     white-space: nowrap;
     float: right;
-    margin-top: 0.4rem;
+    margin-top: var(--space-2, 8px);
     transition: background 0.1s;
   }
   .api-copy-btn:hover { background: var(--gem-navy-10, #e9eef1); }
