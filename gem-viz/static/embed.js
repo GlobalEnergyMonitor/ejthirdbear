@@ -4,15 +4,15 @@
  * Drop-in script for embedding GEM visualizations on any page.
  *
  * Supports two modes:
- *   - iframe (default): Creates an iframe pointing to the embed route
- *   - dynamic: Renders widget directly in the page via Shadow DOM (no iframe)
+ *   - dynamic (default): Renders widget directly in the page via Shadow DOM (no iframe)
+ *   - iframe: Creates an iframe pointing to the embed route
  *
- * Usage (iframe — default):
+ * Usage (dynamic — default):
  *   <div class="gem-embed" data-src="/embed/entity?id=E12345"></div>
  *   <script src="https://gem-viz.fly.dev/embed.js"></script>
  *
- * Usage (dynamic — no iframe):
- *   <div class="gem-embed" data-src="/embed/entity?id=E12345" data-mode="dynamic"></div>
+ * Usage (iframe — opt-in):
+ *   <div class="gem-embed" data-src="/embed/entity?id=E12345" data-mode="iframe"></div>
  *   <script src="https://gem-viz.fly.dev/embed.js"></script>
  *
  * Features:
