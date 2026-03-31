@@ -12,6 +12,8 @@
     trackerMetadata,
     type TrackerMetadata,
   } from '$lib/data-config/tracker-metadata';
+  import { URL_SLUG_TO_CATALOG_SLUG } from '$lib/data-config/tracker-schema';
+  import { fetchNumericFieldStats } from '$lib/api/catalog-api';
   import TrackerFactsheet from '$lib/components/tracker/TrackerFactsheet.svelte';
   import PageHeader from '$lib/components/nav/PageHeader.svelte';
   import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
@@ -76,16 +78,55 @@
   // Fetch field distribution from REST API (client-side aggregation)
   async function fetchFieldDistribution(
     fieldName: string
-  ): Promise<Array<{ value: string; count: number; percentage: number }>> {
+  ): Promise<Array<{ value: string; count: number; percentage: number; uniqueCount?: number }>> {
     try {
-      const assets = await getAssetsForTracker(slug);
+      // Try the stats API first — it has the real unique_count and full value_counts
+      const catalogSlug = URL_SLUG_TO_CATALOG_SLUG[slug];
+      if (catalogSlug) {
+        const apiKeys = FIELD_TO_API_KEY[fieldName] || [fieldName, fieldName.toLowerCase()];
+        for (const apiKey of apiKeys) {
+          const stats = await fetchNumericFieldStats(catalogSlug, apiKey);
+          if (stats) {
+            // Stats endpoint returns value_counts for categorical, values for numeric
+            const raw = stats as unknown as Record<string, unknown>;
+            const valueCounts = raw.value_counts as Array<{ value: string; count: number }> | undefined;
+            if (valueCounts && valueCounts.length > 0) {
+              const total = valueCounts.reduce((s, v) => s + v.count, 0);
+              const items = valueCounts.slice(0, 50).map((v) => ({
+                value: String(v.value),
+                count: v.count,
+                percentage: total > 0 ? v.count / total : 0,
+                uniqueCount: stats.unique_count,
+              }));
+              // Tag first item with uniqueCount so component can read it
+              return items;
+            }
+            // Numeric field — values array
+            if (stats.values && stats.values.length > 0) {
+              const counts = new Map<string, number>();
+              for (const v of stats.values) counts.set(String(v), (counts.get(String(v)) || 0) + 1);
+              const total = stats.values.length;
+              const items = Array.from(counts.entries())
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 50)
+                .map(([value, count]) => ({
+                  value,
+                  count,
+                  percentage: total > 0 ? count / total : 0,
+                  uniqueCount: stats.unique_count,
+                }));
+              return items;
+            }
+          }
+        }
+      }
 
-      // Count occurrences of each value for this field
+      // Fallback: client-side aggregation from cached assets
+      const assets = await getAssetsForTracker(slug);
       const counts = new Map<string, number>();
       const apiKeys = FIELD_TO_API_KEY[fieldName] || [fieldName, fieldName.toLowerCase()];
       for (const asset of assets) {
         const raw = asset.raw || {};
-        // Check raw API keys first, then normalized AssetSummary properties
         let value: unknown = null;
         for (const k of apiKeys) {
           const v = raw[k] ?? (asset as unknown as Record<string, unknown>)[k];
@@ -102,7 +143,6 @@
 
       const total = Array.from(counts.values()).reduce((s, c) => s + c, 0);
 
-      // Sort by count descending, take top 50
       return Array.from(counts.entries())
         .sort((a, b) => b[1] - a[1])
         .slice(0, 50)

@@ -45,6 +45,7 @@
     value: string;
     count: number;
     percentage: number;
+    uniqueCount?: number;
   }
 
   type FieldType = 'numeric' | 'enum' | 'text';
@@ -226,6 +227,9 @@
   // Derived: total row count from distribution
   const totalRows = $derived(fieldDistribution.reduce((sum, d) => sum + d.count, 0));
 
+  // Derived: real unique count from API (if available), else fall back to distribution length
+  const distinctCount = $derived(fieldDistribution[0]?.uniqueCount ?? fieldDistribution.length);
+
   // Derived: max count for bar scaling
   const maxCount = $derived(Math.max(...fieldDistribution.map((d) => d.count), 1));
 
@@ -359,7 +363,7 @@
         <!-- Summary stats row -->
         <div class="dist-summary">
           <span class="dist-stat">{formatCompact(totalRows)} rows</span>
-          <span class="dist-stat">{fieldDistribution.length} distinct</span>
+          <span class="dist-stat">{distinctCount} distinct</span>
           {#if detectedType === 'numeric' && numericStats}
             <span class="dist-stat type-badge numeric"
               ><span class="type-icon">{typeLabels.numeric}</span> Numeric</span
