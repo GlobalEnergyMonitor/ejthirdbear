@@ -51,6 +51,11 @@
         {searchLoading ? 'Searching...' : 'Search'}
       </button>
     </div>
+
+    {#if searchError}
+      <div class="search-error">{searchError}</div>
+    {/if}
+
     <div class="search-help">
       <div class="example-companies">
         <span class="example-label">Quick fill from top owners:</span>
@@ -110,10 +115,6 @@
       </div>
     </div>
   </details>
-
-  {#if searchError}
-    <div class="search-error">{searchError}</div>
-  {/if}
 
   {#if searchLoading}
     <div class="search-loading">

@@ -26,10 +26,9 @@
   } from '$lib/data-config/tracker-schema';
   import type { DynamicStatusGroup } from '$lib/data-config/tracker-schema';
   import {
-    getOwnersByAssetType,
+    getOwnersByFilter,
     getAssetTypeCounts,
     gemTrackerToUiTracker,
-    type ScreenerFilters,
     type ScreenerOwner,
   } from '$lib/data-config/screener-api';
   import {
@@ -41,6 +40,7 @@
   import {
     resolveApiSlug,
     getAPIBase,
+    getEntity,
     fetchStatusFacets,
     fetchStatusTaxonomy,
   } from '$lib/ownership-api';
@@ -56,6 +56,8 @@
   // URL params
   const classesParam = $derived($page.url.searchParams.get('classes') || '');
   const ownersParam = $derived($page.url.searchParams.get('owners') || '');
+  const noassetsParam = $derived($page.url.searchParams.get('noassets') || '');
+  const nomatchParam = $derived($page.url.searchParams.get('nomatch') || '');
 
   // Keep hash in sync with query params when embedded
   $effect(() => {
@@ -137,6 +139,12 @@
   let loading = $state(true);
   let error: string | null = $state(null);
   let owners: ScreenerOwner[] = $state([]);
+
+  // Tier 2: entities that matched search but have no assets in this class
+  // Populated progressively via individual /entities/{id} lookups
+  let noAssetEntities = $state<{ id: string; name: string; country?: string | null }[]>([]);
+  let noAssetLoading = $state(false);
+  const nomatchCount = $derived(nomatchParam ? parseInt(nomatchParam, 10) || 0 : 0);
 
   // Data source tracking
   let dataSource = $state<'local' | 'api'>('api');
@@ -337,11 +345,33 @@
     );
   }
 
-  // Load owners data using centralized screener API
+  // Load owners data using the /owners REST endpoint
   onMount(async () => {
     // Init search from URL
     searchQuery = $page.url.searchParams.get('q') || '';
 
+    // ── Tier 2: kick off entity lookups immediately, populate as they arrive ──
+    const noassetIds = noassetsParam ? noassetsParam.split(',').filter(Boolean) : [];
+    if (noassetIds.length > 0) {
+      noAssetLoading = true;
+      // Fire all lookups in parallel; append each result as it resolves
+      Promise.allSettled(
+        noassetIds.map((id) =>
+          getEntity(id).then((e) => {
+            if (e) {
+              noAssetEntities = [
+                ...noAssetEntities,
+                { id: e.id, name: e.name, country: e.headquartersCountry },
+              ];
+            }
+          })
+        )
+      ).finally(() => {
+        noAssetLoading = false;
+      });
+    }
+
+    // ── Tier 1: load owners from /owners endpoint ─────────────────────────────
     try {
       const classes = selectedClasses;
       if (classes.length === 0) {
@@ -352,36 +382,19 @@
 
       const cls = classes[0];
 
-      // Build filters for the screener API
-      // Prefer statuses[] array for multi-status filtering; fall back to singular status
-      const statusesArray: string[] | undefined = cls?.filters?.statuses;
-      // Normalize geography: could be string (legacy) or string[] (multi-select)
+      const statusesArray: string[] | undefined =
+        cls?.filters?.statuses && cls.filters.statuses.length > 0
+          ? cls.filters.statuses
+          : cls?.filters?.status
+            ? [cls.filters.status]
+            : undefined;
+
       const geoRaw = cls?.filters?.geography;
       const countryFilter: string | string[] | undefined = Array.isArray(geoRaw)
-        ? geoRaw.length > 0
-          ? geoRaw
-          : undefined
+        ? geoRaw.length > 0 ? geoRaw : undefined
         : geoRaw || undefined;
 
-      const geofenceRaw = cls?.filters?.geofence;
-      const geofence =
-        Array.isArray(geofenceRaw) && geofenceRaw.length >= 3 ? geofenceRaw : undefined;
-
-      const filters: ScreenerFilters = {
-        tracker: cls?.tracker || '',
-        status: cls?.filters?.status,
-        statuses: statusesArray && statusesArray.length > 0 ? statusesArray : undefined,
-        country: countryFilter,
-        ownerIds: selectedOwnerIds.length > 0 ? selectedOwnerIds : undefined,
-        assetClassId: cls?.assetClassId || cls?.id,
-        selectedSubClasses: Array.isArray(cls?.selectedSubClasses)
-          ? cls.selectedSubClasses
-          : undefined,
-        catalogUrl: cls?.catalogUrl,
-        geofence,
-      };
-
-      // Fetch asset type counts via REST API (cached, for debug panel)
+      // Fetch asset type counts in parallel (cached, for debug panel)
       getAssetTypeCounts().then((counts) => {
         availableAssetTypes = Object.entries(counts).map(([asset_type, cnt]) => ({
           asset_type,
@@ -389,33 +402,39 @@
         }));
       });
 
-      // Main query: get owners by asset type
-      const result = await getOwnersByAssetType(filters, { limit: 200 });
+      const result = await getOwnersByFilter(
+        {
+          tracker: cls?.tracker || '',
+          assetClassId: cls?.assetClassId || cls?.id,
+          status: statusesArray,
+          country: countryFilter,
+        },
+        { limit: 500 }
+      );
 
       queryTime = result.queryTimeMs;
       dataSource =
         result.source === 'rest-api' ? 'api' : result.source === 'cache' ? 'local' : 'api';
-      const slug = resolveApiSlug(filters.tracker || '');
-      const restBase = getAPIBase();
-      const restParams = new URLSearchParams({
-        asset_type: slug || filters.tracker || '',
-        format: 'json',
-        limit: '500',
-      });
-      if (filters.country) restParams.set('country', String(filters.country));
-      executedQuery = `GET ${restBase}/assets?${restParams.toString()}\n\nsource=${result.source}, filters=${JSON.stringify(filters, null, 2)}`;
 
-      owners = result.owners.map((o) => ({
-        name: o.name,
-        entityId: o.entityId,
-        totalAssets: o.totalAssets,
-        filteredAssets: o.filteredAssets,
-      }));
+      const slug = resolveApiSlug(cls?.tracker || '');
+      const restBase = getAPIBase();
+      executedQuery = `GET ${restBase}/owners?asset_type=${slug}\n\nsource=${result.source}`;
+
+      // If specific owners were requested, filter to just those
+      const ownerIdSet = selectedOwnerIds.length > 0 ? new Set(selectedOwnerIds) : null;
+      owners = result.owners
+        .filter((o) => !ownerIdSet || ownerIdSet.has(o.entityId))
+        .map((o) => ({
+          name: o.name,
+          entityId: o.entityId,
+          totalAssets: o.totalAssets,
+          filteredAssets: o.filteredAssets,
+        }));
 
       loading = false;
     } catch (err) {
       if (import.meta.env.DEV) console.error('Failed to load owners:', err);
-      error = err?.message || 'Failed to load data';
+      error = (err as Error)?.message || 'Failed to load data';
       loading = false;
     }
   });
@@ -692,6 +711,49 @@
       />
     </section>
   </LoadingWrapper>
+
+  <!-- Tier 2: matched entities with no assets in this class -->
+  {#if noAssetEntities.length > 0 || noAssetLoading}
+    <section class="tier2-section">
+      <h3 class="tier2-title">
+        Matched {noAssetEntities.length + (noAssetLoading ? '…' : '')}
+        {noAssetEntities.length === 1 ? 'company' : 'companies'} with no {selectedClasses[0]?.name || 'assets'} in GEM
+      </h3>
+      <p class="tier2-desc">
+        These companies were found in GEM's entity database but have no recorded ownership
+        of {selectedClasses[0]?.name || 'assets in this class'}.
+      </p>
+      <ul class="tier2-list">
+        {#each noAssetEntities as entity}
+          <li class="tier2-item">
+            <span class="tier2-name">{entity.name}</span>
+            {#if entity.country}
+              <span class="tier2-country">{entity.country}</span>
+            {/if}
+            <span class="tier2-badge">No assets</span>
+          </li>
+        {/each}
+        {#if noAssetLoading}
+          <li class="tier2-item tier2-item--loading">Loading…</li>
+        {/if}
+      </ul>
+    </section>
+  {/if}
+
+  <!-- Tier 3: search terms that matched nothing in GEM -->
+  {#if nomatchCount > 0}
+    <section class="tier3-section">
+      <p class="tier3-text">
+        <strong>{nomatchCount} {nomatchCount === 1 ? 'term' : 'terms'}</strong> from your search didn't match any company in GEM's database.
+        <a
+          href="https://globalenergymonitor.org/contact/"
+          target="_blank"
+          rel="noopener"
+          class="tier3-report"
+        >Report missing companies →</a>
+      </p>
+    </section>
+  {/if}
 
   <!-- Debug panel -->
   {#if executedQuery}
@@ -1069,5 +1131,86 @@
     height: 100%;
     border: none;
     border-radius: 0;
+  }
+
+  /* ── Tier 2: matched entities with no assets ───────────────────────────── */
+  .tier2-section {
+    margin-top: var(--space-8);
+    padding: var(--space-5) var(--space-6);
+    background: #fffbeb;
+    border: 1px solid #f0c040;
+    border-radius: var(--radius-sm);
+  }
+
+  .tier2-title {
+    font-size: var(--font-size-body);
+    font-weight: 600;
+    margin: 0 0 var(--space-2);
+    color: var(--color-text-primary);
+  }
+
+  .tier2-desc {
+    margin: 0 0 var(--space-4);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+  }
+
+  .tier2-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .tier2-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    font-size: var(--font-size-sm);
+  }
+
+  .tier2-item--loading {
+    color: var(--color-text-secondary);
+    font-style: italic;
+  }
+
+  .tier2-name {
+    font-weight: 500;
+  }
+
+  .tier2-country {
+    color: var(--color-text-secondary);
+  }
+
+  .tier2-badge {
+    margin-left: auto;
+    font-size: var(--font-size-xs);
+    padding: 2px 8px;
+    border-radius: 99px;
+    background: #fde68a;
+    color: #92400e;
+    white-space: nowrap;
+  }
+
+  /* ── Tier 3: unmatched terms ───────────────────────────────────────────── */
+  .tier3-section {
+    margin-top: var(--space-4);
+    padding: var(--space-4) var(--space-6);
+    background: var(--color-bg-secondary, #f8f8f8);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+  }
+
+  .tier3-text {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+  }
+
+  .tier3-report {
+    margin-left: var(--space-2);
+    color: var(--gem-primary-blue, #1d4961);
   }
 </style>

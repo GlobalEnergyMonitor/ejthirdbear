@@ -53,6 +53,10 @@ export interface ScreenerUrlParams {
   classes?: string | null;
   owners?: string | null;
   q?: string | null;
+  /** Comma-separated entity IDs that matched search but have no assets in the selected class (Tier 2) */
+  noassets?: string | null;
+  /** Integer count of search terms that didn't match any GEM entity at all (Tier 3) */
+  nomatch?: string | null;
 }
 
 export function buildScreenerUrl(path: ScreenerRoutePath, params: ScreenerUrlParams = {}): string {
@@ -74,6 +78,18 @@ export function buildScreenerUrl(path: ScreenerRoutePath, params: ScreenerUrlPar
     url.searchParams.set('q', params.q);
   } else {
     url.searchParams.delete('q');
+  }
+
+  if (params.noassets) {
+    url.searchParams.set('noassets', params.noassets);
+  } else {
+    url.searchParams.delete('noassets');
+  }
+
+  if (params.nomatch) {
+    url.searchParams.set('nomatch', params.nomatch);
+  } else {
+    url.searchParams.delete('nomatch');
   }
 
   return `${url.pathname}${url.search}`;
@@ -117,6 +133,8 @@ export function readScreenerHash(): ScreenerUrlParams {
     classes: p.get('classes') || null,
     owners: p.get('owners') || null,
     q: p.get('q') || null,
+    noassets: p.get('noassets') || null,
+    nomatch: p.get('nomatch') || null,
   };
 }
 
@@ -126,6 +144,8 @@ export function writeScreenerHash(params: ScreenerUrlParams) {
   if (params.classes) p.set('classes', params.classes);
   if (params.owners) p.set('owners', params.owners);
   if (params.q) p.set('q', params.q);
+  if (params.noassets) p.set('noassets', params.noassets);
+  if (params.nomatch) p.set('nomatch', params.nomatch);
   const hash = p.toString();
   history.replaceState(null, '', hash ? '#' + hash : location.pathname + location.search);
 }

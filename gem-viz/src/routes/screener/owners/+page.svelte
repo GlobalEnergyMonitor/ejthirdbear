@@ -1,8 +1,18 @@
 <script lang="ts">
   /**
    * ASSET-CLASS SCREENER - Step 2: Search Owners
-   * Search for companies by name, GEM Entity ID, LEI, or Perm ID.
-   * Matches mockup layout with asset classes panel + owner search.
+   *
+   * On mount: fetch full owner list from /owners endpoint for the selected
+   * asset class. Use this list to:
+   *   - Populate "View all owners" table
+   *   - Draw "Try" examples (top 5 owners)
+   *   - Cross-reference search results to classify entities as:
+   *       Tier 1 – matched entity AND has assets in this class  → navigate to results
+   *       Tier 2 – matched entity but NO assets in this class   → inline warning
+   *       Tier 3 – term matched nothing in GEM at all           → count + "report missing"
+   *
+   * Navigation: after search, skip the selection/deduplication step and go
+   * straight to results with owners param carrying the Tier 1 entity IDs.
    */
 
   import { goto } from '$app/navigation';
@@ -13,34 +23,50 @@
   import DebugPanel from '$lib/components/feedback/DebugPanel.svelte';
   import SectionHeader from '$lib/components/nav/SectionHeader.svelte';
   import OwnerSearchPanel from '$lib/components/screener/OwnerSearchPanel.svelte';
-  import OwnerResultsGroups from '$lib/components/screener/OwnerResultsGroups.svelte';
-  import SelectedOwnersFooter from '$lib/components/screener/SelectedOwnersFooter.svelte';
-  import { getExampleCompanies, type ExampleCompany } from '$lib/data-config/screener-config';
   import {
     searchEntities,
     searchEntitiesBulk,
-    getOwnersByAssetType,
-    type ScreenerFilters,
+    getOwnersByFilter,
+    type ScreenerOwner,
+    type EntitySearchResult,
   } from '$lib/data-config/screener-api';
+  import { getExampleCompanies, type ExampleCompany } from '$lib/data-config/screener-config';
   import { buildScreenerUrl, parseJsonSearchParam } from '$lib/screener-url';
   import type { ScreenerSelectedClass } from '$lib/data-config/screener-types';
   import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
-  // Get selected classes from URL params
+  // ── URL params ──────────────────────────────────────────────────────────
+
   const classesParam = $derived($page.url.searchParams.get('classes') || '');
   const isEmbed = $derived($page.url.searchParams.get('embed') === 'true');
 
-  // Parse selected classes for example companies feature
   const selectedClasses = $derived.by((): ScreenerSelectedClass[] => {
     if (!classesParam) return [];
     const parsed = parseJsonSearchParam<ScreenerSelectedClass[]>(classesParam);
     return Array.isArray(parsed) ? parsed : [];
   });
 
-  function buildResultsUrl(params: { owners?: string }) {
+  const classList = $derived.by(() =>
+    selectedClasses.map((item) => ({
+      ...item,
+      id: item.id || item.assetClassId || item.name || '',
+      name: item.name || item.id || 'Unknown',
+      tracker: item.tracker || '',
+    }))
+  );
+
+  // ── URL helpers ─────────────────────────────────────────────────────────
+
+  function buildResultsUrl(params: {
+    owners?: string;
+    noassets?: string;
+    nomatch?: string;
+  }) {
     return buildScreenerUrl('screener/results', {
       classes: classesParam || undefined,
       owners: params.owners || undefined,
+      noassets: params.noassets || undefined,
+      nomatch: params.nomatch || undefined,
     });
   }
 
@@ -50,243 +76,296 @@
     });
   }
 
-  // Parsed class list with stable IDs for remove/update actions
-  const classList = $derived.by(() => {
-    return selectedClasses.map((item) => ({
-      ...item,
-      id: item.id || item.assetClassId || item.name || '',
-      name: item.name || item.id || 'Unknown',
-      tracker: item.tracker || '',
-    }));
-  });
-
   function removeClass(classToRemove: ScreenerSelectedClass) {
     const removeId = classToRemove?.id || classToRemove?.assetClassId || classToRemove?.name;
     const updated = classList.filter((c) => (c.id || c.assetClassId || c.name) !== removeId);
     goto(buildOwnersUrl(updated.length > 0 ? JSON.stringify(updated) : ''), { replaceState: true });
   }
 
-  // Get relevant example companies: fetch top 4 owners for selected asset class,
-  // fall back to static examples while loading or if no classes selected
-  let topOwners = $state<{ name: string; id: string }[]>([]);
+  // ── All-owners list (loaded on mount) ───────────────────────────────────
 
-  const exampleCompanies = $derived.by(() => {
-    if (topOwners.length > 0) return topOwners;
+  let allOwners = $state<ScreenerOwner[]>([]);
+  let allOwnersLoading = $state(false);
+  let allOwnersError = $state<string | null>(null);
+  let showAllOwnersTable = $state(false);
+
+  /** Map of entityId → ScreenerOwner for O(1) cross-reference during search */
+  const ownersMap = $derived(new Map(allOwners.map((o) => [o.entityId, o])));
+
+  /**
+   * Top 5 owners used as "Try" examples.
+   * Falls back to static screener-config examples while loading or if API returns no names.
+   */
+  const topExamples = $derived.by((): ExampleCompany[] => {
+    const fromApi = allOwners
+      .filter((o) => o.name)
+      .slice(0, 5)
+      .map((o) => ({ name: o.name, id: o.entityId }));
+    if (fromApi.length > 0) return fromApi;
     const trackers = classList.map((c) => c.tracker).filter(Boolean);
     return getExampleCompanies(trackers);
   });
 
-  // Fetch top 4 owners for the first selected asset class + prefill from URL
+  // ── Search state ─────────────────────────────────────────────────────────
+
+  let singleSearchQuery = $state('');
+  let bulkSearchText = $state('');
+  let searchLoading = $state(false);
+  let searchError = $state<string | null>(null);
+
+  /**
+   * After a single search: entities that matched GEM but have no assets
+   * in the selected class. Shown as inline warning instead of navigating.
+   */
+
+  // Debug tracking
+  let debugApiCalls = $state<{ type: string; params: Record<string, unknown>; time: number }[]>([]);
+  let debugLastSearchTime = $state<number | null>(null);
+
+  // ── Mount: prefetch owner list + handle ?q= prefill ─────────────────────
+
   onMount(async () => {
-    // Prefill search from URL query param
+    // Prefill single search from URL
     const q = $page.url.searchParams.get('q') || '';
     if (q) {
       singleSearchQuery = q;
-      void searchSingle();
+      void doSearchSingle();
     }
 
     if (selectedClasses.length === 0) return;
     const cls = selectedClasses[0];
     if (!cls?.tracker) return;
 
+    allOwnersLoading = true;
+    allOwnersError = null;
+
     try {
-      const filters: ScreenerFilters = {
-        tracker: cls.tracker || '',
-        assetClassId: cls.assetClassId || cls.id,
-      };
-      const result = await getOwnersByAssetType(filters, { limit: 4 });
-      if (result.owners.length > 0) {
-        topOwners = result.owners.slice(0, 4).map((o) => ({
-          name: o.name,
-          id: o.entityId,
-        }));
-      }
-    } catch {
-      // Silently fall back to static examples
+      const statuses: string[] =
+        cls.filters?.statuses ||
+        (cls.filters?.status ? [cls.filters.status] : []);
+
+      const countries = cls.filters?.geography
+        ? Array.isArray(cls.filters.geography)
+          ? cls.filters.geography
+          : [cls.filters.geography]
+        : undefined;
+
+      const result = await getOwnersByFilter(
+        {
+          tracker: cls.tracker,
+          assetClassId: cls.assetClassId || cls.id,
+          status: statuses.length > 0 ? statuses : undefined,
+          country: countries,
+        },
+        { limit: 500 }
+      );
+      allOwners = result.owners;
+    } catch (err) {
+      allOwnersError = err instanceof Error ? err.message : 'Failed to load owners';
+    } finally {
+      allOwnersLoading = false;
     }
   });
 
-  // Show all companies with ownership in selected asset classes
-  function showAllAssets() {
-    goto(buildResultsUrl({}));
-  }
+  // ── Search helpers ───────────────────────────────────────────────────────
 
-  // Navigation
-  function continueToResults() {
-    const ownerIds = selectedOwners.map((o) => o.id).join(',');
-    goto(buildResultsUrl({ owners: ownerIds }));
-  }
-
-  // Use an example company
-  function useExample(example: ExampleCompany) {
-    singleSearchQuery = example.name;
-    searchSingle();
+  /** True if the term looks like a structured ID rather than a company name. */
+  function isIdSearch(term: string): boolean {
+    return (
+      /^E\d+$/i.test(term) ||           // GEM Entity ID: E123456
+      /^[A-Z0-9]{20}$/.test(term) ||    // LEI: 20 uppercase alphanumeric chars
+      /^\d{10}$/.test(term)              // PermID: 10 digits
+    );
   }
 
   /**
-   * Toggle or add owner selection (O(1) with Map).
-   * @param toggle - If true (default), deselects the owner if already selected.
-   *                 If false, only adds — useful for "select all" flows.
+   * Filter entity search results to only those whose name actually contains
+   * the search term (case-insensitive substring). Skip this for ID searches
+   * since the name won't match an ID string.
+   *
+   * This prevents the API's fuzzy/semantic matching from returning unrelated
+   * companies that happen to score well against a query like "Shell".
    */
-  function selectOwner(owner: { id: string; name: string }, toggle = true) {
-    const newMap = new Map(selectedOwnerMap);
-    if (toggle && newMap.has(owner.id)) {
-      newMap.delete(owner.id);
-    } else {
-      newMap.set(owner.id, owner);
+  function filterByName(results: EntitySearchResult[], term: string): EntitySearchResult[] {
+    if (isIdSearch(term)) return results;
+    const lower = term.toLowerCase();
+    return results.filter((e) => e.name.toLowerCase().includes(lower));
+  }
+
+  /**
+   * Cross-reference a list of entity search results against the owners map.
+   * Returns { withAssets, noAssets }.
+   */
+  function crossRef(entities: EntitySearchResult[]) {
+    const withAssets: EntitySearchResult[] = [];
+    const noAssets: EntitySearchResult[] = [];
+    for (const e of entities) {
+      if (ownersMap.has(e.id)) {
+        withAssets.push(e);
+      } else {
+        noAssets.push(e);
+      }
     }
-    selectedOwnerMap = newMap;
+    return { withAssets, noAssets };
   }
 
-  /**
-   * Search for a single entity using centralized screener API.
-   * The API handles ID detection (GEM Entity ID, LEI, etc.) internally.
-   */
-  async function searchSingleEntity(input: string) {
-    debugApiCalls = [
-      ...debugApiCalls,
-      { type: 'searchEntities', params: { query: input }, time: Date.now() },
-    ];
-    const results = await searchEntities(input, { limit: 20 });
-    return results;
-  }
-
-  // Search for single owner
-  async function searchSingle() {
+  async function doSearchSingle() {
     const term = singleSearchQuery.trim();
     if (!term) return;
 
     searchLoading = true;
     searchError = null;
-    searchResultGroups = [];
-    debugApiCalls = [];
+    debugApiCalls = [{ type: 'searchEntities', params: { query: term }, time: Date.now() }];
+
     const startTime = performance.now();
 
     try {
-      const results = await searchSingleEntity(term);
-      searchResultGroups = [{ term, results, matchCount: results.length }];
+      const rawResults = await searchEntities(term, { limit: 20 });
       debugLastSearchTime = performance.now() - startTime;
 
-      // Auto-select if only 1 result; scroll to results in all cases
-      if (results.length === 1) {
-        selectOwner(results[0], false);
+      // Post-filter to entities whose name actually contains the search term,
+      // unless the term looks like a structured ID (GEM Entity ID, LEI, PermID).
+      const results = filterByName(rawResults, term);
+
+      if (results.length === 0) {
+        if (rawResults.length > 0) {
+          searchError = `No companies with "${term}" in their name found in GEM. Try a broader term.`;
+        } else {
+          searchError = `No companies named "${term}" found in GEM.`;
+        }
+        return;
       }
-      await tick();
-      resultsEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+      // If owner list is still loading, skip cross-reference and go straight to results
+      if (allOwnersLoading || allOwners.length === 0) {
+        const ownerIds = results.map((r) => r.id).join(',');
+        goto(buildResultsUrl({ owners: ownerIds }));
+        return;
+      }
+
+      const { withAssets, noAssets } = crossRef(results);
+
+      if (withAssets.length === 0) {
+        const names = noAssets.map((e) => e.name).join(', ');
+        const classLabel = selectedClasses[0]?.name || 'this asset class';
+        searchError = `No ${classLabel} assets found for: ${names}`;
+        return;
+      }
+
+      const ownerIds = withAssets.map((e) => e.id).join(',');
+      const noAssetsParam =
+        noAssets.length > 0 ? noAssets.map((e) => e.id).join(',') : undefined;
+      goto(buildResultsUrl({ owners: ownerIds, noassets: noAssetsParam }));
     } catch (err) {
-      searchError = err?.message || 'Search failed';
+      searchError = err instanceof Error ? err.message : 'Search failed';
       debugLastSearchTime = performance.now() - startTime;
     } finally {
       searchLoading = false;
     }
   }
 
-  // Bulk search for multiple owners using centralized API
-  // Currently fires parallel requests, will use batch endpoint when available
-  async function searchBulk() {
+  async function doSearchBulk() {
     if (!bulkSearchText.trim()) return;
 
     searchLoading = true;
     searchError = null;
-    searchResultGroups = [];
     debugApiCalls = [];
 
     try {
-      // Parse lines - handle both newlines and commas
       const inputs = bulkSearchText
         .split(/[\n,]/)
         .map((s) => s.trim())
         .filter((s) => s.length > 0)
-        .slice(0, 30); // Limit to 30 terms
+        .slice(0, 30);
 
       debugApiCalls = [
         { type: 'searchEntitiesBulk', params: { queryCount: inputs.length }, time: Date.now() },
       ];
 
-      // Use centralized bulk search (will switch to batch API when available)
       const bulkResult = await searchEntitiesBulk(inputs, {
         limitPerQuery: 10,
         maxConcurrent: 10,
       });
-
       debugLastSearchTime = bulkResult.queryTimeMs;
 
-      // Convert to search result groups format
-      const groups = Object.entries(bulkResult.results).map(([term, results]) => ({
-        term,
-        results,
-        matchCount: results.length,
-      }));
-
-      // Filter out groups with no results
-      searchResultGroups = groups.filter((g) => g.results.length > 0);
-
-      // Track terms with no matches
-      const noMatches = groups.filter((g) => g.results.length === 0);
-      if (noMatches.length > 0) {
-        const noMatchTerms = noMatches.map((g) => g.term).join(', ');
-        searchError = `No matches found for: ${noMatchTerms}`;
+      // Apply name filter per term — count terms where all API results were filtered out
+      // as Tier 3 (no match), same as terms that returned nothing at all.
+      let tier3Count = 0;
+      const filteredResults: Record<string, EntitySearchResult[]> = {};
+      for (const [term, entities] of Object.entries(bulkResult.results)) {
+        if (entities.length === 0) {
+          tier3Count++;
+        } else {
+          const filtered = filterByName(entities, term);
+          if (filtered.length === 0) {
+            tier3Count++;
+          } else {
+            filteredResults[term] = filtered;
+          }
+        }
       }
 
-      if (import.meta.env.DEV)
-        console.log(
-          `Bulk search: ${bulkResult.apiCallCount} API calls, ${bulkResult.queryTimeMs.toFixed(0)}ms`
-        );
+      const allMatched: EntitySearchResult[] = Object.values(filteredResults).flat();
+
+      if (allMatched.length === 0) {
+        searchError = `None of the ${inputs.length} terms matched any GEM entity by name.`;
+        return;
+      }
+
+      // Cross-reference against owners map (skip if still loading)
+      let tier1Ids: string;
+      let noAssetsParam: string | undefined;
+
+      if (allOwnersLoading || allOwners.length === 0) {
+        tier1Ids = allMatched.map((e) => e.id).join(',');
+      } else {
+        const { withAssets, noAssets } = crossRef(allMatched);
+        tier1Ids = withAssets.map((e) => e.id).join(',');
+        noAssetsParam = noAssets.length > 0 ? noAssets.map((e) => e.id).join(',') : undefined;
+      }
+
+      goto(
+        buildResultsUrl({
+          owners: tier1Ids || undefined,
+          noassets: noAssetsParam,
+          nomatch: tier3Count > 0 ? String(tier3Count) : undefined,
+        })
+      );
     } catch (err) {
-      searchError = err?.message || 'Bulk search failed';
-      if (import.meta.env.DEV) console.error('Bulk search failed:', err);
+      searchError = err instanceof Error ? err.message : 'Bulk search failed';
     } finally {
       searchLoading = false;
     }
   }
 
-  // Handle CSV upload
   async function handleCsvUpload(event: Event) {
     const file = (event.target as HTMLInputElement).files?.[0];
     if (!file) return;
-
     try {
       const text = await file.text();
-      // Parse CSV - assume first column is company name or ID
-      const lines = text.split('\n').slice(1); // Skip header
+      const lines = text.split('\n').slice(1);
       const values = lines
         .map((line) => {
           const cols = line.split(',');
-          return cols[0]?.trim().replace(/^["']|["']$/g, ''); // Remove quotes
+          return cols[0]?.trim().replace(/^["']|["']$/g, '');
         })
-        .filter((v) => v && v.length > 0);
-
+        .filter((v): v is string => !!v && v.length > 0);
       bulkSearchText = values.join('\n');
-      await searchBulk();
+      await doSearchBulk();
     } catch (err) {
       const reason = err instanceof Error ? err.message : 'unknown error';
       searchError = `Failed to parse CSV: ${reason}. Ensure the file is UTF-8 encoded with company names in the first column.`;
     }
   }
 
-  // Search state
-  let singleSearchQuery = $state('');
-  let bulkSearchText = $state('');
-  let searchLoading = $state(false);
-  let searchError = $state(null);
+  function useExample(example: { name: string; id?: string }) {
+    singleSearchQuery = example.name;
+    doSearchSingle();
+  }
 
-  // Search results with disambiguation tracking
-  // Each entry: { term: string, results: Entity[], matchCount: number }
-  let searchResultGroups = $state([]);
-
-  // Ref to scroll results into view when they appear
-  let resultsEl = $state<HTMLElement | null>(null);
-
-  // Debug: track API calls
-  let debugApiCalls = $state([]);
-  let debugLastSearchTime = $state(null);
-
-  // Selected owners (use Map for O(1) lookup by ID)
-  let selectedOwnerMap = $state(new Map());
-  const selectedOwners = $derived([...selectedOwnerMap.values()]);
-
-  // Check if owner is selected (O(1))
-  const isSelected = (owner) => selectedOwnerMap.has(owner.id);
+  function showAllAssets() {
+    goto(buildResultsUrl({}));
+  }
 </script>
 
 <svelte:head>
@@ -312,29 +391,20 @@
     <AssetClassesPanel {classesParam} onRemove={removeClass} />
   {/snippet}
 
-  <!-- Search owners section -->
+  <!-- Search section -->
   <OwnerSearchPanel
     bind:singleSearchQuery
     bind:bulkSearchText
     {searchLoading}
     {searchError}
-    {exampleCompanies}
-    onSearchSingle={searchSingle}
-    onSearchBulk={searchBulk}
+    exampleCompanies={topExamples.length > 0 ? topExamples : []}
+    onSearchSingle={doSearchSingle}
+    onSearchBulk={doSearchBulk}
     onUseExample={useExample}
     onCsvUpload={handleCsvUpload}
   />
 
-  <div bind:this={resultsEl}>
-    <OwnerResultsGroups
-      {searchLoading}
-      groups={searchResultGroups}
-      {isSelected}
-      onSelectOwner={selectOwner}
-    />
-  </div>
-
-  <!-- Browse all companies section -->
+  <!-- Browse / View all owners -->
   <section class="show-all-section">
     <SectionHeader title="Want every asset instead?">
       {#if selectedClasses.length > 0}
@@ -347,7 +417,46 @@
         Show every asset in the database — no ownership filter.
       {/if}
     </SectionHeader>
-    <button class="show-all-btn" onclick={showAllAssets}> All owners of this asset type </button>
+
+    <div class="show-all-actions">
+      <button class="show-all-btn" onclick={showAllAssets}>All owners of this asset type</button>
+
+      {#if allOwners.length > 0}
+        <button
+          class="show-all-btn show-all-btn--secondary"
+          onclick={() => (showAllOwnersTable = !showAllOwnersTable)}
+        >
+          {showAllOwnersTable ? 'Hide' : 'View'} all owners ({allOwners.length})
+        </button>
+      {:else if allOwnersLoading}
+        <span class="owners-loading">Loading owner list…</span>
+      {/if}
+    </div>
+
+    {#if showAllOwnersTable && allOwners.length > 0}
+      <div class="all-owners-table-wrap">
+        <table class="all-owners-table">
+          <thead>
+            <tr>
+              <th>Company</th>
+              <th class="num-col">Assets</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each allOwners as owner}
+              <tr>
+                <td>{owner.name}</td>
+                <td class="num-col">{owner.filteredAssets || owner.totalAssets}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+    {/if}
+
+    {#if allOwnersError}
+      <p class="owners-error">{allOwnersError}</p>
+    {/if}
   </section>
 
   <!-- Debug panel -->
@@ -356,12 +465,6 @@
       <div class="debug-meta">
         <span class="debug-label">API calls:</span>
         <span class="debug-value">{debugApiCalls.length}</span>
-      </div>
-      <div class="debug-meta">
-        <span class="debug-label">Results:</span>
-        <span class="debug-value"
-          >{searchResultGroups.reduce((sum, g) => sum + g.results.length, 0)} entities</span
-        >
       </div>
       <div class="debug-calls">
         <span class="debug-label">Requests:</span>
@@ -374,19 +477,21 @@
       </div>
     </DebugPanel>
   {/if}
-
-  <!-- Selected owners footer -->
-  {#snippet footer()}
-    <SelectedOwnersFooter {selectedOwners} onContinue={continueToResults} />
-  {/snippet}
 </ScreenerLayout>
 
 <style>
-  /* Browse all section */
+  /* ── Browse all section ─────────────────────────────────────────────── */
   .show-all-section {
     padding-top: var(--space-10);
     margin-top: var(--space-4);
     border-top: var(--border-width) solid var(--color-border);
+  }
+
+  .show-all-actions {
+    display: flex;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+    align-items: center;
   }
 
   .show-all-btn {
@@ -403,19 +508,87 @@
     border-color: var(--color-text-secondary);
   }
 
-  .show-all-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+  .show-all-btn--secondary {
+    color: var(--color-text-secondary);
   }
 
-  /* Page-specific debug styles */
+  .owners-loading {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    font-style: italic;
+  }
+
+  .owners-error {
+    margin-top: var(--space-3);
+    font-size: var(--font-size-sm);
+    color: var(--color-error, #c0392b);
+  }
+
+  /* ── All owners table ───────────────────────────────────────────────── */
+  .all-owners-table-wrap {
+    margin-top: var(--space-4);
+    max-height: 480px;
+    overflow-y: auto;
+    border: var(--border-width) solid var(--color-border);
+  }
+
+  .all-owners-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--font-size-sm);
+  }
+
+  .all-owners-table thead th {
+    position: sticky;
+    top: 0;
+    background: var(--color-bg-secondary, #f8f8f8);
+    padding: var(--space-2) var(--space-3);
+    text-align: left;
+    font-weight: 600;
+    border-bottom: var(--border-width) solid var(--color-border);
+  }
+
+  .all-owners-table tbody tr:nth-child(even) {
+    background: var(--color-bg-secondary, #f8f8f8);
+  }
+
+  .all-owners-table tbody tr:hover {
+    background: var(--color-bg-hover, #f0f4f8);
+  }
+
+  .all-owners-table td {
+    padding: var(--space-2) var(--space-3);
+    border-bottom: var(--border-width) solid var(--color-border);
+  }
+
+  .num-col {
+    text-align: right;
+    width: 80px;
+  }
+
+  /* ── Debug ──────────────────────────────────────────────────────────── */
+  .debug-meta {
+    display: flex;
+    gap: var(--space-2);
+    font-size: var(--font-size-sm);
+  }
+
+  .debug-label {
+    color: var(--color-text-secondary);
+    font-weight: 500;
+  }
+
+  .debug-value {
+    font-family: var(--font-family-mono);
+  }
+
   .debug-calls {
     margin-top: var(--space-4);
   }
 
   .debug-call {
     display: grid;
-    grid-template-columns: 100px 1fr;
+    grid-template-columns: 120px 1fr;
     gap: var(--space-2);
     margin-top: var(--space-2);
     font-size: var(--font-size-sm);

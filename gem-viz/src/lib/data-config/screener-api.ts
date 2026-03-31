@@ -609,6 +609,158 @@ async function searchEntitiesBulkREST(
 }
 
 // =============================================================================
+// OWNERS PAGE: GET OWNERS BY FILTER (calls /owners endpoint)
+// =============================================================================
+
+export interface OwnersFilterParams {
+  tracker: string;
+  assetClassId?: string;
+  status?: string | string[];
+  country?: string | string[];
+}
+
+/** In-memory cache for /owners endpoint responses */
+const ownersByFilterCache = new Map<
+  string,
+  { data: ScreenerResultsResponse; timestamp: number }
+>();
+
+/**
+ * Fetch the pre-aggregated owner list from the `/owners` REST endpoint.
+ * Falls back to `getOwnersByAssetType()` if the endpoint is unavailable.
+ *
+ * Called when the user lands on the owners search page so that:
+ *  - "View all owners" can show the full list instantly
+ *  - "Try" examples can be drawn from real top owners
+ *  - Search results can be cross-referenced to determine which entities
+ *    actually have assets in the selected class (Tier 1 vs Tier 2)
+ */
+export async function getOwnersByFilter(
+  params: OwnersFilterParams,
+  options: { limit?: number; skipCache?: boolean } = {}
+): Promise<ScreenerResultsResponse> {
+  const startTime = performance.now();
+  const { limit = 500, skipCache = false } = options;
+
+  const cacheKey = JSON.stringify({ params, limit });
+  if (!skipCache) {
+    const cached = ownersByFilterCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+      return { ...cached.data, source: 'cache' };
+    }
+  }
+
+  try {
+    const { resolveApiSlug } = await import('$lib/ownership-api');
+    const apiSlug = resolveApiSlug(params.tracker);
+    if (!apiSlug) throw new Error(`Cannot resolve API slug for tracker: ${params.tracker}`);
+
+    const p = new URLSearchParams();
+    p.set('asset_type', apiSlug);
+
+    const statuses = Array.isArray(params.status)
+      ? params.status
+      : params.status
+        ? [params.status]
+        : [];
+    for (const s of statuses) p.append('status', s);
+
+    const countries = Array.isArray(params.country)
+      ? params.country
+      : params.country
+        ? [params.country]
+        : [];
+    for (const c of countries) p.append('country', c);
+
+    if (limit) p.set('limit', String(limit));
+
+    const url = `${OWNERSHIP_API_BASE}/owners?${p.toString()}`;
+    const t0 = performance.now();
+    const resp = await fetch(url);
+    const { logApiCall } = await import('$lib/api-log.svelte');
+    logApiCall({
+      url,
+      method: 'GET',
+      status: resp.status,
+      durationMs: performance.now() - t0,
+      timestamp: new Date(),
+      error: resp.ok ? undefined : `${resp.status}`,
+      reason: 'getOwnersByFilter (screener owners page)',
+    });
+
+    if (!resp.ok) throw new Error(`/owners returned ${resp.status}`);
+
+    const data = await resp.json();
+
+    if (import.meta.env.DEV) {
+      const sample = Array.isArray(data) ? data[0] : (data.owners ?? data.results ?? [])[0];
+      console.log('[screener-api] /owners raw response sample:', sample);
+    }
+
+    // Normalize API response — expect { owners: [{entity_id, name, asset_count, ...}] }
+    const rawOwners: Array<Record<string, unknown>> = Array.isArray(data)
+      ? data
+      : (data.owners ?? data.results ?? []);
+
+    const owners: ScreenerOwner[] = rawOwners
+      .map((o) => ({
+        entityId: String(
+          o.entity_id ?? o.entityId ??
+          (o.entity && typeof o.entity === 'object' ? (o.entity as Record<string, unknown>).id : undefined) ??
+          o.id ?? ''
+        ),
+        name: String(
+          o.name ?? o.full_name ?? o.entity_name ?? o.owner_name ??
+          o.display_name ??
+          (o.entity && typeof o.entity === 'object' ? (o.entity as Record<string, unknown>).name : undefined) ??
+          ''
+        ),
+        totalAssets: Number(
+          o.total_asset_count ?? o.total_assets ?? o.totalAssets ?? o.asset_count ?? o.count ?? 0
+        ),
+        filteredAssets: Number(
+          o.asset_count ?? o.filtered_asset_count ?? o.filtered_assets ??
+          o.total_asset_count ?? o.total_assets ?? o.count ?? 0
+        ),
+      }))
+      .filter((o) => o.entityId && o.name);
+
+    const result: ScreenerResultsResponse = {
+      owners,
+      source: 'rest-api',
+      queryTimeMs: performance.now() - startTime,
+      totalCount: owners.length,
+    };
+
+    ownersByFilterCache.set(cacheKey, { data: result, timestamp: Date.now() });
+
+    logQuery({
+      timestamp: new Date(),
+      operation: 'getOwnersByFilter',
+      durationMs: result.queryTimeMs,
+      source: 'rest-api',
+      params: { ...params, limit },
+      resultCount: owners.length,
+    });
+
+    return result;
+  } catch (err) {
+    // Fallback: derive owner list the old way (expensive but reliable)
+    if (import.meta.env.DEV) {
+      console.warn('[screener-api] /owners endpoint unavailable, falling back to asset scan:', err);
+    }
+    const filters: ScreenerFilters = {
+      tracker: params.tracker,
+      assetClassId: params.assetClassId,
+      status: Array.isArray(params.status) ? params.status[0] : params.status,
+      statuses: Array.isArray(params.status) ? params.status : params.status ? [params.status] : undefined,
+      country: params.country,
+    };
+    return getOwnersByAssetType(filters, { limit, skipCache });
+  }
+}
+
+// =============================================================================
 // ASSET TYPE COUNTS (for preset cards)
 // =============================================================================
 
