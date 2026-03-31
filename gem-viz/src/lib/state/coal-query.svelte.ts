@@ -189,7 +189,7 @@ export class CoalQueryState {
 
   #sync() {
     const params = queryToParams(this.query);
-    goto(`${base}/coal?${params.toString()}`, { replaceState: true, keepFocus: true });
+    goto(`${base}/coal-data-explorer?${params.toString()}`, { replaceState: true, keepFocus: true });
   }
 }
 
