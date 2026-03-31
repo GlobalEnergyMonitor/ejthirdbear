@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.5] - 2026-03-31
+
+### Added
+
+- **Coal Data Explorer** (`/coal-data-explorer`) — sentence-based query builder for coal plants and mines. The sentence *is* the interface: inline filter chips with pickers, quick-start presets, live result counts, and URL sync for shareable queries.
+- **Summary statistics mode** — group-by and aggregate pickers wired to live API endpoints via per-field `/catalog/metadata/{tracker}/fields/{field}/{fn}` calls. Supports sum, avg, count with client-side cross-field join.
+- **Plant vs unit granularity toggle** — coal plant aggregations can operate at the generating unit level or collapse to plant level via `location_id` grouping.
+- **Embeddable coal explorer** (`/embed/coal-data-explorer`) — full explorer in an iframe-ready embed with all URL param passthrough.
+- **Coal plant card improvements** — mixed-plant filtering (non-coal units noted but excluded), alt names display (`plant_name_2`/`plant_name_3`), overview consolidation, per-unit table toggle.
+
+### Changed
+
+- **Coal explorer uses shared DataTable** — records table now uses the app-wide `DataTable` component with sorting, search, pagination, and CSV/JSON export.
+- **Design system alignment** — all coal explorer typography uses `--font-size-*` tokens, spacing uses `--space-*` tokens, colors use `--gem-primary-blue` navy instead of freestyle `#099ed8` blue. Tan backgrounds removed from containers (only on chips/badges).
+- **Layout** — query builder sections individually max-width constrained; table and summary go full-width.
+- **"Clear All" button** — moved to top-right as visible orange CTA, now truly resets everything (filters, groupBy, aggregates, outputMode, shown fields, table).
+
+### Fixed
+
+- Summary fetch `$effect` now tracks `groupBy` and `aggregates` as reactive dependencies.
+- `aggregate-api.ts`: null safety on `row.value` before collapse, `console.warn` gated behind `import.meta.env.DEV`.
+- Coal plant embed: removed dead `initialTab`/`onTabChange` props after tab consolidation.
+
+### Removed
+
+- `CoalFilterPanel.svelte` and `CoalQueryBar.svelte` — 1032 lines of unused earlier iterations.
+
 ## [0.3.2] - 2026-03-02
 
 ### Added
