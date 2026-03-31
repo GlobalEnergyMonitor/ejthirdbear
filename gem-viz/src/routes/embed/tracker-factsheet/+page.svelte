@@ -3,10 +3,13 @@
    * Embeddable Tracker Factsheet
    * Two-column metadata explorer for GEM tracker datasets
    *
-   * URL params:
+   * URL params (all overridable via URL hash for Drupal deep-linking):
    *   tracker - Required. Tracker slug (coal-mine, coal-plant, gas-plant, etc.)
+   *   field - Optional. Pre-select a field by name (e.g. "Capacity (Mtpa)")
    *   title - Optional. Custom title override
    *   height - Optional. Max height in pixels (default: 500)
+   *
+   * Hash params: tracker, field, title, height
    */
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
@@ -18,11 +21,13 @@
   } from '$lib/data-config/tracker-metadata';
   import { getTrackerFieldData } from '$lib/catalog-field-meta';
   import { URL_SLUG_TO_CATALOG_SLUG } from '$lib/data-config/tracker-schema';
+  import { readHash, writeHash } from '../embed-utils';
 
-  // Parse URL parameters
-  const trackerSlug = $derived($page.url.searchParams.get('tracker') || '');
-  const titleParam = $derived($page.url.searchParams.get('title'));
-  const heightParam = $derived($page.url.searchParams.get('height'));
+  // URL params (converted to $state so hash can override on mount)
+  let trackerSlug = $state($page.url.searchParams.get('tracker') || '');
+  let titleParam = $state($page.url.searchParams.get('title'));
+  let heightParam = $state($page.url.searchParams.get('height'));
+  let fieldParam = $state($page.url.searchParams.get('field') || '');
 
   const tracker = $derived(slugToTrackerName[trackerSlug] || trackerSlug);
   const _metadata = $derived(trackerMetadata[trackerSlug] as TrackerMetadata | undefined);
@@ -52,6 +57,13 @@
   }
 
   onMount(() => {
+    // Read hash — hash params override query params for deep-linking
+    const h = readHash();
+    if (h.tracker) trackerSlug = h.tracker;
+    if (h.title) titleParam = h.title;
+    if (h.height) heightParam = h.height;
+    if (h.field) fieldParam = h.field;
+
     if (trackerSlug) {
       loadFieldsMetadata();
     } else {
@@ -59,6 +71,11 @@
       loading = false;
     }
   });
+
+  function handleFieldSelect(fieldName: string) {
+    fieldParam = fieldName;
+    writeHash({ tracker: trackerSlug, field: fieldName });
+  }
 
   const validTrackers = Object.keys(slugToTrackerName);
 </script>
@@ -78,7 +95,15 @@
       <p class="embed-hint">Available: {validTrackers.join(', ')}</p>
     </div>
   {:else}
-    <DatasetFactsheet {tracker} {fieldsMetadata} {categoriesOrdered} {catalogSlug} {title} />
+    <DatasetFactsheet
+      {tracker}
+      {fieldsMetadata}
+      {categoriesOrdered}
+      {catalogSlug}
+      {title}
+      initialField={fieldParam}
+      onFieldSelect={handleFieldSelect}
+    />
   {/if}
 </div>
 
@@ -106,6 +131,14 @@
     .factsheet-embed :global(.dataset-fields),
     .factsheet-embed :global(.dataset-previewer) {
       max-height: none;
+    }
+  }
+
+  /* Narrow iframe in Drupal sidebar columns */
+  @media (max-width: 500px) {
+    .factsheet-embed :global(.factsheet) {
+      max-height: none;
+      flex-direction: column;
     }
   }
 </style>

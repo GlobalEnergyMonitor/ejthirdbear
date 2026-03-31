@@ -3,25 +3,34 @@
    * Embeddable Coal Plant Card
    * Renders the full CoalPlantCard (6-tab detail view) in embed mode.
    *
-   * URL params:
+   * URL params (all overridable via URL hash for Drupal deep-linking):
    *   id    - Required. Asset ID (G-prefix or compound L_G) OR location ID (L-prefix)
-   *   tab   - Optional. Initial tab: overview, timeline, coal, emissions, ownership, details
+   *   tab   - Optional. Initial tab: Overview, Timeline, Coal Information,
+   *           Emissions & Phaseout, Ownership, Additional Details
+   *
+   * Hash params: id, tab
+   * writeHash is called when the tab changes interactively.
    */
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
   import { fetchCoalPlantLocation, resolveAssetId } from '$lib/ownership-api';
   import type { CoalPlantUnit } from '$lib/components/cards/coal-plant-types';
   import CoalPlantCard from '$lib/components/cards/CoalPlantCard.svelte';
-  import { errorMessage } from '../embed-utils';
+  import { errorMessage, readHash, writeHash } from '../embed-utils';
 
-  // URL params
-  const assetId = $derived($page.url.searchParams.get('id'));
+  // URL params (converted to $state so hash can override on mount)
+  let assetId = $state($page.url.searchParams.get('id'));
+  let initialTab = $state($page.url.searchParams.get('tab') || '');
 
   // State
   let loading = $state(true);
   let error = $state<string | null>(null);
   let units = $state<CoalPlantUnit[]>([]);
   let plantName = $state('');
+
+  function onTabChange(tab: string) {
+    writeHash({ id: assetId, tab });
+  }
 
   /**
    * Resolve any ID format to a location ID:
@@ -47,6 +56,11 @@
   }
 
   onMount(async () => {
+    // Read hash — hash params override query params for deep-linking
+    const h = readHash();
+    if (h.id) assetId = h.id;
+    if (h.tab) initialTab = h.tab;
+
     if (!assetId) {
       error = 'Missing required parameter: id';
       loading = false;
@@ -87,7 +101,7 @@
       {/if}
     </div>
   {:else if units.length > 0}
-    <CoalPlantCard {units} open={true} />
+    <CoalPlantCard {units} open={true} {initialTab} {onTabChange} />
   {/if}
 </div>
 

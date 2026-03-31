@@ -34,9 +34,12 @@
   });
 </script>
 
-<span class="data-type-icon" title="{icon.label} field" aria-label="{icon.label} field">
-  <svelte:component this={icon.component} {size} strokeWidth={2} />
-</span>
+{#if icon.component}
+  {@const IconComponent = icon.component}
+  <span class="data-type-icon" title="{icon.label} field" aria-label="{icon.label} field">
+    <IconComponent {size} strokeWidth={2} />
+  </span>
+{/if}
 
 <style>
   .data-type-icon {

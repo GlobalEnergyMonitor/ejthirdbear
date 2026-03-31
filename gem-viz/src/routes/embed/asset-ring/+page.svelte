@@ -3,17 +3,19 @@
    * Embeddable Asset Ring Visualization
    * Circular visualization of asset distribution by type and status.
    *
-   * URL params:
+   * URL params (all overridable via URL hash for Drupal deep-linking):
    *   entityId - Required. Entity ID to display
    *   maxAssets - Optional. Maximum assets to show (default: 150)
+   *
+   * Hash params: entityId, maxAssets
    */
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
   import { AssetRingVisualization } from '$lib/components/ownership';
-  import { loadEntityPortfolio, errorMessage, intParam } from '../embed-utils';
+  import { loadEntityPortfolio, errorMessage, intParam, readHash } from '../embed-utils';
 
-  const entityId = $derived($page.url.searchParams.get('entityId'));
-  const maxAssets = $derived(intParam($page.url.searchParams.get('maxAssets'), 150));
+  let entityId = $state($page.url.searchParams.get('entityId'));
+  let maxAssets = $state(intParam($page.url.searchParams.get('maxAssets'), 150));
 
   // State
   let loading = $state(true);
@@ -23,6 +25,11 @@
   const displayAssets = $derived(assets.slice(0, maxAssets));
 
   onMount(async () => {
+    // Read hash — hash params override query params for deep-linking
+    const h = readHash();
+    if (h.entityId) entityId = h.entityId;
+    if (h.maxAssets !== undefined) maxAssets = intParam(h.maxAssets, 150);
+
     if (!entityId) {
       error = 'Missing required parameter: entityId';
       loading = false;

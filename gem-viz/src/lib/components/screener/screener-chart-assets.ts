@@ -190,7 +190,7 @@ export function drawAssetGroups(
 
       if (typeLabel) {
         el.append('tspan')
-          .style('font-size', '9px')
+          .style('font-size', '13px')
           .style('font-weight', 800)
           .style('text-transform', 'uppercase')
           .style('letter-spacing', '0.12em')
@@ -198,14 +198,14 @@ export function drawAssetGroups(
           .text(typeLabel);
 
         el.append('tspan')
-          .style('font-size', '10px')
+          .style('font-size', '14px')
           .style('font-weight', 800)
           .style('fill', colors.grey)
           .text(' | ');
       }
 
       el.append('tspan')
-        .style('font-size', '12px')
+        .style('font-size', '14px')
         .style('font-weight', 500)
         .style('letter-spacing', '0.03em')
         .style('fill', colors.navy)
@@ -213,12 +213,12 @@ export function drawAssetGroups(
 
       if (locData.units.length > 1) {
         el.append('tspan')
-          .style('font-size', '10px')
+          .style('font-size', '14px')
           .style('font-weight', 800)
           .style('fill', colors.grey)
           .text(' | ');
         el.append('tspan')
-          .style('font-size', '9px')
+          .style('font-size', '13px')
           .style('font-weight', 500)
           .style('text-transform', 'uppercase')
           .style('letter-spacing', '0.07em')
@@ -286,7 +286,7 @@ function expandAssetHover(
   labels
     .filter((u) => getStatusLabel(u.status) !== 'operating')
     .append('tspan')
-    .style('font-size', '10px')
+    .style('font-size', '14px')
     .style('font-weight', 800)
     .style('text-transform', 'uppercase')
     .style('letter-spacing', '0.1em')
@@ -296,7 +296,7 @@ function expandAssetHover(
   labels
     .filter((u) => getStatusLabel(u.status) !== 'operating')
     .append('tspan')
-    .style('font-size', '11px')
+    .style('font-size', '13px')
     .style('font-weight', 800)
     .style('fill', colors.grey)
     .text(' | ');
@@ -304,7 +304,7 @@ function expandAssetHover(
   // Asset name
   labels
     .append('tspan')
-    .style('font-size', '12px')
+    .style('font-size', '14px')
     .style('font-weight', 500)
     .style('letter-spacing', '0.03em')
     .style('fill', colors.navy)
@@ -314,7 +314,7 @@ function expandAssetHover(
   labels
     .filter((u) => u.spotlightOwnershipSharePct > 1)
     .append('tspan')
-    .style('font-size', '11px')
+    .style('font-size', '13px')
     .style('font-weight', 800)
     .style('fill', colors.grey)
     .text(' | ');
@@ -322,7 +322,7 @@ function expandAssetHover(
   labels
     .filter((u) => u.spotlightOwnershipSharePct > 1)
     .append('tspan')
-    .style('font-size', '10px')
+    .style('font-size', '14px')
     .style('font-weight', 500)
     .style('font-style', 'italic')
     .style('letter-spacing', '0.05em')

@@ -43,7 +43,7 @@ export function drawLegend(
     trackerLegend
       .append('text')
       .attr('y', -6)
-      .style('font-size', '9px')
+      .style('font-size', '13px')
       .style('font-weight', 600)
       .style('text-transform', 'uppercase')
       .style('letter-spacing', '0.08em')
@@ -59,7 +59,7 @@ export function drawLegend(
         .attr('x', 10)
         .attr('y', 4)
         .attr('dy', '0.35em')
-        .style('font-size', '11px')
+        .style('font-size', '13px')
         .style('fill', colors.gray600)
         .text(tracker);
 
@@ -78,7 +78,7 @@ export function drawLegend(
   statusLegend
     .append('text')
     .attr('y', -6)
-    .style('font-size', '9px')
+    .style('font-size', '13px')
     .style('font-weight', 600)
     .style('text-transform', 'uppercase')
     .style('letter-spacing', '0.08em')
@@ -133,7 +133,7 @@ export function drawLegend(
       .attr('x', 16)
       .attr('y', 4)
       .attr('dy', '0.35em')
-      .style('font-size', '11px')
+      .style('font-size', '13px')
       .style('text-transform', 'capitalize')
       .style('fill', colors.gray600)
       .text(status);

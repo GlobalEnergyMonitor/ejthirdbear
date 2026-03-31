@@ -7,6 +7,13 @@
 
 const API_BASE = import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-api.thirdbear.net';
 
+// Catalog asset-classes endpoint is on staging until backend deploys to prod.
+// Once prod is live this will just equal API_BASE.
+const CATALOG_API_BASE =
+  import.meta.env.PUBLIC_CATALOG_API_BASE_URL ||
+  import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL ||
+  'https://gem-ownership-api-staging.fly.dev';
+
 // =============================================================================
 // TYPES
 // =============================================================================
@@ -181,12 +188,123 @@ export async function fetchApiMetadata(): Promise<ApiMetadata | null> {
   return cachedFetch<ApiMetadata>('metadata', '/metadata?format=json');
 }
 
+// =============================================================================
+// ASSET CLASS CATALOG
+// =============================================================================
+
+/** A single entry from /catalog/asset-classes */
+export interface CatalogAssetClass {
+  id: string;
+  label: string;
+  category: string;
+  /** Optional description (not currently in API response but may be added) */
+  description?: string;
+  /** Relative URL for fetching assets in this class, e.g. "/assets?asset_type=coal-plant" */
+  url?: string;
+  /** Relative URL for fetching owners of this class */
+  owners_url?: string;
+  /** Parent class id — entries that share a parent are OR-combinable subclasses */
+  parent?: string;
+  /** "TBD" means not yet implemented; treat as disabled */
+  notes?: string;
+}
+
+let _assetClassesCache: CatalogAssetClass[] | null = null;
+let _assetClassesFetchedAt = 0;
+const ASSET_CLASSES_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+/** Fetch all asset class definitions from the catalog endpoint. Returns [] on error. */
+export async function fetchAssetClasses(): Promise<CatalogAssetClass[]> {
+  const now = Date.now();
+  if (_assetClassesCache && now - _assetClassesFetchedAt < ASSET_CLASSES_TTL_MS) {
+    return _assetClassesCache;
+  }
+  try {
+    const res = await fetch(`${CATALOG_API_BASE}/catalog/asset-classes?format=json`);
+    if (!res.ok) return [];
+    const data: CatalogAssetClass[] = await res.json();
+    _assetClassesCache = Array.isArray(data) ? data : [];
+    _assetClassesFetchedAt = now;
+    return _assetClassesCache;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Combine multiple child catalog URLs into a single OR query.
+ *
+ * e.g. ["/assets?asset_type=coal-plant&captive__has=aluminum",
+ *       "/assets?asset_type=coal-plant&captive__has=nickel"]
+ * →    "/assets?asset_type=coal-plant&captive__has=aluminum&captive__has=nickel"
+ *
+ * Algorithm: find params common to ALL children (same key+value) = base,
+ * then append each child's unique params (the OR selectors).
+ */
+export function combineChildUrls(childUrls: string[]): string {
+  if (childUrls.length === 0) return '';
+  if (childUrls.length === 1) return childUrls[0];
+
+  const parsed = childUrls.map((u) => new URLSearchParams(u.split('?')[1] ?? ''));
+  const pathPart = childUrls[0].split('?')[0];
+
+  // Params common to ALL children with the same value
+  const base = new URLSearchParams();
+  for (const [key, value] of parsed[0].entries()) {
+    if (parsed.every((p) => p.get(key) === value)) {
+      base.set(key, value);
+    }
+  }
+
+  // Unique params from each child (not in base)
+  const uniquePairs: [string, string][] = [];
+  for (const params of parsed) {
+    for (const [key, value] of params.entries()) {
+      if (base.get(key) !== value) {
+        uniquePairs.push([key, value]);
+      }
+    }
+  }
+
+  const result = new URLSearchParams(base);
+  for (const [key, value] of uniquePairs) {
+    result.append(key, value);
+  }
+  return `${pathPart}?${result.toString()}`;
+}
+
+/**
+ * Build a fully resolved asset URL from a catalog base URL + selected children + user filters.
+ *
+ * @param baseUrl      Relative URL from catalog entry (parent or leaf)
+ * @param childUrls    Relative URLs of selected children (empty = use baseUrl as-is)
+ * @param statuses     User-selected statuses — appended as repeated &status= params
+ * @param countries    User-selected countries — appended as repeated &country= params
+ * @param apiBase      API host to prepend (defaults to CATALOG_API_BASE)
+ */
+export function buildCatalogUrl(
+  baseUrl: string,
+  childUrls: string[],
+  statuses: string[],
+  countries: string[],
+  apiBase: string = CATALOG_API_BASE
+): string {
+  const relUrl = childUrls.length > 0 ? combineChildUrls(childUrls) : baseUrl;
+  const [path, qs] = relUrl.split('?');
+  const params = new URLSearchParams(qs ?? '');
+
+  for (const s of statuses) params.append('status', s);
+  for (const c of countries) params.append('country', c);
+
+  return `${apiBase}${path}?${params.toString()}`;
+}
+
 /** Fetch country facets from asset endpoint. Returns country→count map. */
 export async function fetchCountryFacets(): Promise<Record<string, number> | null> {
   const cached = _cache.get('country-facets') as Record<string, number> | undefined;
   if (cached) return cached;
   try {
-    const url = `${API_BASE}/assets?facets=true&limit=0&format=json`;
+    const url = `${API_BASE}/assets?facets=true&limit=1&format=json`;
     const res = await fetch(url);
     if (!res.ok) return null;
     const data = await res.json();

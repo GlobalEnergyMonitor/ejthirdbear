@@ -7,7 +7,7 @@
 
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import ScreenerLayout from '$lib/components/nav/ScreenerLayout.svelte';
   import AssetClassesPanel from '$lib/components/tracker/AssetClassesPanel.svelte';
   import DebugPanel from '$lib/components/feedback/DebugPanel.svelte';
@@ -166,6 +166,13 @@
       const results = await searchSingleEntity(term);
       searchResultGroups = [{ term, results, matchCount: results.length }];
       debugLastSearchTime = performance.now() - startTime;
+
+      // Auto-select if only 1 result; scroll to results in all cases
+      if (results.length === 1) {
+        selectOwner(results[0], false);
+      }
+      await tick();
+      resultsEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (err) {
       searchError = err?.message || 'Search failed';
       debugLastSearchTime = performance.now() - startTime;
@@ -267,6 +274,9 @@
   // Each entry: { term: string, results: Entity[], matchCount: number }
   let searchResultGroups = $state([]);
 
+  // Ref to scroll results into view when they appear
+  let resultsEl = $state<HTMLElement | null>(null);
+
   // Debug: track API calls
   let debugApiCalls = $state([]);
   let debugLastSearchTime = $state(null);
@@ -315,12 +325,14 @@
     onCsvUpload={handleCsvUpload}
   />
 
-  <OwnerResultsGroups
-    {searchLoading}
-    groups={searchResultGroups}
-    {isSelected}
-    onSelectOwner={selectOwner}
-  />
+  <div bind:this={resultsEl}>
+    <OwnerResultsGroups
+      {searchLoading}
+      groups={searchResultGroups}
+      {isSelected}
+      onSelectOwner={selectOwner}
+    />
+  </div>
 
   <!-- Browse all companies section -->
   <section class="show-all-section">

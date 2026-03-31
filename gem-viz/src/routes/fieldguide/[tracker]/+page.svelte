@@ -31,7 +31,6 @@
   // Resolve tracker name from slug
   const tracker = $derived(slugToTrackerName[trackerParam] || trackerParam);
   const meta = $derived(trackerMetadata[trackerParam]);
-  const color = $derived(getTrackerColor(tracker));
 
   // Field metadata is fetched from the API via catalog-field-meta.ts
   // (API first, hardcoded fallback for resilience)
@@ -104,10 +103,17 @@
     try {
       const index = await fetchCatalogIndex();
       if (index?.trackers?.length) {
-        const slugs = index.trackers
+        const apiSlugs = index.trackers
           .map((t) => CATALOG_SLUG_TO_URL_SLUG[t.slug])
           .filter((s): s is string => !!s && !!trackerMetadata[s]);
-        if (slugs.length) availableSlugs = slugs;
+        if (apiSlugs.length) {
+          // API-ordered trackers first, then remaining hardcoded trackers alphabetically
+          const apiSet = new Set(apiSlugs);
+          const remaining = Object.keys(trackerMetadata)
+            .filter((s) => !apiSet.has(s))
+            .sort((a, b) => trackerMetadata[a].name.localeCompare(trackerMetadata[b].name));
+          availableSlugs = [...apiSlugs, ...remaining];
+        }
       }
     } catch {
       // keep hardcoded fallback
@@ -169,15 +175,13 @@
   </nav>
 
   <!-- Main content: field explorer -->
-  <section class="fieldguide-content" style="--accent: {color}">
-    <DatasetFactsheet
-      {tracker}
-      {fieldsMetadata}
-      {categoriesOrdered}
-      catalogSlug={URL_SLUG_TO_CATALOG_SLUG[trackerParam] ?? ''}
-      title="{info.title} Fields"
-    />
-  </section>
+  <DatasetFactsheet
+    {tracker}
+    {fieldsMetadata}
+    {categoriesOrdered}
+    catalogSlug={URL_SLUG_TO_CATALOG_SLUG[trackerParam] ?? ''}
+    title="{info.title} Fields"
+  />
 
   <!-- Sample assets -->
   {#if sampleAssets.length > 0}
@@ -199,11 +203,9 @@
       <p>{info.citation}</p>
     </div>
     {#if meta?.externalLinks?.gemPage}
-      <div class="external-links">
-        <a href={meta.externalLinks.gemPage} target="_blank" rel="noopener">
-          View on globalenergymonitor.org
-        </a>
-      </div>
+      <a class="external-link" href={meta.externalLinks.gemPage} target="_blank" rel="noopener">
+        View on globalenergymonitor.org
+      </a>
     {/if}
   </section>
 
@@ -234,6 +236,10 @@
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
     padding-bottom: 2px;
+    scroll-snap-type: x proximity;
+    position: relative;
+    mask-image: linear-gradient(to right, black calc(100% - 24px), transparent);
+    -webkit-mask-image: linear-gradient(to right, black calc(100% - 24px), transparent);
   }
 
   .tracker-tabs::-webkit-scrollbar {
@@ -250,6 +256,7 @@
     white-space: nowrap;
     transition: all 0.15s ease;
     border-bottom: 2px solid transparent;
+    scroll-snap-align: start;
   }
 
   .tracker-tab:hover {
@@ -262,11 +269,6 @@
     font-weight: 600;
     border-bottom-color: var(--tab-color, var(--color-accent));
     background: rgba(29, 73, 97, 0.06);
-  }
-
-  /* Content */
-  .fieldguide-content {
-    margin-bottom: var(--space-12);
   }
 
   /* Sample assets */
@@ -328,20 +330,14 @@
     line-height: var(--leading-relaxed);
   }
 
-  .external-links {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-    padding-top: var(--space-3);
-  }
-
-  .external-links a {
+  .external-link {
     font-size: var(--font-size-sm);
     color: var(--color-text-secondary);
     text-decoration: underline;
+    padding-top: var(--space-3);
   }
 
-  .external-links a:hover {
+  .external-link:hover {
     color: var(--color-text-primary);
   }
 

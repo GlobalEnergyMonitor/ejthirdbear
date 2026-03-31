@@ -130,7 +130,8 @@ export async function mountWidget(
   const mod = await loader();
 
   // Mount the Svelte component
-  const instance = mount(mod.default, { target, props });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const instance = mount(mod.default as any, { target, props });
   mountedWidgets.set(shadowRoot, instance);
 }
 
