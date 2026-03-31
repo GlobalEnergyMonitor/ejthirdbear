@@ -3,10 +3,12 @@
    * Embeddable Asset Card
    * Compact asset profile with status, metadata, and owners.
    *
-   * URL params:
+   * URL params (all overridable via URL hash for Drupal deep-linking):
    *   id - Required. Asset ID (GEM unit ID)
    *   showOwners - Optional. Show owners table (default: true)
    *   showMap - Optional. Show location map (default: false)
+   *
+   * Hash params: id, showOwners, showMap
    */
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
@@ -16,12 +18,12 @@
   import StatusIcon from '$lib/components/tracker/StatusIcon.svelte';
   import OwnershipPie from '$lib/components/charts/OwnershipPie.svelte';
   import AssetMap from '$lib/components/map/AssetMap.svelte';
-  import { errorMessage, boolParam } from '../embed-utils';
+  import { errorMessage, boolParam, readHash } from '../embed-utils';
 
-  // URL params
-  const assetId = $derived($page.url.searchParams.get('id'));
-  const showOwners = $derived(boolParam($page.url.searchParams.get('showOwners')));
-  const showMap = $derived(boolParam($page.url.searchParams.get('showMap'), false));
+  // URL params (converted to $state so hash can override on mount)
+  let assetId = $state($page.url.searchParams.get('id'));
+  let showOwners = $state(boolParam($page.url.searchParams.get('showOwners')));
+  let showMap = $state(boolParam($page.url.searchParams.get('showMap'), false));
 
   // State
   let loading = $state(true);
@@ -46,6 +48,12 @@
   );
 
   onMount(async () => {
+    // Read hash — hash params override query params for deep-linking
+    const h = readHash();
+    if (h.id) assetId = h.id;
+    if (h.showOwners !== undefined) showOwners = boolParam(h.showOwners);
+    if (h.showMap !== undefined) showMap = boolParam(h.showMap, false);
+
     if (!assetId) {
       error = 'Missing required parameter: id';
       loading = false;
@@ -238,5 +246,25 @@
   .map-section {
     margin-top: var(--space-4);
     height: 200px;
+  }
+
+  @media (max-width: 480px) {
+    .asset-embed {
+      max-width: 100%;
+      padding: 8px;
+    }
+
+    h1 {
+      font-size: var(--font-size-lg);
+    }
+
+    .meta-row {
+      flex-wrap: wrap;
+    }
+
+    .owner-row {
+      flex-wrap: wrap;
+      gap: var(--space-1);
+    }
   }
 </style>

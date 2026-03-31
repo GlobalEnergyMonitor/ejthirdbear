@@ -14,12 +14,30 @@
   // ── Props ──────────────────────────────────────────────────────────────────
 
   let {
-    units,
+    units: allUnits,
     open = false,
   }: {
     units: CoalPlantUnit[];
     open?: boolean;
   } = $props();
+
+  // Filter to coal units only; track other asset types for the "additional units" note
+  const units = $derived(allUnits.filter((u) => !u.asset_type || u.asset_type === 'Coal Plant'));
+  const otherUnits = $derived(allUnits.filter((u) => u.asset_type && u.asset_type !== 'Coal Plant'));
+
+  const otherUnitsNote = $derived.by((): string | null => {
+    if (otherUnits.length === 0) return null;
+    const byType = new Map<string, number>();
+    for (const u of otherUnits) {
+      const label = (u.asset_type ?? 'Unknown').replace(/\s*Plant\s*$/i, '');
+      byType.set(label, (byType.get(label) ?? 0) + 1);
+    }
+    const coalCount = units.length;
+    const breakdown = Array.from(byType.entries())
+      .map(([type, count]) => `${count} ${type} unit${count === 1 ? '' : 's'}`)
+      .join(', ');
+    return `In addition to ${coalCount} coal unit${coalCount === 1 ? '' : 's'}, it has ${breakdown} not included here.`;
+  });
 
   // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -58,6 +76,18 @@
   const plantName = $derived(f?.plant_name ?? units[0]?.asset_name ?? '');
   const wikiUrl = $derived(f?.wiki_url ?? null);
   const database = $derived(f?.database ?? 'Global Coal Plant Tracker, January 2026');
+
+  const altNames = $derived.by((): string | null => {
+    if (!f) return null;
+    const primary = (f.plant_name ?? '').toLowerCase();
+    const names = [
+      f.plant_name_2,
+      ...(f.plant_name_3 ?? '').split(',').map((s) => s.trim()),
+    ]
+      .filter((n): n is string => !!n && n.toLowerCase() !== primary)
+      .filter((n, i, arr) => arr.indexOf(n) === i); // dedupe
+    return names.length ? names.join(' · ') : null;
+  });
 
   const locationStr = $derived.by(() => {
     const parts: string[] = [];
@@ -98,39 +128,65 @@
     return chips;
   });
 
-  // Per-unit pills (same color coding as compact topline chips)
-  const unitPills = $derived(
-    units.map((u) => {
-      const status = u.coal_plant_fields.status;
-      const capacity = Math.round(parseFloat(u.coal_plant_fields.capacity_megawatts || '0'));
-      let cls: string;
-      if (OPERATING_STATUSES.has(status)) cls = 'chip-operating';
-      else if (DEVELOPMENT_STATUSES.has(status)) cls = 'chip-planned';
-      else if (status === 'mothballed') cls = 'chip-mothballed';
-      else if (RETIRED_STATUSES.has(status)) cls = 'chip-retired';
-      else cls = 'chip-cancelled';
-      return { name: u.coal_plant_fields.unit_name, capacity, cls, status };
-    })
-  );
+  let tableByUnit = $state(false);
 
-  let unitsExpanded = $state(units.length === 1);
+  const unitRows = $derived(
+    [...units]
+      .sort((a, b) => {
+        const si =
+          STATUS_ORDER.indexOf(a.coal_plant_fields.status) -
+          STATUS_ORDER.indexOf(b.coal_plant_fields.status);
+        if (si !== 0) return si;
+        return (a.coal_plant_fields.unit_name ?? '').localeCompare(
+          b.coal_plant_fields.unit_name ?? ''
+        );
+      })
+      .map((u) => {
+        const cpf = u.coal_plant_fields;
+        return {
+          status: cpf.status,
+          name: cpf.unit_name,
+          capacity: Math.round(parseFloat(cpf.capacity_megawatts || '0')),
+          technology: cpf.combustion_technology || '—',
+          coalType: cpf.coal_type || '—',
+          coalSource: cpf.coal_source || '—',
+          chp: cpf.cogeneration && cpf.cogeneration !== 'not found' ? cpf.cogeneration : '—',
+        };
+      })
+  );
 
   // Group units by status for plant summary table
   const statusGroups = $derived.by(() => {
     const groups = new Map<
       string,
-      { count: number; capacity: number; technologies: Set<string> }
+      {
+        count: number;
+        capacity: number;
+        technologies: Set<string>;
+        coalTypes: Set<string>;
+        coalSources: Set<string>;
+        chpValues: Set<string>;
+      }
     >();
     for (const unit of units) {
-      const status = unit.coal_plant_fields.status;
+      const cpf = unit.coal_plant_fields;
+      const status = cpf.status;
       if (!groups.has(status))
-        groups.set(status, { count: 0, capacity: 0, technologies: new Set() });
+        groups.set(status, {
+          count: 0,
+          capacity: 0,
+          technologies: new Set(),
+          coalTypes: new Set(),
+          coalSources: new Set(),
+          chpValues: new Set(),
+        });
       const g = groups.get(status)!;
       g.count++;
-      g.capacity += parseFloat(unit.coal_plant_fields.capacity_megawatts || '0');
-      if (unit.coal_plant_fields.combustion_technology) {
-        g.technologies.add(unit.coal_plant_fields.combustion_technology);
-      }
+      g.capacity += parseFloat(cpf.capacity_megawatts || '0');
+      if (cpf.combustion_technology) g.technologies.add(cpf.combustion_technology);
+      if (cpf.coal_type) g.coalTypes.add(cpf.coal_type);
+      if (cpf.coal_source) g.coalSources.add(cpf.coal_source);
+      if (cpf.cogeneration && cpf.cogeneration !== 'not found') g.chpValues.add(cpf.cogeneration);
     }
     return Array.from(groups.entries())
       .sort(([a], [b]) => STATUS_ORDER.indexOf(a) - STATUS_ORDER.indexOf(b))
@@ -139,6 +195,9 @@
         count: d.count,
         capacity: Math.round(d.capacity),
         technologies: [...d.technologies].join(', ') || '—',
+        coalTypes: [...d.coalTypes].join(', ') || '—',
+        coalSources: [...d.coalSources].join(', ') || '—',
+        chp: [...d.chpValues].join(', ') || '—',
       }));
   });
 
@@ -292,13 +351,24 @@
   );
 
   // Narrative sentences
+  const captiveNote = $derived.by((): string => {
+    const vals = captiveValues.filter(
+      (v) => v && v.toLowerCase() !== 'no' && v.toLowerCase() !== 'unknown'
+    );
+    if (vals.length === 0) return '';
+    return ` — a captive plant generating power primarily for ${vals.join(', ')}, rather than the grid —`;
+  });
+
   const overviewNarrative = $derived.by((): string | null => {
     if (plantAge && plantAge > 0) {
       const yearsText = plantAge >= 40 ? 'over 40' : `${plantAge}`;
-      return `${plantName} has been operating for ${yearsText} years.`;
+      return `${plantName}${captiveNote} has been operating for ${yearsText} years.`;
     }
     if (units.some((u) => DEVELOPMENT_STATUSES.has(u.coal_plant_fields.status))) {
-      return `${plantName} is a proposed coal plant in ${f?.country_area ?? units[0]?.country ?? ''}.`;
+      return `${plantName}${captiveNote} is a proposed coal plant in ${f?.country_area ?? units[0]?.country ?? ''}.`;
+    }
+    if (captiveNote) {
+      return `${plantName}${captiveNote}.`;
     }
     return null;
   });
@@ -344,7 +414,6 @@
     'owner',
     'annual_co2_million_tonnes__annum',
     'lifetime_co2_million_tonnes',
-    'capacity_factor',
     'plant_age_years',
     'wiki_url',
     'location',
@@ -356,7 +425,6 @@
     'latitude',
     'longitude',
     'remaining_plant_lifetime_years',
-    'emission_factor_co2',
     'location_accuracy',
   ]);
 
@@ -367,6 +435,8 @@
     parent: 'Parent company',
     parent_gem_entity_id: 'Parent GEM ID',
     owner_gem_entity_id: 'Owner GEM ID',
+    capacity_factor: 'Capacity factor',
+    emission_factor_co2: 'CO₂ emission factor',
     heat_rate_btu: 'Heat rate (BTU/kWh)',
     major_area: 'Major area',
     region: 'Region',
@@ -392,7 +462,6 @@
   const TABS = [
     'Overview',
     'Timeline',
-    'Coal Information',
     'Emissions & Phaseout',
     'Ownership',
     'Additional Details',
@@ -541,8 +610,8 @@
     const lines = [header];
     if (row.startY) {
       if (row.retiredYear) {
-        const yrs = row.retiredYear - row.startY;
-        lines.push(`${status} · ${row.startY}–${row.retiredYear} (${yrs} yr)`);
+        lines.push(`Start year: ${row.startY}`);
+        lines.push(`Retired: ${row.retiredYear}`);
       } else if (row.plannedRetirement) {
         lines.push(`${status} since ${row.startY}`);
         lines.push(`Planned retirement: ${row.plannedRetirement}`);
@@ -584,10 +653,13 @@
 
 <details class="coal-plant-card" {open}>
   <!-- ── Compact summary ─────────────────────────────────────────────────── -->
-  <summary class="card-compact">
+  <summary class="card-compact" onclick={(e) => { if (window.getSelection()?.toString()) e.preventDefault(); }}>
     <div class="compact-left">
       <h3 class="compact-name">{plantName}</h3>
       <div class="compact-location">{locationStr}</div>
+      {#if altNames}
+        <div class="compact-also">Also: {altNames}</div>
+      {/if}
     </div>
     <div class="compact-badges">
       {#each compactChips as chip}
@@ -618,8 +690,8 @@
     <div class="tabs-wrapper">
       <!-- ── Overview ──────────────────────────────────────────────────── -->
       <div class="tab-panel" class:active={activeTab === 'Overview'}>
-        {#if overviewNarrative}
-          <p class="narrative">{overviewNarrative}</p>
+        {#if overviewNarrative || otherUnitsNote}
+          <p class="narrative">{overviewNarrative ?? ''}{overviewNarrative && otherUnitsNote ? ' ' : ''}{otherUnitsNote ?? ''}</p>
         {/if}
 
         <div class="overview-grid">
@@ -649,48 +721,61 @@
         </div>
 
         <div class="summary-section">
-          <div class="summary-heading">Plant summary</div>
-          <div class="summary-table">
-            <div class="summary-row summary-header">
-              <span>Status</span>
-              <span>Capacity</span>
-              <span>Units</span>
-              <span>Combustion technology</span>
-            </div>
-            {#each statusGroups as group}
-              <div class="summary-row">
-                <span>
-                  <span class="status-badge badge-{statusClass(group.status)}"
-                    >{capitalize(group.status)}</span
-                  >
-                </span>
-                <span>{formatMW(group.capacity)}</span>
-                <span>{group.count} unit{group.count === 1 ? '' : 's'}</span>
-                <span>{group.technologies}</span>
-              </div>
-            {/each}
+          <div class="summary-heading-row">
+            <div class="summary-heading">Plant summary</div>
+            {#if units.length > 1}
+              <button
+                class="table-view-toggle"
+                onclick={() => (tableByUnit = !tableByUnit)}
+                aria-pressed={tableByUnit}
+              >{tableByUnit ? '▲ grouped' : '▼ by unit'}</button>
+            {/if}
           </div>
-        </div>
-
-        <div class="units-section">
-          <button
-            class="units-toggle"
-            onclick={() => (unitsExpanded = !unitsExpanded)}
-            aria-expanded={unitsExpanded}
-          >
-            <span class="summary-heading" style="margin:0">Units ({units.length})</span>
-            <span class="units-toggle-icon">{unitsExpanded ? '▲' : '▼'}</span>
-          </button>
-          {#if unitsExpanded}
-            <div class="unit-pills">
-              {#each unitPills as pill}
-                <span class="unit-pill {pill.cls}">
-                  <span class="pill-name">{pill.name}</span>
-                  <span class="pill-cap">{formatMW(pill.capacity)}</span>
-                </span>
+          <div class="summary-table" class:summary-table--by-unit={tableByUnit}>
+            {#if tableByUnit}
+              <div class="summary-row summary-header">
+                <span>Status</span>
+                <span>Unit</span>
+                <span>Capacity</span>
+                <span>Technology</span>
+                <span>Coal type</span>
+                <span>Coal source</span>
+                <span>CHP <span class="info-dot info-dot-inline" data-tip="Unit used for heat and power">i</span></span>
+              </div>
+              {#each unitRows as row}
+                <div class="summary-row">
+                  <span><span class="status-badge badge-{statusClass(row.status)}">{capitalize(row.status)}</span></span>
+                  <span>{row.name}</span>
+                  <span>{formatMW(row.capacity)}</span>
+                  <span>{row.technology}</span>
+                  <span>{row.coalType}</span>
+                  <span>{row.coalSource}</span>
+                  <span>{row.chp}</span>
+                </div>
               {/each}
-            </div>
-          {/if}
+            {:else}
+              <div class="summary-row summary-header">
+                <span>Status</span>
+                <span>Capacity</span>
+                <span>Units</span>
+                <span>Technology</span>
+                <span>Coal type</span>
+                <span>Coal source</span>
+                <span>CHP <span class="info-dot info-dot-inline" data-tip="Unit used for heat and power">i</span></span>
+              </div>
+              {#each statusGroups as group}
+                <div class="summary-row">
+                  <span><span class="status-badge badge-{statusClass(group.status)}">{capitalize(group.status)}</span></span>
+                  <span>{formatMW(group.capacity)}</span>
+                  <span>{group.count} unit{group.count === 1 ? '' : 's'}</span>
+                  <span>{group.technologies}</span>
+                  <span>{group.coalTypes}</span>
+                  <span>{group.coalSources}</span>
+                  <span>{group.chp}</span>
+                </div>
+              {/each}
+            {/if}
+          </div>
         </div>
       </div>
       <!-- /Overview -->
@@ -856,11 +941,6 @@
                     <span class="status-badge badge-{statusClass(row.status)}"
                       >{capitalize(row.status)}</span
                     >
-                    {#if row.plannedRetirement}
-                      <span class="tl-planned-note"
-                        >Planned retirement<br />in {row.plannedRetirement}</span
-                      >
-                    {/if}
                   </div>
                 </foreignObject>
               </g>
@@ -891,50 +971,6 @@
       </div>
       <!-- /Timeline -->
 
-      <!-- ── Coal Information ────────────────────────────────────────────── -->
-      <div class="tab-panel" class:active={activeTab === 'Coal Information'}>
-        <div class="coal-grid">
-          <div class="coal-section">
-            <div class="field-label">Coal Type(s)</div>
-            {#if coalTypes.length > 0}
-              {#each coalTypes as type}
-                <div class="field-value">{capitalize(type)}</div>
-              {/each}
-            {:else}
-              <div class="field-value muted">Unknown</div>
-            {/if}
-            <div class="field-label" style="margin-top:1.5rem;">Coal Source</div>
-            {#if coalSources.length > 0}
-              {#each coalSources as source}
-                <div class="field-value">{source}</div>
-              {/each}
-            {:else}
-              <div class="field-value muted">Unknown</div>
-            {/if}
-          </div>
-
-          <div class="coal-section">
-            <div class="field-label">Unit used for heat and power?</div>
-            <div class="field-value">{chpValue ?? '—'}</div>
-          </div>
-
-          <div class="coal-section">
-            <div class="field-label">
-              Captive
-              <span
-                class="info-dot"
-                data-tip="A captive plant generates power primarily for a specific industrial user rather than the public grid."
-                >i</span
-              >
-            </div>
-            <div class="field-value">
-              {captiveValues.length > 0 ? captiveValues.join(', ') : 'Unknown'}
-            </div>
-            <!-- TODO: Add "XX% of plants in {country} are captive" once country-level stats are available -->
-          </div>
-        </div>
-      </div>
-      <!-- /Coal Information -->
 
       <!-- ── Emissions & Phaseout ───────────────────────────────────────── -->
       <div class="tab-panel" class:active={activeTab === 'Emissions & Phaseout'}>
@@ -1016,22 +1052,6 @@
               </div>
             {/if}
 
-            <div class="field-label" style="margin-top:1rem;">CO₂ emission factor</div>
-            <div class="field-value">{emissionFactor ?? '—'}</div>
-
-            {#if !isInDevelopment}
-              <div class="field-label" style="margin-top:1rem;">
-                Capacity factor
-                <span
-                  class="info-dot"
-                  data-tip="Country coal fleet average, based on GEM and Ember data. See gem.wiki for methodology."
-                  >i</span
-                >
-              </div>
-              <div class="field-value">
-                {capacityFactor != null ? `${capacityFactor}% (country coal fleet average)` : '—'}
-              </div>
-            {/if}
           </div>
         </div>
       </div>
@@ -1126,10 +1146,31 @@
     font-weight: 700;
     color: #111;
   }
+  .compact-left {
+    min-width: 0;
+  }
+  .compact-name,
+  .compact-location,
+  .compact-also {
+    user-select: text;
+  }
   .compact-location {
     font-size: 0.8rem;
     color: #666;
     margin-top: 0.15rem;
+  }
+  .compact-also {
+    font-size: 0.75rem;
+    color: #999;
+    margin-top: 0.15rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  details[open] .compact-also {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
   }
   .compact-badges {
     display: flex;
@@ -1247,7 +1288,6 @@
     color: #999;
     font-style: italic;
   }
-
   /* ── Shared field styles ──────────────────────────────── */
   .field-label {
     font-size: 0.78rem;
@@ -1285,6 +1325,8 @@
     cursor: help;
     flex-shrink: 0;
     font-style: normal;
+    text-transform: none;
+    letter-spacing: 0;
     position: relative;
   }
   /* Inline variant (inside a field-value line) */
@@ -1298,7 +1340,7 @@
   .info-dot::after {
     content: attr(data-tip);
     position: absolute;
-    bottom: calc(100% + 6px);
+    top: calc(100% + 6px);
     left: 50%;
     transform: translateX(-50%);
     background: #222;
@@ -1366,7 +1408,7 @@
   }
   .summary-row {
     display: grid;
-    grid-template-columns: 150px 110px 80px 1fr;
+    grid-template-columns: 130px 90px 70px 1fr 1fr 1fr 50px;
     gap: 0;
     padding: 0.5rem 0;
     border-bottom: 1px solid rgba(0, 0, 0, 0.06);
@@ -1386,46 +1428,32 @@
     padding-bottom: 0.4rem;
   }
 
-  /* ── Unit pills (Overview tab) ───────────────────────── */
-  .units-section {
-    margin-top: 1.5rem;
+  .summary-heading-row {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin-bottom: 0.6rem;
   }
-  .units-toggle {
+  .summary-heading-row .summary-heading {
+    margin-bottom: 0;
+  }
+  .table-view-toggle {
     all: unset;
     cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 0.75rem;
-  }
-  .units-toggle:hover .summary-heading {
-    text-decoration: underline;
-  }
-  .units-toggle-icon {
-    font-size: 0.6rem;
+    font-size: 0.72rem;
     color: #888;
   }
-  .unit-pills {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
+  .table-view-toggle:hover {
+    color: #333;
   }
-  .unit-pill {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 0.3rem 0.65rem;
-    border-radius: 999px;
-    line-height: 1.3;
+  .summary-table--by-unit .summary-row {
+    grid-template-columns: 130px 1fr 90px 1fr 1fr 1fr 70px;
   }
-  .pill-name {
-    font-size: 0.6rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-  }
-  .pill-cap {
-    font-size: 0.78rem;
-    font-weight: 400;
+  /* Right-align tooltip for info-dots in the last column so it doesn't overflow */
+  .summary-row > span:last-child .info-dot::after {
+    left: auto;
+    right: 0;
+    transform: none;
   }
 
   /* ── Units / Timeline tab ─────────────────────────────── */
@@ -1530,13 +1558,6 @@
     color: #777;
     font-style: italic;
     line-height: 1.3;
-  }
-
-  /* ── Coal Information tab ─────────────────────────────── */
-  .coal-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 2rem;
   }
 
   /* ── Emissions & Phaseout tab ─────────────────────────── */

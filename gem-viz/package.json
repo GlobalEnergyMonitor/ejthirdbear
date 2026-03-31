@@ -1,7 +1,7 @@
 {
   "name": "gem-viz",
   "private": true,
-  "version": "0.7.2",
+  "version": "0.7.4",
   "type": "module",
   "scripts": {
     "dev": "NODE_ENV=development vite dev",
@@ -67,7 +67,7 @@
     "dagre": "^0.8.5",
     "dagre-d3": "^0.6.4",
     "dotenv": "^17.2.3",
-"lucide-svelte": "^0.576.0",
+    "lucide-svelte": "^0.576.0",
     "maplibre-gl": "^5.12.0",
     "maplibre-gl-draw": "^1.6.9",
     "marked": "^17.0.1",

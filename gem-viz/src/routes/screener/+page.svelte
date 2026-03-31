@@ -28,6 +28,7 @@
     fetchStatusFacets,
     fetchStatusTaxonomy,
   } from '$lib/ownership-api';
+  import { fetchAssetClasses, buildCatalogUrl } from '$lib/api/catalog-api';
   import { GEM_DATA_EMAIL } from '$lib/external-links';
   import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
@@ -44,9 +45,23 @@
   ];
 
   // Group asset classes by category in display order (only enabled ones)
-  // Filter by search query against label and description
+  // When catalog is loaded, use it; otherwise fall back to static definitions.
+  // Filter by search query against label.
   const classesByCategory = $derived.by(() => {
     const q = searchQuery.trim().toLowerCase();
+
+    if (catalogClasses.length > 0) {
+      return CATEGORY_META.map((cat) => ({
+        ...cat,
+        classes: catalogClasses.filter((ac) => {
+          if (ac.category !== cat.key) return false;
+          if (!ac.url) return false; // notes:"TBD" entries have no url — disable
+          if (!q) return true;
+          return ac.label.toLowerCase().includes(q);
+        }),
+      })).filter((cat) => cat.classes.length > 0);
+    }
+
     return CATEGORY_META.map((cat) => ({
       ...cat,
       classes: ALL_ASSET_CLASSES.filter((ac) => {
@@ -57,9 +72,21 @@
     })).filter((cat) => cat.classes.length > 0);
   });
 
+  // ─── Catalog state ──────────────────────────────────────────────────
+  /** @type {import('$lib/api/catalog-api').CatalogAssetClass[]} */
+  let catalogClasses = $state([]);
+
   // ─── State ──────────────────────────────────────────────────────────
   let searchQuery = $state('');
   let selectedClassId = $state(null);
+
+  /** Direct children of the currently selected class from catalog */
+  const catalogChildren = $derived(
+    selectedClassId ? catalogClasses.filter((c) => c.parent === selectedClassId) : []
+  );
+
+  /** Catalog child IDs that the user has checked (keyed by child.id) */
+  let catalogChildChecks = $state({});
   /** Flat subClasses checkbox state */
   let subClassChecks = $state({});
   /** SubClassGroups option checkbox state */
@@ -81,18 +108,31 @@
 
   // ─── Selection logic ───────────────────────────────────────────────
   function selectClass(classId) {
+    // Support both catalog entries (just an id string) and static AssetClass objects
+    const catalogEntry = catalogClasses.find((c) => c.id === classId);
     const ac = getAssetClassById(classId);
-    if (!ac || !isEnabled(ac)) return;
 
-    selectedClassId = ac.id;
+    // Need either a catalog entry with a url OR a static definition
+    if (!catalogEntry?.url && !ac) return;
+    if (!catalogEntry?.url && ac && !isEnabled(ac)) return;
+
+    selectedClassId = classId;
     searchQuery = '';
     geoFilters = [];
     geofence = null;
     dynamicStatusGroups = null; // reset while loading
 
+    // Reset catalog child checks — defaults all checked
+    const children = catalogClasses.filter((c) => c.parent === classId);
+    const initialCatalogChecks = {};
+    for (const child of children) {
+      initialCatalogChecks[child.id] = true;
+    }
+    catalogChildChecks = initialCatalogChecks;
+
     // Initialize flat sub-class checkboxes (default: checked)
     const initialSubClassChecks = {};
-    if (ac.subClasses) {
+    if (ac?.subClasses) {
       for (const sc of ac.subClasses) {
         initialSubClassChecks[sc.id] = sc.defaultChecked ?? true;
       }
@@ -101,7 +141,7 @@
 
     // Initialize group option checkboxes (default: checked)
     const initialGroupChecks = {};
-    if (ac.subClassGroups) {
+    if (ac?.subClassGroups) {
       for (const group of ac.subClassGroups) {
         for (const opt of group.options) {
           initialGroupChecks[opt.id] = opt.defaultChecked ?? true;
@@ -121,15 +161,20 @@
     statusChecks = initialStatusChecks;
 
     // Fetch status facets from API (non-blocking)
-    fetchStatusFacetsForClass(ac);
+    fetchStatusFacetsForClass(ac, catalogEntry, classId);
   }
 
-  async function fetchStatusFacetsForClass(ac) {
+  async function fetchStatusFacetsForClass(ac, catalogEntry, classId) {
     try {
-      // Resolve API slugs for all trackers in this class
-      const slugs = ac.trackers
-        .map((t) => resolveApiSlug(gemTrackerToUiTracker(t)))
-        .filter(Boolean);
+      // Resolve API slugs: prefer static class trackers, fall back to catalog URL asset_type
+      let slugs = [];
+      if (ac?.trackers?.length) {
+        slugs = ac.trackers.map((t) => resolveApiSlug(gemTrackerToUiTracker(t))).filter(Boolean);
+      } else if (catalogEntry?.url) {
+        const params = new URLSearchParams(catalogEntry.url.split('?')[1] ?? '');
+        const types = params.getAll('asset_type');
+        slugs = types.map((t) => resolveApiSlug(t) ?? t).filter(Boolean);
+      }
       if (slugs.length === 0) return;
 
       // Fetch facets and taxonomy in parallel
@@ -147,7 +192,7 @@
       }
 
       // Only update if this class is still selected
-      if (selectedClassId !== ac.id) return;
+      if (selectedClassId !== classId) return;
 
       const groups = discoverStatusGroups(mergedFacets, taxonomyResult);
       dynamicStatusGroups = groups;
@@ -170,6 +215,7 @@
     selectedClassId = null;
     subClassChecks = {};
     groupOptionChecks = {};
+    catalogChildChecks = {};
     statusChecks = {};
     geoFilters = [];
     geofence = null;
@@ -198,9 +244,17 @@
 
   // ─── Backward-compatible serialization ─────────────────────────────
   function buildClassData() {
-    if (!selectedClass) return [];
+    if (!selectedClassId) return [];
 
-    // Collect selected sub-class IDs from both flat and grouped
+    const catalogEntry = catalogClasses.find((c) => c.id === selectedClassId);
+    const ac = getAssetClassById(selectedClassId);
+
+    // Label/tracker from catalog entry (preferred) or static definition
+    const label = catalogEntry?.label ?? ac?.label ?? selectedClassId;
+    const trackers = ac?.trackers ?? [];
+    const tracker = trackers.length > 0 ? gemTrackerToUiTracker(trackers[0]) : '';
+
+    // Collect selected sub-class IDs from both flat and grouped (static fallback)
     const selectedSubClassIds = [
       ...Object.entries(subClassChecks)
         .filter(([, v]) => v)
@@ -210,21 +264,52 @@
         .map(([k]) => k),
     ];
 
+    // Build catalog URL when catalog data is available
+    let catalogUrl = undefined;
+    let catalogOwnersUrl = undefined;
+
+    if (catalogEntry?.url) {
+      const selectedChildren = catalogChildren
+        .filter((c) => catalogChildChecks[c.id] !== false && c.url)
+        .map((c) => c.url);
+
+      catalogUrl = buildCatalogUrl(
+        catalogEntry.url,
+        selectedChildren,
+        selectedStatuses,
+        geoFilters
+      );
+
+      if (catalogEntry.owners_url) {
+        const selectedOwnersChildren = catalogChildren
+          .filter((c) => catalogChildChecks[c.id] !== false && c.owners_url)
+          .map((c) => c.owners_url);
+        catalogOwnersUrl = buildCatalogUrl(
+          catalogEntry.owners_url,
+          selectedOwnersChildren,
+          selectedStatuses,
+          geoFilters
+        );
+      }
+    }
+
     return [
       {
-        id: selectedClass.id,
-        name: selectedClass.label,
-        description: selectedClass.description,
-        tracker: gemTrackerToUiTracker(selectedClass.trackers[0]),
+        id: selectedClassId,
+        name: label,
+        description: ac?.description ?? '',
+        tracker,
         filters: {
           geography: geoFilters.length > 0 ? geoFilters : undefined,
           status: selectedStatuses.length === 1 ? selectedStatuses[0] : undefined,
           statuses: selectedStatuses.length > 0 ? selectedStatuses : undefined,
           geofence: geofence || undefined,
         },
-        assetClassId: selectedClass.id,
+        assetClassId: selectedClassId,
         selectedSubClasses: selectedSubClassIds,
-        gemTrackers: selectedClass.trackers,
+        gemTrackers: trackers,
+        catalogUrl,
+        catalogOwnersUrl,
       },
     ];
   }
@@ -232,7 +317,7 @@
   const isEmbed = $derived($page.url.searchParams.get('embed') === 'true');
 
   // Serialized classes param for the step nav (needs selected class to navigate forward)
-  const classesParamForNav = $derived(selectedClass ? JSON.stringify(buildClassData()) : '');
+  const classesParamForNav = $derived(selectedClassId ? JSON.stringify(buildClassData()) : '');
 
   function navigateTo(path) {
     const classData = buildClassData();
@@ -255,7 +340,12 @@
     writeScreenerHash({ classes: JSON.stringify(classData) });
   });
 
-  onMount(() => {
+  onMount(async () => {
+    // Fetch catalog asset classes (non-blocking, falls back to static if it fails)
+    fetchAssetClasses().then((classes) => {
+      if (classes.length > 0) catalogClasses = classes;
+    });
+
     if (!isEmbed) return;
     // Restore from hash when embedded
     const h = readScreenerHash();
@@ -294,8 +384,10 @@
   });
 
   const selectionSummary = $derived.by(() => {
-    if (!selectedClass) return '';
-    const parts = [selectedClass.label].filter(Boolean).join(' ');
+    if (!selectedClassId) return '';
+    const catalogEntry = catalogClasses.find((c) => c.id === selectedClassId);
+    const label = selectedClass?.label ?? catalogEntry?.label ?? selectedClassId;
+    const parts = [label].filter(Boolean).join(' ');
     const geo =
       geoFilters.length === 1
         ? ` in ${geoFilters[0]}`
@@ -376,6 +468,7 @@
         <span class="picker-category-label">{cat.label}</span>
         <div class="picker-grid">
           {#each cat.classes as ac (ac.id)}
+            {@const staticAc = getAssetClassById(ac.id)}
             <button
               class="picker-tile"
               class:selected={selectedClassId === ac.id}
@@ -383,11 +476,11 @@
               onclick={() => selectClass(ac.id)}
             >
               <span class="tile-label">{ac.label}</span>
-              {#if ac.description}
-                <span class="tile-desc">{ac.description}</span>
+              {#if ac.description || staticAc?.description}
+                <span class="tile-desc">{ac.description ?? staticAc?.description}</span>
               {/if}
-              {#if ac.trackers.length > 1}
-                <span class="tile-badge">{ac.trackers.length} trackers</span>
+              {#if staticAc && staticAc.trackers.length > 1}
+                <span class="tile-badge">{staticAc.trackers.length} trackers</span>
               {/if}
             </button>
           {/each}
@@ -410,16 +503,30 @@
     </div>
   </section>
 
-  <!-- Filter panel when class is selected -->
-  {#if selectedClass}
+  <!-- Filter panel when class is selected (catalog or static) -->
+  {#if selectedClassId}
+    {@const staticAc = getAssetClassById(selectedClassId)}
+    {@const catalogEntry = catalogClasses.find((c) => c.id === selectedClassId)}
+    {@const expansionClass =
+      staticAc ??
+      /** @type {any} */ ({
+        id: selectedClassId,
+        label: catalogEntry?.label ?? selectedClassId,
+        description: '',
+        category: catalogEntry?.category ?? '',
+        trackers: [],
+        availableFilters: { status: true, geography: true },
+      })}
     <AssetClassExpansion
-      assetClass={selectedClass}
+      assetClass={expansionClass}
       bind:subClassChecks
       bind:groupOptionChecks
       bind:statusChecks
       bind:geoFilters
       bind:geofence
       {dynamicStatusGroups}
+      {catalogChildren}
+      bind:catalogChildChecks
       onShowAllOwners={() => navigateTo('/screener/results')}
       onSearchSpecificOwners={() => navigateTo('/screener/owners')}
       onClose={clearSelection}
@@ -427,20 +534,22 @@
   {/if}
 
   <!-- Debug panel -->
-  {#if selectedClass}
+  {#if selectedClassId}
     <DebugPanel title="Query Config">
       <div class="debug-meta">
         <span class="debug-label">Asset Class:</span>
-        <span class="debug-value">{selectedClass.label} ({selectedClass.id})</span>
+        <span class="debug-value">{selectionSummary} ({selectedClassId})</span>
       </div>
-      <div class="debug-meta">
-        <span class="debug-label">GEM Tracker(s):</span>
-        <span class="debug-value">{selectedClass.trackers.join(', ')}</span>
-      </div>
-      <div class="debug-meta">
-        <span class="debug-label">UI Tracker:</span>
-        <span class="debug-value">{gemTrackerToUiTracker(selectedClass.trackers[0])}</span>
-      </div>
+      {#if selectedClass}
+        <div class="debug-meta">
+          <span class="debug-label">GEM Tracker(s):</span>
+          <span class="debug-value">{selectedClass.trackers.join(', ')}</span>
+        </div>
+        <div class="debug-meta">
+          <span class="debug-label">UI Tracker:</span>
+          <span class="debug-value">{gemTrackerToUiTracker(selectedClass.trackers[0])}</span>
+        </div>
+      {/if}
       <div class="debug-meta">
         <span class="debug-label">Statuses:</span>
         <span class="debug-value">{selectedStatuses.join(', ') || 'none'}</span>
@@ -485,8 +594,8 @@
     subtitle="Evaluate companies' ownership stakes in classes of fossil fuel assets. Start by selecting an asset class below."
   >
     {#snippet headerRight()}
-      <div class="selection-badge" class:has-selection={selectedClass}>
-        {#if selectedClass}
+      <div class="selection-badge" class:has-selection={selectedClassId}>
+        {#if selectedClassId}
           <span class="selection-text">{selectionSummary}</span>
           <button class="clear-btn" onclick={clearSelection}>&times;</button>
         {:else}
@@ -520,7 +629,7 @@
     border-radius: var(--radius-sm);
     font-size: var(--font-size-lg);
     min-width: 180px;
-    max-width: 340px;
+    max-width: 420px;
   }
 
   .selection-badge.has-selection {
@@ -651,7 +760,7 @@
     display: inline-block;
     margin-top: var(--space-1);
     padding: 1px var(--space-2);
-    font-size: 11px;
+    font-size: var(--font-size-xs);
     font-weight: 500;
     background: rgba(42, 127, 143, 0.1);
     color: var(--gem-teal, #2a7f8f);

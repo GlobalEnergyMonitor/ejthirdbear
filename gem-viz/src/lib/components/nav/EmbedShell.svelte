@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
   /**
    * EmbedShell — reusable embed wrapper with postMessage auto-height,
    * dark mode, branding footer, and shared embed state styles.
@@ -20,6 +20,17 @@
     children,
   } = $props();
 
+  // ── Compute target origin for postMessage (avoids broad '*' when possible) ──
+  const parentOrigin = (() => {
+    if (typeof window === 'undefined') return '*';
+    try {
+      return window.parent.location.origin;
+    } catch {
+      // Cross-origin — cannot read parent origin, must use '*'
+      return '*';
+    }
+  })();
+
   // ── Link rewriting for CMS embeds (Drupal etc.) ──
   // When linkBase is set, all internal links are rewritten to point to the
   // CMS wrapper pages instead of gem-viz routes.
@@ -34,12 +45,15 @@
     return true;
   }
 
-  function rewriteHref(href) {
+  function rewriteHref(href: string): string {
     if (!linkBase) return href;
-    // Strip trailing slash from linkBase, ensure href starts with /
-    const base = linkBase.replace(/\/+$/, '');
-    const path = href.startsWith('/') ? href : '/' + href;
-    return base + path;
+    try {
+      const base = linkBase.replace(/\/+$/, '');
+      const resolved = new URL(href, window.location.href);
+      return base + resolved.pathname + resolved.search + resolved.hash;
+    } catch {
+      return href;
+    }
   }
 
   function handleLinkClick(e) {
@@ -111,16 +125,32 @@
     goto(url.toString(), { replaceState: true });
   });
 
+  export function reportEmbedError(message: string) {
+    if (typeof window === 'undefined') return;
+    if (window.parent === window) return;
+    window.parent.postMessage(
+      { source: 'gem-embed', type: 'error', embedId, message },
+      parentOrigin
+    );
+  }
+
   const postHeight = () => {
     if (!autoHeight) return;
     if (typeof window === 'undefined') return;
     if (window.parent === window) return;
 
-    const height = Math.max(
+    const candidates: number[] = [
       document.documentElement?.scrollHeight || 0,
-      document.body?.scrollHeight || 0
-    );
+      document.body?.scrollHeight || 0,
+    ];
 
+    // SVG and canvas elements may not contribute to scrollHeight
+    document.querySelectorAll<SVGSVGElement | HTMLCanvasElement>('svg, canvas').forEach((el) => {
+      const rect = el.getBoundingClientRect();
+      if (rect.height > 0) candidates.push(rect.height);
+    });
+
+    const height = Math.max(...candidates);
     if (!height) return;
 
     window.parent.postMessage(
@@ -130,18 +160,31 @@
         height,
         embedId,
       },
-      '*'
+      parentOrigin
     );
   };
 
+  let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+  const postHeightDebounced = () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(postHeight, 300);
+  };
+
   onMount(() => {
-    if (!autoHeight) return;
     if (typeof window === 'undefined') return;
     if (window.parent === window) return;
 
+    // Send ready signal
+    window.parent.postMessage(
+      { source: 'gem-embed', type: 'ready', embedId, route: window.location.pathname },
+      parentOrigin
+    );
+
+    if (!autoHeight) return;
+
     postHeight();
 
-    const observer = new ResizeObserver(() => postHeight());
+    const observer = new ResizeObserver(() => postHeightDebounced());
     observer.observe(document.documentElement);
 
     window.addEventListener('load', postHeight);
@@ -151,6 +194,7 @@
       observer.disconnect();
       window.removeEventListener('load', postHeight);
       window.clearTimeout(timeout);
+      clearTimeout(debounceTimer);
     };
   });
 </script>

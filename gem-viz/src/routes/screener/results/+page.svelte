@@ -377,6 +377,7 @@
         selectedSubClasses: Array.isArray(cls?.selectedSubClasses)
           ? cls.selectedSubClasses
           : undefined,
+        catalogUrl: cls?.catalogUrl,
         geofence,
       };
 
@@ -845,7 +846,7 @@
     background: var(--color-gray-50, #f8fafc);
     border: 1px solid var(--color-gray-200, #e5e7eb);
     border-radius: 2px;
-    font-size: 13px;
+    font-size: var(--font-size-sm);
   }
 
   .filter-crumbs {
@@ -866,7 +867,7 @@
     background: none;
     border: none;
     font: inherit;
-    font-size: 12px;
+    font-size: var(--font-size-sm);
     color: var(--color-text-tertiary);
     text-decoration: underline;
     text-underline-offset: 2px;
@@ -903,7 +904,7 @@
     border-radius: 0;
     background: none;
     color: var(--color-text-tertiary);
-    font-size: 10px;
+    font-size: var(--font-size-xs);
   }
 
   .results-title-row :global(.badge .label) {
@@ -913,7 +914,7 @@
   }
 
   h2 {
-    font-size: 15px;
+    font-size: var(--font-size-md);
     font-weight: 500;
     color: var(--color-text-secondary);
     margin: 0;
@@ -970,12 +971,12 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    max-width: 1100px;
+    max-width: 1400px;
     margin: 0 auto;
   }
 
   .footer-summary {
-    font-size: 14px;
+    font-size: var(--font-size-base);
     color: var(--color-text-secondary);
   }
 
@@ -986,7 +987,7 @@
     padding: 10px 24px;
     background: var(--gem-primary-blue, #004a63);
     color: var(--color-white);
-    font-size: 14px;
+    font-size: var(--font-size-base);
     font-weight: 600;
     border: none;
     border-radius: 4px;
@@ -1012,7 +1013,7 @@
 
   .chart-modal {
     position: fixed;
-    inset: 5vh 5vw;
+    inset: 3vh 3vw;
     background: var(--color-bg-primary, #fff);
     z-index: 9999;
     display: flex;
@@ -1035,7 +1036,7 @@
 
   .chart-modal-title h3 {
     margin: 0;
-    font-size: 15px;
+    font-size: var(--font-size-md);
     font-weight: 500;
     color: var(--color-text-secondary);
     font-family: Georgia, serif;
@@ -1046,7 +1047,7 @@
     border: none;
     cursor: pointer;
     color: var(--color-text-tertiary);
-    font-size: 20px;
+    font-size: var(--font-size-lg);
     padding: 4px 8px;
     line-height: 1;
   }

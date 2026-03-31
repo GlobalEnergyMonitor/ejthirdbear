@@ -829,7 +829,7 @@
   }
 
   .ownership-filter {
-    max-width: 300px;
+    max-width: 380px;
     margin: var(--space-3) 0;
   }
 
@@ -869,7 +869,7 @@
     padding: var(--space-1) var(--space-3);
     color: var(--color-text-primary);
     border: none;
-    max-width: 250px;
+    max-width: 320px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1000,7 +1000,7 @@
 
   .picker-header h3 {
     margin: 0;
-    font-size: 15px;
+    font-size: var(--font-size-md);
     font-weight: 500;
     color: var(--color-text-secondary);
   }
@@ -1010,7 +1010,7 @@
     border: none;
     cursor: pointer;
     color: var(--color-text-tertiary);
-    font-size: 16px;
+    font-size: var(--font-size-md);
     padding: 2px 4px;
   }
 
@@ -1037,7 +1037,7 @@
     cursor: pointer;
     text-align: left;
     font-family: inherit;
-    font-size: 14px;
+    font-size: var(--font-size-base);
     color: var(--color-text-primary);
     transition: background 80ms ease;
   }
@@ -1060,13 +1060,13 @@
   }
 
   .picker-country {
-    font-size: 12px;
+    font-size: var(--font-size-sm);
     color: var(--color-text-tertiary);
     white-space: nowrap;
   }
 
   .picker-current-badge {
-    font-size: 10px;
+    font-size: var(--font-size-xs);
     font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.05em;

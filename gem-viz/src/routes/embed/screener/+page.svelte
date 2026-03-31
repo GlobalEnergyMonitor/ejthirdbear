@@ -8,13 +8,19 @@
   import { goto } from '$app/navigation';
   import { readScreenerHash, buildScreenerUrl } from '$lib/screener-url';
 
+  let redirectError = $state('');
+
   onMount(() => {
-    const h = readScreenerHash();
-    const url = buildScreenerUrl('screener', {
-      classes: h.classes || undefined,
-      owners: h.owners || undefined,
-    });
-    goto(url + (url.includes('?') ? '&' : '?') + 'embed=true', { replaceState: true });
+    try {
+      const h = readScreenerHash();
+      const url = buildScreenerUrl('screener', {
+        classes: h.classes || undefined,
+        owners: h.owners || undefined,
+      });
+      goto(url + (url.includes('?') ? '&' : '?') + 'embed=true', { replaceState: true });
+    } catch (err) {
+      redirectError = err instanceof Error ? err.message : 'Failed to load screener';
+    }
   });
 </script>
 
@@ -23,8 +29,15 @@
   <meta name="robots" content="noindex" />
 </svelte:head>
 
-<div
-  style="padding: 2rem; color: var(--color-text-tertiary); font-family: var(--font-family); font-size: 0.875rem;"
->
-  Loading screener…
-</div>
+{#if redirectError}
+  <div class="embed-error">
+    <p>Unable to load screener</p>
+    <p class="embed-hint">{redirectError}</p>
+  </div>
+{:else}
+  <div
+    style="padding: 2rem; color: var(--color-text-tertiary); font-family: var(--font-family); font-size: 0.875rem;"
+  >
+    Loading screener…
+  </div>
+{/if}

@@ -410,12 +410,6 @@
     font-size: var(--font-size-md);
   }
 
-  .no-data {
-    color: var(--color-text-tertiary);
-    font-size: var(--font-size-body);
-    padding: var(--space-4);
-    font-style: italic;
-  }
 
   .config-card {
     background: var(--color-white);
@@ -451,12 +445,6 @@
     background: var(--color-gray-100);
     padding: 2px var(--space-1);
     font-size: var(--font-size-sm);
-  }
-  .docs-ref {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
-    margin-top: var(--space-3);
-    font-style: italic;
   }
 
   .source-grid {

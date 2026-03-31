@@ -11,7 +11,11 @@
  * is the primary source. Call initFromApi() at app startup to populate live data.
  */
 
-import { fetchCatalogTaxonomy, fetchCountryFacets, type StatusTaxonomy } from '$lib/api/catalog-api';
+import {
+  fetchCatalogTaxonomy,
+  fetchCountryFacets,
+  type StatusTaxonomy,
+} from '$lib/api/catalog-api';
 
 // =============================================================================
 // API-DRIVEN STATE (populated by initFromApi)

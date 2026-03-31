@@ -3,12 +3,15 @@
    * Embeddable Entity Card
    * Compact entity profile with ownership flower and asset list.
    *
-   * URL params:
+   * URL params (all overridable via URL hash for Drupal deep-linking):
    *   id - Required. Entity ID
    *   showFlower - Optional. Show ownership flower (default: true)
    *   showAssets - Optional. Show asset list (default: true)
    *   showChart - Optional. Show ownership structure chart (default: false)
+   *   showMap - Optional. Show asset map (default: false)
    *   maxAssets - Optional. Max assets to show (default: 10)
+   *
+   * Hash params: id, showFlower, showAssets, showChart, showMap, maxAssets
    */
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
@@ -22,18 +25,19 @@
     errorMessage,
     intParam,
     boolParam,
+    readHash,
     type EmbedPortfolio,
   } from '../embed-utils';
   import EntityMap from '$lib/components/map/EntityMap.svelte';
   import type { SpotlightAsset } from '$lib/ownership-data';
 
-  // URL params
-  const entityId = $derived($page.url.searchParams.get('id'));
-  const showFlower = $derived(boolParam($page.url.searchParams.get('showFlower')));
-  const showAssets = $derived(boolParam($page.url.searchParams.get('showAssets')));
-  const showChart = $derived($page.url.searchParams.get('showChart') === 'true');
-  const showMap = $derived($page.url.searchParams.get('showMap') === 'true');
-  const maxAssets = $derived(intParam($page.url.searchParams.get('maxAssets'), 10));
+  // URL params (converted to $state so hash can override on mount)
+  let entityId = $state($page.url.searchParams.get('id'));
+  let showFlower = $state(boolParam($page.url.searchParams.get('showFlower')));
+  let showAssets = $state(boolParam($page.url.searchParams.get('showAssets')));
+  let showChart = $state($page.url.searchParams.get('showChart') === 'true');
+  let showMap = $state($page.url.searchParams.get('showMap') === 'true');
+  let maxAssets = $state(intParam($page.url.searchParams.get('maxAssets'), 10));
 
   // State
   let loading = $state(true);
@@ -69,6 +73,15 @@
   });
 
   onMount(async () => {
+    // Read hash — hash params override query params for deep-linking
+    const h = readHash();
+    if (h.id) entityId = h.id;
+    if (h.showFlower !== undefined) showFlower = boolParam(h.showFlower);
+    if (h.showAssets !== undefined) showAssets = boolParam(h.showAssets);
+    if (h.showChart !== undefined) showChart = h.showChart === 'true';
+    if (h.showMap !== undefined) showMap = h.showMap === 'true';
+    if (h.maxAssets !== undefined) maxAssets = intParam(h.maxAssets, 10);
+
     if (!entityId) {
       error = 'Missing required parameter: id';
       loading = false;
@@ -289,5 +302,28 @@
 
   .map-section {
     margin-top: var(--space-4);
+  }
+
+  @media (max-width: 480px) {
+    .entity-embed {
+      max-width: 100%;
+      padding: 8px;
+    }
+
+    h1 {
+      font-size: var(--font-size-lg);
+    }
+
+    .entity-header {
+      flex-wrap: wrap;
+    }
+
+    .tracker-summary {
+      flex-wrap: wrap;
+    }
+
+    .asset-row {
+      flex-wrap: wrap;
+    }
   }
 </style>

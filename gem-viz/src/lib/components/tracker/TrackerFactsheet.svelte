@@ -12,7 +12,7 @@
   import { onMount } from 'svelte';
   import { formatCompact, formatPct } from '$lib/utils/format';
   import { colors } from '$lib/design-tokens';
-  import MiniHistogram from '$lib/components/charts/MiniHistogram.svelte';
+  import FieldHistogram from '$lib/components/charts/FieldHistogram.svelte';
 
   // Props
   interface Props {
@@ -239,7 +239,7 @@
         for (let i = 0; i < d.count; i++) values.push(n);
       }
     }
-    return values;
+    return values.sort((a, b) => a - b);
   });
 
   // Extract unit from field name for histogram label
@@ -377,34 +377,14 @@
 
         <!-- Numeric range summary + histogram -->
         {#if detectedType === 'numeric' && numericStats}
-          {@const range = numericStats.max - numericStats.min || 1}
-          {@const meanPct = ((numericStats.mean - numericStats.min) / range) * 100}
-
           {#if histogramData.length > 0}
-            <div class="histogram-container">
-              <MiniHistogram
-                data={histogramData}
-                bins={Math.min(20, Math.max(8, Math.ceil(Math.sqrt(histogramData.length))))}
-                width={300}
-                height={80}
-                color={trackerColor || 'var(--teal)'}
-                unit={selectedField ? inferUnit(selectedField.columnName) : ''}
-                showAxis={true}
-              />
-            </div>
+            <FieldHistogram
+              values={histogramData}
+              unit={selectedField ? inferUnit(selectedField.columnName) : ''}
+              nullCount={totalRows - histogramData.length}
+              {totalRows}
+            />
           {/if}
-
-          <div class="numeric-range">
-            <div class="range-labels">
-              <span>{formatCompact(numericStats.min)}</span>
-              <span class="range-mean">avg {formatCompact(Math.round(numericStats.mean))}</span>
-              <span>{formatCompact(numericStats.max)}</span>
-            </div>
-            <div class="range-track">
-              <div class="range-fill"></div>
-              <div class="range-mean-tick" style="left:{meanPct}%"></div>
-            </div>
-          </div>
         {/if}
 
         <!-- Distribution bars (hidden for numeric fields with histogram) -->
@@ -687,69 +667,6 @@
     margin-right: 2px;
   }
 
-  /* Histogram container */
-  .histogram-container {
-    margin: 8px 0;
-    padding: 4px 0;
-  }
-
-  .histogram-container :global(.mini-histogram) {
-    width: 100% !important;
-  }
-
-  .histogram-container :global(svg) {
-    width: 100%;
-  }
-
-  /* Numeric range display */
-  .numeric-range {
-    margin: 8px 0 4px;
-  }
-
-  .range-labels {
-    display: flex;
-    justify-content: space-between;
-    font-size: 0.7rem;
-    color: var(--navy);
-    font-variant-numeric: tabular-nums;
-    margin-bottom: 3px;
-  }
-
-  .range-mean {
-    opacity: 0.6;
-    font-style: italic;
-  }
-
-  .range-track {
-    position: relative;
-    height: 6px;
-    background: rgba(0, 74, 99, 0.1);
-    border-radius: 3px;
-    overflow: visible;
-  }
-
-  .range-fill {
-    height: 100%;
-    width: 100%;
-    background: linear-gradient(
-      90deg,
-      var(--bar-color, var(--teal)) 0%,
-      rgba(1, 107, 131, 0.2) 100%
-    );
-    border-radius: 3px;
-    opacity: 0.4;
-  }
-
-  .range-mean-tick {
-    position: absolute;
-    top: -2px;
-    width: 2px;
-    height: 10px;
-    background: var(--orange);
-    border-radius: 1px;
-    transform: translateX(-1px);
-  }
-
   /* Distribution bar chart */
   .dist-bars {
     display: flex;
@@ -895,8 +812,7 @@
     div.dataset-previewer .preview-heading,
     div.dataset-previewer .field-definition,
     div.dataset-previewer .dist-summary,
-    div.dataset-previewer .numeric-range,
-    div.dataset-previewer .histogram-container,
+    div.dataset-previewer :global(.field-histogram),
     div.dataset-previewer .dist-bars,
     div.dataset-previewer .loading,
     div.dataset-previewer .no-enum,
@@ -908,8 +824,7 @@
     div.dataset-previewer.mobile-open .preview-heading,
     div.dataset-previewer.mobile-open .field-definition,
     div.dataset-previewer.mobile-open .dist-summary,
-    div.dataset-previewer.mobile-open .numeric-range,
-    div.dataset-previewer.mobile-open .histogram-container,
+    div.dataset-previewer.mobile-open :global(.field-histogram),
     div.dataset-previewer.mobile-open .dist-bars,
     div.dataset-previewer.mobile-open .loading,
     div.dataset-previewer.mobile-open .no-enum,

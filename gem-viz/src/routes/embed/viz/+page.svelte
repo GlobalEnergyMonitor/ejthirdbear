@@ -4,6 +4,7 @@
    * Renders a single visualization component by name with URL params.
    */
   import { page } from '$app/stores';
+  import { onMount } from 'svelte';
 
   import OwnershipFlower from '$lib/components/network/OwnershipFlower.svelte';
   import AssetScreener from '$lib/components/screener/AssetScreener.svelte';
@@ -12,7 +13,7 @@
   import { OwnershipTreeGraph, AssetRingVisualization } from '$lib/components/ownership';
 
   import { getEntityGraphUp, getEntityGraphDown } from '$lib/ownership-api';
-  import { loadEntityPortfolio, errorMessage, boolParam, intParam } from '../embed-utils';
+  import { loadEntityPortfolio, errorMessage, boolParam, intParam, readHash } from '../embed-utils';
   import { getFieldsForTracker } from '$lib/catalog-field-meta';
   import {
     slugToTrackerName,
@@ -20,10 +21,35 @@
     type TrackerMetadata,
   } from '$lib/data-config/tracker-metadata';
 
+  // Hash overrides for Drupal deep-linking
+  let hashParams = $state<Record<string, string>>({});
+
+  onMount(() => {
+    hashParams = readHash();
+  });
+
+  /** Read a param from hash first, then query string */
+  function param(key: string): string | null {
+    return hashParams[key] ?? $page.url.searchParams.get(key);
+  }
+
+  function paramList(key: string): string[] {
+    const val = param(key);
+    if (!val) return [];
+    return val
+      .split(',')
+      .map((v) => v.trim())
+      .filter(Boolean);
+  }
+
   const vizName = $derived(
-    $page.url.searchParams.get('name') || $page.url.searchParams.get('viz') || ''
+    hashParams['name'] ||
+      hashParams['viz'] ||
+      $page.url.searchParams.get('name') ||
+      $page.url.searchParams.get('viz') ||
+      ''
   );
-  const searchKey = $derived($page.url.searchParams.toString());
+  const searchKey = $derived($page.url.searchParams.toString() + JSON.stringify(hashParams));
 
   let component = $state<any>(null);
   let componentProps = $state<Record<string, any>>({});
@@ -42,14 +68,6 @@
   ];
 
   // Field metadata is fetched from the API via catalog-field-meta.ts
-
-  function parseList(value: string | null) {
-    if (!value) return [];
-    return value
-      .split(',')
-      .map((v) => v.trim())
-      .filter(Boolean);
-  }
 
   async function loadViz() {
     loading = true;
@@ -70,30 +88,28 @@
       return;
     }
 
-    const params = $page.url.searchParams;
-
     try {
       if (vizName === 'ownership-flower') {
-        const ownerId = params.get('entityId') || params.get('ownerId');
+        const ownerId = param('entityId') || param('ownerId');
         if (!ownerId) throw new Error('Missing required parameter: entityId');
 
         component = OwnershipFlower;
         componentProps = {
           ownerId,
-          size: params.get('size') || 'medium',
-          showLabels: boolParam(params.get('showLabels')),
-          showTitle: boolParam(params.get('showTitle')),
-          title: params.get('title') || '',
+          size: param('size') || 'medium',
+          showLabels: boolParam(param('showLabels')),
+          showTitle: boolParam(param('showTitle')),
+          title: param('title') || '',
         };
         loading = false;
         return;
       }
 
       if (vizName === 'ownership-graph') {
-        const entityId = params.get('entityId');
+        const entityId = param('entityId');
         if (!entityId) throw new Error('Missing required parameter: entityId');
 
-        const direction = params.get('direction') || 'down';
+        const direction = param('direction') || 'down';
         const fetchFn = direction === 'down' ? getEntityGraphDown : getEntityGraphUp;
         const graphData = await fetchFn(entityId);
 
@@ -115,10 +131,10 @@
       }
 
       if (vizName === 'asset-ring') {
-        const entityId = params.get('entityId');
+        const entityId = param('entityId');
         if (!entityId) throw new Error('Missing required parameter: entityId');
 
-        const maxAssets = intParam(params.get('maxAssets'), 150);
+        const maxAssets = intParam(param('maxAssets'), 150);
         const { portfolio } = await loadEntityPortfolio(entityId);
         const assets = (portfolio?.assets || []).slice(0, maxAssets);
 
@@ -135,17 +151,17 @@
       }
 
       if (vizName === 'asset-screener') {
-        const entityId = params.get('entityId');
+        const entityId = param('entityId');
         if (!entityId) throw new Error('Missing required parameter: entityId');
 
-        const statuses = parseList(params.get('statuses'));
+        const statuses = paramList('statuses');
 
         component = AssetScreener;
         componentProps = {
           entityId,
-          assetClassName: params.get('assetClass') || 'assets',
-          sortByOwnershipPct: boolParam(params.get('sortByOwnershipPct')),
-          includeUnitNames: boolParam(params.get('includeUnitNames'), false),
+          assetClassName: param('assetClass') || 'assets',
+          sortByOwnershipPct: boolParam(param('sortByOwnershipPct')),
+          includeUnitNames: boolParam(param('includeUnitNames'), false),
           defaultStatuses: statuses.length ? statuses : ['operating', 'planned'],
         };
         loading = false;
@@ -153,7 +169,7 @@
       }
 
       if (vizName === 'asset-map') {
-        const assetId = params.get('assetId') || params.get('id');
+        const assetId = param('assetId') || param('id');
         if (!assetId) throw new Error('Missing required parameter: assetId');
 
         component = AssetMap;
@@ -163,15 +179,15 @@
       }
 
       if (vizName === 'factsheet') {
-        const trackerSlug = params.get('tracker') || '';
+        const trackerSlug = param('tracker') || '';
         if (!trackerSlug) throw new Error('Missing required parameter: tracker');
 
         const tracker = slugToTrackerName[trackerSlug] || trackerSlug;
         const metadata = trackerMetadata[trackerSlug] as TrackerMetadata | undefined;
         if (!metadata) throw new Error(`Unknown tracker: ${trackerSlug}`);
 
-        const title = params.get('title') || `${tracker} Fields`;
-        maxHeight = intParam(params.get('height'), 500);
+        const title = param('title') || `${tracker} Fields`;
+        maxHeight = intParam(param('height'), 500);
 
         const fieldsMetadata = await getFieldsForTracker(trackerSlug, true);
 

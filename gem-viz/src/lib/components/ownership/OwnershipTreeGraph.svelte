@@ -19,6 +19,8 @@
     LayoutEdge,
     DagreEdge,
   } from '$lib/component-data/graph-types';
+  import OwnershipPanel from './OwnershipPanel.svelte';
+  import OwnershipTooltip from './OwnershipTooltip.svelte';
   import {
     TREE_COLORS as C,
     OWNERSHIP_ENTITY_COLORS,
@@ -27,6 +29,18 @@
     pieArc,
     edgePath,
     getNodeColors,
+    COUNTRY_COLORS,
+    COUNTRY_GRAY,
+    SMALL_OWNERSHIP_PCT,
+    MAX_COUNTRY_COLORS,
+    NODE_RADIUS,
+    LARGE_GRAPH_THRESHOLD,
+    ZOOM,
+    GRAPH_MARGIN,
+    OPACITY,
+    DAGRE,
+    PAN_CLICK_THRESHOLD,
+    type ColorMode,
   } from './ownership-tree-utils';
   import { buildNarrativeText } from './ownership-tree-narrative';
 
@@ -176,21 +190,33 @@
   // Ownership % filter slider — 0 means show all
   let minOwnershipPct = $state(0);
 
-  const renderNodes = $derived.by(() => {
-    if (minOwnershipPct <= 0) return renderSubset.nodes;
-    return renderSubset.nodes.filter((n) => {
-      // Always keep asset nodes and the root
-      if (n.type === 'asset' || n.id === rootId) return true;
+  // Color-by mode — entity-type or country
+  let colorMode = $state<ColorMode>('entity-type');
+
+  // Layout always uses ALL nodes — filter only dims, doesn't rebuild dagre
+  const renderNodes = $derived(renderSubset.nodes);
+  const renderEdges = $derived(renderSubset.edges);
+
+  // Nodes below min ownership % are faded (not removed)
+  const fadedNodeIds = $derived.by(() => {
+    if (minOwnershipPct <= 0) return new Set<string>();
+    const faded = new Set<string>();
+    for (const n of renderSubset.nodes) {
+      if (n.type === 'asset' || n.id === rootId) continue;
       const pct = pathsMap.get(n.entity_id || n.id) || edgePctMap.get(n.entity_id || n.id) || 0;
-      return pct >= minOwnershipPct;
-    });
+      if (pct < minOwnershipPct) faded.add(n.id);
+    }
+    return faded;
   });
-  const filteredNodeIds = $derived(new Set(renderNodes.map((n) => n.id)));
-  const renderEdges = $derived.by(() => {
-    if (minOwnershipPct <= 0) return renderSubset.edges;
-    return renderSubset.edges.filter(
-      (e) => filteredNodeIds.has(e.source) && filteredNodeIds.has(e.target)
-    );
+  const fadedEdgeIds = $derived.by(() => {
+    if (fadedNodeIds.size === 0) return new Set<string>();
+    const faded = new Set<string>();
+    for (const e of renderSubset.edges) {
+      if (fadedNodeIds.has(e.source) || fadedNodeIds.has(e.target)) {
+        faded.add(`${e.source}->${e.target}`);
+      }
+    }
+    return faded;
   });
   const isTrimmedGraph = $derived(renderSubset.trimmed);
   const hiddenNodeCount = $derived(renderSubset.hiddenNodes);
@@ -203,7 +229,7 @@
   const graphBaseHeight = $derived(Math.max(gHeight, largeGraphMinHeight));
 
   // Large graph threshold — enables scrollable mode with explicit SVG dimensions
-  const isLargeGraph = $derived(!compact && renderNodes.length > 30);
+  const isLargeGraph = $derived(!compact && renderNodes.length > LARGE_GRAPH_THRESHOLD);
 
   // Compute max depth from edge chains (BFS from root)
   const maxDepth = $derived.by(() => {
@@ -254,9 +280,14 @@
   );
 
   // Node radius — matched to Observable's nodeRadius function
-  // Observable: <10 → 28, 10-25 → 22, >25 → 18
   const nodeR = $derived(
-    compact ? 10 : renderNodes.length < 10 ? 28 : renderNodes.length <= 25 ? 22 : 18
+    compact
+      ? NODE_RADIUS.compact
+      : renderNodes.length < 10
+        ? NODE_RADIUS.small
+        : renderNodes.length <= 25
+          ? NODE_RADIUS.medium
+          : NODE_RADIUS.large
   );
 
   // Process paths: compute cumulative ownership % and track which nodes/edges
@@ -333,17 +364,27 @@
     return m;
   });
 
-  // Color-by logic: fixed 4-category entity-type coloring matching Observable
+  // Color-by logic: entity-type or country mode
   const colorConfig = $derived.by(() => {
-    const entityNodes = renderNodes.filter((n) => n.type !== 'asset' && n.id !== rootId);
+    if (colorMode === 'country') {
+      const items: Array<{ label: string; bg: string; fg: string; light: string }> = [];
+      let i = 0;
+      for (const [country] of ownersByCountry) {
+        if (country === 'Unknown') continue;
+        const colors = i < COUNTRY_COLORS.length ? COUNTRY_COLORS[i] : COUNTRY_GRAY;
+        items.push({ label: country, ...colors });
+        i++;
+        if (i > MAX_COUNTRY_COLORS) break;
+      }
+      return { legendItems: items };
+    }
 
-    // Classify each node into one of the 4 Observable categories
+    // Entity-type mode (default)
+    const entityNodes = renderNodes.filter((n) => n.type !== 'asset' && n.id !== rootId);
     const categoriesPresent = new Set<string>();
     for (const n of entityNodes) {
       categoriesPresent.add(classifyOwnerType(n));
     }
-
-    // Legend items — only show categories that are present in the data
     const legendItems = Object.entries(OWNERSHIP_ENTITY_COLORS)
       .filter(([cat]) => categoriesPresent.has(cat))
       .map(([label, colors]) => ({ label, ...colors }));
@@ -375,19 +416,21 @@
     return list;
   });
 
-  // When a node is frozen, float in-chain owners to top and mark the rest for fading
+  // Reorder owners: highlighted first (by pct desc), then faded/out-of-chain
   const sortedOwnersList = $derived.by(() => {
-    if (!frozenNodeData) return ownersList;
-    const inChain: typeof ownersList = [];
-    const outOfChain: typeof ownersList = [];
+    const highlighted: typeof ownersList = [];
+    const dimmed: typeof ownersList = [];
     for (const o of ownersList) {
-      if (frozenId === o.id || frozenNodeData.nodesTouched.includes(o.id)) {
-        inChain.push(o);
+      const isFaded = fadedNodeIds.has(o.id);
+      const outOfChain =
+        frozenNodeData && frozenId !== o.id && !frozenNodeData.nodesTouched.includes(o.id);
+      if (isFaded || outOfChain) {
+        dimmed.push(o);
       } else {
-        outOfChain.push(o);
+        highlighted.push(o);
       }
     }
-    return [...inChain, ...outOfChain];
+    return [...highlighted, ...dimmed];
   });
 
   // Aggregated summaries matching Observable's ownersSummary.byCountry and byType
@@ -421,6 +464,29 @@
       }
     }
     return [...map.entries()].sort((a, b) => b[1].combinedShare - a[1].combinedShare);
+  });
+
+  // Country ranks for color-by-country mode (top 5 by cumulative ownership %)
+  const countryRanks = $derived.by(() => {
+    const ranks = new Map<string, number>();
+    let i = 0;
+    for (const [country] of ownersByCountry) {
+      if (country === 'Unknown') continue;
+      ranks.set(country, i++);
+    }
+    return ranks;
+  });
+
+  // Smart default: if all entities are the same type, color by country instead
+  const uniqueEntityTypes = $derived(new Set(ownersList.map((o) => o.category)).size);
+  const uniqueCountries = $derived(new Set(ownersList.map((o) => o.country).filter(Boolean)).size);
+
+  $effect(() => {
+    if (uniqueEntityTypes <= 1 && uniqueCountries > 1) {
+      colorMode = 'country';
+    } else {
+      colorMode = 'entity-type';
+    }
   });
 
   // Lookup original GraphNode for tooltip (by hovered layout node id)
@@ -524,8 +590,8 @@
     g.setGraph({
       rankdir: graphDirection === 'downstream' ? 'TB' : 'BT',
       nodesep: dynamicNodeSep, // Observable: sizeDependantNodeSeparation
-      ranksep: compact ? 28 : 60, // Observable default: 60
-      edgesep: 0, // Observable default: 0
+      ranksep: compact ? 28 : DAGRE.ranksep,
+      edgesep: DAGRE.edgesep,
       marginx: compact ? 15 : nodeR, // Observable: nodeRadius
       marginy: compact ? 12 : nodeR, // Observable: nodeRadius
     });
@@ -711,6 +777,18 @@
     hoveredNodeData = pathsTouchedMap.get(entityId) || null;
     if (ev) updateTooltipPos(ev);
   }
+  // Bridge functions for OwnershipPanel callbacks
+  function handlePanelHover(id: string, data: { nodesTouched: string[]; edgeIndices: number[] } | null) {
+    hoverSource = 'panel';
+    hoveredId = id;
+    hoveredNodeData = data;
+  }
+  function handlePanelFreeze(id: string | null, data: { nodesTouched: string[]; edgeIndices: number[] } | null) {
+    frozenId = id;
+    frozenNodeData = data;
+    if (id) hasEverFrozen = true;
+  }
+
   function handleNodeLeave() {
     hoverSource = null;
     hoveredId = null;
@@ -732,22 +810,28 @@
 
   // Path-aware opacity: nodes/edges not on the active (frozen or hovered) path fade
   function getNodeOpacity(n: LayoutNode): number {
-    if (!activeNodeData) return isLargeGraph ? 0.92 : 1;
-    return n.isAsset || n.id === activeId || activeNodeData.nodesTouched.includes(n.id) ? 1 : 0.1;
+    if (fadedNodeIds.has(n.id)) return OPACITY.fadedNode;
+    if (!activeNodeData) return isLargeGraph ? OPACITY.largeGraphBase : 1;
+    return n.isAsset || n.id === activeId || activeNodeData.nodesTouched.includes(n.id)
+      ? 1
+      : OPACITY.inactiveNode;
   }
   function getEdgeOpacity(idx: number): number {
+    const e = layoutEdges[idx];
+    if (e && fadedEdgeIds.has(`${e.source}->${e.target}`)) return OPACITY.fadedEdge;
     if (!activeNodeData) {
-      // Observable: per-edge base opacity — small-ownership edges are dimmer
-      if (isLargeGraph) return 0.22;
-      const e = layoutEdges[idx];
+      if (isLargeGraph) return OPACITY.largeGraphEdge;
       if (!e) return 1;
       const srcNode = layoutNodes.find((nd) => nd.id === e.source);
       const srcPct = srcNode?.pct ?? 100;
-      if (srcPct < 2) return e.imputed_share ? 0.8 : 0.6;
+      if (srcPct < SMALL_OWNERSHIP_PCT) return e.imputed_share ? 0.8 : 0.6;
       return 1;
     }
-    // Active path edges get full opacity; frozen paths slightly stronger dim on non-path
-    return activeNodeData.edgeIndices.includes(idx) ? 1 : frozenNodeData ? 0.06 : 0.1;
+    return activeNodeData.edgeIndices.includes(idx)
+      ? 1
+      : frozenNodeData
+        ? OPACITY.frozenPathEdge
+        : OPACITY.hoverPathEdge;
   }
   // Frozen-chain edges rendered thicker than hover-chain
   function getEdgeWidthMultiplier(idx: number): number {
@@ -767,7 +851,7 @@
   let graphWrapEl = $state<HTMLDivElement | null>(null);
 
   // SVG margins (matching Observable)
-  const svgMargins = { top: 20, right: 30, bottom: 60, left: 40 };
+  const svgMargins = GRAPH_MARGIN;
   const fullW = $derived(gWidth + svgMargins.left + svgMargins.right);
   const fullH = $derived(gHeight + svgMargins.top + svgMargins.bottom);
 
@@ -809,7 +893,7 @@
       // If pointer barely moved, treat as a background click → clear selection
       const dx = Math.abs(ev.clientX - panStartX);
       const dy = Math.abs(ev.clientY - panStartY);
-      if (isPanning && dx < 4 && dy < 4 && frozenId) {
+      if (isPanning && dx < PAN_CLICK_THRESHOLD && dy < PAN_CLICK_THRESHOLD && frozenId) {
         frozenId = null;
         frozenNodeData = null;
       }
@@ -823,7 +907,7 @@
 
     const curZoom = $zoomSpring;
     const delta = ev.deltaY > 0 ? -0.1 : 0.1;
-    const next = Math.max(0.75, Math.min(8, +(curZoom + delta).toFixed(2)));
+    const next = Math.max(ZOOM.min, Math.min(ZOOM.max, +(curZoom + delta).toFixed(2)));
     if (next === curZoom) return;
 
     // Zoom toward cursor position
@@ -849,7 +933,7 @@
 
   function zoomBy(step: number) {
     const cur = $zoomSpring;
-    const next = Math.max(0.75, Math.min(8, +(cur + step).toFixed(2)));
+    const next = Math.max(ZOOM.min, Math.min(ZOOM.max, +(cur + step).toFixed(2)));
     // Animated zoom toward center (spring handles the transition)
     zoomSpring.set(next);
   }
@@ -984,9 +1068,9 @@
     if (dagre && renderNodes.length > 0) runLayout();
   });
 
-  // Clear frozen state if the pinned node gets filtered out
+  // Clear frozen state if the pinned node gets faded out by ownership filter
   $effect(() => {
-    if (frozenId && !filteredNodeIds.has(frozenId)) {
+    if (frozenId && fadedNodeIds.has(frozenId)) {
       frozenId = null;
       frozenNodeData = null;
     }
@@ -1009,6 +1093,12 @@
                 ({hiddenNodeCount.toLocaleString()} hidden, {hiddenEdgeCount.toLocaleString()} edges
                 hidden) for responsive rendering.
               </div>
+            {/if}
+            {#if uniqueEntityTypes > 1 && uniqueCountries > 1}
+              <select class="color-mode-select" bind:value={colorMode}>
+                <option value="entity-type">Entity Type</option>
+                <option value="country">Country</option>
+              </select>
             {/if}
             {#if colorConfig.legendItems.length > 0}
               <div class="color-legend">
@@ -1070,10 +1160,28 @@
             {/if}
           </div>
         {/if}
+        {#if frozenId}
+          {@const frozenNode = nodes.find((n) => n.id === frozenId)}
+          <div class="focus-indicator">
+            <span class="focus-label"
+              >Focused on: <strong>{frozenNode?.name || frozenNode?.Name || frozenId}</strong></span
+            >
+            <button
+              type="button"
+              class="focus-clear"
+              onclick={() => {
+                frozenId = null;
+                frozenNodeData = null;
+              }}
+              aria-label="Clear focus">&#10005;</button
+            >
+          </div>
+        {/if}
         <div
           class="graph-wrap"
           class:panning={isPanning}
           bind:this={graphWrapEl}
+          role="application"
           onpointerdown={startPan}
           onpointermove={movePan}
           onpointerup={endPan}
@@ -1081,9 +1189,12 @@
           onpointerleave={endPan}
           onwheel={onGraphWheel}
         >
+          <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
           <svg
             viewBox="{vbX} {vbY} {vbW} {vbH}"
             preserveAspectRatio="xMidYMid meet"
+            role="img"
+            aria-label="Ownership tree graph"
             style={isLargeGraph
               ? `width: ${Math.round(graphBaseWidth)}px; min-height: ${Math.round(graphBaseHeight)}px;`
               : !compact
@@ -1095,6 +1206,12 @@
                 ev.target === ev.currentTarget ||
                 (ev.target instanceof Element && ev.target.tagName === 'svg')
               ) {
+                frozenId = null;
+                frozenNodeData = null;
+              }
+            }}
+            onkeydown={(ev) => {
+              if (ev.key === 'Escape') {
                 frozenId = null;
                 frozenNodeData = null;
               }
@@ -1183,17 +1300,21 @@
                 {@const showLabel = shouldShowLabel(n)}
                 {@const wrapped = wrapText(n.label, labelMaxChars)}
                 {@const pos = n.labelPos || { dx: 0, dy: n.r + 12, below: false, small: false }}
+                {@const isFaded = fadedNodeIds.has(n.id)}
                 {@const opacity = getNodeOpacity(n)}
                 <g
                   class="node"
                   class:hovered={hoveredId === n.id || frozenId === n.id}
                   class:frozen={frozenId === n.id}
                   class:in-chain={nodesToShowText.has(n.id)}
+                  class:ownership-faded={isFaded}
                   data-rank={n.rank}
                   transform="translate({n.x},{n.y})"
-                  style="opacity: {entranceAnimDone ? opacity : 0}"
+                  style="opacity: {entranceAnimDone ? opacity : 0}; pointer-events: {isFaded
+                    ? 'none'
+                    : 'auto'}"
                   role="button"
-                  tabindex="0"
+                  tabindex={isFaded ? -1 : 0}
                   onclick={() => clickNode(n)}
                   ondblclick={() => dblClickNode(n)}
                   onkeydown={(ev) => ev.key === 'Enter' && dblClickNode(n)}
@@ -1231,7 +1352,13 @@
                       >
                     {/if}
                   {:else}
-                    {@const nodeColors = getNodeColors(n.id, rootId, nodes)}
+                    {@const nodeColors = getNodeColors(
+                      n.id,
+                      rootId,
+                      nodes,
+                      colorMode,
+                      countryRanks
+                    )}
                     {@const circlePad = Math.round(nodeR * 0.18)}
                     {@const visualR =
                       n.r -
@@ -1314,192 +1441,48 @@
         {/if}
       </div>
 
-      <!-- Side panel — 3 sections matching Observable's tables-container -->
       {#if !compact}
-        <div class="panel" class:open={panelOpen} style="opacity: {entranceAnimDone ? 1 : 0}">
-          <button class="panel-toggle" onclick={() => (panelOpen = !panelOpen)}>
-            {ownersList.length} owner{ownersList.length !== 1 ? 's' : ''}
-            {panelOpen ? '▲' : '▼'}
-          </button>
-
-          <!-- Section 1: Owner Entities -->
-          <div class="tabular-section">
-            <h4>Owner Entities</h4>
-            <div class="tabular-rows">
-              {#each sortedOwnersList as o}
-                {@const _rowColors = getNodeColors(o.id, rootId, nodes)}
-                {@const inFrozenChain =
-                  !frozenNodeData ||
-                  frozenId === o.id ||
-                  frozenNodeData.nodesTouched.includes(o.id)}
-                <div
-                  class="tabular-row"
-                  class:is-frozen-view={frozenId === o.id}
-                  class:is-hovered-view={hoveredId === o.id && frozenId !== o.id}
-                  class:faded={frozenNodeData && !inFrozenChain}
-                  class:tease-connection={hoverSource === 'graph' &&
-                    teaseNode.ownerId === o.nid &&
-                    frozenId !== o.id}
-                  role="button"
-                  tabindex="0"
-                  onmouseenter={() => {
-                    if (frozenId && !isNodeInFrozenPath(o.id)) return;
-                    hoverSource = 'panel';
-                    hoveredId = o.id;
-                    hoveredNodeData = pathsTouchedMap.get(o.nid) || null;
-                  }}
-                  onmouseleave={handleNodeLeave}
-                  onclick={() => {
-                    if (frozenId === o.id) {
-                      frozenId = null;
-                      frozenNodeData = null;
-                    } else {
-                      frozenId = o.id;
-                      frozenNodeData = pathsTouchedMap.get(o.nid) || null;
-                      hasEverFrozen = true;
-                    }
-                  }}
-                  ondblclick={() => {
-                    const u = entityLink(o.nid);
-                    onNavigate ? onNavigate(u) : goto(u);
-                  }}
-                  onkeydown={(ev) => {
-                    if (ev.key === 'Enter') {
-                      const u = entityLink(o.nid);
-                      onNavigate ? onNavigate(u) : goto(u);
-                    }
-                  }}
-                >
-                  <span class="table-row-text">{o.name} ({o.pct.toFixed(1)}%)</span>
-                </div>
-              {/each}
-            </div>
-          </div>
-
-          <!-- Section 2: By Headquarter Country -->
-          {#if ownersByCountry.length > 0}
-            <div class="tabular-section">
-              <h4>By Headquarter Country</h4>
-              <div class="tabular-rows">
-                {#each ownersByCountry as [country, data]}
-                  <div
-                    class="tabular-row"
-                    class:is-frozen-view={frozenNodeData &&
-                      frozenNodeData.nodesTouched.length > 0 &&
-                      data.ids.every((id: string) => frozenNodeData!.nodesTouched.includes(id)) &&
-                      data.ids.some(
-                        (id: string) => frozenId === id || frozenNodeData!.nodesTouched.includes(id)
-                      )}
-                    class:tease-connection={hoverSource === 'graph' &&
-                      teaseNode.country === country}
-                    role="button"
-                    tabindex="0"
-                    onmouseenter={() => {
-                      if (frozenId) return;
-                      hoverSource = 'panel';
-                      hoveredId = data.ids[0] || null;
-                      hoveredNodeData =
-                        data.ids.length > 0 ? { nodesTouched: data.ids, edgeIndices: [] } : null;
-                    }}
-                    onmouseleave={handleNodeLeave}
-                    onclick={() => {
-                      if (frozenId && data.ids.includes(frozenId)) {
-                        frozenId = null;
-                        frozenNodeData = null;
-                      } else {
-                        frozenId = data.ids[0] || null;
-                        frozenNodeData =
-                          data.ids.length > 0 ? { nodesTouched: data.ids, edgeIndices: [] } : null;
-                        hasEverFrozen = true;
-                      }
-                    }}
-                  >
-                    <span class="table-row-text"
-                      >{country} ({data.count} owner{data.count !== 1 ? 's' : ''})</span
-                    >
-                  </div>
-                {/each}
-              </div>
-            </div>
-          {/if}
-
-          <!-- Section 3: By Entity Type -->
-          {#if ownersByType.length > 0}
-            <div class="tabular-section">
-              <h4>By Entity Type</h4>
-              <div class="tabular-rows">
-                {#each ownersByType as [type, data]}
-                  <div
-                    class="tabular-row"
-                    class:tease-connection={hoverSource === 'graph' &&
-                      teaseNode.entityType === type}
-                    role="button"
-                    tabindex="0"
-                    onmouseenter={() => {
-                      if (frozenId) return;
-                      hoverSource = 'panel';
-                      hoveredId = data.ids[0] || null;
-                      hoveredNodeData =
-                        data.ids.length > 0 ? { nodesTouched: data.ids, edgeIndices: [] } : null;
-                    }}
-                    onmouseleave={handleNodeLeave}
-                    onclick={() => {
-                      if (frozenId && data.ids.includes(frozenId)) {
-                        frozenId = null;
-                        frozenNodeData = null;
-                      } else {
-                        frozenId = data.ids[0] || null;
-                        frozenNodeData =
-                          data.ids.length > 0 ? { nodesTouched: data.ids, edgeIndices: [] } : null;
-                        hasEverFrozen = true;
-                      }
-                    }}
-                  >
-                    <span class="table-row-text"
-                      >{type} ({data.count} owner{data.count !== 1 ? 's' : ''})</span
-                    >
-                  </div>
-                {/each}
-              </div>
-            </div>
-          {/if}
-        </div>
+        <OwnershipPanel
+          {ownersList}
+          {sortedOwnersList}
+          {ownersByCountry}
+          {ownersByType}
+          {nodes}
+          {rootId}
+          {hoveredId}
+          {frozenId}
+          {frozenNodeData}
+          {hoverSource}
+          {teaseNode}
+          {fadedNodeIds}
+          {pathsTouchedMap}
+          {colorMode}
+          {countryRanks}
+          {panelOpen}
+          {entranceAnimDone}
+          {hasEverFrozen}
+          {onNavigate}
+          onHover={handlePanelHover}
+          onLeave={handleNodeLeave}
+          onFreeze={handlePanelFreeze}
+          onTogglePanel={() => (panelOpen = !panelOpen)}
+          {isNodeInFrozenPath}
+        />
       {/if}
 
-      <!-- Tooltip -->
-      {#if hoverSource === 'graph' && hoveredId && hoveredGraphNode}
-        {@const isAsset = hoveredGraphNode.type === 'asset' || hoveredId === rootId}
-        {@const pct = hoveredLayoutNode?.pct ?? 0}
-        <div
-          class="tooltip"
-          class:frozen={frozenId === hoveredId}
-          style="left: {tooltipX}px; top: {tooltipY}px;"
-        >
-          {#if frozenId === hoveredId}
-            <div class="tooltip-pinned">Pinned</div>
-          {/if}
-          <div class="tooltip-name">
-            {hoveredGraphNode.name || hoveredGraphNode.Name || hoveredId}
-          </div>
-          {#if hoveredGraphNode.headquarters_country}
-            <div class="tooltip-detail">{hoveredGraphNode.headquarters_country}</div>
-          {/if}
-          {#if hoveredGraphNode.entity_type}
-            <div class="tooltip-detail">{hoveredGraphNode.entity_type}</div>
-          {/if}
-          <div class="tooltip-detail">
-            {isAsset ? 'Asset' : 'Entity'}{#if !isAsset && pct > 0}
-              &middot; {pct.toFixed(1)}%{/if}
-          </div>
-          {#if isLargeGraph}
-            <div class="tooltip-hint">Drag to pan · Ctrl/Cmd + wheel to zoom</div>
-          {:else if frozenId && hoveredId === frozenId}
-            <div class="tooltip-hint">Click to unpin · Double-click to open</div>
-          {:else if !hasEverFrozen && !frozenId}
-            <div class="tooltip-hint">Click to pin</div>
-          {/if}
-        </div>
-      {/if}
+      <OwnershipTooltip
+        {hoveredId}
+        {hoveredGraphNode}
+        {hoveredLayoutNode}
+        {frozenId}
+        {hasEverFrozen}
+        {hoverSource}
+        {tooltipX}
+        {tooltipY}
+        {isLargeGraph}
+        {rootId}
+        {edges}
+      />
     </div>
 
     <!-- Context narrative -->
@@ -1601,17 +1584,6 @@
   }
 
   /* Staggered entrance animation — nodes pop in, edges fade in */
-  .node.entrance {
-    animation: node-enter 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-  }
-  .node.entrance circle,
-  .node.entrance rect {
-    animation: shape-enter 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-    animation-delay: inherit;
-  }
-  .edge.entrance {
-    animation: edge-enter 0.4s ease-out both;
-  }
   @keyframes node-enter {
     from {
       opacity: 0;
@@ -1730,95 +1702,41 @@
     dominant-baseline: hanging;
   }
 
-  /* Side panel — matches Observable's #tables-container */
-  .panel {
-    background: var(--tree-warm-white);
-    border-left: 2px solid var(--tree-teal);
-    padding: 20px;
+  /* Focus indicator — visible when a path is pinned */
+  .focus-indicator {
     display: flex;
-    flex-direction: column;
-    gap: 20px;
-    min-width: 200px;
-    max-width: 260px;
-    align-self: flex-start;
-    max-height: 600px;
-    overflow-y: auto;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 10px;
+    background: rgba(0, 79, 97, 0.08);
+    border: 1px solid rgba(0, 79, 97, 0.15);
+    border-radius: 4px;
+    font-size: 0.75rem;
+    color: var(--tree-navy, #1d4961);
+    margin-bottom: 6px;
+    animation: tooltip-in 0.15s ease-out;
   }
-  .panel.entrance {
-    animation: panel-enter 0.5s ease-out 0.5s both;
-  }
-  @keyframes panel-enter {
-    from {
-      opacity: 0;
-      transform: translateX(12px);
-    }
-    to {
-      opacity: 1;
-      transform: translateX(0);
-    }
-  }
-  .full-width .panel {
-    min-width: 0;
-    max-width: none;
-    width: 100%;
-    padding: 20px;
-    border-left: none;
-    border-top: 2px solid var(--tree-teal);
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 20px 30px;
-  }
-  .tabular-section {
-    min-width: 0;
-  }
-  .full-width .tabular-section {
+  .focus-label {
     flex: 1;
-    min-width: 180px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
-  .panel h4 {
-    margin: 0 0 6px;
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--tree-navy);
-  }
-  .tabular-rows {
-    max-height: 160px;
-    overflow-y: auto;
-  }
-  .tabular-row {
-    font-size: 0.8rem;
-    line-height: 1.2;
+  .focus-clear {
+    background: none;
+    border: none;
+    color: var(--tree-teal, #004f61);
     cursor: pointer;
-    padding: 2px 0;
-    color: var(--tree-navy);
-    transition:
-      font-weight 0.15s ease-out,
-      opacity 0.2s ease-out;
+    font-size: 14px;
+    line-height: 1;
+    padding: 2px 4px;
+    border-radius: 3px;
+    opacity: 0.6;
   }
-  .tabular-row:hover,
-  .tabular-row.is-hovered-view {
-    text-decoration: underline;
-  }
-  .tabular-row.is-frozen-view {
-    font-weight: bold;
-  }
-  .tabular-row.faded {
-    opacity: 0.35;
-  }
-  .table-row-text {
-    pointer-events: none;
-  }
-  /* Observable's tease-connection: when hovering a graph node,
-     the matching rows across all 3 sidebar sections get a mint bullet */
-  .tabular-row.tease-connection {
-    font-weight: 600;
-  }
-  .tabular-row.tease-connection > .table-row-text::before {
-    content: '•';
-    color: var(--tree-mint);
-    margin-right: 4px;
+  .focus-clear:hover {
+    opacity: 1;
+    background: rgba(0, 79, 97, 0.1);
   }
 
   /* Color toggle & legend */
@@ -1828,6 +1746,15 @@
     align-items: center;
     gap: 12px;
     margin-bottom: 8px;
+  }
+  .color-mode-select {
+    font-size: 0.75rem;
+    padding: 2px 6px;
+    border: 1px solid var(--tree-edge-imputed, #dce3e5);
+    border-radius: 4px;
+    background: var(--tree-warm-white, #f2f2eb);
+    color: var(--tree-navy, #1d4961);
+    cursor: pointer;
   }
   .ownership-slider {
     display: flex;
@@ -1916,60 +1843,6 @@
     height: 8px;
   }
 
-  /* Tooltip */
-  .tooltip {
-    position: absolute;
-    z-index: 10;
-    background: rgba(29, 73, 97, 0.92); /* navy with opacity */
-    color: white;
-    padding: 6px 10px;
-    border-radius: 4px;
-    font-size: 11px;
-    line-height: 1.4;
-    pointer-events: none;
-    white-space: nowrap;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-    max-width: 250px;
-    animation: tooltip-in 0.15s ease-out;
-  }
-  @keyframes tooltip-in {
-    from {
-      opacity: 0;
-      transform: translateY(4px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-  .tooltip-name {
-    font-weight: 600;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .tooltip-detail {
-    font-size: 10px;
-    opacity: 0.8;
-  }
-  .tooltip.frozen {
-    border-color: var(--tree-teal);
-    background: rgba(0, 79, 97, 0.95); /* teal with opacity */
-  }
-  .tooltip-pinned {
-    font-size: 9px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    opacity: 0.6;
-    margin-bottom: 2px;
-  }
-  .tooltip-hint {
-    font-size: 9px;
-    opacity: 0.5;
-    margin-top: 3px;
-    font-style: italic;
-  }
-
   .narrative {
     font-size: 12px;
     line-height: 1.5;
@@ -1990,20 +1863,7 @@
     margin-bottom: 0;
   }
 
-  /* Panel toggle — hidden on desktop */
-  .panel-toggle {
-    display: none;
-    width: 100%;
-    padding: 8px 12px;
-    font-size: 12px;
-    font-weight: 500;
-    background: var(--color-bg-secondary, #f5f5f5);
-    border: 1px solid var(--color-border, #e0e0e0);
-    border-radius: 6px;
-    cursor: pointer;
-    color: var(--color-text-primary, #1d4961);
-    margin-bottom: 6px;
-  }
+  /* Panel toggle — moved to OwnershipPanel.svelte */
 
   /* Mobile responsive */
   @media (max-width: 768px) {
@@ -2018,28 +1878,6 @@
     }
     .graph-wrap > svg {
       min-height: 250px;
-    }
-    .panel {
-      min-width: unset;
-      max-width: unset;
-      width: 100%;
-      padding: 12px;
-      border-left: none;
-      border-top: 2px solid var(--tree-teal);
-      flex-direction: column;
-    }
-    .panel-toggle {
-      display: block;
-    }
-    .panel .tabular-section {
-      display: none;
-    }
-    .panel.open .tabular-section {
-      display: block;
-    }
-    .tooltip {
-      max-width: 200px;
-      white-space: normal;
     }
     .graph-controls {
       gap: 8px;

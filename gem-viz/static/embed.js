@@ -69,7 +69,10 @@
     '@keyframes gem-spin{to{transform:rotate(360deg)}}' +
     '.' + EMBED_CLASS + '-timeout{text-align:center;padding:20px;font-family:system-ui,sans-serif;' +
     'font-size:13px;color:#64748b}' +
-    '.' + EMBED_CLASS + '-timeout a{color:#1d4961;text-decoration:underline}';
+    '.' + EMBED_CLASS + '-timeout a{color:#1d4961;text-decoration:underline}' +
+    '.' + EMBED_CLASS + '-error{text-align:center;padding:20px;font-family:system-ui,sans-serif;' +
+    'font-size:13px;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:4px}' +
+    '.' + EMBED_CLASS + '-error small{display:block;margin-top:6px;font-size:11px;color:#6b7280}';
   document.head.appendChild(style);
 
   var showLoading = function (container, height) {
@@ -77,6 +80,16 @@
     el.className = EMBED_CLASS + '-loading';
     el.style.height = (height || 200) + 'px';
     el.innerHTML = '<div class="gem-spinner"></div><span>Loading visualization\u2026</span>';
+    container.appendChild(el);
+  };
+
+  var showError = function (container, message) {
+    container.innerHTML = '';
+    var el = document.createElement('div');
+    el.className = EMBED_CLASS + '-error';
+    el.innerHTML =
+      '<p>Unable to load visualization</p>' +
+      (message ? '<small>' + message + '</small>' : '');
     container.appendChild(el);
   };
 
@@ -124,7 +137,8 @@
     if (container.getAttribute('data-gem-initialized')) return;
     container.setAttribute('data-gem-initialized', 'true');
 
-    var embedId = container.getAttribute('data-embed-id') || 'gem-embed-' + (index + 1);
+    var embedId = container.getAttribute('data-embed-id') ||
+      ('gem-embed-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7));
     container.setAttribute('data-embed-id', embedId);
 
     var height = container.getAttribute('data-height') || '400';
@@ -197,7 +211,7 @@
   // IFRAME MODE (existing behavior)
   // ==========================================================================
 
-  var createIframe = function (container, index) {
+  var createIframe = function (container, _index) {
     var dataSrc = container.getAttribute('data-src');
     if (!dataSrc) return;
 
@@ -205,7 +219,8 @@
     if (container.getAttribute('data-gem-initialized')) return;
     container.setAttribute('data-gem-initialized', 'true');
 
-    var embedId = container.getAttribute('data-embed-id') || 'gem-embed-' + (index + 1);
+    var embedId = container.getAttribute('data-embed-id') ||
+      ('gem-embed-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7));
     container.setAttribute('data-embed-id', embedId);
 
     var width = container.getAttribute('data-width') || '100%';
@@ -328,7 +343,7 @@
   var embedCounter = 0;
 
   var initContainer = function (container) {
-    var mode = (container.getAttribute('data-mode') || 'iframe').toLowerCase();
+    var mode = (container.getAttribute('data-mode') || 'dynamic').toLowerCase();
     if (mode === 'dynamic') {
       createDynamic(container, embedCounter++);
     } else {
@@ -355,6 +370,10 @@
       embeds.forEach(function (container) {
         if (container.getAttribute('data-gem-initialized')) return;
         observer.observe(container);
+      });
+      window.__gemEmbedObserver = observer;
+      window.addEventListener('beforeunload', function () {
+        observer.disconnect();
       });
     } else {
       // Fallback: init all immediately
@@ -384,7 +403,29 @@
       iframe.setAttribute('height', '' + height);
     }
 
-    // Mark as loaded on any message from the embed
+    if (data.type === 'ready') {
+      if (!loadedEmbeds[embedId]) {
+        loadedEmbeds[embedId] = true;
+        var loadingReady = container.querySelector('.' + EMBED_CLASS + '-loading');
+        if (loadingReady) loadingReady.remove();
+        iframe.style.opacity = '1';
+      }
+      if (window.__GEM_EMBED_DEBUG__) {
+        console.log('[GEM Embed] ready', embedId, data.route);
+      }
+      return;
+    }
+
+    if (data.type === 'error') {
+      // Cancel the timeout, mark as loaded (to prevent timeout overlay), show error UI
+      loadedEmbeds[embedId] = true;
+      showError(container, data.message || '');
+      // Keep iframe hidden behind error UI
+      iframe.style.display = 'none';
+      return;
+    }
+
+    // Mark as loaded on any message from the embed (resize or unknown)
     if (!loadedEmbeds[embedId]) {
       loadedEmbeds[embedId] = true;
       var loading = container.querySelector('.' + EMBED_CLASS + '-loading');

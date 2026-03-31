@@ -43,6 +43,24 @@
       ],
     },
     {
+      name: 'Coal Data Explorer',
+      slug: 'coal-data-explorer',
+      desc: 'Sentence-based query builder for coal plants & mines with filters, summary stats, and data table.',
+      key: 'tracker',
+      val: 'coal-plant',
+      h: 800,
+      params: [
+        { k: 'tracker', d: 'coal-plant, coal-mine (comma-separated)' },
+        { k: 'filter.status', d: 'operating, construction, etc.' },
+        { k: 'filter.country_area', d: 'Country name' },
+      ],
+      samples: [
+        { label: 'All coal plants', val: 'coal-plant' },
+        { label: 'Coal mines', val: 'coal-mine' },
+        { label: 'Both', val: 'coal-plant,coal-mine' },
+      ],
+    },
+    {
       name: 'Coal Plant Card',
       slug: 'coal-plant',
       desc: 'Six-tab coal plant detail: overview, timeline, coal, emissions, ownership, additional.',
@@ -215,7 +233,7 @@
     const p = w.hash ? `/embed/${w.slug}#${w.hash}` : `/embed/${w.slug}?${w.key}=${activeVal(w)}`;
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     return (
-      `<div class="gem-embed" data-src="${p}" data-height="${w.h}">\n<script src="${origin}/embed.js"><` +
+      `<div class="gem-embed" data-src="${p}" data-height="${w.h}" data-mode="dynamic">\n<script src="${origin}/embed.js"><` +
       `/script>\n</div>`
     );
   }
@@ -300,9 +318,11 @@
 
           <h3>Parameters</h3>
           <table class="meta-params">
-            {#each w.params as p}
-              <tr><td><code>{p.k}</code></td><td>{p.d}</td></tr>
-            {/each}
+            <tbody>
+              {#each w.params as p}
+                <tr><td><code>{p.k}</code></td><td>{p.d}</td></tr>
+              {/each}
+            </tbody>
           </table>
 
           <h3>Embed Code</h3>

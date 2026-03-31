@@ -11,6 +11,7 @@
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
   import ControlChainApp from '$lib/components/controlchain/ControlChainApp.svelte';
+  import { readHash, writeHash } from '../embed-utils';
 
   const qParam = $page.url.searchParams.get('q') || '';
   const typeParam = $page.url.searchParams.get('type') || 'all';
@@ -19,20 +20,8 @@
   let initialType = $state(typeParam);
   let mounted = $state(false);
 
-  function readHash() {
-    if (typeof window === 'undefined') return {};
-    const raw = window.location.hash.slice(1);
-    if (!raw) return {};
-    return Object.fromEntries(new URLSearchParams(raw));
-  }
-
-  function writeHash(q, type) {
-    if (typeof window === 'undefined') return;
-    const p = new URLSearchParams();
-    if (q) p.set('q', q);
-    if (type && type !== 'all') p.set('type', type);
-    const s = p.toString();
-    history.replaceState(null, '', s ? `#${s}` : location.pathname + location.search);
+  function handleStateChange(q, type) {
+    writeHash({ q: q || null, type: type !== 'all' ? type : null });
   }
 
   onMount(() => {
@@ -50,7 +39,7 @@
 
 <div class="cc-embed-wrap">
   {#if mounted}
-    <ControlChainApp {initialQuery} {initialType} onStateChange={writeHash} />
+    <ControlChainApp {initialQuery} {initialType} onStateChange={handleStateChange} />
   {/if}
 </div>
 

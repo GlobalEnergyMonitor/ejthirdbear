@@ -23,10 +23,17 @@
     try {
       const index = await fetchCatalogIndex();
       if (index?.trackers?.length) {
-        const slugs = index.trackers
+        const apiSlugs = index.trackers
           .map((t) => CATALOG_SLUG_TO_URL_SLUG[t.slug])
           .filter((s): s is string => !!s && !!trackerMetadata[s]);
-        if (slugs.length) availableTrackerSlugs = slugs;
+        if (apiSlugs.length) {
+          // API-ordered trackers first, then remaining hardcoded trackers alphabetically
+          const apiSet = new Set(apiSlugs);
+          const remaining = Object.keys(trackerMetadata)
+            .filter((s) => !apiSet.has(s))
+            .sort((a, b) => trackerMetadata[a].name.localeCompare(trackerMetadata[b].name));
+          availableTrackerSlugs = [...apiSlugs, ...remaining];
+        }
       }
     } catch {
       // keep hardcoded fallback
@@ -76,15 +83,12 @@
       {@const count = trackerCounts.get(meta.name)}
       {@const color = getTrackerColor(meta.name)}
       <a href={link(`fieldguide/${slug}`)} class="tracker-card" style="--tracker-color: {color}">
-        <div class="card-accent"></div>
         <div class="card-content">
           <h2>{meta.name}</h2>
           <p class="description">{meta.description}</p>
-          <div class="card-meta">
-            {#if count && count > 0}
-              <span class="asset-count">{formatNumber(count)} assets</span>
-            {/if}
-          </div>
+          {#if count && count > 0}
+            <p class="asset-count">{formatNumber(count)} assets</p>
+          {/if}
         </div>
         <div class="card-footer">
           <span class="view-link">View FieldGuide</span>
@@ -123,6 +127,7 @@
     flex-direction: column;
     background: var(--color-bg-primary);
     border: 1px solid var(--color-border);
+    border-top: 4px solid var(--tracker-color);
     border-radius: var(--radius-md);
     overflow: hidden;
     text-decoration: none;
@@ -135,11 +140,6 @@
   .tracker-card:hover {
     transform: translateY(-2px);
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
-  }
-
-  .card-accent {
-    height: 4px;
-    background: var(--tracker-color);
   }
 
   .card-content {
@@ -163,19 +163,14 @@
     margin: 0 0 var(--space-3) 0;
   }
 
-  .card-meta {
-    display: flex;
-    gap: var(--space-4);
-    font-size: var(--font-size-xs);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--color-text-tertiary);
-  }
-
   .asset-count {
     color: var(--tracker-color);
     font-weight: 600;
     font-variant-numeric: tabular-nums;
+    font-size: var(--font-size-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 0;
   }
 
   .card-footer {

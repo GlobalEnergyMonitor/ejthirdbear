@@ -5,6 +5,14 @@
 
 import { streamOwnerPortfolio, type SpotlightOwnerData } from '$lib/ownership-data';
 
+// PARAM NAMING CONVENTION
+// Routes that display an asset OR entity use `id` (generic):
+//   /embed/asset, /embed/entity, /embed/coal-plant, /embed/project-card
+// Routes that display entity-specific visualizations use `entityId`:
+//   /embed/ownership-flower, /embed/ownership-graph, /embed/asset-ring,
+//   /embed/ultimate-owners, /embed/network-3d
+// Hash state mirrors these exact param names.
+
 /** Portfolio shape expected by OwnershipFlower and other components */
 export type EmbedPortfolio = SpotlightOwnerData;
 
@@ -63,4 +71,31 @@ export function intParam(value: string | null, defaultValue: number): number {
 export function boolParam(value: string | null, defaultValue = true): boolean {
   if (value === null) return defaultValue;
   return value !== 'false';
+}
+
+/**
+ * Read URL hash as a key-value map.
+ * Safe to call during SSR (returns empty object on server).
+ * Used by embed routes to support Drupal-safe deep-linking.
+ */
+export function readHash(): Record<string, string> {
+  if (typeof window === 'undefined') return {};
+  const raw = window.location.hash.slice(1);
+  if (!raw) return {};
+  return Object.fromEntries(new URLSearchParams(raw));
+}
+
+/**
+ * Write key-value pairs to URL hash without changing the parent page URL.
+ * Pass null/undefined values to omit them from the hash.
+ * Safe to call during SSR (no-op on server).
+ */
+export function writeHash(params: Record<string, string | null | undefined>): void {
+  if (typeof window === 'undefined') return;
+  const p = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value != null && value !== '') p.set(key, value);
+  }
+  const s = p.toString();
+  history.replaceState(null, '', s ? `#${s}` : location.pathname + location.search);
 }
