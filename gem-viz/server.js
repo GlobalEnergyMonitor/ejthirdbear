@@ -11,8 +11,9 @@ import { handler } from './build/handler.js';
 const PORT = process.env.PORT || 3000;
 
 const server = createServer((req, res) => {
-  // Add COEP/COOP to all responses EXCEPT embed routes
-  const isEmbed = req.url?.startsWith('/embed');
+  // Add COEP/COOP to all responses EXCEPT embed/widget routes (used cross-origin)
+  const url = req.url || '';
+  const isEmbed = url.startsWith('/embed') || url.startsWith('/widgets') || url === '/embed.js';
   if (!isEmbed) {
     res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
     res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
