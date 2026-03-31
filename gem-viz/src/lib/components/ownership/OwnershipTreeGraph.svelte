@@ -7,6 +7,7 @@
   import { onMount, tick } from 'svelte';
   import { spring } from 'svelte/motion';
   import { goto } from '$app/navigation';
+  import { browser } from '$app/environment';
   import { entityLink, assetLink } from '$lib/links';
   import { track } from '$lib/analytics';
   import { sum } from 'd3-array';
@@ -43,6 +44,37 @@
     type ColorMode,
   } from './ownership-tree-utils';
   import { buildNarrativeText } from './ownership-tree-narrative';
+
+  // --- URL hash state helpers (merge-friendly, namespaced with tree_ prefix) ---
+  const HASH_KEYS = { color: 'tree_color', min: 'tree_min', focus: 'tree_focus' } as const;
+
+  function readTreeHash(): { color?: ColorMode; min?: number; focus?: string } {
+    if (!browser) return {};
+    const raw = window.location.hash.slice(1);
+    if (!raw) return {};
+    const p = new URLSearchParams(raw);
+    const result: { color?: ColorMode; min?: number; focus?: string } = {};
+    const c = p.get(HASH_KEYS.color);
+    if (c === 'entity-type' || c === 'country') result.color = c;
+    const m = p.get(HASH_KEYS.min);
+    if (m != null) { const n = parseInt(m, 10); if (!Number.isNaN(n)) result.min = n; }
+    const f = p.get(HASH_KEYS.focus);
+    if (f) result.focus = f;
+    return result;
+  }
+
+  function writeTreeHash(color: ColorMode, min: number, focus: string | null): void {
+    if (!browser) return;
+    const existing = new URLSearchParams(window.location.hash.slice(1));
+    if (color !== 'entity-type') existing.set(HASH_KEYS.color, color);
+    else existing.delete(HASH_KEYS.color);
+    if (min > 0) existing.set(HASH_KEYS.min, String(min));
+    else existing.delete(HASH_KEYS.min);
+    if (focus) existing.set(HASH_KEYS.focus, focus);
+    else existing.delete(HASH_KEYS.focus);
+    const s = existing.toString();
+    history.replaceState(null, '', s ? `#${s}` : location.pathname + location.search);
+  }
 
   interface Props {
     nodes?: GraphNode[];
@@ -95,6 +127,7 @@
   let frozenMeta = $state<FrozenMeta | null>(null);
   let frozenNodeData = $state<{ nodesTouched: string[]; edgeIndices: number[] } | null>(null);
   let hasEverFrozen = $state(false);
+  let hasAutoFit = false;
   let tooltipX = $state(0);
   let tooltipY = $state(0);
   let viewportWidth = $state(1280);
@@ -224,6 +257,9 @@
 
   // Color-by mode — entity-type or country
   let colorMode = $state<ColorMode>('entity-type');
+
+  // Whether the URL hash provided an explicit colorMode (prevents auto-detect from overriding)
+  let hashInitializedColor = $state(false);
 
   // Layout always uses ALL nodes — filter only dims, doesn't rebuild dagre
   const renderNodes = $derived(renderSubset.nodes);
@@ -527,6 +563,8 @@
   const uniqueCountries = $derived(new Set(ownersList.map((o) => o.country).filter(Boolean)).size);
 
   $effect(() => {
+    // Skip auto-detect if URL hash provided an explicit colorMode
+    if (hashInitializedColor) return;
     if (uniqueEntityTypes <= 1 && uniqueCountries > 1) {
       colorMode = 'country';
     } else {
@@ -1046,8 +1084,28 @@
     zoomSpring.set(next);
   }
 
+  /** Calculate the zoom level that fits the full graph inside the container */
+  function calcFitZoom(): number {
+    if (!graphWrapEl) return 1;
+    const rect = graphWrapEl.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return 1;
+    // Don't zoom in past 1x, but zoom out so the whole tree is visible
+    return Math.max(ZOOM.min, Math.min(1, rect.width / fullW, rect.height / fullH));
+  }
+
+  /** Apply auto-fit zoom once after initial layout + entrance animation */
+  function applyAutoFit() {
+    if (hasAutoFit || compact) return;
+    hasAutoFit = true;
+    const fitZoom = calcFitZoom();
+    if (fitZoom < 1) {
+      zoomSpring.set(fitZoom, { hard: true });
+    }
+  }
+
   function resetView() {
-    zoomSpring.set(1);
+    const fitZoom = calcFitZoom();
+    zoomSpring.set(fitZoom);
     panXSpring.set(0);
     panYSpring.set(0);
   }
@@ -1060,6 +1118,7 @@
     const container = graphWrapEl?.closest('.ownership-tree');
     if (!container) {
       entranceAnimDone = true;
+      applyAutoFit();
       return;
     }
 
@@ -1139,10 +1198,12 @@
           (el as HTMLElement).style.removeProperty('transform');
         });
         if (panel) (panel as HTMLElement).style.removeProperty('opacity');
+        applyAutoFit();
       });
     } catch {
       // anime.js failed to load — skip animation
       entranceAnimDone = true;
+      applyAutoFit();
     }
   }
 
@@ -1152,6 +1213,14 @@
     };
     onResize();
     window.addEventListener('resize', onResize, { passive: true });
+
+    // Restore state from URL hash (only when not in compact mode)
+    if (!compact) {
+      const h = readTreeHash();
+      if (h.color) { colorMode = h.color; hashInitializedColor = true; }
+      if (h.min != null) minOwnershipPct = h.min;
+      if (h.focus) frozenId = h.focus;
+    }
 
     void (async () => {
       try {
@@ -1169,6 +1238,16 @@
     return () => {
       window.removeEventListener('resize', onResize);
     };
+  });
+
+  // Sync tree state to URL hash (only when not in compact mode)
+  $effect(() => {
+    if (compact || !browser) return;
+    const _color = colorMode;
+    const _min = minOwnershipPct;
+    const _focus = frozenId;
+    if (!ready) return;
+    writeTreeHash(_color, _min, _focus);
   });
 
   // Re-run layout when data changes
@@ -1308,6 +1387,70 @@
               }}
               aria-label="Clear focus">&#10005;</button
             >
+          </div>
+          <div class="frozen-detail-card">
+            {#if isAssetNode}
+              <div class="fdc-name">{frozenName}</div>
+              <div class="fdc-meta">
+                {frozenNode?.asset_type || frozenNode?.assetType || 'Asset'}
+                {#if frozenNode?.operating_status || frozenNode?.status}
+                  <span class="fdc-sep">&middot;</span>
+                  {frozenNode?.operating_status || frozenNode?.status}
+                {/if}
+              </div>
+              {#if frozenNode?.country}
+                <div class="fdc-meta">{frozenNode.country}</div>
+              {/if}
+              {#if frozenNode?.capacity_value}
+                <div class="fdc-meta">{frozenNode.capacity_value} {frozenNode.capacity_unit || 'MW'}</div>
+              {/if}
+              <a
+                class="fdc-link"
+                href={assetLink(frozenId)}
+                onclick={(e) => {
+                  if (onNavigate) {
+                    e.preventDefault();
+                    onNavigate(assetLink(frozenId));
+                  }
+                }}
+              >View asset profile &rarr;</a>
+            {:else}
+              <div class="fdc-name">{frozenName}</div>
+              <div class="fdc-meta">
+                {frozenOwnerCategory}
+                {#if frozenNode?.legal_entity_type}
+                  <span class="fdc-sep">&middot;</span>
+                  {frozenNode.legal_entity_type}
+                {/if}
+              </div>
+              {#if frozenHqParts.length > 0}
+                <div class="fdc-meta fdc-hq">{frozenHqParts.join(' \u00b7 ')}</div>
+              {/if}
+              {#if frozenPct > 0}
+                <div class="fdc-ownership">
+                  <span class="fdc-pct">{frozenPct.toFixed(1)}%</span>
+                  <span class="fdc-pct-label">cumulative</span>
+                  {#if frozenDirectPct > 0 && Math.abs(frozenDirectPct - frozenPct) > 0.05}
+                    <span class="fdc-sep">&middot;</span>
+                    <span class="fdc-pct">{frozenDirectPct.toFixed(1)}%</span>
+                    <span class="fdc-pct-label">direct{#if frozenEdge?.imputed_share} (est.){/if}</span>
+                  {/if}
+                </div>
+              {/if}
+              {#if frozenPathCount > 1}
+                <div class="fdc-paths">{frozenPathCount} ownership paths to this entity</div>
+              {/if}
+              <a
+                class="fdc-link"
+                href={entityLink(frozenNode?.entity_id || frozenId)}
+                onclick={(e) => {
+                  if (onNavigate) {
+                    e.preventDefault();
+                    onNavigate(entityLink(frozenNode?.entity_id || frozenId));
+                  }
+                }}
+              >View full profile &rarr;</a>
+            {/if}
           </div>
         {/if}
         <div
@@ -1927,6 +2070,81 @@
   .focus-clear:hover {
     opacity: 1;
     background: rgba(0, 79, 97, 0.1);
+  }
+
+  /* Frozen detail card — expanded info when a node is pinned */
+  .frozen-detail-card {
+    padding: 8px 12px;
+    background: var(--tree-warm-white, #f2f2eb);
+    border: 1px solid rgba(0, 79, 97, 0.12);
+    border-radius: 6px;
+    margin-bottom: 8px;
+    animation: fdc-enter 0.2s ease-out;
+  }
+  @keyframes fdc-enter {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .fdc-name {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--tree-navy, #1d4961);
+    line-height: 1.3;
+    margin-bottom: 2px;
+  }
+  .fdc-meta {
+    font-size: 0.72rem;
+    color: var(--tree-teal, #004f61);
+    opacity: 0.85;
+    line-height: 1.4;
+  }
+  .fdc-sep {
+    opacity: 0.5;
+    margin: 0 2px;
+  }
+  .fdc-ownership {
+    font-size: 0.72rem;
+    margin-top: 4px;
+    color: var(--tree-navy, #1d4961);
+    display: flex;
+    align-items: baseline;
+    gap: 3px;
+    flex-wrap: wrap;
+  }
+  .fdc-pct {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--tree-teal, #004f61);
+  }
+  .fdc-pct-label {
+    opacity: 0.7;
+    font-size: 0.68rem;
+  }
+  .fdc-paths {
+    font-size: 0.68rem;
+    margin-top: 3px;
+    color: var(--tree-navy, #1d4961);
+    opacity: 0.65;
+  }
+  .fdc-link {
+    display: inline-block;
+    font-size: 0.68rem;
+    margin-top: 5px;
+    color: var(--tree-teal, #004f61);
+    text-decoration: none;
+    font-weight: 600;
+    opacity: 0.8;
+    transition: opacity 0.1s;
+  }
+  .fdc-link:hover {
+    opacity: 1;
+    text-decoration: underline;
   }
 
   /* Color toggle & legend */
