@@ -485,23 +485,25 @@
           out:fade={{ duration: 120 }}
         >
           {#if isLastStep || canFinishNow}
-            {#if !isLastStep}
-              <button class="footer-btn geo-opt-in" onclick={() => goToStep(currentStep + 1)}>
-                or narrow by country
-              </button>
-            {/if}
             <button
-              class="footer-btn secondary"
+              class="footer-btn search-owners-cta"
               onclick={onSearchSpecificOwners}
               disabled={actionsDisabled}
             >
-              <SearchIcon size={14} />
+              <SearchIcon size={16} />
               Search Specific Owners
             </button>
-            <button class="footer-btn primary" onclick={onShowAllOwners} disabled={actionsDisabled}>
-              <ArrowRight size={14} />
-              All owners of this asset type
-            </button>
+            <div class="footer-secondary-row">
+              {#if !isLastStep}
+                <button class="footer-btn geo-opt-in" onclick={() => goToStep(currentStep + 1)}>
+                  or narrow by country
+                </button>
+              {/if}
+              <button class="footer-btn secondary" onclick={onShowAllOwners} disabled={actionsDisabled}>
+                <ArrowRight size={14} />
+                All owners of this asset type
+              </button>
+            </div>
           {:else}
             <button class="footer-btn primary" onclick={() => goToStep(currentStep + 1)}>
               Next <ArrowRight size={14} />
@@ -731,6 +733,13 @@
 
   .footer-actions {
     display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .footer-secondary-row {
+    display: flex;
     gap: 8px;
     align-items: center;
   }
@@ -766,6 +775,22 @@
   }
 
   .footer-btn.primary:hover:not(:disabled) {
+    background: var(--gem-primary-blue, #153444);
+    border-color: var(--gem-primary-blue, #153444);
+  }
+
+  .footer-btn.search-owners-cta {
+    width: 100%;
+    justify-content: center;
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    background: var(--gem-teal, #2a7f8f);
+    border: 1px solid var(--gem-teal, #2a7f8f);
+    color: #fff;
+  }
+
+  .footer-btn.search-owners-cta:hover:not(:disabled) {
     background: var(--gem-primary-blue, #153444);
     border-color: var(--gem-primary-blue, #153444);
   }

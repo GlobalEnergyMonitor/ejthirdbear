@@ -249,7 +249,15 @@
       .then(r => r.json())
       .then(data => {
         const total = data.total ?? data.count ?? 0;
-        countResult = { total, byType: data.facets?.asset_type ?? {} };
+        // API facets.asset_type is global (all types) — filter to selected trackers only
+        const SLUG_TO_DISPLAY: Record<string, string> = { 'coal-plant': 'Coal Plant', 'coal-mine': 'Coal Mine' };
+        const allowedTypes = new Set(q.query.trackers.map(t => SLUG_TO_DISPLAY[t]).filter(Boolean));
+        const rawByType: Record<string, number> = data.facets?.asset_type ?? {};
+        const byType: Record<string, number> = {};
+        for (const [type, n] of Object.entries(rawByType)) {
+          if (allowedTypes.has(type)) byType[type] = n as number;
+        }
+        countResult = { total, byType };
         countLoading = false;
       })
       .catch(err => { if (err.name !== 'AbortError') countLoading = false; });
@@ -733,7 +741,7 @@
           {#each Object.entries(countResult.byType) as [type, n]}
             <span class="count-item">
               <strong>{fmt(n)}</strong>
-              {type === 'coal-plant' ? 'plants' : type === 'coal-mine' ? 'mines' : type}
+              {type === 'Coal Plant' ? 'plants' : type === 'Coal Mine' ? 'mines' : type}
             </span>
           {/each}
           <span class="count-total">({fmt(countResult.total)} total)</span>
