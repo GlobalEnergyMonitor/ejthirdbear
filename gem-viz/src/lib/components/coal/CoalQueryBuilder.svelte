@@ -6,9 +6,11 @@
     type AggFn,
     type CoalQueryFilters,
     type Tracker,
+    getField,
     getGroupableFields,
     getAggregatableFields,
   } from '$lib/data-config/coal-field-schema';
+  import { fetchSummaryTable, type SummaryRow } from '$lib/data-config/aggregate-api';
 
   const q = getContext<CoalQueryState>(COAL_QUERY_KEY);
   const API_BASE = import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-api.thirdbear.net';
@@ -214,8 +216,20 @@
   let countLoading = $state(false);
   let countAbort: AbortController | null = null;
 
+  // Always count against /assets, even in summary mode
+  const countUrl = $derived.by(() => {
+    const p = new URLSearchParams();
+    for (const t of q.query.trackers) p.append('asset_type', t);
+    const f = q.query.filters;
+    if (f.country_area?.length) for (const c of f.country_area) p.append('country', c);
+    if (f.status?.length) for (const s of f.status) p.append('status', s);
+    p.set('facets', 'true');
+    p.set('limit', '1');
+    return `${API_BASE}/assets?${p.toString()}`;
+  });
+
   $effect(() => {
-    const url = `${q.apiUrl}&limit=1`;
+    const url = countUrl;
     countAbort?.abort();
     countAbort = new AbortController();
     countLoading = true;
@@ -233,8 +247,8 @@
   function fmt(n: number) { return n.toLocaleString(); }
 
   let apiCopied = $state(false);
-  function copyApiUrl() {
-    navigator.clipboard.writeText(q.apiUrl).then(() => {
+  function copyApiUrls() {
+    navigator.clipboard.writeText(q.apiUrls.join('\n')).then(() => {
       apiCopied = true;
       setTimeout(() => (apiCopied = false), 2000);
     });
@@ -281,11 +295,21 @@
   let tableLoading = $state(false);
   const PAGE = 50;
 
+  // Build /assets URL for records table (always /assets, never aggregate endpoint)
+  const assetsUrl = $derived.by(() => {
+    const p = new URLSearchParams();
+    for (const t of q.query.trackers) p.append('asset_type', t);
+    const f = q.query.filters;
+    if (f.country_area?.length) for (const c of f.country_area) p.append('country', c);
+    if (f.status?.length) for (const s of f.status) p.append('status', s);
+    return `${API_BASE}/assets?${p.toString()}`;
+  });
+
   async function loadTable(reset = false) {
     if (reset) { tableRows = []; tableOffset = 0; }
     tableLoading = true;
     try {
-      const url = `${q.apiUrl}&limit=${PAGE}&offset=${tableOffset}`;
+      const url = `${assetsUrl}&limit=${PAGE}&offset=${tableOffset}`;
       const data = await fetch(url).then(r => r.json());
       const rows = (data.results ?? []) as Record<string, unknown>[];
       tableRows = reset ? rows : [...tableRows, ...rows];
@@ -302,14 +326,14 @@
 
   // Re-fetch table when query changes (if table is open)
   $effect(() => {
-    void q.apiUrl; // track as dependency
+    void assetsUrl; // track as dependency
     untrack(() => { if (showTable) loadTable(true); });
   });
 
   async function downloadCsv() {
     const total = countResult?.total ?? 0;
     const limit = Math.min(total, 5000);
-    const url = `${q.apiUrl}&limit=${limit}`;
+    const url = `${assetsUrl}&limit=${limit}`;
     const data = await fetch(url).then(r => r.json());
     const rows = (data.results ?? []) as Record<string, unknown>[];
     if (!rows.length) return;
@@ -328,6 +352,69 @@
     a.download = 'gem-coal-data.csv';
     a.click();
     URL.revokeObjectURL(a.href);
+  }
+
+  // ── Results: summary table ──────────────────────────────────────────────────
+
+  let summaryRows   = $state<SummaryRow[]>([]);
+  let summaryLoading = $state(false);
+  let summaryError   = $state<string | null>(null);
+
+  // Column definitions for the summary table
+  const summaryCols = $derived(() => {
+    const cols: { key: string; label: string }[] = [];
+    // Group-by columns first
+    for (const gk of q.query.groupBy) {
+      const f = getField(gk);
+      cols.push({ key: gk, label: f?.shortLabel ?? f?.label ?? gk });
+    }
+    // Then aggregate value columns
+    for (const agg of q.query.aggregates) {
+      const f = getField(agg.field);
+      const spec = f?.aggregatable?.find(s => s.fn === agg.fn);
+      cols.push({
+        key: `${agg.fn}:${agg.field}`,
+        label: spec?.label ?? `${agg.fn}(${agg.field})`,
+      });
+    }
+    return cols;
+  });
+
+  // Auto-fetch summary when in summary mode with group-by + aggregates
+  $effect(() => {
+    const inSummary = outputMode === 'summary';
+    const hasGroupBy = q.query.groupBy.length > 0;
+    const hasAggs = q.query.aggregates.length > 0;
+    // Read reactive deps
+    const _trackers = q.query.trackers;
+    const _filters = q.query.filters;
+    const _granularity = q.query.granularity;
+
+    if (!inSummary || !hasGroupBy || !hasAggs) {
+      untrack(() => { summaryRows = []; summaryError = null; });
+      return;
+    }
+
+    untrack(() => {
+      summaryLoading = true;
+      summaryError = null;
+      fetchSummaryTable(q.query)
+        .then(rows => {
+          summaryRows = rows;
+          summaryLoading = false;
+        })
+        .catch(err => {
+          summaryError = err?.message ?? 'Failed to fetch summary';
+          summaryRows = [];
+          summaryLoading = false;
+        });
+    });
+  });
+
+  function fmtVal(v: unknown): string {
+    if (v == null) return '—';
+    if (typeof v === 'number') return v.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    return String(v);
   }
 
   // ── Close picker (removes field if no values selected) ────────────────────
@@ -580,7 +667,26 @@
             </div>
           </div>
         {/if}
-        <p class="summary-notice">Summary statistics require API grouping support — coming soon.</p>
+        {#if q.showGranularityToggle}
+          <div class="summary-row">
+            <span class="output-label">granularity</span>
+            <label class="radio-label">
+              <input type="radio" name="granularity" value="project"
+                checked={q.query.granularity === 'project'}
+                onchange={() => q.setGranularity('project')} />
+              per plant
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="granularity" value="unit"
+                checked={q.query.granularity === 'unit'}
+                onchange={() => q.setGranularity('unit')} />
+              per unit
+            </label>
+          </div>
+        {/if}
+        <p class="summary-notice">
+          Aggregation endpoints are live — see aggregate-api.ts for the data path.
+        </p>
       </div>
     {/if}
   </div>
@@ -600,7 +706,7 @@
           {/each}
           <span class="count-total">({fmt(countResult.total)} total)</span>
         {:else}
-          <span class="count-item"><strong>{fmt(countResult.total)}</strong> {q.query.trackers.includes('coal-plant') ? 'plants' : 'mines'} match</span>
+          <span class="count-item"><strong>{fmt(countResult.total)}</strong> {q.entityLabel} match</span>
         {/if}
       {:else}
         <span class="count-empty">—</span>
@@ -608,7 +714,7 @@
     </div>
 
     <div class="results-actions">
-      {#if countResult && countResult.total > 0}
+      {#if outputMode === 'data' && countResult && countResult.total > 0}
         <button class="result-btn" class:active={showTable} onclick={toggleTable}>
           {showTable ? 'Hide table' : 'View table'}
         </button>
@@ -617,8 +723,8 @@
     </div>
   </div>
 
-  <!-- ── Table ─────────────────────────────────────────────────────────────── -->
-  {#if showTable}
+  <!-- ── Table (records mode) ──────────────────────────────────────────────── -->
+  {#if outputMode === 'data' && showTable}
     <div class="table-wrap">
       {#if tableLoading && tableRows.length === 0}
         <div class="table-loading">Loading…</div>
@@ -650,10 +756,49 @@
     </div>
   {/if}
 
-  <!-- ── Debug: API URL ────────────────────────────────────────────────────── -->
-  <div class="api-url-row">
-    <span class="api-url-text" title={q.apiUrl}>{q.apiUrl}</span>
-    <button class="api-copy-btn" onclick={copyApiUrl}>{apiCopied ? '✓ Copied' : 'Copy API URL'}</button>
+  <!-- ── Summary table ─────────────────────────────────────────────────────── -->
+  {#if outputMode === 'summary' && q.query.groupBy.length > 0 && q.query.aggregates.length > 0}
+    <div class="table-wrap">
+      {#if summaryLoading}
+        <div class="table-loading">Loading summary…</div>
+      {:else if summaryError}
+        <div class="table-loading" style="color: #c44;">Error: {summaryError}</div>
+      {:else if summaryRows.length > 0}
+        <table class="data-table">
+          <thead>
+            <tr>
+              {#each summaryCols() as col}
+                <th>{col.label}</th>
+              {/each}
+            </tr>
+          </thead>
+          <tbody>
+            {#each summaryRows as row}
+              <tr>
+                {#each summaryCols() as col}
+                  <td>{fmtVal(row[col.key])}</td>
+                {/each}
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+        <div class="summary-count">{summaryRows.length} groups</div>
+      {:else}
+        <div class="table-loading">No results</div>
+      {/if}
+    </div>
+  {/if}
+
+  <!-- ── Debug: API URLs ───────────────────────────────────────────────────── -->
+  <div class="api-url-list">
+    {#each q.apiUrls as url}
+      <div class="api-url-row">
+        <span class="api-url-text" title={url}>{url}</span>
+      </div>
+    {/each}
+    <button class="api-copy-btn" onclick={copyApiUrls}>
+      {apiCopied ? '✓ Copied' : q.apiUrls.length > 1 ? `Copy ${q.apiUrls.length} API URLs` : 'Copy API URL'}
+    </button>
   </div>
 
 </div>
@@ -1051,6 +1196,12 @@
   .load-more-btn:hover:not(:disabled) { background: var(--gem-navy-10, #e9eef1); }
   .load-more-btn:disabled { opacity: 0.5; cursor: default; }
 
+  .summary-count {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.75rem;
+    color: var(--color-gray-400, #9eaaad);
+  }
+
   /* ── Summary card (output mode + group by + calculate) ───────────────────── */
   .summary-card {
     margin-top: 1.5rem;
@@ -1172,22 +1323,22 @@
   }
 
   /* ── API URL (debug) ─────────────────────────────────────────────────────── */
-  .api-url-row {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
+  .api-url-list {
     margin-top: 3rem;
     padding-top: 1rem;
     border-top: 1px dashed var(--color-gray-200, #dce3e5);
   }
+  .api-url-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.2rem;
+  }
   .api-url-text {
-    flex: 1;
     font-family: var(--font-family-mono, monospace);
     font-size: 0.68rem;
-    color: var(--color-gray-400, #9eaaad);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    color: var(--color-gray-500, #6b7f84);
+    word-break: break-all;
   }
   .api-copy-btn {
     all: unset;
@@ -1200,7 +1351,8 @@
     padding: 0.2rem 0.5rem;
     background: #fff;
     white-space: nowrap;
-    flex-shrink: 0;
+    float: right;
+    margin-top: 0.4rem;
     transition: background 0.1s;
   }
   .api-copy-btn:hover { background: var(--gem-navy-10, #e9eef1); }

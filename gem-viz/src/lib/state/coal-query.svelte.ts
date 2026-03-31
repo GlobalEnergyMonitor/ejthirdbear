@@ -22,6 +22,7 @@ import {
   type CoalQueryAggregate,
   type CoalView,
   type Tracker,
+  type Granularity,
 } from '$lib/data-config/coal-field-schema';
 
 const API_BASE = import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-api.thirdbear.net';
@@ -38,19 +39,39 @@ export class CoalQueryState {
 
   params = $derived(queryToParams(this.query));
 
-  apiUrl = $derived.by(() => {
-    const p = new URLSearchParams();
-    // Tracker → asset_type
-    for (const t of this.query.trackers) p.append('asset_type', t);
-    // Filters
-    const f = this.query.filters;
-    if (f.country_area?.length) for (const c of f.country_area) p.append('country', c);
-    if (f.status?.length) for (const s of f.status) p.append('status', s);
-    // Group-by and aggregates (API will support these; include for forward-compat)
-    if (this.query.groupBy.length) p.set('group_by', this.query.groupBy.join(','));
-    if (this.query.aggregates.length)
-      p.set('aggregate', this.query.aggregates.map((a) => `${a.fn}:${a.field}`).join(','));
-    return `${API_BASE}/assets?${p.toString()}`;
+  /**
+   * All API URLs the current query will hit.
+   * Records mode: single /assets URL.
+   * Summary mode: one URL per aggregate field, reflecting granularity
+   * (location_id in group_by when plant-mode for coal-plant fields).
+   */
+  apiUrls = $derived.by((): string[] => {
+    if (this.query.aggregates.length === 0) {
+      const p = new URLSearchParams();
+      for (const t of this.query.trackers) p.append('asset_type', t);
+      const f = this.query.filters;
+      if (f.country_area?.length) for (const c of f.country_area) p.append('country', c);
+      if (f.status?.length) for (const s of f.status) p.append('status', s);
+      return [`${API_BASE}/assets?${p.toString()}`];
+    }
+
+    return this.query.aggregates.map(agg => {
+      const field = getField(agg.field);
+      const tracker = field?.trackers[0] ?? this.query.trackers[0];
+      const trackerSlug = tracker.endsWith('s') ? tracker : tracker + 's';
+      const p = new URLSearchParams();
+      const f = this.query.filters;
+      if (f.status?.length) for (const s of f.status) p.append('status', s);
+      if (f.country_area?.length) for (const c of f.country_area) p.append('country', c);
+      // Reflect granularity: plant-mode adds location_id for coal-plant fields
+      const needsPlantCollapse =
+        this.query.granularity === 'project' &&
+        tracker === 'coal-plant' &&
+        field?.aggregatable != null;
+      if (needsPlantCollapse) p.append('group_by', 'location_id');
+      for (const g of this.query.groupBy) p.append('group_by', g);
+      return `${API_BASE}/catalog/metadata/${trackerSlug}/fields/${agg.field}/${agg.fn}?${p.toString()}`;
+    });
   });
 
   // Plain-English sentence describing the current query.
@@ -129,6 +150,30 @@ export class CoalQueryState {
     }).length
   );
 
+  /**
+   * Whether to show the plant/unit toggle.
+   * Only when coal-plant is selected AND in summary mode with aggregates.
+   * Mines have no sub-units so the toggle would be meaningless.
+   */
+  showGranularityToggle = $derived(
+    this.query.trackers.includes('coal-plant') &&
+    this.query.aggregates.length > 0
+  );
+
+  /**
+   * Label for counts — changes with tracker selection and granularity.
+   * "plants" / "mines" / "units" / "projects" as appropriate.
+   */
+  entityLabel = $derived.by((): string => {
+    const hasPlant = this.query.trackers.includes('coal-plant');
+    const hasMine = this.query.trackers.includes('coal-mine');
+    if (hasPlant && hasMine) {
+      return this.query.granularity === 'unit' ? 'units & mines' : 'projects';
+    }
+    if (hasMine) return 'mines';
+    return this.query.granularity === 'unit' ? 'units' : 'plants';
+  });
+
   // ── Initialisation ───────────────────────────────────────────────────────
 
   init(searchParams: URLSearchParams) {
@@ -167,6 +212,11 @@ export class CoalQueryState {
 
   setAggregates(aggregates: CoalQueryAggregate[]) {
     this.query = { ...this.query, aggregates };
+    this.#sync();
+  }
+
+  setGranularity(granularity: Granularity) {
+    this.query = { ...this.query, granularity };
     this.#sync();
   }
 

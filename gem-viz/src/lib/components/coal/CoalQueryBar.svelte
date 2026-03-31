@@ -13,7 +13,7 @@
   let copied = $state(false);
 
   function copyApiUrl() {
-    navigator.clipboard.writeText(coalQuery.apiUrl).then(() => {
+    navigator.clipboard.writeText(coalQuery.apiUrls.join('\n')).then(() => {
       copied = true;
       setTimeout(() => (copied = false), 2000);
     });

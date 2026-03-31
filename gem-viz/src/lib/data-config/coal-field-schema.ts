@@ -13,6 +13,13 @@
  * the API metadata where it exists, extended where we need it.
  *
  * URL serialization for the CoalQuery is documented at the bottom of this file.
+ *
+ * Plant vs unit granularity: coal plant data is at the *unit* level — a power
+ * station can have multiple generating units. When aggregating, the user
+ * explicitly chooses whether to treat each unit as a row ("per unit") or to
+ * first collapse units into plants via location_id ("per plant"). This is a
+ * UI toggle, not encoded metadata — researchers should see what computation
+ * they're asking for.
  */
 
 export type Tracker = 'coal-plant' | 'coal-mine';
@@ -411,11 +418,25 @@ export interface CoalQueryAggregate {
 
 export type CoalView = 'table' | 'cards' | 'summary';
 
+/**
+ * Granularity: per project (plant/mine) or per unit?
+ *
+ * 'project' → coal-plant queries include location_id in group_by so the API
+ *             returns one row per plant. Client then collapses using the user's
+ *             chosen agg function. Mines unaffected (one row per mine already).
+ * 'unit'    → no location_id. Each generating unit is a row. Only matters for
+ *             coal-plant; mines have no sub-units.
+ *
+ * Default: 'project' — researchers think about power stations, not units.
+ */
+export type Granularity = 'project' | 'unit';
+
 export interface CoalQuery {
   trackers: Tracker[];
   filters: CoalQueryFilters;
   groupBy: string[];            // CoalField.key[]
   aggregates: CoalQueryAggregate[];
+  granularity: Granularity;
   view: CoalView;
 }
 
@@ -424,6 +445,7 @@ export const DEFAULT_QUERY: CoalQuery = {
   filters: {},
   groupBy: [],
   aggregates: [],
+  granularity: 'project',
   view: 'table',
 };
 
@@ -450,6 +472,7 @@ export function queryToParams(q: CoalQuery): URLSearchParams {
   if (q.groupBy.length) p.set('groupBy', q.groupBy.join(','));
   if (q.aggregates.length)
     p.set('aggregate', q.aggregates.map((a) => `${a.fn}:${a.field}`).join(','));
+  if (q.granularity !== 'project') p.set('granularity', q.granularity);
   if (q.view !== 'table') p.set('view', q.view);
 
   return p;
@@ -491,6 +514,9 @@ export function paramsToQuery(p: URLSearchParams): CoalQuery {
       return { fn: fn as AggFn, field };
     });
   }
+
+  const granularity = p.get('granularity') as Granularity | null;
+  if (granularity) q.granularity = granularity;
 
   const view = p.get('view') as CoalView | null;
   if (view) q.view = view;
