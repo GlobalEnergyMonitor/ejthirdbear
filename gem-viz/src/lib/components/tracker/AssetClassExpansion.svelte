@@ -13,7 +13,8 @@
   } from '$lib/data-config/tracker-schema';
   import type { DynamicStatusGroup } from '$lib/data-config/tracker-schema';
   import type { AssetClass, SubClassGroup } from '$lib/data-config/asset-class-definitions';
-  import type { CatalogAssetClass } from '$lib/api/catalog-api';
+  import type { CatalogAssetClass, CatalogClassTree } from '$lib/api/catalog-api';
+  import { getAllDescendantIds } from '$lib/api/catalog-api';
   import { ArrowRight, Search as SearchIcon, X } from 'lucide-svelte';
   import { track } from '$lib/analytics';
   import { onMount } from 'svelte';
@@ -43,9 +44,11 @@
     onClose: () => void;
     /** Data-driven status groups from API facets (overrides hardcoded STATUS_GROUPS) */
     dynamicStatusGroups?: DynamicStatusGroup[] | null;
-    /** Direct children from /catalog/asset-classes — when present, replaces static subClasses */
+    /** Direct children from /catalog/asset-classes — flat mode (when present, replaces static subClasses) */
     catalogChildren?: CatalogAssetClass[];
-    /** Checked state for catalog children: child.id -> boolean */
+    /** Nested tree from /catalog/asset-classes — tree mode (feature-flagged) */
+    catalogTree?: CatalogClassTree[];
+    /** Checked state for catalog children/descendants: id -> boolean */
     catalogChildChecks?: Record<string, boolean>;
   }
 
@@ -61,17 +64,23 @@
     onClose,
     dynamicStatusGroups = null,
     catalogChildren = [],
+    catalogTree = [],
     catalogChildChecks = $bindable({}),
   }: Props = $props();
 
-  const hasCatalogChildren = $derived(catalogChildren.length > 0);
-  const hasSubClasses = $derived(!hasCatalogChildren && !!assetClass.subClasses?.length);
-  const hasSubClassGroups = $derived(!hasCatalogChildren && !!assetClass.subClassGroups?.length);
+  const hasCatalogTree = $derived(catalogTree.length > 0);
+  const hasCatalogChildren = $derived(!hasCatalogTree && catalogChildren.length > 0);
+  const hasSubClasses = $derived(
+    !hasCatalogTree && !hasCatalogChildren && !!assetClass.subClasses?.length
+  );
+  const hasSubClassGroups = $derived(
+    !hasCatalogTree && !hasCatalogChildren && !!assetClass.subClassGroups?.length
+  );
   const hasStatusFilter = $derived(!!assetClass.availableFilters.status);
   const isMultiTracker = $derived(assetClass.trackers.length > 1);
   const selectedStatusCount = $derived(Object.values(statusChecks).filter(Boolean).length);
 
-  // Catalog child helpers
+  // Catalog child helpers (flat mode)
   const catalogAllChecked = $derived(
     catalogChildren.length > 0 && catalogChildren.every((c) => catalogChildChecks[c.id] !== false)
   );
@@ -81,10 +90,45 @@
     catalogChildChecks = next;
   }
 
+  // ── Catalog tree helpers (tree mode) ──────────────────────────────
+  function isTreeNodeChecked(node: CatalogClassTree): boolean {
+    if (node.children.length === 0) return catalogChildChecks[node.entry.id] !== false;
+    return node.children.every(isTreeNodeChecked);
+  }
+
+  function isTreeNodeIndeterminate(node: CatalogClassTree): boolean {
+    if (node.children.length === 0) return false;
+    const allChecked = node.children.every(isTreeNodeChecked);
+    const noneChecked = node.children.every((c) => !isTreeNodeChecked(c));
+    return !allChecked && !noneChecked;
+  }
+
+  function toggleTreeNode(node: CatalogClassTree, checked: boolean) {
+    const next = { ...catalogChildChecks };
+    for (const id of getAllDescendantIds(node)) {
+      next[id] = checked;
+    }
+    catalogChildChecks = next;
+  }
+
+  function toggleAllTree(checked: boolean) {
+    const next = { ...catalogChildChecks };
+    for (const tree of catalogTree) {
+      for (const id of getAllDescendantIds(tree)) {
+        next[id] = checked;
+      }
+    }
+    catalogChildChecks = next;
+  }
+
+  const catalogTreeAllChecked = $derived(
+    catalogTree.length > 0 && catalogTree.every(isTreeNodeChecked)
+  );
+
   // ── Wizard steps ───────────────────────────────────────────────────
   const steps = $derived.by(() => {
     const s: { id: string; label: string; optional?: boolean }[] = [];
-    if (hasCatalogChildren || hasSubClasses || hasSubClassGroups)
+    if (hasCatalogTree || hasCatalogChildren || hasSubClasses || hasSubClassGroups)
       s.push({ id: 'subclass', label: 'Subclass' });
     if (hasStatusFilter) s.push({ id: 'status', label: 'Status' });
     if (assetClass.availableFilters.geography)
@@ -278,7 +322,94 @@
           style="--offset: {offset};"
         >
           {#if step.id === 'subclass'}
-            <!-- NARROW BY SUBCLASS: catalog children (server-side, preferred) -->
+            <!-- NARROW BY SUBCLASS: catalog tree (feature-flagged, hierarchical) -->
+            {#if hasCatalogTree}
+              <div class="filter-section">
+                <span class="section-heading">Narrow by subclass</span>
+                <div class="catalog-select-all">
+                  <label class="group-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={catalogTreeAllChecked}
+                      onchange={(e) =>
+                        toggleAllTree((e.target as HTMLInputElement).checked)}
+                    />
+                    <span class="group-label">All subclasses</span>
+                  </label>
+                </div>
+                <div class="group-row">
+                  {#each catalogTree as treeNode (treeNode.entry.id)}
+                    {@const hasKids = treeNode.children.length > 0}
+                    <div class="group-item">
+                      <label class="group-checkbox">
+                        <input
+                          type="checkbox"
+                          checked={isTreeNodeChecked(treeNode)}
+                          indeterminate={isTreeNodeIndeterminate(treeNode)}
+                          onchange={(e) =>
+                            toggleTreeNode(treeNode, (e.target as HTMLInputElement).checked)}
+                        />
+                        <span class="group-label">{treeNode.entry.label}</span>
+                      </label>
+                      {#if hasKids}
+                        <button
+                          class="refine-toggle"
+                          onclick={() => toggleRefine(treeNode.entry.id)}
+                        >
+                          {expandedRefine[treeNode.entry.id] ? '\u25BC' : '\u25B6'} Refine
+                        </button>
+                      {/if}
+                      {#if hasKids && expandedRefine[treeNode.entry.id]}
+                        <div class="refine-panel" transition:slide={{ duration: 150 }}>
+                          {#each treeNode.children as child (child.entry.id)}
+                            {@const childHasKids = child.children.length > 0}
+                            <label class="refine-option">
+                              <input
+                                type="checkbox"
+                                checked={isTreeNodeChecked(child)}
+                                indeterminate={isTreeNodeIndeterminate(child)}
+                                onchange={(e) =>
+                                  toggleTreeNode(child, (e.target as HTMLInputElement).checked)}
+                              />
+                              <span class="refine-label">{child.entry.label}</span>
+                            </label>
+                            {#if childHasKids}
+                              <button
+                                class="refine-toggle nested"
+                                onclick={() => toggleRefine(child.entry.id)}
+                              >
+                                {expandedRefine[child.entry.id] ? '\u25BC' : '\u25B6'} Refine
+                              </button>
+                              {#if expandedRefine[child.entry.id]}
+                                <div class="refine-panel nested" transition:slide={{ duration: 150 }}>
+                                  {#each child.children as leaf (leaf.entry.id)}
+                                    <label class="refine-option">
+                                      <input
+                                        type="checkbox"
+                                        checked={catalogChildChecks[leaf.entry.id] !== false}
+                                        onchange={(e) => {
+                                          catalogChildChecks = {
+                                            ...catalogChildChecks,
+                                            [leaf.entry.id]: (e.target as HTMLInputElement).checked,
+                                          };
+                                        }}
+                                      />
+                                      <span class="refine-label">{leaf.entry.label}</span>
+                                    </label>
+                                  {/each}
+                                </div>
+                              {/if}
+                            {/if}
+                          {/each}
+                        </div>
+                      {/if}
+                    </div>
+                  {/each}
+                </div>
+              </div>
+            {/if}
+
+            <!-- NARROW BY SUBCLASS: catalog children (flat mode, server-side) -->
             {#if hasCatalogChildren}
               <div class="filter-section">
                 <span class="section-heading">Narrow by subclass</span>
@@ -960,6 +1091,11 @@
     color: var(--gem-teal, #2a7f8f);
   }
 
+  .refine-toggle.nested {
+    margin-left: var(--space-4, 16px);
+    font-size: 10px;
+  }
+
   .refine-panel {
     display: flex;
     flex-direction: column;
@@ -967,6 +1103,11 @@
     padding: var(--space-2, 8px) 0 var(--space-2, 8px) var(--space-4, 16px);
     border-left: 2px solid var(--color-border, #e5e7eb);
     margin-top: var(--space-1, 4px);
+  }
+
+  .refine-panel.nested {
+    margin-left: var(--space-4, 16px);
+    border-left-color: var(--color-gray-300, #d1d5db);
   }
 
   .refine-option {

@@ -28,7 +28,13 @@
     fetchStatusFacets,
     fetchStatusTaxonomy,
   } from '$lib/ownership-api';
-  import { fetchAssetClasses, buildCatalogUrl } from '$lib/api/catalog-api';
+  import {
+    fetchAssetClasses,
+    buildCatalogUrl,
+    buildCatalogTree,
+    findSubtree,
+    getAllDescendantIds,
+  } from '$lib/api/catalog-api';
   import { GEM_DATA_EMAIL } from '$lib/external-links';
   import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
@@ -44,8 +50,38 @@
     { key: 'cement', label: 'Cement' },
   ];
 
+  // ─── Catalog state ──────────────────────────────────────────────────
+  /** @type {import('$lib/api/catalog-api').CatalogAssetClass[]} */
+  let catalogClasses = $state([]);
+
+  // ─── Feature flag: catalog tree mode ───────────────────────────────
+  // ENV var sets default, URL param ?catalogTree=true|false overrides.
+  const envDefault =
+    typeof import.meta.env?.PUBLIC_USE_CATALOG_TREE === 'string'
+      ? import.meta.env.PUBLIC_USE_CATALOG_TREE === 'true'
+      : false;
+  const useCatalogTree = $derived.by(() => {
+    const param = $page.url.searchParams.get('catalogTree');
+    if (param === 'true') return true;
+    if (param === 'false') return false;
+    return envDefault;
+  });
+
+  /** Full tree built from flat catalog classes (only used in tree mode). */
+  const catalogForest = $derived(
+    useCatalogTree && catalogClasses.length > 0 ? buildCatalogTree(catalogClasses) : []
+  );
+
+  // ─── State ──────────────────────────────────────────────────────────
+  let searchQuery = $state('');
+  let selectedClassId = $state(null);
+
+  // Set of all catalog IDs (used to identify root vs. child entries)
+  const catalogIdSet = $derived(new Set(catalogClasses.map((c) => c.id)));
+
   // Group asset classes by category in display order (only enabled ones)
   // When catalog is loaded, use it; otherwise fall back to static definitions.
+  // In tree mode, only show root-level classes (entries without a parent in the catalog).
   // Filter by search query against label.
   const classesByCategory = $derived.by(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -56,6 +92,8 @@
         classes: catalogClasses.filter((ac) => {
           if (ac.category !== cat.key) return false;
           if (!ac.url) return false; // notes:"TBD" entries have no url — disable
+          // Tree mode: only show roots (no parent, or parent not in catalog)
+          if (useCatalogTree && ac.parent && catalogIdSet.has(ac.parent)) return false;
           if (!q) return true;
           return ac.label.toLowerCase().includes(q);
         }),
@@ -72,17 +110,16 @@
     })).filter((cat) => cat.classes.length > 0);
   });
 
-  // ─── Catalog state ──────────────────────────────────────────────────
-  /** @type {import('$lib/api/catalog-api').CatalogAssetClass[]} */
-  let catalogClasses = $state([]);
-
-  // ─── State ──────────────────────────────────────────────────────────
-  let searchQuery = $state('');
-  let selectedClassId = $state(null);
-
-  /** Direct children of the currently selected class from catalog */
+  /** Direct children of the currently selected class from catalog (flat mode). */
   const catalogChildren = $derived(
-    selectedClassId ? catalogClasses.filter((c) => c.parent === selectedClassId) : []
+    !useCatalogTree && selectedClassId
+      ? catalogClasses.filter((c) => c.parent === selectedClassId)
+      : []
+  );
+
+  /** Subtree for the selected class (tree mode). */
+  const selectedSubtree = $derived(
+    useCatalogTree && selectedClassId ? findSubtree(catalogForest, selectedClassId) : undefined
   );
 
   /** Catalog child IDs that the user has checked (keyed by child.id) */
@@ -123,10 +160,20 @@
     dynamicStatusGroups = null; // reset while loading
 
     // Reset catalog child checks — defaults all checked
-    const children = catalogClasses.filter((c) => c.parent === classId);
+    // Tree mode: check ALL descendants; flat mode: just direct children
     const initialCatalogChecks = {};
-    for (const child of children) {
-      initialCatalogChecks[child.id] = true;
+    if (useCatalogTree) {
+      const subtree = findSubtree(catalogForest, classId);
+      if (subtree) {
+        for (const id of getAllDescendantIds(subtree)) {
+          if (id !== classId) initialCatalogChecks[id] = true;
+        }
+      }
+    } else {
+      const children = catalogClasses.filter((c) => c.parent === classId);
+      for (const child of children) {
+        initialCatalogChecks[child.id] = true;
+      }
     }
     catalogChildChecks = initialCatalogChecks;
 
@@ -269,24 +316,44 @@
     let catalogOwnersUrl = undefined;
 
     if (catalogEntry?.url) {
-      const selectedChildren = catalogChildren
-        .filter((c) => catalogChildChecks[c.id] !== false && c.url)
-        .map((c) => c.url);
+      // Tree mode: collect checked leaf URLs from the full descendant tree
+      // Flat mode: collect checked direct children URLs (existing behavior)
+      let selectedChildUrls = [];
+      let selectedOwnerChildUrls = [];
+
+      if (useCatalogTree && selectedSubtree) {
+        // Collect all checked descendants that have a url (leaves with filter URLs)
+        const checkedDescendants = catalogClasses.filter(
+          (c) => c.id !== selectedClassId && catalogChildChecks[c.id] !== false && c.url
+        );
+        // Only include entries that are actual descendants of the selected class
+        const allDescIds = new Set(getAllDescendantIds(selectedSubtree));
+        selectedChildUrls = checkedDescendants
+          .filter((c) => allDescIds.has(c.id))
+          .map((c) => c.url);
+        selectedOwnerChildUrls = checkedDescendants
+          .filter((c) => allDescIds.has(c.id) && c.owners_url)
+          .map((c) => c.owners_url);
+      } else {
+        selectedChildUrls = catalogChildren
+          .filter((c) => catalogChildChecks[c.id] !== false && c.url)
+          .map((c) => c.url);
+        selectedOwnerChildUrls = catalogChildren
+          .filter((c) => catalogChildChecks[c.id] !== false && c.owners_url)
+          .map((c) => c.owners_url);
+      }
 
       catalogUrl = buildCatalogUrl(
         catalogEntry.url,
-        selectedChildren,
+        selectedChildUrls,
         selectedStatuses,
         geoFilters
       );
 
       if (catalogEntry.owners_url) {
-        const selectedOwnersChildren = catalogChildren
-          .filter((c) => catalogChildChecks[c.id] !== false && c.owners_url)
-          .map((c) => c.owners_url);
         catalogOwnersUrl = buildCatalogUrl(
           catalogEntry.owners_url,
-          selectedOwnersChildren,
+          selectedOwnerChildUrls,
           selectedStatuses,
           geoFilters
         );
@@ -525,7 +592,8 @@
       bind:geoFilters
       bind:geofence
       {dynamicStatusGroups}
-      {catalogChildren}
+      catalogChildren={useCatalogTree ? [] : catalogChildren}
+      catalogTree={useCatalogTree && selectedSubtree ? selectedSubtree.children : []}
       bind:catalogChildChecks
       onShowAllOwners={() => navigateTo('/screener/results')}
       onSearchSpecificOwners={() => navigateTo('/screener/owners')}

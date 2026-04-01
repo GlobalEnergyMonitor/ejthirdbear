@@ -226,6 +226,67 @@ export interface CatalogAssetClass {
   notes?: string;
 }
 
+// =============================================================================
+// TREE HELPERS — build nested hierarchy from flat parent-pointer list
+// =============================================================================
+
+/** A catalog class with its children nested recursively. */
+export interface CatalogClassTree {
+  entry: CatalogAssetClass;
+  children: CatalogClassTree[];
+}
+
+/**
+ * Build a forest of trees from a flat array of catalog classes using `parent` pointers.
+ * Root nodes are entries whose `parent` is undefined or points to an ID not in the list.
+ */
+export function buildCatalogTree(classes: CatalogAssetClass[]): CatalogClassTree[] {
+  const byId = new Map(classes.map((c) => [c.id, c]));
+  const childrenOf = new Map<string, CatalogAssetClass[]>();
+  const roots: CatalogAssetClass[] = [];
+
+  for (const c of classes) {
+    if (!c.parent || !byId.has(c.parent)) {
+      roots.push(c);
+    } else {
+      const siblings = childrenOf.get(c.parent) ?? [];
+      siblings.push(c);
+      childrenOf.set(c.parent, siblings);
+    }
+  }
+
+  function toNode(entry: CatalogAssetClass): CatalogClassTree {
+    const kids = childrenOf.get(entry.id) ?? [];
+    return { entry, children: kids.map(toNode) };
+  }
+
+  return roots.map(toNode);
+}
+
+/** Collect all leaf entry IDs (nodes with no children) from a tree. */
+export function getTreeLeafIds(node: CatalogClassTree): string[] {
+  if (node.children.length === 0) return [node.entry.id];
+  return node.children.flatMap(getTreeLeafIds);
+}
+
+/** Collect ALL descendant IDs (including the node itself). */
+export function getAllDescendantIds(node: CatalogClassTree): string[] {
+  return [node.entry.id, ...node.children.flatMap(getAllDescendantIds)];
+}
+
+/** Find a subtree by root ID within a forest. */
+export function findSubtree(
+  forest: CatalogClassTree[],
+  id: string
+): CatalogClassTree | undefined {
+  for (const tree of forest) {
+    if (tree.entry.id === id) return tree;
+    const found = findSubtree(tree.children, id);
+    if (found) return found;
+  }
+  return undefined;
+}
+
 let _assetClassesCache: CatalogAssetClass[] | null = null;
 let _assetClassesFetchedAt = 0;
 const ASSET_CLASSES_TTL_MS = 60 * 60 * 1000; // 1 hour
