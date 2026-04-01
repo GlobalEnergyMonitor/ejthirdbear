@@ -659,7 +659,7 @@
   <!-- ── Full card ───────────────────────────────────────────────────────── -->
   <div class="card-full">
     <!-- Tab bar -->
-    <nav class="tab-bar" role="tablist">
+    <div class="tab-bar" role="tablist" aria-label="Coal plant detail tabs">
       {#each TABS as tab}
         <button
           class="tab-btn"
@@ -669,7 +669,7 @@
           onclick={() => (activeTab = tab)}>{tab}</button
         >
       {/each}
-    </nav>
+    </div>
 
     <!-- Tab content (grid-stacked so all tabs are measured; only active is visible) -->
     <div class="tabs-wrapper">
@@ -937,6 +937,8 @@
                 width={tlContainerW}
                 height={TL.rowH}
                 fill="transparent"
+                role="presentation"
+                aria-hidden="true"
                 style="cursor: default;"
                 onmouseenter={(e) => {
                   hoveredRowIndex = i;
