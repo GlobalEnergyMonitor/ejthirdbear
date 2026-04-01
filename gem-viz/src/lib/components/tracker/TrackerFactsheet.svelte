@@ -10,7 +10,7 @@
    * - Top-N with overflow count for high-cardinality fields
    */
   import { onMount } from 'svelte';
-  import { formatCompact, formatPct } from '$lib/utils/format';
+  import { formatCompact, formatRatioAsPct } from '$lib/utils/format';
   import { colors } from '$lib/design-tokens';
   import FieldHistogram from '$lib/components/charts/FieldHistogram.svelte';
 
@@ -296,7 +296,7 @@
         <!-- Null / coverage row (matches Observable notebook) -->
         {#if nullCount > 0}
           <div class="coverage-row">
-            <span class="field-value">Null</span> in {formatCompact(nullCount)} rows ({formatPct(nullPct)})
+            <span class="field-value">Null</span> in {formatCompact(nullCount)} rows ({formatRatioAsPct(nullPct)})
           </div>
         {:else if totalRows > 0}
           <div class="coverage-row full">
@@ -340,7 +340,7 @@
                   <div class="dist-bar-fill" style="width:{barWidth}%"></div>
                 </div>
                 <span class="dist-count">{formatCompact(item.count)}</span>
-                <span class="dist-pct">{formatPct(item.percentage)}</span>
+                <span class="dist-pct">{formatRatioAsPct(item.percentage)}</span>
               </div>
             {/each}
             {#if fieldDistribution.length > MAX_VISIBLE_ITEMS}

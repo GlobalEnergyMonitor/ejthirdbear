@@ -6,7 +6,7 @@
    *
    * URL params (initial state, overridden by hash if present):
    *   q    - Initial search query
-   *   type - Initial search type: "all" | "assets" | "entities" (default: "all")
+   *   type - Initial search type; currently coerced to "assets"
    */
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
@@ -14,7 +14,7 @@
   import { readHash, writeHash } from '../embed-utils';
 
   const qParam = $page.url.searchParams.get('q') || '';
-  const typeParam = $page.url.searchParams.get('type') || 'all';
+  const typeParam = 'assets';
 
   let initialQuery = $state(qParam);
   let initialType = $state(typeParam);
@@ -27,7 +27,7 @@
   onMount(() => {
     const h = readHash();
     initialQuery = h.q || qParam;
-    initialType = h.type || typeParam;
+    initialType = 'assets';
     mounted = true;
   });
 </script>

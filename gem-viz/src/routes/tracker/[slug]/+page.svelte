@@ -6,7 +6,7 @@
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
   import { link } from '$lib/links';
-  import { listAssetsByType, type AssetSummary } from '$lib/ownership-api';
+  import { listAssets, listAssetsByType, resolveApiSlug, type AssetSummary } from '$lib/ownership-api';
   import {
     slugToTrackerName,
     trackerMetadata,
@@ -18,7 +18,7 @@
   import PageHeader from '$lib/components/nav/PageHeader.svelte';
   import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
   import Spinner from '$lib/components/feedback/Spinner.svelte';
-  import { getFieldsForTracker } from '$lib/catalog-field-meta';
+  import { getFieldsForTracker, getFacetKeyForField } from '$lib/catalog-field-meta';
 
   // Cache for REST API asset data (avoids re-fetching for each field)
   let cachedAssets: AssetSummary[] | null = null;
@@ -144,10 +144,40 @@
         }
       }
 
-      // Fallback: client-side aggregation from cached assets
+      // Tier 2: facets API — fast single-request distribution for Status/Country/etc.
+      const facetKey = getFacetKeyForField(fieldName);
+      if (facetKey) {
+        const apiSlug = resolveApiSlug(slug);
+        if (apiSlug) {
+          const page = await listAssets({ asset_type: apiSlug, limit: 1, facets: true });
+          const facetData = page.facets?.[facetKey];
+          if (facetData && Object.keys(facetData).length > 0) {
+            const totalAssets = page.total ?? Object.values(facetData).reduce((s, c) => s + c, 0);
+            const entries = Object.entries(facetData).sort((a, b) => b[1] - a[1]);
+            const nonNull = entries.reduce((s, [, c]) => s + c, 0);
+            return {
+              distribution: entries.slice(0, 50).map(([value, count]) => ({
+                value,
+                count,
+                percentage: totalAssets > 0 ? count / totalAssets : 0,
+              })),
+              totalRows: totalAssets,
+              nullCount: totalAssets - nonNull,
+              nonNullCount: nonNull,
+              uniqueCount: entries.length,
+              dataType: 'text',
+              dataSubType: 'categorical',
+            };
+          }
+        }
+      }
+
+      // Tier 3: client-side aggregation from cached assets
       const assets = await getAssetsForTracker(slug);
       const counts = new Map<string, number>();
-      const apiKeys = FIELD_TO_API_KEY[fieldName] || [fieldName, fieldName.toLowerCase()];
+      const apiKeys = codeFriendlyName
+        ? [codeFriendlyName, ...(FIELD_TO_API_KEY[fieldName] || []), fieldName.toLowerCase()]
+        : (FIELD_TO_API_KEY[fieldName] || [fieldName, fieldName.toLowerCase()]);
       for (const asset of assets) {
         const raw = asset.raw || {};
         let value: unknown = null;

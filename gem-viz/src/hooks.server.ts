@@ -24,5 +24,15 @@ export const handle: Handle = async ({ event, resolve }) => {
     response.headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
   }
 
+  // Add CORS headers for widget assets and embed.js so they can be
+  // dynamically imported from external sites (e.g. GEM Drupal pages)
+  if (
+    event.url.pathname.startsWith('/widgets') ||
+    event.url.pathname === '/embed.js'
+  ) {
+    response.headers.set('Access-Control-Allow-Origin', '*');
+    response.headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  }
+
   return response;
 };

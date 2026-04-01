@@ -5,24 +5,19 @@
    */
   import { onMount } from 'svelte';
   import { link } from '$lib/links';
-  import { getAssetTypeCounts, API_TYPE_TO_SLUG } from '$lib/ownership-api';
+  import { getAssetTypeCounts } from '$lib/ownership-api';
   import PageHeader from '$lib/components/nav/PageHeader.svelte';
-  import Spinner from '$lib/components/feedback/Spinner.svelte';
   import { trackerMetadata } from '$lib/data-config/tracker-metadata';
+  import { API_TYPE_TO_SLUG } from '$lib/data-config/tracker-schema';
   import { fetchSegments, getSegmentApiUrl, type Segment } from '$lib/api/segments-api';
   import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
   // State
   let trackerCounts = $state<Map<string, number>>(new Map());
   let segments = $state<Segment[]>([]);
-  let loading = $state(true);
-  let error = $state<string | null>(null);
 
-  // Load data - show page fast, load data in background
+  // Load data in background — page renders immediately
   onMount(async () => {
-    // Show page content immediately
-    loading = false;
-
     // Try to load segments
     fetchSegments()
       .then((result) => {
@@ -32,12 +27,14 @@
         if (import.meta.env.DEV) console.warn('Segments fetch failed:', err);
       });
 
-    // Fetch asset counts per tracker type from REST API (sampled + extrapolated)
+    // Fetch asset counts per tracker type from REST API
+    // TODO: 5/7 trackers missing counts — API_TYPE_TO_SLUG returns API slugs
+    // (e.g. "oil-gas-plant") but trackerMetadata uses URL slugs ("gas-plant").
+    // Need API slug → URL slug reverse mapping. See IDENTIFIER_TO_API_SLUG.
     getAssetTypeCounts()
       .then((apiCounts) => {
         const mapped = new Map<string, number>();
         for (const [apiType, count] of apiCounts) {
-          // Map API type name back to our tracker display name
           const slug = API_TYPE_TO_SLUG[apiType];
           if (slug && trackerMetadata[slug]) {
             mapped.set(trackerMetadata[slug].name, count);
@@ -80,16 +77,6 @@
     lead="Global Energy Monitor maintains comprehensive databases tracking energy infrastructure worldwide. Each tracker documents assets from announcement through operation and retirement."
   />
 
-  {#if loading}
-    <div class="loading">
-      <Spinner />
-      <p>Loading tracker data...</p>
-    </div>
-  {:else if error}
-    <div class="error">
-      <p>Error: {error}</p>
-    </div>
-  {:else}
     <div class="tracker-grid">
       {#each allTrackerSlugs as slug}
         {@const metadata = trackerMetadata[slug]}
@@ -135,26 +122,9 @@
         </div>
       </section>
     {/if}
-  {/if}
 </div>
 
 <style>
-  .loading,
-  .error {
-    text-align: center;
-    padding: var(--space-10);
-    color: var(--color-text-secondary);
-  }
-
-  .loading p {
-    font-size: var(--font-size-sm);
-    margin: 0;
-  }
-
-  .error {
-    color: var(--color-error, #b91c1c);
-  }
-
   .tracker-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));

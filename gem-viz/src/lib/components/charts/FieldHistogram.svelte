@@ -21,7 +21,7 @@
   } = $props();
 
   let numBins = $state(4);
-  let weight = $state(0.7);
+  let weight = $state(0.5);
 
   // =========================================================================
   // Jenks-weighted binning — ported from Observable notebook
@@ -403,11 +403,6 @@
       <span class="bins-label">Bins</span>
       <input type="range" min="2" max="12" step="1" bind:value={numBins} />
       <span class="bins-value">{numBins}</span>
-    </label>
-    <label class="bins-control">
-      <span class="bins-label">Weight:</span>
-      <input type="range" min="0" max="1" step="0.05" bind:value={weight} />
-      <span class="bins-value">{weight.toFixed(2)}</span>
     </label>
   </div>
 

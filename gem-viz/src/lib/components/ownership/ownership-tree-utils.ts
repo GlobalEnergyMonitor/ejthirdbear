@@ -16,8 +16,10 @@ export const SMALL_OWNERSHIP_PCT = 2;
 /** Max countries shown with distinct colors in country mode (rest → gray) */
 export const MAX_COUNTRY_COLORS = 5;
 
-/** Node radius by graph size: [<10 nodes, 10-25, >25, compact] */
-export const NODE_RADIUS = { small: 28, medium: 22, large: 18, compact: 10 } as const;
+/** Node radius by graph size: [<10 nodes, 10-25, >25, compact]
+ * Increased ~1.25x so ownership pie nodes read more clearly in the tree graph.
+ */
+export const NODE_RADIUS = { small: 35, medium: 28, large: 23, compact: 13 } as const;
 
 /** When graph exceeds this node count, switch to "large graph" mode (dimmer, denser) */
 export const LARGE_GRAPH_THRESHOLD = 30;
