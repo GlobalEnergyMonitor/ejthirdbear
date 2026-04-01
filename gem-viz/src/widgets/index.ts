@@ -68,10 +68,11 @@ const WIDGET_MAP: Record<string, () => Promise<{ default: unknown }>> = {
   entity: () => import('./GemEntityCard.svelte'),
   asset: () => import('./GemAssetCard.svelte'),
   'ownership-flower': () => import('./GemOwnershipFlower.svelte'),
+  'coal-plant': () => import('./GemCoalPlantCard.svelte'),
+  'coal-plant-test': () => import('./GemCoalPlantCard.svelte'),
   // Future widgets:
   // 'ownership-graph': () => import('./GemOwnershipGraph.svelte'),
   // 'project-card': () => import('./GemProjectCard.svelte'),
-  // 'coal-plant': () => import('./GemCoalPlantCard.svelte'),
   // 'asset-ring': () => import('./GemAssetRing.svelte'),
   // 'ultimate-owners': () => import('./GemUltimateOwners.svelte'),
   // 'network-3d': () => import('./GemNetworkGraph.svelte'),

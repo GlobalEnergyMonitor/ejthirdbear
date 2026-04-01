@@ -9,6 +9,18 @@
   import Spinner from '$lib/components/feedback/Spinner.svelte';
   import type { GraphNode, GraphEdge, OwnershipPathEntry } from '$lib/component-data/graph-types';
 
+  type OwnershipGraphResult = {
+    nodes?: GraphNode[];
+    edges?: GraphEdge[];
+    paths?: Record<string, OwnershipPathEntry[]>;
+  };
+
+  type OwnershipGraphLoader = (_params: {
+    root: string;
+    direction: 'up' | 'down';
+    max_depth: number;
+  }) => Promise<OwnershipGraphResult>;
+
   interface Props {
     assetId: string;
     compact?: boolean;
@@ -17,6 +29,7 @@
     showViewFull?: boolean;
     emptyMessage?: string;
     errorMessage?: string;
+    ownershipLoader?: OwnershipGraphLoader;
   }
   let {
     assetId,
@@ -26,6 +39,7 @@
     showViewFull = compact,
     emptyMessage = 'No ownership data available',
     errorMessage = 'Could not load ownership tree',
+    ownershipLoader,
   }: Props = $props();
 
   let loading = $state(true);
@@ -36,7 +50,21 @@
   let lastLoadKey = $state('');
   let requestSeq = 0;
 
-  async function loadGraph(loadAssetId: string, depth: number, loadKey: string) {
+  async function defaultOwnershipLoader(params: {
+    root: string;
+    direction: 'up' | 'down';
+    max_depth: number;
+  }): Promise<OwnershipGraphResult> {
+    const { getOwnershipGraph } = await import('$lib/ownership-api');
+    return getOwnershipGraph(params);
+  }
+
+  async function loadGraph(
+    loadAssetId: string,
+    depth: number,
+    loadKey: string,
+    loader: OwnershipGraphLoader
+  ) {
     const currentSeq = ++requestSeq;
     loading = true;
     error = null;
@@ -45,8 +73,7 @@
     paths = {};
 
     try {
-      const { getOwnershipGraph } = await import('$lib/ownership-api');
-      const result = await getOwnershipGraph({
+      const result = await loader({
         root: loadAssetId,
         direction: 'up',
         max_depth: depth,
@@ -76,9 +103,10 @@
   $effect(() => {
     const loadAssetId = assetId;
     const depth = maxDepth;
-    const loadKey = `${loadAssetId}:${depth}`;
+    const loader = ownershipLoader ?? defaultOwnershipLoader;
+    const loadKey = `${loadAssetId}:${depth}:${ownershipLoader ? 'custom' : 'default'}`;
     if (!loadAssetId || loadKey === lastLoadKey) return;
-    void loadGraph(loadAssetId, depth, loadKey);
+    void loadGraph(loadAssetId, depth, loadKey, loader);
   });
 </script>
 

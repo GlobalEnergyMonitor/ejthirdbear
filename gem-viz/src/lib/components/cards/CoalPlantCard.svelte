@@ -2,6 +2,7 @@
   import { scaleLinear } from 'd3-scale';
   import type { CoalPlantUnit } from './coal-plant-types';
   import { AssetOwnershipTree } from '$lib/components/ownership';
+  import type { GraphNode, GraphEdge, OwnershipPathEntry } from '$lib/component-data/graph-types';
   import {
     OPERATING_STATUSES,
     PLANNED_STATUSES,
@@ -15,9 +16,19 @@
   let {
     units: allUnits,
     open = false,
+    ownershipLoader,
   }: {
     units: CoalPlantUnit[];
     open?: boolean;
+    ownershipLoader?: (_params: {
+      root: string;
+      direction: 'up' | 'down';
+      max_depth: number;
+    }) => Promise<{
+      nodes?: GraphNode[];
+      edges?: GraphEdge[];
+      paths?: Record<string, OwnershipPathEntry[]>;
+    }>;
   } = $props();
 
   // Filter to coal units only; track other asset types for the "additional units" note
@@ -1042,6 +1053,7 @@
               showViewFull={false}
               emptyMessage="No ownership data available"
               errorMessage="Failed to load ownership data"
+              {ownershipLoader}
             />
           </div>
         {:else if ownershipActivated}

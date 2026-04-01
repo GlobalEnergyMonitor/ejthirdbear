@@ -165,6 +165,15 @@
           throw new Error('Could not parse widget type from: ' + dataSrc);
         }
 
+        // If this route doesn't have a dynamic widget, fall back quietly to iframe mode.
+        var available = typeof mod.listWidgets === 'function' ? mod.listWidgets() : [];
+        if (available.length && available.indexOf(parsed.type) === -1) {
+          container.removeAttribute('data-gem-initialized');
+          container.innerHTML = '';
+          createIframe(container, index);
+          return null;
+        }
+
         // Merge extra params from data-params attribute
         if (paramsAttr) {
           var trimmed = paramsAttr.trim();
@@ -199,6 +208,7 @@
         return mod.mountWidget(shadow, parsed.type, parsed.props);
       })
       .catch(function (err) {
+        if (!err) return;
         console.warn('[GEM Embed] Dynamic mode failed, falling back to iframe:', err.message || err);
         // Reset and fall back to iframe
         container.removeAttribute('data-gem-initialized');
