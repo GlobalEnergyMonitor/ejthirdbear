@@ -58,21 +58,65 @@
   /** Intermediary entities with their connected asset counts */
   let intermediaries = $state([]);
 
-  /** Active filter (null = none) */
-  let activeFilter = $state(null);
-  /** Filtered data (mirrors apiData structure but filtered) */
-  let filteredApiData = $state(null);
-  /** Filtered summary */
-  let filteredSummary = $state(null);
-  /** Filtered project groups */
-  let filteredProjectGroups = $state([]);
+  /**
+   * Multi-dimensional crossfilter:
+   * - OR within a column (clicking multiple values in same column = union)
+   * - AND across columns (country OR-set ∩ type OR-set ∩ status OR-set ∩ intermediary)
+   * - Click toggles individual values on/off
+   *
+   * Each column stores a Set of selected values. Empty set = no filter for that column.
+   * Intermediary stores { values: Set<name>, projectIds: Map<name, Set<projectId>> }
+   */
+  let filters = $state({
+    country: new Set(),
+    asset_type: new Set(),
+    operating_status: new Set(),
+    intermediary: new Set(),
+  });
+  /** Intermediary name → projectIds lookup (populated when intermediaries are clicked) */
+  let intermediaryProjectIds = $state(new Map());
 
-  /** Whether we're showing filtered or full data */
-  let isFiltered = $derived(activeFilter !== null);
+  /** Whether any filter is active */
+  let isFiltered = $derived(
+    filters.country.size > 0 ||
+    filters.asset_type.size > 0 ||
+    filters.operating_status.size > 0 ||
+    filters.intermediary.size > 0
+  );
+
+  /** Apply all active filters (OR within column, AND across columns) */
+  let filteredResult = $derived.by(() => {
+    if (!isFiltered || !apiData) return null;
+    let assets = apiData.assets;
+    if (filters.country.size > 0) {
+      assets = assets.filter((a) => filters.country.has(a.country));
+    }
+    if (filters.asset_type.size > 0) {
+      assets = assets.filter((a) => filters.asset_type.has(a.asset_type));
+    }
+    if (filters.operating_status.size > 0) {
+      assets = assets.filter((a) => filters.operating_status.has(a.operating_status));
+    }
+    if (filters.intermediary.size > 0) {
+      // Union all projectIds from selected intermediaries
+      const allPids = new Set();
+      for (const name of filters.intermediary) {
+        const pids = intermediaryProjectIds.get(name);
+        if (pids) for (const p of pids) allPids.add(p);
+      }
+      assets = assets.filter((a) => allPids.has(a.location_id || a.unit_id || a.asset_id));
+    }
+    return {
+      data: { ...apiData, assets },
+      summary: summarizeAssets(assets),
+      groups: makeProjectGroups(assets),
+    };
+  });
+
   /** The data currently being displayed */
-  let displayData = $derived(isFiltered ? filteredApiData : apiData);
-  let displaySummary = $derived(isFiltered ? filteredSummary : summary);
-  let displayProjectGroups = $derived(isFiltered ? filteredProjectGroups : projectGroups);
+  let displayData = $derived(filteredResult ? filteredResult.data : apiData);
+  let displaySummary = $derived(filteredResult ? filteredResult.summary : summary);
+  let displayProjectGroups = $derived(filteredResult ? filteredResult.groups : projectGroups);
 
   /** Color field: 'type' when multi-type, 'status' when single type */
   let colorField = $derived(
@@ -90,12 +134,13 @@
   /** Available viewport height for chart area */
   let containerHeight = $state(500);
 
-  /** Dynamic: how many rows fit in available height */
-  let maxRowsForTree = $derived(Math.max(8, Math.floor(containerHeight / treeParams.rowHeight)));
+  /** How many asset rows fit in one column (notebook: nRows = svgHeight / assetMarkHeightCombined) */
+  const ASSET_MARK_H = 26;
+  let nRowsFit = $derived(Math.max(4, Math.floor(Math.max(300, containerHeight - 80) / ASSET_MARK_H)));
 
-  /** Should we show the tree? */
+  /** Show tree only when all projects fit in a single column (notebook: projectGroups.length <= nRows) */
   let showTree = $derived(
-    displayProjectGroups.length <= maxRowsForTree && displayProjectGroups.length > 0
+    displayProjectGroups.length <= nRowsFit && displayProjectGroups.length > 0
   );
 
   /** DOM refs */
@@ -116,10 +161,7 @@
     summary = null;
     projectGroups = [];
     intermediaries = [];
-    activeFilter = null;
-    filteredApiData = null;
-    filteredSummary = null;
-    filteredProjectGroups = [];
+    filters = { country: new Set(), asset_type: new Set(), operating_status: new Set(), intermediary: new Set() };
 
     try {
       const resp = await fetch(
@@ -294,6 +336,7 @@
           entity_id: e.entity_id,
           name: e.name || e.full_name || e.entity_id,
           assetCount: connectedLeafs.size,
+          projectIds: connectedLeafs, // keep for filtering
         };
       })
       .filter((e) => e.assetCount > 0)
@@ -301,30 +344,32 @@
   }
 
   // ============================================================================
-  // FILTERING
+  // FILTERING — OR within column (click toggles), AND across columns
   // ============================================================================
-  function applyFilter(field, value) {
+  function applyFilter(field, value, projectIdSet) {
     if (!apiData) return;
-    if (activeFilter && activeFilter.field === field && activeFilter.value === value) {
-      // Toggle off
-      activeFilter = null;
-      filteredApiData = null;
-      filteredSummary = null;
-      filteredProjectGroups = [];
-      return;
+    const next = new Set(filters[field]);
+    if (next.has(value)) {
+      next.delete(value); // toggle off
+    } else {
+      next.add(value); // toggle on
     }
-    activeFilter = { field, value };
-    const filtered = apiData.assets.filter((a) => a[field] === value);
-    filteredApiData = { ...apiData, assets: filtered };
-    filteredSummary = summarizeAssets(filtered);
-    filteredProjectGroups = makeProjectGroups(filtered);
+    filters = { ...filters, [field]: next };
+    // Store intermediary projectIds when needed
+    if (field === 'intermediary' && projectIdSet) {
+      const nextMap = new Map(intermediaryProjectIds);
+      nextMap.set(value, projectIdSet);
+      intermediaryProjectIds = nextMap;
+    }
   }
 
   function clearFilter() {
-    activeFilter = null;
-    filteredApiData = null;
-    filteredSummary = null;
-    filteredProjectGroups = [];
+    filters = {
+      country: new Set(),
+      asset_type: new Set(),
+      operating_status: new Set(),
+      intermediary: new Set(),
+    };
   }
 
   // ============================================================================
@@ -348,7 +393,10 @@
   }
 
   function drawTree() {
-    if (!treeSvgEl || !apiData || !showTree) return;
+    if (!treeSvgEl || !apiData || !showTree) {
+      treeRoot = null;
+      return;
+    }
     const svg = d3.select(treeSvgEl);
     svg.selectAll('*').remove();
 
@@ -364,7 +412,7 @@
     const hierData = buildHierarchy(treePaths.pathStrings);
     const root = d3Hierarchy.hierarchy(hierData);
 
-    // Calculate height from leaf count with tight spacing
+    // Calculate height: use available container space, but at least enough for leaves
     const leaves = root.leaves();
     const nLeaves = leaves.length;
     let sibGaps = 0;
@@ -373,12 +421,13 @@
       if (leaves[i].parent === leaves[i + 1].parent) sibGaps++;
       else cousinGaps++;
     }
-    const calcHeight = Math.max(
-      100,
+    const contentHeight =
       nLeaves * treeParams.rowHeight +
-        sibGaps * treeParams.siblingSeparation +
-        cousinGaps * treeParams.cousinSeparation
-    );
+      sibGaps * treeParams.siblingSeparation +
+      cousinGaps * treeParams.cousinSeparation;
+    // Expand to fill available space (like the notebook does), but don't go below content needs
+    const availableHeight = Math.max(200, containerHeight - 80);
+    const calcHeight = Math.max(contentHeight, availableHeight);
 
     const margin = { left: 80, top: 20, right: 20, bottom: 20 };
     const width = 280 - margin.left - margin.right;
@@ -432,7 +481,8 @@
         const isLeaf = !d.target.children;
         const xS = d.source.y + nr + PAD;
         const yS = d.source.x;
-        const xT = isLeaf ? d.target.y + margin.right : d.target.y - nr - PAD;
+        // Leaf links extend to the right edge of the tree so they point at the asset icons
+        const xT = isLeaf ? width + margin.right : d.target.y - nr - PAD;
         const yT = d.target.x;
         const dx = xT - xS;
         const distX = Math.max(dx / 2, width * 0.075);
@@ -575,7 +625,7 @@
   }
 
   // ============================================================================
-  // ASSET SVG DRAWING
+  // ASSET SVG DRAWING (matches notebook's gridInfo + drawAssetsAndUnits)
   // ============================================================================
   function drawAssets() {
     if (!assetsSvgEl || !displayData) return;
@@ -585,58 +635,134 @@
     const groups = displayProjectGroups;
     if (groups.length === 0) return;
 
-    const rowH = 22;
     const unitR = 6;
     const labelX = 28;
-    const svgWidth = 500;
-    const totalHeight = groups.length * rowH + 10;
+    const assetMarkH = 26; // combined mark height (notebook: assetMarkHeightCombined)
+    const assetMarkSingle = 16;
 
-    svg.attr('width', svgWidth).attr('height', totalHeight);
+    // --- Grid layout (port of notebook's gridInfo + nRows) ---
+    // svgHeight drives how many rows fit in one column
+    const svgH = Math.max(300, containerHeight - 80);
+    const nRows = Math.max(4, Math.floor(svgH / assetMarkH));
+    const nProjects = groups.length;
+    const colsNeeded = Math.ceil(nProjects / nRows);
+    const minColWidth = 300;
+    const colWidth = Math.max(minColWidth, assetMarkH * 12);
+    const svgWidthNeeded = colsNeeded * colWidth;
 
-    const g = svg.append('g').attr('transform', 'translate(0, 5)');
+    // Single column = show tree + align to leaf positions
+    const isSingleColumn = nProjects <= nRows;
+
+    // Build a projectID → tree leaf y-position map (notebook pattern:
+    // "Add the x location of the D3 Tree to the data" — d.y = asset.x)
+    const leafYMap = new Map();
+    if (isSingleColumn && showTree && treeRoot) {
+      for (const leaf of treeRoot.leaves()) {
+        leafYMap.set(leaf.data.name, leaf.x); // tree "x" is vertical position
+      }
+    }
+
+    const margin = { top: 20, left: 20 };
+
+    // Calculate total height
+    let totalHeight;
+    if (isSingleColumn && leafYMap.size > 0) {
+      const maxY = Math.max(...leafYMap.values());
+      totalHeight = maxY + margin.top + 30;
+    } else {
+      // Multi-column: height = nRows * assetMarkH
+      const rowsInView = Math.min(nProjects, nRows);
+      totalHeight = rowsInView * assetMarkH + margin.top + 10;
+    }
+
+    svg.attr('width', svgWidthNeeded + margin.left).attr('height', totalHeight);
+
+    const g = svg.append('g').attr('transform', `translate(${margin.left}, ${margin.top})`);
 
     groups.forEach((proj, i) => {
-      const y = i * rowH + rowH / 2;
+      // Multi-column: wrap after nRows, each column offset by colWidth
+      const col = Math.floor(i / nRows);
+      const rowInCol = i % nRows;
+
+      // x = column offset, y = tree-aligned or row-based
+      const x = col * colWidth;
+      let y;
+      if (isSingleColumn && leafYMap.has(proj.projectID)) {
+        y = leafYMap.get(proj.projectID);
+      } else {
+        y = rowInCol * assetMarkH + assetMarkH / 2;
+      }
       const row = g
         .append('g')
         .attr('class', 'asset-row')
         .attr('data-project-id', proj.projectID)
-        .attr('transform', `translate(0, ${y})`);
+        .attr('transform', `translate(${x}, ${y})`);
 
       // Hover background
       row
         .append('rect')
-        .attr('x', -5)
-        .attr('y', -rowH / 2 + 2)
-        .attr('width', svgWidth)
-        .attr('height', rowH - 4)
-        .attr('rx', 4)
-        .style('fill', 'transparent')
+        .attr('x', -(assetMarkH / 2))
+        .attr('y', -assetMarkSingle / 2)
+        .attr('width', colWidth - 10)
+        .attr('height', assetMarkSingle)
+        .attr('rx', assetMarkSingle * 0.25)
+        .style('fill', 'white')
         .style('cursor', 'pointer')
+        .style('pointer-events', 'all')
         .on('mouseover', function () {
-          d3.select(this).style('fill', `${colors.midnightGreen}0F`);
-          // Cross-highlight tree
-          if (treeSvgEl) {
+          d3.select(this).style('fill', `${colors.bgSecondary}`);
+
+          // Highlight only this asset, dim others
+          g.selectAll('.asset-row')
+            .transition('fade')
+            .duration(100)
+            .style('opacity', function () {
+              return this.getAttribute('data-project-id') === proj.projectID ? 1 : 0.1;
+            });
+
+          // Cross-highlight tree: find the leaf for this project, trace ancestors
+          if (treeSvgEl && treeRoot) {
             const treeSvg = d3.select(treeSvgEl);
-            // Find tree leaf matching this project
-            treeSvg
-              .selectAll('.node-mark')
-              .transition()
-              .duration(100)
-              .style('opacity', 0.15);
-            treeSvg
-              .selectAll('path')
-              .transition()
-              .duration(100)
-              .style('opacity', 0.05);
+            const assetLeaf = treeRoot.leaves().find((l) => l.data.name === proj.projectID);
+            if (assetLeaf) {
+              const activeNodes = new Set([...assetLeaf.ancestors()]);
+
+              // Dim tree nodes not in the path
+              treeSvg
+                .selectAll('.node-mark')
+                .transition('fade')
+                .duration(100)
+                .style('opacity', (n) => (activeNodes.has(n) ? 1 : 0.15));
+
+              // Dim tree edges not connecting active nodes
+              treeSvg
+                .selectAll('.link-group path')
+                .transition('fade')
+                .duration(100)
+                .style('opacity', (l) =>
+                  activeNodes.has(l.source) && activeNodes.has(l.target) ? 1 : 0.05
+                );
+            }
           }
         })
         .on('mouseout', function () {
-          d3.select(this).style('fill', 'transparent');
+          d3.select(this).style('fill', 'white');
+
+          // Restore all assets
+          g.selectAll('.asset-row')
+            .transition('fade')
+            .duration(200)
+            .style('opacity', 1);
+
+          // Restore all tree elements
           if (treeSvgEl) {
             const treeSvg = d3.select(treeSvgEl);
-            treeSvg.selectAll('.node-mark').transition().duration(200).style('opacity', 1);
-            treeSvg.selectAll('path').transition().duration(200).style('opacity', 1);
+            treeSvg.selectAll('.node-mark').transition('fade').duration(200).style('opacity', 1);
+            treeSvg
+              .selectAll('.link-group path')
+              .transition('fade')
+              .duration(200)
+              .style('opacity', 1);
           }
         });
 
@@ -661,7 +787,8 @@
           .attr('cy', cy)
           .attr('r', circleR)
           .style('fill', unitColor)
-          .style('mix-blend-mode', 'multiply');
+          .style('mix-blend-mode', 'multiply')
+          .style('pointer-events', 'none');
 
         // Ownership pie slice if partial ownership
         if (unit.ownership_share && unit.ownership_share < 100 && unit.ownership_share > 1) {
@@ -700,7 +827,7 @@
         '$1'
       );
 
-      const labelG = row.append('g').attr('transform', `translate(${labelX}, 0)`);
+      const labelG = row.append('g').attr('transform', `translate(${labelX}, 0)`).style('pointer-events', 'none');
 
       // Type prefix for non-plants
       const assetType = (proj.units[0]?.asset_type || '').toLowerCase();
@@ -858,25 +985,26 @@
       </div>
     </div>
 
-    <!-- FILTER FOOTER (summary tables) -->
+    <!-- FILTER FOOTER — cross-column additive (AND), same-column click toggles -->
     <div class="chart-footer">
       <div class="summary-section">
         <p class="subtitle">By Location</p>
         <div class="summary-table">
-          {#each [...(displaySummary?.byCountry || summary.byCountry)] as [country, data]}
-            {@const isActive = activeFilter?.field === 'country' && activeFilter?.value === country}
-            {@const isFaded =
-              isFiltered && activeFilter?.field === 'country' && activeFilter?.value !== country}
+          {#each [...summary.byCountry] as [country, data]}
+            {@const isActive = filters.country.has(country)}
+            {@const filteredCount = displaySummary?.byCountry?.get(country)?.assetCount}
+            {@const hasResults = !isFiltered || filteredCount != null}
             <div
               class="summary-row"
               class:active={isActive}
-              class:faded={isFaded}
+              class:dimmed={isFiltered && !isActive && hasResults}
+              class:faded={isFiltered && !isActive && !hasResults}
               role="button"
               tabindex="0"
               onclick={() => applyFilter('country', country)}
               onkeydown={(e) => e.key === 'Enter' && applyFilter('country', country)}
             >
-              {country} ({data.assetCount})
+              {country} ({isFiltered ? (filteredCount ?? 0) : data.assetCount})
             </div>
           {/each}
         </div>
@@ -885,21 +1013,21 @@
       <div class="summary-section">
         <p class="subtitle">By Type</p>
         <div class="summary-table">
-          {#each [...(displaySummary?.byType || summary.byType)] as [type, data]}
-            {@const isActive =
-              activeFilter?.field === 'asset_type' && activeFilter?.value === type}
-            {@const isFaded =
-              isFiltered && activeFilter?.field === 'asset_type' && activeFilter?.value !== type}
+          {#each [...summary.byType] as [type, data]}
+            {@const isActive = filters.asset_type.has(type)}
+            {@const filteredCount = displaySummary?.byType?.get(type)?.assetCount}
+            {@const hasResults = !isFiltered || filteredCount != null}
             <div
               class="summary-row"
               class:active={isActive}
-              class:faded={isFaded}
+              class:dimmed={isFiltered && !isActive && hasResults}
+              class:faded={isFiltered && !isActive && !hasResults}
               role="button"
               tabindex="0"
               onclick={() => applyFilter('asset_type', type)}
               onkeydown={(e) => e.key === 'Enter' && applyFilter('asset_type', type)}
             >
-              {type} ({data.assetCount})
+              {type} ({isFiltered ? (filteredCount ?? 0) : data.assetCount})
             </div>
           {/each}
         </div>
@@ -908,23 +1036,21 @@
       <div class="summary-section">
         <p class="subtitle">By Status</p>
         <div class="summary-table">
-          {#each [...(displaySummary?.byStatus || summary.byStatus)] as [status, data]}
-            {@const isActive =
-              activeFilter?.field === 'operating_status' && activeFilter?.value === status}
-            {@const isFaded =
-              isFiltered &&
-              activeFilter?.field === 'operating_status' &&
-              activeFilter?.value !== status}
+          {#each [...summary.byStatus] as [status, data]}
+            {@const isActive = filters.operating_status.has(status)}
+            {@const filteredCount = displaySummary?.byStatus?.get(status)?.assetCount}
+            {@const hasResults = !isFiltered || filteredCount != null}
             <div
               class="summary-row"
               class:active={isActive}
-              class:faded={isFaded}
+              class:dimmed={isFiltered && !isActive && hasResults}
+              class:faded={isFiltered && !isActive && !hasResults}
               role="button"
               tabindex="0"
               onclick={() => applyFilter('operating_status', status)}
               onkeydown={(e) => e.key === 'Enter' && applyFilter('operating_status', status)}
             >
-              {status} ({data.assetCount})
+              {status} ({isFiltered ? (filteredCount ?? 0) : data.assetCount})
             </div>
           {/each}
         </div>
@@ -934,7 +1060,16 @@
         <p class="subtitle">Intermediaries</p>
         <div class="summary-table">
           {#each intermediaries as inter}
-            <div class="summary-row">
+            {@const isActive = filters.intermediary.has(inter.name)}
+            <div
+              class="summary-row"
+              class:active={isActive}
+              class:dimmed={isFiltered && !isActive}
+              role="button"
+              tabindex="0"
+              onclick={() => applyFilter('intermediary', inter.name, inter.projectIds)}
+              onkeydown={(e) => e.key === 'Enter' && applyFilter('intermediary', inter.name, inter.projectIds)}
+            >
               {inter.name} ({inter.assetCount})
             </div>
           {/each}
@@ -943,8 +1078,9 @@
     </div>
 
     {#if isFiltered}
+      {@const activeLabels = Object.values(filters).flatMap((s) => [...s])}
       <button class="clear-filter" onclick={clearFilter}>
-        Clear filter: {activeFilter?.value}
+        Clear filters: {activeLabels.join(' + ')}
       </button>
     {/if}
   {/if}
@@ -1129,12 +1265,20 @@
   .summary-row:hover {
     background: rgba(255, 255, 255, 0.15);
   }
+  .summary-row:focus-visible {
+    outline: 2px solid var(--gem-mint, #9df7e5);
+    outline-offset: 1px;
+    border-radius: var(--radius-sm);
+  }
   .summary-row.active {
     background: rgba(157, 247, 229, 0.25);
     font-weight: var(--font-weight-bold);
   }
+  .summary-row.dimmed {
+    opacity: 0.5;
+  }
   .summary-row.faded {
-    opacity: 0.25;
+    opacity: 0.2;
   }
 
   /* ---- Utils ---- */
