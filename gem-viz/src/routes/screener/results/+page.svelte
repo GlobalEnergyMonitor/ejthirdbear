@@ -160,6 +160,8 @@
 
   // Search/filter for journalists with watchlists
   let searchQuery = $state('');
+  const PAGE_SIZE = 100;
+  let currentPage = $state(0);
   // Modal state for ownership chart
   let chartModalOwner: { entityId: string; name: string; filteredAssets?: number } | null =
     $state(null);
@@ -338,8 +340,12 @@
     return result;
   });
 
+  const totalPages = $derived(Math.ceil(filteredOwners.length / PAGE_SIZE));
+  const pagedOwners = $derived(filteredOwners.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE));
+
   function handleOwnerSearch(query: string) {
     searchQuery = query;
+    currentPage = 0;
     const trimmed = query.trim();
     goto(
       buildScreenerUrl('screener/results', {
@@ -717,7 +723,7 @@
       </div>
 
       <ScreenerOwnersResultsTable
-        {filteredOwners}
+        filteredOwners={pagedOwners}
         {classDescription}
         {searchQuery}
         {viewMode}
@@ -726,6 +732,25 @@
         onToggleExpanded={openChartModal}
         onClearSearch={() => handleOwnerSearch('')}
       />
+
+      {#if totalPages > 1}
+        <div class="pagination">
+          <button
+            class="page-btn"
+            onclick={() => (currentPage -= 1)}
+            disabled={currentPage === 0}
+          >← Prev</button>
+          <span class="page-info">
+            {currentPage + 1} / {totalPages}
+            <span class="page-count">({filteredOwners.length.toLocaleString()} owners)</span>
+          </span>
+          <button
+            class="page-btn"
+            onclick={() => (currentPage += 1)}
+            disabled={currentPage >= totalPages - 1}
+          >Next →</button>
+        </div>
+      {/if}
     </section>
   </LoadingWrapper>
 
@@ -1014,6 +1039,43 @@
 
   .search-bar {
     margin-bottom: var(--space-3);
+  }
+
+  .pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-4);
+    padding: var(--space-4) 0 var(--space-2);
+  }
+
+  .page-btn {
+    padding: var(--space-1) var(--space-4);
+    font-size: var(--font-size-sm);
+    background: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    border: var(--border-width) solid var(--color-gray-300);
+    cursor: pointer;
+    transition: border-color var(--transition-base);
+  }
+
+  .page-btn:hover:not(:disabled) {
+    border-color: var(--color-text-secondary);
+  }
+
+  .page-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+
+  .page-info {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+  }
+
+  .page-count {
+    color: var(--color-text-tertiary);
+    margin-left: var(--space-1);
   }
 
   /* Page-specific debug styles */

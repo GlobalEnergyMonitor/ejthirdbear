@@ -651,9 +651,9 @@ export async function getOwnersByFilter(
   options: { limit?: number; skipCache?: boolean } = {}
 ): Promise<ScreenerResultsResponse> {
   const startTime = performance.now();
-  const { limit = 500, skipCache = false } = options;
+  const { skipCache = false } = options;
 
-  const cacheKey = JSON.stringify({ params, limit });
+  const cacheKey = JSON.stringify({ params });
   if (!skipCache) {
     const cached = ownersByFilterCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
@@ -683,35 +683,49 @@ export async function getOwnersByFilter(
         : [];
     for (const c of countries) p.append('country', c);
 
-    if (limit) p.set('limit', String(limit));
+    const PAGE_SIZE = 500; // API hard cap
+    p.set('limit', String(PAGE_SIZE));
 
-    const url = `${OWNERSHIP_API_BASE}/owners?${p.toString()}`;
-    const t0 = performance.now();
-    const resp = await fetch(url);
     const { logApiCall } = await import('$lib/api-log.svelte');
-    logApiCall({
-      url,
-      method: 'GET',
-      status: resp.status,
-      durationMs: performance.now() - t0,
-      timestamp: new Date(),
-      error: resp.ok ? undefined : `${resp.status}`,
-      reason: 'getOwnersByFilter (screener owners page)',
-    });
+    const rawOwners: Array<Record<string, unknown>> = [];
+    let offset = 0;
+    let total = Infinity;
 
-    if (!resp.ok) throw new Error(`/owners returned ${resp.status}`);
+    while (rawOwners.length < total) {
+      p.set('offset', String(offset));
+      const url = `${OWNERSHIP_API_BASE}/owners?${p.toString()}`;
+      const t0 = performance.now();
+      const resp = await fetch(url);
+      logApiCall({
+        url,
+        method: 'GET',
+        status: resp.status,
+        durationMs: performance.now() - t0,
+        timestamp: new Date(),
+        error: resp.ok ? undefined : `${resp.status}`,
+        reason: 'getOwnersByFilter (screener owners page)',
+      });
 
-    const data = await resp.json();
+      if (!resp.ok) throw new Error(`/owners returned ${resp.status}`);
 
-    if (import.meta.env.DEV) {
-      const sample = Array.isArray(data) ? data[0] : (data.owners ?? data.results ?? [])[0];
-      console.log('[screener-api] /owners raw response sample:', sample);
+      const data = await resp.json();
+
+      if (import.meta.env.DEV && offset === 0) {
+        const sample = Array.isArray(data) ? data[0] : (data.results ?? data.owners ?? [])[0];
+        console.log('[screener-api] /owners raw response sample:', sample);
+      }
+
+      const page: Array<Record<string, unknown>> = Array.isArray(data)
+        ? data
+        : (data.results ?? data.owners ?? []);
+
+      rawOwners.push(...page);
+      total = typeof data.total === 'number' ? data.total : rawOwners.length;
+      offset += PAGE_SIZE;
+
+      // Stop if the page was empty or we've fetched everything
+      if (page.length === 0) break;
     }
-
-    // Normalize API response — expect { owners: [{entity_id, name, asset_count, ...}] }
-    const rawOwners: Array<Record<string, unknown>> = Array.isArray(data)
-      ? data
-      : (data.owners ?? data.results ?? []);
 
     const owners: ScreenerOwner[] = rawOwners
       .map((o) => ({
@@ -750,7 +764,7 @@ export async function getOwnersByFilter(
       operation: 'getOwnersByFilter',
       durationMs: result.queryTimeMs,
       source: 'rest-api',
-      params: { ...params, limit },
+      params: params as unknown as Record<string, unknown>,
       resultCount: owners.length,
     });
 
@@ -767,7 +781,7 @@ export async function getOwnersByFilter(
       statuses: Array.isArray(params.status) ? params.status : params.status ? [params.status] : undefined,
       country: params.country,
     };
-    return getOwnersByAssetType(filters, { limit, skipCache });
+    return getOwnersByAssetType(filters, { skipCache });
   }
 }
 
