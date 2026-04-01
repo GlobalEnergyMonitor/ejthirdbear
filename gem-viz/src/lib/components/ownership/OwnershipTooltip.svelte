@@ -76,7 +76,7 @@
       </div>
       {#if pct > 0}
         <div class="tooltip-pct">
-          <span class="tooltip-pct-value">{pct.toFixed(1)}%</span> cumulative
+          <span class="tooltip-pct-value">{pct.toFixed(1)}%</span> ownership
           {#if directPct > 0 && directPct !== pct}
             · {directPct.toFixed(1)}% direct{#if isImputed} (est.){/if}
           {/if}
@@ -84,12 +84,10 @@
       {/if}
     {/if}
 
-    {#if isLargeGraph && !frozenId}
-      <div class="tooltip-hint">Drag to pan · Ctrl/Cmd + wheel to zoom</div>
-    {:else if frozenId && hoveredId === frozenId}
+    {#if frozenId && hoveredId === frozenId}
       <div class="tooltip-hint">Click to unpin · Double-click to open</div>
-    {:else if !hasEverFrozen && !frozenId}
-      <div class="tooltip-hint">Click to pin</div>
+    {:else}
+      <div class="tooltip-hint">Click for details</div>
     {/if}
   </div>
 {/if}

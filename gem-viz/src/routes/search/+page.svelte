@@ -1,15 +1,15 @@
 <script>
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
-  import { link, assetLink, entityLink } from '$lib/links';
-  import { listAssets, listEntities, getOwnershipGraph } from '$lib/ownership-api';
+  import { link, assetLink } from '$lib/links';
+  import { listAssets, getOwnershipGraph } from '$lib/ownership-api';
   import AssetSearchBar from '$lib/components/search/AssetSearchBar.svelte';
   import PageHeader from '$lib/components/nav/PageHeader.svelte';
   import OwnershipTreeGraph from '$lib/components/ownership/OwnershipTreeGraph.svelte';
   import StatusIcon from '$lib/components/tracker/StatusIcon.svelte';
   import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
-  const _initSearchType = /** @type {string} */ ($page.url.searchParams.get('type') || 'all');
+  const _initSearchType = 'assets';
   const _initQuery = $page.url.searchParams.get('q') || '';
   let searchType = $state(_initSearchType);
   let query = $state(_initQuery);
@@ -29,9 +29,7 @@
   let treeError = $state('');
 
   const modes = [
-    { id: 'all', label: 'All', placeholder: 'Search assets and entities...' },
     { id: 'assets', label: 'Assets', placeholder: 'Search assets...' },
-    { id: 'entities', label: 'Entities', placeholder: 'Search entities...' },
   ];
 
   // Debounce timer
@@ -75,31 +73,16 @@
     try {
       const merged = [];
 
-      if (type === 'all' || type === 'assets') {
-        const assetRes = await listAssets({ q, limit: 20 });
-        for (const a of assetRes.results) {
-          merged.push({
-            id: a.id,
-            name: a.name,
-            kind: 'asset',
-            country: a.country,
-            status: a.status,
-            asset_type: a.facilityType,
-          });
-        }
-      }
-
-      if (type === 'all' || type === 'entities') {
-        const entityRes = await listEntities({ q, limit: 20 });
-        for (const e of entityRes.results) {
-          const rec = /** @type {any} */ (e);
-          merged.push({
-            id: rec.id || rec.entity_id,
-            name: rec.name || rec.Name,
-            kind: 'entity',
-            country: rec.country || rec.hq_country,
-          });
-        }
+      const assetRes = await listAssets({ q, limit: 20 });
+      for (const a of assetRes.results) {
+        merged.push({
+          id: a.id,
+          name: a.name,
+          kind: 'asset',
+          country: a.country,
+          status: a.status,
+          asset_type: a.facilityType,
+        });
       }
 
       results = merged;
@@ -113,7 +96,7 @@
 
   function handleSearch(q, mode) {
     query = q;
-    searchType = mode || 'all';
+    searchType = mode || 'assets';
     clearTimeout(debounceTimer);
     updateUrl(q, searchType);
 
@@ -145,11 +128,9 @@
     treePaths = {};
 
     try {
-      // Assets: look up (who owns this?), Entities: look down (what do they own?)
-      const direction = item.kind === 'asset' ? 'up' : 'down';
       const graph = await getOwnershipGraph({
         root: item.id,
-        direction,
+        direction: 'up',
         max_depth: 3,
       });
 
@@ -174,11 +155,11 @@
   <title>Search — Global Energy Monitor</title>
   <meta
     name="description"
-    content="Search for assets and entities and view their ownership trees."
+    content="Search for assets and view their ownership trees."
   />
   <SeoMeta
     title="Search — Global Energy Monitor"
-    description="Search for assets and entities and view their ownership trees."
+    description="Search for assets and view their ownership trees."
   />
 </svelte:head>
 
@@ -186,7 +167,7 @@
   <PageHeader
     breadcrumbs={[{ label: 'Home', href: link('index') }, { label: 'Search' }]}
     title="Ownership Search"
-    lead="Search for assets or entities and view their ownership structure."
+    lead="Search for assets and view their ownership structure."
   />
 
   <section class="search-section">
@@ -194,7 +175,7 @@
       bind:value={query}
       bind:activeMode={searchType}
       {modes}
-      label="Search assets and entities"
+      label="Search assets"
       placeholder="Search by name..."
       showButton={false}
       onSearch={handleSearch}
@@ -228,9 +209,8 @@
               <span
                 class="result-kind"
                 class:asset={item.kind === 'asset'}
-                class:entity={item.kind === 'entity'}
               >
-                {item.kind === 'asset' ? 'Asset' : 'Entity'}
+                Asset
               </span>
               <span class="result-name">{item.name}</span>
               {#if item.status}
@@ -256,10 +236,7 @@
     <section class="tree-section">
       <div class="tree-header">
         <h2>{selected.name}</h2>
-        <a
-          href={selected.kind === 'asset' ? assetLink(selected.id) : entityLink(selected.id)}
-          class="detail-link"
-        >
+        <a href={assetLink(selected.id)} class="detail-link">
           View full details →
         </a>
       </div>
@@ -278,7 +255,7 @@
           />
         </div>
       {:else}
-        <p class="status">No ownership data available for this {selected.kind}.</p>
+        <p class="status">No ownership data available for this asset.</p>
       {/if}
     </section>
   {/if}
@@ -363,11 +340,6 @@
   .result-kind.asset {
     background: #e8f5e9;
     color: #2e7d32;
-  }
-
-  .result-kind.entity {
-    background: #e3f2fd;
-    color: #1565c0;
   }
 
   .result-name {

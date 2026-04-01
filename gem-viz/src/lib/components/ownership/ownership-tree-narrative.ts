@@ -81,8 +81,8 @@ export function buildNarrativeText(params: NarrativeParams): NarrativeResult {
 
     if (pct > 0) {
       let ownershipLine = isDownstream
-        ? `${assetName} holds ${pct.toFixed(1)}% cumulative ownership of ${name}`
-        : `Holds ${pct.toFixed(1)}% cumulative ownership of ${assetName}`;
+        ? `${assetName} holds ${pct.toFixed(1)}% ownership of ${name}`
+        : `Holds ${pct.toFixed(1)}% ownership of ${assetName}`;
       if (intermediaries > 0) {
         ownershipLine += ` through ${intermediaries} intermediar${intermediaries === 1 ? 'y' : 'ies'}`;
       }

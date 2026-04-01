@@ -7,7 +7,7 @@
   import ControlChainApp from '$lib/components/controlchain/ControlChainApp.svelte';
 
   const initialQuery = $page.url.searchParams.get('q') || '';
-  const initialType = $page.url.searchParams.get('type') || 'all';
+  const initialType = 'assets';
 
   function onStateChange(q, type) {
     const params = new URLSearchParams();
@@ -22,7 +22,7 @@
   <title>GEM ControlChain — Global Energy Monitor</title>
   <SeoMeta
     title="GEM ControlChain — Global Energy Monitor"
-    description="Explore ownership structures for energy assets worldwide. Search for any asset or entity to see who controls it."
+    description="Explore ownership structures for energy assets worldwide. Search for any asset to see who controls it."
   />
 </svelte:head>
 
@@ -30,7 +30,7 @@
   <PageHeader
     breadcrumbs={[{ label: 'Home', href: link('index') }, { label: 'ControlChain' }]}
     title="GEM ControlChain"
-    lead="Explore ownership structures for energy assets worldwide. Search for any asset or entity to trace who controls it."
+    lead="Explore ownership structures for energy assets worldwide. Search for any asset to trace who controls it."
   />
 
   <ControlChainApp {initialQuery} {initialType} {onStateChange} />

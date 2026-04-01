@@ -16,7 +16,11 @@
     formatPercent,
     type FieldInfo,
   } from '$lib/factsheet';
-  import { fetchNumericFieldStats, type NumericFieldStats } from '$lib/api/catalog-api';
+  import { readHashParam, writeHash } from '$lib/utils/hash-state';
+  import {
+    fetchFieldStats as fetchCatalogFieldStats,
+    type FieldStats as CatalogFieldStats,
+  } from '$lib/api/catalog-api';
   import FieldHistogram from '$lib/components/charts/FieldHistogram.svelte';
   import DataTypeIcon from '$lib/components/tracker/DataTypeIcon.svelte';
   import LoadingWrapper from '$lib/components/feedback/LoadingWrapper.svelte';
@@ -53,7 +57,9 @@
   let rowCount = $state(0);
   let selectedField = $state<FieldInfo | null>(null);
   let fieldStats = $state<{ value: string | number | null; count: number }[]>([]);
-  let numericStats = $state<NumericFieldStats | null>(null);
+  let numericStats = $state<CatalogFieldStats | null>(null);
+  let sampleValues = $state<string[]>([]);
+  let catalogUniqueCount = $state<number | null>(null);
   let statsLoading = $state(false);
 
   const isNumericField = $derived((selectedField as any)?.dataType === 'numeric');
@@ -115,20 +121,46 @@
     modalOpen = true;
     numericStats = null;
     fieldStats = [];
+    sampleValues = [];
+    catalogUniqueCount = null;
 
     onFieldSelect?.(field.columnName);
+    writeHash({ field: field.columnName });
 
-    const codeFriendlyName = (field as any).codeFriendlyName as string | undefined;
-    const dataType = (field as any).dataType as string | undefined;
+    const codeFriendlyName = (field as unknown as Record<string, unknown>).codeFriendlyName as string | undefined;
+    const dataType = (field as unknown as Record<string, unknown>).dataType as string | undefined;
+    if (import.meta.env.DEV) console.log('[DatasetFactsheet] loadStats', field.columnName, { codeFriendlyName, dataType, catalogSlug });
 
     try {
-      if (dataType === 'numeric' && catalogSlug && codeFriendlyName) {
-        // Numeric field: fetch pre-sorted values array for histogram
-        numericStats = await fetchNumericFieldStats(catalogSlug, codeFriendlyName);
-      } else {
-        // Categorical/text field: aggregate value counts client-side
-        fieldStats = await fetchFieldStats(tracker, field.columnName);
+      // Try catalog API first (works for all field types when available)
+      if (catalogSlug && codeFriendlyName) {
+        const catalogStats = await fetchCatalogFieldStats(catalogSlug, codeFriendlyName);
+        if (catalogStats) {
+          if (dataType === 'numeric' && catalogStats.values?.length) {
+            numericStats = catalogStats;
+          } else if (catalogStats.value_counts?.length) {
+            // Categorical: convert catalog value_counts to fieldStats format
+            fieldStats = catalogStats.value_counts.map((v) => ({
+              value: v.value,
+              count: v.count,
+            }));
+            rowCount = catalogStats.total_rows;
+            catalogUniqueCount = catalogStats.unique_count;
+          } else if (catalogStats.sample_values?.length) {
+            // High-cardinality text: show sample values
+            sampleValues = catalogStats.sample_values;
+            catalogUniqueCount = catalogStats.unique_count;
+            rowCount = catalogStats.total_rows;
+          }
+          // If catalog returned something, we're done
+          if (numericStats || fieldStats.length || sampleValues.length) {
+            return;
+          }
+        }
       }
+
+      // Fallback: client-side aggregation
+      fieldStats = await fetchFieldStats(tracker, field.columnName);
     } catch (err) {
       if (import.meta.env.DEV) console.error('Failed to load field stats:', err);
     } finally {
@@ -153,20 +185,32 @@
     };
   });
 
-  onMount(async () => {
+  // Auto-select initial field when fieldsMetadata arrives.
+  // On first mount, fieldsMetadata may be empty (parent is still fetching),
+  // so we watch for it to become populated rather than relying on onMount alone.
+  let hasAutoSelected = false;
+
+  async function initializeView() {
     loading = true;
     rowCount = await fetchRowCount(tracker);
-    // Auto-select field from initialField prop, or default to Status
-    const targetName = initialField || 'Status';
+    const hashField = readHashParam('field');
+    const targetName = hashField || initialField || 'Status';
     const targetField = fieldsMetadata.find((f) => f.columnName === targetName && !f.fieldValue);
     if (targetField) {
-      // Expand the category so the field is visible
       if (targetField.category && !expandedCategories.has(targetField.category)) {
         expandedCategories = new Set([...expandedCategories, targetField.category]);
       }
       await loadStats(targetField);
     }
     loading = false;
+  }
+
+  $effect(() => {
+    // Subscribe to fieldsMetadata changes — client-only to avoid SSR fetch
+    const fieldCount = fieldsMetadata.length;
+    if (typeof window === 'undefined' || fieldCount === 0 || hasAutoSelected) return;
+    hasAutoSelected = true;
+    initializeView();
   });
 </script>
 
@@ -205,27 +249,36 @@
           totalRows={numericStats.total_rows}
         />
       {:else}
-        {#if uniqueCount > 0}
+        {#if uniqueCount > 0 || (catalogUniqueCount != null && catalogUniqueCount > 0)}
           {#if nullCount > 0}
             <div class="null-info">
               <span class="field-value">Null</span> in {nullCount} rows ({formatPercent(nullPct)})
             </div>
           {/if}
-          <div class="unique-count">{uniqueCount} distinct values:</div>
-          <div class="previewer-values-table">
-            {#each fieldStats.filter((s) => s.value !== null && s.value !== '') as stat}
-              {@const barPct = pctBase > 0 ? (stat.count / pctBase) * 100 : 0}
-              <div class="value-row">
-                <span class="field-value">{stat.value}</span>
-                <span class="value-bar-wrap">
-                  <span class="value-bar" style="width: {barPct.toFixed(1)}%"></span>
-                </span>
-                <span class="value-count">
-                  {stat.count}{pctBase > 0 ? ` (${formatPercent(stat.count / pctBase)})` : ''}
-                </span>
-              </div>
-            {/each}
-          </div>
+          <div class="unique-count">{catalogUniqueCount ?? uniqueCount} distinct values:</div>
+          {#if fieldStats.filter((s) => s.value !== null && s.value !== '').length > 0}
+            <div class="previewer-values-table">
+              {#each fieldStats.filter((s) => s.value !== null && s.value !== '') as stat}
+                {@const barPct = pctBase > 0 ? (stat.count / pctBase) * 100 : 0}
+                <div class="value-row">
+                  <span class="field-value">{stat.value}</span>
+                  <span class="value-bar-wrap">
+                    <span class="value-bar" style="width: {barPct.toFixed(1)}%"></span>
+                  </span>
+                  <span class="value-count">
+                    {stat.count}{pctBase > 0 ? ` (${formatPercent(stat.count / pctBase)})` : ''}
+                  </span>
+                </div>
+              {/each}
+            </div>
+          {:else if sampleValues.length > 0}
+            <div class="sample-values">
+              <div class="sample-label">Sample values:</div>
+              {#each sampleValues as sv}
+                <span class="sample-value">{shorten(sv, 60)}</span>
+              {/each}
+            </div>
+          {/if}
         {/if}
 
         {#if valueDefinitions.length > 0}
@@ -308,29 +361,38 @@
         />
       {:else}
         <!-- Categorical/text field: value count list -->
-        {#if uniqueCount > 0}
+        {#if uniqueCount > 0 || (catalogUniqueCount != null && catalogUniqueCount > 0)}
           {#if nullCount > 0}
             <div class="null-info">
               <span class="field-value">Null</span> in {nullCount} rows ({formatPercent(nullPct)})
             </div>
           {/if}
 
-          <div class="unique-count">{uniqueCount} distinct values:</div>
+          <div class="unique-count">{catalogUniqueCount ?? uniqueCount} distinct values:</div>
 
-          <div class="previewer-values-table">
-            {#each fieldStats.filter((s) => s.value !== null && s.value !== '') as stat}
-              {@const barPct = pctBase > 0 ? (stat.count / pctBase) * 100 : 0}
-              <div class="value-row">
-                <span class="field-value">{stat.value}</span>
-                <span class="value-bar-wrap">
-                  <span class="value-bar" style="width: {barPct.toFixed(1)}%"></span>
-                </span>
-                <span class="value-count">
-                  {stat.count}{pctBase > 0 ? ` (${formatPercent(stat.count / pctBase)})` : ''}
-                </span>
-              </div>
-            {/each}
-          </div>
+          {#if fieldStats.filter((s) => s.value !== null && s.value !== '').length > 0}
+            <div class="previewer-values-table">
+              {#each fieldStats.filter((s) => s.value !== null && s.value !== '') as stat}
+                {@const barPct = pctBase > 0 ? (stat.count / pctBase) * 100 : 0}
+                <div class="value-row">
+                  <span class="field-value">{stat.value}</span>
+                  <span class="value-bar-wrap">
+                    <span class="value-bar" style="width: {barPct.toFixed(1)}%"></span>
+                  </span>
+                  <span class="value-count">
+                    {stat.count}{pctBase > 0 ? ` (${formatPercent(stat.count / pctBase)})` : ''}
+                  </span>
+                </div>
+              {/each}
+            </div>
+          {:else if sampleValues.length > 0}
+            <div class="sample-values">
+              <div class="sample-label">Sample values:</div>
+              {#each sampleValues as sv}
+                <span class="sample-value">{shorten(sv, 60)}</span>
+              {/each}
+            </div>
+          {/if}
         {/if}
 
         {#if valueDefinitions.length > 0}
@@ -457,10 +519,6 @@
     display: inline-flex;
     align-items: center;
     gap: var(--space-1);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 280px;
     vertical-align: top;
     transition: all var(--transition-base, 0.15s ease);
   }
@@ -476,10 +534,6 @@
     border-color: var(--gem-teal);
   }
 
-  .field-category-group.expanded .field-bubble {
-    white-space: initial;
-    max-width: initial;
-  }
 
   .field-name > span.definition {
     display: none;
@@ -514,6 +568,28 @@
     font-size: var(--font-size-sm);
     color: var(--color-text-secondary);
     margin-top: var(--space-2);
+  }
+
+  .sample-values {
+    margin-top: var(--space-2);
+  }
+
+  .sample-label {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--space-2);
+  }
+
+  .sample-value {
+    display: inline-block;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    background: var(--color-bg-secondary);
+    padding: 2px var(--space-2);
+    border-radius: var(--radius-sm);
+    margin: 0 var(--space-1) var(--space-1) 0;
   }
 
   .value-row {

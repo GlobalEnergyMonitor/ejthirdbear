@@ -41,6 +41,10 @@
       columnName: string;
       category: string;
       definition: string;
+      dataType?: string;
+      dataSubType?: string;
+      unit?: string;
+      codeFriendlyName?: string;
       fieldValue?: string | null;
       valueDefinition?: string | null;
     }>
@@ -61,45 +65,8 @@
     }>
   >([]);
 
-  async function loadFieldsMetadata() {
-    const { fields, categoriesOrdered: cats } = await getTrackerFieldData(trackerParam);
-    fieldsMetadata = fields;
-    if (cats.length) categoriesOrdered = cats;
-  }
-
-  async function loadSampleAssets() {
-    try {
-      const slug = trackerNameToSlug[tracker] || tracker.toLowerCase().replace(/\s+/g, '-');
-      const assets = await listAssetsByType(slug, { limit: 50 });
-
-      const sorted = assets
-        .filter((a) => a.capacity != null)
-        .sort((a, b) => (b.capacity ?? 0) - (a.capacity ?? 0))
-        .slice(0, 6);
-
-      const primaryOwner = (idx: number) => sorted[idx]?.owners?.[0];
-      sampleAssets = sorted.map((a, i) => ({
-        id: a.id,
-        name: a.name,
-        status: a.status || '',
-        capacity: a.capacity ?? undefined,
-        capacityUnit: a.capacityUnit || (tracker.includes('Mine') ? 'Mtpa' : 'MW'),
-        country: a.country ?? undefined,
-        state:
-          (a.raw?.['Subnational unit (province, state)'] as string | undefined) ??
-          (a.raw?.['State'] as string | undefined) ??
-          undefined,
-        owner: a.ownerName ?? primaryOwner(i)?.name ?? undefined,
-        ownershipShare: primaryOwner(i)?.ownershipShare ?? undefined,
-        tracker,
-      }));
-    } catch {
-      // sample assets are optional
-    }
-  }
-
   onMount(async () => {
-    // Fetch API-ordered tracker list for tabs
+    // Fetch API-ordered tracker list for tabs (once)
     try {
       const index = await fetchCatalogIndex();
       if (index?.trackers?.length) {
@@ -107,7 +74,6 @@
           .map((t) => CATALOG_SLUG_TO_URL_SLUG[t.slug])
           .filter((s): s is string => !!s && !!trackerMetadata[s]);
         if (apiSlugs.length) {
-          // API-ordered trackers first, then remaining hardcoded trackers alphabetically
           const apiSet = new Set(apiSlugs);
           const remaining = Object.keys(trackerMetadata)
             .filter((s) => !apiSet.has(s))
@@ -118,8 +84,62 @@
     } catch {
       // keep hardcoded fallback
     }
+  });
 
-    Promise.all([loadFieldsMetadata(), loadSampleAssets()]);
+  // Re-fetch field metadata and sample assets whenever the tracker param changes.
+  // Clears stale data immediately + cancels in-flight fetches on rapid tab switches.
+  $effect(() => {
+    const slug = trackerParam;
+    const trackerName = slugToTrackerName[slug] || slug;
+
+    // Clear stale data immediately so UI doesn't flash old tracker's content
+    fieldsMetadata = [];
+    categoriesOrdered = [];
+    sampleAssets = [];
+
+    let stale = false;
+
+    // Fetch field metadata
+    getTrackerFieldData(slug).then(({ fields, categoriesOrdered: cats }) => {
+      if (stale) return;
+      fieldsMetadata = fields;
+      if (cats.length) categoriesOrdered = cats;
+    });
+
+    // Fetch sample assets
+    const apiSlug =
+      trackerNameToSlug[trackerName] || trackerName.toLowerCase().replace(/\s+/g, '-');
+    listAssetsByType(apiSlug, { limit: 50 })
+      .then((assets) => {
+        if (stale) return;
+        const sorted = assets
+          .filter((a) => a.capacity != null)
+          .sort((a, b) => (b.capacity ?? 0) - (a.capacity ?? 0))
+          .slice(0, 6);
+
+        const primaryOwner = (idx: number) => sorted[idx]?.owners?.[0];
+        sampleAssets = sorted.map((a, i) => ({
+          id: a.id,
+          name: a.name,
+          status: a.status || '',
+          capacity: a.capacity ?? undefined,
+          capacityUnit: a.capacityUnit || (trackerName.includes('Mine') ? 'Mtpa' : 'MW'),
+          country: a.country ?? undefined,
+          state:
+            (a.raw?.['Subnational unit (province, state)'] as string | undefined) ??
+            (a.raw?.['State'] as string | undefined) ??
+            undefined,
+          owner: a.ownerName ?? primaryOwner(i)?.name ?? undefined,
+          ownershipShare: primaryOwner(i)?.ownershipShare ?? undefined,
+          tracker: trackerName,
+        }));
+      })
+      .catch(() => {});
+
+    // Cleanup: mark in-flight fetches as stale when tracker changes again
+    return () => {
+      stale = true;
+    };
   });
 
   // Tracker nav — driven by API, falls back to hardcoded
@@ -174,14 +194,16 @@
     {/each}
   </nav>
 
-  <!-- Main content: field explorer -->
-  <DatasetFactsheet
-    {tracker}
-    {fieldsMetadata}
-    {categoriesOrdered}
-    catalogSlug={URL_SLUG_TO_CATALOG_SLUG[trackerParam] ?? ''}
-    title="{info.title} Fields"
-  />
+  <!-- Main content: field explorer (keyed so it remounts on tracker change) -->
+  {#key trackerParam}
+    <DatasetFactsheet
+      {tracker}
+      {fieldsMetadata}
+      {categoriesOrdered}
+      catalogSlug={URL_SLUG_TO_CATALOG_SLUG[trackerParam] ?? ''}
+      title="{info.title} Fields"
+    />
+  {/key}
 
   <!-- Sample assets -->
   {#if sampleAssets.length > 0}

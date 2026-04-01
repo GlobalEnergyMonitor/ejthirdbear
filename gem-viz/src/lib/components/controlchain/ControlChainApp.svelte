@@ -5,33 +5,35 @@
    *
    * Props:
    *   initialQuery  - Starting search query
-   *   initialType   - Starting search type: "all" | "assets" | "entities"
+   *   initialType   - Starting search type; coerced to "assets"
    *   onStateChange - Called with (q, type) whenever search state changes
    *                   (caller uses this to update URL params or hash)
    */
-  import { untrack } from 'svelte';
-  import { listAssets, listEntities, getOwnershipGraph } from '$lib/ownership-api';
+  import { onMount, untrack } from 'svelte';
+  import { listAssets, getAsset, getOwnershipGraph } from '$lib/ownership-api';
+  import { readHashParam, writeHash } from '$lib/utils/hash-state';
   import AssetSearchBar from '$lib/components/search/AssetSearchBar.svelte';
   import OwnershipTreeGraph from '$lib/components/ownership/OwnershipTreeGraph.svelte';
   import StatusIcon from '$lib/components/tracker/StatusIcon.svelte';
+  import { classifyOwnerType } from '$lib/components/ownership/ownership-tree-utils';
+
+  const PLACEHOLDER_ENTITY_IDS = new Set(['E100001015587', 'E100000123261', 'E100000132388']);
 
   /** @type {{ initialQuery?: string, initialType?: string, onStateChange?: (q: string, type: string) => void }} */
   let { initialQuery = '', initialType = 'all', onStateChange } = $props();
 
   const modes = [
-    { id: 'all', label: 'All', placeholder: 'Search by name, ID, owner, or country...' },
-    { id: 'assets', label: 'Assets', placeholder: 'Search assets by name...' },
-    { id: 'entities', label: 'Entities', placeholder: 'Search entities by name...' },
+    { id: 'assets', label: 'Assets', placeholder: 'Search assets by name, ID, owner, or country...' },
   ];
 
   const examples = [
-    { name: 'Eskom', kind: 'entity', q: 'Eskom' },
-    { name: 'Adani Power', kind: 'entity', q: 'Adani Power' },
     { name: 'Medupi', kind: 'asset', q: 'Medupi' },
-    { name: 'NTPC', kind: 'entity', q: 'NTPC' },
+    { name: 'Bowline Point', kind: 'asset', q: 'Bowline Point' },
+    { name: 'Tavan Tolgoi', kind: 'asset', q: 'Tavan Tolgoi' },
+    { name: 'Nord Stream', kind: 'asset', q: 'Nord Stream' },
   ];
 
-  let searchType = $state(untrack(() => initialType));
+  let searchType = $state('assets');
   let query = $state(untrack(() => initialQuery));
 
   let results = $state(/** @type {any[]} */ ([]));
@@ -49,7 +51,97 @@
   let treeDirection = $state('auto');
   let modalOpen = $state(false);
 
+  // Mobile summary: data-driven sentences derived from tree data
+  const mobileSummary = $derived.by(() => {
+    if (treeNodes.length === 0 || !selected) return null;
+    const filtered = treeNodes.filter((n) => !PLACEHOLDER_ENTITY_IDS.has(n.entity_id || n.id));
+    const entities = filtered.filter((n) => n.type !== 'asset' && n.id !== treeRootId);
+    if (entities.length === 0) return null;
+
+    const assetNode = filtered.find((n) => n.type === 'asset' || n.id === treeRootId);
+    const assetName = assetNode?.Name || assetNode?.name || selected.name || 'This asset';
+    const isDown = treeDirection !== 'upstream';
+
+    // Direct owners/subsidiaries
+    const directEdges = isDown
+      ? treeEdges.filter((e) => e.source === treeRootId)
+      : treeEdges.filter((e) => e.target === treeRootId);
+    const directIds = new Set(directEdges.map((e) => isDown ? e.target : e.source));
+    const directEntities = entities.filter((n) => directIds.has(n.id));
+
+    // By type
+    const byType = {};
+    for (const n of entities) {
+      const cat = classifyOwnerType(n);
+      byType[cat] = (byType[cat] || 0) + 1;
+    }
+
+    // By country
+    const byCountry = {};
+    for (const n of entities) {
+      const c = n.headquarters_country || 'Unknown';
+      byCountry[c] = (byCountry[c] || 0) + 1;
+    }
+    const topCountries = Object.entries(byCountry)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5);
+
+    // Top owners by direct edge value
+    const topOwners = directEntities
+      .map((n) => {
+        const edge = directEdges.find((e) => (isDown ? e.target : e.source) === n.id);
+        return { name: n.name || n.Name || n.id, pct: edge?.value || 0 };
+      })
+      .sort((a, b) => b.pct - a.pct)
+      .slice(0, 5);
+
+    // Build sentences
+    const lines = [];
+    lines.push(
+      isDown
+        ? `${assetName} has ${directEntities.length} direct owner${directEntities.length !== 1 ? 's' : ''} and ${entities.length} entities in its ownership structure.`
+        : `${assetName} has ${directEntities.length} direct subsidiar${directEntities.length !== 1 ? 'ies' : 'y'} and ${entities.length} entities downstream.`
+    );
+
+    if (topOwners.length > 0) {
+      const ownerStr = topOwners
+        .map((o) => `${o.name}${o.pct > 0 ? ` (${o.pct.toFixed(1)}%)` : ''}`)
+        .join(', ');
+      lines.push(`Top owners: ${ownerStr}.`);
+    }
+
+    const typeStr = Object.entries(byType)
+      .sort((a, b) => b[1] - a[1])
+      .map(([t, c]) => `${c} ${t}`)
+      .join(', ');
+    if (typeStr) lines.push(`By type: ${typeStr}.`);
+
+    if (topCountries.length > 0) {
+      const countryStr = topCountries
+        .map(([c, n]) => `${c} (${n})`)
+        .join(', ');
+      lines.push(`By headquarters: ${countryStr}.`);
+    }
+
+    return { lines, topOwners, byType, byCountry: topCountries, totalEntities: entities.length };
+  });
+
   let debounceTimer;
+
+  // Restore modal from hash deep-link (e.g. #asset=A12345)
+  onMount(async () => {
+    const assetId = readHashParam('asset');
+    if (assetId) {
+      try {
+        const asset = await getAsset(assetId);
+        if (asset) {
+          selectResult({ id: asset.id, name: asset.name, status: asset.status, country: asset.country, facilityType: asset.facilityType, capacity: asset.capacity });
+        }
+      } catch {
+        // invalid deep-link, ignore
+      }
+    }
+  });
 
   $effect(() => {
     const q = query;
@@ -77,30 +169,17 @@
     hasSearched = true;
     try {
       const merged = [];
-      if (type === 'all' || type === 'assets') {
-        const r = await listAssets({ q, limit: 20 });
-        for (const a of r.results) {
-          merged.push({
-            id: a.id,
-            name: a.name,
-            kind: 'asset',
-            country: a.country,
-            status: a.status,
-            asset_type: a.facilityType,
-          });
-        }
-      }
-      if (type === 'all' || type === 'entities') {
-        const r = await listEntities({ q, limit: 20 });
-        for (const e of r.results) {
-          const rec = /** @type {any} */ (e);
-          merged.push({
-            id: rec.id || rec.entity_id,
-            name: rec.name || rec.Name,
-            kind: 'entity',
-            country: rec.country || rec.hq_country,
-          });
-        }
+
+      const r = await listAssets({ q, limit: 20 });
+      for (const a of r.results) {
+        merged.push({
+          id: a.id,
+          name: a.name,
+          kind: 'asset',
+          country: a.country,
+          status: a.status,
+          asset_type: a.facilityType,
+        });
       }
       results = merged;
     } catch (err) {
@@ -113,7 +192,7 @@
 
   function handleSearch(q, mode) {
     query = q;
-    searchType = mode || 'all';
+    searchType = mode || 'assets';
     clearTimeout(debounceTimer);
     onStateChange?.(q, searchType);
     if (!q || q.length < 2) {
@@ -140,17 +219,19 @@
     selected = null;
     treeNodes = [];
     treeEdges = [];
+    writeHash({ asset: null });
   }
 
   async function selectResult(item) {
     selected = item;
     modalOpen = true;
+    writeHash({ asset: item.id });
     loadingTree = true;
     treeError = '';
     treeNodes = [];
     treeEdges = [];
     treePaths = {};
-    const direction = item.kind === 'asset' ? 'up' : 'down';
+    const direction = 'up';
     treeDirection = direction;
     try {
       const graph = await getOwnershipGraph({ root: item.id, direction, max_depth: 5 });
@@ -167,7 +248,7 @@
 
   function searchExample(ex) {
     query = ex.q;
-    searchType = ex.kind === 'asset' ? 'assets' : 'entities';
+    searchType = 'assets';
     doSearch(query, searchType);
     onStateChange?.(query, searchType);
   }
@@ -175,9 +256,8 @@
   // Run initial search if a query was provided
   {
     const q = untrack(() => initialQuery);
-    const t = untrack(() => initialType);
     if (q && q.length >= 2) {
-      doSearch(q, t);
+      doSearch(q, 'assets');
     }
   }
 </script>
@@ -188,7 +268,7 @@
       bind:value={query}
       bind:activeMode={searchType}
       {modes}
-      label="Search assets and entities"
+      label="Search assets"
       placeholder="Search by name..."
       showButton={false}
       onSearch={handleSearch}
@@ -198,14 +278,14 @@
 
   {#if !hasSearched && !selected}
     <div class="cc-empty">
-      <p class="cc-empty-prompt">Try searching for an entity or asset, or explore an example:</p>
+      <p class="cc-empty-prompt">Try searching for an asset, or explore an example:</p>
       <div class="cc-examples">
         {#each examples as ex}
           <button class="cc-chip" onclick={() => searchExample(ex)}>
             <span
               class="cc-kind"
               class:asset={ex.kind === 'asset'}
-              class:entity={ex.kind === 'entity'}>{ex.kind}</span
+            >{ex.kind}</span
             >
             {ex.name}
           </button>
@@ -243,9 +323,8 @@
               <span
                 class="cc-result-kind"
                 class:asset={item.kind === 'asset'}
-                class:entity={item.kind === 'entity'}
               >
-                {item.kind === 'asset' ? 'Asset' : 'Entity'}
+                Asset
               </span>
               <div class="cc-result-info">
                 <span class="cc-result-name">{item.name}</span>
@@ -302,7 +381,8 @@
         {:else if treeError}
           <div class="cc-tree-error">{treeError}</div>
         {:else if treeNodes.length > 0}
-          <div class="cc-tree-wrap">
+          <!-- Desktop: full interactive graph -->
+          <div class="cc-tree-wrap cc-desktop-only">
             <OwnershipTreeGraph
               nodes={treeNodes}
               edges={treeEdges}
@@ -312,6 +392,43 @@
               fullWidth={true}
             />
           </div>
+
+          <!-- Mobile: data-driven summary replacing the graph -->
+          {#if mobileSummary}
+            <div class="cc-mobile-summary">
+              {#each mobileSummary.lines as line}
+                <p class="cc-summary-line">{line}</p>
+              {/each}
+
+              {#if mobileSummary.topOwners.length > 0}
+                <div class="cc-summary-section">
+                  <h4>Top Owners</h4>
+                  <ul class="cc-summary-list">
+                    {#each mobileSummary.topOwners as o}
+                      <li>
+                        <span class="cc-owner-name">{o.name}</span>
+                        {#if o.pct > 0}<span class="cc-owner-pct">{o.pct.toFixed(1)}%</span>{/if}
+                      </li>
+                    {/each}
+                  </ul>
+                </div>
+              {/if}
+
+              {#if mobileSummary.byCountry.length > 0}
+                <div class="cc-summary-section">
+                  <h4>By Headquarters</h4>
+                  <ul class="cc-summary-list">
+                    {#each mobileSummary.byCountry as [country, count]}
+                      <li>
+                        <span class="cc-owner-name">{country}</span>
+                        <span class="cc-owner-pct">{count} owner{count !== 1 ? 's' : ''}</span>
+                      </li>
+                    {/each}
+                  </ul>
+                </div>
+              {/if}
+            </div>
+          {/if}
         {:else}
           <div class="cc-tree-empty">No ownership data available for this {selected.kind}.</div>
         {/if}
@@ -376,11 +493,6 @@
     background: #e8f5e9;
     color: #2e7d32;
   }
-  .cc-kind.entity {
-    background: #e3f2fd;
-    color: #1565c0;
-  }
-
   /* Error / status */
   .cc-error {
     color: var(--color-error, #c00);
@@ -480,10 +592,6 @@
   .cc-result-kind.asset {
     background: #e8f5e9;
     color: #2e7d32;
-  }
-  .cc-result-kind.entity {
-    background: #e3f2fd;
-    color: #1565c0;
   }
   .cc-result-info {
     flex: 1;
@@ -650,5 +758,70 @@
     font-size: var(--font-size-sm);
     padding: var(--space-8);
     text-align: center;
+  }
+
+  /* Mobile: hide graph, show summary */
+  .cc-mobile-summary {
+    display: none;
+  }
+
+  @media (max-width: 768px) {
+    .cc-desktop-only {
+      display: none;
+    }
+    .cc-mobile-summary {
+      display: block;
+      padding: var(--space-2) 0;
+    }
+    .cc-modal {
+      width: 100vw;
+      max-width: 100vw;
+      max-height: 100vh;
+      min-height: auto;
+      border-radius: 0;
+    }
+    .cc-modal-backdrop {
+      padding: 0;
+    }
+  }
+
+  .cc-summary-line {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-primary);
+    line-height: 1.5;
+    margin: 0 0 var(--space-2) 0;
+  }
+  .cc-summary-section {
+    margin-top: var(--space-4);
+  }
+  .cc-summary-section h4 {
+    font-size: var(--font-size-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-text-tertiary);
+    margin: 0 0 var(--space-2) 0;
+    font-weight: 600;
+  }
+  .cc-summary-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .cc-summary-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-1) 0;
+    font-size: var(--font-size-sm);
+    border-bottom: 1px solid var(--color-border);
+  }
+  .cc-owner-name {
+    color: var(--color-text-primary);
+    font-weight: 500;
+  }
+  .cc-owner-pct {
+    color: var(--color-text-secondary);
+    font-variant-numeric: tabular-nums;
+    font-size: var(--font-size-xs);
   }
 </style>

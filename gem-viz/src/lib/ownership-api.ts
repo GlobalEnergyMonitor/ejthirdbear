@@ -162,6 +162,7 @@ export interface GraphEdge {
   source: string;
   target: string;
   value?: number | null;
+  closes_cycle?: boolean;
 }
 
 export interface EntityGraphResponse {
@@ -180,6 +181,7 @@ export interface OwnershipGraphResponse {
       type?: 'leafEdge' | 'intermediateEdge';
       refUrl?: string | null;
       imputed_share?: boolean;
+      closes_cycle?: boolean;
       depth?: number;
     }
   >;

@@ -153,6 +153,31 @@ Any visualization can be made embeddable as a standalone iframe. Embeds live und
 
 **Helpers** from `embed-utils.ts`: `errorMessage(err, fallback)`, `intParam(val, default)`, `boolParam(val, default)`, `loadEntityPortfolio(entityId)`.
 
+## Tracker Metadata Configuration
+
+The file `src/lib/data-config/tracker-metadata.ts` controls which trackers appear across the app — FieldGuide tabs, FieldGuide index cards, and anywhere `trackerMetadata` is referenced.
+
+**How it works:** The `trackerMetadata` object maps URL slugs to tracker info (name, description, color, citation, etc.). Only trackers present in this object appear in the UI.
+
+**Currently enabled:**
+
+| Slug | Name | API catalog metadata |
+| --- | --- | --- |
+| `coal-plant` | Coal Plant | Yes (`coal-plants`) |
+| `coal-mine` | Coal Mine | Yes (`coal-mines`) |
+
+**Currently commented out** (no API catalog metadata yet):
+
+| Slug | Name |
+| --- | --- |
+| `gas-plant` | Gas Plant |
+| `iron-mine` | Iron Mine |
+| `steel-plant` | Steel Plant |
+| `gas-pipeline` | Gas Pipeline |
+| `bioenergy` | Bioenergy Power |
+
+**To re-enable a tracker:** Uncomment its entry in `trackerMetadata` in `tracker-metadata.ts`. The tracker will immediately appear in FieldGuide tabs and index. Verify that the API has catalog metadata for it at `GET /catalog/metadata?format=json` first.
+
 ## Changelog
 
 See [CHANGELOG.md](./CHANGELOG.md).

@@ -67,6 +67,7 @@ export interface GraphEdge {
   type?: string;
   refUrl?: string | null;
   imputed_share?: boolean;
+  closes_cycle?: boolean;
   depth?: number;
 }
 

@@ -6,7 +6,7 @@
   import { goto } from '$app/navigation';
   import { entityLink } from '$lib/links';
   import type { GraphNode, GraphEdge } from '$lib/component-data/graph-types';
-  import { getNodeColors, type ColorMode } from './ownership-tree-utils';
+  import { getNodeColors, COUNTRY_COLORS, COUNTRY_GRAY, OWNERSHIP_ENTITY_COLORS, pieArc, type ColorMode } from './ownership-tree-utils';
 
   let {
     ownersList,
@@ -17,6 +17,7 @@
     rootId,
     hoveredId = null,
     frozenId = null,
+    frozenMeta = null,
     frozenNodeData = null,
     hoverSource = null,
     teaseNode,
@@ -33,15 +34,18 @@
     onFreeze,
     onTogglePanel,
     isNodeInFrozenPath,
+    minOwnershipPct = $bindable(0),
+    showSlider = false,
   }: {
     ownersList: Array<{ id: string; nid: string; name: string; pct: number; category: string; country: string }>;
     sortedOwnersList: typeof ownersList;
-    ownersByCountry: Array<[string, { count: number; ids: string[] }]>;
-    ownersByType: Array<[string, { count: number; ids: string[] }]>;
+    ownersByCountry: Array<[string, { combinedShare: number; count: number; ids: string[] }]>;
+    ownersByType: Array<[string, { combinedShare: number; count: number; ids: string[] }]>;
     nodes: GraphNode[];
     rootId: string;
     hoveredId: string | null;
     frozenId: string | null;
+    frozenMeta: { kind: 'entity' | 'asset' | 'country' | 'entity-type'; label: string; facts: string[] } | null;
     frozenNodeData: { nodesTouched: string[]; edgeIndices: number[] } | null;
     hoverSource: 'graph' | 'panel' | null;
     teaseNode: { ownerId: string | null; country: string | null; entityType: string | null };
@@ -55,9 +59,15 @@
     onNavigate?: (url: string) => void;
     onHover: (id: string, data: { nodesTouched: string[]; edgeIndices: number[] } | null) => void;
     onLeave: () => void;
-    onFreeze: (id: string | null, data: { nodesTouched: string[]; edgeIndices: number[] } | null) => void;
+    onFreeze: (
+      id: string | null,
+      data: { nodesTouched: string[]; edgeIndices: number[] } | null,
+      meta?: { kind: 'entity' | 'asset' | 'country' | 'entity-type'; label: string; facts: string[] } | null
+    ) => void;
     onTogglePanel: () => void;
     isNodeInFrozenPath: (id: string) => boolean;
+    minOwnershipPct?: number;
+    showSlider?: boolean;
   } = $props();
 
   function nav(entityNid: string) {
@@ -72,9 +82,18 @@
     {panelOpen ? '▲' : '▼'}
   </button>
 
+  {#if showSlider}
+    <label class="panel-slider">
+      <span class="slider-label-prefix">Min ownership</span>
+      <input type="range" min="0" max="100" step="1" bind:value={minOwnershipPct} />
+      <span class="slider-value">{minOwnershipPct > 0 ? `${minOwnershipPct}%` : 'All'}</span>
+    </label>
+  {/if}
+
   <!-- Section 1: Owner Entities -->
   <div class="tabular-section">
     <h4>Owner Entities</h4>
+    <div class="tabular-rows-wrap">
     <div class="tabular-rows">
       {#each sortedOwnersList as o}
         {@const _rowColors = getNodeColors(o.id, rootId, nodes, colorMode, countryRanks)}
@@ -102,7 +121,11 @@
             if (frozenId === o.id) {
               onFreeze(null, null);
             } else {
-              onFreeze(o.id, pathsTouchedMap.get(o.nid) || null);
+              onFreeze(o.id, pathsTouchedMap.get(o.nid) || null, {
+                kind: 'entity',
+                label: o.name,
+                facts: [o.category, o.country || 'HQ unknown', `${o.pct.toFixed(1)}% ownership`],
+              });
             }
           }}
           ondblclick={() => nav(o.nid)}
@@ -112,22 +135,21 @@
         </div>
       {/each}
     </div>
+    </div>
   </div>
 
   <!-- Section 2: By Headquarter Country -->
   {#if ownersByCountry.length > 0}
     <div class="tabular-section">
       <h4>By Headquarter Country</h4>
+      <div class="tabular-rows-wrap">
       <div class="tabular-rows">
         {#each ownersByCountry as [country, data]}
+          {@const cRank = countryRanks.get(country)}
+          {@const cColor = cRank != null && cRank < COUNTRY_COLORS.length ? COUNTRY_COLORS[cRank] : COUNTRY_GRAY}
           <div
             class="tabular-row"
-            class:is-frozen-view={frozenNodeData &&
-              frozenNodeData.nodesTouched.length > 0 &&
-              data.ids.every((id) => frozenNodeData!.nodesTouched.includes(id)) &&
-              data.ids.some(
-                (id) => frozenId === id || frozenNodeData!.nodesTouched.includes(id)
-              )}
+            class:is-frozen-view={frozenMeta?.kind === 'country' && frozenMeta.label === country}
             class:tease-connection={hoverSource === 'graph' &&
               teaseNode.country === country}
             role="button"
@@ -138,26 +160,49 @@
             }}
             onmouseleave={onLeave}
             onclick={() => {
-              if (frozenId && data.ids.includes(frozenId)) {
+              if (frozenMeta?.kind === 'country' && frozenMeta.label === country) {
                 onFreeze(null, null);
               } else {
-                onFreeze(data.ids[0] || null, data.ids.length > 0 ? { nodesTouched: data.ids, edgeIndices: [] } : null);
+                onFreeze(
+                  null,
+                  data.ids.length > 0 ? { nodesTouched: data.ids, edgeIndices: [] } : null,
+                  {
+                    kind: 'country',
+                    label: country,
+                    facts: [`${data.count} owner${data.count !== 1 ? 's' : ''}`, `${data.combinedShare.toFixed(1)}% combined`],
+                  }
+                );
               }
             }}
             onkeydown={(ev) => {
               if (ev.key === 'Enter' || ev.key === ' ') {
                 ev.preventDefault();
-                if (frozenId && data.ids.includes(frozenId)) {
+                if (frozenMeta?.kind === 'country' && frozenMeta.label === country) {
                   onFreeze(null, null);
                 } else {
-                  onFreeze(data.ids[0] || null, data.ids.length > 0 ? { nodesTouched: data.ids, edgeIndices: [] } : null);
+                  onFreeze(
+                    null,
+                    data.ids.length > 0 ? { nodesTouched: data.ids, edgeIndices: [] } : null,
+                    {
+                      kind: 'country',
+                      label: country,
+                      facts: [`${data.count} owner${data.count !== 1 ? 's' : ''}`, `${data.combinedShare.toFixed(1)}% combined`],
+                    }
+                  );
                 }
               }
             }}
           >
+            {#if colorMode === 'country'}
+              <svg class="pie-swatch" viewBox="0 0 14 14" width="14" height="14">
+                <circle cx="7" cy="7" r="6" fill={cColor.bg} stroke={cColor.bg} stroke-width="1" />
+                <path d={pieArc(50, 5)} transform="translate(7,7)" fill={cColor.fg} />
+              </svg>
+            {/if}
             <span class="table-row-text">{country} ({data.count} owner{data.count !== 1 ? 's' : ''})</span>
           </div>
         {/each}
+      </div>
       </div>
     </div>
   {/if}
@@ -166,10 +211,13 @@
   {#if ownersByType.length > 0}
     <div class="tabular-section">
       <h4>By Entity Type</h4>
+      <div class="tabular-rows-wrap">
       <div class="tabular-rows">
         {#each ownersByType as [type, data]}
+          {@const eColor = OWNERSHIP_ENTITY_COLORS[type] || OWNERSHIP_ENTITY_COLORS['Other']}
           <div
             class="tabular-row"
+            class:is-frozen-view={frozenMeta?.kind === 'entity-type' && frozenMeta.label === type}
             class:tease-connection={hoverSource === 'graph' &&
               teaseNode.entityType === type}
             role="button"
@@ -180,26 +228,49 @@
             }}
             onmouseleave={onLeave}
             onclick={() => {
-              if (frozenId && data.ids.includes(frozenId)) {
+              if (frozenMeta?.kind === 'entity-type' && frozenMeta.label === type) {
                 onFreeze(null, null);
               } else {
-                onFreeze(data.ids[0] || null, data.ids.length > 0 ? { nodesTouched: data.ids, edgeIndices: [] } : null);
+                onFreeze(
+                  null,
+                  data.ids.length > 0 ? { nodesTouched: data.ids, edgeIndices: [] } : null,
+                  {
+                    kind: 'entity-type',
+                    label: type,
+                    facts: [`${data.count} owner${data.count !== 1 ? 's' : ''}`, `${data.combinedShare.toFixed(1)}% combined`],
+                  }
+                );
               }
             }}
             onkeydown={(ev) => {
               if (ev.key === 'Enter' || ev.key === ' ') {
                 ev.preventDefault();
-                if (frozenId && data.ids.includes(frozenId)) {
+                if (frozenMeta?.kind === 'entity-type' && frozenMeta.label === type) {
                   onFreeze(null, null);
                 } else {
-                  onFreeze(data.ids[0] || null, data.ids.length > 0 ? { nodesTouched: data.ids, edgeIndices: [] } : null);
+                  onFreeze(
+                    null,
+                    data.ids.length > 0 ? { nodesTouched: data.ids, edgeIndices: [] } : null,
+                    {
+                      kind: 'entity-type',
+                      label: type,
+                      facts: [`${data.count} owner${data.count !== 1 ? 's' : ''}`, `${data.combinedShare.toFixed(1)}% combined`],
+                    }
+                  );
                 }
               }
             }}
           >
+            {#if colorMode === 'entity-type'}
+              <svg class="pie-swatch" viewBox="0 0 14 14" width="14" height="14">
+                <circle cx="7" cy="7" r="6" fill={eColor.bg} stroke={eColor.bg} stroke-width="1" />
+                <path d={pieArc(50, 5)} transform="translate(7,7)" fill={eColor.fg} />
+              </svg>
+            {/if}
             <span class="table-row-text">{type} ({data.count} owner{data.count !== 1 ? 's' : ''})</span>
           </div>
         {/each}
+      </div>
       </div>
     </div>
   {/if}
@@ -228,6 +299,38 @@
     border-bottom: 1px solid rgba(0, 0, 0, 0.08);
     margin-bottom: 4px;
   }
+  .panel-slider {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 4px 8px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  }
+  .slider-label-prefix {
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: var(--tree-teal, #004f61);
+    white-space: nowrap;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .slider-value {
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: var(--tree-navy, #1d4961);
+    width: 32px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+  }
+  .panel-slider input[type='range'] {
+    flex: 1;
+    min-width: 40px;
+    height: 4px;
+    accent-color: var(--tree-teal, #004f61);
+    cursor: pointer;
+  }
   .tabular-section {
     margin-bottom: 12px;
   }
@@ -239,17 +342,47 @@
     margin: 0 0 4px;
     font-weight: 600;
   }
+  .tabular-rows-wrap {
+    position: relative;
+    max-height: 350px;
+  }
+  .tabular-rows-wrap::after {
+    content: '';
+    position: sticky;
+    bottom: 0;
+    display: block;
+    height: 32px;
+    pointer-events: none;
+    background: linear-gradient(to bottom, transparent, var(--tree-warm-white, #f2f2eb));
+  }
   .tabular-rows {
     display: flex;
     flex-direction: column;
+    max-height: 350px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 79, 97, 0.3) transparent;
+  }
+  .tabular-rows::-webkit-scrollbar {
+    width: 3px;
+  }
+  .tabular-rows::-webkit-scrollbar-thumb {
+    background: rgba(0, 79, 97, 0.3);
+    border-radius: 3px;
   }
   .tabular-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
     padding: 3px 6px;
     cursor: pointer;
     border-radius: 3px;
     transition: background 0.1s ease, opacity 0.2s ease;
     font-size: 0.72rem;
     line-height: 1.35;
+  }
+  .pie-swatch {
+    flex-shrink: 0;
   }
   .tabular-row:hover,
   .tabular-row.is-hovered-view {

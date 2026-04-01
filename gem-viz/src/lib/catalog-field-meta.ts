@@ -38,53 +38,78 @@ const TRACKER_TO_CATALOG_SLUG = URL_SLUG_TO_CATALOG_SLUG;
 // HARDCODED FALLBACK (common fields across all trackers)
 // =============================================================================
 
-const FALLBACK_FIELDS: Record<string, { category: string; definition: string }> = {
-  Status: { category: 'Main', definition: 'Current operating status of the asset.' },
-  Country: { category: 'Geography', definition: 'Country where the asset is located.' },
-  Countries: { category: 'Geography', definition: 'Countries the pipeline passes through.' },
-  Owner: { category: 'Ownership', definition: 'Primary owner or operator.' },
-  'Immediate Owner Entity Name': {
-    category: 'Ownership',
-    definition: 'Direct ownership entity name.',
+/**
+ * Fallback fields derived from the normalized API schema.
+ * These match actual top-level fields on every asset — no phantom fields.
+ * codeFriendlyName maps to the API field key for distribution fetching.
+ * facetKey (when set) enables fast distribution via /assets?facets=true.
+ */
+interface FallbackField {
+  category: string;
+  definition: string;
+  codeFriendlyName: string;
+  dataType?: string;
+  dataSubType?: string;
+  unit?: string;
+  /** If set, distribution can be fetched from facets endpoint */
+  facetKey?: string;
+}
+
+const FALLBACK_FIELDS: Record<string, FallbackField> = {
+  Status: {
+    category: 'Main',
+    definition: 'Current operating status of the asset.',
+    codeFriendlyName: 'operating_status',
+    dataType: 'text',
+    dataSubType: 'categorical',
+    facetKey: 'status',
   },
-  'Start year': {
-    category: 'Age',
-    definition: 'Year the asset began or is planned to begin operation.',
+  'Sub-Status': {
+    category: 'Main',
+    definition: 'Detailed operating sub-status.',
+    codeFriendlyName: 'operating_sub_status',
+    dataType: 'text',
+    dataSubType: 'categorical',
+    facetKey: 'sub_status',
   },
-  'Capacity (MW)': { category: 'Size', definition: 'Generating capacity in megawatts.' },
-  'Capacity (Mtpa)': {
+  Country: {
+    category: 'Geography',
+    definition: 'Country where the asset is located.',
+    codeFriendlyName: 'country',
+    dataType: 'text',
+    dataSubType: 'categorical',
+    facetKey: 'country',
+  },
+  'State / Province': {
+    category: 'Geography',
+    definition: 'State or province where the asset is located.',
+    codeFriendlyName: 'state_province',
+    dataType: 'text',
+    dataSubType: 'categorical',
+  },
+  'Asset Name': {
+    category: 'Names',
+    definition: 'Name of the asset or project.',
+    codeFriendlyName: 'asset_name',
+    dataType: 'text',
+  },
+  Capacity: {
     category: 'Size',
-    definition: 'Production capacity in million tonnes per annum.',
+    definition: 'Production or generating capacity (unit varies by tracker).',
+    codeFriendlyName: 'capacity_value',
+    dataType: 'numeric',
   },
-  'Design capacity (ttpa)': {
-    category: 'Size',
-    definition: 'Design production capacity in thousand tonnes per annum.',
-  },
-  'Nominal crude steel capacity (ttpa)': {
-    category: 'Size',
-    definition: 'Nominal crude steel production capacity in thousand tonnes per annum.',
-  },
-  'CapacityBcm/y': {
-    category: 'Size',
-    definition: 'Pipeline capacity in billion cubic meters per year.',
-  },
-  'Fuel type': { category: 'Details', definition: 'Type of fuel used by the plant.' },
-  Technology: { category: 'Details', definition: 'Technology or process type used.' },
-  'Mine type': {
-    category: 'Details',
-    definition: 'Type of mining operation (surface, underground, etc.).',
-  },
-  Feedstock: { category: 'Details', definition: 'Primary feedstock material for bioenergy.' },
-  'Asset Name': { category: 'Names', definition: 'Name of the asset or project.' },
-  '% Share of Ownership': { category: 'Ownership', definition: 'Percentage ownership stake.' },
-  'Asset Type': { category: 'Main', definition: 'Type of tracked asset (plant, mine, pipeline).' },
   Latitude: {
     category: 'Geography',
     definition: 'Geographic latitude coordinate (decimal degrees).',
+    codeFriendlyName: 'latitude',
+    dataType: 'numeric',
   },
   Longitude: {
     category: 'Geography',
     definition: 'Geographic longitude coordinate (decimal degrees).',
+    codeFriendlyName: 'longitude',
+    dataType: 'numeric',
   },
 };
 
@@ -193,5 +218,17 @@ function getFallbackFields(): FieldMeta[] {
     columnName: name,
     category: meta.category,
     definition: meta.definition,
+    codeFriendlyName: meta.codeFriendlyName,
+    dataType: meta.dataType,
+    dataSubType: meta.dataSubType,
+    unit: meta.unit,
   }));
+}
+
+/**
+ * For a given field, return the facet key if it can be resolved via the
+ * /assets?facets=true endpoint (much faster than paginating all assets).
+ */
+export function getFacetKeyForField(fieldName: string): string | undefined {
+  return FALLBACK_FIELDS[fieldName]?.facetKey;
 }

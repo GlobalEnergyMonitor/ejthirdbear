@@ -104,19 +104,20 @@ export const trackerMetadata: Record<string, TrackerMetadata> = {
     keyFields: ['Status', 'Capacity (MW)', 'Country', 'Owner', 'Start year'],
   },
 
-  'gas-plant': {
-    slug: 'gas-plant',
-    name: 'Gas Plant',
-    description:
-      'Tracks gas-fired power generation facilities globally, including LNG terminals and combined-cycle plants, with detailed ownership and capacity data.',
-    color: '#1D4961',
-    externalLinks: {
-      gemPage: gemTrackerPage('gas-plant'),
-    },
-    citation:
-      'Global Energy Monitor, Global Gas Plant Tracker, May 2025 release. Distributed under a Creative Commons Attribution 4.0 International License.',
-    keyFields: ['Status', 'Capacity (MW)', 'Country', 'Owner', 'Fuel type'],
-  },
+  // TODO: Uncomment non-coal trackers when their catalog metadata is available in the API
+  // 'gas-plant': {
+  //   slug: 'gas-plant',
+  //   name: 'Gas Plant',
+  //   description:
+  //     'Tracks gas-fired power generation facilities globally, including LNG terminals and combined-cycle plants, with detailed ownership and capacity data.',
+  //   color: '#1D4961',
+  //   externalLinks: {
+  //     gemPage: gemTrackerPage('gas-plant'),
+  //   },
+  //   citation:
+  //     'Global Energy Monitor, Global Gas Plant Tracker, May 2025 release. Distributed under a Creative Commons Attribution 4.0 International License.',
+  //   keyFields: ['Status', 'Capacity (MW)', 'Country', 'Owner', 'Fuel type'],
+  // },
 
   'coal-mine': {
     slug: 'coal-mine',
@@ -133,61 +134,61 @@ export const trackerMetadata: Record<string, TrackerMetadata> = {
     keyFields: ['Status', 'Capacity (Mtpa)', 'Country', 'Owner', 'Mine type'],
   },
 
-  'iron-mine': {
-    slug: 'iron-mine',
-    name: 'Iron Mine',
-    description:
-      'Tracks iron ore mining operations globally, providing data on extraction capacity, ownership, and development status.',
-    color: '#8b4513',
-    externalLinks: {
-      gemPage: gemTrackerPage('iron-mine'),
-    },
-    citation:
-      'Global Energy Monitor, Global Iron Mine Tracker, May 2025 release. Distributed under a Creative Commons Attribution 4.0 International License.',
-    keyFields: ['Status', 'Design capacity (ttpa)', 'Country', 'Owner'],
-  },
+  // 'iron-mine': {
+  //   slug: 'iron-mine',
+  //   name: 'Iron Mine',
+  //   description:
+  //     'Tracks iron ore mining operations globally, providing data on extraction capacity, ownership, and development status.',
+  //   color: '#8b4513',
+  //   externalLinks: {
+  //     gemPage: gemTrackerPage('iron-mine'),
+  //   },
+  //   citation:
+  //     'Global Energy Monitor, Global Iron Mine Tracker, May 2025 release. Distributed under a Creative Commons Attribution 4.0 International License.',
+  //   keyFields: ['Status', 'Design capacity (ttpa)', 'Country', 'Owner'],
+  // },
 
-  'steel-plant': {
-    slug: 'steel-plant',
-    name: 'Steel Plant',
-    description:
-      'Comprehensive database of steel manufacturing facilities worldwide, tracking crude steel capacity, production technology, and ownership.',
-    color: '#5a6a7a',
-    externalLinks: {
-      gemPage: gemTrackerPage('steel-plant'),
-    },
-    citation:
-      'Global Energy Monitor, Global Steel Plant Tracker, May 2025 release. Distributed under a Creative Commons Attribution 4.0 International License.',
-    keyFields: ['Status', 'Nominal crude steel capacity (ttpa)', 'Country', 'Owner', 'Technology'],
-  },
+  // 'steel-plant': {
+  //   slug: 'steel-plant',
+  //   name: 'Steel Plant',
+  //   description:
+  //     'Comprehensive database of steel manufacturing facilities worldwide, tracking crude steel capacity, production technology, and ownership.',
+  //   color: '#5a6a7a',
+  //   externalLinks: {
+  //     gemPage: gemTrackerPage('steel-plant'),
+  //   },
+  //   citation:
+  //     'Global Energy Monitor, Global Steel Plant Tracker, May 2025 release. Distributed under a Creative Commons Attribution 4.0 International License.',
+  //   keyFields: ['Status', 'Nominal crude steel capacity (ttpa)', 'Country', 'Owner', 'Technology'],
+  // },
 
-  'gas-pipeline': {
-    slug: 'gas-pipeline',
-    name: 'Gas Pipeline',
-    description:
-      'Documents natural gas pipeline infrastructure globally, tracking pipeline length, capacity, and cross-border connections.',
-    color: '#1D4961',
-    externalLinks: {
-      gemPage: gemTrackerPage('gas-pipeline'),
-    },
-    citation:
-      'Global Energy Monitor, Global Gas Pipeline Tracker, May 2025 release. Distributed under a Creative Commons Attribution 4.0 International License.',
-    keyFields: ['Status', 'CapacityBcm/y', 'Countries', 'Owner'],
-  },
+  // 'gas-pipeline': {
+  //   slug: 'gas-pipeline',
+  //   name: 'Gas Pipeline',
+  //   description:
+  //     'Documents natural gas pipeline infrastructure globally, tracking pipeline length, capacity, and cross-border connections.',
+  //   color: '#1D4961',
+  //   externalLinks: {
+  //     gemPage: gemTrackerPage('gas-pipeline'),
+  //   },
+  //   citation:
+  //     'Global Energy Monitor, Global Gas Pipeline Tracker, May 2025 release. Distributed under a Creative Commons Attribution 4.0 International License.',
+  //   keyFields: ['Status', 'CapacityBcm/y', 'Countries', 'Owner'],
+  // },
 
-  bioenergy: {
-    slug: 'bioenergy',
-    name: 'Bioenergy Power',
-    description:
-      'Tracks bioenergy power generation facilities including biomass, biogas, and waste-to-energy plants with capacity and feedstock data.',
-    color: '#2d5a3d',
-    externalLinks: {
-      gemPage: gemTrackerPage('bioenergy'),
-    },
-    citation:
-      'Global Energy Monitor, Global Bioenergy Power Tracker, May 2025 release. Distributed under a Creative Commons Attribution 4.0 International License.',
-    keyFields: ['Status', 'Capacity (MW)', 'Country', 'Owner', 'Feedstock'],
-  },
+  // bioenergy: {
+  //   slug: 'bioenergy',
+  //   name: 'Bioenergy Power',
+  //   description:
+  //     'Tracks bioenergy power generation facilities including biomass, biogas, and waste-to-energy plants with capacity and feedstock data.',
+  //   color: '#2d5a3d',
+  //   externalLinks: {
+  //     gemPage: gemTrackerPage('bioenergy'),
+  //   },
+  //   citation:
+  //     'Global Energy Monitor, Global Bioenergy Power Tracker, May 2025 release. Distributed under a Creative Commons Attribution 4.0 International License.',
+  //   keyFields: ['Status', 'Capacity (MW)', 'Country', 'Owner', 'Feedstock'],
+  // },
 };
 
 /**

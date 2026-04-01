@@ -19,6 +19,12 @@ const server = createServer((req, res) => {
     res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
   }
 
+  // CORS for widget assets and embed.js — allows dynamic import() from external sites
+  if (url.startsWith('/widgets') || url === '/embed.js') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  }
+
   handler(req, res);
 });
 
