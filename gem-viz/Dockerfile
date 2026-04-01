@@ -17,6 +17,9 @@ RUN npm install --legacy-peer-deps && npm install @rollup/rollup-linux-x64-gnu -
 
 COPY . .
 
+# Sync SvelteKit types (needed by widget build's tsconfig)
+RUN npx svelte-kit sync
+
 # Build Shadow DOM widgets into static/widgets/
 RUN npm run build:widgets
 

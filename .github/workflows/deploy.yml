@@ -31,6 +31,9 @@ jobs:
       - name: Install dependencies
         run: rm -f package-lock.json && npm install --force
 
+      - name: Sync SvelteKit types
+        run: npx svelte-kit sync
+
       - name: Build widgets
         run: npm run build:widgets
 
