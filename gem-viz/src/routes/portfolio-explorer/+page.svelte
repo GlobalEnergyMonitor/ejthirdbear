@@ -286,19 +286,24 @@
       }
     }
 
-    // DFS to collect all paths from root to leaf projects
+    // DFS to collect all paths from root to leaf projects.
+    // Dead-end entities (subsidiaries with no assets) are excluded.
+    const entityIds = new Set(
+      graph.nodes.filter((n) => n.node_type === 'entity').map((n) => n.entity_id)
+    );
     const paths = [];
     const pathStrings = [];
     function dfs(nodeId, path) {
       const children = childrenOf.get(nodeId) || [];
       if (children.length === 0) {
-        // Leaf — resolve to project ID
+        // Leaf — resolve to project ID. Skip dead-end entities.
         const projId = assetToProject.get(nodeId) || nodeId;
         if (projectIds.has(projId) || projectIds.has(nodeId)) {
           const fullPath = [...path, projId];
           paths.push({ path: fullPath });
           pathStrings.push(fullPath.join('/'));
         }
+        // else: dead-end entity — intentionally dropped
         return;
       }
       for (const child of children) {
@@ -375,7 +380,7 @@
   // ============================================================================
   // D3 TREE VISUALIZATION (port of drawTreeChart)
   // ============================================================================
-  function buildHierarchy(pathStrings) {
+  function buildHierarchy(pathStrings, validLeafIds) {
     const root = { name: 'root', children: [] };
     for (const ps of pathStrings) {
       const parts = ps.split('/');
@@ -389,6 +394,15 @@
         cur = child;
       }
     }
+    // Prune branches that don't reach a valid project leaf
+    function prune(node) {
+      node.children = node.children.filter((c) => {
+        prune(c);
+        // Keep if it's a valid leaf OR has children that survived pruning
+        return c.children.length > 0 || validLeafIds.has(c.name);
+      });
+    }
+    prune(root);
     return root.children.length === 1 ? root.children[0] : root;
   }
 
@@ -409,7 +423,8 @@
     );
     if (treePaths.pathStrings.length === 0) return;
 
-    const hierData = buildHierarchy(treePaths.pathStrings);
+    const validLeafIds = new Set(currentGroups.map((g) => g.projectID));
+    const hierData = buildHierarchy(treePaths.pathStrings, validLeafIds);
     const root = d3Hierarchy.hierarchy(hierData);
 
     // Calculate height: use available container space, but at least enough for leaves
@@ -987,6 +1002,13 @@
 
     <!-- FILTER FOOTER — cross-column additive (AND), same-column click toggles -->
     <div class="chart-footer">
+      {#if isFiltered}
+        {@const activeLabels = Object.values(filters).flatMap((s) => [...s])}
+        <button class="clear-filter-inline" class:many={activeLabels.length > 3} onclick={clearFilter}>
+          Clear: {activeLabels.join(' + ')}
+        </button>
+      {/if}
+      <div class="footer-columns">
       <div class="summary-section">
         <p class="subtitle">By Location</p>
         <div class="summary-table">
@@ -1017,6 +1039,7 @@
             {@const isActive = filters.asset_type.has(type)}
             {@const filteredCount = displaySummary?.byType?.get(type)?.assetCount}
             {@const hasResults = !isFiltered || filteredCount != null}
+            {@const typeColor = trackerColorMap.get(type) || colors.grey}
             <div
               class="summary-row"
               class:active={isActive}
@@ -1027,6 +1050,7 @@
               onclick={() => applyFilter('asset_type', type)}
               onkeydown={(e) => e.key === 'Enter' && applyFilter('asset_type', type)}
             >
+              <span class="legend-dot" style="background: {typeColor}"></span>
               {type} ({isFiltered ? (filteredCount ?? 0) : data.assetCount})
             </div>
           {/each}
@@ -1040,6 +1064,7 @@
             {@const isActive = filters.operating_status.has(status)}
             {@const filteredCount = displaySummary?.byStatus?.get(status)?.assetCount}
             {@const hasResults = !isFiltered || filteredCount != null}
+            {@const statusColor = COLOR_BY_STATUS.get(status.toLowerCase()) || colors.grey}
             <div
               class="summary-row"
               class:active={isActive}
@@ -1050,6 +1075,7 @@
               onclick={() => applyFilter('operating_status', status)}
               onkeydown={(e) => e.key === 'Enter' && applyFilter('operating_status', status)}
             >
+              <span class="legend-dot" style="background: {statusColor}"></span>
               {status} ({isFiltered ? (filteredCount ?? 0) : data.assetCount})
             </div>
           {/each}
@@ -1075,14 +1101,8 @@
           {/each}
         </div>
       </div>
+      </div>
     </div>
-
-    {#if isFiltered}
-      {@const activeLabels = Object.values(filters).flatMap((s) => [...s])}
-      <button class="clear-filter" onclick={clearFilter}>
-        Clear filters: {activeLabels.join(' + ')}
-      </button>
-    {/if}
   {/if}
 </div>
 
@@ -1240,8 +1260,7 @@
   /* ---- Footer / Summary Tables ---- */
   .chart-footer {
     display: flex;
-    align-items: start;
-    gap: var(--space-10);
+    flex-direction: column;
     padding: var(--space-3) var(--space-5);
     background: var(--gem-navy);
     color: white;
@@ -1256,11 +1275,22 @@
     scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
   }
   .summary-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2, 6px);
     font-size: var(--font-size-sm);
     padding: 2px var(--space-1);
     cursor: pointer;
     border-radius: var(--radius-sm);
     transition: all var(--duration-fast) ease;
+  }
+  .legend-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: var(--radius-full, 50%);
+    flex-shrink: 0;
+    border: 1px solid rgba(255, 255, 255, 0.3);
   }
   .summary-row:hover {
     background: rgba(255, 255, 255, 0.15);
@@ -1294,21 +1324,32 @@
     color: var(--color-error, #7f142a);
     font-size: var(--font-size-sm);
   }
-  .clear-filter {
+  .footer-columns {
+    display: flex;
+    align-items: start;
+    gap: var(--space-10, 40px);
+    width: 100%;
+  }
+  .clear-filter-inline {
     display: block;
-    margin: var(--space-3) auto;
-    padding: var(--space-2) var(--space-4);
-    border: 1px solid var(--gem-navy);
-    border-radius: var(--radius-full);
-    background: var(--color-bg-primary);
-    color: var(--gem-navy);
+    width: 100%;
+    padding: var(--space-1) var(--space-3);
+    margin-bottom: var(--space-2);
+    border: 1px solid rgba(157, 247, 229, 0.4);
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--gem-mint, #9df7e5);
     font-size: var(--font-size-xs);
     cursor: pointer;
     font-family: inherit;
     font-weight: var(--font-weight-medium);
+    text-align: left;
     transition: background var(--duration-fast) ease;
   }
-  .clear-filter:hover {
-    background: var(--color-bg-tertiary);
+  .clear-filter-inline.many {
+    font-size: 10px;
+  }
+  .clear-filter-inline:hover {
+    background: rgba(255, 255, 255, 0.15);
   }
 </style>

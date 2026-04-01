@@ -108,6 +108,25 @@
         { k: '#type', d: 'all (default), assets, or entities' },
       ],
     },
+    // ── Portfolio Explorer ──
+    {
+      name: 'Portfolio Explorer',
+      slug: 'portfolio-explorer',
+      desc: 'Entity downstream assets with tree visualization, multi-column grid, and crossfilter summary.',
+      key: 'id',
+      val: 'E100001000347',
+      h: 700,
+      params: [
+        { k: 'id', d: 'Entity ID' },
+        { k: 'hidePicker', d: 'Hide entity picker (default: true)' },
+      ],
+      samples: [
+        { label: 'Bank of America', val: 'E100001000347' },
+        { label: 'LUKOIL', val: 'E100000000869' },
+        { label: 'KKR', val: 'E100000001247' },
+        { label: 'National Grid', val: 'E100000001116' },
+      ],
+    },
     // ── Screener ──
     {
       name: 'Asset Class Screener',
