@@ -13,7 +13,7 @@ ENV PUBLIC_OWNERSHIP_API_BASE_URL=$PUBLIC_OWNERSHIP_API_BASE_URL
 ENV PUBLIC_SITE_URL=$PUBLIC_SITE_URL
 
 COPY package.json package-lock.json ./
-RUN npm install --legacy-peer-deps && npm install @rollup/rollup-linux-x64-gnu --no-save
+RUN npm install --legacy-peer-deps && npm install @rollup/rollup-linux-x64-gnu --no-save --legacy-peer-deps
 
 COPY . .
 
