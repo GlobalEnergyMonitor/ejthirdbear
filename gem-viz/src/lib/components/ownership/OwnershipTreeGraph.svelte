@@ -1344,6 +1344,16 @@
         {#if frozenMeta}
           {@const rootNode = filteredNodes.find((n) => n.id === rootId)}
           {@const rootName = rootNode?.name || rootNode?.Name || rootId}
+          {@const frozenNode = nodes.find((n) => n.id === frozenId)}
+          {@const isAssetNode = frozenNode?.type === 'asset' || frozenId === rootId}
+          {@const frozenName = frozenNode?.full_name || frozenNode?.name || frozenNode?.Name || frozenId}
+          {@const frozenPct = pathsMap.get(frozenNode?.entity_id || frozenId) || edgePctMap.get(frozenNode?.entity_id || frozenId) || 0}
+          {@const frozenEdge = renderEdges.find((e) => e.target === (frozenNode?.entity_id || frozenId) || e.target === frozenId)}
+          {@const frozenDirectPct = frozenEdge?.value ?? 0}
+          {@const frozenPathEntries = paths[frozenNode?.entity_id || frozenId] || []}
+          {@const frozenPathCount = frozenPathEntries.length}
+          {@const frozenHqParts = [frozenNode?.headquarters_country, frozenNode?.headquarters_subdivision].filter(Boolean)}
+          {@const frozenOwnerCategory = !isAssetNode && frozenNode ? classifyOwnerType(frozenNode) : ''}
           <div class="focus-indicator">
             <div class="focus-copy">
               {#if frozenMeta.kind === 'entity' && frozenMeta.entityId}
