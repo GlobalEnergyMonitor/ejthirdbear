@@ -17,6 +17,9 @@ RUN npm install --legacy-peer-deps && npm install @rollup/rollup-linux-x64-gnu -
 
 COPY . .
 
+# Build Shadow DOM widgets into static/widgets/
+RUN npm run build:widgets
+
 # Build the app (SSR mode queries REST API at runtime)
 RUN npm run build
 
