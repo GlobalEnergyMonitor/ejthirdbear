@@ -29,13 +29,11 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        run: rm -f package-lock.json && npm install
+        run: npm install --legacy-peer-deps
 
       - name: Build
         run: npm run build
         env:
-          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
-          PUBLIC_MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
           PUBLIC_SITE_URL: https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz
 
       - name: Get version
