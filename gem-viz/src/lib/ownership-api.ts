@@ -585,9 +585,20 @@ export function resolveApiAssetType(tracker: string): string {
   );
 }
 
-/** Resolve any tracker identifier to the API slug used in ?asset_type= filter */
+/** Resolve any tracker identifier to the API slug used in ?asset_type= filter.
+ *  Handles URL-encoded ampersands (%26, &amp;) that can appear when tracker
+ *  names like "Oil & Gas Plant" round-trip through URL query parameters. */
 export function resolveApiSlug(tracker: string): string | null {
-  return _SCHEMA_ID_TO_SLUG[tracker] ?? null;
+  // Direct match first (fast path)
+  const direct = _SCHEMA_ID_TO_SLUG[tracker];
+  if (direct) return direct;
+
+  // Normalize encoded ampersands and retry
+  const normalized = tracker
+    .split('&amp;').join('&')
+    .split('%26').join('&')
+    .trim();
+  return _SCHEMA_ID_TO_SLUG[normalized] ?? null;
 }
 
 // ============================================================================
