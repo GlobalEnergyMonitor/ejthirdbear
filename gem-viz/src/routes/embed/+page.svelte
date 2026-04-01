@@ -2,6 +2,14 @@
   import { base } from '$app/paths';
   import SiteNav from '$lib/components/nav/SiteNav.svelte';
 
+  const DYNAMIC_WIDGETS = new Set([
+    'entity',
+    'asset',
+    'ownership-flower',
+    'coal-plant',
+    'coal-plant-test',
+  ]);
+
   const widgets = [
     // ── Top ──
     {
@@ -232,8 +240,9 @@
   function snippet(w) {
     const p = w.hash ? `/embed/${w.slug}#${w.hash}` : `/embed/${w.slug}?${w.key}=${activeVal(w)}`;
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const modeAttr = DYNAMIC_WIDGETS.has(w.slug) ? ' data-mode="dynamic"' : '';
     return (
-      `<div class="gem-embed" data-src="${p}" data-height="${w.h}" data-mode="dynamic">\n<script src="${origin}/embed.js"><` +
+      `<div class="gem-embed" data-src="${p}" data-height="${w.h}"${modeAttr}>\n<script src="${origin}/embed.js"><` +
       `/script>\n</div>`
     );
   }

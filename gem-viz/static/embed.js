@@ -46,6 +46,14 @@
   };
 
   var baseUrl = getBaseUrl();
+  var isLocalDev = /^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname) &&
+    /^(localhost|127\.0\.0\.1)$/i.test((function () {
+      try {
+        return new URL(baseUrl || window.location.origin).hostname;
+      } catch {
+        return window.location.hostname;
+      }
+    })());
 
   // Detect host page dark mode preference
   var prefersDark =
@@ -118,7 +126,9 @@
    */
   var loadWidgetModule = function () {
     if (widgetModulePromise) return widgetModulePromise;
-    var widgetUrl = baseUrl + '/widgets/index.js';
+    var widgetUrl = isLocalDev
+      ? baseUrl + '/src/widgets/index.ts?t=' + Date.now()
+      : baseUrl + '/widgets/index.js';
     widgetModulePromise = import(/* webpackIgnore: true */ widgetUrl).catch(function (err) {
       widgetModulePromise = null; // allow retry
       throw err;
