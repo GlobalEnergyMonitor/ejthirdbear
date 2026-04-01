@@ -108,7 +108,6 @@ export async function fetchChartData(
   const graph = await getOwnershipGraph({
     root: entityId,
     direction: 'down',
-    max_depth: 4,
   });
 
   // Build adjacency maps

@@ -17,16 +17,16 @@
 
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
-  import { onMount, tick } from 'svelte';
+  import { onMount } from 'svelte';
   import ScreenerLayout from '$lib/components/nav/ScreenerLayout.svelte';
   import AssetClassesPanel from '$lib/components/tracker/AssetClassesPanel.svelte';
   import DebugPanel from '$lib/components/feedback/DebugPanel.svelte';
-  import SectionHeader from '$lib/components/nav/SectionHeader.svelte';
   import OwnerSearchPanel from '$lib/components/screener/OwnerSearchPanel.svelte';
   import {
     searchEntities,
     searchEntitiesBulk,
     getOwnersByFilter,
+    EXCLUDED_ENTITY_IDS,
     type ScreenerOwner,
     type EntitySearchResult,
   } from '$lib/data-config/screener-api';
@@ -87,7 +87,6 @@
   let allOwners = $state<ScreenerOwner[]>([]);
   let allOwnersLoading = $state(false);
   let allOwnersError = $state<string | null>(null);
-  let showAllOwnersTable = $state(false);
 
   /** Map of entityId → ScreenerOwner for O(1) cross-reference during search */
   const ownersMap = $derived(new Map(allOwners.map((o) => [o.entityId, o])));
@@ -110,17 +109,16 @@
 
   let singleSearchQuery = $state('');
   let bulkSearchText = $state('');
+  let strictMatchOnly = $state(false);
   let searchLoading = $state(false);
   let searchError = $state<string | null>(null);
-
-  /**
-   * After a single search: entities that matched GEM but have no assets
-   * in the selected class. Shown as inline warning instead of navigating.
-   */
 
   // Debug tracking
   let debugApiCalls = $state<{ type: string; params: Record<string, unknown>; time: number }[]>([]);
   let debugLastSearchTime = $state<number | null>(null);
+
+  /** sessionStorage key for passing bulk-match provenance to results page */
+  const BULK_MATCH_KEY = '__gem_bulk_match__';
 
   // ── Mount: prefetch owner list + handle ?q= prefill ─────────────────────
 
@@ -189,6 +187,9 @@
   function filterByName(results: EntitySearchResult[], term: string): EntitySearchResult[] {
     if (isIdSearch(term)) return results;
     const lower = term.toLowerCase();
+    if (strictMatchOnly) {
+      return results.filter((e) => e.name.toLowerCase() === lower);
+    }
     return results.filter((e) => e.name.toLowerCase().includes(lower));
   }
 
@@ -272,43 +273,90 @@
     debugApiCalls = [];
 
     try {
-      const inputs = bulkSearchText
-        .split(/[\n,]/)
-        .map((s) => s.trim())
-        .filter((s) => s.length > 0)
-        .slice(0, 30);
+      // Parse: each line may be tab-delimited (from CSV preview); each cell is a candidate.
+      // Group by row so we can try ID cells first, then fall back to names within the same row.
+      type Row = { idCells: string[]; nameCells: string[] };
+      const rows: Row[] = bulkSearchText
+        .split('\n')
+        .map((line) => {
+          const cells = line.split('\t').map((c) => c.trim()).filter((c) => c.length > 0);
+          return {
+            idCells: cells.filter((c) => isIdSearch(c)),
+            nameCells: cells.filter((c) => !isIdSearch(c)),
+          };
+        })
+        .filter((r) => r.idCells.length > 0 || r.nameCells.length > 0);
+
+      if (rows.length === 0) return;
+
+      // Cap unique terms (not rows) to avoid overwhelming the API
+      const allIdTerms = [...new Set(rows.flatMap((r) => r.idCells))].slice(0, 200);
+      const allNameTerms = [...new Set(rows.flatMap((r) => r.nameCells))].slice(0, 200);
 
       debugApiCalls = [
-        { type: 'searchEntitiesBulk', params: { queryCount: inputs.length }, time: Date.now() },
+        {
+          type: 'searchEntitiesBulk',
+          params: { idTerms: allIdTerms.length, nameTerms: allNameTerms.length },
+          time: Date.now(),
+        },
       ];
 
-      const bulkResult = await searchEntitiesBulk(inputs, {
-        limitPerQuery: 10,
-        maxConcurrent: 10,
-      });
-      debugLastSearchTime = bulkResult.queryTimeMs;
+      // Search IDs and names in parallel; IDs are precise, names need filtering
+      const [idBulkResult, nameBulkResult] = await Promise.all([
+        allIdTerms.length > 0
+          ? searchEntitiesBulk(allIdTerms, { limitPerQuery: 5, maxConcurrent: 10 })
+          : Promise.resolve({ results: {} as Record<string, EntitySearchResult[]>, queryTimeMs: 0, source: 'rest-api-sequential' as const, apiCallCount: 0 }),
+        allNameTerms.length > 0
+          ? searchEntitiesBulk(allNameTerms, { limitPerQuery: 10, maxConcurrent: 10 })
+          : Promise.resolve({ results: {} as Record<string, EntitySearchResult[]>, queryTimeMs: 0, source: 'rest-api-sequential' as const, apiCallCount: 0 }),
+      ]);
+      debugLastSearchTime = Math.max(idBulkResult.queryTimeMs, nameBulkResult.queryTimeMs);
 
-      // Apply name filter per term — count terms where all API results were filtered out
-      // as Tier 3 (no match), same as terms that returned nothing at all.
+      // Build deduped entity map: id → EntitySearchResult
+      const resolvedById = new Map<string, EntitySearchResult>();
+      // Track which input terms matched each entity (for results-page tooltips)
+      const matchedTerms = new Map<string, Set<string>>();
+
+      const addMatch = (e: EntitySearchResult, term: string) => {
+        if (!e.id || EXCLUDED_ENTITY_IDS.has(e.id)) return;
+        resolvedById.set(e.id, e);
+        if (!matchedTerms.has(e.id)) matchedTerms.set(e.id, new Set());
+        matchedTerms.get(e.id)!.add(term);
+      };
+
+      // ID results — no name filter needed; these are precise lookups
+      for (const [term, entities] of Object.entries(idBulkResult.results)) {
+        for (const e of entities) addMatch(e, term);
+      }
+
+      // Name results — apply name filter to remove fuzzy misfires
+      for (const [term, entities] of Object.entries(nameBulkResult.results)) {
+        const filtered = filterByName(entities, term);
+        for (const e of filtered) addMatch(e, term);
+      }
+
+      // Per-row tier-3 counting: a row is unmatched only if neither its ID cells
+      // nor its name cells resolved to any entity
       let tier3Count = 0;
-      const filteredResults: Record<string, EntitySearchResult[]> = {};
-      for (const [term, entities] of Object.entries(bulkResult.results)) {
-        if (entities.length === 0) {
+      const unmatchedTerms: string[] = [];
+      for (const row of rows) {
+        const rowResolved =
+          row.idCells.some((c) =>
+            (idBulkResult.results[c] ?? []).some((e) => resolvedById.has(e.id))
+          ) ||
+          row.nameCells.some((c) =>
+            filterByName(nameBulkResult.results[c] ?? [], c).some((e) => resolvedById.has(e.id))
+          );
+        if (!rowResolved) {
           tier3Count++;
-        } else {
-          const filtered = filterByName(entities, term);
-          if (filtered.length === 0) {
-            tier3Count++;
-          } else {
-            filteredResults[term] = filtered;
-          }
+          unmatchedTerms.push([...row.idCells, ...row.nameCells].join('\t'));
         }
       }
 
-      const allMatched: EntitySearchResult[] = Object.values(filteredResults).flat();
+      const allMatched = [...resolvedById.values()];
 
       if (allMatched.length === 0) {
-        searchError = `None of the ${inputs.length} terms matched any GEM entity by name.`;
+        searchError = `None of the ${rows.length} entries matched any GEM entity.`;
         return;
       }
 
@@ -320,8 +368,30 @@
         tier1Ids = allMatched.map((e) => e.id).join(',');
       } else {
         const { withAssets, noAssets } = crossRef(allMatched);
+        if (withAssets.length === 0) {
+          const classLabel = selectedClasses[0]?.name || 'this asset class';
+          const sample = noAssets
+            .slice(0, 3)
+            .map((e) => e.name)
+            .join(', ');
+          const extra = noAssets.length > 3 ? ` and ${noAssets.length - 3} more` : '';
+          searchError = `Found ${noAssets.length} matching compan${noAssets.length === 1 ? 'y' : 'ies'} (${sample}${extra}) but none own assets in ${classLabel}.`;
+          return;
+        }
         tier1Ids = withAssets.map((e) => e.id).join(',');
         noAssetsParam = noAssets.length > 0 ? noAssets.map((e) => e.id).join(',') : undefined;
+      }
+
+      // Persist matched-term provenance + unmatched terms for results-page display (best-effort)
+      try {
+        const provenance: Record<string, string[]> = {};
+        for (const [id, terms] of matchedTerms) {
+          provenance[id] = [...terms];
+        }
+        sessionStorage.setItem(BULK_MATCH_KEY, JSON.stringify(provenance));
+        sessionStorage.setItem('__gem_unmatched__', JSON.stringify(unmatchedTerms));
+      } catch {
+        // sessionStorage unavailable — tooltips/unmatched list simply won't appear
       }
 
       goto(
@@ -343,18 +413,26 @@
     if (!file) return;
     try {
       const text = await file.text();
-      const lines = text.split('\n').slice(1);
-      const values = lines
-        .map((line) => {
-          const cols = line.split(',');
-          return cols[0]?.trim().replace(/^["']|["']$/g, '');
-        })
-        .filter((v): v is string => !!v && v.length > 0);
-      bulkSearchText = values.join('\n');
-      await doSearchBulk();
+      // Auto-detect delimiter: prefer tab, fall back to comma
+      const isTabDelimited = text.includes('\t');
+      const allLines = text.split('\n');
+      const dataLines = allLines.slice(1); // skip header row
+
+      // Normalize to tab-delimited for preview so all columns are visible.
+      // Strip surrounding quotes from comma-delimited cells.
+      const previewLines: string[] = [];
+      for (const line of dataLines) {
+        const cells = isTabDelimited
+          ? line.split('\t').map((c) => c.trim())
+          : line.split(',').map((c) => c.trim().replace(/^["']|["']$/g, ''));
+        const nonEmpty = cells.filter((c) => c.length > 0);
+        if (nonEmpty.length > 0) previewLines.push(nonEmpty.join('\t'));
+      }
+      // Show in textarea for user review — search runs when they click "Search All"
+      bulkSearchText = previewLines.join('\n');
     } catch (err) {
       const reason = err instanceof Error ? err.message : 'unknown error';
-      searchError = `Failed to parse CSV: ${reason}. Ensure the file is UTF-8 encoded with company names in the first column.`;
+      searchError = `Failed to parse file: ${reason}. Accepts tab-delimited or comma-delimited CSV (UTF-8).`;
     }
   }
 
@@ -384,7 +462,7 @@
 <ScreenerLayout
   currentStep={2}
   {isEmbed}
-  subtitle="Search for a company to see their ownership stakes, assets, and corporate network."
+  subtitle="Search owners to see their stakes in selected assets."
   {classesParam}
 >
   {#snippet headerRight()}
@@ -395,9 +473,12 @@
   <OwnerSearchPanel
     bind:singleSearchQuery
     bind:bulkSearchText
+    bind:strictMatchOnly
     {searchLoading}
     {searchError}
     exampleCompanies={topExamples.length > 0 ? topExamples : []}
+    ownerCount={allOwners.length > 0 ? allOwners.length : null}
+    ownerCountLoading={allOwnersLoading}
     onSearchSingle={doSearchSingle}
     onSearchBulk={doSearchBulk}
     onUseExample={useExample}
@@ -406,53 +487,22 @@
 
   <!-- Browse / View all owners -->
   <section class="show-all-section">
-    <SectionHeader title="Want every asset instead?">
-      {#if selectedClasses.length > 0}
-        Show every <strong
-          >{selectedClasses.length > 1
-            ? selectedClasses.map((c) => c.name).join(' & ')
-            : selectedClasses[0]?.name}</strong
-        > asset worldwide — no ownership filter.
-      {:else}
-        Show every asset in the database — no ownership filter.
-      {/if}
-    </SectionHeader>
+    <h2 class="show-all-title">Want all owners instead?</h2>
 
     <div class="show-all-actions">
-      <button class="show-all-btn" onclick={showAllAssets}>All owners of this asset type</button>
-
-      {#if allOwners.length > 0}
-        <button
-          class="show-all-btn show-all-btn--secondary"
-          onclick={() => (showAllOwnersTable = !showAllOwnersTable)}
-        >
-          {showAllOwnersTable ? 'Hide' : 'View'} all owners ({allOwners.length})
+      {#if allOwnersLoading}
+        <button class="show-all-btn" onclick={showAllAssets} disabled>Loading owners…</button>
+      {:else}
+        <button class="show-all-btn" onclick={showAllAssets}>
+          View all {allOwners.length > 0 ? allOwners.length.toLocaleString() : ''} owners
+          {#if selectedClasses.length > 0}
+            of {selectedClasses.length > 1
+              ? selectedClasses.map((c) => c.name).join(' & ')
+              : selectedClasses[0]?.name}
+          {/if}
         </button>
-      {:else if allOwnersLoading}
-        <span class="owners-loading">Loading owner list…</span>
       {/if}
     </div>
-
-    {#if showAllOwnersTable && allOwners.length > 0}
-      <div class="all-owners-table-wrap">
-        <table class="all-owners-table">
-          <thead>
-            <tr>
-              <th>Company</th>
-              <th class="num-col">Assets</th>
-            </tr>
-          </thead>
-          <tbody>
-            {#each allOwners as owner}
-              <tr>
-                <td>{owner.name}</td>
-                <td class="num-col">{owner.filteredAssets || owner.totalAssets}</td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
-      </div>
-    {/if}
 
     {#if allOwnersError}
       <p class="owners-error">{allOwnersError}</p>
@@ -482,9 +532,15 @@
 <style>
   /* ── Browse all section ─────────────────────────────────────────────── */
   .show-all-section {
-    padding-top: var(--space-10);
+    padding-top: var(--space-6);
     margin-top: var(--space-4);
     border-top: var(--border-width) solid var(--color-border);
+  }
+
+  .show-all-title {
+    margin: 0 0 var(--space-4) 0;
+    font-size: var(--font-size-lg);
+    font-weight: 700;
   }
 
   .show-all-actions {
@@ -508,62 +564,15 @@
     border-color: var(--color-text-secondary);
   }
 
-  .show-all-btn--secondary {
-    color: var(--color-text-secondary);
-  }
-
-  .owners-loading {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
-    font-style: italic;
+  .show-all-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   .owners-error {
     margin-top: var(--space-3);
     font-size: var(--font-size-sm);
     color: var(--color-error, #c0392b);
-  }
-
-  /* ── All owners table ───────────────────────────────────────────────── */
-  .all-owners-table-wrap {
-    margin-top: var(--space-4);
-    max-height: 480px;
-    overflow-y: auto;
-    border: var(--border-width) solid var(--color-border);
-  }
-
-  .all-owners-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: var(--font-size-sm);
-  }
-
-  .all-owners-table thead th {
-    position: sticky;
-    top: 0;
-    background: var(--color-bg-secondary, #f8f8f8);
-    padding: var(--space-2) var(--space-3);
-    text-align: left;
-    font-weight: 600;
-    border-bottom: var(--border-width) solid var(--color-border);
-  }
-
-  .all-owners-table tbody tr:nth-child(even) {
-    background: var(--color-bg-secondary, #f8f8f8);
-  }
-
-  .all-owners-table tbody tr:hover {
-    background: var(--color-bg-hover, #f0f4f8);
-  }
-
-  .all-owners-table td {
-    padding: var(--space-2) var(--space-3);
-    border-bottom: var(--border-width) solid var(--color-border);
-  }
-
-  .num-col {
-    text-align: right;
-    width: 80px;
   }
 
   /* ── Debug ──────────────────────────────────────────────────────────── */

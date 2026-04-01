@@ -100,6 +100,17 @@ export interface ScreenerFilters {
 
 const OWNERSHIP_API_BASE = getAPIBase();
 
+/**
+ * Entity IDs that represent aggregated placeholder owners (not real companies).
+ * "small shareholders" and "natural person(s)" appear as a single entity each
+ * but actually represent many separate real-world owners — they should be
+ * excluded from owner lists, examples, and visualizations.
+ */
+export const EXCLUDED_ENTITY_IDS = new Set([
+  'E100001015587', // small shareholders
+  'E100000123261', // natural person(s)
+]);
+
 /** Enable detailed console logging */
 const DEBUG = false;
 
@@ -346,7 +357,7 @@ async function getOwnersByAssetTypeREST(
 
   // Sort by filtered asset count descending, take top N
   const sorted = [...ownerMap.entries()]
-    .filter(([, { filteredAssetIds }]) => filteredAssetIds.size > 0)
+    .filter(([entityId, { filteredAssetIds }]) => filteredAssetIds.size > 0 && !EXCLUDED_ENTITY_IDS.has(entityId))
     .map(([entityId, { name, totalAssetIds, filteredAssetIds }]) => ({
       entityId,
       name,
@@ -723,7 +734,7 @@ export async function getOwnersByFilter(
           o.total_asset_count ?? o.total_assets ?? o.count ?? 0
         ),
       }))
-      .filter((o) => o.entityId && o.name);
+      .filter((o) => o.entityId && o.name && !EXCLUDED_ENTITY_IDS.has(o.entityId));
 
     const result: ScreenerResultsResponse = {
       owners,

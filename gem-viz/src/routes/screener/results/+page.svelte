@@ -146,6 +146,12 @@
   let noAssetLoading = $state(false);
   const nomatchCount = $derived(nomatchParam ? parseInt(nomatchParam, 10) || 0 : 0);
 
+  /** Provenance map: entityId → search terms that matched it (from bulk search via sessionStorage) */
+  let bulkMatchProvenance = $state<Record<string, string[]>>({});
+  /** Unmatched bulk search terms (from sessionStorage) */
+  let unmatchedTerms = $state<string[]>([]);
+  let showUnmatched = $state(false);
+
   // Data source tracking
   let dataSource = $state<'local' | 'api'>('api');
   let queryTime: number | null = $state(null);
@@ -349,6 +355,16 @@
   onMount(async () => {
     // Init search from URL
     searchQuery = $page.url.searchParams.get('q') || '';
+
+    // Read bulk-search provenance + unmatched terms from sessionStorage
+    try {
+      const raw = sessionStorage.getItem('__gem_bulk_match__');
+      if (raw) bulkMatchProvenance = JSON.parse(raw);
+      const rawUnmatched = sessionStorage.getItem('__gem_unmatched__');
+      if (rawUnmatched) unmatchedTerms = JSON.parse(rawUnmatched);
+    } catch {
+      // ignore — tooltips/unmatched list simply won't appear
+    }
 
     // ── Tier 2: kick off entity lookups immediately, populate as they arrive ──
     const noassetIds = noassetsParam ? noassetsParam.split(',').filter(Boolean) : [];
@@ -706,6 +722,7 @@
         {searchQuery}
         {viewMode}
         selectedOwnerCount={selectedOwnerIds.length}
+        {bulkMatchProvenance}
         onToggleExpanded={openChartModal}
         onClearSearch={() => handleOwnerSearch('')}
       />
@@ -730,7 +747,6 @@
             {#if entity.country}
               <span class="tier2-country">{entity.country}</span>
             {/if}
-            <span class="tier2-badge">No assets</span>
           </li>
         {/each}
         {#if noAssetLoading}
@@ -743,15 +759,28 @@
   <!-- Tier 3: search terms that matched nothing in GEM -->
   {#if nomatchCount > 0}
     <section class="tier3-section">
-      <p class="tier3-text">
-        <strong>{nomatchCount} {nomatchCount === 1 ? 'term' : 'terms'}</strong> from your search didn't match any company in GEM's database.
-        <a
-          href="https://globalenergymonitor.org/contact/"
-          target="_blank"
-          rel="noopener"
-          class="tier3-report"
-        >Report missing companies →</a>
-      </p>
+      <div class="tier3-header">
+        <p class="tier3-text">
+          <strong>{nomatchCount} {nomatchCount === 1 ? 'term' : 'terms'}</strong> from your search didn't match any company in GEM's database.
+        </p>
+        {#if unmatchedTerms.length > 0}
+          <button class="tier3-toggle" onclick={() => (showUnmatched = !showUnmatched)}>
+            {showUnmatched ? 'Hide' : 'Show'} unmatched terms
+          </button>
+        {/if}
+      </div>
+
+      {#if showUnmatched && unmatchedTerms.length > 0}
+        <table class="unmatched-table">
+          <tbody>
+            {#each unmatchedTerms as term}
+              <tr>
+                <td class="unmatched-term">{term}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      {/if}
     </section>
   {/if}
 
@@ -1184,16 +1213,6 @@
     color: var(--color-text-secondary);
   }
 
-  .tier2-badge {
-    margin-left: auto;
-    font-size: var(--font-size-xs);
-    padding: 2px 8px;
-    border-radius: 99px;
-    background: #fde68a;
-    color: #92400e;
-    white-space: nowrap;
-  }
-
   /* ── Tier 3: unmatched terms ───────────────────────────────────────────── */
   .tier3-section {
     margin-top: var(--space-4);
@@ -1203,14 +1222,50 @@
     border-radius: var(--radius-sm);
   }
 
+  .tier3-header {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-4);
+    flex-wrap: wrap;
+  }
+
   .tier3-text {
     margin: 0;
     font-size: var(--font-size-sm);
     color: var(--color-text-secondary);
   }
 
-  .tier3-report {
-    margin-left: var(--space-2);
+  .tier3-toggle {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: var(--font-size-sm);
     color: var(--gem-primary-blue, #1d4961);
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    white-space: nowrap;
+  }
+
+  .tier3-toggle:hover {
+    color: var(--color-text-primary);
+  }
+
+  .unmatched-table {
+    margin-top: var(--space-3);
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--font-size-sm);
+  }
+
+  .unmatched-term {
+    padding: var(--space-1) var(--space-2);
+    border-bottom: 1px solid var(--color-border-light);
+    color: var(--color-text-secondary);
+    font-family: var(--font-family-mono, monospace);
+  }
+
+  .unmatched-table tr:last-child .unmatched-term {
+    border-bottom: none;
   }
 </style>
