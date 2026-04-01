@@ -7,6 +7,7 @@
    *
    * Ported from Observable notebook: https://observablehq.com/d/5a1f34aee34fe4cf
    */
+  import { page } from '$app/stores';
   import { entityLink } from '$lib/links';
   import * as d3 from 'd3-selection';
   import * as d3Array from 'd3-array';
@@ -44,8 +45,13 @@
   // ============================================================================
   // STATE
   // ============================================================================
-  let selectedEntityId = $state(SAMPLE_OWNERS[0][1]);
+  /** URL param support: ?entity=E100001000347&hidePicker=true */
+  const urlEntity = $page.url.searchParams.get('entity');
+  const urlHidePicker = $page.url.searchParams.get('hidePicker') === 'true';
+
+  let selectedEntityId = $state(urlEntity || SAMPLE_OWNERS[0][1]);
   let customEntityId = $state('');
+  let hidePicker = $state(urlHidePicker);
   let loading = $state(false);
   let error = $state('');
 
@@ -945,6 +951,7 @@
 
 <div class="portfolio-explorer">
   <!-- ENTITY SELECTOR -->
+  {#if !hidePicker}
   <div class="selector-bar">
     <div class="selector-label">Select owner:</div>
     <div class="selector-chips">
@@ -968,6 +975,7 @@
       <button class="go-btn" onclick={handleCustomEntity}>Go</button>
     </div>
   </div>
+  {/if}
 
   {#if loading}
     <div class="loading">Loading portfolio…</div>
