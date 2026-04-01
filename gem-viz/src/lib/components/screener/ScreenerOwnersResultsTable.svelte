@@ -4,6 +4,7 @@
   export let searchQuery = '';
   export let viewMode: 'all' | 'filtered' = 'all';
   export let selectedOwnerCount = 0;
+  export let bulkMatchProvenance: Record<string, string[]> = {};
   export let onToggleExpanded: (_entityId: string, _event?: MouseEvent) => void;
   export let onClearSearch: () => void;
 </script>
@@ -26,6 +27,13 @@
         >
           <td class="td-company">
             <span class="owner-name">{owner.name}</span>
+            {#if bulkMatchProvenance[owner.entityId]?.length}
+              {@const terms = bulkMatchProvenance[owner.entityId]}
+              <span class="match-badge" aria-label="Bulk search match: {terms.join(', ')}">
+                🔍
+                <span class="match-tooltip">Matched from: {terms.join(', ')}</span>
+              </span>
+            {/if}
           </td>
           <td class="td-count">
             <span class="count-num">{owner.totalAssets?.toLocaleString() ?? '—'}</span>
@@ -126,6 +134,40 @@
   .owner-name {
     color: var(--color-text-primary, #1e293b);
     font-weight: 500;
+  }
+
+  .match-badge {
+    position: relative;
+    font-size: 11px;
+    opacity: 0.45;
+    cursor: pointer;
+    user-select: none;
+    flex-shrink: 0;
+  }
+
+  .match-badge:hover {
+    opacity: 1;
+  }
+
+  .match-tooltip {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1e293b;
+    color: #fff;
+    font-size: 11px;
+    font-family: var(--font-family-mono, monospace);
+    font-weight: 400;
+    padding: 4px 8px;
+    white-space: nowrap;
+    z-index: 20;
+    pointer-events: none;
+  }
+
+  .match-badge:hover .match-tooltip {
+    display: block;
   }
 
   .owner-row:hover .owner-name {

@@ -100,6 +100,17 @@ export interface ScreenerFilters {
 
 const OWNERSHIP_API_BASE = getAPIBase();
 
+/**
+ * Entity IDs that represent aggregated placeholder owners (not real companies).
+ * "small shareholders" and "natural person(s)" appear as a single entity each
+ * but actually represent many separate real-world owners — they should be
+ * excluded from owner lists, examples, and visualizations.
+ */
+export const EXCLUDED_ENTITY_IDS = new Set([
+  'E100001015587', // small shareholders
+  'E100000123261', // natural person(s)
+]);
+
 /** Enable detailed console logging */
 const DEBUG = false;
 
@@ -346,7 +357,7 @@ async function getOwnersByAssetTypeREST(
 
   // Sort by filtered asset count descending, take top N
   const sorted = [...ownerMap.entries()]
-    .filter(([, { filteredAssetIds }]) => filteredAssetIds.size > 0)
+    .filter(([entityId, { filteredAssetIds }]) => filteredAssetIds.size > 0 && !EXCLUDED_ENTITY_IDS.has(entityId))
     .map(([entityId, { name, totalAssetIds, filteredAssetIds }]) => ({
       entityId,
       name,
@@ -606,6 +617,172 @@ async function searchEntitiesBulkREST(
   });
 
   return { results, source: 'rest-api', queryTimeMs, apiCallCount: 1 };
+}
+
+// =============================================================================
+// OWNERS PAGE: GET OWNERS BY FILTER (calls /owners endpoint)
+// =============================================================================
+
+export interface OwnersFilterParams {
+  tracker: string;
+  assetClassId?: string;
+  status?: string | string[];
+  country?: string | string[];
+}
+
+/** In-memory cache for /owners endpoint responses */
+const ownersByFilterCache = new Map<
+  string,
+  { data: ScreenerResultsResponse; timestamp: number }
+>();
+
+/**
+ * Fetch the pre-aggregated owner list from the `/owners` REST endpoint.
+ * Falls back to `getOwnersByAssetType()` if the endpoint is unavailable.
+ *
+ * Called when the user lands on the owners search page so that:
+ *  - "View all owners" can show the full list instantly
+ *  - "Try" examples can be drawn from real top owners
+ *  - Search results can be cross-referenced to determine which entities
+ *    actually have assets in the selected class (Tier 1 vs Tier 2)
+ */
+export async function getOwnersByFilter(
+  params: OwnersFilterParams,
+  options: { limit?: number; skipCache?: boolean } = {}
+): Promise<ScreenerResultsResponse> {
+  const startTime = performance.now();
+  const { skipCache = false } = options;
+
+  const cacheKey = JSON.stringify({ params });
+  if (!skipCache) {
+    const cached = ownersByFilterCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+      return { ...cached.data, source: 'cache' };
+    }
+  }
+
+  try {
+    const { resolveApiSlug } = await import('$lib/ownership-api');
+    const apiSlug = resolveApiSlug(params.tracker);
+    if (!apiSlug) throw new Error(`Cannot resolve API slug for tracker: ${params.tracker}`);
+
+    const p = new URLSearchParams();
+    p.set('asset_type', apiSlug);
+
+    const statuses = Array.isArray(params.status)
+      ? params.status
+      : params.status
+        ? [params.status]
+        : [];
+    for (const s of statuses) p.append('status', s);
+
+    const countries = Array.isArray(params.country)
+      ? params.country
+      : params.country
+        ? [params.country]
+        : [];
+    for (const c of countries) p.append('country', c);
+
+    const PAGE_SIZE = 500; // API hard cap
+    p.set('limit', String(PAGE_SIZE));
+
+    const { logApiCall } = await import('$lib/api-log.svelte');
+    const rawOwners: Array<Record<string, unknown>> = [];
+    let offset = 0;
+    let total = Infinity;
+
+    while (rawOwners.length < total) {
+      p.set('offset', String(offset));
+      const url = `${OWNERSHIP_API_BASE}/owners?${p.toString()}`;
+      const t0 = performance.now();
+      const resp = await fetch(url);
+      logApiCall({
+        url,
+        method: 'GET',
+        status: resp.status,
+        durationMs: performance.now() - t0,
+        timestamp: new Date(),
+        error: resp.ok ? undefined : `${resp.status}`,
+        reason: 'getOwnersByFilter (screener owners page)',
+      });
+
+      if (!resp.ok) throw new Error(`/owners returned ${resp.status}`);
+
+      const data = await resp.json();
+
+      if (import.meta.env.DEV && offset === 0) {
+        const sample = Array.isArray(data) ? data[0] : (data.results ?? data.owners ?? [])[0];
+        console.log('[screener-api] /owners raw response sample:', sample);
+      }
+
+      const page: Array<Record<string, unknown>> = Array.isArray(data)
+        ? data
+        : (data.results ?? data.owners ?? []);
+
+      rawOwners.push(...page);
+      total = typeof data.total === 'number' ? data.total : rawOwners.length;
+      offset += PAGE_SIZE;
+
+      // Stop if the page was empty or we've fetched everything
+      if (page.length === 0) break;
+    }
+
+    const owners: ScreenerOwner[] = rawOwners
+      .map((o) => ({
+        entityId: String(
+          o.entity_id ?? o.entityId ??
+          (o.entity && typeof o.entity === 'object' ? (o.entity as Record<string, unknown>).id : undefined) ??
+          o.id ?? ''
+        ),
+        name: String(
+          o.name ?? o.full_name ?? o.entity_name ?? o.owner_name ??
+          o.display_name ??
+          (o.entity && typeof o.entity === 'object' ? (o.entity as Record<string, unknown>).name : undefined) ??
+          ''
+        ),
+        totalAssets: Number(
+          o.total_asset_count ?? o.total_assets ?? o.totalAssets ?? o.asset_count ?? o.count ?? 0
+        ),
+        filteredAssets: Number(
+          o.asset_count ?? o.filtered_asset_count ?? o.filtered_assets ??
+          o.total_asset_count ?? o.total_assets ?? o.count ?? 0
+        ),
+      }))
+      .filter((o) => o.entityId && o.name && !EXCLUDED_ENTITY_IDS.has(o.entityId));
+
+    const result: ScreenerResultsResponse = {
+      owners,
+      source: 'rest-api',
+      queryTimeMs: performance.now() - startTime,
+      totalCount: owners.length,
+    };
+
+    ownersByFilterCache.set(cacheKey, { data: result, timestamp: Date.now() });
+
+    logQuery({
+      timestamp: new Date(),
+      operation: 'getOwnersByFilter',
+      durationMs: result.queryTimeMs,
+      source: 'rest-api',
+      params: params as unknown as Record<string, unknown>,
+      resultCount: owners.length,
+    });
+
+    return result;
+  } catch (err) {
+    // Fallback: derive owner list the old way (expensive but reliable)
+    if (import.meta.env.DEV) {
+      console.warn('[screener-api] /owners endpoint unavailable, falling back to asset scan:', err);
+    }
+    const filters: ScreenerFilters = {
+      tracker: params.tracker,
+      assetClassId: params.assetClassId,
+      status: Array.isArray(params.status) ? params.status[0] : params.status,
+      statuses: Array.isArray(params.status) ? params.status : params.status ? [params.status] : undefined,
+      country: params.country,
+    };
+    return getOwnersByAssetType(filters, { skipCache });
+  }
 }
 
 // =============================================================================

@@ -26,10 +26,9 @@
   } from '$lib/data-config/tracker-schema';
   import type { DynamicStatusGroup } from '$lib/data-config/tracker-schema';
   import {
-    getOwnersByAssetType,
+    getOwnersByFilter,
     getAssetTypeCounts,
     gemTrackerToUiTracker,
-    type ScreenerFilters,
     type ScreenerOwner,
   } from '$lib/data-config/screener-api';
   import {
@@ -41,6 +40,7 @@
   import {
     resolveApiSlug,
     getAPIBase,
+    getEntity,
     fetchStatusFacets,
     fetchStatusTaxonomy,
   } from '$lib/ownership-api';
@@ -56,6 +56,8 @@
   // URL params
   const classesParam = $derived($page.url.searchParams.get('classes') || '');
   const ownersParam = $derived($page.url.searchParams.get('owners') || '');
+  const noassetsParam = $derived($page.url.searchParams.get('noassets') || '');
+  const nomatchParam = $derived($page.url.searchParams.get('nomatch') || '');
 
   // Keep hash in sync with query params when embedded
   $effect(() => {
@@ -138,6 +140,18 @@
   let error: string | null = $state(null);
   let owners: ScreenerOwner[] = $state([]);
 
+  // Tier 2: entities that matched search but have no assets in this class
+  // Populated progressively via individual /entities/{id} lookups
+  let noAssetEntities = $state<{ id: string; name: string; country?: string | null }[]>([]);
+  let noAssetLoading = $state(false);
+  const nomatchCount = $derived(nomatchParam ? parseInt(nomatchParam, 10) || 0 : 0);
+
+  /** Provenance map: entityId → search terms that matched it (from bulk search via sessionStorage) */
+  let bulkMatchProvenance = $state<Record<string, string[]>>({});
+  /** Unmatched bulk search terms (from sessionStorage) */
+  let unmatchedTerms = $state<string[]>([]);
+  let showUnmatched = $state(false);
+
   // Data source tracking
   let dataSource = $state<'local' | 'api'>('api');
   let queryTime: number | null = $state(null);
@@ -146,6 +160,8 @@
 
   // Search/filter for journalists with watchlists
   let searchQuery = $state('');
+  const PAGE_SIZE = 100;
+  let currentPage = $state(0);
   // Modal state for ownership chart
   let chartModalOwner: { entityId: string; name: string; filteredAssets?: number } | null =
     $state(null);
@@ -324,8 +340,12 @@
     return result;
   });
 
+  const totalPages = $derived(Math.ceil(filteredOwners.length / PAGE_SIZE));
+  const pagedOwners = $derived(filteredOwners.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE));
+
   function handleOwnerSearch(query: string) {
     searchQuery = query;
+    currentPage = 0;
     const trimmed = query.trim();
     goto(
       buildScreenerUrl('screener/results', {
@@ -337,11 +357,43 @@
     );
   }
 
-  // Load owners data using centralized screener API
+  // Load owners data using the /owners REST endpoint
   onMount(async () => {
     // Init search from URL
     searchQuery = $page.url.searchParams.get('q') || '';
 
+    // Read bulk-search provenance + unmatched terms from sessionStorage
+    try {
+      const raw = sessionStorage.getItem('__gem_bulk_match__');
+      if (raw) bulkMatchProvenance = JSON.parse(raw);
+      const rawUnmatched = sessionStorage.getItem('__gem_unmatched__');
+      if (rawUnmatched) unmatchedTerms = JSON.parse(rawUnmatched);
+    } catch {
+      // ignore — tooltips/unmatched list simply won't appear
+    }
+
+    // ── Tier 2: kick off entity lookups immediately, populate as they arrive ──
+    const noassetIds = noassetsParam ? noassetsParam.split(',').filter(Boolean) : [];
+    if (noassetIds.length > 0) {
+      noAssetLoading = true;
+      // Fire all lookups in parallel; append each result as it resolves
+      Promise.allSettled(
+        noassetIds.map((id) =>
+          getEntity(id).then((e) => {
+            if (e) {
+              noAssetEntities = [
+                ...noAssetEntities,
+                { id: e.id, name: e.name, country: e.headquartersCountry },
+              ];
+            }
+          })
+        )
+      ).finally(() => {
+        noAssetLoading = false;
+      });
+    }
+
+    // ── Tier 1: load owners from /owners endpoint ─────────────────────────────
     try {
       const classes = selectedClasses;
       if (classes.length === 0) {
@@ -352,36 +404,19 @@
 
       const cls = classes[0];
 
-      // Build filters for the screener API
-      // Prefer statuses[] array for multi-status filtering; fall back to singular status
-      const statusesArray: string[] | undefined = cls?.filters?.statuses;
-      // Normalize geography: could be string (legacy) or string[] (multi-select)
+      const statusesArray: string[] | undefined =
+        cls?.filters?.statuses && cls.filters.statuses.length > 0
+          ? cls.filters.statuses
+          : cls?.filters?.status
+            ? [cls.filters.status]
+            : undefined;
+
       const geoRaw = cls?.filters?.geography;
       const countryFilter: string | string[] | undefined = Array.isArray(geoRaw)
-        ? geoRaw.length > 0
-          ? geoRaw
-          : undefined
+        ? geoRaw.length > 0 ? geoRaw : undefined
         : geoRaw || undefined;
 
-      const geofenceRaw = cls?.filters?.geofence;
-      const geofence =
-        Array.isArray(geofenceRaw) && geofenceRaw.length >= 3 ? geofenceRaw : undefined;
-
-      const filters: ScreenerFilters = {
-        tracker: cls?.tracker || '',
-        status: cls?.filters?.status,
-        statuses: statusesArray && statusesArray.length > 0 ? statusesArray : undefined,
-        country: countryFilter,
-        ownerIds: selectedOwnerIds.length > 0 ? selectedOwnerIds : undefined,
-        assetClassId: cls?.assetClassId || cls?.id,
-        selectedSubClasses: Array.isArray(cls?.selectedSubClasses)
-          ? cls.selectedSubClasses
-          : undefined,
-        catalogUrl: cls?.catalogUrl,
-        geofence,
-      };
-
-      // Fetch asset type counts via REST API (cached, for debug panel)
+      // Fetch asset type counts in parallel (cached, for debug panel)
       getAssetTypeCounts().then((counts) => {
         availableAssetTypes = Object.entries(counts).map(([asset_type, cnt]) => ({
           asset_type,
@@ -389,33 +424,39 @@
         }));
       });
 
-      // Main query: get owners by asset type
-      const result = await getOwnersByAssetType(filters, { limit: 200 });
+      const result = await getOwnersByFilter(
+        {
+          tracker: cls?.tracker || '',
+          assetClassId: cls?.assetClassId || cls?.id,
+          status: statusesArray,
+          country: countryFilter,
+        },
+        { limit: 500 }
+      );
 
       queryTime = result.queryTimeMs;
       dataSource =
         result.source === 'rest-api' ? 'api' : result.source === 'cache' ? 'local' : 'api';
-      const slug = resolveApiSlug(filters.tracker || '');
-      const restBase = getAPIBase();
-      const restParams = new URLSearchParams({
-        asset_type: slug || filters.tracker || '',
-        format: 'json',
-        limit: '500',
-      });
-      if (filters.country) restParams.set('country', String(filters.country));
-      executedQuery = `GET ${restBase}/assets?${restParams.toString()}\n\nsource=${result.source}, filters=${JSON.stringify(filters, null, 2)}`;
 
-      owners = result.owners.map((o) => ({
-        name: o.name,
-        entityId: o.entityId,
-        totalAssets: o.totalAssets,
-        filteredAssets: o.filteredAssets,
-      }));
+      const slug = resolveApiSlug(cls?.tracker || '');
+      const restBase = getAPIBase();
+      executedQuery = `GET ${restBase}/owners?asset_type=${slug}\n\nsource=${result.source}`;
+
+      // If specific owners were requested, filter to just those
+      const ownerIdSet = selectedOwnerIds.length > 0 ? new Set(selectedOwnerIds) : null;
+      owners = result.owners
+        .filter((o) => !ownerIdSet || ownerIdSet.has(o.entityId))
+        .map((o) => ({
+          name: o.name,
+          entityId: o.entityId,
+          totalAssets: o.totalAssets,
+          filteredAssets: o.filteredAssets,
+        }));
 
       loading = false;
     } catch (err) {
       if (import.meta.env.DEV) console.error('Failed to load owners:', err);
-      error = err?.message || 'Failed to load data';
+      error = (err as Error)?.message || 'Failed to load data';
       loading = false;
     }
   });
@@ -682,16 +723,91 @@
       </div>
 
       <ScreenerOwnersResultsTable
-        {filteredOwners}
+        filteredOwners={pagedOwners}
         {classDescription}
         {searchQuery}
         {viewMode}
         selectedOwnerCount={selectedOwnerIds.length}
+        {bulkMatchProvenance}
         onToggleExpanded={openChartModal}
         onClearSearch={() => handleOwnerSearch('')}
       />
+
+      {#if totalPages > 1}
+        <div class="pagination">
+          <button
+            class="page-btn"
+            onclick={() => (currentPage -= 1)}
+            disabled={currentPage === 0}
+          >← Prev</button>
+          <span class="page-info">
+            {currentPage + 1} / {totalPages}
+            <span class="page-count">({filteredOwners.length.toLocaleString()} owners)</span>
+          </span>
+          <button
+            class="page-btn"
+            onclick={() => (currentPage += 1)}
+            disabled={currentPage >= totalPages - 1}
+          >Next →</button>
+        </div>
+      {/if}
     </section>
   </LoadingWrapper>
+
+  <!-- Tier 2: matched entities with no assets in this class -->
+  {#if noAssetEntities.length > 0 || noAssetLoading}
+    <section class="tier2-section">
+      <h3 class="tier2-title">
+        Matched {noAssetEntities.length + (noAssetLoading ? '…' : '')}
+        {noAssetEntities.length === 1 ? 'company' : 'companies'} with no {selectedClasses[0]?.name || 'assets'} in GEM
+      </h3>
+      <p class="tier2-desc">
+        These companies were found in GEM's entity database but have no recorded ownership
+        of {selectedClasses[0]?.name || 'assets in this class'}.
+      </p>
+      <ul class="tier2-list">
+        {#each noAssetEntities as entity}
+          <li class="tier2-item">
+            <span class="tier2-name">{entity.name}</span>
+            {#if entity.country}
+              <span class="tier2-country">{entity.country}</span>
+            {/if}
+          </li>
+        {/each}
+        {#if noAssetLoading}
+          <li class="tier2-item tier2-item--loading">Loading…</li>
+        {/if}
+      </ul>
+    </section>
+  {/if}
+
+  <!-- Tier 3: search terms that matched nothing in GEM -->
+  {#if nomatchCount > 0}
+    <section class="tier3-section">
+      <div class="tier3-header">
+        <p class="tier3-text">
+          <strong>{nomatchCount} {nomatchCount === 1 ? 'term' : 'terms'}</strong> from your search didn't match any company in GEM's database.
+        </p>
+        {#if unmatchedTerms.length > 0}
+          <button class="tier3-toggle" onclick={() => (showUnmatched = !showUnmatched)}>
+            {showUnmatched ? 'Hide' : 'Show'} unmatched terms
+          </button>
+        {/if}
+      </div>
+
+      {#if showUnmatched && unmatchedTerms.length > 0}
+        <table class="unmatched-table">
+          <tbody>
+            {#each unmatchedTerms as term}
+              <tr>
+                <td class="unmatched-term">{term}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      {/if}
+    </section>
+  {/if}
 
   <!-- Debug panel -->
   {#if executedQuery}
@@ -925,6 +1041,43 @@
     margin-bottom: var(--space-3);
   }
 
+  .pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-4);
+    padding: var(--space-4) 0 var(--space-2);
+  }
+
+  .page-btn {
+    padding: var(--space-1) var(--space-4);
+    font-size: var(--font-size-sm);
+    background: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    border: var(--border-width) solid var(--color-gray-300);
+    cursor: pointer;
+    transition: border-color var(--transition-base);
+  }
+
+  .page-btn:hover:not(:disabled) {
+    border-color: var(--color-text-secondary);
+  }
+
+  .page-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+
+  .page-info {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+  }
+
+  .page-count {
+    color: var(--color-text-tertiary);
+    margin-left: var(--space-1);
+  }
+
   /* Page-specific debug styles */
   .debug-sql {
     margin-top: var(--space-4);
@@ -1069,5 +1222,112 @@
     height: 100%;
     border: none;
     border-radius: 0;
+  }
+
+  /* ── Tier 2: matched entities with no assets ───────────────────────────── */
+  .tier2-section {
+    margin-top: var(--space-8);
+    padding: var(--space-5) var(--space-6);
+    background: #fffbeb;
+    border: 1px solid #f0c040;
+    border-radius: var(--radius-sm);
+  }
+
+  .tier2-title {
+    font-size: var(--font-size-body);
+    font-weight: 600;
+    margin: 0 0 var(--space-2);
+    color: var(--color-text-primary);
+  }
+
+  .tier2-desc {
+    margin: 0 0 var(--space-4);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+  }
+
+  .tier2-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .tier2-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    font-size: var(--font-size-sm);
+  }
+
+  .tier2-item--loading {
+    color: var(--color-text-secondary);
+    font-style: italic;
+  }
+
+  .tier2-name {
+    font-weight: 500;
+  }
+
+  .tier2-country {
+    color: var(--color-text-secondary);
+  }
+
+  /* ── Tier 3: unmatched terms ───────────────────────────────────────────── */
+  .tier3-section {
+    margin-top: var(--space-4);
+    padding: var(--space-4) var(--space-6);
+    background: var(--color-bg-secondary, #f8f8f8);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+  }
+
+  .tier3-header {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-4);
+    flex-wrap: wrap;
+  }
+
+  .tier3-text {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+  }
+
+  .tier3-toggle {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: var(--font-size-sm);
+    color: var(--gem-primary-blue, #1d4961);
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    white-space: nowrap;
+  }
+
+  .tier3-toggle:hover {
+    color: var(--color-text-primary);
+  }
+
+  .unmatched-table {
+    margin-top: var(--space-3);
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--font-size-sm);
+  }
+
+  .unmatched-term {
+    padding: var(--space-1) var(--space-2);
+    border-bottom: 1px solid var(--color-border-light);
+    color: var(--color-text-secondary);
+    font-family: var(--font-family-mono, monospace);
+  }
+
+  .unmatched-table tr:last-child .unmatched-term {
+    border-bottom: none;
   }
 </style>

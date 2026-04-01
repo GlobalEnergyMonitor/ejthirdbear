@@ -1,5 +1,4 @@
 <script lang="ts">
-  import SectionHeader from '$lib/components/nav/SectionHeader.svelte';
   import Spinner from '$lib/components/feedback/Spinner.svelte';
 
   type ExampleCompany = { name: string; id: string };
@@ -7,9 +6,12 @@
   let {
     singleSearchQuery = $bindable(''),
     bulkSearchText = $bindable(''),
+    strictMatchOnly = $bindable(false),
     searchLoading = false,
     searchError = null,
     exampleCompanies = [],
+    ownerCount = null,
+    ownerCountLoading = false,
     onSearchSingle,
     onSearchBulk,
     onUseExample,
@@ -17,41 +19,79 @@
   }: {
     singleSearchQuery?: string;
     bulkSearchText?: string;
+    strictMatchOnly?: boolean;
     searchLoading?: boolean;
     searchError?: string | null;
     exampleCompanies?: ExampleCompany[];
+    ownerCount?: number | null;
+    ownerCountLoading?: boolean;
     onSearchSingle: () => void;
     onSearchBulk: () => void;
     onUseExample: (_example: ExampleCompany) => void;
     onCsvUpload: (_event: Event) => void;
   } = $props();
+
+  let activeTab = $state<'single' | 'bulk'>('single');
 </script>
 
 <section class="search-section">
-  <SectionHeader
-    title="Search by Company Name"
-    subtitle="Find owners by company name, entity ID, LEI, or Perm ID."
-  />
-
-  <div class="search-field primary-search">
-    <div class="search-input-wrapper">
-      <input
-        id="single-search"
-        type="text"
-        class="search-input"
-        placeholder="Enter company name..."
-        bind:value={singleSearchQuery}
-        onkeydown={(e) => e.key === 'Enter' && onSearchSingle()}
-      />
+  <!-- Tabs act as the section header -->
+  <div class="tab-header">
+    <div class="tabs" role="tablist">
       <button
-        class="search-btn"
-        onclick={onSearchSingle}
-        disabled={searchLoading || !singleSearchQuery.trim()}
+        role="tab"
+        class="tab-btn"
+        class:active={activeTab === 'single'}
+        onclick={() => (activeTab = 'single')}
+        aria-selected={activeTab === 'single'}
       >
-        {searchLoading ? 'Searching...' : 'Search'}
+        Search Single Owner
+      </button>
+      <button
+        role="tab"
+        class="tab-btn"
+        class:active={activeTab === 'bulk'}
+        onclick={() => (activeTab = 'bulk')}
+        aria-selected={activeTab === 'bulk'}
+      >
+        Bulk Search
       </button>
     </div>
-    <div class="search-help">
+
+    {#if ownerCountLoading}
+      <span class="owner-count owner-count--loading">Loading owners…</span>
+    {:else if ownerCount !== null}
+      <span class="owner-count"
+        >{ownerCount.toLocaleString()} owners with stakes in this asset class</span
+      >
+    {/if}
+  </div>
+
+  {#if activeTab === 'single'}
+    <div class="tab-panel" role="tabpanel">
+      <p class="tab-subtitle">Find owners by company name, GEM entity ID, LEI, or Perm ID.</p>
+      <div class="search-input-wrapper">
+        <input
+          id="single-search"
+          type="text"
+          class="search-input"
+          placeholder="Enter owner name or ID..."
+          bind:value={singleSearchQuery}
+          onkeydown={(e) => e.key === 'Enter' && onSearchSingle()}
+        />
+        <button
+          class="search-btn"
+          onclick={onSearchSingle}
+          disabled={searchLoading || !singleSearchQuery.trim()}
+        >
+          {searchLoading ? 'Searching...' : 'Search'}
+        </button>
+      </div>
+
+      {#if searchError}
+        <div class="search-error">{searchError}</div>
+      {/if}
+
       <div class="example-companies">
         <span class="example-label">Quick fill from top owners:</span>
         {#each exampleCompanies as example, i}
@@ -62,57 +102,50 @@
         {/each}
       </div>
     </div>
-  </div>
+  {:else}
+    <div class="tab-panel" role="tabpanel">
+      <div class="bulk-search-hint">
+        One entity per line — name, GEM Entity ID, LEI, or PermID. Or
+        <label class="upload-btn">
+          upload a CSV
+          <input type="file" accept=".csv,.tsv,.txt" onchange={onCsvUpload} hidden />
+        </label>
+        to populate.
+      </div>
 
-  <div class="results-preview">
-    <span class="preview-label">You'll see:</span>
-    <span class="preview-item">Ownership stakes</span>
-    <span class="preview-sep">·</span>
-    <span class="preview-item">Asset list</span>
-    <span class="preview-sep">·</span>
-    <span class="preview-item">Corporate relationships</span>
-  </div>
+      <div class="bulk-search-body">
+        <textarea
+          id="bulk-search"
+          class="bulk-input"
+          placeholder="Shell&#10;BP&#10;TotalEnergies&#10;E100001000348&#10;549300MLUDYVRQOOXS22"
+          bind:value={bulkSearchText}
+          rows="6"
+        ></textarea>
 
-  <details class="advanced-search">
-    <summary>Advanced: Search by ID or bulk search</summary>
-    <div class="advanced-content">
-      <p class="advanced-hint">You can also search using identifiers:</p>
-      <ul class="id-formats">
-        <li><strong>GEM Entity ID</strong> — e.g., <code>E100001000348</code></li>
-        <li>
-          <strong>LEI</strong> — 20-character code, e.g., <code>549300MLUDYVRQOOXS22</code>
-        </li>
-        <li><strong>PermID</strong> — 10-digit number, e.g., <code>4295903609</code></li>
-      </ul>
-
-      <div class="search-field">
-        <label for="bulk-search">Search multiple companies</label>
-        <div class="input-row">
-          <textarea
-            id="bulk-search"
-            class="bulk-input"
-            placeholder="Shell&#10;BP&#10;TotalEnergies&#10;E100001000348"
-            bind:value={bulkSearchText}
-            rows="4"
-          ></textarea>
+        <div class="bulk-actions">
+          <button
+            class="submit-btn"
+            onclick={onSearchBulk}
+            disabled={searchLoading || !bulkSearchText.trim()}
+          >
+            {#if searchLoading}
+              <Spinner size={14} />
+              Searching...
+            {:else}
+              Search
+            {/if}
+          </button>
+          <label class="debug-option">
+            <input type="checkbox" bind:checked={strictMatchOnly} />
+            Exact match only
+          </label>
         </div>
       </div>
 
-      <div class="action-row">
-        <button class="submit-btn" onclick={onSearchBulk} disabled={searchLoading}>
-          {searchLoading ? 'Searching...' : 'Search All'}
-        </button>
-        <span class="or-text">or</span>
-        <label class="upload-btn">
-          Upload CSV
-          <input type="file" accept=".csv" onchange={onCsvUpload} hidden />
-        </label>
-      </div>
+      {#if searchError}
+        <div class="search-error">{searchError}</div>
+      {/if}
     </div>
-  </details>
-
-  {#if searchError}
-    <div class="search-error">{searchError}</div>
   {/if}
 
   {#if searchLoading}
@@ -125,143 +158,78 @@
 
 <style>
   .search-section {
-    margin-bottom: 56px;
-  }
-
-  .primary-search {
     margin-bottom: var(--space-4);
   }
 
-  .primary-search .search-input-wrapper {
-    margin-bottom: var(--space-3);
-  }
-
-  .primary-search .search-input {
-    width: 100%;
-    font-size: var(--font-size-xl);
-  }
-
-  .search-help {
+  /* ── Tab header (replaces SectionHeader) ───────────────────────────── */
+  .tab-header {
     display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-  }
-
-  .results-preview {
-    display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: max-content;
-    gap: var(--space-2);
     align-items: center;
-    font-size: var(--font-size-body);
-    color: var(--color-text-tertiary);
-    margin-bottom: var(--space-8);
-    padding: var(--space-3) 0;
+    justify-content: space-between;
+    gap: var(--space-4);
     border-bottom: var(--border-width) solid var(--color-border-light);
+    margin-bottom: var(--space-5);
   }
 
-  .preview-label {
-    font-weight: 500;
-    color: var(--color-text-secondary);
+  .tabs {
+    display: flex;
   }
 
-  .preview-item {
-    color: var(--color-text-secondary);
-  }
-
-  .preview-sep {
-    color: var(--color-gray-300);
-  }
-
-  .advanced-search {
-    margin-bottom: var(--space-8);
-  }
-
-  .advanced-search summary {
-    font-size: var(--font-size-body);
-    color: var(--color-text-tertiary);
-    cursor: pointer;
-    padding: var(--space-2) 0;
-    list-style: none;
-  }
-
-  .advanced-search summary::-webkit-details-marker {
-    display: none;
-  }
-
-  .advanced-search summary::before {
-    content: '+ ';
-    font-weight: 500;
-  }
-
-  .advanced-search[open] summary::before {
-    content: '− ';
-  }
-
-  .advanced-search summary:hover {
-    color: var(--color-text-secondary);
-  }
-
-  .advanced-content {
-    padding-top: var(--space-4);
-  }
-
-  .advanced-hint {
-    font-size: var(--font-size-body);
-    color: var(--color-text-secondary);
-    margin: 0 0 var(--space-3) 0;
-  }
-
-  .id-formats {
-    font-size: var(--font-size-body);
-    color: var(--color-text-secondary);
-    margin: 0 0 var(--space-6) 0;
-    padding-left: var(--space-5);
-    line-height: var(--line-height-relaxed);
-  }
-
-  .id-formats li {
-    margin-bottom: var(--space-1);
-  }
-
-  .id-formats strong {
-    color: var(--color-text-primary);
-    font-weight: 500;
-  }
-
-  .id-formats code {
-    font-family: var(--font-family-mono);
+  .tab-btn {
+    padding: var(--space-2) var(--space-5);
     font-size: var(--font-size-md);
-    background: var(--color-gray-100);
-    padding: 2px 6px;
-    color: var(--color-text-secondary);
-  }
-
-  .search-field {
-    margin-bottom: var(--space-6);
-  }
-
-  .search-field label {
-    display: block;
-    font-size: var(--font-size-base);
-    font-weight: 500;
+    font-weight: 600;
     letter-spacing: var(--tracking-caps);
     text-transform: uppercase;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
     color: var(--color-text-tertiary);
-    margin-bottom: var(--space-2);
+    cursor: pointer;
+    margin-bottom: -1px;
+    transition:
+      color var(--duration-base),
+      border-color var(--duration-base);
   }
 
-  .input-row {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--space-5);
+  .tab-btn:hover {
+    color: var(--color-text-secondary);
   }
 
+  .tab-btn.active {
+    color: var(--color-text-primary);
+    border-bottom-color: var(--color-text-primary);
+  }
+
+  .owner-count {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-tertiary);
+    white-space: nowrap;
+    padding-bottom: var(--space-2);
+  }
+
+  .owner-count--loading {
+    font-style: italic;
+  }
+
+  /* ── Tab panels ────────────────────────────────────────────────────── */
+  .tab-panel {
+    min-height: 0;
+  }
+
+  .tab-subtitle {
+    margin: 0 0 var(--space-4) 0;
+    font-size: var(--font-size-body);
+    color: var(--color-text-tertiary);
+  }
+
+  /* Single search */
   .search-input-wrapper {
     display: grid;
     grid-template-columns: minmax(200px, 380px) auto;
     gap: var(--space-3);
     align-items: end;
+    margin-bottom: var(--space-3);
   }
 
   .search-input {
@@ -302,32 +270,12 @@
     cursor: not-allowed;
   }
 
-  .bulk-input {
-    width: 340px;
-    padding: var(--space-2) var(--space-3);
-    font-size: var(--font-size-lg);
-    border: var(--border-width) solid var(--color-gray-300);
-    background: var(--color-bg-primary);
-    resize: vertical;
-    font-family: inherit;
-    line-height: var(--line-height-normal);
-  }
-
-  .bulk-input:focus {
-    outline: none;
-    border-color: var(--color-text-tertiary);
-  }
-
-  .bulk-input::placeholder {
-    color: var(--color-text-tertiary);
-  }
-
   .example-companies {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: var(--space-1);
-    margin-top: var(--space-2);
+    margin-top: var(--space-3);
     font-size: var(--font-size-body);
   }
 
@@ -357,16 +305,51 @@
     text-decoration-color: var(--color-accent);
   }
 
-  .action-row {
-    display: grid;
-    grid-template-columns: auto auto auto;
-    gap: var(--space-4);
-    align-items: center;
-    justify-content: start;
-    margin-top: var(--space-2);
+  /* Bulk search */
+  .bulk-search-hint {
+    font-size: var(--font-size-body);
+    color: var(--color-text-tertiary);
+    margin-bottom: var(--space-3);
+  }
+
+  .bulk-search-body {
+    display: flex;
+    gap: var(--space-5);
+    align-items: flex-start;
+  }
+
+  .bulk-input {
+    flex: 1;
+    min-width: 480px;
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--font-size-body);
+    border: var(--border-width) solid var(--color-gray-300);
+    background: var(--color-bg-primary);
+    resize: vertical;
+    font-family: inherit;
+    line-height: var(--line-height-normal);
+  }
+
+  .bulk-input:focus {
+    outline: none;
+    border-color: var(--color-text-tertiary);
+  }
+
+  .bulk-input::placeholder {
+    color: var(--color-text-tertiary);
+  }
+
+  .bulk-actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    padding-top: var(--space-1);
   }
 
   .submit-btn {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
     padding: var(--space-2) var(--space-5);
     font-size: var(--font-size-body);
     background: var(--color-bg-primary);
@@ -385,14 +368,10 @@
     cursor: not-allowed;
   }
 
-  .or-text {
-    font-size: var(--font-size-body);
-    color: var(--color-text-tertiary);
-  }
-
   .upload-btn {
+    display: inline;
     padding: 0;
-    font-size: var(--font-size-body);
+    font-size: inherit;
     background: none;
     color: var(--color-text-secondary);
     border: none;
@@ -405,25 +384,44 @@
     color: var(--color-text-primary);
   }
 
+  .debug-option {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .debug-option input[type='checkbox'] {
+    cursor: pointer;
+  }
+
+  /* Shared */
   .search-error {
     padding: var(--space-2) var(--space-3);
     background: var(--color-bg-primary);
     border-left: 3px solid var(--color-error);
     color: var(--color-error);
     font-size: var(--font-size-body);
-    margin-top: var(--space-5);
+    margin-top: var(--space-4);
   }
 
   .search-loading {
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    padding: var(--space-6) 0;
+    padding: var(--space-4) 0;
     font-size: var(--font-size-body);
     color: var(--color-text-tertiary);
   }
 
   @media (max-width: 768px) {
+    .tab-header {
+      flex-wrap: wrap;
+    }
+
     .search-input-wrapper {
       grid-template-columns: 1fr;
     }
@@ -432,32 +430,18 @@
       justify-self: start;
     }
 
-    .input-row {
+    .bulk-search-body {
       flex-direction: column;
-      gap: var(--space-3);
     }
 
-    .search-input,
+    .bulk-actions {
+      flex-direction: row;
+      flex-wrap: wrap;
+    }
+
     .bulk-input {
+      min-width: 0;
       width: 100%;
-    }
-
-    .action-row {
-      grid-template-columns: 1fr 1fr;
-    }
-
-    .or-text {
-      display: none;
-    }
-
-    .results-preview {
-      grid-auto-flow: row;
-      grid-auto-columns: 1fr;
-      justify-items: start;
-    }
-
-    .preview-sep {
-      display: none;
     }
   }
 </style>
