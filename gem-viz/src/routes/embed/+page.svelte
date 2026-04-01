@@ -8,6 +8,17 @@
     'ownership-flower',
     'coal-plant',
     'coal-plant-test',
+    'ownership-graph',
+    'project-card',
+    'asset-ring',
+    'ultimate-owners',
+    'network-3d',
+    'asset-search',
+    'tracker-factsheet',
+    'controlchain',
+    'coal-data-explorer',
+    'viz',
+    'portfolio-explorer',
   ]);
 
   const widgets = [

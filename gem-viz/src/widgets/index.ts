@@ -70,14 +70,16 @@ const WIDGET_MAP: Record<string, () => Promise<{ default: unknown }>> = {
   'ownership-flower': () => import('./GemOwnershipFlower.svelte'),
   'coal-plant': () => import('./GemCoalPlantCard.svelte'),
   'coal-plant-test': () => import('./GemCoalPlantCard.svelte'),
-  // Future widgets:
-  // 'ownership-graph': () => import('./GemOwnershipGraph.svelte'),
-  // 'project-card': () => import('./GemProjectCard.svelte'),
-  // 'asset-ring': () => import('./GemAssetRing.svelte'),
-  // 'ultimate-owners': () => import('./GemUltimateOwners.svelte'),
-  // 'network-3d': () => import('./GemNetworkGraph.svelte'),
-  // 'asset-search': () => import('./GemAssetSearch.svelte'),
-  // 'tracker-factsheet': () => import('./GemTrackerFactsheet.svelte'),
+  'ownership-graph': () => import('./GemOwnershipGraph.svelte'),
+  'project-card': () => import('./GemProjectCard.svelte'),
+  'asset-ring': () => import('./GemAssetRing.svelte'),
+  'ultimate-owners': () => import('./GemUltimateOwners.svelte'),
+  'network-3d': () => import('./GemNetworkGraph.svelte'),
+  'asset-search': () => import('./GemAssetSearch.svelte'),
+  'tracker-factsheet': () => import('./GemTrackerFactsheet.svelte'),
+  controlchain: () => import('./GemControlChain.svelte'),
+  'coal-data-explorer': () => import('./GemCoalDataExplorer.svelte'),
+  viz: () => import('./GemViz.svelte'),
 };
 
 export function listWidgets(): string[] {
@@ -202,6 +204,11 @@ export function parseSrc(dataSrc: string): { type: string; props: Record<string,
   }
   // embed/asset uses ?id= but widget uses assetId
   if (type === 'asset' && props.id && !props.assetId) {
+    props.assetId = props.id;
+    delete props.id;
+  }
+  // embed/project-card uses ?id= but widget uses assetId
+  if (type === 'project-card' && props.id && !props.assetId) {
     props.assetId = props.id;
     delete props.id;
   }
