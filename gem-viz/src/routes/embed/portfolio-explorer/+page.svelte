@@ -12,18 +12,18 @@
   import { onMount } from 'svelte';
   import { readHash } from '../embed-utils';
 
-  let entityId = $state($page.url.searchParams.get('id') || '');
+  let entityId = $state($page.url.searchParams.get('id') || $page.url.searchParams.get('entity') || '');
   let hidePicker = $state($page.url.searchParams.get('hidePicker') !== 'false');
   let iframeSrc = $state('');
 
   onMount(() => {
     const h = readHash();
-    if (h.id) entityId = h.id;
+    if (h.id || h.entity) entityId = h.id || h.entity;
     if (h.hidePicker === 'false') hidePicker = false;
 
     if (entityId) {
-      // Load the full portfolio-explorer page in an iframe with the entity pre-selected
-      const params = new URLSearchParams({ entity: entityId });
+      // Load the full portfolio-explorer page in an iframe with embed=true to hide navbar
+      const params = new URLSearchParams({ entity: entityId, embed: 'true' });
       if (hidePicker) params.set('hidePicker', 'true');
       iframeSrc = `/portfolio-explorer/?${params.toString()}`;
     }
@@ -56,8 +56,7 @@
   }
   .pe-iframe {
     width: 100%;
-    height: 100%;
-    min-height: 600px;
+    height: 100vh;
     border: none;
   }
 </style>

@@ -1236,15 +1236,19 @@
   }
 
   /* ---- Chart Row ---- */
+  /* Single scroll container for both tree + assets so SVG lines stay aligned */
   .chart-row {
     display: flex;
-    overflow-x: auto;
+    overflow: auto;
     min-height: 200px;
     max-height: calc(100vh - 260px);
   }
   .tree-container {
     flex-shrink: 0;
-    overflow: visible;
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--color-bg-primary, #fff);
   }
   .tree-container svg {
     overflow: visible;
@@ -1252,9 +1256,6 @@
   }
   .assets-container {
     flex: 1;
-    overflow-x: auto;
-    overflow-y: auto;
-    max-height: calc(100vh - 260px);
     padding-left: var(--space-2);
   }
   .assets-container.full-width {
