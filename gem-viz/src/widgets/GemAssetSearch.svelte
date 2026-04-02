@@ -11,10 +11,22 @@
     mode?: string;
     modes?: string;
     showButton?: boolean;
+    open?: string;
+    helper?: string;
+    linkBase?: string;
     theme?: 'light' | 'dark';
   }
 
-  let { q = '', mode = 'asset', modes = 'asset,owner,universal', showButton = true, theme = 'light' }: Props = $props();
+  let {
+    q = '',
+    mode = 'asset',
+    modes = 'asset,owner,universal',
+    showButton = true,
+    open: openMode = 'self',
+    helper = '',
+    linkBase = '',
+    theme = 'light',
+  }: Props = $props();
 
   type SearchMode = { id: string; label: string; placeholder: string; buttonLabel: string };
   const modeDefaults: Record<string, SearchMode> = {
@@ -36,15 +48,21 @@
     const trimmed = value.trim();
     if (!trimmed) return;
 
+    const base = linkBase || '';
     let url: string;
     if (/^[EG]\d+/.test(trimmed)) {
       url = trimmed.startsWith('E') ? entityLink(trimmed) : assetLink(trimmed);
     } else if (searchMode === 'owner') {
-      url = `/search?q=${encodeURIComponent(trimmed)}&type=entities`;
+      url = `${base}/search?q=${encodeURIComponent(trimmed)}&type=entities`;
     } else {
-      url = `/search?q=${encodeURIComponent(trimmed)}`;
+      url = `${base}/search?q=${encodeURIComponent(trimmed)}`;
     }
-    window.open(url, '_blank', 'noopener');
+
+    if (openMode === 'parent') {
+      window.parent?.postMessage({ type: 'gem-navigate', url }, '*');
+    } else {
+      window.open(url, '_blank', 'noopener');
+    }
   }
 </script>
 
@@ -56,11 +74,20 @@
     {showButton}
     onSearch={handleSearch}
   />
+  {#if helper}
+    <p class="helper-text">{helper}</p>
+  {/if}
 </div>
 
 <style>
   .search-embed {
     width: 100%;
     font-family: var(--font-family);
+  }
+  .helper-text {
+    margin: var(--space-2) 0 0;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+    line-height: 1.4;
   }
 </style>

@@ -18,6 +18,7 @@
     'controlchain',
     'coal-data-explorer',
     'viz',
+    'screener',
     'portfolio-explorer',
   ]);
 

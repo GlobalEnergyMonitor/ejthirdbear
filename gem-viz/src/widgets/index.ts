@@ -80,6 +80,8 @@ const WIDGET_MAP: Record<string, () => Promise<{ default: unknown }>> = {
   controlchain: () => import('./GemControlChain.svelte'),
   'coal-data-explorer': () => import('./GemCoalDataExplorer.svelte'),
   viz: () => import('./GemViz.svelte'),
+  screener: () => import('./GemScreener.svelte'),
+  'portfolio-explorer': () => import('./GemPortfolioExplorer.svelte'),
 };
 
 export function listWidgets(): string[] {
