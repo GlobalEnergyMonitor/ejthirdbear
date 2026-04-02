@@ -397,7 +397,7 @@
           {@const graphData = entityOwnershipGraphs.get(selectedEntityForGraph)}
           {@const portfolio = entityPortfolios.find((e) => e.entity_id === selectedEntityForGraph)}
 
-          <h3 class="subsection-head">Upstream Ownership</h3>
+          <h3 class="subsection-head">Upstream Control Chain</h3>
           <p class="subsection-lede">Who owns this entity</p>
           {#if graphData && graphData.nodes.length > 1}
             <div class="ownership-graph-container">

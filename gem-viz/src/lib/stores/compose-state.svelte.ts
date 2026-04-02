@@ -46,7 +46,7 @@ import {
   STATIC_COLUMNS,
   STATIC_TRACKER_COLUMNS,
   type ComposeRow,
-} from '$lib/compose-api';
+} from '$lib/api/compose-api';
 import type { AssetSummary } from '$lib/ownership-api';
 import { trackerColors } from '$lib/design-tokens';
 import {
@@ -61,11 +61,70 @@ import {
 } from '../../routes/compose/compose-utils';
 import { statusColorsGranular } from '$lib/design-tokens';
 
+const FILTER_ARRAY_KEYS = [
+  'trackers',
+  'trackersAnd',
+  'statuses',
+  'statusesAnd',
+  'countries',
+  'countriesAnd',
+  'stateProvinces',
+  'stateProvincesAnd',
+  'ownerCountries',
+  'ownerCountriesAnd',
+  'owners',
+  'ownersAnd',
+] as const;
+
+const FILTER_NUMBER_KEYS = [
+  'capacityMin',
+  'capacityMax',
+  'shareMin',
+  'shareMax',
+  'startYearMin',
+  'startYearMax',
+] as const;
+
+function cloneFilters(filters: any) {
+  const cloned = { ...emptyFilterState(), ...filters };
+  for (const key of FILTER_ARRAY_KEYS) {
+    cloned[key] = Array.isArray(filters?.[key]) ? [...filters[key]] : [];
+  }
+  for (const key of FILTER_NUMBER_KEYS) {
+    cloned[key] = typeof filters?.[key] === 'number' ? filters[key] : null;
+  }
+  cloned.logic = filters?.logic === 'OR' ? 'OR' : 'AND';
+  cloned.search = typeof filters?.search === 'string' ? filters.search : '';
+  return cloned;
+}
+
+function normalizeStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((item) => (typeof item === 'string' ? item.trim() : '')).filter(Boolean);
+  }
+  if (typeof value === 'string' && value.trim()) {
+    return [value.trim()];
+  }
+  return [];
+}
+
+function normalizeOptionalNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // State Class
 // ---------------------------------------------------------------------------
 
 export class ComposeState {
+  routeBase: string;
+  syncUrl: boolean;
+
   // =========================================================================
   // Mutable State ($state)
   // =========================================================================
@@ -224,7 +283,13 @@ export class ComposeState {
     const allColumns = [
       { key: 'name', label: 'Asset', sortable: true, filterable: true },
       { key: 'asset_id', label: 'Asset ID', sortable: true, filterable: true },
-      { key: 'tracker', label: 'Tracker', sortable: true, filterable: true, colorMap: trackerColors },
+      {
+        key: 'tracker',
+        label: 'Tracker',
+        sortable: true,
+        filterable: true,
+        colorMap: trackerColors,
+      },
       { key: 'status', label: 'Status', sortable: true, filterable: true },
       { key: 'country', label: 'Country', sortable: true, filterable: true },
       ...(this.availableColumns.hasCapacity
@@ -312,7 +377,13 @@ export class ComposeState {
   // Constructor (sets up effects)
   // =========================================================================
 
-  constructor() {
+  constructor({
+    routeBase = `${base}/compose`,
+    syncUrl = true,
+  }: { routeBase?: string; syncUrl?: boolean } = {}) {
+    this.routeBase = routeBase;
+    this.syncUrl = syncUrl;
+
     // Bridge Svelte 4 writable store into reactive $state
     $effect(() => {
       const unsub = investigationCart.subscribe((items: any[]) => {
@@ -364,10 +435,10 @@ export class ComposeState {
   // =========================================================================
 
   syncFiltersToUrl = () => {
-    if (!browser) return;
+    if (!browser || !this.syncUrl) return;
     const encoded = encodeFilters(this.filters);
-    const newUrl = encoded ? `${base}/compose?${encoded}` : `${base}/compose`;
-    goto(newUrl, { replaceState: true, keepFocus: true });
+    const newUrl = encoded ? `${this.routeBase}?${encoded}` : this.routeBase;
+    goto(newUrl, { replaceState: true, keepFocus: true, noScroll: true });
   };
 
   // =========================================================================
@@ -590,7 +661,14 @@ export class ComposeState {
   };
 
   removeFilter = (key: string, value?: string) => {
-    const arrayKeys = ['trackers', 'statuses', 'countries', 'stateProvinces', 'ownerCountries', 'owners'];
+    const arrayKeys = [
+      'trackers',
+      'statuses',
+      'countries',
+      'stateProvinces',
+      'ownerCountries',
+      'owners',
+    ];
     if (arrayKeys.includes(key)) {
       (this.filters as any)[key] = value
         ? (this.filters as any)[key].filter((v: string) => v !== value)
@@ -610,6 +688,52 @@ export class ComposeState {
     this.syncFiltersToUrl();
     this.loadResults();
     this.updateParametricCounts();
+  };
+
+  applyAssistantFilters = (
+    nextFilters: Record<string, unknown> = {},
+    {
+      mode = 'replace',
+    }: {
+      mode?: 'replace' | 'merge' | 'clear';
+    } = {}
+  ) => {
+    if (mode === 'clear') {
+      this.clearFilters();
+      return;
+    }
+
+    const baseFilters = mode === 'merge' ? cloneFilters(this.filters) : emptyFilterState();
+    const merged = cloneFilters(baseFilters);
+
+    for (const key of FILTER_ARRAY_KEYS) {
+      if (!(key in nextFilters)) continue;
+      const incoming = normalizeStringArray(nextFilters[key]);
+      if (mode === 'merge') {
+        merged[key] = [...new Set([...merged[key], ...incoming])];
+      } else {
+        merged[key] = incoming;
+      }
+    }
+
+    for (const key of FILTER_NUMBER_KEYS) {
+      if (!(key in nextFilters)) continue;
+      merged[key] = normalizeOptionalNumber(nextFilters[key]);
+    }
+
+    if ('logic' in nextFilters) {
+      merged.logic = nextFilters.logic === 'OR' ? 'OR' : 'AND';
+    }
+
+    if ('search' in nextFilters) {
+      merged.search = typeof nextFilters.search === 'string' ? nextFilters.search.trim() : '';
+    }
+
+    this.filters = merged;
+    this._cachedAssets = null;
+    this._cacheKey = null;
+    this.currentPage = 1;
+    this.applyFilters();
   };
 
   // =========================================================================

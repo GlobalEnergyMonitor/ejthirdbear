@@ -19,8 +19,6 @@ export {
   getEntity,
   getEntityOwners,
   getEntityOwned,
-  traceEntityUp,
-  traceEntityDown,
   getEntityGraphUp,
   getEntityGraphDown,
   // Asset operations
@@ -46,11 +44,4 @@ export {
 // SMART ASSET FETCHER
 // =============================================================================
 
-export {
-  fetchAssetData,
-  isCompoundId,
-  isGPrefixId,
-  isMPrefixId,
-  extractUnitId,
-  type AssetDataResult,
-} from '$lib/asset-data';
+export { fetchAssetData, type AssetDataResult } from '$lib/asset-data';

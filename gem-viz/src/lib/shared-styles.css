@@ -45,11 +45,12 @@
   --font-weight-bold: 700;
 
   /* Size scale - Based on GEM Brand Guidelines */
-  --font-size-xs: 10px; /* Annotations, footnotes (uppercase) */
-  --font-size-sm: 12px; /* Tables, small text */
-  --font-size-base: 14px; /* Body text */
-  --font-size-md: 16px; /* Large body / small sublines */
-  --font-size-lg: 18px; /* Sublines */
+  --font-size-xs: 12px; /* Annotations, footnotes (uppercase) */
+  --font-size-sm: 14px; /* Tables, small text */
+  --font-size-base: 16px; /* Body text */
+  --font-size-body: 16px; /* Alias for base — used in screener/embed components */
+  --font-size-md: 18px; /* Large body / small sublines */
+  --font-size-lg: 20px; /* Sublines */
   --font-size-xl: 24px; /* Section headers */
   --font-size-2xl: 32px; /* Page titles */
   --font-size-3xl: 40px; /* Large headlines */
@@ -100,12 +101,12 @@
      Based on GEM website layout patterns
      ========================================================================== */
 
-  --container-xs: 480px; /* Narrow content (forms, login) */
-  --container-sm: 640px; /* Single column content */
-  --container-md: 768px; /* Medium content */
-  --container-lg: 960px; /* Article/screener width */
-  --container-xl: 1200px; /* Main content container */
-  --container-2xl: 1400px; /* Wide layouts, dashboards */
+  --container-xs: 540px; /* Narrow content (forms, login) */
+  --container-sm: 720px; /* Single column content */
+  --container-md: 900px; /* Medium content */
+  --container-lg: 1100px; /* Article/screener width */
+  --container-xl: 1400px; /* Main content container */
+  --container-2xl: 1680px; /* Wide layouts, dashboards */
   --container-full: 100%;
 
   /* Site gutter/edge padding */
@@ -223,7 +224,7 @@
   --color-status-construction: #7f142a;
   --color-status-pre-construction: #ca4a50;
   --color-status-announced: #f4b7b3;
-  --color-status-prospective: #ca4a50;
+  --color-status-planned: #ca4a50;
 
   /* --- Status Colors (Renewables - Green Scale) --- */
   --color-status-operating-renewable: #348d59;
@@ -337,6 +338,34 @@
   --z-modal-backdrop: 900;
   --z-modal: 1000;
   --z-toast: 1100;
+}
+
+/* ============================================================================
+   RESPONSIVE FONT SCALE
+   Bump the small-end tokens up on large and extra-large screens so the viz
+   stays readable without manual zooming.
+   ============================================================================ */
+
+@media (min-width: 1400px) {
+  :root {
+    --font-size-xs: 13px;
+    --font-size-sm: 15px;
+    --font-size-base: 17px;
+    --font-size-body: 17px;
+    --font-size-md: 19px;
+    --font-size-lg: 22px;
+  }
+}
+
+@media (min-width: 1800px) {
+  :root {
+    --font-size-xs: 14px;
+    --font-size-sm: 16px;
+    --font-size-base: 18px;
+    --font-size-body: 18px;
+    --font-size-md: 21px;
+    --font-size-lg: 24px;
+  }
 }
 
 /* ============================================================================

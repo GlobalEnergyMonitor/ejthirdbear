@@ -6,8 +6,9 @@
   import { onMount } from 'svelte';
   import maplibregl from 'maplibre-gl';
   import 'maplibre-gl/dist/maplibre-gl.css';
+  import { BASEMAP_POSITRON } from '$lib/map-config';
 
-  let { lat, lon, name = '' } = $props<{ lat: number; lon: number; name?: string }>();
+  let { lat, lon, name: _name = '' } = $props<{ lat: number; lon: number; name?: string }>();
 
   let container: HTMLDivElement;
   let map: maplibregl.Map | null = null;
@@ -16,7 +17,7 @@
   onMount(() => {
     map = new maplibregl.Map({
       container,
-      style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
+      style: BASEMAP_POSITRON,
       center: [lon, lat],
       zoom: 8,
       scrollZoom: false,

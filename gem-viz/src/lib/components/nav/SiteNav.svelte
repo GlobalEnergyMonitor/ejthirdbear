@@ -50,9 +50,12 @@
 
   // Navigation links
   const navLinks = [
-    { path: 'compose', label: 'Compose' },
+    // { path: 'compose', label: 'Compose' },
     { path: 'screener', label: 'Screener' },
-    { path: 'report', label: 'Report', showBadge: true },
+    { path: 'controlchain', label: 'ControlChain' },
+    { path: 'fieldguide', label: 'FieldGuide' },
+    { path: 'cards', label: 'Cards' },
+    // { path: 'report', label: 'Report', showBadge: true },
     { path: 'downloads', label: 'Downloads' },
   ];
 </script>

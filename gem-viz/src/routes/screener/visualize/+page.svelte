@@ -16,14 +16,16 @@
   import ScreenerExportPanel from '$lib/components/screener/ScreenerExportPanel.svelte';
   import MiniBarChart from '$lib/components/charts/MiniBarChart.svelte';
   import { buildScreenerUrl, parseJsonSearchParam } from '$lib/screener-url';
-  import { formatCapacity } from '$lib/format';
+  import { formatCapacity } from '$lib/utils/format';
   import { formatNumber } from '$lib/components/cart/export-panel-utils';
   import { statusColorsGranular } from '$lib/design-tokens';
   import RangeSlider from '$lib/components/table/RangeSlider.svelte';
+  import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
   // Get params from URL
   const classesParam = $derived($page.url.searchParams.get('classes') || '');
   const ownersParam = $derived($page.url.searchParams.get('owners') || '');
+  const isEmbed = $derived($page.url.searchParams.get('embed') === 'true');
 
   // Parse owner IDs
   const ownerIds = $derived(ownersParam ? ownersParam.split(',') : []);
@@ -49,6 +51,7 @@
   let viewMode = $state('grid');
   let selectedOwner = $state(null);
   let showHelp = $state(false);
+  let showOwnerPicker = $state(false);
 
   // Data collection from chart callbacks
   let assetsByOwner = $state(new Map());
@@ -261,7 +264,8 @@
       );
 
       owners = ownerData;
-      if (owners.length === 1) {
+      // Always start in single view with first owner
+      if (owners.length > 0) {
         selectedOwner = owners[0];
         viewMode = 'single';
       }
@@ -309,11 +313,7 @@
   function goToOwner(owner) {
     selectedOwner = owner;
     viewMode = 'single';
-  }
-
-  function backToGrid() {
-    viewMode = 'grid';
-    selectedOwner = null;
+    showOwnerPicker = false;
   }
 
   function openEntityPage(ownerId) {
@@ -323,7 +323,15 @@
   function toggleHelp() {
     showHelp = !showHelp;
   }
+
+  function handleKeydown(e) {
+    if (e.key === 'Escape' && showOwnerPicker) {
+      showOwnerPicker = false;
+    }
+  }
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
 
 <svelte:head>
   <title>Ownership Analysis — Global Energy Monitor</title>
@@ -331,13 +339,25 @@
     name="description"
     content="Visualize ownership network connections and export asset data for selected companies."
   />
+  <SeoMeta
+    title="Ownership Analysis — Global Energy Monitor"
+    description="Visualize ownership network connections and export asset data for selected companies."
+    image="/og/screener.png"
+  />
 </svelte:head>
 
-<ScreenerLayout currentStep={4} subtitle={subtitle()} {classesParam} {ownersParam} maxWidth="wide">
+<ScreenerLayout
+  currentStep={4}
+  subtitle={subtitle()}
+  {classesParam}
+  {ownersParam}
+  maxWidth="wide"
+  {isEmbed}
+>
   {#snippet headerRight()}
-    {#if owners.length > 1 && viewMode === 'single'}
-      <button class="text-link" onclick={backToGrid}>
-        View all {owners.length}
+    {#if owners.length > 1}
+      <button class="text-link" onclick={() => (showOwnerPicker = true)}>
+        Switch owner ({owners.length})
       </button>
     {/if}
   {/snippet}
@@ -364,13 +384,23 @@
       </div>
     {:else if owners.length === 0}
       <div class="empty-state">
-        <p>No entities selected. Return to results to select entities.</p>
+        <p>
+          No entities selected. <button class="text-link" onclick={goBack}>Return to results</button
+          > to select entities.
+        </p>
       </div>
     {:else if viewMode === 'single' && selectedOwner}
       <!-- Single owner view -->
       <div class="owner-bar">
         <div class="owner-title">
-          <h2>{selectedOwner.name}</h2>
+          {#if owners.length > 1}
+            <button class="owner-name-btn" onclick={() => (showOwnerPicker = true)}>
+              <h2>{selectedOwner.name}</h2>
+              <span class="owner-switch-hint">{owners.length} owners ▾</span>
+            </button>
+          {:else}
+            <h2>{selectedOwner.name}</h2>
+          {/if}
           {#if selectedOwner.country}
             <span class="country">{selectedOwner.country}</span>
           {/if}
@@ -383,12 +413,6 @@
           <button class="text-link muted" onclick={() => openEntityPage(selectedOwner.id)}>
             Profile
           </button>
-          {#if owners.length > 1}
-            <span class="separator">|</span>
-            <button class="text-link" onclick={backToGrid}>
-              All {owners.length}
-            </button>
-          {/if}
         </div>
       </div>
 
@@ -412,6 +436,7 @@
     {:else}
       <!-- Grid view -->
       <div class="grid-view">
+        <p class="grid-hint">Open a company to inspect its full ownership view and export data.</p>
         {#each owners as owner}
           <article class="graph-card">
             <header class="card-header">
@@ -438,7 +463,7 @@
               />
             </div>
             <footer class="card-footer">
-              <button class="text-link" onclick={() => goToOwner(owner)}>Expand</button>
+              <button class="text-link" onclick={() => goToOwner(owner)}>Open detailed view</button>
               <button class="text-link muted" onclick={() => openEntityPage(owner.id)}>
                 Profile
               </button>
@@ -512,7 +537,10 @@
     {@const rows = tableRows()}
     {@const totalRows = tableRowsUnfiltered().length}
     <details class="data-table-section">
-      <summary class="table-summary">Data table ({rows.length === totalRows ? formatNumber(totalRows) : `${formatNumber(rows.length)} of ${formatNumber(totalRows)}`} rows)</summary
+      <summary class="table-summary"
+        >Data table ({rows.length === totalRows
+          ? formatNumber(totalRows)
+          : `${formatNumber(rows.length)} of ${formatNumber(totalRows)}`} rows)</summary
       >
       <div class="ownership-filter">
         <RangeSlider
@@ -575,6 +603,37 @@
     <button class="text-link nav-link" onclick={goBack}>Back to results</button>
     <button class="text-link nav-link" onclick={() => goto(link('screener'))}> New search </button>
   </nav>
+
+  <!-- Owner picker modal -->
+  {#if showOwnerPicker}
+    <div
+      class="picker-backdrop"
+      onclick={() => (showOwnerPicker = false)}
+      role="presentation"
+    ></div>
+    <div class="picker-modal" role="dialog" aria-modal="true" aria-label="Select owner">
+      <div class="picker-header">
+        <h3>Select owner</h3>
+        <button class="picker-close" onclick={() => (showOwnerPicker = false)}>✕</button>
+      </div>
+      <ul class="picker-list">
+        {#each owners as owner (owner.id)}
+          {@const isCurrent = selectedOwner?.id === owner.id}
+          <li>
+            <button class="picker-item" class:current={isCurrent} onclick={() => goToOwner(owner)}>
+              <span class="picker-name">{owner.name}</span>
+              {#if owner.country}
+                <span class="picker-country">{owner.country}</span>
+              {/if}
+              {#if isCurrent}
+                <span class="picker-current-badge">viewing</span>
+              {/if}
+            </button>
+          </li>
+        {/each}
+      </ul>
+    </div>
+  {/if}
 </ScreenerLayout>
 
 <style>
@@ -698,6 +757,13 @@
     gap: var(--space-5);
   }
 
+  .grid-hint {
+    grid-column: 1 / -1;
+    margin: 0;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-tertiary);
+  }
+
   .graph-card {
     padding-bottom: var(--space-4);
     border-bottom: var(--border-width) solid var(--color-border);
@@ -763,7 +829,7 @@
   }
 
   .ownership-filter {
-    max-width: 300px;
+    max-width: 380px;
     margin: var(--space-3) 0;
   }
 
@@ -803,7 +869,7 @@
     padding: var(--space-1) var(--space-3);
     color: var(--color-text-primary);
     border: none;
-    max-width: 250px;
+    max-width: 320px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -859,6 +925,153 @@
     color: var(--color-text-tertiary);
     margin-top: var(--space-2);
     font-style: italic;
+  }
+
+  /* Owner name button (clickable to open picker) */
+  .owner-name-btn {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .owner-name-btn:hover h2 {
+    color: var(--gem-teal, #2a7f8f);
+  }
+
+  .owner-switch-hint {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-tertiary);
+    white-space: nowrap;
+  }
+
+  .owner-name-btn:hover .owner-switch-hint {
+    color: var(--gem-teal, #2a7f8f);
+  }
+
+  /* Owner picker modal */
+  .picker-backdrop {
+    position: fixed;
+    inset: 0;
+    background: color-mix(in srgb, var(--color-white, #fff) 85%, transparent);
+    backdrop-filter: blur(2px);
+    z-index: 9998;
+  }
+
+  .picker-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(480px, 90vw);
+    max-height: 70vh;
+    background: var(--color-bg-primary, #fff);
+    border: 1px solid var(--color-black, #000);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    font-family: Georgia, serif;
+    animation: pickerIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes pickerIn {
+    from {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+  }
+
+  .picker-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--color-gray-100, #f1f5f9);
+  }
+
+  .picker-header h3 {
+    margin: 0;
+    font-size: var(--font-size-md);
+    font-weight: 500;
+    color: var(--color-text-secondary);
+  }
+
+  .picker-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-md);
+    padding: 2px 4px;
+  }
+
+  .picker-close:hover {
+    color: var(--color-text-primary);
+  }
+
+  .picker-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+  }
+
+  .picker-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    width: 100%;
+    padding: 12px 18px;
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--color-gray-50, #f8fafc);
+    cursor: pointer;
+    text-align: left;
+    font-family: inherit;
+    font-size: var(--font-size-base);
+    color: var(--color-text-primary);
+    transition: background 80ms ease;
+  }
+
+  .picker-item:hover {
+    background: var(--color-gray-50, #f8fafc);
+  }
+
+  .picker-item.current {
+    background: rgba(42, 127, 143, 0.06);
+  }
+
+  .picker-name {
+    font-weight: 500;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .picker-country {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-tertiary);
+    white-space: nowrap;
+  }
+
+  .picker-current-badge {
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--gem-teal, #2a7f8f);
+    white-space: nowrap;
   }
 
   /* Responsive */

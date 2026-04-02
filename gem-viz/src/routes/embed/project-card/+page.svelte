@@ -3,10 +3,12 @@
    * Embeddable Project Card
    * Renders a single ProjectCard in embed mode.
    *
-   * URL params:
+   * URL params (all overridable via URL hash for Drupal deep-linking):
    *   id       - Required. Asset ID (GEM unit ID or G-prefix)
    *   showMap  - Optional. Show location map (default: true)
    *   showOwnership - Optional. Show ownership tree (default: true)
+   *
+   * Hash params: id, showMap, showOwnership
    */
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
@@ -15,12 +17,12 @@
   import ProjectCard from '$lib/components/cards/ProjectCard.svelte';
   import ProjectCardMap from '$lib/components/map/ProjectCardMap.svelte';
   import { AssetOwnershipTree } from '$lib/components/ownership';
-  import { errorMessage, boolParam } from '../embed-utils';
+  import { errorMessage, boolParam, readHash } from '../embed-utils';
 
-  // URL params
-  const assetId = $derived($page.url.searchParams.get('id'));
-  const showMap = $derived(boolParam($page.url.searchParams.get('showMap')));
-  const showOwnership = $derived(boolParam($page.url.searchParams.get('showOwnership')));
+  // URL params (converted to $state so hash can override on mount)
+  let assetId = $state($page.url.searchParams.get('id'));
+  let showMap = $state(boolParam($page.url.searchParams.get('showMap')));
+  let showOwnership = $state(boolParam($page.url.searchParams.get('showOwnership')));
 
   // State
   let loading = $state(true);
@@ -29,6 +31,12 @@
   let resolvedId = $state<string | null>(null);
 
   onMount(async () => {
+    // Read hash — hash params override query params for deep-linking
+    const h = readHash();
+    if (h.id) assetId = h.id;
+    if (h.showMap !== undefined) showMap = boolParam(h.showMap);
+    if (h.showOwnership !== undefined) showOwnership = boolParam(h.showOwnership);
+
     if (!assetId) {
       error = 'Missing required parameter: id';
       loading = false;
@@ -129,29 +137,7 @@
   .embed-wrapper {
     width: 100%;
     max-width: 600px;
-    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
   }
 
-  .embed-loading {
-    padding: 2rem;
-    text-align: center;
-    color: #666;
-    font-size: 0.875rem;
-  }
-
-  .embed-error {
-    padding: 1.5rem;
-    background: #fef2f2;
-    border: 1px solid #fca5a5;
-    border-radius: 8px;
-    color: #991b1b;
-    font-size: 0.875rem;
-  }
-
-  .embed-hint {
-    margin-top: 0.5rem;
-    font-size: 0.75rem;
-    font-family: monospace;
-    color: #666;
-  }
+  /* loading/error/hint styles provided by EmbedShell */
 </style>

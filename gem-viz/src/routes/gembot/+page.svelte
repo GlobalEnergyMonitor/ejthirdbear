@@ -13,10 +13,16 @@
   import 'maplibre-gl/dist/maplibre-gl.css';
   import { investigationCart } from '$lib/investigationCart';
   import { colorByTracker, colors } from '$lib/design-tokens';
+  import { emptyFilterState } from '$lib/filter-state';
+  import { ComposeState } from '$lib/stores/compose-state.svelte';
 
   // Components
   import EntityMicroCard from '$lib/components/cards/EntityMicroCard.svelte';
   import AssetMicroCard from '$lib/components/cards/AssetMicroCard.svelte';
+  import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
+  import GembotComposeDeck from '$lib/components/gembot/GembotComposeDeck.svelte';
+  import ChatSidebar from './ChatSidebar.svelte';
+  import WelcomeState from './WelcomeState.svelte';
 
   // Gembot utilities
   import {
@@ -50,6 +56,14 @@
   let streamingText = $state('');
   let streamingStatus = $state('');
   let activeTools = $state(new Map());
+  let composeState = new ComposeState({ syncUrl: false });
+  let composeDeckOpen = $state(false);
+  let composeDeckLoading = $state(false);
+  let composeDeckInitialized = $state(false);
+  let composeDeckInitPromise = $state(null);
+  let composeDeckError = $state('');
+  let composeDeckTitle = $state('Live Filters');
+  let composeDeckNote = $state('Use Compose filters here without leaving chat.');
 
   // --- Storage ---
   function saveMessages() {
@@ -82,6 +96,18 @@
   // Clear chat history
   function clearHistory() {
     messages = [];
+    currentToolCalls = [];
+    streamingText = '';
+    streamingStatus = '';
+    activeTools = new Map();
+    composeDeckOpen = false;
+    composeDeckLoading = false;
+    composeDeckError = '';
+    composeDeckTitle = 'Live Filters';
+    composeDeckNote = 'Use Compose filters here without leaving chat.';
+    if (composeDeckInitialized) {
+      composeState.clearFilters();
+    }
     if (typeof localStorage !== 'undefined') {
       localStorage.removeItem(CHAT_STORAGE_KEY);
     }
@@ -122,7 +148,101 @@
     compare_entities: 'Comparison',
     find_common_owners: 'Common owners',
     get_owner_geographic_footprint: 'Footprint',
+    open_compose_control: 'Compose deck',
+    discover_api_endpoints: 'API index',
+    query_api_ad_hoc: 'API query',
   };
+
+  const COMPOSE_TOOL_NAME = 'open_compose_control';
+
+  const isComposeControlPayload = (result) => result?.type === 'compose_control';
+  const isComposeControlResult = (toolCall) =>
+    toolCall?.tool === COMPOSE_TOOL_NAME && isComposeControlPayload(toolCall.result);
+  const isApiEndpointIndexResult = (toolCall) => toolCall?.result?.type === 'api_endpoint_index';
+  const isApiAdHocResult = (toolCall) => toolCall?.result?.type === 'api_ad_hoc_result';
+
+  function getComposeSummaryLabels(filters = {}) {
+    const labels = [];
+    const pushList = (values, prefix) => {
+      if (Array.isArray(values) && values.length > 0) {
+        labels.push(...values.slice(0, 2).map((value) => `${prefix}: ${value}`));
+        if (values.length > 2) labels.push(`${prefix}: +${values.length - 2} more`);
+      }
+    };
+
+    pushList(filters.trackers, 'Tracker');
+    pushList(filters.statuses, 'Status');
+    pushList(filters.countries, 'Country');
+    pushList(filters.stateProvinces, 'State');
+    pushList(filters.ownerCountries, 'Owner HQ');
+    pushList(filters.owners, 'Owner');
+
+    if (filters.capacityMin != null || filters.capacityMax != null) {
+      labels.push(`Capacity: ${filters.capacityMin ?? 'min'}-${filters.capacityMax ?? 'max'} MW`);
+    }
+    if (filters.shareMin != null || filters.shareMax != null) {
+      labels.push(`Share: ${filters.shareMin ?? 'min'}-${filters.shareMax ?? 'max'}%`);
+    }
+    if (filters.startYearMin != null || filters.startYearMax != null) {
+      labels.push(`Start year: ${filters.startYearMin ?? 'min'}-${filters.startYearMax ?? 'max'}`);
+    }
+    if (filters.search) {
+      labels.push(`Search: ${filters.search}`);
+    }
+
+    return labels;
+  }
+
+  async function ensureComposeDeckReady() {
+    if (composeDeckInitialized) return composeState;
+    if (composeDeckInitPromise) return composeDeckInitPromise;
+
+    composeDeckLoading = true;
+    composeDeckError = '';
+
+    composeDeckInitPromise = composeState
+      .init(emptyFilterState())
+      .then(() => {
+        composeDeckInitialized = true;
+        return composeState;
+      })
+      .catch((error) => {
+        composeDeckError =
+          error instanceof Error ? error.message : 'Failed to load live filters. Please try again.';
+        throw error;
+      })
+      .finally(() => {
+        composeDeckLoading = false;
+        composeDeckInitPromise = null;
+      });
+
+    return composeDeckInitPromise;
+  }
+
+  async function openComposeDeck(control = {}) {
+    composeDeckOpen = true;
+    composeDeckTitle = control.title || 'Live Filters';
+    composeDeckNote = control.message || 'Use Compose filters here without leaving chat.';
+
+    let state;
+    try {
+      state = await ensureComposeDeckReady();
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.warn('[gembot] failed to initialize compose deck:', error);
+      }
+      return;
+    }
+    if (!state) return;
+
+    if (control.mode === 'clear' || control.filters) {
+      state.applyAssistantFilters(control.filters || {}, { mode: control.mode || 'replace' });
+    }
+  }
+
+  function closeComposeDeck() {
+    composeDeckOpen = false;
+  }
 
   // Extract entities/assets from tool results with provenance tracking
   function trackMentioned(toolCalls) {
@@ -222,7 +342,14 @@
       });
 
       if (!response.ok) {
-        throw new Error('Failed to get response');
+        const payload = await response.json().catch(() => null);
+        throw new Error(
+          payload?.error || payload?.message || `Failed to get response (${response.status})`
+        );
+      }
+
+      if (!response.body) {
+        throw new Error('Chat response stream was empty');
       }
 
       // Handle SSE stream
@@ -259,7 +386,10 @@
         ...messages,
         {
           role: 'assistant',
-          content: "Sorry, I hit a snag trying to fetch that data. Let's try again!",
+          content:
+            err instanceof Error
+              ? `Gembot hit an error: ${err.message}`
+              : 'Gembot hit an unexpected error.',
           error: true,
         },
       ];
@@ -295,9 +425,26 @@
       if (data.result?.type === 'cart_write') {
         executeCartOperation(data.result);
       }
+      if (isComposeControlPayload(data.result)) {
+        void openComposeDeck(data.result);
+      }
 
       currentToolCalls = [...currentToolCalls, data];
       trackMentioned([data]);
+      return;
+    }
+
+    if (data.message !== undefined && data.toolCalls === undefined) {
+      messages = [
+        ...messages,
+        {
+          role: 'assistant',
+          content: `Gembot hit an error: ${data.message}`,
+          error: true,
+        },
+      ];
+      saveMessages();
+      streamingText = '';
       return;
     }
 
@@ -380,51 +527,19 @@
     name="description"
     content="Chat with Gembot to explore Global Energy Monitor data on energy assets and ownership."
   />
+  <SeoMeta
+    title="GEM Bot — Global Energy Monitor"
+    description="Chat with Gembot to explore Global Energy Monitor data on energy assets and ownership."
+  />
 </svelte:head>
 
 <div class="gembot-container">
-  <div class="chat-layout">
+  <div class="chat-layout" class:compose-active={composeDeckOpen}>
     <!-- Main chat area -->
     <main class="chat-main">
       <div class="chat-messages" bind:this={chatContainer}>
         {#if messages.length === 0}
-          <!-- Welcome state -->
-          <div class="welcome-state">
-            <h2>Gembot</h2>
-            <p class="lead text-center" style="max-width: 500px; margin: 0 auto var(--space-8);">
-              Explore the Global Energy Monitor database. Ask about energy assets, ownership
-              structures, or company portfolios.
-            </p>
-
-            <div class="suggestions-section mb-6">
-              <h3 class="section-header text-center">Try asking</h3>
-              <div class="suggestions-grid">
-                {#each SUGGESTIONS as suggestion}
-                  <button class="chip" onclick={() => sendMessage(suggestion.label)}>
-                    {suggestion.label}
-                  </button>
-                {/each}
-              </div>
-            </div>
-
-            <div class="capabilities-section mb-6">
-              <h3 class="section-header text-center">Capabilities</h3>
-              <ul class="flex flex-wrap gap-3 justify-center" style="list-style: none;">
-                <li class="flex items-center gap-2 text-sm text-secondary">
-                  Search companies and assets
-                </li>
-                <li class="flex items-center gap-2 text-sm text-secondary">
-                  Explore ownership portfolios
-                </li>
-                <li class="flex items-center gap-2 text-sm text-secondary">
-                  Trace ownership chains
-                </li>
-                <li class="flex items-center gap-2 text-sm text-secondary">
-                  Filter by country, status, capacity
-                </li>
-              </ul>
-            </div>
-          </div>
+          <WelcomeState onSendMessage={sendMessage} onOpenComposeDeck={openComposeDeck} />
         {:else}
           <!-- Message list -->
           {#each messages as message, i}
@@ -674,6 +789,132 @@
                                   </div>
                                 {/each}
                               </div>
+                              <!-- API endpoint discovery -->
+                            {:else if isApiEndpointIndexResult(toolCall)}
+                              <div class="api-explorer">
+                                <div class="api-explorer__header">
+                                  <div>
+                                    <div class="api-explorer__title">API Endpoint Index</div>
+                                    <div class="api-explorer__meta">
+                                      {toolCall.result.totalEndpoints} routes
+                                      {#if toolCall.result.query}
+                                        matching "{toolCall.result.query}"
+                                      {/if}
+                                    </div>
+                                  </div>
+                                  <code class="api-explorer__base">{toolCall.result.baseUrl}</code>
+                                </div>
+
+                                {#if toolCall.result.familyCounts?.length}
+                                  <div class="api-explorer__chips">
+                                    {#each toolCall.result.familyCounts as family}
+                                      <span class="api-explorer__chip"
+                                        >{family.family} ({family.count})</span
+                                      >
+                                    {/each}
+                                  </div>
+                                {/if}
+
+                                <div class="api-endpoint-list">
+                                  {#each toolCall.result.endpoints.slice(0, 8) as endpoint}
+                                    <div class="api-endpoint-card">
+                                      <div class="api-endpoint-card__top">
+                                        <strong>{endpoint.key}</strong>
+                                        <span class="api-endpoint-card__family">
+                                          {endpoint.family}
+                                        </span>
+                                      </div>
+                                      <code class="api-endpoint-card__path">{endpoint.url}</code>
+                                      <p>{endpoint.description}</p>
+                                      {#if endpoint.pathParams?.length}
+                                        <div class="api-endpoint-card__params">
+                                          {#each endpoint.pathParams as param}
+                                            <span>{param}</span>
+                                          {/each}
+                                        </div>
+                                      {/if}
+                                    </div>
+                                  {/each}
+                                  {#if toolCall.result.endpoints.length > 8}
+                                    <div class="more-results">
+                                      +{toolCall.result.endpoints.length - 8} more endpoints
+                                    </div>
+                                  {/if}
+                                </div>
+                              </div>
+                              <!-- API ad hoc result -->
+                            {:else if isApiAdHocResult(toolCall)}
+                              <div class="api-explorer">
+                                <div class="api-explorer__header">
+                                  <div>
+                                    <div class="api-explorer__title">
+                                      {toolCall.result.endpointKey || 'API Query'}
+                                    </div>
+                                    <div class="api-explorer__meta">
+                                      {toolCall.result.family} · {toolCall.result.resultKind}
+                                      {#if toolCall.result.itemCount != null}
+                                        · {toolCall.result.itemCount.toLocaleString()} items
+                                      {/if}
+                                    </div>
+                                  </div>
+                                  <code class="api-explorer__path">{toolCall.result.path}</code>
+                                </div>
+
+                                {#if toolCall.result.endpointDescription}
+                                  <p class="api-explorer__description">
+                                    {toolCall.result.endpointDescription}
+                                  </p>
+                                {/if}
+
+                                {#if toolCall.result.queryParams?.length}
+                                  <div class="api-explorer__chips">
+                                    {#each toolCall.result.queryParams as queryParam}
+                                      <span class="api-explorer__chip">
+                                        {queryParam.key}: {queryParam.value}
+                                      </span>
+                                    {/each}
+                                  </div>
+                                {/if}
+
+                                {#if toolCall.result.topLevelKeys?.length}
+                                  <div class="api-explorer__keys">
+                                    {#each toolCall.result.topLevelKeys as key}
+                                      <span class="api-explorer__key">{key}</span>
+                                    {/each}
+                                  </div>
+                                {/if}
+
+                                <div class="tool-result">
+                                  <strong>Preview</strong>
+                                  <pre>{JSON.stringify(toolCall.result.preview, null, 2)}</pre>
+                                </div>
+                              </div>
+                              <!-- Embedded compose control -->
+                            {:else if isComposeControlResult(toolCall)}
+                              <div class="compose-result">
+                                <div class="compose-result__header">
+                                  <span class="compose-result__eyebrow">Compose Deck Synced</span>
+                                  <strong>{toolCall.result.title || 'Live Filters'}</strong>
+                                </div>
+                                <p class="compose-result__message">
+                                  {toolCall.result.message ||
+                                    'Applied filters to the embedded compose deck.'}
+                                </p>
+                                <div class="compose-result__chips">
+                                  {#each getComposeSummaryLabels(toolCall.result.filters) as label}
+                                    <span class="compose-result__chip">{label}</span>
+                                  {/each}
+                                </div>
+                                <div class="compose-result__actions">
+                                  <button
+                                    class="compose-result__button"
+                                    onclick={() => openComposeDeck(toolCall.result)}
+                                  >
+                                    Show live filters
+                                  </button>
+                                  <a class="compose-result__link" href="/compose">Open full page</a>
+                                </div>
+                              </div>
                               <!-- Screener URL -->
                             {:else if hasScreenerUrl(toolCall)}
                               <a href={toolCall.result.url} class="screener-link">
@@ -866,207 +1107,59 @@
           <p class="caption text-tertiary">
             Press Enter to send. Try asking "Who owns the most coal plants in China?"
           </p>
-          {#if messages.length > 0}
-            <button class="btn btn--ghost btn--small" onclick={clearHistory} disabled={isLoading}>
-              Clear chat
+          <div class="input-actions__buttons">
+            <button class="compose-toggle" onclick={() => openComposeDeck()} disabled={isLoading}>
+              {composeDeckOpen ? 'Live filters open' : 'Open live filters'}
             </button>
-          {/if}
+            {#if messages.length > 0}
+              <button class="btn btn--ghost btn--small" onclick={clearHistory} disabled={isLoading}>
+                Clear chat
+              </button>
+            {/if}
+          </div>
         </div>
       </div>
     </main>
 
-    <!-- Sidebar with quick actions -->
-    <aside class="chat-sidebar">
-      <!-- Mentioned entities panel - shows when there's content -->
-      {#if mentionedEntities.size > 0 || mentionedAssets.size > 0}
-        <div class="sidebar-panel mentioned-panel">
-          <h4 class="sidebar-panel__title">Discussed</h4>
-          <div class="mentioned-scroll">
-            {#if mentionedEntities.size > 0}
-              <div class="mentioned-group">
-                <span class="mentioned-label">Entities ({mentionedEntities.size})</span>
-                {#each [...mentionedEntities.values()] as entity}
-                  <a
-                    href={entityLink(entity.id)}
-                    class="mentioned-item entity"
-                    target="_blank"
-                    title="Source: {entity.source || 'conversation'}{entity.role
-                      ? ` (${entity.role})`
-                      : ''}"
-                  >
-                    <span class="mentioned-name">{entity.name}</span>
-                    <span class="mentioned-detail">
-                      {#if entity.role}
-                        <span class="mentioned-role">{entity.role}</span>
-                      {/if}
-                      {#if entity.country}
-                        <span class="mentioned-meta">{entity.country}</span>
-                      {/if}
-                      {#if entity.ownershipPct}
-                        <span class="mentioned-pct">{entity.ownershipPct}%</span>
-                      {/if}
-                      {#if entity.assetCount}
-                        <span class="mentioned-meta">{entity.assetCount} assets</span>
-                      {/if}
-                    </span>
-                    <span class="mentioned-source">via {entity.source || 'chat'}</span>
-                  </a>
-                {/each}
-              </div>
-            {/if}
-            {#if mentionedAssets.size > 0}
-              <div class="mentioned-group">
-                <span class="mentioned-label">Assets ({mentionedAssets.size})</span>
-                {#each [...mentionedAssets.values()] as asset}
-                  <a
-                    href={link(`asset/${asset.id}`)}
-                    class="mentioned-item asset"
-                    target="_blank"
-                    title="Source: {asset.source || 'conversation'}"
-                  >
-                    <span class="mentioned-name">{asset.name}</span>
-                    <span class="mentioned-detail">
-                      <span class="mentioned-meta"
-                        >{asset.type}{asset.status ? ` · ${asset.status}` : ''}</span
-                      >
-                      {#if asset.country}
-                        <span class="mentioned-meta">{asset.country}</span>
-                      {/if}
-                      {#if asset.capacity}
-                        <span class="mentioned-meta"
-                          >{asset.capacity} {asset.capacityUnit || 'MW'}</span
-                        >
-                      {/if}
-                      {#if asset.owner}
-                        <span class="mentioned-meta">Owner: {asset.owner}</span>
-                      {/if}
-                    </span>
-                    <span class="mentioned-source">via {asset.source || 'chat'}</span>
-                  </a>
-                {/each}
-              </div>
-            {/if}
+    {#if composeDeckOpen}
+      {#if composeDeckLoading}
+        <aside class="chat-sidebar compose-sidebar-loading">
+          <div class="sidebar-panel">
+            <h4 class="sidebar-panel__title">Live Filters</h4>
+            <p class="sidebar-note">Loading compose filters and live results...</p>
           </div>
-          <button
-            class="clear-mentioned"
-            onclick={() => {
-              mentionedEntities = new Map();
-              mentionedAssets = new Map();
-            }}
-          >
-            Clear
-          </button>
-        </div>
+        </aside>
+      {:else if composeDeckError}
+        <aside class="chat-sidebar compose-sidebar-loading">
+          <div class="sidebar-panel">
+            <h4 class="sidebar-panel__title">Live Filters Unavailable</h4>
+            <p class="sidebar-note">{composeDeckError}</p>
+            <button class="compose-launch" onclick={() => openComposeDeck()} disabled={isLoading}>
+              Try again
+            </button>
+          </div>
+        </aside>
+      {:else}
+        <GembotComposeDeck
+          state={composeState}
+          title={composeDeckTitle}
+          note={composeDeckNote}
+          onClose={closeComposeDeck}
+        />
       {/if}
-
-      <div class="sidebar-panel">
-        <h4 class="sidebar-panel__title">Quick Searches</h4>
-        <div class="sidebar-panel__list">
-          {#each SUGGESTIONS.slice(0, 3) as suggestion}
-            <button class="chip" onclick={() => sendMessage(suggestion.label)} disabled={isLoading}>
-              {suggestion.icon}
-              {suggestion.label.split(' ').slice(0, 4).join(' ')}...
-            </button>
-          {/each}
-        </div>
-      </div>
-
-      <div class="sidebar-panel">
-        <h4 class="sidebar-panel__title">Popular Entities</h4>
-        <div class="sidebar-panel__list">
-          {#each QUICK_ENTITIES as entity}
-            <button
-              class="chip"
-              onclick={() => sendMessage(`Tell me about ${entity.name}'s energy portfolio`)}
-              disabled={isLoading}
-            >
-              {entity.name}
-            </button>
-          {/each}
-        </div>
-      </div>
-
-      <div class="sidebar-panel">
-        <h4 class="sidebar-panel__title">Asset Types</h4>
-        <div class="sidebar-panel__list">
-          <button
-            class="chip"
-            onclick={() => sendMessage('Show me coal plants')}
-            disabled={isLoading}>Coal Plants</button
-          >
-          <button
-            class="chip"
-            onclick={() => sendMessage('Show me gas pipelines')}
-            disabled={isLoading}>Gas Pipelines</button
-          >
-          <button
-            class="chip"
-            onclick={() => sendMessage('Show me steel plants')}
-            disabled={isLoading}>Steel Plants</button
-          >
-          <button
-            class="chip"
-            onclick={() => sendMessage('Show me coal mines')}
-            disabled={isLoading}>Coal Mines</button
-          >
-        </div>
-      </div>
-
-      <div class="sidebar-panel workflows-section">
-        <h4 class="sidebar-panel__title">Investigation Workflows</h4>
-        <div class="sidebar-panel__list">
-          <button
-            class="workflow-chip"
-            onclick={() =>
-              sendMessage(
-                'Help me build a watchlist of companies with coal plants in Southeast Asia'
-              )}
-            disabled={isLoading}
-          >
-            <span class="workflow-title">Build watchlist</span>
-            <span class="workflow-desc">Find companies for investigation</span>
-          </button>
-          <button
-            class="workflow-chip"
-            onclick={() =>
-              sendMessage(
-                'Which companies are building new coal plants? Give me a screener link to explore'
-              )}
-            disabled={isLoading}
-          >
-            <span class="workflow-title">New coal pipeline</span>
-            <span class="workflow-desc">Construction & proposed assets</span>
-          </button>
-          <button
-            class="workflow-chip"
-            onclick={() => sendMessage('Compare the top 3 biggest gas pipeline owners')}
-            disabled={isLoading}
-          >
-            <span class="workflow-title">Compare players</span>
-            <span class="workflow-desc">Side-by-side analysis</span>
-          </button>
-          <button
-            class="workflow-chip"
-            onclick={() =>
-              sendMessage(
-                'Show me geographic breakdown of steel plants and create a screener for China'
-              )}
-            disabled={isLoading}
-          >
-            <span class="workflow-title">Geographic analysis</span>
-            <span class="workflow-desc">Country-by-country breakdown</span>
-          </button>
-        </div>
-      </div>
-
-      <div class="sidebar-footer">
-        <p class="sidebar-note">
-          Gembot uses GEM's ownership database to answer questions about energy infrastructure
-          worldwide.
-        </p>
-        <a href={link('about')} class="learn-more">Learn more about the data →</a>
-      </div>
-    </aside>
+    {:else}
+      <ChatSidebar
+        {mentionedEntities}
+        {mentionedAssets}
+        {isLoading}
+        onSendMessage={sendMessage}
+        onOpenComposeDeck={openComposeDeck}
+        onClearMentioned={() => {
+          mentionedEntities = new Map();
+          mentionedAssets = new Map();
+        }}
+      />
+    {/if}
   </div>
 </div>
 
@@ -1078,6 +1171,8 @@
     height: calc(100dvh - 64px - 4rem);
     display: flex;
     flex-direction: column;
+    width: 100%;
+    max-width: none;
     background: var(--color-bg-secondary);
     overflow: hidden;
   }
@@ -1086,13 +1181,23 @@
     flex: 1;
     display: grid;
     grid-template-columns: 1fr 280px;
-    max-width: var(--container-xl);
-    margin: 0 auto;
     width: 100%;
+    max-width: none;
+    margin: 0;
     gap: var(--space-6);
-    padding: var(--space-6);
+    padding: var(--space-4);
     min-height: 0; /* allow grid children to shrink */
     overflow: hidden;
+  }
+
+  .chat-layout.compose-active {
+    grid-template-columns: minmax(360px, 0.72fr) minmax(860px, 1.28fr);
+  }
+
+  @media (max-width: 1400px) {
+    .chat-layout.compose-active {
+      grid-template-columns: minmax(320px, 0.8fr) minmax(640px, 1.2fr);
+    }
   }
 
   @media (max-width: 900px) {
@@ -1101,6 +1206,11 @@
     }
     .chat-sidebar {
       display: none;
+    }
+
+    .compose-onramp {
+      flex-direction: column;
+      align-items: flex-start;
     }
   }
 
@@ -1112,6 +1222,10 @@
     border: 1px solid var(--color-border);
     overflow: hidden;
     min-height: 0; /* critical: allow flex child to shrink */
+  }
+
+  .chat-layout.compose-active .chat-main {
+    min-width: 0;
   }
 
   .chat-messages {
@@ -1132,10 +1246,6 @@
     margin-bottom: var(--space-4);
   }
 
-  .welcome-state h2 {
-    font-size: var(--font-size-2xl);
-    margin-bottom: var(--space-3);
-  }
 
   /* welcome-text uses global .lead utility */
 
@@ -1146,6 +1256,71 @@
     flex-wrap: wrap;
     gap: var(--space-2);
     justify-content: center;
+  }
+
+  .compose-onramp {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--space-4);
+    max-width: 760px;
+    margin: 0 auto var(--space-6) auto;
+    padding: var(--space-4);
+    border-radius: var(--radius-lg);
+    border: 1px solid rgba(39, 212, 255, 0.18);
+    background:
+      radial-gradient(circle at top left, rgba(39, 212, 255, 0.12), transparent 38%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.85), rgba(247, 251, 255, 0.95));
+    text-align: left;
+  }
+
+  .compose-onramp__copy {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .compose-onramp__copy strong {
+    font-size: var(--font-size-lg);
+    color: var(--color-text-primary);
+  }
+
+  .compose-onramp__copy p {
+    margin: 0;
+    max-width: 52ch;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+  }
+
+  .compose-onramp__eyebrow {
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--gem-navy);
+  }
+
+  .compose-onramp__button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    padding: 0 var(--space-4);
+    border: 1px solid rgba(39, 212, 255, 0.26);
+    border-radius: var(--radius-md);
+    background: linear-gradient(135deg, rgba(39, 212, 255, 0.18), rgba(90, 255, 190, 0.14));
+    color: var(--color-text-primary);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    cursor: pointer;
+    transition:
+      transform 0.15s ease,
+      border-color 0.15s ease;
+  }
+
+  .compose-onramp__button:hover {
+    transform: translateY(-1px);
+    border-color: rgba(39, 212, 255, 0.42);
   }
 
   /* chip-icon override if needed */
@@ -1437,6 +1612,84 @@
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: var(--space-3);
+  }
+
+  .compose-result {
+    padding: var(--space-4);
+    border-radius: var(--radius-lg);
+    border: 1px solid rgba(39, 212, 255, 0.22);
+    background:
+      radial-gradient(circle at top left, rgba(39, 212, 255, 0.12), transparent 40%),
+      linear-gradient(180deg, rgba(6, 23, 37, 0.98), rgba(8, 15, 28, 0.98));
+    color: #e9fcff;
+  }
+
+  .compose-result__header {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-bottom: var(--space-2);
+  }
+
+  .compose-result__eyebrow {
+    font-size: var(--font-size-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: rgba(129, 247, 255, 0.78);
+  }
+
+  .compose-result__message {
+    margin: 0 0 var(--space-3) 0;
+    color: rgba(233, 252, 255, 0.82);
+  }
+
+  .compose-result__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+  }
+
+  .compose-result__chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 28px;
+    padding: 0 var(--space-2);
+    border-radius: var(--radius-full);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(114, 249, 255, 0.18);
+    font-size: var(--font-size-xs);
+  }
+
+  .compose-result__actions {
+    display: flex;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+  }
+
+  .compose-result__button,
+  .compose-result__link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 34px;
+    padding: 0 var(--space-3);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    text-decoration: none;
+  }
+
+  .compose-result__button {
+    color: #031019;
+    border: none;
+    background: linear-gradient(135deg, #74fdff, #47e1ff);
+  }
+
+  .compose-result__link {
+    color: #e9fcff;
+    border: 1px solid rgba(114, 249, 255, 0.18);
+    background: rgba(255, 255, 255, 0.03);
   }
 
   .comparison-card {
@@ -1770,6 +2023,43 @@
 
   /* input-actions and input-hint use global flex/caption utilities */
 
+  .input-actions__buttons {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .compose-toggle,
+  .compose-launch {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 34px;
+    padding: 0 var(--space-3);
+    border-radius: var(--radius-md);
+    border: 1px solid rgba(39, 212, 255, 0.28);
+    background: linear-gradient(135deg, rgba(39, 212, 255, 0.14), rgba(90, 255, 190, 0.12));
+    color: var(--color-text-primary);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    cursor: pointer;
+    transition:
+      transform 0.15s ease,
+      border-color 0.15s ease;
+  }
+
+  .compose-toggle:hover:not(:disabled),
+  .compose-launch:hover:not(:disabled) {
+    transform: translateY(-1px);
+    border-color: rgba(39, 212, 255, 0.45);
+  }
+
+  .compose-toggle:disabled,
+  .compose-launch:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
   /* clear-btn uses global btn--ghost btn--small */
 
   /* Sidebar */
@@ -1779,6 +2069,17 @@
     gap: var(--space-5);
     overflow-y: auto;
     min-height: 0;
+  }
+
+  .compose-entry {
+    background:
+      radial-gradient(circle at top left, rgba(39, 212, 255, 0.12), transparent 44%),
+      var(--color-bg-primary);
+    border: 1px solid rgba(39, 212, 255, 0.16);
+  }
+
+  .compose-sidebar-loading {
+    justify-content: flex-start;
   }
 
   /* sidebar-panel and chip classes use global utilities */
@@ -1812,9 +2113,6 @@
     border-color: var(--color-border);
   }
 
-  .workflows-section h4 {
-    color: var(--gem-navy);
-  }
 
   /* workflow-chips uses sidebar-panel__list from utilities */
 
@@ -1863,10 +2161,6 @@
     flex-direction: column;
   }
 
-  .mentioned-panel h4 {
-    color: var(--color-text-primary);
-    margin-bottom: var(--space-2);
-  }
 
   .mentioned-scroll {
     flex: 1;

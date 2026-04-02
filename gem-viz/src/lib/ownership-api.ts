@@ -1,11 +1,35 @@
 /** Ownership API client — REST API for entity/asset ownership relationships */
 
 import { logApiCall } from './api-log.svelte';
+import {
+  API_SLUG_TO_TYPE as _SCHEMA_SLUG_TO_TYPE,
+  API_TYPE_TO_SLUG as _SCHEMA_TYPE_TO_SLUG,
+  IDENTIFIER_TO_API_SLUG as _SCHEMA_ID_TO_SLUG,
+  normalizeSubStatus,
+} from '$lib/data-config/tracker-schema';
+import {
+  FK_ID,
+  FK_NAME,
+  FK_FACILITY_TYPE,
+  FK_STATUS,
+  FK_SUB_STATUS,
+  FK_CAPACITY,
+  FK_CAPACITY_UNIT,
+  FK_COUNTRY,
+  FK_LATITUDE,
+  FK_LONGITUDE,
+  FK_OWNER,
+  FK_OWNER_ENTITY_ID,
+  FK_PARENT,
+  FK_PARENT_ENTITY_ID,
+  FK_ENTITY_ID,
+  FK_ENTITY_NAME,
+  FK_FULL_NAME,
+  FK_HQ_COUNTRY,
+} from '$lib/field-keys';
 
 // API base URL (env override or production default)
-const API_BASE =
-  import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL ||
-  'https://gem-api.thirdbear.net'; // Fallback to production API
+const API_BASE = import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-api.thirdbear.net'; // Fallback to production API
 
 // Default timeout for API requests (30 seconds)
 const API_TIMEOUT_MS = 30_000;
@@ -88,9 +112,11 @@ export interface AssetSummary {
   name: string;
   facilityType?: string | null;
   status?: string | null;
+  subStatus?: string | null;
   capacity?: number | null;
   capacityUnit?: string | null;
   country?: string | null;
+  stateProvince?: string | null;
   latitude?: number | null;
   longitude?: number | null;
   ownerName?: string | null;
@@ -119,15 +145,8 @@ export interface OwnershipTraceNode {
   type: 'entity' | 'asset';
 }
 
-export interface OwnershipTracePath {
-  terminal: OwnershipTraceNode;
-  path: Array<{ node: OwnershipTraceNode; share?: number }>;
-}
-
-export interface OwnershipTraceResponse {
-  root: OwnershipTraceNode;
-  terminals: OwnershipTracePath[];
-}
+// OwnershipTracePath and OwnershipTraceResponse removed — the /trace/ endpoints
+// exist in the API but we use /ownership/graph instead (richer data).
 
 export interface GraphNode {
   id: string;
@@ -143,6 +162,7 @@ export interface GraphEdge {
   source: string;
   target: string;
   value?: number | null;
+  closes_cycle?: boolean;
 }
 
 export interface EntityGraphResponse {
@@ -161,6 +181,7 @@ export interface OwnershipGraphResponse {
       type?: 'leafEdge' | 'intermediateEdge';
       refUrl?: string | null;
       imputed_share?: boolean;
+      closes_cycle?: boolean;
       depth?: number;
     }
   >;
@@ -319,7 +340,7 @@ function toNumber(value: unknown): number | null {
   return null;
 }
 
-function pickKey<T extends Record<string, unknown>>(obj: T, keys: string[]): unknown {
+function pickKey<T extends Record<string, unknown>>(obj: T, keys: readonly string[]): unknown {
   for (const key of keys) {
     if (obj[key] !== undefined && obj[key] !== null && obj[key] !== '') return obj[key];
   }
@@ -336,67 +357,47 @@ function extractEntityId(value: unknown): string | null {
 }
 
 function normalizeEntity(raw: RawEntity): EntitySummary | null {
-  const idRaw = pickKey(raw, ['Entity ID', 'GEM Entity ID', 'entity_id', 'id']);
+  const idRaw = pickKey(raw, FK_ENTITY_ID);
   const id = extractEntityId(idRaw) || String(idRaw || '').trim();
   if (!id) return null; // skip ghost entries with empty IDs
 
-  const str = (keys: string[]) => {
+  const str = (keys: readonly string[]) => {
     const v = pickKey(raw, keys);
     return v ? String(v) : null;
   };
   return {
     id,
-    name: String(pickKey(raw, ['Name', 'Entity Name', 'entity_name', 'name']) || id).trim() || id,
-    fullName: str(['Full Name', 'full_name']),
-    headquartersCountry: str([
-      'Headquarters Country',
-      'Headquarters country',
-      'headquarters_country',
-    ]),
+    name: String(pickKey(raw, FK_ENTITY_NAME) || id).trim() || id,
+    fullName: str(FK_FULL_NAME),
+    headquartersCountry: str(FK_HQ_COUNTRY),
     raw,
   };
 }
 
 function normalizeAsset(raw: RawAsset): AssetSummary {
   // Helpers: pick first non-empty key as string or number
-  const str = (keys: string[]) => {
+  const str = (keys: readonly string[]) => {
     const v = pickKey(raw, keys);
     return v ? String(v) : null;
   };
-  const num = (keys: string[]) => toNumber(pickKey(raw, keys));
+  const num = (keys: readonly string[]) => toNumber(pickKey(raw, keys));
 
-  const id = String(
-    pickKey(raw, [
-      'GEM Unit Phase ID',
-      'GEM Unit ID',
-      'GEM unit ID',
-      'gem_unit_id',
-      'asset_id',
-      'id',
-    ]) || ''
-  ).trim();
+  const id = String(pickKey(raw, FK_ID) || '').trim();
   return {
     id,
-    name: String(
-      pickKey(raw, ['Facility Name', 'Project', 'Unit Name', 'asset_name', 'name']) || id
-    ).trim(),
-    facilityType: str(['Facility Type', 'Tracker', 'facility_type', 'asset_type']),
-    status: str(['Status', 'status', 'operating_status']),
-    capacity: num(['Capacity', 'Capacity (MW)', 'capacity', 'capacity_value']),
-    capacityUnit: str(['Capacity Unit', 'capacity_unit']),
-    country: str(['Country Area', 'Country', 'country']),
-    latitude: num(['Latitude', 'lat', 'latitude']),
-    longitude: num(['Longitude', 'lon', 'longitude']),
-    ownerName: str(['Owner', 'Immediate Project Owner', 'owner']),
-    ownerEntityId: extractEntityId(
-      pickKey(raw, [
-        'Owner GEM Entity ID',
-        'Immediate Project Owner GEM Entity ID',
-        'owner_entity_id',
-      ])
-    ),
-    parentName: str(['Parent', 'parent']),
-    parentEntityId: extractEntityId(pickKey(raw, ['Parent GEM Entity ID', 'parent_entity_id'])),
+    name: String(pickKey(raw, FK_NAME) || id).trim(),
+    facilityType: str(FK_FACILITY_TYPE),
+    status: str(FK_STATUS),
+    subStatus: str(FK_SUB_STATUS),
+    capacity: num(FK_CAPACITY),
+    capacityUnit: str(FK_CAPACITY_UNIT),
+    country: str(FK_COUNTRY),
+    latitude: num(FK_LATITUDE),
+    longitude: num(FK_LONGITUDE),
+    ownerName: str(FK_OWNER),
+    ownerEntityId: extractEntityId(pickKey(raw, FK_OWNER_ENTITY_ID)),
+    parentName: str(FK_PARENT),
+    parentEntityId: extractEntityId(pickKey(raw, FK_PARENT_ENTITY_ID)),
     owners: normalizeOwners(raw),
     raw,
   };
@@ -431,7 +432,8 @@ function normalizePaginated<T>(raw: T[] | PaginatedResponse<T>): PaginatedRespon
 
 // Build query string from an object, skipping nullish values.
 // Supports arrays: repeated keys for multi-value params (e.g. country=X&country=Y).
-function buildQuery(
+// Also used by src/widgets/widget-api.ts (imported from here).
+export function buildQuery(
   params?: Record<string, string | number | string[] | undefined | null>
 ): string {
   if (!params) return '';
@@ -462,7 +464,10 @@ export async function listEntities(params?: {
     `/entities${buildQuery(params)}`
   );
   const page = normalizePaginated(raw);
-  return { ...page, results: page.results.map(normalizeEntity).filter((e): e is EntitySummary => e !== null) };
+  return {
+    ...page,
+    results: page.results.map(normalizeEntity).filter((e): e is EntitySummary => e !== null),
+  };
 }
 
 export async function getEntity(entityId: string): Promise<EntitySummary | null> {
@@ -501,13 +506,8 @@ export async function getEntityOwned(entityId: string): Promise<DirectOwned[]> {
   }));
 }
 
-/** Trace ownership in given direction to all terminal nodes */
-function traceEntity(entityId: string, dir: 'up' | 'down'): Promise<OwnershipTraceResponse> {
-  _currentReason = `traceEntity ${dir} ${entityId}`;
-  return fetchAPI(`/entities/${encodeURIComponent(entityId)}/trace/${dir}`);
-}
-export const traceEntityUp = (id: string) => traceEntity(id, 'up');
-export const traceEntityDown = (id: string) => traceEntity(id, 'down');
+// traceEntityUp / traceEntityDown removed — we use /ownership/graph instead.
+// The /entities/{id}/trace/{up|down} endpoints still exist in the API if needed.
 
 // Raw shape returned by /entities/{id}/graph/{direction}
 interface RawEntityGraph {
@@ -562,94 +562,43 @@ export const getEntityGraphDown = (id: string) => getEntityGraph(id, 'down');
 // ============================================================================
 
 /**
- * Mapping from our URL slugs to the API display type names.
- * These are used for client-side matching of facilityType values.
+ * Slug/type maps — sourced from tracker-schema.ts (single source of truth).
+ * These re-exports exist for backward compatibility with existing importers.
  */
 export const SLUG_TO_API_TYPE: Record<string, string> = {
-  'coal-plant': 'Coal Plant',
-  'gas-plant': 'Oil & Gas Plant',
-  'oil-gas-plant': 'Oil & Gas Plant',
-  'iron-mine': 'Iron Ore Mine',
-  'iron-ore-mine': 'Iron Ore Mine',
-  'steel-plant': 'Iron & Steel Plant',
-  'iron-steel-plant': 'Iron & Steel Plant',
-  'gas-pipeline': 'Natural Gas Transmission Pipeline',
-  'oil-pipeline': 'Oil or NGL Pipeline',
-  'cement-plant': 'Cement or Concrete Plant',
-  bioenergy: 'Bioenergy Plant',
-  'bioenergy-plant': 'Bioenergy Plant',
+  ..._SCHEMA_SLUG_TO_TYPE,
+  // Backward-compat aliases (old URL slugs → API types)
+  'gas-plant': _SCHEMA_SLUG_TO_TYPE['oil-gas-plant'],
+  'iron-mine': _SCHEMA_SLUG_TO_TYPE['iron-ore-mine'],
+  'steel-plant': _SCHEMA_SLUG_TO_TYPE['iron-steel-plant'],
+  bioenergy: _SCHEMA_SLUG_TO_TYPE['bioenergy-plant'],
 };
 
-/** Reverse mapping: API type → our slug */
-export const API_TYPE_TO_SLUG: Record<string, string> = Object.fromEntries(
-  Object.entries(SLUG_TO_API_TYPE).map(([slug, apiType]) => [apiType, slug])
-);
-
-/** Also map our tracker display names to API types */
-const TRACKER_NAME_TO_API_TYPE: Record<string, string> = {
-  'Coal Plant': 'Coal Plant',
-  'Gas Plant': 'Oil & Gas Plant',
-  'Oil & Gas Plant': 'Oil & Gas Plant',
-  'Iron Mine': 'Iron Ore Mine',
-  'Iron Ore Mine': 'Iron Ore Mine',
-  'Steel Plant': 'Iron & Steel Plant',
-  'Iron & Steel Plant': 'Iron & Steel Plant',
-  'Gas Pipeline': 'Natural Gas Transmission Pipeline',
-  'Natural Gas Transmission Pipeline': 'Natural Gas Transmission Pipeline',
-  'Bioenergy Power': 'Bioenergy Plant',
-  'Bioenergy Plant': 'Bioenergy Plant',
-  'Oil Pipeline': 'Oil or NGL Pipeline',
-  'Oil or NGL Pipeline': 'Oil or NGL Pipeline',
-  'Cement Plant': 'Cement or Concrete Plant',
-  'Cement or Concrete Plant': 'Cement or Concrete Plant',
-};
+export const API_TYPE_TO_SLUG: Record<string, string> = { ..._SCHEMA_TYPE_TO_SLUG };
 
 /** Resolve any tracker identifier (slug, display name, or API type) to API display type name */
 export function resolveApiAssetType(tracker: string): string {
-  return SLUG_TO_API_TYPE[tracker] || TRACKER_NAME_TO_API_TYPE[tracker] || tracker;
+  return (
+    SLUG_TO_API_TYPE[tracker] ||
+    (_SCHEMA_ID_TO_SLUG[tracker] && SLUG_TO_API_TYPE[_SCHEMA_ID_TO_SLUG[tracker]]) ||
+    tracker
+  );
 }
 
-/**
- * Map from any identifier to the API slug format used in ?asset_type= filter.
- * Accepts: old slugs, tracker display names, API display names, or API slugs.
- */
-const IDENTIFIER_TO_API_SLUG: Record<string, string> = {
-  // Our old URL slugs
-  'coal-plant': 'coal-plant',
-  'gas-plant': 'oil-gas-plant',
-  'iron-mine': 'iron-ore-mine',
-  'steel-plant': 'iron-steel-plant',
-  'gas-pipeline': 'gas-pipeline',
-  bioenergy: 'bioenergy-plant',
-  // API slugs (identity)
-  'oil-gas-plant': 'oil-gas-plant',
-  'iron-ore-mine': 'iron-ore-mine',
-  'iron-steel-plant': 'iron-steel-plant',
-  'bioenergy-plant': 'bioenergy-plant',
-  'cement-plant': 'cement-plant',
-  'oil-pipeline': 'oil-pipeline',
-  // Tracker display names
-  'Coal Plant': 'coal-plant',
-  'Gas Plant': 'oil-gas-plant',
-  'Iron Mine': 'iron-ore-mine',
-  'Steel Plant': 'iron-steel-plant',
-  'Gas Pipeline': 'gas-pipeline',
-  'Bioenergy Power': 'bioenergy-plant',
-  'Oil Pipeline': 'oil-pipeline',
-  'Cement Plant': 'cement-plant',
-  // API display names
-  'Oil & Gas Plant': 'oil-gas-plant',
-  'Iron Ore Mine': 'iron-ore-mine',
-  'Iron & Steel Plant': 'iron-steel-plant',
-  'Bioenergy Plant': 'bioenergy-plant',
-  'Natural Gas Transmission Pipeline': 'gas-pipeline',
-  'Oil or NGL Pipeline': 'oil-pipeline',
-  'Cement or Concrete Plant': 'cement-plant',
-};
-
-/** Resolve any tracker identifier to the API slug used in ?asset_type= filter */
+/** Resolve any tracker identifier to the API slug used in ?asset_type= filter.
+ *  Handles URL-encoded ampersands (%26, &amp;) that can appear when tracker
+ *  names like "Oil & Gas Plant" round-trip through URL query parameters. */
 export function resolveApiSlug(tracker: string): string | null {
-  return IDENTIFIER_TO_API_SLUG[tracker] ?? null;
+  // Direct match first (fast path)
+  const direct = _SCHEMA_ID_TO_SLUG[tracker];
+  if (direct) return direct;
+
+  // Normalize encoded ampersands and retry
+  const normalized = tracker
+    .split('&amp;').join('&')
+    .split('%26').join('&')
+    .trim();
+  return _SCHEMA_ID_TO_SLUG[normalized] ?? null;
 }
 
 // ============================================================================
@@ -911,17 +860,46 @@ export function graphToExplorerData(
  * Fetch status facets for a given asset type.
  * Uses limit=1 since we only need the facet metadata, not the assets themselves.
  */
-export async function fetchStatusFacets(
-  assetTypeSlug?: string
-): Promise<Map<string, number>> {
+export async function fetchStatusFacets(assetTypeSlug?: string): Promise<Map<string, number>> {
   _currentReason = `fetchStatusFacets${assetTypeSlug ? ` type=${assetTypeSlug}` : ''}`;
   const res = await listAssets({
     asset_type: assetTypeSlug,
     facets: true,
     limit: 1,
   });
-  return new Map(Object.entries(res.facets?.status ?? {}));
+  // Prefer sub_status facets (granular) over status facets (aggregate)
+  const rawFacets = res.facets?.sub_status ?? res.facets?.status ?? {};
+  // Normalize snake_case keys to our display convention via normalizeSubStatus
+  const normalized = new Map<string, number>();
+  for (const [k, v] of Object.entries(rawFacets)) {
+    const mapped = normalizeSubStatus(k);
+    if (!mapped) continue;
+    normalized.set(mapped, (normalized.get(mapped) ?? 0) + v);
+  }
+  return normalized;
 }
+
+// =============================================================================
+// STATUS TAXONOMY — re-exported from catalog-api.ts (single source of truth)
+// =============================================================================
+
+export { fetchCatalogTaxonomy as fetchStatusTaxonomy } from '$lib/api/catalog-api';
+export type { StatusTaxonomy } from '$lib/api/catalog-api';
 
 // Export the API base for debugging
 export const getAPIBase = () => API_BASE;
+
+// =============================================================================
+// COAL PLANT LOCATION
+// =============================================================================
+
+import type { CoalPlantLocation } from '$lib/components/cards/coal-plant-types';
+
+/**
+ * Fetch all units for a coal plant by location ID.
+ * Returns top-line plant info plus a units[] array of unit-level data.
+ */
+export async function fetchCoalPlantLocation(locationId: string): Promise<CoalPlantLocation> {
+  _currentReason = `fetchCoalPlantLocation ${locationId}`;
+  return fetchAPI<CoalPlantLocation>(`/locations/${encodeURIComponent(locationId)}`);
+}

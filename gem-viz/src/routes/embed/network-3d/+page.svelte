@@ -3,18 +3,30 @@
    * Embeddable 3D Network Graph
    * Interactive 3D force-directed ownership network visualization.
    *
-   * URL params:
+   * URL params (all overridable via URL hash for Drupal deep-linking):
    *   entityId - Required. Entity ID to display
    *   height - Optional. Height in pixels (default: 500)
    *   maxHops - Optional. Max relationship hops (default: 3)
+   *
+   * Hash params: entityId, height, maxHops
    */
   import { page } from '$app/stores';
+  import { onMount } from 'svelte';
   import MiniNetworkGraph from '$lib/components/network/MiniNetworkGraph.svelte';
-  import { intParam } from '../embed-utils';
+  import { intParam, readHash } from '../embed-utils';
 
-  const entityId = $derived($page.url.searchParams.get('entityId'));
-  const height = $derived(intParam($page.url.searchParams.get('height'), 500));
-  const maxHops = $derived(intParam($page.url.searchParams.get('maxHops'), 3));
+  let entityId = $state($page.url.searchParams.get('entityId'));
+  let height = $state(intParam($page.url.searchParams.get('height'), 500));
+  let maxHops = $state(intParam($page.url.searchParams.get('maxHops'), 3));
+  let mounted = $state(false);
+
+  onMount(() => {
+    const h = readHash();
+    if (h.entityId) entityId = h.entityId;
+    if (h.height !== undefined) height = intParam(h.height, 500);
+    if (h.maxHops !== undefined) maxHops = intParam(h.maxHops, 3);
+    mounted = true;
+  });
 </script>
 
 <svelte:head>
@@ -22,7 +34,9 @@
   <meta name="robots" content="noindex" />
 </svelte:head>
 
-{#if entityId}
+{#if !mounted}
+  <div class="embed-loading">Loading…</div>
+{:else if entityId}
   <div class="network-embed" style="height: {height}px;">
     <MiniNetworkGraph {entityId} {height} {maxHops} />
   </div>

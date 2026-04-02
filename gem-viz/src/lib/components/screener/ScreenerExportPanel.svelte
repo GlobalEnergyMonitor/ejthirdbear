@@ -16,7 +16,7 @@
     generateBriefing,
   } from '$lib/components/cart/export-panel-utils';
   import { statusColors } from '$lib/design-tokens';
-  import { formatCapacity } from '$lib/format';
+  import { formatCapacity } from '$lib/utils/format';
 
   let {
     assets = [],

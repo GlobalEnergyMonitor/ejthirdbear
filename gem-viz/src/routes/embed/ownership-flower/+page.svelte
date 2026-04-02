@@ -3,11 +3,13 @@
    * Embeddable Ownership Flower
    * Radial visualization showing an entity's portfolio mix by tracker type.
    *
-   * URL params:
+   * URL params (all overridable via URL hash for Drupal deep-linking):
    *   entityId - Required. Entity ID to display
    *   size - Optional. "small", "medium", "large" (default: medium)
    *   showLabels - Optional. "true" or "false" (default: true)
    *   showTitle - Optional. "true" or "false" (default: true)
+   *
+   * Hash params: entityId, size, showLabels, showTitle
    */
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
@@ -16,17 +18,18 @@
     loadEntityPortfolio,
     errorMessage,
     boolParam,
+    readHash,
     type EmbedPortfolio,
   } from '../embed-utils';
 
   type FlowerSize = 'small' | 'medium' | 'large';
   const VALID_SIZES: FlowerSize[] = ['small', 'medium', 'large'];
 
-  // URL params
-  const entityId = $derived($page.url.searchParams.get('entityId'));
-  const sizeParam = $derived($page.url.searchParams.get('size') || 'medium');
-  const showLabels = $derived(boolParam($page.url.searchParams.get('showLabels')));
-  const showTitle = $derived(boolParam($page.url.searchParams.get('showTitle')));
+  // URL params (converted to $state so hash can override on mount)
+  let entityId = $state($page.url.searchParams.get('entityId'));
+  let sizeParam = $state($page.url.searchParams.get('size') || 'medium');
+  let showLabels = $state(boolParam($page.url.searchParams.get('showLabels')));
+  let showTitle = $state(boolParam($page.url.searchParams.get('showTitle')));
   const validSize = $derived<FlowerSize>(
     VALID_SIZES.includes(sizeParam as FlowerSize) ? (sizeParam as FlowerSize) : 'medium'
   );
@@ -37,6 +40,13 @@
   let portfolio = $state<EmbedPortfolio | null>(null);
 
   onMount(async () => {
+    // Read hash — hash params override query params for deep-linking
+    const h = readHash();
+    if (h.entityId) entityId = h.entityId;
+    if (h.size) sizeParam = h.size;
+    if (h.showLabels !== undefined) showLabels = boolParam(h.showLabels);
+    if (h.showTitle !== undefined) showTitle = boolParam(h.showTitle);
+
     if (!entityId) {
       error = 'Missing required parameter: entityId';
       loading = false;
@@ -76,7 +86,7 @@
       This entity owns subsidiaries but no direct assets. Try the <a
         href="/embed/entity?id={entityId}"
         target="_blank"
-        rel="noopener">Entity Card</a
+        rel="noopener noreferrer">Entity Card</a
       > embed for subsidiary details.
     </p>
   </div>

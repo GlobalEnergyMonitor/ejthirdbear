@@ -30,7 +30,8 @@
 import { browser } from '$app/environment';
 import { getAPIBase } from '$lib/ownership-api';
 import { logApiCall } from '$lib/api-log.svelte';
-import { pointInPolygon } from '$lib/geo-utils';
+import { pointInPolygon } from '$lib/utils/geo-utils';
+import { matchesStatusFilter } from '$lib/data-config/tracker-schema';
 
 // =============================================================================
 // GEM TRACKER NAME → UI TRACKER NAME BRIDGE
@@ -41,12 +42,9 @@ import { pointInPolygon } from '$lib/geo-utils';
  * UI TrackerName values that the API understands.
  * Most are identity; only two differ.
  */
-const GEM_TO_UI_TRACKER: Record<string, string> = {
-  'Oil & Gas Plant': 'Gas Plant',
-  'Iron & Steel Plant': 'Steel Plant',
-  'Oil or NGL Pipeline': 'Oil Pipeline',
-  'Cement or Concrete Plant': 'Cement Plant',
-};
+import { API_TYPE_TO_TRACKER } from '$lib/data-config/tracker-schema';
+
+const GEM_TO_UI_TRACKER: Record<string, string> = API_TYPE_TO_TRACKER;
 
 export function gemTrackerToUiTracker(gemName: string): string {
   return GEM_TO_UI_TRACKER[gemName] ?? gemName;
@@ -102,17 +100,34 @@ export interface ScreenerFilters {
 
 const OWNERSHIP_API_BASE = getAPIBase();
 
+/**
+ * Entity IDs that represent aggregated placeholder owners (not real companies).
+ * "small shareholders" and "natural person(s)" appear as a single entity each
+ * but actually represent many separate real-world owners — they should be
+ * excluded from owner lists, examples, and visualizations.
+ */
+export const EXCLUDED_ENTITY_IDS = new Set([
+  'E100001015587', // small shareholders
+  'E100000123261', // natural person(s)
+]);
+
 /** Enable detailed console logging */
 const DEBUG = false;
 
 /** Cache TTL in milliseconds (5 minutes) */
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
+/** Cache TTL for asset type counts (1 hour — counts rarely change) */
+const CACHE_TTL_COUNTS_MS = 60 * 60 * 1000;
+
 const ENABLE_BATCH_SEARCH =
   browser && localStorage.getItem('__GEM_SCREENER_BATCH_SEARCH__') === '1';
 
-/** In-memory cache for results */
+/** In-memory cache for owner results */
 const resultsCache = new Map<string, { data: ScreenerResultsResponse; timestamp: number }>();
+
+/** In-memory cache for asset type counts */
+const countsCache = new Map<string, { data: Record<string, number>; timestamp: number }>();
 
 // =============================================================================
 // LOGGING / PROFILING
@@ -140,16 +155,6 @@ function logQuery(log: QueryLog) {
     );
     if (log.error) console.error(`[screener-api] Error:`, log.error);
   }
-}
-
-/** Get recent query logs for debugging */
-export function getQueryLogs(): QueryLog[] {
-  return [...queryLogs].slice(-50);
-}
-
-/** Clear query logs */
-export function clearQueryLogs(): void {
-  queryLogs.length = 0;
 }
 
 // =============================================================================
@@ -200,8 +205,53 @@ export async function getOwnersByAssetType(
 }
 
 /**
+ * Async generator that paginates a fully-qualified catalog URL.
+ * Uses listAssets() so results go through normalizeAsset() field mapping.
+ */
+async function* paginateCatalogUrl(
+  baseUrl: string
+): AsyncGenerator<import('$lib/ownership-api').AssetSummary[], void, unknown> {
+  const { listAssets } = await import('$lib/ownership-api');
+  const BATCH = 500;
+  let offset = 0;
+  const MAX_OFFSET = 50000;
+
+  // Parse the catalog URL to extract path params and pass them to listAssets
+  const [, existingQs] = baseUrl.split('?');
+  const existingParams = new URLSearchParams(existingQs ?? '');
+
+  // Collect all params into a plain object for listAssets
+  // listAssets uses buildQuery() which handles repeated keys via arrays
+  const paramMap: Record<string, string | string[]> = {};
+  for (const [key, value] of existingParams.entries()) {
+    const existing = paramMap[key];
+    if (existing === undefined) {
+      paramMap[key] = value;
+    } else if (Array.isArray(existing)) {
+      existing.push(value);
+    } else {
+      paramMap[key] = [existing, value];
+    }
+  }
+
+  while (offset < MAX_OFFSET) {
+    const page = await listAssets({ ...paramMap, limit: BATCH, offset } as Parameters<
+      typeof listAssets
+    >[0]);
+    if (!page?.results?.length) break;
+    yield page.results;
+    if (page.results.length < BATCH) break;
+    offset += BATCH;
+  }
+}
+
+/**
  * REST API implementation: paginate /assets?asset_type={slug} and
  * aggregate owners client-side from the owners[] array on each asset.
+ *
+ * When filters.catalogUrl is present, uses that URL directly (server already
+ * encodes asset_type + subclass + status + country params). Falls back to the
+ * legacy tracker-slug approach otherwise.
  */
 async function getOwnersByAssetTypeREST(
   filters: ScreenerFilters,
@@ -210,33 +260,49 @@ async function getOwnersByAssetTypeREST(
 ): Promise<ScreenerResultsResponse> {
   const { resolveApiSlug, paginateAssetsByType } = await import('$lib/ownership-api');
 
-  // Resolve tracker name → API slug
-  const trackerName = filters.tracker || '';
-  const apiSlug = resolveApiSlug(trackerName);
-  if (!apiSlug) {
-    throw new Error(`Cannot resolve API slug for tracker: ${trackerName}`);
+  // ── Catalog URL fast path ─────────────────────────────────────────
+  // When a catalogUrl is present, skip slug resolution and class matching entirely.
+  // The server has already encoded all subclass/status/country filters in the URL.
+  const catalogUrl = filters.catalogUrl as string | undefined;
+
+  let pageIterator: AsyncGenerator<import('$lib/ownership-api').AssetSummary[], void, unknown>;
+
+  if (catalogUrl) {
+    pageIterator = paginateCatalogUrl(catalogUrl);
+  } else {
+    // Legacy path: resolve tracker name → API slug
+    const trackerName = filters.tracker || '';
+    const apiSlug = resolveApiSlug(trackerName);
+    if (!apiSlug) {
+      throw new Error(`Cannot resolve API slug for tracker: ${trackerName}`);
+    }
+    pageIterator = paginateAssetsByType(apiSlug, {
+      status: undefined,
+      country: filters.country,
+    });
   }
 
-  // Accumulate owners: entityId → { name, assetIds }
-  const ownerMap = new Map<string, { name: string; assetIds: Set<string> }>();
+  // Accumulate owners: entityId → { name, totalAssetIds (pre-filter), filteredAssetIds (post-filter) }
+  const ownerMap = new Map<
+    string,
+    { name: string; totalAssetIds: Set<string>; filteredAssetIds: Set<string> }
+  >();
   const hasOwnerFilter = filters.ownerIds && filters.ownerIds.length > 0;
   const ownerIdSet = hasOwnerFilter ? new Set(filters.ownerIds) : null;
 
-  // Multi-status filter: use statuses[] array, fall back to singular status
+  // Multi-status filter: only needed for legacy path (catalogUrl encodes status server-side)
   const statusArray =
-    filters.statuses && filters.statuses.length > 0
+    !catalogUrl && filters.statuses && filters.statuses.length > 0
       ? filters.statuses.map((s) => s.toLowerCase())
-      : filters.status
+      : !catalogUrl && filters.status
         ? [filters.status.toLowerCase()]
         : null;
 
-  // Don't pass status to API — some trackers have null status (e.g., Steel Plants).
-  // All status filtering is done client-side to handle null gracefully.
-  const apiStatus = undefined;
   const geofence = filters.geofence || null;
-  let classMatcher: ((_record: Record<string, unknown>) => boolean) | null = null;
 
-  if (filters.assetClassId) {
+  // Class matcher only needed for legacy path (catalogUrl encodes subclass server-side)
+  let classMatcher: ((_record: Record<string, unknown>) => boolean) | null = null;
+  if (!catalogUrl && filters.assetClassId) {
     const { getAssetClassById, buildClassMatcher } = await import(
       '$lib/data-config/asset-class-definitions'
     );
@@ -250,51 +316,53 @@ async function getOwnersByAssetTypeREST(
   }
 
   let pageCount = 0;
-  for await (const page of paginateAssetsByType(apiSlug, {
-    status: apiStatus,
-    country: filters.country,
-  })) {
+  for await (const page of pageIterator) {
     pageCount++;
     for (const asset of page) {
       if (classMatcher && !classMatcher(asset.raw || {})) continue;
+      if (!asset.owners || asset.owners.length === 0) continue;
 
-      // Geofence filtering — skip assets outside the custom region
+      // Determine if this asset passes the status/geofence filters
+      let passesFilters = true;
+
       if (geofence) {
         const lng = asset.longitude ?? (asset.raw as Record<string, unknown>)?.longitude;
         const lat = asset.latitude ?? (asset.raw as Record<string, unknown>)?.latitude;
-        if (typeof lng !== 'number' || typeof lat !== 'number') continue;
-        if (!pointInPolygon([lng, lat], geofence)) continue;
+        if (typeof lng !== 'number' || typeof lat !== 'number') passesFilters = false;
+        else if (!pointInPolygon([lng, lat], geofence)) passesFilters = false;
       }
 
-      // Client-side status filtering — skip assets whose status doesn't match.
-      // Assets with null/undefined status pass through (some trackers don't track status).
-      if (statusArray && asset.status) {
-        if (!statusArray.includes(asset.status.toLowerCase())) continue;
+      if (passesFilters && statusArray) {
+        if (!matchesStatusFilter(asset.status, asset.subStatus, statusArray)) {
+          passesFilters = false;
+        }
       }
 
-      if (!asset.owners || asset.owners.length === 0) continue;
       for (const owner of asset.owners) {
         if (!owner.entityId) continue;
-        // If ownerIds filter is active, skip non-matching owners
         if (ownerIdSet && !ownerIdSet.has(owner.entityId)) continue;
 
         let entry = ownerMap.get(owner.entityId);
         if (!entry) {
-          entry = { name: owner.name, assetIds: new Set() };
+          entry = { name: owner.name, totalAssetIds: new Set(), filteredAssetIds: new Set() };
           ownerMap.set(owner.entityId, entry);
         }
-        entry.assetIds.add(asset.id);
+        entry.totalAssetIds.add(asset.id);
+        if (passesFilters) {
+          entry.filteredAssetIds.add(asset.id);
+        }
       }
     }
   }
 
   // Sort by filtered asset count descending, take top N
   const sorted = [...ownerMap.entries()]
-    .map(([entityId, { name, assetIds }]) => ({
+    .filter(([entityId, { filteredAssetIds }]) => filteredAssetIds.size > 0 && !EXCLUDED_ENTITY_IDS.has(entityId))
+    .map(([entityId, { name, totalAssetIds, filteredAssetIds }]) => ({
       entityId,
       name,
-      totalAssets: 0, // cross-type totals not available without full scan
-      filteredAssets: assetIds.size,
+      totalAssets: totalAssetIds.size,
+      filteredAssets: filteredAssetIds.size,
     }))
     .sort((a, b) => b.filteredAssets - a.filteredAssets)
     .slice(0, limit);
@@ -425,7 +493,8 @@ export async function searchEntitiesBulk(
     try {
       return await searchEntitiesBulkREST(cleanQueries, limitPerQuery, startTime);
     } catch (e) {
-      console.warn('[screener-api] Batch search endpoint failed, falling back to sequential:', e);
+      if (import.meta.env.DEV)
+        console.warn('[screener-api] Batch search endpoint failed, falling back to sequential:', e);
     }
   }
 
@@ -551,6 +620,172 @@ async function searchEntitiesBulkREST(
 }
 
 // =============================================================================
+// OWNERS PAGE: GET OWNERS BY FILTER (calls /owners endpoint)
+// =============================================================================
+
+export interface OwnersFilterParams {
+  tracker: string;
+  assetClassId?: string;
+  status?: string | string[];
+  country?: string | string[];
+}
+
+/** In-memory cache for /owners endpoint responses */
+const ownersByFilterCache = new Map<
+  string,
+  { data: ScreenerResultsResponse; timestamp: number }
+>();
+
+/**
+ * Fetch the pre-aggregated owner list from the `/owners` REST endpoint.
+ * Falls back to `getOwnersByAssetType()` if the endpoint is unavailable.
+ *
+ * Called when the user lands on the owners search page so that:
+ *  - "View all owners" can show the full list instantly
+ *  - "Try" examples can be drawn from real top owners
+ *  - Search results can be cross-referenced to determine which entities
+ *    actually have assets in the selected class (Tier 1 vs Tier 2)
+ */
+export async function getOwnersByFilter(
+  params: OwnersFilterParams,
+  options: { limit?: number; skipCache?: boolean } = {}
+): Promise<ScreenerResultsResponse> {
+  const startTime = performance.now();
+  const { skipCache = false } = options;
+
+  const cacheKey = JSON.stringify({ params });
+  if (!skipCache) {
+    const cached = ownersByFilterCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+      return { ...cached.data, source: 'cache' };
+    }
+  }
+
+  try {
+    const { resolveApiSlug } = await import('$lib/ownership-api');
+    const apiSlug = resolveApiSlug(params.tracker);
+    if (!apiSlug) throw new Error(`Cannot resolve API slug for tracker: ${params.tracker}`);
+
+    const p = new URLSearchParams();
+    p.set('asset_type', apiSlug);
+
+    const statuses = Array.isArray(params.status)
+      ? params.status
+      : params.status
+        ? [params.status]
+        : [];
+    for (const s of statuses) p.append('status', s);
+
+    const countries = Array.isArray(params.country)
+      ? params.country
+      : params.country
+        ? [params.country]
+        : [];
+    for (const c of countries) p.append('country', c);
+
+    const PAGE_SIZE = 500; // API hard cap
+    p.set('limit', String(PAGE_SIZE));
+
+    const { logApiCall } = await import('$lib/api-log.svelte');
+    const rawOwners: Array<Record<string, unknown>> = [];
+    let offset = 0;
+    let total = Infinity;
+
+    while (rawOwners.length < total) {
+      p.set('offset', String(offset));
+      const url = `${OWNERSHIP_API_BASE}/owners?${p.toString()}`;
+      const t0 = performance.now();
+      const resp = await fetch(url);
+      logApiCall({
+        url,
+        method: 'GET',
+        status: resp.status,
+        durationMs: performance.now() - t0,
+        timestamp: new Date(),
+        error: resp.ok ? undefined : `${resp.status}`,
+        reason: 'getOwnersByFilter (screener owners page)',
+      });
+
+      if (!resp.ok) throw new Error(`/owners returned ${resp.status}`);
+
+      const data = await resp.json();
+
+      if (import.meta.env.DEV && offset === 0) {
+        const sample = Array.isArray(data) ? data[0] : (data.results ?? data.owners ?? [])[0];
+        console.log('[screener-api] /owners raw response sample:', sample);
+      }
+
+      const page: Array<Record<string, unknown>> = Array.isArray(data)
+        ? data
+        : (data.results ?? data.owners ?? []);
+
+      rawOwners.push(...page);
+      total = typeof data.total === 'number' ? data.total : rawOwners.length;
+      offset += PAGE_SIZE;
+
+      // Stop if the page was empty or we've fetched everything
+      if (page.length === 0) break;
+    }
+
+    const owners: ScreenerOwner[] = rawOwners
+      .map((o) => ({
+        entityId: String(
+          o.entity_id ?? o.entityId ??
+          (o.entity && typeof o.entity === 'object' ? (o.entity as Record<string, unknown>).id : undefined) ??
+          o.id ?? ''
+        ),
+        name: String(
+          o.name ?? o.full_name ?? o.entity_name ?? o.owner_name ??
+          o.display_name ??
+          (o.entity && typeof o.entity === 'object' ? (o.entity as Record<string, unknown>).name : undefined) ??
+          ''
+        ),
+        totalAssets: Number(
+          o.total_asset_count ?? o.total_assets ?? o.totalAssets ?? o.asset_count ?? o.count ?? 0
+        ),
+        filteredAssets: Number(
+          o.asset_count ?? o.filtered_asset_count ?? o.filtered_assets ??
+          o.total_asset_count ?? o.total_assets ?? o.count ?? 0
+        ),
+      }))
+      .filter((o) => o.entityId && o.name && !EXCLUDED_ENTITY_IDS.has(o.entityId));
+
+    const result: ScreenerResultsResponse = {
+      owners,
+      source: 'rest-api',
+      queryTimeMs: performance.now() - startTime,
+      totalCount: owners.length,
+    };
+
+    ownersByFilterCache.set(cacheKey, { data: result, timestamp: Date.now() });
+
+    logQuery({
+      timestamp: new Date(),
+      operation: 'getOwnersByFilter',
+      durationMs: result.queryTimeMs,
+      source: 'rest-api',
+      params: params as unknown as Record<string, unknown>,
+      resultCount: owners.length,
+    });
+
+    return result;
+  } catch (err) {
+    // Fallback: derive owner list the old way (expensive but reliable)
+    if (import.meta.env.DEV) {
+      console.warn('[screener-api] /owners endpoint unavailable, falling back to asset scan:', err);
+    }
+    const filters: ScreenerFilters = {
+      tracker: params.tracker,
+      assetClassId: params.assetClassId,
+      status: Array.isArray(params.status) ? params.status[0] : params.status,
+      statuses: Array.isArray(params.status) ? params.status : params.status ? [params.status] : undefined,
+      country: params.country,
+    };
+    return getOwnersByAssetType(filters, { skipCache });
+  }
+}
+
+// =============================================================================
 // ASSET TYPE COUNTS (for preset cards)
 // =============================================================================
 
@@ -560,10 +795,10 @@ async function searchEntitiesBulkREST(
  */
 export async function getAssetTypeCounts(): Promise<Record<string, number>> {
   const cacheKey = 'asset-type-counts';
-  const cached = resultsCache.get(cacheKey);
+  const cached = countsCache.get(cacheKey);
 
-  if (cached && Date.now() - cached.timestamp < 60 * 60 * 1000) {
-    return cached.data as unknown as Record<string, number>;
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_COUNTS_MS) {
+    return cached.data;
   }
 
   const startTime = performance.now();
@@ -578,8 +813,8 @@ export async function getAssetTypeCounts(): Promise<Record<string, number>> {
       counts[type] = count;
     }
 
-    resultsCache.set(cacheKey, {
-      data: counts as unknown as ScreenerResultsResponse,
+    countsCache.set(cacheKey, {
+      data: counts,
       timestamp: Date.now(),
     });
 
@@ -605,80 +840,4 @@ export async function getAssetTypeCounts(): Promise<Record<string, number>> {
     });
     return {};
   }
-}
-
-// =============================================================================
-// CACHE MANAGEMENT
-// =============================================================================
-
-/** Clear all cached data */
-export function clearCache(): void {
-  resultsCache.clear();
-  if (DEBUG) console.log('[screener-api] Cache cleared');
-}
-
-/** Get cache stats for debugging */
-export function getCacheStats(): { size: number; keys: string[] } {
-  return {
-    size: resultsCache.size,
-    keys: [...resultsCache.keys()],
-  };
-}
-
-// =============================================================================
-// DEBUG UTILITIES
-// =============================================================================
-
-/** Get API configuration for debugging */
-export function getConfig() {
-  return {
-    apiBase: OWNERSHIP_API_BASE,
-    debug: DEBUG,
-    cacheTtlMs: CACHE_TTL_MS,
-  };
-}
-
-/**
- * Run a diagnostic check on data sources.
- * All screener data now flows through the REST API by default.
- */
-export async function runDiagnostics(): Promise<{
-  restApi: { ok: boolean; latencyMs: number; error?: string };
-}> {
-  const results = {
-    restApi: { ok: false, latencyMs: 0, error: undefined as string | undefined },
-  };
-
-  // Test REST API
-  const diagUrl = `${OWNERSHIP_API_BASE}/entities?limit=1`;
-  const restStart = performance.now();
-  try {
-    const response = await fetch(diagUrl);
-    results.restApi.latencyMs = performance.now() - restStart;
-    results.restApi.ok = response.ok;
-    if (!response.ok) results.restApi.error = `HTTP ${response.status}`;
-    logApiCall({
-      url: diagUrl,
-      method: 'GET',
-      status: response.status,
-      durationMs: results.restApi.latencyMs,
-      timestamp: new Date(),
-      error: response.ok ? undefined : results.restApi.error,
-      reason: 'diagnostics ping',
-    });
-  } catch (e) {
-    results.restApi.latencyMs = performance.now() - restStart;
-    results.restApi.error = e instanceof Error ? e.message : String(e);
-    logApiCall({
-      url: diagUrl,
-      method: 'GET',
-      status: null,
-      durationMs: results.restApi.latencyMs,
-      timestamp: new Date(),
-      error: results.restApi.error,
-      reason: 'diagnostics ping',
-    });
-  }
-
-  return results;
 }

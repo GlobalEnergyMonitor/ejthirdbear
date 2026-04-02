@@ -3,7 +3,7 @@ primary_region = 'sjc'
 
 [build]
   [build.args]
-    PUBLIC_OWNERSHIP_API_BASE_URL = "https://gem-ownership-api.fly.dev"
+    PUBLIC_OWNERSHIP_API_BASE_URL = "https://gem-ownership-api-staging.fly.dev"
 
 [env]
   NODE_ENV = 'production'

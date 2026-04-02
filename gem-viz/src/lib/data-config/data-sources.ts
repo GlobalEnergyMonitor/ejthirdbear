@@ -11,6 +11,13 @@
  * Section: "Data sources"
  */
 
+import {
+  gemTrackerRepo,
+  GEM_DATA_EMAIL,
+  GEM_OWNERSHIP_ISSUES,
+  GEM_OWNERSHIP_DOCS,
+} from '$lib/external-links';
+
 /**
  * GEM Published Dataset reference
  */
@@ -97,7 +104,7 @@ export const TrackerDatasets: Record<string, GEMDataset> = {
   coalPlant: {
     name: 'Coal Plant Tracker',
     description: 'Global coal-fired power plants and generating units',
-    url: 'https://github.com/GlobalEnergyMonitor/coal_plant_tracker',
+    url: gemTrackerRepo('coal-plant')!,
     version: 'v2.0',
     lastUpdated: '2025-11-15',
     rowCount: 3500,
@@ -107,7 +114,7 @@ export const TrackerDatasets: Record<string, GEMDataset> = {
   gasPlant: {
     name: 'Gas Plant Tracker',
     description: 'Global natural gas power plants and generating units',
-    url: 'https://github.com/GlobalEnergyMonitor/gas_plant_tracker',
+    url: gemTrackerRepo('gas-plant')!,
     version: 'v2.0',
     lastUpdated: '2025-11-15',
     rowCount: 5000,
@@ -117,7 +124,7 @@ export const TrackerDatasets: Record<string, GEMDataset> = {
   coalMine: {
     name: 'Coal Mine Tracker',
     description: 'Global coal mining operations and complexes',
-    url: 'https://github.com/GlobalEnergyMonitor/coal_mine_tracker',
+    url: gemTrackerRepo('coal-mine')!,
     version: 'v1.5',
     lastUpdated: '2025-10-01',
     rowCount: 600,
@@ -127,7 +134,7 @@ export const TrackerDatasets: Record<string, GEMDataset> = {
   ironMine: {
     name: 'Iron Ore Mine Tracker',
     description: 'Global iron ore mining operations',
-    url: 'https://github.com/GlobalEnergyMonitor/iron_mine_tracker',
+    url: gemTrackerRepo('iron-mine')!,
     version: 'v1.0',
     lastUpdated: '2025-09-01',
     rowCount: 350,
@@ -137,7 +144,7 @@ export const TrackerDatasets: Record<string, GEMDataset> = {
   steelPlant: {
     name: 'Steel Plant Tracker',
     description: 'Global steel production facilities',
-    url: 'https://github.com/GlobalEnergyMonitor/steel_plant_tracker',
+    url: gemTrackerRepo('steel-plant')!,
     version: 'v1.5',
     lastUpdated: '2025-10-15',
     rowCount: 500,
@@ -147,7 +154,7 @@ export const TrackerDatasets: Record<string, GEMDataset> = {
   cementPlant: {
     name: 'Cement and Concrete Tracker',
     description: 'Global cement and concrete production facilities',
-    url: 'https://github.com/GlobalEnergyMonitor/cement_tracker',
+    url: gemTrackerRepo('cement-plant')!,
     version: 'v1.0',
     lastUpdated: '2025-09-01',
     rowCount: 2000,
@@ -157,7 +164,7 @@ export const TrackerDatasets: Record<string, GEMDataset> = {
   gasPipeline: {
     name: 'Gas Infrastructure Tracker',
     description: 'Global natural gas transmission pipelines and infrastructure',
-    url: 'https://github.com/GlobalEnergyMonitor/gas_infrastructure_tracker',
+    url: gemTrackerRepo('gas-pipeline')!,
     version: 'v1.0',
     lastUpdated: '2025-08-01',
     rowCount: 1200,
@@ -167,7 +174,7 @@ export const TrackerDatasets: Record<string, GEMDataset> = {
   oilPipeline: {
     name: 'Oil & NGL Pipeline Tracker',
     description: 'Global oil and natural gas liquid transmission pipelines',
-    url: 'https://github.com/GlobalEnergyMonitor/oil_pipeline_tracker',
+    url: gemTrackerRepo('oil-pipeline')!,
     version: 'v1.0',
     lastUpdated: '2025-08-01',
     rowCount: 800,
@@ -177,7 +184,7 @@ export const TrackerDatasets: Record<string, GEMDataset> = {
   bioenergy: {
     name: 'Bioenergy Power Tracker',
     description: 'Global biomass and biogas power generation facilities',
-    url: 'https://github.com/GlobalEnergyMonitor/bioenergy_tracker',
+    url: gemTrackerRepo('bioenergy')!,
     version: 'v1.0',
     lastUpdated: '2025-07-01',
     rowCount: 1000,
@@ -205,7 +212,7 @@ export const DerivedDatasets: Record<string, GEMDataset> = {
   trackerMetadata: {
     name: 'Tracker Metadata Manifest',
     description: 'Column names, data types, descriptions, and metadata for all tracker fields',
-    url: 'src/lib/data-config/tracker-config.ts',
+    url: 'src/lib/data-config/tracker-schema.ts',
     version: '1.0',
     lastUpdated: '2025-12-14',
     notes: 'Centralized schema definition - source of truth for field mappings',
@@ -221,6 +228,41 @@ export const DerivedDatasets: Record<string, GEMDataset> = {
     notes: 'Matcher functions for each asset class',
   },
 };
+
+/**
+ * Fetch live data sources from the API.
+ * Returns source files, asset types, row counts, and load timestamps.
+ * Falls back to hardcoded TrackerDatasets on error.
+ */
+export async function getLiveDataSources(): Promise<
+  Array<{
+    source_file: string;
+    asset_type: string;
+    row_count: number | null;
+    load_timestamp: string;
+  }>
+> {
+  try {
+    const { fetchCatalogSources } = await import('$lib/api/catalog-api');
+    const data = await fetchCatalogSources();
+    if (data?.results?.length) {
+      return data.results.map((s) => ({
+        source_file: s.source_file,
+        asset_type: s.asset_type,
+        row_count: s.row_count_output,
+        load_timestamp: s.load_timestamp,
+      }));
+    }
+  } catch {
+    // fall through
+  }
+  return Object.values(TrackerDatasets).map((d) => ({
+    source_file: d.name,
+    asset_type: d.description,
+    row_count: null,
+    load_timestamp: d.lastUpdated,
+  }));
+}
 
 /**
  * Get all datasets in a category
@@ -261,13 +303,13 @@ export const dataVersionInfo = {
   lastVerificationDate: '2025-12-14',
 
   /** Contact for data questions */
-  dataContact: 'data@globalenergymonitor.org',
+  dataContact: GEM_DATA_EMAIL,
 
   /** Issue tracking for data quality issues */
-  issueTracker: 'https://github.com/GlobalEnergyMonitor/Ownership_External_Dataset/issues',
+  issueTracker: GEM_OWNERSHIP_ISSUES,
 
   /** Data documentation and schema */
-  documentation: 'https://github.com/GlobalEnergyMonitor/Ownership_External_Dataset',
+  documentation: GEM_OWNERSHIP_DOCS,
 
   /** Notes about this release */
   releaseNotes: `
@@ -319,7 +361,8 @@ export function validateDataSourcesArePublished(): boolean {
       dataset.url.includes('src/lib/data-config');
 
     if (!isPublic) {
-      if (import.meta.env.DEV) console.warn(`Non-public data source detected: ${dataset.name} at ${dataset.url}`);
+      if (import.meta.env.DEV)
+        console.warn(`Non-public data source detected: ${dataset.name} at ${dataset.url}`);
       return false;
     }
   }

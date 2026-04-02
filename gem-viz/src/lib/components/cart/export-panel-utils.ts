@@ -4,8 +4,9 @@
  */
 
 import { getAsset, getEntityGraphDown, type AssetSummary } from '$lib/ownership-api';
-import { getStatusGroup, statusColors } from '$lib/design-tokens';
-import { formatCapacity } from '$lib/format';
+import { getStatusGroup } from '$lib/design-tokens';
+import { STATUS_GROUPS } from '$lib/data-config/tracker-schema';
+import { formatCapacity } from '$lib/utils/format';
 
 export interface PreflightStats {
   ok: boolean;
@@ -284,8 +285,8 @@ export function aggregateAssetStats(assets: AssetSummary[]): AggregatedStats {
     typeMap.set(type, { count: tEntry.count + 1, capacity: tEntry.capacity + cap });
   }
 
-  // Sort statuses: operating first, then prospective, retired, cancelled, unknown
-  const statusOrder = ['operating', 'prospective', 'retired', 'cancelled', 'unknown'];
+  // Sort statuses by canonical group order
+  const statusOrder = [...STATUS_GROUPS.map((g) => g.id), 'unknown'];
   const statusBreakdown = statusOrder
     .filter((g) => statusMap.has(g))
     .map((g) => ({ group: g, ...statusMap.get(g)! }));
@@ -334,8 +335,8 @@ export function generateBriefing(
   }
   const retired = stats.statusBreakdown.find((s) => s.group === 'retired');
   if (retired) parts.push(`${retired.count} are retired`);
-  const prospective = stats.statusBreakdown.find((s) => s.group === 'prospective');
-  if (prospective) parts.push(`${prospective.count} are proposed or under development`);
+  const planned = stats.statusBreakdown.find((s) => s.group === 'planned');
+  if (planned) parts.push(`${planned.count} are proposed or under development`);
   const cancelled = stats.statusBreakdown.find((s) => s.group === 'cancelled');
   if (cancelled) parts.push(`${cancelled.count} are cancelled`);
 
@@ -488,21 +489,8 @@ export function serializeSVG(container: HTMLElement): string | null {
   return new XMLSerializer().serializeToString(clone);
 }
 
-// CSV column definitions for export
-const CSV_COLUMNS = [
-  'asset_id',
-  'asset_name',
-  'asset_type',
-  'status',
-  'country',
-  'latitude',
-  'longitude',
-  'capacity',
-  'capacity_unit',
-  'owner_name',
-  'owner_entity_id',
-  'ownership_share',
-];
+// Reuse the same column definitions
+const CSV_COLUMNS = ASSET_CSV_COLUMNS;
 
 function assetToCSVRows(asset: AssetSummary): string[][] {
   const owners = asset.owners || [];

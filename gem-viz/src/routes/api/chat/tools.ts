@@ -450,6 +450,155 @@ export const TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'open_compose_control',
+      description:
+        'Open or update the embedded Compose control deck inside Gembot. Use this when the user wants an interactive filter UI, wants to tune sliders live, or wants the compose view opened without leaving chat.',
+      parameters: {
+        type: 'object',
+        properties: {
+          mode: {
+            type: 'string',
+            enum: ['replace', 'merge', 'clear'],
+            description:
+              'How to apply filters to the compose deck. Use replace for a fresh filter set, merge to add filters to an existing set, or clear to reset the deck.',
+          },
+          trackers: {
+            type: 'array',
+            items: { type: 'string', enum: TRACKERS as unknown as string[] },
+            description: 'One or more asset tracker types to select in the compose deck.',
+          },
+          statuses: {
+            type: 'array',
+            items: { type: 'string', enum: STATUS_VALUES as unknown as string[] },
+            description: 'One or more statuses to select in the compose deck.',
+          },
+          countries: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Asset countries to select in the compose deck.',
+          },
+          state_provinces: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'State or province filters to apply when useful.',
+          },
+          owner_countries: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Owner headquarters countries to select.',
+          },
+          owners: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Owner names to select.',
+          },
+          capacity_min: {
+            type: 'number',
+            description: 'Minimum capacity slider value in MW.',
+          },
+          capacity_max: {
+            type: 'number',
+            description: 'Maximum capacity slider value in MW.',
+          },
+          share_min: {
+            type: 'number',
+            description: 'Minimum ownership share slider value in percent.',
+          },
+          share_max: {
+            type: 'number',
+            description: 'Maximum ownership share slider value in percent.',
+          },
+          start_year_min: {
+            type: 'number',
+            description: 'Minimum start year slider value.',
+          },
+          start_year_max: {
+            type: 'number',
+            description: 'Maximum start year slider value.',
+          },
+          search: {
+            type: 'string',
+            description: 'Free text project or owner search to prefill.',
+          },
+          focus: {
+            type: 'string',
+            enum: ['filters', 'results'],
+            description: 'Which part of the compose deck should be emphasized.',
+          },
+          panel_title: {
+            type: 'string',
+            description: 'Short title shown at the top of the embedded compose deck.',
+          },
+          message: {
+            type: 'string',
+            description: 'Short note to show in the deck after applying the filters.',
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'discover_api_endpoints',
+      description:
+        'Read the Ownership API root endpoint registry to discover available endpoints, families, templates, and descriptions. Use this when the user wants an unusual backend query, schema details, or you need to inspect what routes exist before building an ad hoc request.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description:
+              'Optional text filter for endpoint keys, URLs, or descriptions (for example: "catalog", "ownership", "assets").',
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'query_api_ad_hoc',
+      description:
+        'Run a safe GET-only ad hoc query against the GEM Ownership API using a discovered endpoint key or relative path. Supports path params and query params for flexible exploration across entities, assets, ownership, catalog, segments, and metadata. Use this when built-in tools are too rigid but the backend likely has the answer.',
+      parameters: {
+        type: 'object',
+        properties: {
+          endpoint_key: {
+            type: 'string',
+            description:
+              'Endpoint key from discover_api_endpoints, such as "assets", "entities_detail", "catalog_sources", or "metadata".',
+          },
+          path: {
+            type: 'string',
+            description:
+              'Optional relative API path to query directly, such as "/catalog/sources/1", "/metadata", or "/entities/E100000000650/owners". Use this when the discovered endpoint list needs a concrete resource path.',
+          },
+          path_params: {
+            type: 'object',
+            description:
+              'Path params used to fill endpoint templates like /entities/{id} or /assets/{id}. Example: {"id":"E100000000687"}.',
+          },
+          query_params: {
+            type: 'object',
+            description:
+              'Arbitrary GET query params. Arrays should be passed as JSON arrays so repeated params can be generated. Example: {"root":"E100000000650","direction":"down","max_depth":2} for ownership_graph.',
+          },
+          preview_limit: {
+            type: 'number',
+            description:
+              'How many list items to include in the preview payload (default 10, max 50).',
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'get_investigation_cart',
       description: "Get the current contents of the user's investigation cart.",
       parameters: { type: 'object', properties: {}, required: [] },

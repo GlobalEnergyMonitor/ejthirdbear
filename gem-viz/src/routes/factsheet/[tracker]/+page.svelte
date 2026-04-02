@@ -10,21 +10,16 @@
   import DatasetFactsheet from '$lib/widgets/DatasetFactsheet.svelte';
   import ProjectCard from '$lib/components/cards/ProjectCard.svelte';
   import { listAssetsByType } from '$lib/ownership-api';
-  import { trackerNameToSlug } from '$lib/data-config/tracker-metadata';
+  import { trackerNameToSlug, trackerMetadata } from '$lib/data-config/tracker-metadata';
+  import { URL_SLUG_TO_TRACKER } from '$lib/data-config/tracker-schema';
   import PageHeader from '$lib/components/nav/PageHeader.svelte';
+  import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
   // Get tracker from URL param
   const trackerParam = $derived($page.params.tracker);
 
-  // Map URL slugs to tracker names
-  const trackerMap: Record<string, string> = {
-    'coal-mine': 'Coal Mine',
-    'coal-plant': 'Coal Plant',
-    'gas-plant': 'Gas Plant',
-    'steel-plant': 'Steel Plant',
-    'iron-mine': 'Iron Mine',
-    bioenergy: 'Bioenergy Power',
-  };
+  // Map URL slugs to tracker names — from canonical tracker-schema.ts
+  const trackerMap: Record<string, string> = URL_SLUG_TO_TRACKER;
 
   // Map tracker to metadata CSV file
   const metadataFiles: Record<string, string> = {
@@ -152,32 +147,17 @@
     Promise.all([loadFieldsMetadata(), loadSampleAssets()]);
   });
 
-  // Tracker info
-  const trackerInfo: Record<string, { title: string; description: string; citation: string }> = {
-    'Coal Mine': {
-      title: 'Global Coal Mine Tracker',
-      description:
-        'The Global Coal Mine Tracker (GCMT) provides a comprehensive database of coal mines and proposed coal mine projects worldwide.',
-      citation:
-        'Global Energy Monitor, Global Coal Mine Tracker, May 2025 release. Distributed under a Creative Commons Attribution 4.0 International License.',
-    },
-    'Coal Plant': {
-      title: 'Global Coal Plant Tracker',
-      description:
-        'The Global Coal Plant Tracker (GCPT) provides a comprehensive database of coal-fired power plants worldwide.',
-      citation:
-        'Global Energy Monitor, Global Coal Plant Tracker, May 2025 release. Distributed under a Creative Commons Attribution 4.0 International License.',
-    },
-  };
-
-  const info = $derived(
-    trackerInfo[tracker] || {
-      title: `${tracker} Tracker`,
-      description: `Field metadata and distributions for the ${tracker} tracker.`,
-      citation:
-        'Global Energy Monitor. Distributed under a Creative Commons Attribution 4.0 International License.',
-    }
-  );
+  // Tracker info — derived from tracker-metadata.ts (enriched by API at startup)
+  const trackerSlug = $derived(trackerNameToSlug[tracker] || trackerParam);
+  const meta = $derived(trackerMetadata[trackerSlug]);
+  const info = $derived({
+    title: meta ? `Global ${meta.name} Tracker` : `${tracker} Tracker`,
+    description:
+      meta?.description || `Field metadata and distributions for the ${tracker} tracker.`,
+    citation:
+      meta?.citation ||
+      'Global Energy Monitor. Distributed under a Creative Commons Attribution 4.0 International License.',
+  });
 </script>
 
 <svelte:head>
@@ -185,6 +165,10 @@
   <meta
     name="description"
     content="Field-level documentation and data distribution analysis for the {info.title} dataset from Global Energy Monitor."
+  />
+  <SeoMeta
+    title="{info.title} Factsheet — Global Energy Monitor"
+    description="Field-level documentation and data distribution analysis for the {info.title} dataset from Global Energy Monitor."
   />
 </svelte:head>
 

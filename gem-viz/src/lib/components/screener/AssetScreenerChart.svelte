@@ -16,6 +16,7 @@
   } from '$lib/design-tokens';
   import { fetchChartData, buildSubsidiaryGroups } from './screener-chart-data';
   import { renderChart } from './screener-chart-render';
+  import { matchesStatusFilter } from '$lib/data-config/tracker-schema';
   import Spinner from '$lib/components/feedback/Spinner.svelte';
 
   // Props
@@ -27,6 +28,8 @@
     filteredAssetCount = null,
     /** Optional: only show assets whose raw status is in this list */
     statusFilter = undefined,
+    /** Optional: only show assets whose tracker matches one of these names */
+    trackerFilter = undefined,
     onDataLoaded = undefined,
     onContainerReady = undefined,
   } = $props();
@@ -39,19 +42,35 @@
   let chartCleanup = null;
   let isEmpty = $state(false);
   let totalAssets = $state(0);
+  let totalAssetsPreFilter = $state(0);
   let directSubsidiaries = $state(0);
   let trackerLegend = $state([]);
   let statusLegend = $state([]);
   let prospectiveLegend = $state(false);
+  // Mirrors the colorField logic in screener-chart-render.ts:
+  // use tracker coloring unless there's ≤1 tracker type AND >1 status to differentiate
+  const colorByTracker = $derived(!(trackerLegend.length <= 1 && statusLegend.length > 1));
+  let intermediarySummaries = $state([]);
   let destroyed = false;
 
   const hasFilteredAssetCount = $derived(
     typeof filteredAssetCount === 'number' && !Number.isNaN(filteredAssetCount)
   );
   const matchedAssets = $derived(
-    hasFilteredAssetCount ? Math.max(0, Math.min(filteredAssetCount, totalAssets)) : totalAssets
+    hasFilteredAssetCount
+      ? totalAssets > 0
+        ? Math.max(0, Math.min(filteredAssetCount, totalAssets))
+        : filteredAssetCount
+      : totalAssets
   );
-  const additionalAssets = $derived(Math.max(0, totalAssets - matchedAssets));
+  const additionalAssets = $derived(
+    Math.max(0, (totalAssetsPreFilter || totalAssets) - matchedAssets)
+  );
+
+  function formatOwnershipPct(value) {
+    if (typeof value !== 'number' || Number.isNaN(value)) return null;
+    return Number.isInteger(value) ? `${value}%` : `${value.toFixed(1)}%`;
+  }
 
   async function loadAndRender() {
     if (!entityId || !container) return;
@@ -60,6 +79,7 @@
       loading = true;
       error = null;
       isEmpty = false;
+      intermediarySummaries = [];
 
       // Clean up previous render
       if (chartCleanup) {
@@ -74,14 +94,33 @@
 
       if (destroyed || !container) return;
 
-      // Apply status filter if provided
+      // Record pre-filter total for "additional assets" calculation
+      totalAssetsPreFilter = chartData.assets.length;
+
+      // Apply status filter if provided (checks both status and sub-status)
       if (statusFilter && statusFilter.length > 0) {
-        const allowed = new Set(statusFilter.map((s) => s.toLowerCase()));
-        const matchStatus = (u) => allowed.has((u.status || '').toLowerCase());
+        const allowed = statusFilter.map((s) => s.toLowerCase());
+        const matchStatus = (u) => matchesStatusFilter(u.status, u.subStatus, allowed);
         chartData.assets = chartData.assets.filter(matchStatus);
         chartData.directlyOwned = chartData.directlyOwned.filter(matchStatus);
         for (const [subId, units] of chartData.subsidiariesMatched) {
           const filtered = units.filter(matchStatus);
+          if (filtered.length === 0) {
+            chartData.subsidiariesMatched.delete(subId);
+          } else {
+            chartData.subsidiariesMatched.set(subId, filtered);
+          }
+        }
+      }
+
+      // Apply tracker filter if provided
+      if (trackerFilter && trackerFilter.length > 0) {
+        const allowed = new Set(trackerFilter);
+        const matchTracker = (u) => allowed.has(u.tracker);
+        chartData.assets = chartData.assets.filter(matchTracker);
+        chartData.directlyOwned = chartData.directlyOwned.filter(matchTracker);
+        for (const [subId, units] of chartData.subsidiariesMatched) {
+          const filtered = units.filter(matchTracker);
           if (filtered.length === 0) {
             chartData.subsidiariesMatched.delete(subId);
           } else {
@@ -100,6 +139,19 @@
       const subsidiaryGroups = buildSubsidiaryGroups(chartData);
       totalAssets = chartData.assets.length;
       directSubsidiaries = chartData.subsidiariesMatched.size;
+      intermediarySummaries = Array.from(chartData.subsidiariesMatched.entries())
+        .filter(([subId]) => chartData.intermediaryData.has(subId))
+        .map(([subId, units]) => {
+          const intermediary = chartData.intermediaryData.get(subId);
+          return {
+            id: subId,
+            name: chartData.entityMap.get(subId)?.Name || subId,
+            matchedAssetCount: units.length,
+            ownershipPct: chartData.matchedEdges.get(subId)?.value ?? null,
+            totalDescendants: intermediary?.total_descendants ?? 0,
+            maxGenerations: intermediary?.max_generations ?? 0,
+          };
+        });
 
       const trackers = Array.from(
         new Set(chartData.assets.map((a) => a.tracker).filter((t) => t && t !== 'Unknown'))
@@ -112,20 +164,26 @@
       const rawStatuses = chartData.assets
         .map((a) => String(a.status || '').toLowerCase())
         .filter(Boolean);
-      const allProspective =
+      const allPlanned =
         rawStatuses.length > 0 && rawStatuses.every((s) => prospectiveStatuses.includes(s));
-      prospectiveLegend = allProspective;
+      prospectiveLegend = allPlanned;
 
-      if (allProspective) {
+      if (allPlanned) {
         const items = [];
         for (const [color, { descript, statuses }] of statusColorsProspective) {
           if (statuses.some((s) => rawStatuses.includes(s))) {
-            items.push({ label: descript, color, kind: 'prospective-detail' });
+            items.push({ label: descript, color, kind: 'planned-detail' });
           }
         }
-        statusLegend = items;
-      } else {
-        const order = ['operating', 'prospective', 'retired', 'cancelled', 'unknown'];
+        // If no granular match (e.g. API returned aggregate 'planned'), fall through to normal legend
+        if (items.length > 0) {
+          statusLegend = items;
+        } else {
+          prospectiveLegend = false;
+        }
+      }
+      if (!prospectiveLegend) {
+        const order = ['operating', 'planned', 'retired', 'cancelled', 'unknown'];
         const aggregated = Array.from(
           new Set(chartData.assets.map((a) => a.status_agg).filter(Boolean))
         ).sort((a, b) => order.indexOf(a) - order.indexOf(b));
@@ -150,10 +208,13 @@
 
       loading = false;
 
-      // Notify parent with loaded data
+      // Notify parent with loaded data (status-filtered asset IDs)
+      const filteredAssetIds = new Set(chartData.assets.map((a) => a.id));
       onDataLoaded?.({
         entityId,
-        assets: Array.from(chartData.assetDetails.values()),
+        assets: Array.from(chartData.assetDetails.values()).filter((a) =>
+          filteredAssetIds.has(a.id)
+        ),
         chartData,
       });
       onContainerReady?.(container);
@@ -194,9 +255,12 @@
       <p class="subtitle">Details</p>
       <p class="company-details">
         {matchedAssets}
-        {assetClassName || 'assets'} via {directSubsidiaries} direct {directSubsidiaries === 1
-          ? 'subsidiary'
-          : 'subsidiaries'}
+        {assetClassName || 'assets'}
+        {#if loading}
+          <span class="loading-hint">loading…</span>
+        {:else}
+          via {directSubsidiaries} direct {directSubsidiaries === 1 ? 'subsidiary' : 'subsidiaries'}
+        {/if}
       </p>
     </div>
   </div>
@@ -220,6 +284,50 @@
     <div bind:this={container} class="chart-render"></div>
   </div>
 
+  {#if intermediarySummaries.length > 0}
+    <section class="intermediary-foldouts" class:hidden={loading || !!error || isEmpty}>
+      <div class="intermediary-header">
+        <p class="title">Intermediary Paths</p>
+        <p class="intermediary-copy">
+          Some subsidiaries hold the matched assets through additional intermediary companies.
+        </p>
+      </div>
+      <div class="intermediary-list">
+        {#each intermediarySummaries as summary (summary.id)}
+          <details class="intermediary-item" open={intermediarySummaries.length === 1}>
+            <summary class="intermediary-summary">
+              <span class="intermediary-name">{summary.name}</span>
+              <span class="intermediary-meta">
+                {summary.matchedAssetCount} matching {summary.matchedAssetCount === 1
+                  ? assetClassName || 'asset'
+                  : assetClassName || 'assets'}
+              </span>
+            </summary>
+            <p class="intermediary-detail">
+              {#if formatOwnershipPct(summary.ownershipPct)}
+                <strong>{entityName || entityId}</strong> holds
+                <strong>{formatOwnershipPct(summary.ownershipPct)}</strong> of
+                <strong>{summary.name}</strong>.
+              {/if}
+              {#if summary.totalDescendants === 1}
+                This ownership path passes through <strong>1 intermediary company</strong>.
+              {:else}
+                This ownership path passes through
+                <strong>{summary.totalDescendants} intermediary companies</strong>.
+              {/if}
+              {#if summary.maxGenerations > 1}
+                The longest chain reaches <strong>{summary.maxGenerations}</strong> layers below the
+                direct subsidiary.
+              {:else}
+                The chain stays within <strong>1 layer</strong> below the direct subsidiary.
+              {/if}
+            </p>
+          </details>
+        {/each}
+      </div>
+    </section>
+  {/if}
+
   <div id="additional-info" class:hidden={loading || !!error || isEmpty}>
     <p>
       <span>
@@ -231,15 +339,22 @@
   </div>
 
   <div id="legend-container" class:hidden={loading || !!error || isEmpty}>
-    <div id="legend-container-status" class="legend-container">
+    <div
+      id="legend-container-status"
+      class="legend-container"
+      class:tracker-colored={colorByTracker}
+    >
       <p class="title">Asset Status <span>(top-right icons)</span></p>
       <div id="legend-status" class="legend" class:single={trackerLegend.length === 0}>
         {#each statusLegend as item}
           <div class="legend-item">
             <span class="legend-dot-wrap">
-              <span class="legend-bubble" style="background-color:{item.color};"></span>
+              <span
+                class="legend-bubble"
+                style={colorByTracker ? '' : `background-color:${item.color};`}
+              ></span>
               {#if !prospectiveLegend}
-                {#if item.kind === 'prospective'}
+                {#if item.kind === 'planned'}
                   <span class="legend-mark proposed"></span>
                 {:else if item.kind === 'retired'}
                   <span class="legend-mark cross retired">✕</span>
@@ -260,7 +375,9 @@
         <div id="legend-type" class="legend">
           {#each trackerLegend as item}
             <div class="legend-item">
-              <span class="legend-bubble" style="background-color:{item.color};"></span>
+              {#if colorByTracker}
+                <span class="legend-bubble" style="background-color:{item.color};"></span>
+              {/if}
               <span class="legend-label">{item.label}</span>
             </div>
           {/each}
@@ -277,9 +394,9 @@
     font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
     max-height: 760px;
     overflow: auto;
-    border: 1px solid #e4e7eb;
+    border: 1px solid var(--color-gray-200, #e4e7eb);
     border-radius: 8px;
-    background: #fafaf7;
+    background: var(--color-gray-50, #fafaf7);
   }
 
   #chart-header {
@@ -291,7 +408,7 @@
     gap: 2em;
     padding: 0.5em 1.4em;
     border-bottom: 3px solid #d8d8ce;
-    background: #004a63;
+    background: var(--gem-primary-blue, #004a63);
     color: #ffffff;
   }
 
@@ -320,9 +437,15 @@
     margin: 0;
   }
 
+  .loading-hint {
+    opacity: 0.6;
+    font-style: italic;
+    font-size: 0.85em;
+  }
+
   .chart-wrapper {
     overflow: visible;
-    background: #fafaf7;
+    background: var(--color-gray-50, #fafaf7);
   }
 
   .chart-render {
@@ -370,7 +493,70 @@
   #additional-info span {
     display: inline-block;
     padding: 0.8em;
-    border-top: 2px solid #d45f42;
+    border-top: 2px solid var(--gem-orange, #d45f42);
+  }
+
+  .intermediary-foldouts {
+    padding: 0.75em 1.2em 0.25em 1.2em;
+    border-top: 1px solid #e1e4de;
+    background: rgba(255, 255, 255, 0.55);
+  }
+
+  .intermediary-header {
+    margin-bottom: 0.7em;
+  }
+
+  .intermediary-copy {
+    margin: 0.3em 0 0 0;
+    font-size: 0.88em;
+    color: var(--color-text-secondary, #43525b);
+  }
+
+  .intermediary-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55em;
+  }
+
+  .intermediary-item {
+    border: 1px solid #d8d8ce;
+    border-radius: 6px;
+    background: #ffffff;
+    overflow: hidden;
+  }
+
+  .intermediary-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1em;
+    padding: 0.8em 1em;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .intermediary-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .intermediary-name {
+    font-size: 0.95em;
+    font-weight: 700;
+    color: var(--gem-primary-blue, #004a63);
+  }
+
+  .intermediary-meta {
+    font-size: 0.82em;
+    color: var(--color-text-tertiary, #61717b);
+    text-align: right;
+  }
+
+  .intermediary-detail {
+    margin: 0;
+    padding: 0 1em 0.9em 1em;
+    font-size: 0.88em;
+    line-height: 1.55;
+    color: var(--color-text-primary, #1f2f38);
   }
 
   #legend-container {
@@ -378,9 +564,9 @@
     bottom: 0;
     z-index: 20;
     padding: 0.6em 1.2em 1em 1.2em;
-    border-top: 3px solid #004a63;
-    background: #fafaf7;
-    color: #002c40;
+    border-top: 3px solid var(--gem-primary-blue, #004a63);
+    background: var(--color-gray-50, #fafaf7);
+    color: var(--color-text-primary, #002c40);
     backdrop-filter: blur(4px);
   }
 
@@ -392,7 +578,7 @@
     font-weight: 700;
     letter-spacing: 0.07em;
     margin: 0.2em 0 0.5em 0;
-    color: #004a63;
+    color: var(--gem-primary-blue, #004a63);
   }
 
   .legend-container .title span {
@@ -478,5 +664,23 @@
 
   .legend-label {
     text-transform: capitalize;
+  }
+
+  /* When assets are colored by tracker type, show status legend circles as grey outlines.
+     Shrink by 1.5px (stroke is centered on the path, so 0.75px bleeds inward on each side). */
+  .tracker-colored .legend-bubble {
+    background-color: transparent;
+    border: 1.5px solid #9ca3af;
+    width: 11.5px;
+    height: 11.5px;
+  }
+
+  .tracker-colored .legend-mark.proposed {
+    background: #9ca3af;
+  }
+
+  .tracker-colored .legend-mark.cross.retired,
+  .tracker-colored .legend-mark.cross.cancelled {
+    color: #9ca3af;
   }
 </style>

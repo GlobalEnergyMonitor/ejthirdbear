@@ -6,6 +6,7 @@
 
 import { getOwnershipGraph, getAsset, type GraphNode, type AssetSummary } from '$lib/ownership-api';
 import { getStatusGroup } from '$lib/design-tokens';
+import { STATUS_GROUPS } from '$lib/data-config/tracker-schema';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -16,6 +17,7 @@ export interface ChartUnit {
   name: string;
   tracker: string;
   status: string;
+  subStatus: string;
   status_agg: string;
   spotlightOwnershipSharePct: number;
   directlyOwnedBySpotlightOwner: boolean;
@@ -82,7 +84,8 @@ export const LAYOUT = {
   subsidiaryMarkHeight: 19,
   subsidiaryMinHeight: 112,
   yPadding: 40,
-  assetsX: 500,
+  assetsX: 532,
+  regionPadding: 32, // keeps region right edge fixed as assetsX shifts right
   assetSpacing: 9,
   assetMarkHeightSingle: 16,
   assetMarkHeightCombined: 26,
@@ -105,7 +108,6 @@ export async function fetchChartData(
   const graph = await getOwnershipGraph({
     root: entityId,
     direction: 'down',
-    max_depth: 4,
   });
 
   // Build adjacency maps
@@ -226,6 +228,7 @@ export async function fetchChartData(
     const name = detail?.name || graphNode?.Name || assetId;
     const tracker = detail?.facilityType || 'Unknown';
     const status = detail?.status || 'unknown';
+    const subStatus = detail?.subStatus || '';
     const pct = getOwnershipPct(assetId);
 
     // Extract locationID from compound ID (L_G → L part)
@@ -239,6 +242,7 @@ export async function fetchChartData(
       name,
       tracker,
       status,
+      subStatus,
       status_agg: getStatusGroup(status) || 'unknown',
       spotlightOwnershipSharePct: pct,
       directlyOwnedBySpotlightOwner: isDirect,
@@ -359,12 +363,12 @@ export function buildSubsidiaryGroups(chartData: ScreenerChartData): SubsidiaryG
     return subData;
   });
 
-  // Compute layout heights
-  let y = 0;
+  // Compute layout heights — start at yPadding/2 (= MARGIN.top in the render) so the
+  // first region's bezier top lands exactly at y=0 in the SVG (bottom of the sticky header)
+  let y = LAYOUT.yPadding / 2;
   for (const d of subsidiariesData) {
     d.top = y;
     const nLocations = d.locations.length;
-
     for (let j = 0; j < d.locations.length; j++) {
       const loc = d.locations[j];
       const nUnits = loc.units.length;
@@ -414,7 +418,7 @@ export function buildSubsidiaryGroups(chartData: ScreenerChartData): SubsidiaryG
     }
 
     // Status bars
-    const statusOrder = ['proposed', 'operating', 'retired', 'cancelled', 'unknown'];
+    const statusOrder = [...STATUS_GROUPS.map((g) => g.id), 'unknown'];
     const statusData: BarDatum[] = Array.from(statusFreq, ([status, count]) => ({
       status,
       count,

@@ -13,6 +13,7 @@
   import { exportList } from '$lib/exportList';
   import DataTable from '$lib/components/table/DataTable.svelte';
   import Spinner from '$lib/components/feedback/Spinner.svelte';
+  import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
   // --- STATE ---
   let loading = $state(true);
@@ -195,6 +196,10 @@
   <meta
     name="description"
     content="Search for energy assets by name, ID, location, or owner in the Global Energy Monitor database."
+  />
+  <SeoMeta
+    title="Asset Search — Global Energy Monitor"
+    description="Search for energy assets by name, ID, location, or owner in the Global Energy Monitor database."
   />
 </svelte:head>
 

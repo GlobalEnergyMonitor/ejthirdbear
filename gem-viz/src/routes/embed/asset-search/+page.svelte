@@ -1,7 +1,23 @@
 <script lang="ts">
+  /**
+   * Embeddable Asset/Owner Search Bar
+   *
+   * URL params (overridable via URL hash for Drupal deep-linking):
+   *   q - Initial search query
+   *   mode - Active search mode: "asset" | "owner" | "universal"
+   *   modes - Comma-separated list of available modes (default: "asset,owner,universal")
+   *
+   * Hash params: q, mode, modes
+   * writeHash is called when q or activeMode changes.
+   */
   import { page } from '$app/stores';
+  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { assetLink, entityLink, link } from '$lib/links';
+  import { readHash, writeHash } from '../embed-utils';
+
+  // Check if linkBase is configured (CMS embed mode)
+  const linkBase = $derived($page.url.searchParams.get('linkBase') || '');
   import AssetSearchBar from '$lib/components/search/AssetSearchBar.svelte';
 
   type SearchMode = {
@@ -73,6 +89,19 @@
     }
   });
 
+  onMount(() => {
+    // Read hash — hash params override query params for deep-linking
+    const h = readHash();
+    if (h.q) {
+      query = h.q;
+      syncedQuery = h.q;
+    }
+    if (h.mode) {
+      const m = h.mode.toLowerCase();
+      if (searchModes.some((mode) => mode.id === m)) activeMode = m;
+    }
+  });
+
   function looksLikeOwnerId(value: string): boolean {
     return /^E\d+$/i.test(value);
   }
@@ -110,6 +139,9 @@
     const queryString = params.toString();
     const href = `${link('embed/asset-search')}${queryString ? `?${queryString}` : ''}`;
     goto(href, { replaceState: true, noScroll: true, keepFocus: true });
+
+    // Also write hash so Drupal embeds can deep-link to this state
+    writeHash({ q: q || null, mode });
   }
 
   function runSearch(rawQuery: string, mode?: string) {
@@ -122,7 +154,15 @@
 
     if (opensNewTab) {
       updateEmbedUrl(rawQuery, selectedMode);
-      if (target) window.open(target, '_blank', 'noopener,noreferrer');
+      if (target) {
+        // When linkBase is set, use goto() so EmbedShell's beforeNavigate can
+        // rewrite the URL for the CMS. Otherwise, open directly in a new tab.
+        if (linkBase) {
+          goto(target);
+        } else {
+          window.open(target, '_blank', 'noopener,noreferrer');
+        }
+      }
       return;
     }
 
@@ -155,5 +195,14 @@
   .search-embed {
     width: 100%;
     max-width: 920px;
+    padding: 16px;
+    box-sizing: border-box;
+  }
+
+  @media (max-width: 480px) {
+    .search-embed {
+      max-width: 100%;
+      padding: 8px;
+    }
   }
 </style>

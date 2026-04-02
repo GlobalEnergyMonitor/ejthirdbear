@@ -10,15 +10,28 @@ import type { Handle } from '@sveltejs/kit';
 export const handle: Handle = async ({ event, resolve }) => {
   const response = await resolve(event);
 
-  // Skip COEP/COOP for embed routes and ?embed=true — they need to work in cross-origin iframes
+  // Skip COEP/COOP for embed routes, widgets, and embed.js — they need to work cross-origin
   const isEmbedRoute =
-    event.url.pathname.startsWith('/embed') || event.url.searchParams.get('embed') === 'true';
+    event.url.pathname.startsWith('/embed') ||
+    event.url.pathname.startsWith('/widgets') ||
+    event.url.pathname === '/embed.js' ||
+    event.url.searchParams.get('embed') === 'true';
 
   if (!isEmbedRoute) {
     // Add required headers for SharedArrayBuffer support
     // 'require-corp' works in Safari (credentialless does not)
     response.headers.set('Cross-Origin-Opener-Policy', 'same-origin');
     response.headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
+  }
+
+  // Add CORS headers for widget assets and embed.js so they can be
+  // dynamically imported from external sites (e.g. GEM Drupal pages)
+  if (
+    event.url.pathname.startsWith('/widgets') ||
+    event.url.pathname === '/embed.js'
+  ) {
+    response.headers.set('Access-Control-Allow-Origin', '*');
+    response.headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
   }
 
   return response;

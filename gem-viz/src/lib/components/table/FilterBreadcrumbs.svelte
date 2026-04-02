@@ -6,7 +6,7 @@
    * Reusable across the app wherever filter state is displayed.
    */
 
-  import { formatCompact } from '$lib/format';
+  import { formatCompact } from '$lib/utils/format';
 
   /**
    * @typedef {Object} FilterState

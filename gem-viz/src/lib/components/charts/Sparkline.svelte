@@ -5,7 +5,7 @@
    * Shows trend over time with smooth transitions
    */
 
-  import { formatCompact } from '$lib/format';
+  import { formatCompact } from '$lib/utils/format';
 
   let {
     data = [], // Array of { x: number, y: number } or just numbers

@@ -16,10 +16,12 @@
   import AssetMap from '$lib/components/map/AssetMap.svelte';
   import OwnershipPie from '$lib/components/charts/OwnershipPie.svelte';
   import StatusIcon from '$lib/components/tracker/StatusIcon.svelte';
-  import AddToCartButton from '$lib/components/cart/AddToCartButton.svelte';
+
   import Citation from '$lib/components/data/Citation.svelte';
   import DataSourceBadge from '$lib/components/data/DataSourceBadge.svelte';
   import { OwnershipTreeGraph, OwnershipSummaryTables } from '$lib/components/ownership';
+  import TrackerCard from '$lib/components/cards/TrackerCard.svelte';
+  import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
   /**
    * @typedef {Object} AssetData
@@ -166,6 +168,11 @@
     content="Ownership details and corporate structure for {assetName ||
       assetId} from the Global Energy Monitor database."
   />
+  <SeoMeta
+    title="{assetName || assetId} — Global Energy Monitor"
+    description="Ownership details and corporate structure for {assetName ||
+      assetId} from the Global Energy Monitor database."
+  />
 </svelte:head>
 
 <div class="page">
@@ -181,15 +188,7 @@
         <DataSourceBadge source={dataSource} size="md" />
       </div>
       <p class="asset-id">GEM Unit ID: {assetId}</p>
-      <div class="page-actions">
-        <AddToCartButton
-          id={assetId}
-          name={assetName || assetId}
-          type="asset"
-          tracker={asset?.facilityType}
-          metadata={{ country: asset?.country, status: asset?.status }}
-        />
-      </div>
+      <div class="page-actions"></div>
 
       <!-- Meta Grid -->
       <div class="meta-grid">
@@ -244,6 +243,11 @@
           </div>
         {/if}
       </div>
+
+      <!-- Tracker-specific detail card (e.g., CoalPlantCard) -->
+      {#if asset}
+        <TrackerCard {asset} />
+      {/if}
 
       <!-- Owners Table -->
       <section class="owners-section">
@@ -392,10 +396,10 @@
      ============================================================================ -->
 
 <style>
-  /* Layout */
+  /* Layout — override root layout's max-width: var(--container-xl) */
   .page {
     width: 100%;
-    max-width: 100%;
+    max-width: 100% !important;
     padding: var(--space-10);
     overflow-x: hidden;
   }

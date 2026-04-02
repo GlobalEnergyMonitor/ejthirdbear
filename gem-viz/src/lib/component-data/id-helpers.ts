@@ -48,7 +48,7 @@
  * ============================================================================
  */
 
-import { getTrackerConfig } from '$lib/data-config';
+import { getIdFieldForTracker } from '$lib/data-config/tracker-schema';
 
 // ============================================================================
 // PART 1: GEM DATABASE ID SYSTEM
@@ -323,16 +323,13 @@ export function extractUnitIdFromComposite(id: string): string {
  * - Steel Plants: 'Steel Plant ID'
  * - Gas Pipelines: 'ProjectID'
  *
- * This function looks up the correct field from tracker-config.
+ * This function looks up the correct field from tracker-schema.
  *
  * @example
  * getIdFieldForTracker('Coal Plant')  // Returns: 'GEM unit ID'
  * getIdFieldForTracker('Steel Plant') // Returns: 'Steel Plant ID'
  */
-export function getIdFieldForTracker(trackerName: string): string | null {
-  const config = getTrackerConfig(trackerName);
-  return config?.idField || null;
-}
+export { getIdFieldForTracker } from '$lib/data-config/tracker-schema';
 
 /**
  * Extract asset ID using tracker-specific configuration.
@@ -349,10 +346,10 @@ export function extractAssetIdByTracker(
   trackerName: string,
   record: Record<string, unknown>
 ): string | null {
-  const config = getTrackerConfig(trackerName);
+  const idField = getIdFieldForTracker(trackerName);
 
-  if (config && config.idField in record) {
-    return (record[config.idField] as string) || null;
+  if (idField && idField in record) {
+    return (record[idField] as string) || null;
   }
 
   // Fallback to generic ID extraction using priority list

@@ -1,7 +1,7 @@
 /**
  * Manifest / Admin Index
  *
- * Shows static configuration data and API metadata.
+ * Shows live API metadata + static configuration data.
  */
 
 import {
@@ -9,18 +9,32 @@ import {
   OwnershipTrackerDatasets,
   DerivedDatasets,
   dataVersionInfo,
+  getLiveDataSources,
 } from '$lib/data-config/data-sources';
-import { getAllTrackerNames, getTrackerConfig } from '$lib/data-config/tracker-config';
+import { TRACKERS, TRACKER_TO_ASSET_TYPE, TRACKER_ID_FIELD } from '$lib/data-config/tracker-schema';
+import {
+  fetchApiMetadata,
+  fetchCatalogFieldMappings,
+  fetchCatalogTaxonomy,
+} from '$lib/api/catalog-api';
 import { env } from '$env/dynamic/public';
 
-/**
- * Get static configuration data (always available)
- */
-function getStaticData() {
-  const trackerNames = getAllTrackerNames();
-  const trackerConfigs = trackerNames.map((name) => ({
+/** @type {import('./$types').PageLoad} */
+export async function load() {
+  const startTime = Date.now();
+
+  // Fetch live data from API in parallel
+  const [apiMeta, liveSources, fieldMappings, statusTaxonomy] = await Promise.all([
+    fetchApiMetadata().catch(() => null),
+    getLiveDataSources().catch(() => []),
+    fetchCatalogFieldMappings().catch(() => null),
+    fetchCatalogTaxonomy().catch(() => null),
+  ]);
+
+  const trackerConfigs = TRACKERS.map((name) => ({
     name,
-    config: getTrackerConfig(name),
+    assetType: TRACKER_TO_ASSET_TYPE[name],
+    idField: TRACKER_ID_FIELD[name],
   }));
 
   const dataSources = {
@@ -32,27 +46,23 @@ function getStaticData() {
     derived: Object.entries(DerivedDatasets).map(([key, value]) => ({ key, ...value })),
   };
 
-  const staticFiles = [
-    { path: 'static/points.geojson', description: 'Asset locations GeoJSON' },
-    { path: 'static/version.json', description: 'Build version metadata' },
-  ];
-
-  return { trackerConfigs, dataSources, staticFiles };
-}
-
-/** @type {import('./$types').PageLoad} */
-export async function load() {
-  const startTime = Date.now();
-  const staticData = getStaticData();
-
   const loadTime = Date.now() - startTime;
 
   return {
     tables: [],
-    ...staticData,
+    trackerConfigs,
+    dataSources,
+    liveSources,
+    staticFiles: [
+      { path: 'static/points.geojson', description: 'Asset locations GeoJSON' },
+      { path: 'static/version.json', description: 'Build version metadata' },
+    ],
     dataVersionInfo,
+    apiMeta,
+    fieldMappings: fieldMappings?.results || [],
+    statusTaxonomy,
     api: {
-      baseUrl: env.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://6b7c36096b12.ngrok.app',
+      baseUrl: env.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-api.thirdbear.net',
       note: 'Ownership Tracing API is the primary data source for runtime queries.',
     },
     meta: {

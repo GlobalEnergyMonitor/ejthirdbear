@@ -27,17 +27,19 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: gem-viz/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: rm -f package-lock.json && npm install --force
+
+      - name: Sync SvelteKit types
+        run: npx svelte-kit sync
+
+      - name: Build widgets
+        run: npm run build:widgets
 
       - name: Build
         run: npm run build
         env:
-          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
-          PUBLIC_MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
           PUBLIC_SITE_URL: https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz
 
       - name: Get version
@@ -57,9 +59,18 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.DO_SPACES_SECRET_KEY }}
           AWS_DEFAULT_REGION: us-east-1
 
+      - name: Deploy to Fly.io staging
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Fly deploy staging
+        run: flyctl deploy --config fly.staging.toml --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
       - name: Deployment summary
         run: |
           VERSION=${{ steps.version.outputs.version }}
           echo "## Deployment Complete" >> $GITHUB_STEP_SUMMARY
           echo "**Version:** v${VERSION}" >> $GITHUB_STEP_SUMMARY
-          echo "**URL:** https://${DO_SPACES_BUCKET}.${DO_SPACES_REGION}.digitaloceanspaces.com/gem-viz/v${VERSION}/" >> $GITHUB_STEP_SUMMARY
+          echo "**DO Spaces:** https://${DO_SPACES_BUCKET}.${DO_SPACES_REGION}.digitaloceanspaces.com/gem-viz/v${VERSION}/" >> $GITHUB_STEP_SUMMARY
+          echo "**Fly staging:** https://gem-viz-staging.fly.dev/" >> $GITHUB_STEP_SUMMARY

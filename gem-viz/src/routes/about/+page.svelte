@@ -8,6 +8,7 @@
   import { dataVersionInfo, TrackerDatasets } from '$lib/data-config/data-sources';
   import { changelog } from '$lib/data/changelog';
   import PageHeader from '$lib/components/nav/PageHeader.svelte';
+  import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
   /**
    * @typedef {Object} PageStats
@@ -40,6 +41,10 @@
   <meta
     name="description"
     content="About the Global Energy Monitor ownership visualization platform: methodology, data sources, and how to explore energy asset ownership structures."
+  />
+  <SeoMeta
+    title="About — Global Energy Monitor"
+    description="About the Global Energy Monitor ownership visualization platform: methodology, data sources, and how to explore energy asset ownership structures."
   />
 </svelte:head>
 
@@ -303,7 +308,7 @@
       </dd>
 
       <dt>Status Icons</dt>
-      <dd>Light circle = prospective, X mark = retired/cancelled, no icon = operating</dd>
+      <dd>Light circle = planned, X mark = retired/cancelled, no icon = operating</dd>
     </dl>
 
     <h3>Exporting Data</h3>
@@ -643,7 +648,7 @@
     flex-shrink: 0;
   }
   .status-dot.proposed {
-    background: var(--color-status-prospective);
+    background: var(--color-status-planned);
   }
   .status-dot.operating {
     background: var(--color-status-operating);

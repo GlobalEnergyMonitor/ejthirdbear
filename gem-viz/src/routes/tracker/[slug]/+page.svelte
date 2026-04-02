@@ -6,15 +6,19 @@
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
   import { link } from '$lib/links';
-  import { listAssetsByType, type AssetSummary } from '$lib/ownership-api';
+  import { listAssets, listAssetsByType, resolveApiSlug, type AssetSummary } from '$lib/ownership-api';
   import {
     slugToTrackerName,
     trackerMetadata,
     type TrackerMetadata,
   } from '$lib/data-config/tracker-metadata';
+  import { URL_SLUG_TO_CATALOG_SLUG } from '$lib/data-config/tracker-schema';
+  import { fetchFieldStats } from '$lib/api/catalog-api';
   import TrackerFactsheet from '$lib/components/tracker/TrackerFactsheet.svelte';
   import PageHeader from '$lib/components/nav/PageHeader.svelte';
+  import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
   import Spinner from '$lib/components/feedback/Spinner.svelte';
+  import { getFieldsForTracker, getFacetKeyForField } from '$lib/catalog-field-meta';
 
   // Cache for REST API asset data (avoids re-fetching for each field)
   let cachedAssets: AssetSummary[] | null = null;
@@ -46,212 +50,165 @@
   let loading = $state(true);
   let error = $state<string | null>(null);
 
-  // Map of metadata CSV files per tracker
-  const metadataFiles: Record<string, string> = {
-    'coal-mine': '/coal-mine-tracker-fields-info.csv',
-    // Add more trackers as CSVs become available
-  };
+  // Field metadata is fetched from the API via catalog-field-meta.ts
 
-  // Field descriptions for generating synthetic metadata
-  const fieldDescriptions: Record<string, { category: string; definition: string }> = {
-    Status: { category: 'Main', definition: 'Current operating status of the asset.' },
-    Country: { category: 'Geography', definition: 'Country where the asset is located.' },
-    Owner: { category: 'Ownership', definition: 'Primary owner or operator.' },
-    'Immediate Owner Entity Name': {
-      category: 'Ownership',
-      definition: 'Direct ownership entity name.',
-    },
-    'Start year': {
-      category: 'Age',
-      definition: 'Year the asset began or is planned to begin operation.',
-    },
-    'Capacity (MW)': { category: 'Size', definition: 'Generating capacity in megawatts.' },
-    'Capacity (Mtpa)': {
-      category: 'Size',
-      definition: 'Production capacity in million tonnes per annum.',
-    },
-    'Nominal crude steel capacity (ttpa)': {
-      category: 'Size',
-      definition: 'Nominal crude steel production capacity in thousand tonnes per annum.',
-    },
-    'Nominal iron capacity (ttpa)': {
-      category: 'Size',
-      definition: 'Nominal iron production capacity in thousand tonnes per annum.',
-    },
-    'CapacityBcm/y': {
-      category: 'Size',
-      definition: 'Pipeline capacity in billion cubic meters per year.',
-    },
-    'Fuel type': { category: 'Details', definition: 'Type of fuel used by the plant.' },
-    Technology: { category: 'Details', definition: 'Technology or process type used.' },
-    'Mine type': {
-      category: 'Details',
-      definition: 'Type of mining operation (surface, underground, etc.).',
-    },
-    Feedstock: { category: 'Details', definition: 'Primary feedstock material for bioenergy.' },
-    'Asset Name': { category: 'Names', definition: 'Name of the asset or project.' },
-    'Asset Type': { category: 'Main', definition: 'Type of asset tracked.' },
-    '% Share of Ownership': { category: 'Ownership', definition: 'Percentage ownership stake.' },
-  };
-
-  // Generate synthetic field metadata from tracker keyFields
-  function generateSyntheticFields(meta: TrackerMetadata): FieldInfo[] {
-    const fields: FieldInfo[] = [];
-    // Start with the tracker's key fields
-    for (const fieldName of meta.keyFields) {
-      const desc = fieldDescriptions[fieldName];
-      fields.push({
-        columnName: fieldName,
-        category: desc?.category || 'Other',
-        definition: desc?.definition || `${fieldName} field.`,
-      });
-    }
-    // Add common fields not already included
-    const included = new Set(fields.map((f) => f.columnName));
-    const extras = ['Country', 'Immediate Owner Entity Name', '% Share of Ownership'];
-    for (const fieldName of extras) {
-      if (!included.has(fieldName)) {
-        const desc = fieldDescriptions[fieldName];
-        if (desc) {
-          fields.push({
-            columnName: fieldName,
-            category: desc.category,
-            definition: desc.definition,
-          });
-        }
-      }
-    }
-    return fields;
+  // FieldStatsResult matches what TrackerFactsheet expects
+  interface FieldStatsResult {
+    distribution: Array<{ value: string; count: number; percentage: number }>;
+    totalRows: number;
+    nullCount: number;
+    nonNullCount: number;
+    uniqueCount: number;
+    dataType?: string;
+    dataSubType?: string;
+    unit?: string;
+    sampleValues?: string[];
+    values?: number[];
   }
 
-  // Map human-readable field names to REST API keys + normalized AssetSummary keys
+  // Map human-readable field names to API code_friendly_name keys
   const FIELD_TO_API_KEY: Record<string, string[]> = {
     Status: ['operating_status', 'status', 'Status'],
     Country: ['country', 'Country'],
-    'Country / Area': ['country', 'Country'],
+    'Country / Area': ['country_area', 'country', 'Country'],
     Countries: ['country', 'Country'],
-    'Capacity (MW)': ['capacity_value', 'capacity', 'Capacity (MW)'],
-    'Capacity (Mtpa)': ['capacity_value', 'capacity', 'Capacity (Mtpa)'],
+    'Capacity (MW)': ['capacity_mw', 'capacity_value', 'capacity'],
+    'Capacity (Mtpa)': ['capacity_mtpa', 'capacity_value', 'capacity'],
     'Nominal crude steel capacity (ttpa)': ['capacity_value', 'capacity'],
     'Nominal iron capacity (ttpa)': ['capacity_value', 'capacity'],
     'CapacityBcm/y': ['capacity_value', 'capacity'],
     'Design capacity (ttpa)': ['capacity_value', 'capacity'],
-    'Asset Name': ['asset_name', 'name', 'Asset Name'],
-    'Asset Type': ['asset_type', 'facilityType', 'Asset Type'],
-    'Fuel type': ['fuel_type', 'Fuel type'],
-    Technology: ['technology', 'Technology'],
-    'Mine type': ['mine_type', 'Mine type'],
-    Feedstock: ['feedstock', 'Feedstock'],
-    'Start year': ['start_year', 'Start year'],
-    'Immediate Owner Entity Name': ['owner_name', 'Immediate Owner Entity Name'],
-    '% Share of Ownership': ['ownership_pct', '% Share of Ownership'],
+    'Asset Name': ['asset_name', 'name'],
+    'Asset Type': ['asset_type', 'facilityType'],
+    'Fuel type': ['fuel_type'],
+    Technology: ['technology'],
+    'Mine type': ['mine_type'],
+    Feedstock: ['feedstock'],
+    'Start year': ['start_year'],
+    'Immediate Owner Entity Name': ['owner_name'],
+    '% Share of Ownership': ['ownership_pct'],
   };
 
-  // Fetch field distribution from REST API (client-side aggregation)
-  async function fetchFieldDistribution(
-    fieldName: string
-  ): Promise<Array<{ value: string; count: number; percentage: number }>> {
-    try {
-      const assets = await getAssetsForTracker(slug);
+  // Fetch field stats from the API — returns full metadata + distribution
+  async function fetchFieldDistribution(fieldName: string, codeFriendlyName?: string): Promise<FieldStatsResult> {
+    const empty: FieldStatsResult = {
+      distribution: [], totalRows: 0, nullCount: 0, nonNullCount: 0, uniqueCount: 0,
+    };
 
-      // Count occurrences of each value for this field
+    try {
+      const catalogSlug = URL_SLUG_TO_CATALOG_SLUG[slug];
+      if (catalogSlug) {
+        // Prefer code_friendly_name from field metadata, then fall back to hardcoded map
+        const apiKeys = codeFriendlyName
+          ? [codeFriendlyName, ...(FIELD_TO_API_KEY[fieldName] || []), fieldName.toLowerCase()]
+          : (FIELD_TO_API_KEY[fieldName] || [fieldName, fieldName.toLowerCase()]);
+        for (const apiKey of apiKeys) {
+          const stats = await fetchFieldStats(catalogSlug, apiKey);
+          if (!stats) continue;
+
+          // Build distribution from value_counts (categorical) or values (numeric)
+          let distribution: FieldStatsResult['distribution'] = [];
+
+          if (stats.value_counts && stats.value_counts.length > 0) {
+            // Use total_rows (incl nulls) as denominator to match Observable notebook
+            const denom = stats.total_rows || stats.value_counts.reduce((s, v) => s + v.count, 0);
+            distribution = stats.value_counts.slice(0, 50).map((v) => ({
+              value: String(v.value),
+              count: v.count,
+              percentage: denom > 0 ? v.count / denom : 0,
+            }));
+          } else if (stats.values && stats.values.length > 0) {
+            const counts = new Map<string, number>();
+            for (const v of stats.values) counts.set(String(v), (counts.get(String(v)) || 0) + 1);
+            const denom = stats.total_rows || stats.values.length;
+            distribution = Array.from(counts.entries())
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 50)
+              .map(([value, count]) => ({
+                value, count, percentage: denom > 0 ? count / denom : 0,
+              }));
+          }
+
+          return {
+            distribution,
+            totalRows: stats.total_rows,
+            nullCount: stats.null_count,
+            nonNullCount: stats.non_null_count,
+            uniqueCount: stats.unique_count,
+            dataType: stats.data_type,
+            dataSubType: stats.data_sub_type,
+            unit: stats.unit_name_short,
+            sampleValues: stats.sample_values,
+            values: stats.values,
+          };
+        }
+      }
+
+      // Tier 2: facets API — fast single-request distribution for Status/Country/etc.
+      const facetKey = getFacetKeyForField(fieldName);
+      if (facetKey) {
+        const apiSlug = resolveApiSlug(slug);
+        if (apiSlug) {
+          const page = await listAssets({ asset_type: apiSlug, limit: 1, facets: true });
+          const facetData = page.facets?.[facetKey];
+          if (facetData && Object.keys(facetData).length > 0) {
+            const totalAssets = page.total ?? Object.values(facetData).reduce((s, c) => s + c, 0);
+            const entries = Object.entries(facetData).sort((a, b) => b[1] - a[1]);
+            const nonNull = entries.reduce((s, [, c]) => s + c, 0);
+            return {
+              distribution: entries.slice(0, 50).map(([value, count]) => ({
+                value,
+                count,
+                percentage: totalAssets > 0 ? count / totalAssets : 0,
+              })),
+              totalRows: totalAssets,
+              nullCount: totalAssets - nonNull,
+              nonNullCount: nonNull,
+              uniqueCount: entries.length,
+              dataType: 'text',
+              dataSubType: 'categorical',
+            };
+          }
+        }
+      }
+
+      // Tier 3: client-side aggregation from cached assets
+      const assets = await getAssetsForTracker(slug);
       const counts = new Map<string, number>();
-      const apiKeys = FIELD_TO_API_KEY[fieldName] || [fieldName, fieldName.toLowerCase()];
+      const apiKeys = codeFriendlyName
+        ? [codeFriendlyName, ...(FIELD_TO_API_KEY[fieldName] || []), fieldName.toLowerCase()]
+        : (FIELD_TO_API_KEY[fieldName] || [fieldName, fieldName.toLowerCase()]);
       for (const asset of assets) {
         const raw = asset.raw || {};
-        // Check raw API keys first, then normalized AssetSummary properties
         let value: unknown = null;
         for (const k of apiKeys) {
           const v = raw[k] ?? (asset as unknown as Record<string, unknown>)[k];
-          if (v != null && v !== '') {
-            value = v;
-            break;
-          }
+          if (v != null && v !== '') { value = v; break; }
         }
-        const strValue = value != null && value !== '' ? String(value) : null;
-        if (strValue) {
-          counts.set(strValue, (counts.get(strValue) || 0) + 1);
+        if (value != null && value !== '') {
+          const sv = String(value);
+          counts.set(sv, (counts.get(sv) || 0) + 1);
         }
       }
-
       const total = Array.from(counts.values()).reduce((s, c) => s + c, 0);
-
-      // Sort by count descending, take top 50
-      return Array.from(counts.entries())
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 50)
-        .map(([value, count]) => ({
-          value,
-          count,
-          percentage: total > 0 ? count / total : 0,
-        }));
+      return {
+        distribution: Array.from(counts.entries())
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 50)
+          .map(([value, count]) => ({ value, count, percentage: total > 0 ? count / total : 0 })),
+        totalRows: assets.length,
+        nullCount: assets.length - total,
+        nonNullCount: total,
+        uniqueCount: counts.size,
+      };
     } catch (err) {
       if (import.meta.env.DEV) console.warn(`Failed to fetch distribution for ${fieldName}:`, err);
     }
-    return [];
+    return empty;
   }
 
-  // Load field metadata CSV
   async function loadFieldsMetadata() {
-    const file = metadataFiles[slug];
-    if (!file) {
-      // No CSV — generate from keyFields instead
-      if (metadata) {
-        fieldsMetadata = generateSyntheticFields(metadata);
-      }
-      return;
-    }
-
-    try {
-      const response = await fetch(file);
-      if (!response.ok) {
-        if (import.meta.env.DEV) console.warn(`Failed to load ${file}: ${response.status}`);
-        // Fall back to synthetic fields
-        if (metadata) fieldsMetadata = generateSyntheticFields(metadata);
-        return;
-      }
-      const text = await response.text();
-
-      // Parse CSV
-      const lines = text.split('\n');
-
-      fieldsMetadata = lines
-        .slice(1)
-        .filter((line) => line.trim())
-        .map((line) => {
-          // Handle quoted CSV values
-          const values: string[] = [];
-          let current = '';
-          let inQuotes = false;
-
-          for (let i = 0; i < line.length; i++) {
-            const char = line[i];
-            if (char === '"') {
-              inQuotes = !inQuotes;
-            } else if (char === ',' && !inQuotes) {
-              values.push(current.trim());
-              current = '';
-            } else {
-              current += char;
-            }
-          }
-          values.push(current.trim());
-
-          const fieldValue = values[3] || null;
-          const result = {
-            columnName: values[0] || '',
-            category: values[1] || '',
-            definition: values[4] || '',
-            fieldValue,
-            valueDefinition: fieldValue ? values[4] : null,
-          };
-          return result;
-        });
-    } catch (err) {
-      if (import.meta.env.DEV) console.error('Failed to load field metadata:', err);
-      // Fall back to synthetic fields
-      if (metadata) fieldsMetadata = generateSyntheticFields(metadata);
-    }
+    fieldsMetadata = await getFieldsForTracker(slug, true);
   }
 
   // Load data - show page fast
@@ -278,6 +235,10 @@
 <svelte:head>
   <title>{metadata?.name || trackerName} — Global Energy Monitor</title>
   <meta name="description" content={metadata?.description || `Data overview for ${trackerName}`} />
+  <SeoMeta
+    title="{metadata?.name || trackerName} — Global Energy Monitor"
+    description={metadata?.description || `Data overview for ${trackerName}`}
+  />
 </svelte:head>
 
 <div class="page-container--wide">

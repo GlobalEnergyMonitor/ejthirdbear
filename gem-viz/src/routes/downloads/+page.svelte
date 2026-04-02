@@ -4,6 +4,7 @@
    * Three sections: Investigation Cart exports, Bulk dataset downloads, Filtered export links.
    */
   import { link } from '$lib/links';
+  import { API_SLUG_TO_TYPE } from '$lib/data-config/tracker-schema';
   import { investigationCart } from '$lib/investigationCart';
   import {
     fetchCombinedCSV,
@@ -15,6 +16,7 @@
   } from '$lib/components/cart/export-panel-utils';
   import { paginateAssetsByType, getAssetTypeCounts, SLUG_TO_API_TYPE } from '$lib/ownership-api';
   import PageHeader from '$lib/components/nav/PageHeader.svelte';
+  import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
   import {
     Download,
     Package,
@@ -64,16 +66,7 @@
   }
 
   // --- Bulk Downloads ---
-  const TRACKER_SLUGS = [
-    { slug: 'coal-plant', label: 'Coal Plant' },
-    { slug: 'oil-gas-plant', label: 'Oil & Gas Plant' },
-    { slug: 'bioenergy-plant', label: 'Bioenergy Plant' },
-    { slug: 'gas-pipeline', label: 'Gas Pipeline' },
-    { slug: 'cement-plant', label: 'Cement Plant' },
-    { slug: 'oil-pipeline', label: 'Oil Pipeline' },
-    { slug: 'iron-steel-plant', label: 'Iron & Steel Plant' },
-    { slug: 'iron-ore-mine', label: 'Iron Ore Mine' },
-  ];
+  const TRACKER_SLUGS = Object.entries(API_SLUG_TO_TYPE).map(([slug, label]) => ({ slug, label }));
 
   /** @type {Map<string, number>} */
   let assetCounts = $state(new Map());
@@ -96,12 +89,10 @@
   }
 
   let dlSlug = $state('');
-  let dlFormat = $state('');
   let dlProgress = $state('');
 
   async function bulkDownload(slug, format) {
     dlSlug = slug;
-    dlFormat = format;
     dlProgress = 'Fetching...';
     try {
       const allAssets = [];
@@ -131,7 +122,6 @@
     } finally {
       setTimeout(() => {
         dlSlug = '';
-        dlFormat = '';
         dlProgress = '';
       }, 3000);
     }
@@ -140,6 +130,15 @@
 
 <svelte:head>
   <title>Downloads — GEM Viz</title>
+  <meta
+    name="description"
+    content="Export ownership data as CSV, JSON, and GeoJSON across all GEM energy trackers."
+  />
+  <SeoMeta
+    title="Downloads — Global Energy Monitor"
+    description="Export ownership data as CSV, JSON, and GeoJSON across all GEM energy trackers."
+    image="/og/downloads.png"
+  />
 </svelte:head>
 
 <div class="page-container">

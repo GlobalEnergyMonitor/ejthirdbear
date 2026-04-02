@@ -90,6 +90,27 @@ export function downloadsLink(): string {
 }
 
 /**
+ * Generate fieldguide page link
+ */
+export function fieldguideLink(tracker?: string): string {
+  if (tracker) {
+    const slug = tracker.toLowerCase().replace(/\s+/g, '-');
+    return link(`fieldguide/${slug}`);
+  }
+  return link('fieldguide');
+}
+
+/**
+ * Generate controlchain page link
+ */
+export function controlchainLink(q?: string): string {
+  if (q) {
+    return link(`controlchain?q=${encodeURIComponent(q)}`);
+  }
+  return link('controlchain');
+}
+
+/**
  * Generate search page link
  */
 export function searchLink(q?: string, type?: string): string {

@@ -4,6 +4,7 @@
    * Complete directory of all pages and routes in GEM Viz
    */
   import PageHeader from '$lib/components/nav/PageHeader.svelte';
+  import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
   const sections = [
     {
@@ -61,6 +62,11 @@
       title: 'Visualizations',
       routes: [
         {
+          path: '/controlchain',
+          name: 'GEM ControlChain',
+          description: 'Search assets/entities and explore ownership trees',
+        },
+        {
           path: '/network',
           name: 'Ownership Network',
           description: 'Full ownership network graph',
@@ -72,12 +78,17 @@
     {
       title: 'Reference',
       routes: [
-        { path: '/factsheet', name: 'Factsheets', description: 'Tracker factsheet index' },
         {
-          path: '/factsheet/[tracker]',
-          name: 'Tracker Factsheet',
-          description: 'Individual tracker factsheet',
+          path: '/fieldguide',
+          name: 'Tracker FieldGuide',
+          description: 'Tracker field-level documentation',
         },
+        {
+          path: '/fieldguide/[tracker]',
+          name: 'Tracker FieldGuide Detail',
+          description: 'Individual tracker field documentation',
+        },
+        { path: '/factsheet', name: 'Factsheets (legacy)', description: 'Redirects to FieldGuide' },
         { path: '/presets', name: 'Presets', description: 'Saved query presets' },
         {
           path: '/manifest',
@@ -99,6 +110,11 @@
         { path: '/embed/asset', name: 'Asset Embed', description: 'Embed an asset card' },
         { path: '/embed/entity', name: 'Entity Embed', description: 'Embed an entity card' },
         {
+          path: '/embed/coal-plant',
+          name: 'Coal Plant Card',
+          description: 'Rich coal plant detail card with 6 tabs',
+        },
+        {
           path: '/embed/viz',
           name: 'Modular Embed',
           description: 'Generic embed for modular visualizations',
@@ -116,8 +132,8 @@
         },
         {
           path: '/embed/ownership-graph',
-          name: 'Ownership Graph',
-          description: 'Hierarchical ownership graph',
+          name: 'Control Chain',
+          description: 'Interactive control chain tree',
         },
         {
           path: '/embed/tracker-factsheet',
@@ -139,6 +155,7 @@
 <svelte:head>
   <title>Sitemap — GEM Viz</title>
   <meta name="description" content="Complete directory of all pages in GEM Viz" />
+  <SeoMeta title="Sitemap — GEM Viz" description="Complete directory of all pages in GEM Viz" />
 </svelte:head>
 
 <div class="page-container--narrow">

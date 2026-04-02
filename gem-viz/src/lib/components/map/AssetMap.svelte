@@ -3,6 +3,7 @@
   import { onMount } from 'svelte';
   import maplibregl from 'maplibre-gl';
   import 'maplibre-gl/dist/maplibre-gl.css';
+  import { BASEMAP_POSITRON } from '$lib/map-config';
 
   import { fetchAssetBasics, fetchCoordinatesByLocation } from '$lib/component-data/schema';
 
@@ -81,7 +82,7 @@
         // Initialize map
         map = new maplibregl.Map({
           container: mapContainer,
-          style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
+          style: BASEMAP_POSITRON,
           center: [finalLon, finalLat],
           zoom: 10,
         });

@@ -1,38 +1,85 @@
 <script lang="ts">
   /**
-   * AssetOwnershipTree - Self-contained compact ownership tree for an asset
-   * Fetches ownership graph via REST API and renders OwnershipTreeGraph in compact mode.
-   * Designed for inline use inside ProjectCard's ownership slot.
+   * AssetOwnershipTree - Shared fetched ownership tree for an asset.
+   * Fetches ownership graph via REST API and renders OwnershipTreeGraph.
+   * Used by compact card embeds and full-width ownership tabs.
    */
-  import { onMount } from 'svelte';
   import { assetLink } from '$lib/links';
   import OwnershipTreeGraph from './OwnershipTreeGraph.svelte';
   import Spinner from '$lib/components/feedback/Spinner.svelte';
   import type { GraphNode, GraphEdge, OwnershipPathEntry } from '$lib/component-data/graph-types';
 
+  type OwnershipGraphResult = {
+    nodes?: GraphNode[];
+    edges?: GraphEdge[];
+    paths?: Record<string, OwnershipPathEntry[]>;
+  };
+
+  type OwnershipGraphLoader = (_params: {
+    root: string;
+    direction: 'up' | 'down';
+    max_depth: number;
+  }) => Promise<OwnershipGraphResult>;
+
   interface Props {
     assetId: string;
+    compact?: boolean;
+    fullWidth?: boolean;
+    maxDepth?: number;
+    showViewFull?: boolean;
+    emptyMessage?: string;
+    errorMessage?: string;
+    ownershipLoader?: OwnershipGraphLoader;
   }
-  let { assetId }: Props = $props();
+  let {
+    assetId,
+    compact = true,
+    fullWidth = false,
+    maxDepth = 3,
+    showViewFull = compact,
+    emptyMessage = 'No ownership data available',
+    errorMessage = 'Could not load ownership tree',
+    ownershipLoader,
+  }: Props = $props();
 
   let loading = $state(true);
   let error = $state<string | null>(null);
   let nodes = $state<GraphNode[]>([]);
   let edges = $state<GraphEdge[]>([]);
   let paths = $state<Record<string, OwnershipPathEntry[]>>({});
+  let lastLoadKey = $state('');
+  let requestSeq = 0;
 
-  async function loadGraph() {
+  async function defaultOwnershipLoader(params: {
+    root: string;
+    direction: 'up' | 'down';
+    max_depth: number;
+  }): Promise<OwnershipGraphResult> {
+    const { getOwnershipGraph } = await import('$lib/ownership-api');
+    return getOwnershipGraph(params);
+  }
+
+  async function loadGraph(
+    loadAssetId: string,
+    depth: number,
+    loadKey: string,
+    loader: OwnershipGraphLoader
+  ) {
+    const currentSeq = ++requestSeq;
     loading = true;
     error = null;
+    nodes = [];
+    edges = [];
+    paths = {};
 
     try {
-      const { getOwnershipGraph } = await import('$lib/ownership-api');
-      const result = await getOwnershipGraph({
-        root: assetId,
+      const result = await loader({
+        root: loadAssetId,
         direction: 'up',
-        max_depth: 3,
+        max_depth: depth,
       });
 
+      if (currentSeq !== requestSeq) return;
       nodes = result.nodes || [];
       edges = result.edges || [];
       paths = result.paths || {};
@@ -42,29 +89,50 @@
         error = 'no-owners';
       }
     } catch (err) {
+      if (currentSeq !== requestSeq) return;
       error = err instanceof Error ? err.message : 'Failed to load ownership data';
-      if (import.meta.env.DEV) console.warn(`[AssetOwnershipTree] Failed for ${assetId}:`, error);
+      if (import.meta.env.DEV) console.warn(`[AssetOwnershipTree] Failed for ${loadAssetId}:`, error);
     } finally {
-      loading = false;
+      if (currentSeq === requestSeq) {
+        loading = false;
+        lastLoadKey = loadKey;
+      }
     }
   }
 
-  onMount(loadGraph);
+  $effect(() => {
+    const loadAssetId = assetId;
+    const depth = maxDepth;
+    const loader = ownershipLoader ?? defaultOwnershipLoader;
+    const loadKey = `${loadAssetId}:${depth}:${ownershipLoader ? 'custom' : 'default'}`;
+    if (!loadAssetId || loadKey === lastLoadKey) return;
+    void loadGraph(loadAssetId, depth, loadKey, loader);
+  });
 </script>
 
-<div class="asset-ownership-tree">
+<div class="asset-ownership-tree" class:compact class:full={fullWidth && !compact}>
   {#if loading}
     <div class="tree-loading">
       <Spinner size={14} />
       Loading ownership tree...
     </div>
   {:else if error === 'no-owners'}
-    <div class="tree-empty">No ownership data available</div>
+    <div class="tree-empty">{emptyMessage}</div>
   {:else if error}
-    <div class="tree-error">Could not load ownership tree</div>
+    <div class="tree-error">{errorMessage}</div>
   {:else}
-    <OwnershipTreeGraph {nodes} {edges} {paths} rootId={assetId} compact={true} />
-    <a class="view-full" href={assetLink(assetId)}>View full ownership details &rarr;</a>
+    <OwnershipTreeGraph
+      {nodes}
+      {edges}
+      {paths}
+      rootId={assetId}
+      {compact}
+      {fullWidth}
+      direction="upstream"
+    />
+    {#if showViewFull}
+      <a class="view-full" href={assetLink(assetId)}>View full ownership details &rarr;</a>
+    {/if}
   {/if}
 </div>
 
@@ -74,6 +142,10 @@
     grid-column: 1 / -1;
     max-height: 240px;
     overflow: auto;
+  }
+  .asset-ownership-tree.full {
+    max-height: none;
+    overflow: visible;
   }
   .tree-loading {
     display: flex;

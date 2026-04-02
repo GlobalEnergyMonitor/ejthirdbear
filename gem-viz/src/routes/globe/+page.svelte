@@ -12,9 +12,9 @@
   import { goto } from '$app/navigation';
   import maplibregl from 'maplibre-gl';
   import 'maplibre-gl/dist/maplibre-gl.css';
-  import { link, assetPath, assetLink } from '$lib/links';
+  import { assetPath, assetLink } from '$lib/links';
   import { colors, colorByTracker } from '$lib/design-tokens';
-  import DataSourceBadge from '$lib/components/data/DataSourceBadge.svelte';
+  import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
   // DOM refs
   let mapContainer;
@@ -31,7 +31,7 @@
 
   // Data state
   let filteredAssets = $state([]);
-  let filteredCount = $state(0);
+  let _filteredCount = $state(0);
 
   // Filter state
   let selectedTrackers = $state([]);
@@ -43,13 +43,14 @@
   let countryFacets = $state([]);
 
   // Stats
-  let queryTime = $state(0);
+  let _queryTime = $state(0);
 
   // Microvis data
   let trackerBreakdown = $state([]);
   let countryBreakdown = $state([]);
 
-  const BASEMAP_STYLE_URL = 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json';
+  import { BASEMAP_VOYAGER } from '$lib/map-config';
+  const BASEMAP_STYLE_URL = BASEMAP_VOYAGER;
   const ASSET_SOURCE_ID = 'asset-points';
   const ASSET_GLOW_LAYER_ID = 'asset-points-glow';
   const ASSET_LAYER_ID = 'asset-points-core';
@@ -60,10 +61,10 @@
     return countryFacets.filter((facet) => facet.value.toLowerCase().includes(needle));
   });
 
-  const visibleCountriesCount = $derived(
+  const _visibleCountriesCount = $derived(
     new Set(filteredAssets.map((a) => a.country).filter(Boolean)).size
   );
-  const visibleTrackerCount = $derived(
+  const _visibleTrackerCount = $derived(
     new Set(filteredAssets.map((a) => a.tracker).filter(Boolean)).size
   );
 
@@ -91,19 +92,21 @@
   function toFeatureCollection(assets) {
     return {
       type: 'FeatureCollection',
-      features: assets.map((asset) => ({
-        type: 'Feature',
-        geometry: {
-          type: 'Point',
-          coordinates: [asset.lon, asset.lat],
-        },
-        properties: {
-          id: asset.id,
-          name: asset.name,
-          tracker: asset.tracker,
-          country: asset.country,
-        },
-      })),
+      features: assets
+        .filter((a) => a.hasCoords)
+        .map((asset) => ({
+          type: 'Feature',
+          geometry: {
+            type: 'Point',
+            coordinates: [asset.lon, asset.lat],
+          },
+          properties: {
+            id: asset.id,
+            name: asset.name,
+            tracker: asset.tracker,
+            country: asset.country,
+          },
+        })),
     };
   }
 
@@ -127,25 +130,27 @@
       });
 
       loadingPhase = 'Processing records...';
-      allAssets = (geojson.features || [])
-        .filter(
-          (f) =>
-            f.geometry?.coordinates &&
-            f.geometry.coordinates.length >= 2 &&
-            isFinite(f.geometry.coordinates[0]) &&
-            isFinite(f.geometry.coordinates[1]) &&
-            f.geometry.coordinates[1] >= -90 &&
-            f.geometry.coordinates[1] <= 90
-        )
-        .map((f) => ({
+      allAssets = (geojson.features || []).map((f) => {
+        const coords = f.geometry?.coordinates;
+        const hasCoords =
+          coords &&
+          coords.length >= 2 &&
+          isFinite(coords[0]) &&
+          isFinite(coords[1]) &&
+          coords[1] >= -90 &&
+          coords[1] <= 90;
+        return {
           id: f.properties?.id || f.properties?.['GEM location ID'] || '',
           name: f.properties?.name || f.properties?.Project || f.properties?.id || '',
           tracker: f.properties?.tracker || '',
           country: f.properties?.country || '',
-          lat: f.geometry.coordinates[1],
-          lon: f.geometry.coordinates[0],
-        }));
+          lat: hasCoords ? coords[1] : null,
+          lon: hasCoords ? coords[0] : null,
+          hasCoords,
+        };
+      });
 
+      // Build facets from ALL assets (including pipeline assets with no map coords)
       trackerFacets = buildFacets(allAssets, 'tracker');
       countryFacets = buildFacets(allAssets, 'country', 200);
 
@@ -173,7 +178,7 @@
     }
 
     filteredAssets = assets;
-    filteredCount = assets.length;
+    _filteredCount = assets.length;
 
     function breakdownBy(field, limit = 6) {
       const counts = new Map();
@@ -190,7 +195,7 @@
     trackerBreakdown = breakdownBy('tracker', 6);
     countryBreakdown = breakdownBy('country', 6);
 
-    queryTime = Math.round(performance.now() - start);
+    _queryTime = Math.round(performance.now() - start);
     updateMapData();
   }
 
@@ -352,6 +357,10 @@
     name="description"
     content="Interactive map visualization of energy assets worldwide. Filter by tracker type and country to explore the global energy infrastructure."
   />
+  <SeoMeta
+    title="Global Asset Map — Global Energy Monitor"
+    description="Interactive map visualization of energy assets worldwide. Filter by tracker type and country to explore the global energy infrastructure."
+  />
 </svelte:head>
 
 <div class="explorer">
@@ -482,65 +491,6 @@
     font-family: var(--font-family-sans);
   }
 
-  .explorer-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: var(--space-3) var(--space-5);
-    background: var(--color-black);
-    color: var(--color-white);
-    flex-shrink: 0;
-  }
-
-  .header-left {
-    display: flex;
-    align-items: center;
-    gap: var(--space-4);
-  }
-
-  .back-link {
-    font-size: var(--font-size-sm);
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-tight);
-    color: rgba(255, 255, 255, 0.6);
-    text-decoration: none;
-  }
-
-  .back-link:hover {
-    color: var(--color-white);
-  }
-
-  h1 {
-    font-size: var(--font-size-lg);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-wide);
-    margin: 0;
-  }
-
-  .header-stats {
-    display: flex;
-    gap: var(--space-6);
-  }
-
-  .stat {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-  }
-
-  .stat-value {
-    font-size: var(--font-size-2xl);
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .stat-label {
-    font-size: var(--font-size-base);
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-tight);
-    opacity: 0.6;
-  }
 
   .explorer-body {
     display: flex;
@@ -816,8 +766,5 @@
       border-bottom: var(--border-width) solid var(--color-border);
     }
 
-    .header-stats {
-      display: none;
-    }
   }
 </style>

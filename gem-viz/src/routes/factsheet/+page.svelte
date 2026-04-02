@@ -4,19 +4,19 @@
    */
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
-  import { link, factsheetLink } from '$lib/links';
+  import { link, fieldguideLink, factsheetLink } from '$lib/links';
   import PageHeader from '$lib/components/nav/PageHeader.svelte';
+  import { TRACKER_TO_URL_SLUG } from '$lib/data-config/tracker-schema';
 
-  const trackers = [
-    { slug: 'coal-mine', name: 'Coal Mine', available: true },
-    { slug: 'coal-plant', name: 'Coal Plant', available: false },
-    { slug: 'gas-plant', name: 'Gas Plant', available: false },
-    { slug: 'steel-plant', name: 'Steel Plant', available: false },
-  ];
+  const trackers = Object.entries(TRACKER_TO_URL_SLUG).map(([name, slug]) => ({
+    slug,
+    name,
+    available: true,
+  }));
 
   onMount(() => {
-    // Auto-redirect to first available tracker
-    goto(factsheetLink('Coal Mine'), { replaceState: true });
+    // Redirect to new FieldGuide page
+    goto(fieldguideLink(), { replaceState: true });
   });
 </script>
 

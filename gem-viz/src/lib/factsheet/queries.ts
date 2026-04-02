@@ -3,7 +3,7 @@
  * Uses REST API (gem-api.thirdbear.net) exclusively.
  */
 
-import { listAssetsByType, resolveApiAssetType, type AssetSummary } from '$lib/ownership-api';
+import { listAssetsByType, type AssetSummary } from '$lib/ownership-api';
 import { trackerNameToSlug } from '$lib/data-config/tracker-metadata';
 import type { Asset } from './types';
 
@@ -246,13 +246,39 @@ export async function fetchFieldStats(
 
   try {
     const slug = trackerNameToSlug[tracker] || tracker.toLowerCase().replace(/\s+/g, '-');
+
+    // Check if this tracker has a valid API slug — if not, skip stats
+    // (e.g. coal mines aren't in the /assets endpoint yet)
+    const { resolveApiSlug } = await import('$lib/ownership-api');
+    if (!resolveApiSlug(slug)) {
+      setCache(cacheKey, []);
+      return [];
+    }
+
     const assets = await listAssetsByType(slug, { limit: 2000 });
+
+    // Map common metadata field names to top-level AssetSummary properties
+    // (these fields are extracted from raw by the API and won't appear in asset.raw)
+    const topLevelMap: Record<string, (_a: AssetSummary) => unknown> = {
+      Status: (a) => a.status,
+      Country: (a) => a.country,
+      'Country / Area': (a) => a.country,
+      Countries: (a) => a.country,
+      'Capacity (MW)': (a) => a.capacity,
+      'Capacity (Mtpa)': (a) => a.capacity,
+      Owner: (a) => a.ownerName ?? a.owners?.[0]?.name,
+      'Immediate Owner Entity Name': (a) => a.ownerName ?? a.owners?.[0]?.name,
+      'Asset Name': (a) => a.name,
+      'Mine Name': (a) => a.name,
+      'Fuel type': (a) => a.facilityType,
+    };
 
     // Count occurrences of each value for this field
     const counts = new Map<string, number>();
+    const topLevelFn = topLevelMap[fieldName];
     for (const asset of assets) {
       const raw = asset.raw || {};
-      const value = raw[fieldName] ?? raw[fieldName.toLowerCase()] ?? null;
+      const value = topLevelFn?.(asset) ?? raw[fieldName] ?? raw[fieldName.toLowerCase()] ?? null;
       const strValue = value != null && value !== '' ? String(value) : null;
       if (strValue) {
         counts.set(strValue, (counts.get(strValue) || 0) + 1);
@@ -283,11 +309,12 @@ export async function fetchRowCount(tracker: string): Promise<number> {
   }
 
   try {
-    // Use getAssetTypeCounts for an estimated count
-    const { getAssetTypeCounts } = await import('$lib/ownership-api');
-    const apiType = resolveApiAssetType(tracker);
-    const counts = await getAssetTypeCounts();
-    const count = counts.get(apiType) || 0;
+    // Use a limit=1 query with the asset_type filter to get the total from the response
+    const { listAssets, resolveApiSlug } = await import('$lib/ownership-api');
+    const slug = trackerNameToSlug[tracker] || tracker.toLowerCase().replace(/\s+/g, '-');
+    const apiSlug = resolveApiSlug(slug);
+    const page = await listAssets({ limit: 1, asset_type: apiSlug ?? undefined });
+    const count = page.total ?? page.count ?? 0;
     setCache(cacheKey, count);
     return count;
   } catch (err) {

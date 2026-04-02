@@ -77,9 +77,11 @@
 
 <style>
   .search-results {
-    margin-top: var(--space-10);
-    padding-top: var(--space-8);
+    margin-top: var(--space-4);
+    padding-top: var(--space-4);
+    padding-bottom: var(--space-16);
     border-top: var(--border-width) solid var(--color-border);
+    scroll-margin-top: 80px;
   }
 
   .results-source-row {
@@ -147,7 +149,7 @@
     gap: var(--space-4);
     max-height: min(480px, calc(100vh - 300px));
     overflow-y: auto;
-    padding: 2px;
+    padding: 8px;
   }
 
   .result-wrapper {

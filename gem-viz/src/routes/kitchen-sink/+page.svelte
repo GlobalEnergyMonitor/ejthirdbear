@@ -6,13 +6,14 @@
    * lists the rest organized by category.
    */
 
+  import { onMount } from 'svelte';
+
   // Core UI
   import Skeleton from '$lib/components/feedback/Skeleton.svelte';
   import Spinner from '$lib/components/feedback/Spinner.svelte';
   import StatusIcon from '$lib/components/tracker/StatusIcon.svelte';
   import TrackerIcon from '$lib/components/tracker/TrackerIcon.svelte';
   import DataSourceBadge from '$lib/components/data/DataSourceBadge.svelte';
-  import AddToCartButton from '$lib/components/cart/AddToCartButton.svelte';
   import LoadingWrapper from '$lib/components/feedback/LoadingWrapper.svelte';
   import ReportLoadingTerminal from '$lib/components/feedback/ReportLoadingTerminal.svelte';
   import Citation from '$lib/components/data/Citation.svelte';
@@ -25,15 +26,13 @@
   import EntityMicroCard from '$lib/components/cards/EntityMicroCard.svelte';
   import AssetMicroCard from '$lib/components/cards/AssetMicroCard.svelte';
   import ProjectCard from '$lib/components/cards/ProjectCard.svelte';
+  import CoalPlantCard from '$lib/components/cards/CoalPlantCard.svelte';
 
   // Charts
   import Sparkline from '$lib/components/charts/Sparkline.svelte';
   import MiniBarChart from '$lib/components/charts/MiniBarChart.svelte';
-  import MiniFlower from '$lib/components/charts/MiniFlower.svelte';
   import MiniHistogram from '$lib/components/charts/MiniHistogram.svelte';
   import OwnershipPie from '$lib/components/charts/OwnershipPie.svelte';
-  import RadialBarChart from '$lib/components/charts/RadialBarChart.svelte';
-
   // Ownership & network viz
   import OwnershipTreeGraph from '$lib/components/ownership/OwnershipTreeGraph.svelte';
   import AssetRingVisualization from '$lib/components/ownership/AssetRingVisualization.svelte';
@@ -77,7 +76,7 @@
   } from './kitchen-sink-data';
 
   // Featured assets from Observable notebook — for ownership tree parity testing
-  import { getOwnershipGraph } from '$lib/ownership-api';
+  import { getOwnershipGraph, fetchCoalPlantLocation } from '$lib/ownership-api';
   const featuredAssets = new Map([
     ['sinesPowerStation', 'G100000109409'],
     ['BaghlanPowerStation', 'G100001057899'],
@@ -116,6 +115,109 @@
     }
   });
 
+  // CoalPlantCard test harness
+  const COAL_PRESETS = [
+    { label: 'Boundary Dam', id: 'L100000100176' },
+    { label: 'Eraring', id: 'L100000100005' },
+    { label: 'Yancheng Binhai', id: 'L100000100973' },
+    { label: 'Maritsa 3', id: 'L100000100136' },
+    { label: 'Gubin Power Project', id: 'L100000103227' },
+    { label: 'Liuzhi', id: 'L100000100463' },
+    { label: 'Worsley Refinery', id: 'L100000100043' },
+    { label: 'Zhunger Weijiamao', id: 'L100000100896' },
+    { label: 'Huaiyin', id: 'L100000100991' },
+    { label: 'Zhenxiong', id: 'L100000101719' },
+    { label: 'Rovinari', id: 'L100000103294' },
+    { label: 'Nabinagar Thermal', id: 'L100000102114' },
+    { label: 'Shanying Cogen', id: 'L100000101755' },
+    { label: 'Lixin Banji', id: 'L100000100233' },
+    { label: 'Gansu Huating', id: 'L100000100340' },
+  ];
+  let coalSelectedPreset = $state('L100000100176');
+  let coalCustomId = $state('');
+  let coalUseCustom = $state(false);
+  let coalLocationId = $derived(coalUseCustom ? coalCustomId : coalSelectedPreset);
+  let coalLocation = $state(null);
+  let coalLoading = $state(false);
+  let coalError = $state('');
+
+  async function loadCoalPlant() {
+    if (!coalLocationId.trim()) return;
+    coalLoading = true;
+    coalError = '';
+    coalLocation = null;
+    try {
+      coalLocation = await fetchCoalPlantLocation(coalLocationId.trim());
+    } catch (e) {
+      coalError = e.message || 'Failed to load';
+    } finally {
+      coalLoading = false;
+    }
+  }
+
+  // Deep-link: scroll to hash on mount + update hash on scroll
+  let activeSection = $state('');
+
+  onMount(() => {
+    // Add copy buttons to all code-hint blocks
+    document.querySelectorAll('pre.code-hint').forEach((pre) => {
+      if (!(pre instanceof HTMLElement)) return;
+      const btn = document.createElement('button');
+      btn.className = 'copy-btn';
+      btn.textContent = 'copy';
+      btn.addEventListener('click', async () => {
+        await navigator.clipboard.writeText(pre.textContent || '');
+        btn.textContent = '✓ copied';
+        setTimeout(() => (btn.textContent = 'copy'), 1500);
+      });
+      pre.style.position = 'relative';
+      btn.style.cssText =
+        'position:absolute;top:6px;right:6px;font-size:11px;padding:2px 6px;border:1px solid #ccc;border-radius:3px;background:#f0f0f0;cursor:pointer;font-family:monospace;color:#555;';
+      pre.appendChild(btn);
+    });
+
+    // Scroll to hash fragment on page load
+    const hash = window.location.hash?.slice(1);
+    if (hash) {
+      // Wait for DOM to settle, then scroll
+      requestAnimationFrame(() => {
+        const el = document.getElementById(hash);
+        if (el) {
+          el.scrollIntoView({ behavior: 'instant' });
+          activeSection = hash;
+        }
+      });
+    }
+
+    // Track which section is visible and update URL hash
+    const sections = document.querySelectorAll('section[id]');
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            const id = entry.target.id;
+            activeSection = id;
+            // Update URL hash without triggering scroll
+            history.replaceState(null, '', `#${id}`);
+          }
+        }
+      },
+      { rootMargin: '-80px 0px -60% 0px', threshold: 0 }
+    );
+
+    sections.forEach((s) => observer.observe(s));
+    return () => observer.disconnect();
+  });
+
+  function scrollToSection(id) {
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth' });
+      activeSection = id;
+      history.replaceState(null, '', `#${id}`);
+    }
+  }
+
   // Toggle states for interactive demos
   let showLoading = $state(false);
   let showError = $state(false);
@@ -128,20 +230,86 @@
   // Derived stats
   const liveComponentCount = 30;
   const totalComponentCount = componentIndex.length;
-  const registryCategories = [...new Set(componentIndex.map(c => c.category))];
+  const _registryCategories = [...new Set(componentIndex.map((c) => c.category))];
+
+  // Registry search/filter
+  let registrySearch = $state('');
+  const filteredComponentIndex = $derived(
+    registrySearch.trim()
+      ? componentIndex.filter(
+          (c) =>
+            c.name.toLowerCase().includes(registrySearch.toLowerCase()) ||
+            c.category.toLowerCase().includes(registrySearch.toLowerCase())
+        )
+      : componentIndex
+  );
+  const filteredCategories = $derived([...new Set(filteredComponentIndex.map((c) => c.category))]);
 
   // Components that need API/complex context — not demoed live
   const complexComponents = [
-    { name: 'OwnershipFlower', path: 'src/lib/components/network/OwnershipFlower.svelte', note: 'Large radial diagram — needs entity API data' },
-    { name: 'MiniNetworkGraph', path: 'src/lib/components/network/MiniNetworkGraph.svelte', note: 'Compact force-directed network' },
-    { name: 'OwnershipMiniTree', path: 'src/lib/components/ownership/OwnershipMiniTree.svelte', note: 'Horizontal dagre tree — fetches from API' },
-    { name: 'UltimateOwners', path: 'src/lib/components/tracker/UltimateOwners.svelte', note: 'Ownership chain — fetches from API' },
-    { name: 'FacetedFilter', path: 'src/lib/components/table/FacetedFilter.svelte', note: 'Multi-select facets' },
-    { name: 'CommandPalette', path: 'src/lib/components/search/CommandPalette.svelte', note: 'Cmd+K palette' },
-    { name: 'ProjectCardList', path: 'src/lib/components/cards/ProjectCardList.svelte', note: 'Paginated list — fetches from API' },
-    { name: 'AssetMap / EntityMap', path: 'src/lib/components/map/', note: 'MapLibre-based — needs coordinates + tiles' },
-    { name: 'TrackerGlobeGrid', path: 'src/lib/components/tracker/TrackerGlobeGrid.svelte', note: 'Globe visualization — needs GeoJSON' },
-    { name: 'TrackerFactsheet', path: 'src/lib/components/tracker/TrackerFactsheet.svelte', note: 'Full tracker page — needs API context' },
+    {
+      name: 'OwnershipFlower',
+      path: 'src/lib/components/network/OwnershipFlower.svelte',
+      what: 'Nadieh Bremer–style radial flower where petal angle encodes tracker mix (by asset count) and petal length encodes total capacity.',
+      api: 'Calls fetchOwnerPortfolio(ownerId) → /ownership/graph?root=…&direction=down. Pass pre-fetched portfolio via portfolio prop to skip the fetch.',
+      usage: `<OwnershipFlower ownerId="E100001000348" size="medium" showLabels />`,
+    },
+    {
+      name: 'MiniNetworkGraph',
+      path: 'src/lib/components/network/MiniNetworkGraph.svelte',
+      what: 'Interactive 3-D force-directed network (deck.gl + d3-force-3d) showing the ownership neighborhood around a single entity — nodes are entities/assets, edges are ownership links.',
+      api: 'Calls getOwnershipGraph({ root: entityId, direction: "both", max_depth: maxHops }) from ownership-api.ts.',
+      usage: `<MiniNetworkGraph entityId="E100001000348" maxHops={2} height={300} />`,
+    },
+    {
+      name: 'UltimateOwners',
+      path: 'src/lib/components/tracker/UltimateOwners.svelte',
+      what: 'Traces ownership chains upward to find terminal ancestor entities and shows effective ownership percentages (multiplied through intermediate holdings).',
+      api: 'Calls getEntityGraphUp(entityId) → /ownership/graph?root=…&direction=up.',
+      usage: `<UltimateOwners entityId="E100001000348" />`,
+    },
+    {
+      name: 'FacetedFilter',
+      path: 'src/lib/components/table/FacetedFilter.svelte',
+      what: 'Shopping-style checkbox facet list: selected items float to top with FLIP animation, live-updating counts, search-within-facet, and Shift+click for AND logic.',
+      api: 'Pure UI — no API calls. Caller provides options array with { value, count? }. Bind selected and selectedAnd for two-way state.',
+      usage: `<FacetedFilter label="Status" options={[{value:'operating',count:847}]} bind:selected={statusFilter} />`,
+    },
+    {
+      name: 'CommandPalette',
+      path: 'src/lib/components/search/CommandPalette.svelte',
+      what: 'Cmd+K universal search and command interface (Linear/VS Code–style) — searches assets and entities, runs page navigation commands, and shows recent searches.',
+      api: 'Calls listAssets() and listEntities() from ownership-api.ts on query. Opened/closed via commandPaletteOpen Svelte store.',
+      usage: `<CommandPalette /> <!-- mounted once in layout; toggle via commandPaletteOpen.set(true) -->`,
+    },
+    {
+      name: 'ProjectCardList',
+      path: 'src/lib/components/cards/ProjectCardList.svelte',
+      what: 'Paginated grid of ProjectCards with optional map view and capacity-percentile bars for context within a tracker dataset.',
+      api: 'Calls fetchAssets({ tracker, statusFilter, sortBy, limit }) and fetchCapacities(tracker) from $lib/factsheet.',
+      usage: `<ProjectCardList tracker="Coal Plant" statusFilter={['operating']} sortBy="capacity" limit={5} />`,
+    },
+    {
+      name: 'AssetMap / EntityMap',
+      path: 'src/lib/components/map/',
+      what: 'MapLibre GL–based maps rendering asset points or entity footprints on a Natural Earth base layer with hover tooltips and click-to-navigate.',
+      api: 'Needs asset coordinate data (latitude/longitude from REST API or points.geojson). Tile config from $lib/map-config.',
+      usage: `<AssetMap assets={assetArray} zoom={2} center={[0, 20]} />`,
+    },
+    {
+      name: 'TrackerGlobeGrid',
+      path: 'src/lib/components/tracker/TrackerGlobeGrid.svelte',
+      what: 'Hero visualization with a center globe plus 6 surrounding satellite globes, each filtered to one tracker type, spinning in sync via MapLibre.',
+      api: 'Fetches static/points.geojson (~9 MB) and renders point layers filtered by asset_type field.',
+      usage: `<TrackerGlobeGrid /> <!-- self-contained, no props needed -->`,
+    },
+    {
+      name: 'TrackerFactsheet',
+      path: 'src/lib/components/tracker/TrackerFactsheet.svelte',
+      what: 'Dataset field-metadata previewer — shows field categories, definitions, and inline distribution charts (bar charts for enums, histograms for numerics).',
+      api: 'Receives fieldsMetadata array and a fetchDistribution(field) callback; caller supplies both from tracker-specific API calls.',
+      usage: `<TrackerFactsheet tracker="Coal Plant" fieldsMetadata={fields} fetchDistribution={fetchFn} />`,
+    },
   ];
 </script>
 
@@ -156,37 +324,31 @@
     <h1>Kitchen Sink</h1>
     <p class="subtitle">
       {totalComponentCount} components across 15 directories.
-      {liveComponentCount} demoed live below, {complexComponents.length} need API context.
-      All examples use realistic data from Global Energy Monitor trackers.
+      {liveComponentCount} demoed live below, {complexComponents.length} need API context. All examples
+      use realistic data from Global Energy Monitor trackers.
     </p>
   </header>
 
   <!-- Table of Contents -->
   <nav class="toc">
     <span class="toc-label">Jump to:</span>
-    <a href="#primitives">Primitives</a>
-    <a href="#badges">Badges</a>
-    <a href="#layout">Layout</a>
-    <a href="#cards">Cards</a>
-    <a href="#charts">Charts</a>
-    <a href="#ownership-tree">Ownership Tree</a>
-    <a href="#tables">Tables</a>
-    <a href="#inputs">Inputs</a>
-    <a href="#navigation">Navigation</a>
-    <a href="#states">Loading States</a>
-    <a href="#buttons">Buttons</a>
-    <a href="#typography">Typography</a>
-    <a href="#colors">Colors</a>
-    <a href="#debug">Debug</a>
-    <a href="#complex">Complex</a>
-    <a href="#registry">Full Registry</a>
+    {#each [['primitives', 'Primitives'], ['badges', 'Badges'], ['layout', 'Layout'], ['cards', 'Cards'], ['charts', 'Charts'], ['ownership-tree', 'Ownership Tree'], ['tables', 'Tables'], ['inputs', 'Inputs'], ['navigation', 'Navigation'], ['states', 'Loading States'], ['buttons', 'Buttons'], ['typography', 'Typography'], ['colors', 'Colors'], ['debug', 'Debug'], ['complex', 'Complex'], ['coal-plant-card', 'Coal Plant Card'], ['registry', 'Full Registry']] as [id, label]}
+      <a
+        href="#{id}"
+        class:active={activeSection === id}
+        onclick={(e) => {
+          e.preventDefault();
+          scrollToSection(id);
+        }}>{label}</a
+      >
+    {/each}
   </nav>
 
   <!-- ========================================
        TYPOGRAPHY REFERENCE
        ======================================== -->
   <section id="typography">
-    <h2>Typography Reference</h2>
+    <h2><a href="#typography" class="section-anchor">#</a>Typography Reference</h2>
     <div class="component-group">
       <div class="type-samples">
         <div class="type-row">
@@ -233,7 +395,7 @@
        COLOR REFERENCE
        ======================================== -->
   <section id="colors">
-    <h2>Color Reference</h2>
+    <h2><a href="#colors" class="section-anchor">#</a>Color Reference</h2>
     <div class="component-group">
       <h3>Text Colors</h3>
       <div class="color-swatches">
@@ -303,7 +465,7 @@
        PRIMITIVES
        ======================================== -->
   <section id="primitives">
-    <h2>Primitives</h2>
+    <h2><a href="#primitives" class="section-anchor">#</a>Primitives</h2>
 
     <div class="component-group">
       <div class="component-header">
@@ -408,7 +570,7 @@
        BADGES
        ======================================== -->
   <section id="badges">
-    <h2>Badges & Attribution</h2>
+    <h2><a href="#badges" class="section-anchor">#</a>Badges & Attribution</h2>
 
     <div class="component-group">
       <div class="component-header">
@@ -454,22 +616,29 @@
        LAYOUT
        ======================================== -->
   <section id="layout">
-    <h2>Layout Components</h2>
+    <h2><a href="#layout" class="section-anchor">#</a>Layout Components</h2>
 
     <div class="component-group">
       <div class="component-header">
         <h3>PageHeader</h3>
         <code class="file-path">src/lib/components/nav/PageHeader.svelte</code>
       </div>
-      <p class="component-desc">Page header with breadcrumb navigation, title, and optional lead text</p>
+      <p class="component-desc">
+        Page header with breadcrumb navigation, title, and optional lead text
+      </p>
       <div class="demo-block full-width">
         <PageHeader
-          breadcrumbs={[{ label: 'Home', href: '/' }, { label: 'Trackers', href: '/tracker' }, { label: 'Coal Plant' }]}
+          breadcrumbs={[
+            { label: 'Home', href: '/' },
+            { label: 'Trackers', href: '/tracker' },
+            { label: 'Coal Plant' },
+          ]}
           title="Shenhua Ningxia Coal Power Station"
           lead="3,200 MW coal plant in Ningxia, China — operating since 2011"
         />
       </div>
-      <pre class="code-hint">&lt;PageHeader breadcrumbs=&#123;[...]&#125; title="..." lead="..." /&gt;</pre>
+      <pre
+        class="code-hint">&lt;PageHeader breadcrumbs=&#123;[...]&#125; title="..." lead="..." /&gt;</pre>
     </div>
 
     <div class="component-group">
@@ -486,7 +655,8 @@
           <button class="btn btn-sm">Export CSV</button>
         </SectionHeader>
       </div>
-      <pre class="code-hint">&lt;SectionHeader title="..." subtitle="..."&gt;&#123;slot&#125;&lt;/SectionHeader&gt;</pre>
+      <pre
+        class="code-hint">&lt;SectionHeader title="..." subtitle="..."&gt;&#123;slot&#125;&lt;/SectionHeader&gt;</pre>
     </div>
   </section>
 
@@ -494,7 +664,7 @@
        CARDS
        ======================================== -->
   <section id="cards">
-    <h2>Cards</h2>
+    <h2><a href="#cards" class="section-anchor">#</a>Cards</h2>
 
     <div class="component-group">
       <div class="component-header">
@@ -539,7 +709,9 @@
         <h3>ProjectCard</h3>
         <code class="file-path">src/lib/components/cards/ProjectCard.svelte</code>
       </div>
-      <p class="component-desc">Expandable asset detail card with tabbed layout for factsheet data</p>
+      <p class="component-desc">
+        Expandable asset detail card with tabbed layout for factsheet data
+      </p>
       <div class="demo-stack">
         {#each sampleProjectAssets as asset}
           <div class="demo-block full-width">
@@ -547,7 +719,8 @@
           </div>
         {/each}
       </div>
-      <pre class="code-hint">&lt;ProjectCard asset=&#123;assetData&#125; variant="compact" /&gt;</pre>
+      <pre
+        class="code-hint">&lt;ProjectCard asset=&#123;assetData&#125; variant="compact" /&gt;</pre>
     </div>
   </section>
 
@@ -555,34 +728,7 @@
        CHARTS
        ======================================== -->
   <section id="charts">
-    <h2>Charts & Visualizations</h2>
-
-    <div class="component-group">
-      <div class="component-header">
-        <h3>MiniFlower</h3>
-        <code class="file-path">src/lib/components/MiniFlower.svelte</code>
-      </div>
-      <p class="component-desc">
-        Nadieh Bremer-inspired radial petal chart showing tracker distribution by count & capacity
-      </p>
-      <div class="demo-row">
-        {#each realCompanies as company}
-          <div class="demo-item flower-demo">
-            <MiniFlower trackers={company.trackers} size={48} />
-            <span class="demo-label">{company.name.split(' ')[0]}</span>
-          </div>
-        {/each}
-        <div class="demo-item flower-demo">
-          <MiniFlower
-            trackers={[{ tracker: 'Coal Plant', count: 100, capacity: 50000 }]}
-            size={48}
-          />
-          <span class="demo-label">Single type</span>
-        </div>
-      </div>
-      <pre
-        class="code-hint">&lt;MiniFlower trackers=&#123;[&#123;tracker: 'Coal Plant', count: 312, capacity: 142000&#125;]&#125; size=&#123;48&#125; /&gt;</pre>
-    </div>
+    <h2><a href="#charts" class="section-anchor">#</a>Charts & Visualizations</h2>
 
     <div class="component-group">
       <div class="component-header">
@@ -689,63 +835,13 @@
       <pre
         class="code-hint">&lt;MiniHistogram data=&#123;[150, 200, 660, 1000, ...]&#125; label="Capacity" unit="MW" /&gt;</pre>
     </div>
-
-    <div class="component-group">
-      <div class="component-header">
-        <h3>RadialBarChart</h3>
-        <code class="file-path">src/lib/components/RadialBarChart.svelte</code>
-      </div>
-      <p class="component-desc">
-        Stacked radial bar chart with concentric arcs — each ring represents a category, arc length
-        encodes value
-      </p>
-      <div class="demo-row">
-        <div class="demo-item flower-demo">
-          <RadialBarChart
-            data={[
-              { label: 'Operating', value: 847 },
-              { label: 'Planned', value: 312 },
-              { label: 'Retired', value: 520 },
-            ]}
-            size={200}
-          />
-          <span class="demo-label">3 categories</span>
-        </div>
-        <div class="demo-item flower-demo">
-          <RadialBarChart
-            data={[
-              { label: 'Coal', value: 14363, color: '#7F142A' },
-              { label: 'Oil & Gas', value: 14407, color: '#CA4A50' },
-              { label: 'Bioenergy', value: 4537, color: '#A0AAE5' },
-              { label: 'Gas Pipeline', value: 4246, color: '#004F61' },
-            ]}
-            size={200}
-          />
-          <span class="demo-label">Tracker counts</span>
-        </div>
-        <div class="demo-item flower-demo">
-          <RadialBarChart
-            data={[
-              { label: 'China', value: 90 },
-              { label: 'India', value: 65 },
-            ]}
-            size={140}
-            ringWidth={24}
-            cornerRadius={4}
-          />
-          <span class="demo-label">Thick rings</span>
-        </div>
-      </div>
-      <pre
-        class="code-hint">&lt;RadialBarChart data=&#123;[&#123;label: 'Operating', value: 847&#125;, ...]&#125; size=&#123;200&#125; /&gt;</pre>
-    </div>
   </section>
 
   <!-- ========================================
        OWNERSHIP TREE GRAPH
        ======================================== -->
   <section id="ownership-tree">
-    <h2>Ownership Tree Graph</h2>
+    <h2><a href="#ownership-tree" class="section-anchor">#</a>Ownership Tree Graph</h2>
 
     <div class="component-group">
       <div class="component-header">
@@ -753,22 +849,35 @@
         <code class="file-path">src/lib/components/ownership/OwnershipTreeGraph.svelte</code>
       </div>
       <p class="component-desc">
-        Same featured assets from the Observable notebook. Select one to fetch live data and compare rendering parity.
+        Same featured assets from the Observable notebook. Select one to fetch live data and compare
+        rendering parity.
       </p>
       <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px;">
         {#each [...featuredAssets] as [name, id]}
           <button
-            style="padding: 4px 10px; border: 1px solid {selectedFeaturedAsset === name ? '#016B83' : '#ccc'}; border-radius: 4px; background: {selectedFeaturedAsset === name ? '#016B83' : '#fff'}; color: {selectedFeaturedAsset === name ? '#fff' : '#333'}; cursor: pointer; font-size: 12px;"
-            onclick={() => { selectedFeaturedAsset = name; }}
+            style="padding: 4px 10px; border: 1px solid {selectedFeaturedAsset === name
+              ? '#016B83'
+              : '#ccc'}; border-radius: 4px; background: {selectedFeaturedAsset === name
+              ? '#016B83'
+              : '#fff'}; color: {selectedFeaturedAsset === name
+              ? '#fff'
+              : '#333'}; cursor: pointer; font-size: 12px;"
+            onclick={() => {
+              selectedFeaturedAsset = name;
+            }}
           >
             {name} <span style="opacity: 0.6; font-size: 10px;">({id})</span>
           </button>
         {/each}
       </div>
       <div class="demo-block full-width">
-        <span class="variant-label">API: {selectedFeaturedAsset} ({featuredAssets.get(selectedFeaturedAsset)})</span>
+        <span class="variant-label"
+          >API: {selectedFeaturedAsset} ({featuredAssets.get(selectedFeaturedAsset)})</span
+        >
         {#if featuredLoading}
-          <div style="padding: 40px; text-align: center; color: #888;">Loading {selectedFeaturedAsset}...</div>
+          <div style="padding: 40px; text-align: center; color: #888;">
+            Loading {selectedFeaturedAsset}...
+          </div>
         {:else if featuredError}
           <div style="padding: 40px; text-align: center; color: #c00;">{featuredError}</div>
         {:else if featuredGraphData}
@@ -788,7 +897,8 @@
         <code class="file-path">src/lib/components/ownership/OwnershipTreeGraph.svelte</code>
       </div>
       <p class="component-desc">
-        Small tree (6 nodes, depth 2) — all labels centered below nodes. Color-by toggle and legend visible.
+        Small tree (6 nodes, depth 2) — all labels centered below nodes. Color-by toggle and legend
+        visible.
       </p>
       <div class="demo-block full-width">
         <span class="variant-label">labelMode: default</span>
@@ -824,7 +934,8 @@
         <h3>Large mode</h3>
       </div>
       <p class="component-desc">
-        Large tree (30 nodes) — labels hidden by default, only shown for high-pct (&gt;20%) nodes. Hover to reveal others.
+        Large tree (30 nodes) — labels hidden by default, only shown for high-pct (&gt;20%) nodes.
+        Hover to reveal others.
       </p>
       <div class="demo-block full-width">
         <span class="variant-label">labelMode: large</span>
@@ -862,7 +973,8 @@
         <code class="file-path">src/lib/components/ownership/AssetRingVisualization.svelte</code>
       </div>
       <p class="component-desc">
-        Ring-of-circles showing multiple units at a single location with status coloring and ownership pies.
+        Ring-of-circles showing multiple units at a single location with status coloring and
+        ownership pies.
       </p>
       <div class="demo-row">
         <div class="demo-item flower-demo">
@@ -870,11 +982,16 @@
           <span class="demo-label">6 units, mixed status</span>
         </div>
         <div class="demo-item flower-demo">
-          <AssetRingVisualization assets={sampleRingAssets.slice(0, 3)} size={140} interactive={false} />
+          <AssetRingVisualization
+            assets={sampleRingAssets.slice(0, 3)}
+            size={140}
+            interactive={false}
+          />
           <span class="demo-label">3 units</span>
         </div>
       </div>
-      <pre class="code-hint">&lt;AssetRingVisualization assets=&#123;[&#123;id, name, status, capacityMw, share&#125;]&#125; size=&#123;200&#125; /&gt;</pre>
+      <pre
+        class="code-hint">&lt;AssetRingVisualization assets=&#123;[&#123;id, name, status, capacityMw, share&#125;]&#125; size=&#123;200&#125; /&gt;</pre>
     </div>
   </section>
 
@@ -882,7 +999,7 @@
        TABLES
        ======================================== -->
   <section id="tables">
-    <h2>Tables & Data</h2>
+    <h2><a href="#tables" class="section-anchor">#</a>Tables & Data</h2>
 
     <div class="component-group">
       <div class="component-header">
@@ -890,7 +1007,8 @@
         <code class="file-path">src/lib/components/table/DataTable.svelte</code>
       </div>
       <p class="component-desc">
-        Feature-rich data table with search, column filters, sorting, pagination, and CSV/JSON export.
+        Feature-rich data table with search, column filters, sorting, pagination, and CSV/JSON
+        export.
       </p>
       <div class="demo-block full-width">
         <DataTable
@@ -903,7 +1021,8 @@
           showColumnFilters={false}
         />
       </div>
-      <pre class="code-hint">&lt;DataTable columns=&#123;[...]&#125; data=&#123;[...]&#125; pageSize=&#123;25&#125; showExport /&gt;</pre>
+      <pre
+        class="code-hint">&lt;DataTable columns=&#123;[...]&#125; data=&#123;[...]&#125; pageSize=&#123;25&#125; showExport /&gt;</pre>
     </div>
   </section>
 
@@ -911,7 +1030,7 @@
        NAVIGATION
        ======================================== -->
   <section id="navigation">
-    <h2>Navigation & Filtering</h2>
+    <h2><a href="#navigation" class="section-anchor">#</a>Navigation & Filtering</h2>
 
     <div class="component-group">
       <div class="component-header">
@@ -983,7 +1102,7 @@
        INPUTS
        ======================================== -->
   <section id="inputs">
-    <h2>Inputs & Search</h2>
+    <h2><a href="#inputs" class="section-anchor">#</a>Inputs & Search</h2>
 
     <div class="component-group">
       <div class="component-header">
@@ -1008,7 +1127,8 @@
         <span class="variant-label">compact, no button</span>
         <AssetSearchBar compact showButton={false} placeholder="Quick search..." />
       </div>
-      <pre class="code-hint">&lt;AssetSearchBar bind:value modes=&#123;[...]&#125; helperText="..." /&gt;</pre>
+      <pre
+        class="code-hint">&lt;AssetSearchBar bind:value modes=&#123;[...]&#125; helperText="..." /&gt;</pre>
     </div>
 
     <div class="component-group">
@@ -1017,13 +1137,14 @@
         <code class="file-path">src/lib/components/screener/CountryMultiSelect.svelte</code>
       </div>
       <p class="component-desc">
-        Searchable multi-select combobox with preset country groups (G7, EU, BRICS).
-        Type "G7" to add all G7 countries at once.
+        Searchable multi-select combobox with preset country groups (G7, EU, BRICS). Type "G7" to
+        add all G7 countries at once.
       </p>
       <div class="demo-block full-width" style="max-width: 400px;">
         <CountryMultiSelect bind:selected={selectedCountries} countries={sampleCountries} />
       </div>
-      <pre class="code-hint">&lt;CountryMultiSelect bind:selected countries=&#123;[...]&#125; /&gt;</pre>
+      <pre
+        class="code-hint">&lt;CountryMultiSelect bind:selected countries=&#123;[...]&#125; /&gt;</pre>
     </div>
 
     <div class="component-group">
@@ -1055,7 +1176,7 @@
        LOADING STATES
        ======================================== -->
   <section id="states">
-    <h2>Loading States</h2>
+    <h2><a href="#states" class="section-anchor">#</a>Loading States</h2>
 
     <div class="component-group">
       <div class="component-header">
@@ -1117,7 +1238,8 @@
         <code class="file-path">src/lib/components/feedback/ReportLoadingTerminal.svelte</code>
       </div>
       <p class="component-desc">
-        Terminal-style progress display for long-running report generation, with step status indicators
+        Terminal-style progress display for long-running report generation, with step status
+        indicators
       </p>
       <div class="demo-block full-width" style="max-width: 480px;">
         <ReportLoadingTerminal
@@ -1128,7 +1250,8 @@
           steps={sampleReportSteps}
         />
       </div>
-      <pre class="code-hint">&lt;ReportLoadingTerminal elapsedMs=&#123;2910&#125; steps=&#123;[&#123;id, label, status, rows?, ms?&#125;]&#125; /&gt;</pre>
+      <pre
+        class="code-hint">&lt;ReportLoadingTerminal elapsedMs=&#123;2910&#125; steps=&#123;[&#123;id, label, status, rows?, ms?&#125;]&#125; /&gt;</pre>
     </div>
   </section>
 
@@ -1136,35 +1259,7 @@
        BUTTONS
        ======================================== -->
   <section id="buttons">
-    <h2>Buttons</h2>
-
-    <div class="component-group">
-      <div class="component-header">
-        <h3>AddToCartButton</h3>
-        <code class="file-path">src/lib/components/AddToCartButton.svelte</code>
-      </div>
-      <p class="component-desc">Toggle button for adding entities/assets to investigation cart</p>
-      <div class="demo-row">
-        <div class="demo-item">
-          <AddToCartButton id="E100001000348" name="China Energy" variant="default" />
-          <span class="demo-label">default</span>
-        </div>
-        <div class="demo-item">
-          <AddToCartButton id="E100001000349" name="NTPC Limited" variant="default" size="small" />
-          <span class="demo-label">small</span>
-        </div>
-        <div class="demo-item">
-          <AddToCartButton id="E100001000350" name="Adani Power" variant="icon" />
-          <span class="demo-label">icon</span>
-        </div>
-        <div class="demo-item">
-          <AddToCartButton id="E100001000351" name="TotalEnergies" variant="minimal" />
-          <span class="demo-label">minimal</span>
-        </div>
-      </div>
-      <pre
-        class="code-hint">&lt;AddToCartButton id="E100001000348" name="China Energy" variant="icon" /&gt;</pre>
-    </div>
+    <h2><a href="#buttons" class="section-anchor">#</a>Buttons</h2>
 
     <div class="component-group">
       <h3>Global Button Styles</h3>
@@ -1188,7 +1283,7 @@
        DEBUG
        ======================================== -->
   <section id="debug">
-    <h2>Debug & Diagnostics</h2>
+    <h2><a href="#debug" class="section-anchor">#</a>Debug & Diagnostics</h2>
 
     <div class="component-group">
       <div class="component-header">
@@ -1216,20 +1311,101 @@
        COMPLEX COMPONENTS
        ======================================== -->
   <section id="complex">
-    <h2>Complex Components</h2>
+    <h2><a href="#complex" class="section-anchor">#</a>Complex Components</h2>
     <p class="section-intro">
-      These components require API data or complex runtime context and can't be demoed with static data.
-      See them live on their respective pages.
+      These components require API data or complex runtime context and can't be demoed with static
+      data. See them live on their respective pages.
     </p>
 
-    <div class="component-index">
+    <div class="complex-list">
       {#each complexComponents as comp}
-        <div class="index-item">
-          <code class="comp-name">{comp.name}</code>
-          <code class="file-path">{comp.path}</code>
-          <span class="comp-note">{comp.note}</span>
+        <div class="complex-item">
+          <div class="complex-header">
+            <code class="comp-name">{comp.name}</code>
+            <code class="file-path">{comp.path}</code>
+          </div>
+          <p class="complex-what">{comp.what}</p>
+          <p class="complex-api"><strong>API:</strong> {comp.api}</p>
+          <pre class="code-hint">{comp.usage}</pre>
         </div>
       {/each}
+    </div>
+  </section>
+
+  <!-- ========================================
+       COAL PLANT CARD TEST HARNESS
+       ======================================== -->
+  <section id="coal-plant-card">
+    <h2><a href="#coal-plant-card" class="section-anchor">#</a>CoalPlantCard</h2>
+    <p class="section-intro">
+      Test harness for <code>src/lib/components/cards/CoalPlantCard.svelte</code>.
+    </p>
+    <div class="demo-block">
+      <!-- Preset radio buttons -->
+      <div class="coal-presets">
+        {#each COAL_PRESETS as preset}
+          <label
+            class="coal-preset-label"
+            class:active={!coalUseCustom && coalSelectedPreset === preset.id}
+          >
+            <input
+              type="radio"
+              name="coal-preset"
+              value={preset.id}
+              checked={!coalUseCustom && coalSelectedPreset === preset.id}
+              onchange={() => {
+                coalSelectedPreset = preset.id;
+                coalUseCustom = false;
+                loadCoalPlant();
+              }}
+            />
+            <span class="coal-preset-name">{preset.label}</span>
+            <span class="coal-preset-id">{preset.id}</span>
+          </label>
+        {/each}
+      </div>
+
+      <!-- Custom ID row -->
+      <div
+        style="display: flex; gap: var(--space-3); align-items: center; margin-top: var(--space-3); margin-bottom: var(--space-4);"
+      >
+        <label
+          class="coal-preset-label"
+          class:active={coalUseCustom}
+          style="margin: 0; padding: var(--space-2) var(--space-3);"
+        >
+          <input
+            type="radio"
+            name="coal-preset"
+            checked={coalUseCustom}
+            onchange={() => {
+              coalUseCustom = true;
+            }}
+          />
+          <span class="coal-preset-name">Custom</span>
+        </label>
+        <input
+          type="text"
+          bind:value={coalCustomId}
+          placeholder="e.g. L100000103058"
+          onfocus={() => {
+            coalUseCustom = true;
+          }}
+          onkeydown={(e) => e.key === 'Enter' && loadCoalPlant()}
+          style="font-family: var(--font-family-mono); font-size: var(--font-size-sm); padding: var(--space-2) var(--space-3); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-sm); width: 220px;"
+        />
+        <button class="btn" onclick={loadCoalPlant} disabled={coalLoading}>
+          {coalLoading ? 'Loading…' : 'Load'}
+        </button>
+      </div>
+
+      {#if coalError}
+        <p style="color: var(--color-status-retired); font-size: var(--font-size-sm);">
+          {coalError}
+        </p>
+      {:else if coalLocation}
+        <CoalPlantCard units={coalLocation.units} open={true} />
+      {/if}
     </div>
   </section>
 
@@ -1237,16 +1413,26 @@
        FULL REGISTRY
        ======================================== -->
   <section id="registry">
-    <h2>Full Component Registry</h2>
+    <h2><a href="#registry" class="section-anchor">#</a>Full Component Registry</h2>
     <p class="section-intro">
       All {totalComponentCount} components in the codebase, organized by category.
     </p>
 
-    {#each registryCategories as cat}
+    <input
+      type="search"
+      class="registry-search"
+      placeholder="Filter components by name or category…"
+      bind:value={registrySearch}
+    />
+    {#if registrySearch && filteredComponentIndex.length === 0}
+      <p class="registry-empty">No components match "{registrySearch}"</p>
+    {/if}
+
+    {#each filteredCategories as cat}
       <div class="registry-category">
         <h3 class="registry-cat-label">{cat}</h3>
         <div class="component-index">
-          {#each componentIndex.filter(c => c.category === cat) as comp}
+          {#each filteredComponentIndex.filter((c) => c.category === cat) as comp}
             <div class="index-item">
               <code class="comp-name">{comp.name}</code>
               <code class="file-path">{comp.path}</code>
@@ -1256,10 +1442,53 @@
       </div>
     {/each}
   </section>
-
 </div>
 
 <style>
+  /* ── CoalPlantCard preset picker ── */
+  .coal-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+  }
+  .coal-preset-label {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    user-select: none;
+    transition:
+      border-color 0.1s,
+      background 0.1s;
+  }
+  .coal-preset-label:hover {
+    border-color: #888;
+  }
+  .coal-preset-label.active {
+    border-color: #111;
+    background: #111;
+    color: #fff;
+  }
+  .coal-preset-label input[type='radio'] {
+    display: none;
+  }
+  .coal-preset-name {
+    font-weight: 500;
+  }
+  .coal-preset-id {
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-xs);
+    opacity: 0.6;
+  }
+  .coal-preset-label.active .coal-preset-id {
+    opacity: 0.7;
+  }
+
   .page {
     max-width: 1000px;
     margin: 0 auto;
@@ -1319,19 +1548,30 @@
 
   .toc a {
     font-size: var(--font-size-body);
-    color: var(--color-text-secondary);
+    color: var(--color-text-tertiary);
     text-decoration: none;
     padding: var(--space-1) var(--space-2);
+    border-radius: 2px;
+    transition:
+      color 0.15s,
+      background 0.15s;
   }
 
   .toc a:hover {
     color: var(--color-text-primary);
-    text-decoration: underline;
+    background: var(--color-gray-50);
+  }
+
+  .toc a.active {
+    color: var(--color-text-primary);
+    background: var(--color-gray-100);
+    font-weight: 500;
   }
 
   /* Sections */
   section {
-    margin-bottom: var(--space-16);
+    margin-bottom: 80px;
+    padding-top: var(--space-6);
     scroll-margin-top: 60px;
   }
 
@@ -1344,6 +1584,24 @@
     padding-bottom: var(--space-3);
     border-bottom: var(--border-width) solid var(--color-border);
     color: var(--color-text-secondary);
+    position: relative;
+  }
+
+  .section-anchor {
+    color: var(--color-gray-300);
+    text-decoration: none;
+    margin-right: var(--space-2);
+    opacity: 0;
+    transition: opacity 0.15s;
+    font-weight: 400;
+  }
+
+  section h2:hover .section-anchor {
+    opacity: 1;
+  }
+
+  .section-anchor:hover {
+    color: var(--color-text-primary);
   }
 
   .section-intro {
@@ -1354,7 +1612,7 @@
 
   /* Component Groups */
   .component-group {
-    margin-bottom: var(--space-12);
+    margin-bottom: var(--space-16);
   }
 
   .component-header {
@@ -1515,10 +1773,6 @@
     color: var(--color-text-primary);
   }
 
-  .comp-note {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-tertiary);
-  }
 
   /* Typography Reference */
   .type-samples {
@@ -1577,6 +1831,28 @@
     font-family: var(--font-family-mono);
   }
 
+  .registry-search {
+    display: block;
+    width: 100%;
+    max-width: 360px;
+    margin-bottom: var(--space-6);
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--font-size-body);
+    font-family: var(--font-family-sans);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-bg-primary, #fff);
+    color: var(--color-text-primary);
+  }
+  .registry-search:focus {
+    outline: none;
+    border-color: var(--gem-primary-blue, #1d4961);
+  }
+  .registry-empty {
+    font-size: var(--font-size-body);
+    color: var(--color-text-tertiary);
+    margin-bottom: var(--space-4);
+  }
   .registry-category {
     margin-bottom: var(--space-6);
   }
@@ -1590,6 +1866,41 @@
   }
   .component-group h3:not(:first-of-type) {
     margin-top: var(--space-8);
+  }
+
+  .complex-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+  .complex-item {
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: var(--space-5);
+  }
+  .complex-header {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-4);
+    margin-bottom: var(--space-3);
+    flex-wrap: wrap;
+  }
+  .complex-what {
+    font-size: var(--font-size-body);
+    color: var(--color-text-primary);
+    margin: 0 0 var(--space-2) 0;
+  }
+  .complex-api {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    margin: 0;
+  }
+  .complex-api strong {
+    color: var(--color-text-tertiary);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: var(--font-size-xs);
+    letter-spacing: var(--tracking-caps);
   }
 
   @media (max-width: 768px) {

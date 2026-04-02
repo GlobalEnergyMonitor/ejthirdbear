@@ -1,0 +1,394 @@
+<script lang="ts">
+  /**
+   * TRACKER FIELDGUIDE PAGE
+   * Field-level documentation and data distribution explorer per tracker.
+   * Rebranded from "Factsheet" — fully native Svelte, no Observable dependency.
+   */
+  import { page } from '$app/stores';
+  import { onMount } from 'svelte';
+  import { link } from '$lib/links';
+  import DatasetFactsheet from '$lib/widgets/DatasetFactsheet.svelte';
+  import ProjectCard from '$lib/components/cards/ProjectCard.svelte';
+  import { listAssetsByType } from '$lib/ownership-api';
+  import {
+    slugToTrackerName,
+    trackerNameToSlug,
+    trackerMetadata,
+  } from '$lib/data-config/tracker-metadata';
+  import {
+    CATALOG_SLUG_TO_URL_SLUG,
+    URL_SLUG_TO_CATALOG_SLUG,
+  } from '$lib/data-config/tracker-schema';
+  import { fetchCatalogIndex } from '$lib/api/catalog-api';
+  import { getTrackerColor } from '$lib/design-tokens';
+  import PageHeader from '$lib/components/nav/PageHeader.svelte';
+  import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
+  import { getTrackerFieldData } from '$lib/catalog-field-meta';
+
+  // URL param
+  const trackerParam = $derived($page.params.tracker);
+
+  // Resolve tracker name from slug
+  const tracker = $derived(slugToTrackerName[trackerParam] || trackerParam);
+  const meta = $derived(trackerMetadata[trackerParam]);
+
+  // Field metadata is fetched from the API via catalog-field-meta.ts
+  // (API first, hardcoded fallback for resilience)
+
+  // State
+  let fieldsMetadata = $state<
+    Array<{
+      columnName: string;
+      category: string;
+      definition: string;
+      dataType?: string;
+      dataSubType?: string;
+      unit?: string;
+      codeFriendlyName?: string;
+      fieldValue?: string | null;
+      valueDefinition?: string | null;
+    }>
+  >([]);
+  let categoriesOrdered = $state<string[]>([]);
+  let sampleAssets = $state<
+    Array<{
+      id: string;
+      name: string;
+      status: string;
+      capacity?: number;
+      capacityUnit?: string;
+      country?: string;
+      state?: string;
+      owner?: string;
+      ownershipShare?: number;
+      tracker?: string;
+    }>
+  >([]);
+
+  onMount(async () => {
+    // Fetch API-ordered tracker list for tabs (once)
+    try {
+      const index = await fetchCatalogIndex();
+      if (index?.trackers?.length) {
+        const apiSlugs = index.trackers
+          .map((t) => CATALOG_SLUG_TO_URL_SLUG[t.slug])
+          .filter((s): s is string => !!s && !!trackerMetadata[s]);
+        if (apiSlugs.length) {
+          const apiSet = new Set(apiSlugs);
+          const remaining = Object.keys(trackerMetadata)
+            .filter((s) => !apiSet.has(s))
+            .sort((a, b) => trackerMetadata[a].name.localeCompare(trackerMetadata[b].name));
+          availableSlugs = [...apiSlugs, ...remaining];
+        }
+      }
+    } catch {
+      // keep hardcoded fallback
+    }
+  });
+
+  // Re-fetch field metadata and sample assets whenever the tracker param changes.
+  // Clears stale data immediately + cancels in-flight fetches on rapid tab switches.
+  $effect(() => {
+    const slug = trackerParam;
+    const trackerName = slugToTrackerName[slug] || slug;
+
+    // Clear stale data immediately so UI doesn't flash old tracker's content
+    fieldsMetadata = [];
+    categoriesOrdered = [];
+    sampleAssets = [];
+
+    let stale = false;
+
+    // Fetch field metadata
+    getTrackerFieldData(slug).then(({ fields, categoriesOrdered: cats }) => {
+      if (stale) return;
+      fieldsMetadata = fields;
+      if (cats.length) categoriesOrdered = cats;
+    });
+
+    // Fetch sample assets
+    const apiSlug =
+      trackerNameToSlug[trackerName] || trackerName.toLowerCase().replace(/\s+/g, '-');
+    listAssetsByType(apiSlug, { limit: 50 })
+      .then((assets) => {
+        if (stale) return;
+        const sorted = assets
+          .filter((a) => a.capacity != null)
+          .sort((a, b) => (b.capacity ?? 0) - (a.capacity ?? 0))
+          .slice(0, 6);
+
+        const primaryOwner = (idx: number) => sorted[idx]?.owners?.[0];
+        sampleAssets = sorted.map((a, i) => ({
+          id: a.id,
+          name: a.name,
+          status: a.status || '',
+          capacity: a.capacity ?? undefined,
+          capacityUnit: a.capacityUnit || (trackerName.includes('Mine') ? 'Mtpa' : 'MW'),
+          country: a.country ?? undefined,
+          state:
+            (a.raw?.['Subnational unit (province, state)'] as string | undefined) ??
+            (a.raw?.['State'] as string | undefined) ??
+            undefined,
+          owner: a.ownerName ?? primaryOwner(i)?.name ?? undefined,
+          ownershipShare: primaryOwner(i)?.ownershipShare ?? undefined,
+          tracker: trackerName,
+        }));
+      })
+      .catch(() => {});
+
+    // Cleanup: mark in-flight fetches as stale when tracker changes again
+    return () => {
+      stale = true;
+    };
+  });
+
+  // Tracker nav — driven by API, falls back to hardcoded
+  let availableSlugs = $state<string[]>(Object.keys(trackerMetadata));
+
+  const info = $derived(
+    meta
+      ? {
+          title: `${meta.name} Tracker`,
+          description: meta.description,
+          citation: meta.citation,
+        }
+      : {
+          title: `${tracker} Tracker`,
+          description: `Field metadata and distributions for the ${tracker} tracker.`,
+          citation: 'Global Energy Monitor. CC BY 4.0.',
+        }
+  );
+</script>
+
+<svelte:head>
+  <title>{info.title} FieldGuide — Global Energy Monitor</title>
+  <SeoMeta
+    title="{info.title} FieldGuide — Global Energy Monitor"
+    description="Field-level documentation and data distribution analysis for the {info.title} dataset."
+  />
+</svelte:head>
+
+<main>
+  <PageHeader
+    breadcrumbs={[
+      { label: 'Home', href: link('index') },
+      { label: 'Tracker FieldGuide', href: link('fieldguide') },
+      { label: tracker },
+    ]}
+    title="{info.title} FieldGuide"
+    lead={info.description}
+  />
+
+  <!-- Tracker switcher tabs -->
+  <nav class="tracker-tabs" aria-label="Switch tracker">
+    {#each availableSlugs as slug}
+      {@const m = trackerMetadata[slug]}
+      <a
+        href={link(`fieldguide/${slug}`)}
+        class="tracker-tab"
+        class:active={slug === trackerParam}
+        style="--tab-color: {getTrackerColor(m.name)}"
+      >
+        {m.name}
+      </a>
+    {/each}
+  </nav>
+
+  <!-- Main content: field explorer (keyed so it remounts on tracker change) -->
+  {#key trackerParam}
+    <DatasetFactsheet
+      {tracker}
+      {fieldsMetadata}
+      {categoriesOrdered}
+      catalogSlug={URL_SLUG_TO_CATALOG_SLUG[trackerParam] ?? ''}
+      title="{info.title} Fields"
+    />
+  {/key}
+
+  <!-- Sample assets -->
+  {#if sampleAssets.length > 0}
+    <section class="sample-assets">
+      <h2>Largest Assets</h2>
+      <p class="section-desc">Top assets by capacity in this tracker</p>
+      <div class="cards-grid">
+        {#each sampleAssets as asset}
+          <ProjectCard {asset} />
+        {/each}
+      </div>
+    </section>
+  {/if}
+
+  <!-- Citation & links -->
+  <section class="footer-section">
+    <div class="citation-block">
+      <h3>Citation</h3>
+      <p>{info.citation}</p>
+    </div>
+    {#if meta?.externalLinks?.gemPage}
+      <a class="external-link" href={meta.externalLinks.gemPage} target="_blank" rel="noopener">
+        View on globalenergymonitor.org
+      </a>
+    {/if}
+  </section>
+
+  <footer class="page-footer">
+    <a href={link('fieldguide')}>All Trackers</a>
+    <span class="sep">&middot;</span>
+    <a href="?embed=true" target="_blank" rel="noopener">Embeddable version</a>
+    <span class="sep">&middot;</span>
+    <a href={link('explore')}>Explore Data</a>
+  </footer>
+</main>
+
+<style>
+  main {
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: var(--space-10) var(--space-5);
+    font-family: var(--font-family-sans);
+  }
+
+  /* Tracker tabs */
+  .tracker-tabs {
+    display: flex;
+    gap: var(--space-1);
+    margin-bottom: var(--space-6);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+    scroll-snap-type: x proximity;
+    position: relative;
+    mask-image: linear-gradient(to right, black calc(100% - 24px), transparent);
+    -webkit-mask-image: linear-gradient(to right, black calc(100% - 24px), transparent);
+  }
+
+  .tracker-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tracker-tab {
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    text-decoration: none;
+    border-radius: var(--radius-md);
+    white-space: nowrap;
+    transition: all 0.15s ease;
+    border-bottom: 2px solid transparent;
+    scroll-snap-align: start;
+  }
+
+  .tracker-tab:hover {
+    color: var(--color-text-primary);
+    background: rgba(29, 73, 97, 0.05);
+  }
+
+  .tracker-tab.active {
+    color: var(--tab-color, var(--color-accent));
+    font-weight: 600;
+    border-bottom-color: var(--tab-color, var(--color-accent));
+    background: rgba(29, 73, 97, 0.06);
+  }
+
+  /* Sample assets */
+  .sample-assets {
+    margin-bottom: var(--space-12);
+  }
+
+  h2 {
+    font-size: var(--font-size-xl);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
+    color: var(--color-text-primary);
+    margin: 0 0 var(--space-2) 0;
+  }
+
+  h3 {
+    font-size: var(--font-size-lg);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
+    color: var(--color-text-primary);
+    margin: 0 0 var(--space-2) 0;
+  }
+
+  .section-desc {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    margin: 0 0 var(--space-4) 0;
+  }
+
+  .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: var(--space-3);
+  }
+
+  /* Footer section */
+  .footer-section {
+    display: flex;
+    gap: var(--space-6);
+    align-items: flex-start;
+    flex-wrap: wrap;
+    margin-bottom: var(--space-8);
+  }
+
+  .citation-block {
+    flex: 1;
+    min-width: 280px;
+    background: var(--color-bg-secondary);
+    padding: var(--space-5);
+    border-radius: 0 var(--radius-xl) var(--radius-xl) var(--radius-xl);
+  }
+
+  .citation-block p {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-primary);
+    margin: 0;
+    line-height: var(--leading-relaxed);
+  }
+
+  .external-link {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    text-decoration: underline;
+    padding-top: var(--space-3);
+  }
+
+  .external-link:hover {
+    color: var(--color-text-primary);
+  }
+
+  .page-footer {
+    display: flex;
+    gap: var(--space-3);
+    align-items: center;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-tertiary);
+    padding-top: var(--space-6);
+    border-top: 1px solid var(--color-border);
+  }
+
+  .page-footer a {
+    color: var(--color-text-secondary);
+    text-decoration: none;
+  }
+
+  .page-footer a:hover {
+    text-decoration: underline;
+  }
+
+  .sep {
+    color: var(--color-border);
+  }
+
+  @media (max-width: 720px) {
+    .cards-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

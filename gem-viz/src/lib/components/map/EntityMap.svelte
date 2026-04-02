@@ -8,6 +8,7 @@
   import { onMount } from 'svelte';
   import maplibregl from 'maplibre-gl';
   import 'maplibre-gl/dist/maplibre-gl.css';
+  import { BASEMAP_POSITRON } from '$lib/map-config';
   import { trackerToMapColor, colors } from '$lib/design-tokens';
   import type { SpotlightAsset } from '$lib/ownership-data';
 
@@ -45,10 +46,10 @@
     hasLocations = geoAssets.length > 0;
   });
 
-  // Map color lookup — handles both tracker-config names and API facility type names
+  // Map color lookup — handles both tracker names and API facility type names
   function getMarkerColor(tracker: string): string {
     if (trackerToMapColor[tracker]) return trackerToMapColor[tracker];
-    // Fallback for API facility type names that differ from tracker-config names
+    // Fallback for API facility type names that differ from UI tracker names
     const apiNameMap: Record<string, string> = {
       'Oil & Gas Plant': trackerToMapColor['Gas Plant'] || colors.gray500,
       'Bioenergy Plant': trackerToMapColor['Bioenergy Power'] || colors.gray500,
@@ -65,7 +66,7 @@
 
     map = new maplibregl.Map({
       container: mapContainer,
-      style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
+      style: BASEMAP_POSITRON,
       center: [0, 20],
       zoom: 1.5,
       maxZoom: 12,

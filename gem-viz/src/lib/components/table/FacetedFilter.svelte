@@ -11,7 +11,7 @@
    * - Shift+click for AND filtering (vs default OR)
    */
 
-  import { formatCompact } from '$lib/format';
+  import { formatCompact } from '$lib/utils/format';
   import { flip } from 'svelte/animate';
   import { ChevronDown, ChevronRight } from 'lucide-svelte';
   import { fade } from 'svelte/transition';

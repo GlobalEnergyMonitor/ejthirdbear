@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
   /**
    * EmbedShell — reusable embed wrapper with postMessage auto-height,
    * dark mode, branding footer, and shared embed state styles.
@@ -7,6 +7,7 @@
    */
   import { onMount } from 'svelte';
   import { beforeNavigate, goto } from '$app/navigation';
+  import { GEM_DOMAIN } from '$lib/external-links';
 
   let {
     theme = 'light',
@@ -14,17 +15,102 @@
     autoHeight = true,
     embedId = '',
     branding = false,
+    linkBase = '',
+    linkTarget = '_blank',
     children,
   } = $props();
+
+  // ── Compute target origin for postMessage (avoids broad '*' when possible) ──
+  const parentOrigin = (() => {
+    if (typeof window === 'undefined') return '*';
+    try {
+      return window.parent.location.origin;
+    } catch {
+      // Cross-origin — cannot read parent origin, must use '*'
+      return '*';
+    }
+  })();
+
+  // ── Link rewriting for CMS embeds (Drupal etc.) ──
+  // When linkBase is set, all internal links are rewritten to point to the
+  // CMS wrapper pages instead of gem-viz routes.
+  // linkBase: e.g. "https://drupal-site.com/data-tools" or "/data-tools"
+  // linkTarget: "_blank" (default), "_top" (navigate parent frame), "_self"
+
+  function isInternalHref(href) {
+    if (!href) return false;
+    if (href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('javascript:'))
+      return false;
+    if (/^https?:\/\//i.test(href)) return false;
+    return true;
+  }
+
+  function rewriteHref(href: string): string {
+    if (!linkBase) return href;
+    try {
+      const base = linkBase.replace(/\/+$/, '');
+      const resolved = new URL(href, window.location.href);
+      return base + resolved.pathname + resolved.search + resolved.hash;
+    } catch {
+      return href;
+    }
+  }
+
+  function handleLinkClick(e) {
+    if (!linkBase) return;
+    const anchor = e.target.closest('a');
+    if (!anchor) return;
+    const href = anchor.getAttribute('href');
+    if (!isInternalHref(href)) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    const newUrl = rewriteHref(href);
+
+    if (linkTarget === '_top' && window.parent !== window) {
+      window.top.location.href = newUrl;
+    } else if (linkTarget === '_self') {
+      window.location.href = newUrl;
+    } else {
+      window.open(newUrl, '_blank', 'noopener,noreferrer');
+    }
+  }
 
   // Preserve embed query params when navigating within the iframe.
   // Without this, clicking a breadcrumb link in /cards?embed=true would
   // navigate to /explore (no embed param) and show full app chrome inside the iframe.
-  const EMBED_PARAMS = ['embed', 'embedId', 'theme', 'padding', 'autoHeight', 'branding'];
+  const EMBED_PARAMS = [
+    'embed',
+    'embedId',
+    'theme',
+    'padding',
+    'autoHeight',
+    'branding',
+    'linkBase',
+    'linkTarget',
+  ];
 
   beforeNavigate((nav) => {
     if (nav.willUnload) return;
     if (!nav.to?.url) return;
+
+    // If linkBase is set, intercept all internal goto() navigations and
+    // redirect to the CMS wrapper URL instead.
+    if (linkBase) {
+      nav.cancel();
+      const path = nav.to.url.pathname + nav.to.url.search + nav.to.url.hash;
+      const newUrl = rewriteHref(path);
+
+      if (linkTarget === '_top' && window.parent !== window) {
+        window.top.location.href = newUrl;
+      } else if (linkTarget === '_self') {
+        window.location.href = newUrl;
+      } else {
+        window.open(newUrl, '_blank', 'noopener,noreferrer');
+      }
+      return;
+    }
+
     if (nav.to.url.searchParams.has('embed')) return;
 
     const from = nav.from?.url;
@@ -39,16 +125,32 @@
     goto(url.toString(), { replaceState: true });
   });
 
+  export function reportEmbedError(message: string) {
+    if (typeof window === 'undefined') return;
+    if (window.parent === window) return;
+    window.parent.postMessage(
+      { source: 'gem-embed', type: 'error', embedId, message },
+      parentOrigin
+    );
+  }
+
   const postHeight = () => {
     if (!autoHeight) return;
     if (typeof window === 'undefined') return;
     if (window.parent === window) return;
 
-    const height = Math.max(
+    const candidates: number[] = [
       document.documentElement?.scrollHeight || 0,
-      document.body?.scrollHeight || 0
-    );
+      document.body?.scrollHeight || 0,
+    ];
 
+    // SVG and canvas elements may not contribute to scrollHeight
+    document.querySelectorAll<SVGSVGElement | HTMLCanvasElement>('svg, canvas').forEach((el) => {
+      const rect = el.getBoundingClientRect();
+      if (rect.height > 0) candidates.push(rect.height);
+    });
+
+    const height = Math.max(...candidates);
     if (!height) return;
 
     window.parent.postMessage(
@@ -58,18 +160,31 @@
         height,
         embedId,
       },
-      '*'
+      parentOrigin
     );
   };
 
+  let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+  const postHeightDebounced = () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(postHeight, 300);
+  };
+
   onMount(() => {
-    if (!autoHeight) return;
     if (typeof window === 'undefined') return;
     if (window.parent === window) return;
 
+    // Send ready signal
+    window.parent.postMessage(
+      { source: 'gem-embed', type: 'ready', embedId, route: window.location.pathname },
+      parentOrigin
+    );
+
+    if (!autoHeight) return;
+
     postHeight();
 
-    const observer = new ResizeObserver(() => postHeight());
+    const observer = new ResizeObserver(() => postHeightDebounced());
     observer.observe(document.documentElement);
 
     window.addEventListener('load', postHeight);
@@ -79,17 +194,23 @@
       observer.disconnect();
       window.removeEventListener('load', postHeight);
       window.clearTimeout(timeout);
+      clearTimeout(debounceTimer);
     };
   });
 </script>
 
-<div class="embed-container" class:dark={theme === 'dark'} style="padding: {padding}px;">
+<!-- svelte-ignore a11y_click_events_have_key_events -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div
+  class="embed-container"
+  class:dark={theme === 'dark'}
+  style="padding: {padding}px;"
+  onclick={handleLinkClick}
+>
   {@render children()}
   {#if branding}
     <footer class="gem-branding">
-      <a href="https://globalenergymonitor.org" target="_blank" rel="noopener">
-        Powered by Global Energy Monitor
-      </a>
+      <a href={GEM_DOMAIN} target="_blank" rel="noopener"> Powered by Global Energy Monitor </a>
     </footer>
   {/if}
 </div>
@@ -97,7 +218,7 @@
 <style>
   .embed-container {
     min-height: 100vh;
-    background: var(--color-bg-primary);
+    background: transparent;
     display: flex;
     flex-direction: column;
     align-items: center;

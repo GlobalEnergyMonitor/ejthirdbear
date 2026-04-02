@@ -16,6 +16,10 @@ import { SYSTEM_PROMPT } from './system-prompt';
 import { TOOLS, type CartItem } from './tools';
 import { executeTool } from './execute-tool';
 
+// LLM provider config
+const OPENROUTER_URL = env.OPENROUTER_URL || 'https://openrouter.ai/api/v1/chat/completions';
+const APP_SITE_URL = env.PUBLIC_SITE_URL || 'https://gem-viz.fly.dev';
+
 // Model options
 const MODEL = 'anthropic/claude-sonnet-4'; // Main orchestrator
 
@@ -141,12 +145,12 @@ async function streamFinalResponse(
 
   let streamResponse: Response;
   try {
-    streamResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    streamResponse = await fetch(OPENROUTER_URL, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${getOpenRouterKey()}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://gem-viz.fly.dev',
+        'HTTP-Referer': APP_SITE_URL,
         'X-Title': 'GEM Gembot',
       },
       body: JSON.stringify({
@@ -277,12 +281,12 @@ export const POST: RequestHandler = async ({ request }) => {
         send('status', { stage: 'thinking', message: 'Processing your request...' });
 
         // Initial API call
-        let response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        let response = await fetch(OPENROUTER_URL, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${getOpenRouterKey()}`,
             'Content-Type': 'application/json',
-            'HTTP-Referer': 'https://gem-viz.fly.dev',
+            'HTTP-Referer': APP_SITE_URL,
             'X-Title': 'GEM Gembot',
           },
           body: JSON.stringify({
@@ -332,12 +336,12 @@ export const POST: RequestHandler = async ({ request }) => {
 
           send('status', { stage: 'thinking', message: 'Analyzing results...' });
 
-          response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          response = await fetch(OPENROUTER_URL, {
             method: 'POST',
             headers: {
               Authorization: `Bearer ${getOpenRouterKey()}`,
               'Content-Type': 'application/json',
-              'HTTP-Referer': 'https://gem-viz.fly.dev',
+              'HTTP-Referer': APP_SITE_URL,
               'X-Title': 'GEM Gembot',
             },
             body: JSON.stringify({

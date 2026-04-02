@@ -5,7 +5,7 @@
   // ============================================================================
 
   // --- IMPORTS ---
-  import { assetLink, entityLink } from '$lib/links';
+  import { assetLink, entityLink, link } from '$lib/links';
   import TrackerGlobeGrid from '$lib/components/tracker/TrackerGlobeGrid.svelte';
   import TrackerIcon from '$lib/components/tracker/TrackerIcon.svelte';
 
@@ -125,6 +125,16 @@
           {/each}
         </div>
       </section>
+
+      <!-- Tools -->
+      <section class="asset-links">
+        <p>Tools</p>
+        <div class="link-list">
+          <a href={link('controlchain')} class="tool-link">ControlChain</a>
+          <a href={link('fieldguide')} class="tool-link">Tracker FieldGuide</a>
+          <a href={link('screener')} class="tool-link">Asset Screener</a>
+        </div>
+      </section>
     </aside>
 
     <!-- Tracker Globe Grid -->
@@ -163,12 +173,13 @@
     max-height: 100vh;
     overflow: hidden;
     display: flex;
-    align-items: flex-start;
+    align-items: stretch;
     justify-content: center;
   }
 
-  .home-globe :global(.globe-grid) {
-    max-width: 500px;
+  .home-globe :global(.globe-console) {
+    width: 100%;
+    max-width: 640px;
   }
 
   /* Featured Sections */
@@ -218,8 +229,8 @@
       gap: var(--space-5);
     }
 
-    .home-globe :global(.globe-grid) {
-      max-width: 420px;
+    .home-globe :global(.globe-console) {
+      max-width: 560px;
     }
   }
 
@@ -236,7 +247,7 @@
       order: -1;
     }
 
-    .home-globe :global(.globe-grid) {
+    .home-globe :global(.globe-console) {
       max-width: 100%;
     }
   }

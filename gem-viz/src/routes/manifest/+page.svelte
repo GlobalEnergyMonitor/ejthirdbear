@@ -12,8 +12,23 @@
   const api = $derived(data?.api);
   const trackerConfigs = $derived(data?.trackerConfigs || []);
   const dataSources = $derived(data?.dataSources || { ownership: [], trackers: [], derived: [] });
+  const liveSources = $derived(data?.liveSources || []);
+  const apiMeta = $derived(data?.apiMeta || null);
+  const fieldMappings = $derived(data?.fieldMappings || []);
+  const statusTaxonomy = $derived(data?.statusTaxonomy || null);
   const dataVersionInfo = $derived(data?.dataVersionInfo || null);
   const meta = $derived(data?.meta || { generatedAt: '', loadTime: null, error: null });
+
+  // Group field mappings by asset type for display
+  const fieldMappingsByType = $derived.by(() => {
+    const groups = {};
+    for (const fm of fieldMappings) {
+      const key = fm.asset_type || 'Unknown';
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(fm);
+    }
+    return groups;
+  });
 
   // Helpers
   function formatNumber(n) {
@@ -47,6 +62,8 @@
     <h2>Contents</h2>
     <ul>
       <li><a href="#api-info">Ownership API</a></li>
+      <li><a href="#status-taxonomy">Status Taxonomy</a></li>
+      <li><a href="#field-mappings">Field Mappings ({fieldMappings.length})</a></li>
       <li><a href="#tracker-configs">Tracker Configs ({trackerConfigs.length})</a></li>
       <li><a href="#data-sources">Data Source Registry</a></li>
       <li><a href="#version-info">Version Info</a></li>
@@ -63,47 +80,129 @@
     </div>
   </section>
 
+  <!-- Live API Data -->
+  {#if apiMeta}
+    <section id="api-live">
+      <h2>Live API Database</h2>
+      <p class="section-desc">From <code>/metadata</code> endpoint — real-time database stats.</p>
+      <div class="api-card">
+        <div><strong>API Version:</strong> {apiMeta.version}</div>
+        <div><strong>Git:</strong> {apiMeta.git_branch}@{apiMeta.git_commit}</div>
+        <div><strong>Assets:</strong> {formatNumber(apiMeta.database.asset_count)}</div>
+        <div><strong>Entities:</strong> {formatNumber(apiMeta.database.entity_count)}</div>
+        <div>
+          <strong>Ownership relationships:</strong>
+          {formatNumber(apiMeta.database.ownership_relationships)}
+        </div>
+        <div><strong>Sources:</strong> {apiMeta.database.source_count}</div>
+        <div><strong>DB size:</strong> {apiMeta.database.size_mb} MB</div>
+        <div><strong>Asset types:</strong> {apiMeta.database.asset_types.join(', ')}</div>
+      </div>
+    </section>
+  {/if}
+
+  <!-- Live Sources -->
+  {#if liveSources.length > 0}
+    <section id="live-sources">
+      <h2>Live Data Sources</h2>
+      <p class="section-desc">
+        From <code>/catalog/sources</code> — tracker spreadsheets loaded into the API.
+      </p>
+      <table class="probe-table">
+        <thead>
+          <tr><th>Source File</th><th>Asset Type</th><th>Rows</th><th>Loaded</th></tr>
+        </thead>
+        <tbody>
+          {#each liveSources as src}
+            <tr>
+              <td><code>{src.source_file}</code></td>
+              <td>{src.asset_type}</td>
+              <td>{formatNumber(src.row_count)}</td>
+              <td>{new Date(src.load_timestamp).toLocaleDateString()}</td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    </section>
+  {/if}
+
+  <!-- Status Taxonomy -->
+  {#if statusTaxonomy?.statuses}
+    <section id="status-taxonomy">
+      <h2>Status Taxonomy</h2>
+      <p class="section-desc">
+        From <code>/catalog/metadata/status-taxonomy</code> — canonical status groups and sub-statuses.
+      </p>
+      {#each Object.entries(statusTaxonomy.statuses) as [_groupId, group]}
+        <article class="config-card">
+          <h3>{group.label}</h3>
+          <table class="probe-table">
+            <thead>
+              <tr><th>Sub-Status</th><th>Description</th></tr>
+            </thead>
+            <tbody>
+              {#each Object.entries(group.sub_statuses) as [key, sub]}
+                <tr>
+                  <td><code>{key}</code></td>
+                  <td>{sub.description || '—'}</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </article>
+      {/each}
+    </section>
+  {/if}
+
+  <!-- Field Mappings -->
+  {#if fieldMappings.length > 0}
+    <section id="field-mappings">
+      <h2>Field Mappings</h2>
+      <p class="section-desc">
+        From <code>/catalog/field-mappings</code> — how source spreadsheet columns map to normalized
+        API fields.
+      </p>
+      {#each Object.entries(fieldMappingsByType) as [assetType, mappings]}
+        <article class="config-card">
+          <h3>{assetType}</h3>
+          <table class="probe-table">
+            <thead>
+              <tr><th>Normalized Field</th><th>Original Column</th><th>Type</th><th>Notes</th></tr>
+            </thead>
+            <tbody>
+              {#each mappings as fm}
+                <tr>
+                  <td><code>{fm.normalized_field}</code></td>
+                  <td>{fm.original_field}</td>
+                  <td>{fm.mapping_type}</td>
+                  <td>{fm.notes || '—'}</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </article>
+      {/each}
+    </section>
+  {/if}
+
   <!-- Tracker Configs -->
   <section id="tracker-configs">
     <h2>Tracker Configurations</h2>
     <p class="section-desc">Field mappings for each asset tracker type.</p>
 
-    {#each trackerConfigs as { name, config }}
+    {#each trackerConfigs as { name, assetType, idField }}
       <article class="config-card">
         <h3>{name}</h3>
-        {#if config}
-          <dl class="config-list">
-            <div>
-              <dt>Asset Type</dt>
-              <dd>{config.assetType}</dd>
-            </div>
-            <div>
-              <dt>ID Field</dt>
-              <dd><code>{config.idField}</code></dd>
-            </div>
-            <div>
-              <dt>Name Fields</dt>
-              <dd><code>{JSON.stringify(config.nameFields)}</code></dd>
-            </div>
-            <div>
-              <dt>Capacity Field</dt>
-              <dd><code>{config.capacityField || '—'}</code> ({config.capacityUnit || '—'})</dd>
-            </div>
-            <div>
-              <dt>Status Field</dt>
-              <dd><code>{config.statusField}</code></dd>
-            </div>
-            <div>
-              <dt>Source Tab</dt>
-              <dd>{config.sourceTab}</dd>
-            </div>
-          </dl>
-          {#if config.docsRef}
-            <p class="docs-ref">{config.docsRef}</p>
-          {/if}
-        {:else}
-          <p class="no-data">No configuration found</p>
-        {/if}
+        <dl class="config-list">
+          <div>
+            <dt>API Asset Type</dt>
+            <dd>{assetType}</dd>
+          </div>
+          <div>
+            <dt>ID Field</dt>
+            <dd><code>{idField}</code></dd>
+          </div>
+        </dl>
       </article>
     {/each}
   </section>
@@ -311,12 +410,6 @@
     font-size: var(--font-size-md);
   }
 
-  .no-data {
-    color: var(--color-text-tertiary);
-    font-size: var(--font-size-body);
-    padding: var(--space-4);
-    font-style: italic;
-  }
 
   .config-card {
     background: var(--color-white);
@@ -352,12 +445,6 @@
     background: var(--color-gray-100);
     padding: 2px var(--space-1);
     font-size: var(--font-size-sm);
-  }
-  .docs-ref {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
-    margin-top: var(--space-3);
-    font-style: italic;
   }
 
   .source-grid {

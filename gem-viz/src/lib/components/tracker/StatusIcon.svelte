@@ -2,7 +2,7 @@
   /**
    * StatusIcon - Inline SVG status indicator from Observable notebook
    * Shows different icons based on grouped status:
-   * - prospective: light circle
+   * - planned: light circle
    * - cancelled: light X
    * - retired: dark X
    * - operating: no icon (clean look)
@@ -17,7 +17,7 @@
   const strokeWidth = $derived(Math.max(1.25, size * 0.125));
 </script>
 
-{#if groupedStatus === 'prospective' || groupedStatus === 'proposed'}
+{#if groupedStatus === 'planned' || groupedStatus === 'proposed'}
   <svg width={size} height={size} viewBox="0 0 {size} {size}" class="status-icon proposed">
     <circle cx={r} cy={r} r={r * 0.7} fill={statusColor} />
   </svg>

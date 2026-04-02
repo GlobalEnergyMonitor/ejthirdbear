@@ -3,107 +3,37 @@
    * Embeddable Tracker Factsheet
    * Two-column metadata explorer for GEM tracker datasets
    *
-   * URL params:
+   * URL params (all overridable via URL hash for Drupal deep-linking):
    *   tracker - Required. Tracker slug (coal-mine, coal-plant, gas-plant, etc.)
+   *   field - Optional. Pre-select a field by name (e.g. "Capacity (Mtpa)")
    *   title - Optional. Custom title override
    *   height - Optional. Max height in pixels (default: 500)
+   *
+   * Hash params: tracker, field, title, height
    */
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
-  import { base } from '$app/paths';
   import DatasetFactsheet from '$lib/widgets/DatasetFactsheet.svelte';
   import {
     slugToTrackerName,
     trackerMetadata,
     type TrackerMetadata,
   } from '$lib/data-config/tracker-metadata';
+  import { getTrackerFieldData } from '$lib/catalog-field-meta';
+  import { URL_SLUG_TO_CATALOG_SLUG } from '$lib/data-config/tracker-schema';
+  import { readHash, writeHash } from '../embed-utils';
 
-  // Field descriptions for generating synthetic metadata
-  const fieldDescriptions: Record<string, { category: string; definition: string }> = {
-    Status: { category: 'Main', definition: 'Current operating status of the asset.' },
-    Country: { category: 'Geography', definition: 'Country where the asset is located.' },
-    Countries: { category: 'Geography', definition: 'Countries the pipeline passes through.' },
-    Owner: { category: 'Ownership', definition: 'Primary owner or operator.' },
-    'Immediate Owner Entity Name': {
-      category: 'Ownership',
-      definition: 'Direct ownership entity name.',
-    },
-    'Start year': {
-      category: 'Age',
-      definition: 'Year the asset began or is planned to begin operation.',
-    },
-    'Capacity (MW)': { category: 'Size', definition: 'Generating capacity in megawatts.' },
-    'Capacity (Mtpa)': {
-      category: 'Size',
-      definition: 'Production capacity in million tonnes per annum.',
-    },
-    'Design capacity (ttpa)': {
-      category: 'Size',
-      definition: 'Design production capacity in thousand tonnes per annum.',
-    },
-    'Nominal crude steel capacity (ttpa)': {
-      category: 'Size',
-      definition: 'Nominal crude steel production capacity in thousand tonnes per annum.',
-    },
-    'CapacityBcm/y': {
-      category: 'Size',
-      definition: 'Pipeline capacity in billion cubic meters per year.',
-    },
-    'Fuel type': { category: 'Details', definition: 'Type of fuel used by the plant.' },
-    Technology: { category: 'Details', definition: 'Technology or process type used.' },
-    'Mine type': {
-      category: 'Details',
-      definition: 'Type of mining operation (surface, underground, etc.).',
-    },
-    Feedstock: { category: 'Details', definition: 'Primary feedstock material for bioenergy.' },
-    'Asset Name': { category: 'Names', definition: 'Name of the asset or project.' },
-    '% Share of Ownership': { category: 'Ownership', definition: 'Percentage ownership stake.' },
-  };
-
-  // Generate synthetic field metadata from tracker keyFields
-  function generateSyntheticFields(meta: TrackerMetadata) {
-    const fields: Array<{ columnName: string; category: string; definition: string }> = [];
-    for (const fieldName of meta.keyFields) {
-      const desc = fieldDescriptions[fieldName];
-      fields.push({
-        columnName: fieldName,
-        category: desc?.category || 'Other',
-        definition: desc?.definition || `${fieldName} field.`,
-      });
-    }
-    // Add common fields not already included
-    const included = new Set(fields.map((f) => f.columnName));
-    const extras = ['Country', 'Immediate Owner Entity Name', '% Share of Ownership'];
-    for (const fieldName of extras) {
-      if (!included.has(fieldName)) {
-        const desc = fieldDescriptions[fieldName];
-        if (desc) {
-          fields.push({
-            columnName: fieldName,
-            category: desc.category,
-            definition: desc.definition,
-          });
-        }
-      }
-    }
-    return fields;
-  }
-
-  // Map tracker to metadata CSV file
-  const metadataFiles: Record<string, string> = {
-    'Coal Mine': `${base}/coal-mine-fields-metadata.csv`,
-  };
-
-  // Parse URL parameters
-  const trackerSlug = $derived($page.url.searchParams.get('tracker') || '');
-  const titleParam = $derived($page.url.searchParams.get('title'));
-  const heightParam = $derived($page.url.searchParams.get('height'));
+  // URL params (converted to $state so hash can override on mount)
+  let trackerSlug = $state($page.url.searchParams.get('tracker') || '');
+  let titleParam = $state($page.url.searchParams.get('title'));
+  let heightParam = $state($page.url.searchParams.get('height'));
+  let fieldParam = $state($page.url.searchParams.get('field') || '');
 
   const tracker = $derived(slugToTrackerName[trackerSlug] || trackerSlug);
-  const metadata = $derived(trackerMetadata[trackerSlug] as TrackerMetadata | undefined);
-  const metadataFile = $derived(metadataFiles[tracker] || null);
+  const _metadata = $derived(trackerMetadata[trackerSlug] as TrackerMetadata | undefined);
   const maxHeight = $derived(heightParam ? parseInt(heightParam, 10) : 500);
   const title = $derived(titleParam || `${tracker} Fields`);
+  const catalogSlug = $derived(URL_SLUG_TO_CATALOG_SLUG[trackerSlug] ?? '');
 
   // State
   let fieldsMetadata = $state<
@@ -115,76 +45,37 @@
       valueDefinition?: string | null;
     }>
   >([]);
+  let categoriesOrdered = $state<string[]>([]);
   let loading = $state(true);
   let error = $state<string | null>(null);
 
-  // Load field metadata from CSV, falling back to synthetic fields
   async function loadFieldsMetadata() {
-    // If we have a CSV, try to load it
-    if (metadataFile) {
-      try {
-        const response = await fetch(metadataFile);
-        if (response.ok) {
-          const text = await response.text();
-          const lines = text.split('\n');
-
-          fieldsMetadata = lines
-            .slice(1)
-            .filter((line) => line.trim())
-            .map((line) => {
-              const values: string[] = [];
-              let current = '';
-              let inQuotes = false;
-
-              for (let i = 0; i < line.length; i++) {
-                const char = line[i];
-                if (char === '"') {
-                  inQuotes = !inQuotes;
-                } else if (char === ',' && !inQuotes) {
-                  values.push(current.trim());
-                  current = '';
-                } else {
-                  current += char;
-                }
-              }
-              values.push(current.trim());
-
-              return {
-                columnName: values[0] || '',
-                category: values[1] || '',
-                definition: values[4] || '',
-                fieldValue: values[3] || null,
-                valueDefinition: values[3] ? values[4] : null,
-              };
-            });
-
-          loading = false;
-          return;
-        }
-      } catch (err) {
-        if (import.meta.env.DEV)
-          console.warn('CSV load failed, falling back to synthetic fields:', err);
-      }
-    }
-
-    // Fall back to synthetic fields from tracker metadata
-    if (metadata) {
-      fieldsMetadata = generateSyntheticFields(metadata);
-    }
+    const { fields, categoriesOrdered: cats } = await getTrackerFieldData(trackerSlug);
+    fieldsMetadata = fields;
+    if (cats.length) categoriesOrdered = cats;
     loading = false;
   }
 
   onMount(() => {
-    if (metadata) {
+    // Read hash — hash params override query params for deep-linking
+    const h = readHash();
+    if (h.tracker) trackerSlug = h.tracker;
+    if (h.title) titleParam = h.title;
+    if (h.height) heightParam = h.height;
+    if (h.field) fieldParam = h.field;
+
+    if (trackerSlug) {
       loadFieldsMetadata();
-    } else if (!trackerSlug) {
-      error = 'Missing required parameter: tracker';
-      loading = false;
     } else {
-      error = `Unknown tracker: ${trackerSlug}`;
+      error = 'Missing required parameter: tracker';
       loading = false;
     }
   });
+
+  function handleFieldSelect(fieldName: string) {
+    fieldParam = fieldName;
+    writeHash({ tracker: trackerSlug, field: fieldName });
+  }
 
   const validTrackers = Object.keys(slugToTrackerName);
 </script>
@@ -200,24 +91,25 @@
   {:else if error}
     <div class="embed-error">
       <p>{error}</p>
-      {#if !trackerSlug}
-        <p class="embed-hint">Example: ?tracker=coal-mine</p>
-        <p class="embed-hint">Available trackers: {validTrackers.join(', ')}</p>
-      {/if}
-    </div>
-  {:else if fieldsMetadata.length === 0}
-    <div class="embed-error">
-      <p>No metadata found for {tracker}</p>
+      <p class="embed-hint">Example: ?tracker=coal-mine</p>
+      <p class="embed-hint">Available: {validTrackers.join(', ')}</p>
     </div>
   {:else}
-    <DatasetFactsheet {tracker} {fieldsMetadata} {title} />
+    <DatasetFactsheet
+      {tracker}
+      {fieldsMetadata}
+      {categoriesOrdered}
+      {catalogSlug}
+      {title}
+      initialField={fieldParam}
+      onFieldSelect={handleFieldSelect}
+    />
   {/if}
 </div>
 
 <style>
   .factsheet-embed {
     width: 100%;
-    max-width: 900px;
   }
 
   .factsheet-embed :global(.factsheet) {
@@ -239,6 +131,14 @@
     .factsheet-embed :global(.dataset-fields),
     .factsheet-embed :global(.dataset-previewer) {
       max-height: none;
+    }
+  }
+
+  /* Narrow iframe in Drupal sidebar columns */
+  @media (max-width: 500px) {
+    .factsheet-embed :global(.factsheet) {
+      max-height: none;
+      flex-direction: column;
     }
   }
 </style>

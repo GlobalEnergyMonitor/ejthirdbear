@@ -22,12 +22,6 @@ interface GraphEdge {
   depth?: number;
 }
 
-// ID format utilities (REST API uses compound L_G, app uses simple G/M prefixes)
-export const isCompoundId = (id: string) => /^L\d+_G\d+$/.test(id);
-export const isGPrefixId = (id: string) => /^G\d+$/.test(id);
-export const isMPrefixId = (id: string) => /^M\d+$/.test(id);
-export const extractUnitId = (id: string) => (isCompoundId(id) ? id.split('_')[1] : id);
-
 // Shorthand for error results
 const fail = (error: string): AssetDataResult => ({
   asset: null,
