@@ -536,14 +536,15 @@
                         indeterminate={isStatusGroupIndeterminate(sg.id)}
                         onchange={() => toggleStatusGroup(sg.id)}
                       />
-                      <span class="group-label">{sg.label}</span>
+                      <span
+                        class="group-label"
+                        class:tooltip-hint={!!STATUS_GROUP_DESCRIPTIONS[sg.id]}
+                        data-tooltip={STATUS_GROUP_DESCRIPTIONS[sg.id] || undefined}
+                      >{sg.label}</span>
                       {#if sg.totalCount > 0}
                         <span class="count-badge">{sg.totalCount.toLocaleString()}</span>
                       {/if}
                     </label>
-                    {#if STATUS_GROUP_DESCRIPTIONS[sg.id]}
-                      <span class="group-desc">{STATUS_GROUP_DESCRIPTIONS[sg.id]}</span>
-                    {/if}
                     {#if hasRefine}
                       <button class="refine-toggle" onclick={() => toggleRefine(`status-${sg.id}`)}>
                         {expandedRefine[`status-${sg.id}`] ? '\u25BC' : '\u25B6'} Refine
@@ -557,14 +558,11 @@
                               type="checkbox"
                               bind:checked={statusChecks[`status-${sg.id}-${statusItem.value}`]}
                             />
-                            <span class="refine-copy">
-                              <span class="refine-label">{statusItem.value}</span>
-                              {#if STATUS_VALUE_DESCRIPTIONS[statusItem.value]}
-                                <span class="refine-desc">
-                                  {STATUS_VALUE_DESCRIPTIONS[statusItem.value]}
-                                </span>
-                              {/if}
-                            </span>
+                            <span
+                              class="refine-label"
+                              class:tooltip-hint={!!STATUS_VALUE_DESCRIPTIONS[statusItem.value]}
+                              data-tooltip={STATUS_VALUE_DESCRIPTIONS[statusItem.value] || undefined}
+                            >{statusItem.value}</span>
                             {#if statusItem.count > 0}
                               <span class="count-badge small"
                                 >{statusItem.count.toLocaleString()}</span
@@ -1008,7 +1006,7 @@
 
   .group-checkbox {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: var(--space-2, 8px);
     cursor: pointer;
     font-size: var(--font-size-body, 15px);
@@ -1016,12 +1014,15 @@
 
   .group-checkbox input[type='checkbox'] {
     margin: 0;
+    margin-top: 4px;
     cursor: pointer;
+    flex-shrink: 0;
   }
 
   .group-label {
     font-weight: 500;
     color: var(--color-text-primary);
+    line-height: 1.25;
   }
 
   .group-desc {
@@ -1112,7 +1113,6 @@
 
   .refine-option {
     display: flex;
-    align-items: flex-start;
     gap: var(--space-2, 8px);
     cursor: pointer;
     font-size: var(--font-size-sm, 13px);
@@ -1139,22 +1139,40 @@
     padding: 0 4px;
   }
 
-  .refine-copy {
-    display: flex;
+  .refine-label {
+    text-transform: capitalize;
     flex: 1;
-    flex-direction: column;
-    gap: 2px;
     min-width: 0;
   }
 
-  .refine-label {
-    text-transform: capitalize;
+  /* CSS-only tooltip for status group labels and refine-panel values */
+  .tooltip-hint {
+    text-decoration: underline dotted var(--color-text-tertiary);
+    text-underline-offset: 3px;
+    cursor: help;
+    position: relative;
   }
 
-  .refine-desc {
+  .tooltip-hint[data-tooltip]:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    width: 220px;
+    padding: 6px 10px;
+    background: var(--color-text-primary, #1a2332);
+    color: #fff;
     font-size: 12px;
-    line-height: 1.35;
-    color: var(--color-text-tertiary);
+    font-weight: 400;
+    line-height: 1.4;
+    text-transform: none;
+    letter-spacing: 0;
+    text-decoration: none;
+    border-radius: 3px;
+    white-space: normal;
+    pointer-events: none;
+    z-index: 200;
   }
 
   /* ── Responsive ───────────────────────────────────────────────────── */

@@ -113,10 +113,12 @@
         }
       }
 
-      // Apply tracker filter if provided
+      // Apply tracker filter if provided.
+      // Normalize both sides to handle slug ('coal-mine') vs display name ('Coal Mine') format.
       if (trackerFilter && trackerFilter.length > 0) {
-        const allowed = new Set(trackerFilter);
-        const matchTracker = (u) => allowed.has(u.tracker);
+        const normTracker = (t) => (t || '').toLowerCase().replace(/[-\s]/g, '');
+        const allowed = new Set(trackerFilter.map(normTracker));
+        const matchTracker = (u) => allowed.has(normTracker(u.tracker));
         chartData.assets = chartData.assets.filter(matchTracker);
         chartData.directlyOwned = chartData.directlyOwned.filter(matchTracker);
         for (const [subId, units] of chartData.subsidiariesMatched) {

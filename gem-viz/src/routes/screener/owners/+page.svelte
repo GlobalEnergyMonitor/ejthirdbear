@@ -119,6 +119,8 @@
 
   /** sessionStorage key for passing bulk-match provenance to results page */
   const BULK_MATCH_KEY = '__gem_bulk_match__';
+  /** sessionStorage key for passing pre-fetched filtered owner data to results page */
+  const MATCHED_OWNERS_KEY = '__gem_matched_owners__';
 
   // ── Mount: prefetch owner list + handle ?q= prefill ─────────────────────
 
@@ -154,8 +156,9 @@
           assetClassId: cls.assetClassId || cls.id,
           status: statuses.length > 0 ? statuses : undefined,
           country: countries,
+          catalogOwnersUrl: cls.catalogOwnersUrl || undefined,
         },
-        { limit: 500 }
+        { skipCache: false }
       );
       allOwners = result.owners;
     } catch (err) {
@@ -256,6 +259,7 @@
       const ownerIds = withAssets.map((e) => e.id).join(',');
       const noAssetsParam =
         noAssets.length > 0 ? noAssets.map((e) => e.id).join(',') : undefined;
+      storeMatchedOwners(withAssets.map((e) => e.id));
       goto(buildResultsUrl({ owners: ownerIds, noassets: noAssetsParam }));
     } catch (err) {
       searchError = err instanceof Error ? err.message : 'Search failed';
@@ -394,6 +398,7 @@
         // sessionStorage unavailable — tooltips/unmatched list simply won't appear
       }
 
+      storeMatchedOwners((tier1Ids || '').split(',').filter(Boolean));
       goto(
         buildResultsUrl({
           owners: tier1Ids || undefined,
@@ -437,8 +442,30 @@
   }
 
   function useExample(example: { name: string; id?: string }) {
+    // If we already know this entity is a valid owner (it came from the owners list),
+    // navigate directly to results without going through the search/entity-lookup flow.
+    if (example.id && ownersMap.has(example.id)) {
+      const owner = ownersMap.get(example.id)!;
+      storeMatchedOwners([example.id]);
+      goto(buildResultsUrl({ owners: example.id }));
+      return;
+    }
     singleSearchQuery = example.name;
     doSearchSingle();
+  }
+
+  /** Store matched owner data in sessionStorage so results page can skip re-fetching */
+  function storeMatchedOwners(entityIds: string[]) {
+    try {
+      const matched = entityIds
+        .map((id) => ownersMap.get(id))
+        .filter((o): o is ScreenerOwner => !!o);
+      if (matched.length > 0) {
+        sessionStorage.setItem(MATCHED_OWNERS_KEY, JSON.stringify(matched));
+      }
+    } catch {
+      // sessionStorage unavailable — results page will fall back to re-fetching
+    }
   }
 
   function showAllAssets() {
@@ -493,14 +520,24 @@
       {#if allOwnersLoading}
         <button class="show-all-btn" onclick={showAllAssets} disabled>Loading owners…</button>
       {:else}
-        <button class="show-all-btn" onclick={showAllAssets}>
-          View all {allOwners.length > 0 ? allOwners.length.toLocaleString() : ''} owners
-          {#if selectedClasses.length > 0}
-            of {selectedClasses.length > 1
-              ? selectedClasses.map((c) => c.name).join(' & ')
-              : selectedClasses[0]?.name}
+        {@const cls = selectedClasses[0]}
+        {@const subLabels = cls?.selectedSubClassLabels ?? []}
+        {@const statuses = cls?.filters?.statuses ?? (cls?.filters?.status ? [cls.filters.status] : [])}
+        {@const geo = cls?.filters?.geography}
+        {@const detailParts = [
+          subLabels.length > 0 && subLabels.length <= 3 ? `(${subLabels.join(', ')})` : subLabels.length > 3 ? `(${subLabels.slice(0, 3).join(', ')}…)` : '',
+          statuses.length > 0 ? statuses.map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(', ') : '',
+          Array.isArray(geo) && geo.length === 1 ? geo[0] : Array.isArray(geo) && geo.length > 1 ? `${geo.length} countries` : typeof geo === 'string' && geo ? geo : '',
+        ].filter(Boolean)}
+        {@const detail = cls ? [cls.name, ...detailParts].join(' · ') : ''}
+        <div class="show-all-btn-wrap">
+          <button class="show-all-btn" onclick={showAllAssets}>
+            View all {allOwners.length > 0 ? allOwners.length.toLocaleString() : ''} owners
+          </button>
+          {#if detail}
+            <span class="show-all-detail">{detail}</span>
           {/if}
-        </button>
+        </div>
       {/if}
     </div>
 
@@ -547,7 +584,18 @@
     display: flex;
     gap: var(--space-3);
     flex-wrap: wrap;
-    align-items: center;
+    align-items: flex-start;
+  }
+
+  .show-all-btn-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .show-all-detail {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-tertiary);
   }
 
   .show-all-btn {

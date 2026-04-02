@@ -226,7 +226,7 @@ export async function fetchChartData(
     const detail = assetDetails.get(assetId);
     const graphNode = nodeMap.get(assetId);
     const name = detail?.name || graphNode?.Name || assetId;
-    const tracker = detail?.facilityType || 'Unknown';
+    const tracker = detail?.facilityType || graphNode?.asset_type || 'Unknown';
     const status = detail?.status || 'unknown';
     const subStatus = detail?.subStatus || '';
     const pct = getOwnershipPct(assetId);

@@ -12,122 +12,53 @@
   import ScreenerStepNav from '$lib/components/nav/ScreenerStepNav.svelte';
   import AssetClassExpansion from '$lib/components/tracker/AssetClassExpansion.svelte';
   import DebugPanel from '$lib/components/feedback/DebugPanel.svelte';
-  import { ALL_ASSET_CLASSES, getAssetClassById } from '$lib/data-config/asset-class-definitions';
-  import { gemTrackerToUiTracker } from '$lib/data-config/screener-api';
   import { buildScreenerUrl, readScreenerHash, writeScreenerHash } from '$lib/screener-url';
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
   import {
-    isValidTracker,
     STATUS_GROUPS,
     discoverStatusGroups,
   } from '$lib/data-config/tracker-schema';
   import {
-    resolveApiSlug,
-    getAPIBase,
     fetchStatusFacets,
     fetchStatusTaxonomy,
   } from '$lib/ownership-api';
   import {
     fetchAssetClasses,
     buildCatalogUrl,
-    buildCatalogTree,
-    findSubtree,
-    getAllDescendantIds,
   } from '$lib/api/catalog-api';
+  import {
+    getHierarchyCategories,
+    getHierarchyOptionIds,
+    getHierarchyTree,
+    getUiTrackerFromCatalogEntry,
+    getAssetTypesFromUrl,
+    API_SLUG_TO_UI_TRACKER,
+  } from '$lib/data-config/asset-class-hierarchy';
   import { GEM_DATA_EMAIL } from '$lib/external-links';
   import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
-
-  // ─── Category display config ────────────────────────────────────────
-  const CATEGORY_META = [
-    { key: 'multi-tracker', label: 'Multi-Tracker Classes' },
-    { key: 'coal-plant', label: 'Coal Plant' },
-    { key: 'coal-mine', label: 'Coal Mine' },
-    { key: 'oil-gas', label: 'Oil & Gas' },
-    { key: 'steel-iron', label: 'Steel & Iron' },
-    { key: 'bioenergy', label: 'Bioenergy' },
-    { key: 'chemical', label: 'Chemical' },
-    { key: 'cement', label: 'Cement' },
-  ];
 
   // ─── Catalog state ──────────────────────────────────────────────────
   /** @type {import('$lib/api/catalog-api').CatalogAssetClass[]} */
   let catalogClasses = $state([]);
 
-  // ─── Feature flag: catalog tree mode ───────────────────────────────
-  // ENV var sets default, URL param ?catalogTree=true|false overrides.
-  const envDefault =
-    typeof import.meta.env?.PUBLIC_USE_CATALOG_TREE === 'string'
-      ? import.meta.env.PUBLIC_USE_CATALOG_TREE === 'true'
-      : false;
-  const useCatalogTree = $derived.by(() => {
-    const param = $page.url.searchParams.get('catalogTree');
-    if (param === 'true') return true;
-    if (param === 'false') return false;
-    return envDefault;
-  });
-
-  /** Full tree built from flat catalog classes (only used in tree mode). */
-  const catalogForest = $derived(
-    useCatalogTree && catalogClasses.length > 0 ? buildCatalogTree(catalogClasses) : []
-  );
-
   // ─── State ──────────────────────────────────────────────────────────
   let searchQuery = $state('');
   let selectedClassId = $state(null);
 
-  // Set of all catalog IDs (used to identify root vs. child entries)
-  const catalogIdSet = $derived(new Set(catalogClasses.map((c) => c.id)));
+  // Categories and tiles driven entirely by hierarchy JSON + flat API list
+  const classesByCategory = $derived(getHierarchyCategories(catalogClasses, searchQuery));
 
-  // Group asset classes by category in display order (only enabled ones)
-  // When catalog is loaded, use it; otherwise fall back to static definitions.
-  // In tree mode, only show root-level classes (entries without a parent in the catalog).
-  // Filter by search query against label.
-  const classesByCategory = $derived.by(() => {
-    const q = searchQuery.trim().toLowerCase();
-
-    if (catalogClasses.length > 0) {
-      return CATEGORY_META.map((cat) => ({
-        ...cat,
-        classes: catalogClasses.filter((ac) => {
-          if (ac.category !== cat.key) return false;
-          if (!ac.url) return false; // notes:"TBD" entries have no url — disable
-          // Tree mode: only show roots (no parent, or parent not in catalog)
-          if (useCatalogTree && ac.parent && catalogIdSet.has(ac.parent)) return false;
-          if (!q) return true;
-          return ac.label.toLowerCase().includes(q);
-        }),
-      })).filter((cat) => cat.classes.length > 0);
-    }
-
-    return CATEGORY_META.map((cat) => ({
-      ...cat,
-      classes: ALL_ASSET_CLASSES.filter((ac) => {
-        if (ac.category !== cat.key || !isEnabled(ac)) return false;
-        if (!q) return true;
-        return ac.label.toLowerCase().includes(q) || ac.description.toLowerCase().includes(q);
-      }),
-    })).filter((cat) => cat.classes.length > 0);
-  });
-
-  /** Direct children of the currently selected class from catalog (flat mode). */
-  const catalogChildren = $derived(
-    !useCatalogTree && selectedClassId
-      ? catalogClasses.filter((c) => c.parent === selectedClassId)
-      : []
+  /** Hierarchy-driven subclass tree for the selected tile (passed to AssetClassExpansion). */
+  const hierarchyTree = $derived(
+    selectedClassId ? getHierarchyTree(selectedClassId, catalogClasses) : []
   );
 
-  /** Subtree for the selected class (tree mode). */
-  const selectedSubtree = $derived(
-    useCatalogTree && selectedClassId ? findSubtree(catalogForest, selectedClassId) : undefined
-  );
-
+  /** Dummy state for AssetClassExpansion's bindable props (unused in tree mode) */
+  let subClassChecks = $state({});
+  let groupOptionChecks = $state({});
   /** Catalog child IDs that the user has checked (keyed by child.id) */
   let catalogChildChecks = $state({});
-  /** Flat subClasses checkbox state */
-  let subClassChecks = $state({});
-  /** SubClassGroups option checkbox state */
-  let groupOptionChecks = $state({});
   /** Status checkbox state: `status-{groupId}-{statusValue}` -> boolean */
   let statusChecks = $state({});
   let geoFilters = $state([]);
@@ -135,93 +66,59 @@
   /** @type {import('$lib/data-config/tracker-schema').DynamicStatusGroup[] | null} */
   let dynamicStatusGroups = $state(null);
 
-  const selectedClass = $derived(selectedClassId ? getAssetClassById(selectedClassId) : null);
-
-  // Is a class selectable? Must map to at least one known UI tracker.
-  function isEnabled(ac) {
-    if (ac.trackers.length === 0) return false;
-    return ac.trackers.some((t) => isValidTracker(gemTrackerToUiTracker(t)));
-  }
-
   // ─── Selection logic ───────────────────────────────────────────────
   function selectClass(classId) {
-    // Support both catalog entries (just an id string) and static AssetClass objects
     const catalogEntry = catalogClasses.find((c) => c.id === classId);
-    const ac = getAssetClassById(classId);
-
-    // Need either a catalog entry with a url OR a static definition
-    if (!catalogEntry?.url && !ac) return;
-    if (!catalogEntry?.url && ac && !isEnabled(ac)) return;
+    if (!catalogEntry?.url) return;
 
     selectedClassId = classId;
     searchQuery = '';
     geoFilters = [];
     geofence = null;
-    dynamicStatusGroups = null; // reset while loading
+    dynamicStatusGroups = null;
 
-    // Reset catalog child checks — defaults all checked
-    // Tree mode: check ALL descendants; flat mode: just direct children
-    const initialCatalogChecks = {};
-    if (useCatalogTree) {
-      const subtree = findSubtree(catalogForest, classId);
-      if (subtree) {
-        for (const id of getAllDescendantIds(subtree)) {
-          if (id !== classId) initialCatalogChecks[id] = true;
-        }
-      }
-    } else {
-      const children = catalogClasses.filter((c) => c.parent === classId);
-      for (const child of children) {
-        initialCatalogChecks[child.id] = true;
-      }
-    }
+    // Initialize subclass checks from hierarchy option IDs — all checked by default
+    const optionIds = getHierarchyOptionIds(classId);
+    const initialCatalogChecks = Object.fromEntries(optionIds.map((id) => [id, true]));
     catalogChildChecks = initialCatalogChecks;
 
-    // Initialize flat sub-class checkboxes (default: checked)
-    const initialSubClassChecks = {};
-    if (ac?.subClasses) {
-      for (const sc of ac.subClasses) {
-        initialSubClassChecks[sc.id] = sc.defaultChecked ?? true;
-      }
-    }
-    subClassChecks = initialSubClassChecks;
+    // Multi-tracker classes: use top-level status groups only (no substatuses).
+    // Each tracker uses different sub-status values so merging them is misleading.
+    const slugs = getAssetTypesFromUrl(catalogEntry.url ?? '');
+    const isMultiTracker = slugs.length > 1;
 
-    // Initialize group option checkboxes (default: checked)
-    const initialGroupChecks = {};
-    if (ac?.subClassGroups) {
-      for (const group of ac.subClassGroups) {
-        for (const opt of group.options) {
-          initialGroupChecks[opt.id] = opt.defaultChecked ?? true;
+    if (isMultiTracker) {
+      // One entry per group (value = group ID) — prevents refine dropdown from rendering
+      dynamicStatusGroups = STATUS_GROUPS.map((sg) => ({
+        id: sg.id,
+        label: sg.label,
+        statuses: [{ value: sg.id, count: -1 }],
+        totalCount: -1,
+      }));
+      const initialStatusChecks = {};
+      for (const sg of STATUS_GROUPS) {
+        initialStatusChecks[`status-${sg.id}-${sg.id}`] = sg.id === 'operating' || sg.id === 'planned';
+      }
+      statusChecks = initialStatusChecks;
+    } else {
+      // Initialize status checkboxes — Operating/Planned checked by default
+      const initialStatusChecks = {};
+      for (const sg of STATUS_GROUPS) {
+        for (const s of sg.statuses) {
+          initialStatusChecks[`status-${sg.id}-${s}`] = sg.id === 'operating' || sg.id === 'planned';
         }
       }
-    }
-    groupOptionChecks = initialGroupChecks;
+      statusChecks = initialStatusChecks;
 
-    // Initialize status checkboxes — all Operating/Planned checked by default
-    const initialStatusChecks = {};
-    for (const sg of STATUS_GROUPS) {
-      for (const s of sg.statuses) {
-        const key = `status-${sg.id}-${s}`;
-        initialStatusChecks[key] = sg.id === 'operating' || sg.id === 'planned';
-      }
+      // Fetch dynamic status facets (non-blocking)
+      fetchStatusFacetsForClass(catalogEntry, classId);
     }
-    statusChecks = initialStatusChecks;
-
-    // Fetch status facets from API (non-blocking)
-    fetchStatusFacetsForClass(ac, catalogEntry, classId);
   }
 
-  async function fetchStatusFacetsForClass(ac, catalogEntry, classId) {
+  async function fetchStatusFacetsForClass(catalogEntry, classId) {
     try {
-      // Resolve API slugs: prefer static class trackers, fall back to catalog URL asset_type
-      let slugs = [];
-      if (ac?.trackers?.length) {
-        slugs = ac.trackers.map((t) => resolveApiSlug(gemTrackerToUiTracker(t))).filter(Boolean);
-      } else if (catalogEntry?.url) {
-        const params = new URLSearchParams(catalogEntry.url.split('?')[1] ?? '');
-        const types = params.getAll('asset_type');
-        slugs = types.map((t) => resolveApiSlug(t) ?? t).filter(Boolean);
-      }
+      // Parse asset_type slugs directly from the catalog URL
+      const slugs = getAssetTypesFromUrl(catalogEntry?.url ?? '');
       if (slugs.length === 0) return;
 
       // Fetch facets and taxonomy in parallel
@@ -289,83 +186,53 @@
     return statuses;
   });
 
-  // ─── Backward-compatible serialization ─────────────────────────────
+  // ─── Serialization ─────────────────────────────────────────────────
   function buildClassData() {
     if (!selectedClassId) return [];
 
     const catalogEntry = catalogClasses.find((c) => c.id === selectedClassId);
-    const ac = getAssetClassById(selectedClassId);
+    if (!catalogEntry) return [];
 
-    // Label/tracker from catalog entry (preferred) or static definition
-    const label = catalogEntry?.label ?? ac?.label ?? selectedClassId;
-    const trackers = ac?.trackers ?? [];
-    const tracker = trackers.length > 0 ? gemTrackerToUiTracker(trackers[0]) : '';
+    const label = catalogEntry.label ?? selectedClassId;
+    const tracker = getUiTrackerFromCatalogEntry(catalogEntry);
+    const assetTypes = getAssetTypesFromUrl(catalogEntry.url ?? '');
 
-    // Collect selected sub-class IDs from both flat and grouped (static fallback)
-    const selectedSubClassIds = [
-      ...Object.entries(subClassChecks)
-        .filter(([, v]) => v)
-        .map(([k]) => k),
-      ...Object.entries(groupOptionChecks)
-        .filter(([, v]) => v)
-        .map(([k]) => k),
-    ];
+    // Collect selected sub-class IDs from catalogChildChecks
+    const selectedSubClassIds = Object.entries(catalogChildChecks)
+      .filter(([, v]) => v)
+      .map(([k]) => k);
 
-    // Build catalog URL when catalog data is available
-    let catalogUrl = undefined;
-    let catalogOwnersUrl = undefined;
+    // Build URLs from checked option IDs
+    const byId = new Map(catalogClasses.map((c) => [c.id, c]));
+    const selectedChildUrls = selectedSubClassIds
+      .map((id) => byId.get(id)?.url)
+      .filter(Boolean);
+    const selectedOwnerChildUrls = selectedSubClassIds
+      .map((id) => byId.get(id)?.owners_url)
+      .filter(Boolean);
 
-    if (catalogEntry?.url) {
-      // Tree mode: collect checked leaf URLs from the full descendant tree
-      // Flat mode: collect checked direct children URLs (existing behavior)
-      let selectedChildUrls = [];
-      let selectedOwnerChildUrls = [];
+    const catalogUrl = buildCatalogUrl(
+      catalogEntry.url,
+      selectedChildUrls,
+      selectedStatuses,
+      geoFilters
+    );
+    const catalogOwnersUrl = catalogEntry.owners_url
+      ? buildCatalogUrl(catalogEntry.owners_url, selectedOwnerChildUrls, selectedStatuses, geoFilters)
+      : undefined;
 
-      if (useCatalogTree && selectedSubtree) {
-        // Collect all checked descendants that have a url (leaves with filter URLs)
-        const checkedDescendants = catalogClasses.filter(
-          (c) => c.id !== selectedClassId && catalogChildChecks[c.id] !== false && c.url
-        );
-        // Only include entries that are actual descendants of the selected class
-        const allDescIds = new Set(getAllDescendantIds(selectedSubtree));
-        selectedChildUrls = checkedDescendants
-          .filter((c) => allDescIds.has(c.id))
-          .map((c) => c.url);
-        selectedOwnerChildUrls = checkedDescendants
-          .filter((c) => allDescIds.has(c.id) && c.owners_url)
-          .map((c) => c.owners_url);
-      } else {
-        selectedChildUrls = catalogChildren
-          .filter((c) => catalogChildChecks[c.id] !== false && c.url)
-          .map((c) => c.url);
-        selectedOwnerChildUrls = catalogChildren
-          .filter((c) => catalogChildChecks[c.id] !== false && c.owners_url)
-          .map((c) => c.owners_url);
-      }
-
-      catalogUrl = buildCatalogUrl(
-        catalogEntry.url,
-        selectedChildUrls,
-        selectedStatuses,
-        geoFilters
-      );
-
-      if (catalogEntry.owners_url) {
-        catalogOwnersUrl = buildCatalogUrl(
-          catalogEntry.owners_url,
-          selectedOwnerChildUrls,
-          selectedStatuses,
-          geoFilters
-        );
-      }
-    }
+    // Labels for selected sub-classes (for panel summary display)
+    const selectedSubClassLabels = selectedSubClassIds
+      .map((id) => byId.get(id)?.label)
+      .filter(Boolean);
 
     return [
       {
         id: selectedClassId,
         name: label,
-        description: ac?.description ?? '',
+        description: '',
         tracker,
+        selectedSubClassLabels,
         filters: {
           geography: geoFilters.length > 0 ? geoFilters : undefined,
           status: selectedStatuses.length === 1 ? selectedStatuses[0] : undefined,
@@ -374,7 +241,7 @@
         },
         assetClassId: selectedClassId,
         selectedSubClasses: selectedSubClassIds,
-        gemTrackers: trackers,
+        gemTrackers: assetTypes.map((slug) => API_SLUG_TO_UI_TRACKER[slug] ?? slug),
         catalogUrl,
         catalogOwnersUrl,
       },
@@ -438,22 +305,10 @@
     }
   });
 
-  // Build the REST API URL that will be called for this config
-  const restUrl = $derived.by(() => {
-    if (!selectedClass) return '';
-    const uiTracker = gemTrackerToUiTracker(selectedClass.trackers[0]);
-    const slug = resolveApiSlug(uiTracker);
-    if (!slug) return '';
-    const base = getAPIBase();
-    const params = new URLSearchParams({ asset_type: slug, format: 'json', limit: '500' });
-    if (geoFilters.length === 1) params.set('country', geoFilters[0]);
-    return `${base}/assets?${params.toString()}`;
-  });
-
   const selectionSummary = $derived.by(() => {
     if (!selectedClassId) return '';
     const catalogEntry = catalogClasses.find((c) => c.id === selectedClassId);
-    const label = selectedClass?.label ?? catalogEntry?.label ?? selectedClassId;
+    const label = catalogEntry?.label ?? selectedClassId;
     const parts = [label].filter(Boolean).join(' ');
     const geo =
       geoFilters.length === 1
@@ -530,12 +385,11 @@
         bind:value={searchQuery}
       />
     </div>
-    {#each classesByCategory as cat (cat.key)}
+    {#each classesByCategory as cat (cat.id)}
       <div class="picker-category">
         <span class="picker-category-label">{cat.label}</span>
         <div class="picker-grid">
           {#each cat.classes as ac (ac.id)}
-            {@const staticAc = getAssetClassById(ac.id)}
             <button
               class="picker-tile"
               class:selected={selectedClassId === ac.id}
@@ -543,11 +397,8 @@
               onclick={() => selectClass(ac.id)}
             >
               <span class="tile-label">{ac.label}</span>
-              {#if ac.description || staticAc?.description}
-                <span class="tile-desc">{ac.description ?? staticAc?.description}</span>
-              {/if}
-              {#if staticAc && staticAc.trackers.length > 1}
-                <span class="tile-badge">{staticAc.trackers.length} trackers</span>
+              {#if ac.description}
+                <span class="tile-desc">{ac.description}</span>
               {/if}
             </button>
           {/each}
@@ -570,20 +421,17 @@
     </div>
   </section>
 
-  <!-- Filter panel when class is selected (catalog or static) -->
+  <!-- Filter panel when class is selected -->
   {#if selectedClassId}
-    {@const staticAc = getAssetClassById(selectedClassId)}
     {@const catalogEntry = catalogClasses.find((c) => c.id === selectedClassId)}
-    {@const expansionClass =
-      staticAc ??
-      /** @type {any} */ ({
-        id: selectedClassId,
-        label: catalogEntry?.label ?? selectedClassId,
-        description: '',
-        category: catalogEntry?.category ?? '',
-        trackers: [],
-        availableFilters: { status: true, geography: true },
-      })}
+    {@const expansionClass = /** @type {any} */ ({
+      id: selectedClassId,
+      label: catalogEntry?.label ?? selectedClassId,
+      description: '',
+      category: catalogEntry?.category ?? '',
+      trackers: [],
+      availableFilters: { status: true, geography: true },
+    })}
     <AssetClassExpansion
       assetClass={expansionClass}
       bind:subClassChecks
@@ -592,8 +440,7 @@
       bind:geoFilters
       bind:geofence
       {dynamicStatusGroups}
-      catalogChildren={useCatalogTree ? [] : catalogChildren}
-      catalogTree={useCatalogTree && selectedSubtree ? selectedSubtree.children : []}
+      catalogTree={hierarchyTree}
       bind:catalogChildChecks
       onShowAllOwners={() => navigateTo('/screener/results')}
       onSearchSpecificOwners={() => navigateTo('/screener/owners')}
@@ -608,16 +455,6 @@
         <span class="debug-label">Asset Class:</span>
         <span class="debug-value">{selectionSummary} ({selectedClassId})</span>
       </div>
-      {#if selectedClass}
-        <div class="debug-meta">
-          <span class="debug-label">GEM Tracker(s):</span>
-          <span class="debug-value">{selectedClass.trackers.join(', ')}</span>
-        </div>
-        <div class="debug-meta">
-          <span class="debug-label">UI Tracker:</span>
-          <span class="debug-value">{gemTrackerToUiTracker(selectedClass.trackers[0])}</span>
-        </div>
-      {/if}
       <div class="debug-meta">
         <span class="debug-label">Statuses:</span>
         <span class="debug-value">{selectedStatuses.join(', ') || 'none'}</span>
@@ -626,14 +463,6 @@
         <div class="debug-meta">
           <span class="debug-label">Geography:</span>
           <span class="debug-value">{geoFilters.join(', ')}</span>
-        </div>
-      {/if}
-      {#if restUrl}
-        <div class="debug-meta">
-          <span class="debug-label">REST API:</span>
-          <span class="debug-value">
-            <a href={restUrl} target="_blank" rel="noopener" class="rest-url">{restUrl}</a>
-          </span>
         </div>
       {/if}
       <div class="debug-json">
@@ -824,18 +653,6 @@
     overflow: hidden;
   }
 
-  .tile-badge {
-    display: inline-block;
-    margin-top: var(--space-1);
-    padding: 1px var(--space-2);
-    font-size: var(--font-size-xs);
-    font-weight: 500;
-    background: rgba(42, 127, 143, 0.1);
-    color: var(--gem-teal, #2a7f8f);
-    border-radius: var(--radius-sm);
-    width: fit-content;
-  }
-
   .support-cta {
     display: flex;
     justify-content: space-between;
@@ -926,13 +743,4 @@
     }
   }
 
-  .rest-url {
-    color: var(--color-link, #016b83);
-    text-decoration: none;
-    word-break: break-all;
-  }
-
-  .rest-url:hover {
-    text-decoration: underline;
-  }
 </style>

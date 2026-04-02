@@ -1,10 +1,10 @@
 {
-  "version": "dd640fb",
-  "commit": "dd640fb",
-  "message": "chore(release): v0.7.5",
+  "version": "ec1b63c",
+  "commit": "ec1b63c",
+  "message": "fix(embed): portfolio-explorer embed renders full page via iframe",
   "author": "EJ Fox",
-  "timestamp": "2026-03-31T16:07:37.407Z",
-  "deployed": "2026-03-31T16:07:37.407Z",
-  "buildTime": "3/31/2026, 12:07:37 PM",
+  "timestamp": "2026-04-01T22:12:41.348Z",
+  "deployed": "2026-04-01T22:12:41.348Z",
+  "buildTime": "4/1/2026, 3:12:41 PM",
   "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.7.5"
 }

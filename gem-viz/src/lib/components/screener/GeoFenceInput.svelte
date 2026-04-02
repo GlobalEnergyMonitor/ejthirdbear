@@ -62,9 +62,9 @@
   {#if expanded}
     <div class="geofence-body" transition:slide={{ duration: 150 }}>
       <p class="hint">
-        Draw a region on
+        Paste GeoJSON below. <br />(Want to draw your own area? you can use
         <a href="https://geojson.io" target="_blank" rel="noopener noreferrer">geojson.io</a>, then
-        paste the GeoJSON here.
+        copy the GeoJSON output there and paste it here)
       </p>
       <textarea
         class="geojson-textarea"

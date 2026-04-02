@@ -156,6 +156,7 @@ export interface GraphNode {
   is_root?: boolean;
   entity_id?: string;
   headquarters_country?: string;
+  asset_type?: string;
 }
 
 export interface GraphEdge {
@@ -791,7 +792,7 @@ export async function getOwnershipGraph(params: {
   const nodes: GraphNode[] = (raw.nodes || []).map((n) => ({
     id: String(n.entity_id || n.asset_id || ''),
     Name: String(n.name || n.asset_name || ''),
-    type: (n.node_type as 'entity' | 'asset') || 'entity',
+    type: (n.node_type as 'entity' | 'asset') || (n.asset_type ? 'asset' : 'entity'),
     is_terminal: n.is_terminal as boolean | undefined,
     is_root: n.is_root as boolean | undefined,
     // Preserve useful raw fields for side panel and entity type classification
