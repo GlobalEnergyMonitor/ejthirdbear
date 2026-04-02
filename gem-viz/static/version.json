@@ -1,10 +1,10 @@
 {
-  "version": "dd640fb",
-  "commit": "dd640fb",
-  "message": "chore(release): v0.7.5",
+  "version": "0.8.0",
+  "commit": "b79fe7c",
+  "message": "chore(release): v0.8.0",
   "author": "EJ Fox",
-  "timestamp": "2026-03-31T16:07:37.407Z",
-  "deployed": "2026-03-31T16:07:37.407Z",
-  "buildTime": "3/31/2026, 12:07:37 PM",
-  "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.7.5"
+  "timestamp": "2026-04-02T00:00:00.000Z",
+  "deployed": "2026-04-02T00:00:00.000Z",
+  "buildTime": "4/2/2026",
+  "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.8.0"
 }
