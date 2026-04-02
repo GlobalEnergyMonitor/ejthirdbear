@@ -109,7 +109,6 @@
 
   let singleSearchQuery = $state('');
   let bulkSearchText = $state('');
-  let strictMatchOnly = $state(false);
   let searchLoading = $state(false);
   let searchError = $state<string | null>(null);
 
@@ -180,21 +179,32 @@
   }
 
   /**
-   * Filter entity search results to only those whose name actually contains
-   * the search term (case-insensitive substring). Skip this for ID searches
-   * since the name won't match an ID string.
+   * Fast local search against the pre-loaded owners list.
+   * Returns matched ScreenerOwner[] without any API calls.
    *
-   * This prevents the API's fuzzy/semantic matching from returning unrelated
-   * companies that happen to score well against a query like "Shell".
+   * ID terms match against entityId (exact, case-insensitive).
+   * Name terms match against name as a case-insensitive substring.
+   *
+   * Expand this function as the API returns more fields:
+   *   - ID fields: o.lei, o.permId, o.isin, ...
+   *   - Name fields: o.fullName, o.aliases, o.formerNames, ...
    */
-  function filterByName(results: EntitySearchResult[], term: string): EntitySearchResult[] {
-    if (isIdSearch(term)) return results;
-    const lower = term.toLowerCase();
-    if (strictMatchOnly) {
-      return results.filter((e) => e.name.toLowerCase() === lower);
+  function findOwnersLocally(term: string): ScreenerOwner[] {
+    if (!term || allOwners.length === 0) return [];
+    if (isIdSearch(term)) {
+      const upper = term.toUpperCase();
+      return allOwners.filter((o) =>
+        o.entityId.toUpperCase() === upper
+        // Future ID fields: || o.lei === upper || o.permId === upper
+      );
     }
-    return results.filter((e) => e.name.toLowerCase().includes(lower));
+    const lower = term.toLowerCase();
+    return allOwners.filter((o) =>
+      o.name.toLowerCase().includes(lower)
+      // Future name fields: || o.fullName?.toLowerCase().includes(lower)
+    );
   }
+
 
   /**
    * Cross-reference a list of entity search results against the owners map.
@@ -224,19 +234,23 @@
     const startTime = performance.now();
 
     try {
-      const rawResults = await searchEntities(term, { limit: 20 });
+      // Fast path: search pre-loaded owners list before making any API calls
+      if (!allOwnersLoading && allOwners.length > 0) {
+        const localMatches = findOwnersLocally(term);
+        if (localMatches.length > 0) {
+          storeMatchedOwners(localMatches.map((o) => o.entityId));
+          goto(buildResultsUrl({ owners: localMatches.map((o) => o.entityId).join(',') }));
+          return;
+        }
+      }
+
+      // Fall back to entity API — needed to distinguish "not in GEM at all" from
+      // "in GEM but owns no assets in this class"
+      const results = await searchEntities(term, { limit: 20 });
       debugLastSearchTime = performance.now() - startTime;
 
-      // Post-filter to entities whose name actually contains the search term,
-      // unless the term looks like a structured ID (GEM Entity ID, LEI, PermID).
-      const results = filterByName(rawResults, term);
-
       if (results.length === 0) {
-        if (rawResults.length > 0) {
-          searchError = `No companies with "${term}" in their name found in GEM. Try a broader term.`;
-        } else {
-          searchError = `No companies named "${term}" found in GEM.`;
-        }
+        searchError = `No companies named "${term}" found in GEM.`;
         return;
       }
 
@@ -297,29 +311,12 @@
       const allIdTerms = [...new Set(rows.flatMap((r) => r.idCells))].slice(0, 200);
       const allNameTerms = [...new Set(rows.flatMap((r) => r.nameCells))].slice(0, 200);
 
-      debugApiCalls = [
-        {
-          type: 'searchEntitiesBulk',
-          params: { idTerms: allIdTerms.length, nameTerms: allNameTerms.length },
-          time: Date.now(),
-        },
-      ];
-
-      // Search IDs and names in parallel; IDs are precise, names need filtering
-      const [idBulkResult, nameBulkResult] = await Promise.all([
-        allIdTerms.length > 0
-          ? searchEntitiesBulk(allIdTerms, { limitPerQuery: 5, maxConcurrent: 10 })
-          : Promise.resolve({ results: {} as Record<string, EntitySearchResult[]>, queryTimeMs: 0, source: 'rest-api-sequential' as const, apiCallCount: 0 }),
-        allNameTerms.length > 0
-          ? searchEntitiesBulk(allNameTerms, { limitPerQuery: 10, maxConcurrent: 10 })
-          : Promise.resolve({ results: {} as Record<string, EntitySearchResult[]>, queryTimeMs: 0, source: 'rest-api-sequential' as const, apiCallCount: 0 }),
-      ]);
-      debugLastSearchTime = Math.max(idBulkResult.queryTimeMs, nameBulkResult.queryTimeMs);
-
       // Build deduped entity map: id → EntitySearchResult
       const resolvedById = new Map<string, EntitySearchResult>();
       // Track which input terms matched each entity (for results-page tooltips)
       const matchedTerms = new Map<string, Set<string>>();
+      // Track which terms were resolved locally (to skip API calls for them)
+      const locallyMatchedTerms = new Set<string>();
 
       const addMatch = (e: EntitySearchResult, term: string) => {
         if (!e.id || EXCLUDED_ENTITY_IDS.has(e.id)) return;
@@ -328,15 +325,50 @@
         matchedTerms.get(e.id)!.add(term);
       };
 
-      // ID results — no name filter needed; these are precise lookups
+      // Fast path: check pre-loaded owners list before making API calls
+      if (!allOwnersLoading && allOwners.length > 0) {
+        for (const term of [...allIdTerms, ...allNameTerms]) {
+          const localMatches = findOwnersLocally(term);
+          if (localMatches.length > 0) {
+            locallyMatchedTerms.add(term);
+            for (const o of localMatches) {
+              addMatch({ id: o.entityId, name: o.name }, term);
+            }
+          }
+        }
+      }
+
+      // Only API-call terms not already resolved locally
+      const apiIdTerms = allIdTerms.filter((t) => !locallyMatchedTerms.has(t));
+      const apiNameTerms = allNameTerms.filter((t) => !locallyMatchedTerms.has(t));
+
+      debugApiCalls = [
+        {
+          type: 'searchEntitiesBulk',
+          params: { idTerms: apiIdTerms.length, nameTerms: apiNameTerms.length, localHits: locallyMatchedTerms.size },
+          time: Date.now(),
+        },
+      ];
+
+      const emptyBulk = { results: {} as Record<string, EntitySearchResult[]>, queryTimeMs: 0, source: 'rest-api-sequential' as const, apiCallCount: 0 };
+      const [idBulkResult, nameBulkResult] = await Promise.all([
+        apiIdTerms.length > 0
+          ? searchEntitiesBulk(apiIdTerms, { limitPerQuery: 5, maxConcurrent: 10 })
+          : Promise.resolve(emptyBulk),
+        apiNameTerms.length > 0
+          ? searchEntitiesBulk(apiNameTerms, { limitPerQuery: 10, maxConcurrent: 10 })
+          : Promise.resolve(emptyBulk),
+      ]);
+      debugLastSearchTime = Math.max(idBulkResult.queryTimeMs, nameBulkResult.queryTimeMs);
+
+      // ID results — precise lookups
       for (const [term, entities] of Object.entries(idBulkResult.results)) {
         for (const e of entities) addMatch(e, term);
       }
 
-      // Name results — apply name filter to remove fuzzy misfires
+      // Name results — trust API results directly
       for (const [term, entities] of Object.entries(nameBulkResult.results)) {
-        const filtered = filterByName(entities, term);
-        for (const e of filtered) addMatch(e, term);
+        for (const e of entities) addMatch(e, term);
       }
 
       // Per-row tier-3 counting: a row is unmatched only if neither its ID cells
@@ -345,12 +377,8 @@
       const unmatchedTerms: string[] = [];
       for (const row of rows) {
         const rowResolved =
-          row.idCells.some((c) =>
-            (idBulkResult.results[c] ?? []).some((e) => resolvedById.has(e.id))
-          ) ||
-          row.nameCells.some((c) =>
-            filterByName(nameBulkResult.results[c] ?? [], c).some((e) => resolvedById.has(e.id))
-          );
+          row.idCells.some((c) => resolvedById.has(c) || (idBulkResult.results[c] ?? []).some((e) => resolvedById.has(e.id))) ||
+          row.nameCells.some((c) => locallyMatchedTerms.has(c) || (nameBulkResult.results[c] ?? []).some((e) => resolvedById.has(e.id)));
         if (!rowResolved) {
           tier3Count++;
           unmatchedTerms.push([...row.idCells, ...row.nameCells].join('\t'));
@@ -500,7 +528,6 @@
   <OwnerSearchPanel
     bind:singleSearchQuery
     bind:bulkSearchText
-    bind:strictMatchOnly
     {searchLoading}
     {searchError}
     exampleCompanies={topExamples.length > 0 ? topExamples : []}

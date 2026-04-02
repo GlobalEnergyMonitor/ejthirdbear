@@ -33,7 +33,6 @@
     getHierarchyTree,
     getUiTrackerFromCatalogEntry,
     getAssetTypesFromUrl,
-    API_SLUG_TO_UI_TRACKER,
   } from '$lib/data-config/asset-class-hierarchy';
   import { GEM_DATA_EMAIL } from '$lib/external-links';
   import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
@@ -167,9 +166,10 @@
   }
 
   // ─── Derive selected statuses ─────────────────────────────────────
+
+  /** Flat list of selected substatus values — used for chart-side client filtering. */
   const selectedStatuses = $derived.by(() => {
     const statuses = [];
-    // Use dynamic groups if available, otherwise hardcoded
     const groups =
       dynamicStatusGroups ??
       STATUS_GROUPS.map((sg) => ({
@@ -184,6 +184,33 @@
       }
     }
     return statuses;
+  });
+
+  /**
+   * Structured status params for the API URL.
+   * - Full group selected → status=groupId (e.g. status=planned)
+   * - Partial group selected → substatus=val1&substatus=val2
+   */
+  const selectedStatusParams = $derived.by(() => {
+    const statusValues = [];
+    const substatusValues = [];
+    const groups =
+      dynamicStatusGroups ??
+      STATUS_GROUPS.map((sg) => ({
+        id: sg.id,
+        statuses: sg.statuses.map((s) => ({ value: s })),
+      }));
+    for (const sg of groups) {
+      const allValues = sg.statuses.map((s) => s.value);
+      const checkedValues = allValues.filter((v) => statusChecks[`status-${sg.id}-${v}`]);
+      if (checkedValues.length === 0) continue;
+      if (checkedValues.length === allValues.length) {
+        statusValues.push(sg.id);
+      } else {
+        substatusValues.push(...checkedValues);
+      }
+    }
+    return { statusValues, substatusValues };
   });
 
   // ─── Serialization ─────────────────────────────────────────────────
@@ -214,11 +241,11 @@
     const catalogUrl = buildCatalogUrl(
       catalogEntry.url,
       selectedChildUrls,
-      selectedStatuses,
+      selectedStatusParams,
       geoFilters
     );
     const catalogOwnersUrl = catalogEntry.owners_url
-      ? buildCatalogUrl(catalogEntry.owners_url, selectedOwnerChildUrls, selectedStatuses, geoFilters)
+      ? buildCatalogUrl(catalogEntry.owners_url, selectedOwnerChildUrls, selectedStatusParams, geoFilters)
       : undefined;
 
     // Labels for selected sub-classes (for panel summary display)
@@ -241,7 +268,7 @@
         },
         assetClassId: selectedClassId,
         selectedSubClasses: selectedSubClassIds,
-        gemTrackers: assetTypes.map((slug) => API_SLUG_TO_UI_TRACKER[slug] ?? slug),
+        gemTrackers: assetTypes,
         catalogUrl,
         catalogOwnersUrl,
       },

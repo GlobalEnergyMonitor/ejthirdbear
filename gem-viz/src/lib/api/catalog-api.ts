@@ -360,10 +360,17 @@ export function combineChildUrls(childUrls: string[]): string {
  * @param countries    User-selected countries — appended as repeated &country= params
  * @param apiBase      API host to prepend (defaults to CATALOG_API_BASE)
  */
+export interface StatusParams {
+  /** Top-level status group IDs where all substatuses are selected (e.g. 'planned', 'operating') */
+  statusValues: string[];
+  /** Individual substatus values where only a partial group is selected (e.g. 'construction', 'announced') */
+  substatusValues: string[];
+}
+
 export function buildCatalogUrl(
   baseUrl: string,
   childUrls: string[],
-  statuses: string[],
+  statusParams: StatusParams,
   countries: string[],
   apiBase: string = CATALOG_API_BASE
 ): string {
@@ -371,7 +378,8 @@ export function buildCatalogUrl(
   const [path, qs] = relUrl.split('?');
   const params = new URLSearchParams(qs ?? '');
 
-  for (const s of statuses) params.append('status', s);
+  for (const s of statusParams.statusValues) params.append('status', s);
+  for (const s of statusParams.substatusValues) params.append('substatus', s);
   for (const c of countries) params.append('country', c);
 
   return `${apiBase}${path}?${params.toString()}`;

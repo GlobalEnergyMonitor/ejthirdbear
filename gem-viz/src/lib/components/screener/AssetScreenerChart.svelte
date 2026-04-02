@@ -114,9 +114,11 @@
       }
 
       // Apply tracker filter if provided.
-      // Normalize both sides to handle slug ('coal-mine') vs display name ('Coal Mine') format.
+      // Normalize both sides: strip all non-alphanumeric chars so slugs ('oil-gas-plant'),
+      // display names ('Oil & Gas Plant'), and abbreviated names ('Gas Plant') all reduce
+      // to the same canonical form for comparison.
       if (trackerFilter && trackerFilter.length > 0) {
-        const normTracker = (t) => (t || '').toLowerCase().replace(/[-\s]/g, '');
+        const normTracker = (t) => (t || '').toLowerCase().replace(/[^a-z0-9]/g, '');
         const allowed = new Set(trackerFilter.map(normTracker));
         const matchTracker = (u) => allowed.has(normTracker(u.tracker));
         chartData.assets = chartData.assets.filter(matchTracker);
