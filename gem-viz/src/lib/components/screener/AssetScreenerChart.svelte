@@ -113,10 +113,14 @@
         }
       }
 
-      // Apply tracker filter if provided
+      // Apply tracker filter if provided.
+      // Normalize both sides: strip all non-alphanumeric chars so slugs ('oil-gas-plant'),
+      // display names ('Oil & Gas Plant'), and abbreviated names ('Gas Plant') all reduce
+      // to the same canonical form for comparison.
       if (trackerFilter && trackerFilter.length > 0) {
-        const allowed = new Set(trackerFilter);
-        const matchTracker = (u) => allowed.has(u.tracker);
+        const normTracker = (t) => (t || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        const allowed = new Set(trackerFilter.map(normTracker));
+        const matchTracker = (u) => allowed.has(normTracker(u.tracker));
         chartData.assets = chartData.assets.filter(matchTracker);
         chartData.directlyOwned = chartData.directlyOwned.filter(matchTracker);
         for (const [subId, units] of chartData.subsidiariesMatched) {

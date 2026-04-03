@@ -7,8 +7,6 @@
   import {
     COUNTRIES,
     STATUS_GROUPS,
-    STATUS_GROUP_DESCRIPTIONS,
-    STATUS_VALUE_DESCRIPTIONS,
     fetchLiveCountries,
   } from '$lib/data-config/tracker-schema';
   import type { DynamicStatusGroup } from '$lib/data-config/tracker-schema';
@@ -196,51 +194,6 @@
       totalCount: -1,
     }));
   });
-
-  // ── Status group helpers ──────────────────────────────────────────
-
-  function getStatusIds(groupId: string): string[] {
-    const g = resolvedStatusGroups.find((sg) => sg.id === groupId);
-    return g ? g.statuses.map((s) => `status-${groupId}-${s.value}`) : [];
-  }
-
-  function isStatusGroupAllChecked(groupId: string): boolean {
-    return getStatusIds(groupId).every((id) => statusChecks[id]);
-  }
-
-  function isStatusGroupNoneChecked(groupId: string): boolean {
-    return getStatusIds(groupId).every((id) => !statusChecks[id]);
-  }
-
-  function isStatusGroupIndeterminate(groupId: string): boolean {
-    return !isStatusGroupAllChecked(groupId) && !isStatusGroupNoneChecked(groupId);
-  }
-
-  function toggleStatusGroup(groupId: string) {
-    const wasAllChecked = isStatusGroupAllChecked(groupId);
-    const next = { ...statusChecks };
-    for (const id of getStatusIds(groupId)) {
-      next[id] = !wasAllChecked;
-    }
-    statusChecks = next;
-  }
-
-  function setStatusPreset(preset: 'default' | 'all' | 'none') {
-    const next: Record<string, boolean> = {};
-    for (const sg of resolvedStatusGroups) {
-      for (const s of sg.statuses) {
-        const key = `status-${sg.id}-${s.value}`;
-        if (preset === 'all') {
-          next[key] = true;
-        } else if (preset === 'none') {
-          next[key] = false;
-        } else {
-          next[key] = sg.id === 'operating' || sg.id === 'planned';
-        }
-      }
-    }
-    statusChecks = next;
-  }
 
   // ── Modal helpers ─────────────────────────────────────────────────
 
@@ -933,7 +886,7 @@
 
   .group-checkbox {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: var(--space-2, 8px);
     cursor: pointer;
     font-size: var(--font-size-body, 15px);
@@ -941,12 +894,15 @@
 
   .group-checkbox input[type='checkbox'] {
     margin: 0;
+    margin-top: 4px;
     cursor: pointer;
+    flex-shrink: 0;
   }
 
   .group-label {
     font-weight: 500;
     color: var(--color-text-primary);
+    line-height: 1.25;
   }
 
   .group-desc {
@@ -1037,7 +993,6 @@
 
   .refine-option {
     display: flex;
-    align-items: flex-start;
     gap: var(--space-2, 8px);
     cursor: pointer;
     font-size: var(--font-size-sm, 13px);
@@ -1064,22 +1019,40 @@
     padding: 0 4px;
   }
 
-  .refine-copy {
-    display: flex;
+  .refine-label {
+    text-transform: capitalize;
     flex: 1;
-    flex-direction: column;
-    gap: 2px;
     min-width: 0;
   }
 
-  .refine-label {
-    text-transform: capitalize;
+  /* CSS-only tooltip for status group labels and refine-panel values */
+  .tooltip-hint {
+    text-decoration: underline dotted var(--color-text-tertiary);
+    text-underline-offset: 3px;
+    cursor: help;
+    position: relative;
   }
 
-  .refine-desc {
+  .tooltip-hint[data-tooltip]:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    width: 220px;
+    padding: 6px 10px;
+    background: var(--color-text-primary, #1a2332);
+    color: #fff;
     font-size: 12px;
-    line-height: 1.35;
-    color: var(--color-text-tertiary);
+    font-weight: 400;
+    line-height: 1.4;
+    text-transform: none;
+    letter-spacing: 0;
+    text-decoration: none;
+    border-radius: 3px;
+    white-space: normal;
+    pointer-events: none;
+    z-index: 200;
   }
 
   /* ── Responsive ───────────────────────────────────────────────────── */

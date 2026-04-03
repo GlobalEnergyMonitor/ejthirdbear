@@ -87,7 +87,7 @@
 
   // Derive chart props from selected class
   const chartAssetClassName = $derived(
-    selectedClasses.length > 0 ? selectedClasses[0]?.tracker || selectedClasses[0]?.name || '' : ''
+    selectedClasses.length > 0 ? selectedClasses[0]?.name || selectedClasses[0]?.tracker || '' : ''
   );
   const chartTrackerSlug = $derived(selectedClasses.length > 0 ? selectedClasses[0]?.id || '' : '');
 
@@ -103,7 +103,7 @@
     if (selectedClasses.length === 0) return 'selected assets';
 
     const cls = selectedClasses[0];
-    const trackerName = cls.tracker || cls.name || 'assets';
+    const trackerName = cls.name || cls.tracker || 'assets';
     const parts: string[] = [];
 
     // Only show status prefix when a small number are selected (1-3)
@@ -393,7 +393,7 @@
       });
     }
 
-    // ── Tier 1: load owners from /owners endpoint ─────────────────────────────
+    // ── Tier 1: load owners ───────────────────────────────────────────────────
     try {
       const classes = selectedClasses;
       if (classes.length === 0) {
@@ -403,6 +403,35 @@
       }
 
       const cls = classes[0];
+
+      // Fetch asset type counts in parallel (cached, for debug panel)
+      getAssetTypeCounts().then((counts) => {
+        availableAssetTypes = Object.entries(counts).map(([asset_type, cnt]) => ({
+          asset_type,
+          cnt,
+        }));
+      });
+
+      // When specific owners were selected on the previous page, use pre-fetched
+      // data from sessionStorage to avoid a redundant full-owner API call.
+      if (selectedOwnerIds.length > 0) {
+        try {
+          const raw = sessionStorage.getItem('__gem_matched_owners__');
+          if (raw) {
+            const cached: ScreenerOwner[] = JSON.parse(raw);
+            sessionStorage.removeItem('__gem_matched_owners__');
+            const idSet = new Set(selectedOwnerIds);
+            const matched = cached.filter((o) => idSet.has(o.entityId));
+            if (matched.length > 0) {
+              owners = matched;
+              loading = false;
+              return;
+            }
+          }
+        } catch {
+          // sessionStorage unavailable — fall through to API fetch
+        }
+      }
 
       const statusesArray: string[] | undefined =
         cls?.filters?.statuses && cls.filters.statuses.length > 0
@@ -416,20 +445,13 @@
         ? geoRaw.length > 0 ? geoRaw : undefined
         : geoRaw || undefined;
 
-      // Fetch asset type counts in parallel (cached, for debug panel)
-      getAssetTypeCounts().then((counts) => {
-        availableAssetTypes = Object.entries(counts).map(([asset_type, cnt]) => ({
-          asset_type,
-          cnt,
-        }));
-      });
-
       const result = await getOwnersByFilter(
         {
           tracker: cls?.tracker || '',
           assetClassId: cls?.assetClassId || cls?.id,
           status: statusesArray,
           country: countryFilter,
+          catalogOwnersUrl: cls?.catalogOwnersUrl || undefined,
         },
         { limit: 500 }
       );
@@ -653,7 +675,7 @@
   <div class="filter-bar">
     <span class="filter-crumbs">
       {#each selectedClasses as cls}
-        <span class="crumb">{cls.tracker || cls.name}</span>
+        <span class="crumb">{cls.name || cls.tracker}</span>
         {#if cls.filters?.statuses?.length > 0}
           <span class="crumb-sep">/</span>
           <span class="crumb">

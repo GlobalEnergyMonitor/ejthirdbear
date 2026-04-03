@@ -377,7 +377,7 @@
       {#if activeGroups.length > 0 && filtered.length > 0}
         <li class="dropdown-divider" role="separator"></li>
       {/if}
-      {#each filtered.slice(0, 50) as country, i (country)}
+      {#each filtered as country, i (country)}
         <li
           class="dropdown-item"
           class:highlighted={activeGroups.length + i === highlightIndex}

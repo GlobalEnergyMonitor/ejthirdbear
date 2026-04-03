@@ -628,6 +628,8 @@ export interface OwnersFilterParams {
   assetClassId?: string;
   status?: string | string[];
   country?: string | string[];
+  /** Pre-built catalog /owners URL — when present, bypasses tracker → slug resolution and uses this URL directly (with pagination appended). Status and geography are already encoded in the URL. */
+  catalogOwnersUrl?: string;
 }
 
 /** In-memory cache for /owners endpoint responses */
@@ -662,38 +664,50 @@ export async function getOwnersByFilter(
   }
 
   try {
-    const { resolveApiSlug } = await import('$lib/ownership-api');
-    const apiSlug = resolveApiSlug(params.tracker);
-    if (!apiSlug) throw new Error(`Cannot resolve API slug for tracker: ${params.tracker}`);
-
-    const p = new URLSearchParams();
-    p.set('asset_type', apiSlug);
-
-    const statuses = Array.isArray(params.status)
-      ? params.status
-      : params.status
-        ? [params.status]
-        : [];
-    for (const s of statuses) p.append('status', s);
-
-    const countries = Array.isArray(params.country)
-      ? params.country
-      : params.country
-        ? [params.country]
-        : [];
-    for (const c of countries) p.append('country', c);
-
-    const PAGE_SIZE = 500; // API hard cap
-    p.set('limit', String(PAGE_SIZE));
-
     const { logApiCall } = await import('$lib/api-log.svelte');
+    const PAGE_SIZE = 500; // API hard cap
+
+    // Build base params — either from catalogOwnersUrl or tracker slug
+    let baseParams: URLSearchParams;
+    if (params.catalogOwnersUrl) {
+      // catalogOwnersUrl already encodes asset_type, status, geography etc.
+      // Strip any existing limit/offset so we control pagination.
+      const parsed = new URLSearchParams(params.catalogOwnersUrl.split('?')[1] ?? '');
+      parsed.delete('limit');
+      parsed.delete('offset');
+      baseParams = parsed;
+    } else {
+      const { resolveApiSlug } = await import('$lib/ownership-api');
+      const apiSlug = resolveApiSlug(params.tracker);
+      if (!apiSlug) throw new Error(`Cannot resolve API slug for tracker: ${params.tracker}`);
+      baseParams = new URLSearchParams();
+      baseParams.set('asset_type', apiSlug);
+      const statuses = Array.isArray(params.status)
+        ? params.status
+        : params.status
+          ? [params.status]
+          : [];
+      for (const s of statuses) baseParams.append('status', s);
+      const countries = Array.isArray(params.country)
+        ? params.country
+        : params.country
+          ? [params.country]
+          : [];
+      for (const c of countries) baseParams.append('country', c);
+    }
+    baseParams.set('limit', String(PAGE_SIZE));
+
     const rawOwners: Array<Record<string, unknown>> = [];
     let offset = 0;
     let total = Infinity;
 
     while (rawOwners.length < total) {
+      const p = new URLSearchParams(baseParams);
       p.set('offset', String(offset));
-      const url = `${OWNERSHIP_API_BASE}/owners?${p.toString()}`;
+      const base = params.catalogOwnersUrl
+        ? params.catalogOwnersUrl.split('?')[0]
+        : `${OWNERSHIP_API_BASE}/owners`;
+      const url = `${base}?${p.toString()}`;
       const t0 = performance.now();
       const resp = await fetch(url);
       logApiCall({

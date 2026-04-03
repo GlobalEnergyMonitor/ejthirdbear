@@ -40,6 +40,7 @@
         description: item.description || '',
         tracker: item.tracker || '',
         filters: item.filters || null,
+        selectedSubClassLabels: item.selectedSubClassLabels || [],
       }));
     }
 
@@ -51,16 +52,35 @@
     return [];
   });
 
-  // Build human-readable description of a class
+  // Build human-readable summary of a class + its active selections
   function getClassDescription(cls) {
-    if (cls.description) return cls.description;
+    const parts = [cls.name];
 
-    const parts = [];
-    if (cls.filters?.status) parts.push(cls.filters.status);
-    parts.push(cls.tracker || cls.name || 'assets');
-    if (cls.filters?.geography) parts.push(`in ${cls.filters.geography}`);
+    // Sub-class selections (e.g. "Metals, Other Industries")
+    const subLabels = cls.selectedSubClassLabels ?? [];
+    if (subLabels.length > 0 && subLabels.length <= 3) {
+      parts.push(`(${subLabels.join(', ')})`);
+    } else if (subLabels.length > 3) {
+      parts.push(`(${subLabels.slice(0, 3).join(', ')}…)`);
+    }
 
-    return parts.join(' ');
+    // Statuses (support both array and legacy single-value)
+    const statuses = cls.filters?.statuses ?? (cls.filters?.status ? [cls.filters.status] : []);
+    if (statuses.length > 0) {
+      parts.push(statuses.map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(', '));
+    }
+
+    // Geography
+    const geo = cls.filters?.geography;
+    if (Array.isArray(geo) && geo.length === 1) {
+      parts.push(geo[0]);
+    } else if (Array.isArray(geo) && geo.length > 1) {
+      parts.push(`${geo.length} countries`);
+    } else if (typeof geo === 'string' && geo) {
+      parts.push(geo);
+    }
+
+    return parts.join(' · ');
   }
 
   function handleRemove(cls) {
@@ -105,10 +125,7 @@
   <div class="classes-panel" class:expanded={isExpanded}>
     <button class="panel-header" onclick={() => (isExpanded = !isExpanded)}>
       <span class="toggle-icon">{isExpanded ? '▼' : '▶'}</span>
-      <span class="panel-title">Selected Asset Classes</span>
-      {#if selectedClasses.length > 0}
-        <span class="count">{selectedClasses.length}</span>
-      {/if}
+      <span class="panel-title">Selected Asset Class</span>
     </button>
 
     {#if isExpanded}
