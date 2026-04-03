@@ -16,6 +16,7 @@
   import OwnershipTreeGraph from '$lib/components/ownership/OwnershipTreeGraph.svelte';
   import StatusIcon from '$lib/components/tracker/StatusIcon.svelte';
   import { classifyOwnerType } from '$lib/components/ownership/ownership-tree-utils';
+  import QuerySentenceBuilder from '$lib/components/filters/QuerySentenceBuilder.svelte';
 
   const PLACEHOLDER_ENTITY_IDS = new Set(['E100001015587', 'E100000123261', 'E100000132388']);
 
@@ -50,6 +51,53 @@
   let treeError = $state('');
   let treeDirection = $state('auto');
   let modalOpen = $state(false);
+
+  // ── Filter state ──────────────────────────────────────────────────────────
+  let filterAssetTypes = $state(/** @type {string[]} */ ([]));
+  let filterCountries  = $state(/** @type {string[]} */ ([]));
+  let filterStatuses   = $state(/** @type {string[]} */ ([]));
+  let openPicker   = $state(/** @type {string|null} */ (null));
+  let shownFields  = $state(/** @type {string[]} */ (['asset_type']));
+  let countryOptions  = $state(/** @type {string[]} */ ([]));
+  let countrySearch = $state('');
+
+  /** Maps display labels → API slugs for asset_type */
+  const ASSET_TYPE_SLUG = {
+    'Coal Plant':        'coal-plant',
+    'Oil & Gas Plant':   'oil-gas-plant',
+    'Bioenergy Plant':   'bioenergy-plant',
+    'Gas Pipeline':      'gas-pipeline',
+    'Cement Plant':      'cement-plant',
+    'Oil Pipeline':      'oil-pipeline',
+    'Iron & Steel Plant':'iron-steel-plant',
+    'Iron Ore Mine':     'iron-ore-mine',
+  };
+  const ASSET_TYPE_LABELS = Object.keys(ASSET_TYPE_SLUG);
+
+  const STATUS_OPTIONS = ['operating', 'planned', 'cancelled', 'retired'];
+
+  const FILTER_FIELDS = [
+    { key: 'asset_type', label: 'Asset type', phrase: 'of type' },
+    { key: 'country',    label: 'Country',    phrase: 'in' },
+    { key: 'status',     label: 'Status',     phrase: 'that are' },
+  ];
+
+  const sentenceFilters = $derived({
+    asset_type: filterAssetTypes,
+    country:    filterCountries,
+    status:     filterStatuses,
+  });
+  const filtersDirty = $derived(
+    filterAssetTypes.length > 0 || filterCountries.length > 0 || filterStatuses.length > 0
+  );
+  const filteredCountryOptions = $derived(
+    countrySearch
+      ? countryOptions.filter(c => c.toLowerCase().includes(countrySearch.toLowerCase()))
+      : countryOptions
+  );
+
+  // Reset country search when picker closes
+  $effect(() => { if (openPicker !== 'country') countrySearch = ''; });
 
   // Mobile summary: data-driven sentences derived from tree data
   const mobileSummary = $derived.by(() => {
@@ -141,13 +189,21 @@
         // invalid deep-link, ignore
       }
     }
+    // Fetch country options for the country picker
+    try {
+      const res = await listAssets({ limit: 1, facets: true });
+      if (res.facets?.country) {
+        countryOptions = Object.keys(res.facets.country).sort();
+      }
+    } catch { /* non-fatal */ }
   });
 
   $effect(() => {
     const q = query;
     const type = searchType;
+    const hasFilters = filterAssetTypes.length > 0 || filterCountries.length > 0 || filterStatuses.length > 0;
     clearTimeout(debounceTimer);
-    if (!q || q.length < 2) {
+    if ((!q || q.length < 2) && !hasFilters) {
       results = [];
       hasSearched = false;
       return;
@@ -159,7 +215,13 @@
   });
 
   async function doSearch(q, type) {
-    if (!q || q.length < 2) {
+    // Snapshot reactive arrays into plain arrays to avoid proxy issues in buildQuery
+    const countries  = Array.from(filterCountries);
+    const types      = Array.from(filterAssetTypes);
+    const statuses   = Array.from(filterStatuses);
+
+    const hasFilters = types.length > 0 || countries.length > 0 || statuses.length > 0;
+    if ((!q || q.length < 2) && !hasFilters) {
       results = [];
       hasSearched = false;
       return;
@@ -169,19 +231,34 @@
     hasSearched = true;
     try {
       const merged = [];
+      const typesToSearch    = types.length   > 0 ? types.map(l => ASSET_TYPE_SLUG[l]) : [undefined];
+      const statusesToSearch = statuses.length > 0 ? statuses : [undefined];
+      const countryParam = countries.length > 0 ? countries : undefined;
 
-      const r = await listAssets({ q, limit: 20 });
-      for (const a of r.results) {
-        merged.push({
-          id: a.id,
-          name: a.name,
-          kind: 'asset',
-          country: a.country,
-          status: a.status,
-          asset_type: a.facilityType,
-        });
+      for (const assetType of typesToSearch) {
+        for (const status of statusesToSearch) {
+          const r = await listAssets({
+            q: q || undefined,
+            limit: 20,
+            asset_type: assetType,
+            status: status,
+            country: countryParam,
+          });
+          for (const a of r.results) {
+            if (!merged.some(m => m.id === a.id)) {
+              merged.push({
+                id: a.id,
+                name: a.name,
+                kind: 'asset',
+                country: a.country,
+                status: a.status,
+                asset_type: a.facilityType,
+              });
+            }
+          }
+        }
       }
-      results = merged;
+      results = merged.slice(0, 40);
     } catch (err) {
       searchError = err.message || 'Search failed';
       results = [];
@@ -190,17 +267,48 @@
     }
   }
 
+  function toggleAssetType(label) {
+    filterAssetTypes = filterAssetTypes.includes(label)
+      ? filterAssetTypes.filter(v => v !== label)
+      : [...filterAssetTypes, label];
+  }
+
+  function toggleCountry(country) {
+    filterCountries = filterCountries.includes(country)
+      ? filterCountries.filter(v => v !== country)
+      : [...filterCountries, country];
+  }
+
+  function toggleStatus(s) {
+    filterStatuses = filterStatuses.includes(s)
+      ? filterStatuses.filter(v => v !== s)
+      : [...filterStatuses, s];
+  }
+
+  function handleRemoveFilterValue(key, val) {
+    if (key === 'asset_type') filterAssetTypes = filterAssetTypes.filter(v => v !== val);
+    else if (key === 'country')    filterCountries = filterCountries.filter(v => v !== val);
+    else if (key === 'status')     filterStatuses  = filterStatuses.filter(v => v !== val);
+  }
+
+  function handleRemoveFilterField(key) {
+    if (key === 'asset_type') filterAssetTypes = [];
+    else if (key === 'country')    filterCountries = [];
+    else if (key === 'status')     filterStatuses  = [];
+  }
+
+  function handleClearFilters() {
+    filterAssetTypes = [];
+    filterCountries  = [];
+    filterStatuses   = [];
+  }
+
   function handleSearch(q, mode) {
     query = q;
     searchType = mode || 'assets';
     clearTimeout(debounceTimer);
     onStateChange?.(q, searchType);
-    if (!q || q.length < 2) {
-      results = [];
-      hasSearched = false;
-      return;
-    }
-    debounceTimer = setTimeout(() => doSearch(q, searchType), 200);
+    // Let the $effect handle re-searching (it considers active filters too)
   }
 
   function handleClear() {
@@ -274,6 +382,69 @@
       onSearch={handleSearch}
       onClear={handleClear}
     />
+  </div>
+
+  <div class="cc-filters">
+    <QuerySentenceBuilder
+      fields={FILTER_FIELDS}
+      filters={sentenceFilters}
+      isDirty={filtersDirty}
+      bind:openPicker
+      bind:shownFields
+      panelTitles={{ country: 'Select countries', asset_type: 'Select asset types', status: 'Select statuses' }}
+      columnPickerKeys={['country']}
+      onRemoveValue={handleRemoveFilterValue}
+      onRemoveField={handleRemoveFilterField}
+      onClearAll={handleClearFilters}
+    >
+      {#snippet subject()}
+        <span class="cc-sentence-subject">assets</span>
+      {/snippet}
+      {#snippet picker(fieldKey)}
+        {#if fieldKey === 'asset_type'}
+          {#each ASSET_TYPE_LABELS as label}
+            <button
+              class="cc-filter-pill"
+              class:active={filterAssetTypes.includes(label)}
+              onclick={() => toggleAssetType(label)}
+            >{label}</button>
+          {/each}
+        {:else if fieldKey === 'status'}
+          {#each STATUS_OPTIONS as s}
+            <button
+              class="cc-filter-pill"
+              class:active={filterStatuses.includes(s)}
+              onclick={() => toggleStatus(s)}
+            >{s}</button>
+          {/each}
+        {:else if fieldKey === 'country'}
+          <input
+            class="cc-country-search"
+            type="text"
+            placeholder="Search countries..."
+            bind:value={countrySearch}
+          />
+          <div class="cc-country-list">
+            {#each filteredCountryOptions as country}
+              <label class="cc-country-item">
+                <input
+                  type="checkbox"
+                  checked={filterCountries.includes(country)}
+                  onchange={() => toggleCountry(country)}
+                />
+                {country}
+              </label>
+            {/each}
+            {#if filteredCountryOptions.length === 0 && countryOptions.length > 0}
+              <span class="cc-no-country">No countries match "{countrySearch}"</span>
+            {/if}
+            {#if countryOptions.length === 0}
+              <span class="cc-no-country">Loading countries…</span>
+            {/if}
+          </div>
+        {/if}
+      {/snippet}
+    </QuerySentenceBuilder>
   </div>
 
   {#if !hasSearched && !selected}
@@ -444,7 +615,82 @@
   }
 
   .cc-search {
+    margin-bottom: var(--space-3);
+  }
+
+  .cc-filters {
     margin-bottom: var(--space-5);
+    --sentence-max-width: 100%;
+  }
+
+  .cc-sentence-subject {
+    color: var(--color-text-primary);
+    font-weight: 500;
+  }
+
+  .cc-filter-pill {
+    all: unset;
+    cursor: pointer;
+    padding: var(--space-2) var(--space-4);
+    border: 1.5px solid var(--color-border);
+    border-radius: 20px;
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    background: #fff;
+    transition: all 0.12s;
+    white-space: nowrap;
+  }
+
+  .cc-filter-pill:hover {
+    border-color: var(--gem-navy, #1d4961);
+    color: var(--gem-navy, #1d4961);
+  }
+
+  .cc-filter-pill.active {
+    background: var(--gem-navy, #1d4961);
+    color: #fff;
+    border-color: var(--gem-navy, #1d4961);
+  }
+
+  .cc-country-search {
+    width: 100%;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm, 4px);
+    font-size: var(--font-size-sm);
+    font-family: inherit;
+    margin-bottom: var(--space-2);
+    box-sizing: border-box;
+  }
+
+  .cc-country-list {
+    max-height: 220px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .cc-country-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    padding: 3px 0;
+  }
+
+  .cc-country-item input[type='checkbox'] {
+    cursor: pointer;
+    margin: 0;
+  }
+
+  .cc-no-country {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-tertiary);
+    padding: var(--space-2) 0;
   }
 
   /* Empty / examples */

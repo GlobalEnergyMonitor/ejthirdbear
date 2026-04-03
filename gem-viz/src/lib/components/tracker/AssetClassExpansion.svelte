@@ -7,8 +7,6 @@
   import {
     COUNTRIES,
     STATUS_GROUPS,
-    STATUS_GROUP_DESCRIPTIONS,
-    STATUS_VALUE_DESCRIPTIONS,
     fetchLiveCountries,
   } from '$lib/data-config/tracker-schema';
   import type { DynamicStatusGroup } from '$lib/data-config/tracker-schema';
@@ -21,6 +19,7 @@
   import { slide, fade } from 'svelte/transition';
   import CountryMultiSelect from '$lib/components/screener/CountryMultiSelect.svelte';
   import GeoFenceInput from '$lib/components/screener/GeoFenceInput.svelte';
+  import StatusFilter from '$lib/components/filters/StatusFilter.svelte';
 
   // Live countries from API facets, falls back to hardcoded COUNTRIES
   let countries = $state<readonly string[]>(COUNTRIES);
@@ -195,51 +194,6 @@
       totalCount: -1,
     }));
   });
-
-  // ── Status group helpers ──────────────────────────────────────────
-
-  function getStatusIds(groupId: string): string[] {
-    const g = resolvedStatusGroups.find((sg) => sg.id === groupId);
-    return g ? g.statuses.map((s) => `status-${groupId}-${s.value}`) : [];
-  }
-
-  function isStatusGroupAllChecked(groupId: string): boolean {
-    return getStatusIds(groupId).every((id) => statusChecks[id]);
-  }
-
-  function isStatusGroupNoneChecked(groupId: string): boolean {
-    return getStatusIds(groupId).every((id) => !statusChecks[id]);
-  }
-
-  function isStatusGroupIndeterminate(groupId: string): boolean {
-    return !isStatusGroupAllChecked(groupId) && !isStatusGroupNoneChecked(groupId);
-  }
-
-  function toggleStatusGroup(groupId: string) {
-    const wasAllChecked = isStatusGroupAllChecked(groupId);
-    const next = { ...statusChecks };
-    for (const id of getStatusIds(groupId)) {
-      next[id] = !wasAllChecked;
-    }
-    statusChecks = next;
-  }
-
-  function setStatusPreset(preset: 'default' | 'all' | 'none') {
-    const next: Record<string, boolean> = {};
-    for (const sg of resolvedStatusGroups) {
-      for (const s of sg.statuses) {
-        const key = `status-${sg.id}-${s.value}`;
-        if (preset === 'all') {
-          next[key] = true;
-        } else if (preset === 'none') {
-          next[key] = false;
-        } else {
-          next[key] = sg.id === 'operating' || sg.id === 'planned';
-        }
-      }
-    }
-    statusChecks = next;
-  }
 
   // ── Modal helpers ─────────────────────────────────────────────────
 
@@ -504,83 +458,7 @@
               </div>
             {/if}
           {:else if step.id === 'status'}
-            <!-- OPERATING STATUS -->
-            <div class="filter-section">
-              <span class="section-heading">Operating status</span>
-              <div class="status-toolbar">
-                <div class="status-presets" role="group" aria-label="Status presets">
-                  <button
-                    type="button"
-                    class="preset-btn"
-                    onclick={() => setStatusPreset('default')}
-                  >
-                    Operating + planned
-                  </button>
-                  <button type="button" class="preset-btn" onclick={() => setStatusPreset('all')}>
-                    All statuses
-                  </button>
-                  <button type="button" class="preset-btn" onclick={() => setStatusPreset('none')}>
-                    Clear
-                  </button>
-                </div>
-                <span class="status-count">{selectedStatusCount} selected</span>
-              </div>
-              <div class="group-row">
-                {#each resolvedStatusGroups as sg (sg.id)}
-                  {@const hasRefine = sg.statuses.length > 1}
-                  <div class="group-item">
-                    <label class="group-checkbox">
-                      <input
-                        type="checkbox"
-                        checked={isStatusGroupAllChecked(sg.id)}
-                        indeterminate={isStatusGroupIndeterminate(sg.id)}
-                        onchange={() => toggleStatusGroup(sg.id)}
-                      />
-                      <span class="group-label">{sg.label}</span>
-                      {#if sg.totalCount > 0}
-                        <span class="count-badge">{sg.totalCount.toLocaleString()}</span>
-                      {/if}
-                    </label>
-                    {#if STATUS_GROUP_DESCRIPTIONS[sg.id]}
-                      <span class="group-desc">{STATUS_GROUP_DESCRIPTIONS[sg.id]}</span>
-                    {/if}
-                    {#if hasRefine}
-                      <button class="refine-toggle" onclick={() => toggleRefine(`status-${sg.id}`)}>
-                        {expandedRefine[`status-${sg.id}`] ? '\u25BC' : '\u25B6'} Refine
-                      </button>
-                    {/if}
-                    {#if hasRefine && expandedRefine[`status-${sg.id}`]}
-                      <div class="refine-panel" transition:slide={{ duration: 150 }}>
-                        {#each sg.statuses as statusItem}
-                          <label class="refine-option">
-                            <input
-                              type="checkbox"
-                              bind:checked={statusChecks[`status-${sg.id}-${statusItem.value}`]}
-                            />
-                            <span class="refine-copy">
-                              <span class="refine-label">{statusItem.value}</span>
-                              {#if STATUS_VALUE_DESCRIPTIONS[statusItem.value]}
-                                <span class="refine-desc">
-                                  {STATUS_VALUE_DESCRIPTIONS[statusItem.value]}
-                                </span>
-                              {/if}
-                            </span>
-                            {#if statusItem.count > 0}
-                              <span class="count-badge small"
-                                >{statusItem.count.toLocaleString()}</span
-                              >
-                            {/if}
-                          </label>
-                        {/each}
-                      </div>
-                    {/if}
-                  </div>
-                {/each}
-              </div>
-              {#if selectedStatusCount === 0}
-                <p class="status-warning">Select at least one status to continue.</p>
-              {/if}
-            </div>
+            <StatusFilter bind:statusChecks statusGroups={resolvedStatusGroups} />
           {:else if step.id === 'geography'}
             <!-- GEOGRAPHY (optional) -->
             <div class="filter-section">
@@ -1008,7 +886,7 @@
 
   .group-checkbox {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: var(--space-2, 8px);
     cursor: pointer;
     font-size: var(--font-size-body, 15px);
@@ -1016,12 +894,15 @@
 
   .group-checkbox input[type='checkbox'] {
     margin: 0;
+    margin-top: 4px;
     cursor: pointer;
+    flex-shrink: 0;
   }
 
   .group-label {
     font-weight: 500;
     color: var(--color-text-primary);
+    line-height: 1.25;
   }
 
   .group-desc {
@@ -1112,7 +993,6 @@
 
   .refine-option {
     display: flex;
-    align-items: flex-start;
     gap: var(--space-2, 8px);
     cursor: pointer;
     font-size: var(--font-size-sm, 13px);
@@ -1139,22 +1019,40 @@
     padding: 0 4px;
   }
 
-  .refine-copy {
-    display: flex;
+  .refine-label {
+    text-transform: capitalize;
     flex: 1;
-    flex-direction: column;
-    gap: 2px;
     min-width: 0;
   }
 
-  .refine-label {
-    text-transform: capitalize;
+  /* CSS-only tooltip for status group labels and refine-panel values */
+  .tooltip-hint {
+    text-decoration: underline dotted var(--color-text-tertiary);
+    text-underline-offset: 3px;
+    cursor: help;
+    position: relative;
   }
 
-  .refine-desc {
+  .tooltip-hint[data-tooltip]:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    width: 220px;
+    padding: 6px 10px;
+    background: var(--color-text-primary, #1a2332);
+    color: #fff;
     font-size: 12px;
-    line-height: 1.35;
-    color: var(--color-text-tertiary);
+    font-weight: 400;
+    line-height: 1.4;
+    text-transform: none;
+    letter-spacing: 0;
+    text-decoration: none;
+    border-radius: 3px;
+    white-space: normal;
+    pointer-events: none;
+    z-index: 200;
   }
 
   /* ── Responsive ───────────────────────────────────────────────────── */

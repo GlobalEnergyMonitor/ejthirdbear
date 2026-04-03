@@ -16,10 +16,11 @@
   interface Props {
     id?: string;
     assetId?: string;
+    tab?: string;
     theme?: 'light' | 'dark';
   }
 
-  let { id, assetId, theme = 'light' }: Props = $props();
+  let { id, assetId, tab, theme = 'light' }: Props = $props();
 
   let loading = $state(true);
   let error = $state<string | null>(null);
@@ -74,7 +75,7 @@
       <p>{error}</p>
     </div>
   {:else if units.length > 0}
-    <CoalPlantCard units={units} open={true} ownershipLoader={getOwnershipGraph} />
+    <CoalPlantCard units={units} open={true} initialTab={tab} ownershipLoader={getOwnershipGraph} />
   {:else}
     <div class="embed-error">
       <p>No coal plant data available.</p>
