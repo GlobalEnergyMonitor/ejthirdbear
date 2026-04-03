@@ -24,8 +24,52 @@ import {
   type Tracker,
   type Granularity,
 } from '$lib/data-config/coal-field-schema';
+import { STATUS_GROUPS } from '$lib/data-config/tracker-schema';
 
 const API_BASE = import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-api.thirdbear.net';
+
+/**
+ * Appends coal filter params to a URLSearchParams.
+ * - status → status=groupId when all group members selected, sub_status=val otherwise
+ * - country_area → country
+ * - all other categorical filter arrays → field_key=val (passed through as-is)
+ */
+export function appendCoalFilters(p: URLSearchParams, filters: CoalQueryFilters): void {
+  // Status: map individual values to status= or sub_status= based on group membership
+  if (filters.status?.length) {
+    const selectedSet = new Set(filters.status);
+    const handledVals = new Set<string>();
+
+    for (const sg of STATUS_GROUPS) {
+      const inGroup = (sg.statuses as readonly string[]).filter((s) => selectedSet.has(s));
+      if (inGroup.length === 0) continue;
+
+      if (inGroup.length === sg.statuses.length) {
+        p.append('status', sg.id);
+      } else {
+        for (const v of inGroup) p.append('sub_status', v);
+      }
+      for (const v of inGroup) handledVals.add(v);
+    }
+
+    // Any selected values not matched by STATUS_GROUPS go as sub_status
+    for (const v of filters.status) {
+      if (!handledVals.has(v)) p.append('sub_status', v);
+    }
+  }
+
+  // Country
+  if (filters.country_area?.length) {
+    for (const c of filters.country_area) p.append('country', c);
+  }
+
+  // All other categorical filter arrays
+  const SKIP = new Set(['status', 'country_area']);
+  for (const [key, vals] of Object.entries(filters)) {
+    if (SKIP.has(key) || !Array.isArray(vals) || vals.length === 0) continue;
+    for (const v of vals) p.append(key, v as string);
+  }
+}
 
 const TRACKER_LABELS: Record<Tracker, string> = {
   'coal-plant': 'Coal Plants',
@@ -49,9 +93,7 @@ export class CoalQueryState {
     if (this.query.aggregates.length === 0) {
       const p = new URLSearchParams();
       for (const t of this.query.trackers) p.append('asset_type', t);
-      const f = this.query.filters;
-      if (f.country_area?.length) for (const c of f.country_area) p.append('country', c);
-      if (f.status?.length) for (const s of f.status) p.append('status', s);
+      appendCoalFilters(p, this.query.filters);
       return [`${API_BASE}/assets?${p.toString()}`];
     }
 
@@ -60,9 +102,7 @@ export class CoalQueryState {
       const tracker = field?.trackers[0] ?? this.query.trackers[0];
       const trackerSlug = tracker.endsWith('s') ? tracker : tracker + 's';
       const p = new URLSearchParams();
-      const f = this.query.filters;
-      if (f.status?.length) for (const s of f.status) p.append('status', s);
-      if (f.country_area?.length) for (const c of f.country_area) p.append('country', c);
+      appendCoalFilters(p, this.query.filters);
       // Reflect granularity: plant-mode adds location_id for coal-plant fields
       const needsPlantCollapse =
         this.query.granularity === 'project' &&

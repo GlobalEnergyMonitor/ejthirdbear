@@ -1,6 +1,6 @@
 <script lang="ts">
   import { getContext, untrack } from 'svelte';
-  import { COAL_QUERY_KEY } from '$lib/state/coal-query.svelte';
+  import { COAL_QUERY_KEY, appendCoalFilters } from '$lib/state/coal-query.svelte';
   import type { CoalQueryState } from '$lib/state/coal-query.svelte';
   import {
     type AggFn,
@@ -231,9 +231,7 @@
   const countUrl = $derived.by(() => {
     const p = new URLSearchParams();
     for (const t of q.query.trackers) p.append('asset_type', t);
-    const f = q.query.filters;
-    if (f.country_area?.length) for (const c of f.country_area) p.append('country', c);
-    if (f.status?.length) for (const s of f.status) p.append('status', s);
+    appendCoalFilters(p, q.query.filters);
     p.set('facets', 'true');
     p.set('limit', '1');
     return `${API_BASE}/assets?${p.toString()}`;
@@ -335,9 +333,7 @@
   const assetsUrl = $derived.by(() => {
     const p = new URLSearchParams();
     for (const t of q.query.trackers) p.append('asset_type', t);
-    const f = q.query.filters;
-    if (f.country_area?.length) for (const c of f.country_area) p.append('country', c);
-    if (f.status?.length) for (const s of f.status) p.append('status', s);
+    appendCoalFilters(p, q.query.filters);
     return `${API_BASE}/assets?${p.toString()}`;
   });
 
