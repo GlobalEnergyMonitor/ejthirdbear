@@ -57,7 +57,7 @@
   let filterCountries  = $state(/** @type {string[]} */ ([]));
   let filterStatuses   = $state(/** @type {string[]} */ ([]));
   let openPicker   = $state(/** @type {string|null} */ (null));
-  let shownFields  = $state(/** @type {string[]} */ ([]));
+  let shownFields  = $state(/** @type {string[]} */ (['asset_type']));
   let countryOptions  = $state(/** @type {string[]} */ ([]));
   let countrySearch = $state('');
 
