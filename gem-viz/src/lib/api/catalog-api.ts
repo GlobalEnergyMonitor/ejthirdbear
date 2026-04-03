@@ -379,7 +379,7 @@ export function buildCatalogUrl(
   const params = new URLSearchParams(qs ?? '');
 
   for (const s of statusParams.statusValues) params.append('status', s);
-  for (const s of statusParams.substatusValues) params.append('substatus', s);
+  for (const s of statusParams.substatusValues) params.append('sub_status', s);
   for (const c of countries) params.append('country', c);
 
   return `${apiBase}${path}?${params.toString()}`;

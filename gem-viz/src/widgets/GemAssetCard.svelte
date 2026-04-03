@@ -14,10 +14,11 @@
   interface Props {
     assetId: string;
     showOwners?: boolean;
+    showMap?: boolean;
     theme?: 'light' | 'dark';
   }
 
-  let { assetId, showOwners = true, theme = 'light' }: Props = $props();
+  let { assetId, showOwners = true, showMap = false, theme = 'light' }: Props = $props();
 
   let loading = $state(true);
   let error = $state<string | null>(null);
@@ -92,6 +93,14 @@
       {/if}
     </div>
 
+    {#if showMap && asset?.latitude && asset?.longitude}
+      <div class="map-section">
+        <div class="map-placeholder" style="height: 200px; background: var(--color-bg-tertiary); display: flex; align-items: center; justify-content: center; font-size: var(--font-size-sm); color: var(--color-text-tertiary); border: var(--border-width) solid var(--color-border);">
+          {asset.latitude.toFixed(4)}, {asset.longitude.toFixed(4)} — {asset.country || 'Unknown'}
+        </div>
+      </div>
+    {/if}
+
     {#if showOwners && ownerRows.length > 0}
       <div class="owners-section">
         <h2>Owners ({ownerRows.length})</h2>
@@ -158,6 +167,9 @@
   }
   .meta-chip.status {
     border-left: 3px solid var(--status-color);
+  }
+  .map-section {
+    margin-bottom: var(--space-4);
   }
   h2 {
     font-size: var(--font-size-sm);

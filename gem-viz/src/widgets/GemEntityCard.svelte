@@ -10,10 +10,14 @@
   import TrackerIcon from '$lib/components/tracker/TrackerIcon.svelte';
   import StatusIcon from '$lib/components/tracker/StatusIcon.svelte';
 
+  import AssetScreenerChart from '$lib/components/screener/AssetScreenerChart.svelte';
+
   interface Props {
     entityId: string;
     showFlower?: boolean;
     showAssets?: boolean;
+    showChart?: boolean;
+    showMap?: boolean;
     maxAssets?: number;
     theme?: 'light' | 'dark';
   }
@@ -22,6 +26,8 @@
     entityId,
     showFlower = true,
     showAssets = true,
+    showChart = false,
+    showMap = false,
     maxAssets = 10,
     theme = 'light',
   }: Props = $props();
@@ -154,6 +160,12 @@
         {/each}
       </div>
     {/if}
+
+    {#if showChart}
+      <div class="chart-section">
+        <AssetScreenerChart {entityId} entityName={entityName} />
+      </div>
+    {/if}
   {/if}
 </div>
 
@@ -239,6 +251,11 @@
     color: var(--color-text-tertiary);
     text-align: center;
     margin: var(--space-2) 0 0 0;
+  }
+  .chart-section {
+    margin-top: var(--space-4);
+    padding-top: var(--space-4);
+    border-top: var(--border-width) solid var(--color-border);
   }
   h2 {
     font-size: var(--font-size-sm);

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { getContext, untrack } from 'svelte';
-  import { COAL_QUERY_KEY } from '$lib/state/coal-query.svelte';
+  import { COAL_QUERY_KEY, appendCoalFilters } from '$lib/state/coal-query.svelte';
   import type { CoalQueryState } from '$lib/state/coal-query.svelte';
   import {
     type AggFn,
@@ -12,6 +12,10 @@
   } from '$lib/data-config/coal-field-schema';
   import { fetchSummaryTable, type SummaryRow } from '$lib/data-config/aggregate-api';
   import DataTable from '$lib/components/table/DataTable.svelte';
+  import QuerySentenceBuilder, { type FilterFieldDef, type QuickStart } from '$lib/components/filters/QuerySentenceBuilder.svelte';
+  import StatusFilter from '$lib/components/filters/StatusFilter.svelte';
+  import CountryMultiSelect from '$lib/components/screener/CountryMultiSelect.svelte';
+  import { STATUS_GROUPS } from '$lib/data-config/tracker-schema';
 
   const q = getContext<CoalQueryState>(COAL_QUERY_KEY);
   const API_BASE = import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-api.thirdbear.net';
@@ -60,8 +64,6 @@
 
   // ── Filter field definitions ───────────────────────────────────────────────
 
-  type FilterFieldDef = { key: string; label: string; phrase: string };
-
   const PLANT_FIELDS: FilterFieldDef[] = [
     { key: 'status',                          label: 'Operating status', phrase: 'with a status of'        },
     { key: 'country_area',                    label: 'Country',          phrase: 'located in'              },
@@ -106,16 +108,6 @@
     });
   });
 
-  function toggleFilterField(key: string) {
-    if (shownFields.includes(key)) {
-      shownFields = shownFields.filter(k => k !== key);
-      q.clearFilter(key as keyof CoalQueryFilters);
-    } else {
-      shownFields = [...shownFields, key];
-      openPicker = key;
-    }
-  }
-
   // ── Picker state ───────────────────────────────────────────────────────────
 
   let openPicker = $state<string | null>(null);
@@ -124,13 +116,6 @@
     openPicker = openPicker === key ? null : key;
     if (openPicker !== 'country_area') countrySearch = '';
   }
-
-  const panelTitle = $derived(() => {
-    if (!openPicker) return '';
-    if (openPicker === 'tracker')   return 'Project type';
-    if (openPicker === '__fields')  return 'Add filter fields';
-    return availableFilterFields.find(f => f.key === openPicker)?.label ?? openPicker;
-  });
 
   // ── Trackers ───────────────────────────────────────────────────────────────
 
@@ -156,6 +141,82 @@
     const cur = q.query.filters.status ?? [];
     const next = cur.includes(s) ? cur.filter(x => x !== s) : [...cur, s];
     q.setFilter('status', next.length ? next : undefined);
+  }
+
+  // ── Status bidirectional sync ──────────────────────────────────────────────
+
+  function buildStatusChecks(selected: string[] | undefined): Record<string, boolean> {
+    const selectedSet = new Set(selected ?? []);
+    const checks: Record<string, boolean> = {};
+    for (const sg of STATUS_GROUPS) {
+      for (const s of sg.statuses) {
+        checks[`status-${sg.id}-${s.value}`] = selectedSet.has(s.value);
+      }
+    }
+    return checks;
+  }
+
+  function extractStatusValues(checks: Record<string, boolean>): string[] {
+    return Object.entries(checks).filter(([, v]) => v).map(([key]) => key.split('-').slice(2).join('-'));
+  }
+
+  function sameStringSet(a: string[], b: string[]): boolean {
+    if (a.length !== b.length) return false;
+    const s = new Set(a);
+    return b.every(v => s.has(v));
+  }
+
+  let statusChecks = $state<Record<string, boolean>>(buildStatusChecks(untrack(() => q.query.filters.status)));
+
+  // statusChecks → q.query.filters.status
+  $effect(() => {
+    const vals = extractStatusValues(statusChecks);
+    const cur = untrack(() => q.query.filters.status ?? []);
+    if (sameStringSet(vals, cur)) return;
+    untrack(() => q.setFilter('status', vals.length ? vals : undefined));
+  });
+
+  // q.query.filters.status → statusChecks (for quickstarts / URL changes)
+  $effect(() => {
+    const status = q.query.filters.status ?? [];
+    const curVals = extractStatusValues(untrack(() => statusChecks));
+    if (sameStringSet(status, curVals)) return;
+    untrack(() => { statusChecks = buildStatusChecks(status); });
+  });
+
+  // ── Country bidirectional sync ─────────────────────────────────────────────
+
+  let localSelectedCountries = $state<string[]>(untrack(() => q.query.filters.country_area ?? []));
+
+  $effect(() => {
+    const selected = localSelectedCountries;
+    const cur = untrack(() => q.query.filters.country_area ?? []);
+    if (sameStringSet(selected, cur)) return;
+    untrack(() => q.setFilter('country_area', selected.length ? selected : undefined));
+  });
+
+  $effect(() => {
+    const external = q.query.filters.country_area ?? [];
+    const cur = untrack(() => localSelectedCountries);
+    if (sameStringSet(external, cur)) return;
+    untrack(() => { localSelectedCountries = [...external]; });
+  });
+
+  // ── Sentence builder wiring ────────────────────────────────────────────────
+
+  const sentenceFilters = $derived(q.query.filters as Record<string, string[]>);
+
+  function handleRemoveValue(key: string, val: string) {
+    if (key === 'country_area') {
+      localSelectedCountries = localSelectedCountries.filter(c => c !== val);
+    } else {
+      toggleValue(key as keyof CoalQueryFilters, val);
+    }
+  }
+
+  function handleRemoveField(key: string) {
+    q.clearFilter(key as keyof CoalQueryFilters);
+    if (key === 'country_area') localSelectedCountries = [];
   }
 
   const countryDropdown = $derived(
@@ -231,9 +292,7 @@
   const countUrl = $derived.by(() => {
     const p = new URLSearchParams();
     for (const t of q.query.trackers) p.append('asset_type', t);
-    const f = q.query.filters;
-    if (f.country_area?.length) for (const c of f.country_area) p.append('country', c);
-    if (f.status?.length) for (const s of f.status) p.append('status', s);
+    appendCoalFilters(p, q.query.filters);
     p.set('facets', 'true');
     p.set('limit', '1');
     return `${API_BASE}/assets?${p.toString()}`;
@@ -335,9 +394,7 @@
   const assetsUrl = $derived.by(() => {
     const p = new URLSearchParams();
     for (const t of q.query.trackers) p.append('asset_type', t);
-    const f = q.query.filters;
-    if (f.country_area?.length) for (const c of f.country_area) p.append('country', c);
-    if (f.status?.length) for (const s of f.status) p.append('status', s);
+    appendCoalFilters(p, q.query.filters);
     return `${API_BASE}/assets?${p.toString()}`;
   });
 
@@ -468,7 +525,7 @@
 
   // ── Quick starts ───────────────────────────────────────────────────────────
 
-  const QUICK_STARTS: { sentence: string; apply: () => void }[] = [
+  const QUICK_STARTS: QuickStart[] = [
     {
       sentence: 'Planned captive coal plants in Indonesia',
       apply: () => q.applyQuery({
@@ -514,157 +571,82 @@
 
 <div class="builder">
 
-  <!-- ── Clear all (top-right when filters active) ───────────────────────── -->
-  {#if q.isDirty}
-    <div class="top-bar">
-      <button class="clear-all-btn" onclick={clearAll}>Clear all &times;</button>
-    </div>
-  {/if}
-
-  <!-- ── Quick starts ─────────────────────────────────────────────────────── -->
-  {#if !q.isDirty}
-    <div class="quick-starts">
-      <p class="qs-heading">What would you like to explore?</p>
-      {#each QUICK_STARTS as qs}
-        <button class="qs-item" onclick={qs.apply}>
-          {qs.sentence} <span class="qs-arrow">→</span>
-        </button>
-      {/each}
-    </div>
-  {/if}
-
-  <!-- ── Sentence ─────────────────────────────────────────────────────────── -->
-  <div class="sentence">
-
-    <span class="word">See</span>
-
-    <!-- Summary prefix: aggregate chips + "by" groupBy chips + "for" connector -->
-    {#if outputMode === 'summary' && (q.query.aggregates.length > 0 || q.query.groupBy.length > 0)}
-      {#each q.query.aggregates as agg (agg.fn + agg.field)}
-        {@const af = aggregatableFields.find(f => f.key === agg.field)}
-        {@const spec = af?.aggregatable?.find(s => s.fn === agg.fn)}
-        <span class="value-chip value-chip--summary">
-          {spec?.label ?? `${agg.fn}(${agg.field})`}
-          <button class="chip-x" onclick={() => toggleAggregate(agg.fn, agg.field)}>×</button>
-        </span>
-      {/each}
-      {#if q.query.groupBy.length > 0}
-        <span class="word">by</span>
-        {#each q.query.groupBy as field (field)}
-          {@const gf = groupableFields.find(f => f.key === field)}
-          <span class="value-chip value-chip--summary">
-            {gf?.shortLabel ?? gf?.label ?? field}
-            <button class="chip-x" onclick={() => toggleGroupBy(field)}>×</button>
+  <div class="sentence-wrapper">
+    <QuerySentenceBuilder
+      fields={availableFilterFields}
+      filters={sentenceFilters}
+      isDirty={q.isDirty}
+      quickStarts={QUICK_STARTS}
+      bind:openPicker
+      bind:shownFields
+      panelTitles={{ tracker: 'Project type' }}
+      columnPickerKeys={['country_area']}
+      onRemoveValue={handleRemoveValue}
+      onRemoveField={handleRemoveField}
+      onClearAll={clearAll}
+    >
+      {#snippet subject()}
+        <!-- Summary prefix: aggregate + groupBy chips -->
+        {#if outputMode === 'summary' && (q.query.aggregates.length > 0 || q.query.groupBy.length > 0)}
+          {#each q.query.aggregates as agg (agg.fn + agg.field)}
+            {@const af = aggregatableFields.find(f => f.key === agg.field)}
+            {@const spec = af?.aggregatable?.find(s => s.fn === agg.fn)}
+            <span class="value-chip value-chip--summary">
+              {spec?.label ?? `${agg.fn}(${agg.field})`}
+              <button class="chip-x" onclick={() => toggleAggregate(agg.fn, agg.field)}>×</button>
+            </span>
+          {/each}
+          {#if q.query.groupBy.length > 0}
+            <span class="word">by</span>
+            {#each q.query.groupBy as field (field)}
+              {@const gf = groupableFields.find(f => f.key === field)}
+              <span class="value-chip value-chip--summary">
+                {gf?.shortLabel ?? gf?.label ?? field}
+                <button class="chip-x" onclick={() => toggleGroupBy(field)}>×</button>
+              </span>
+            {/each}
+          {/if}
+          <span class="word">for</span>
+        {/if}
+        <!-- Tracker chips -->
+        {#each q.query.trackers as t (t)}
+          <span class="value-chip">
+            {TRACKER_LABELS[t]}
+            {#if q.query.trackers.length > 1}
+              <button class="chip-x" onclick={() => removeTracker(t)} aria-label="Remove {TRACKER_LABELS[t]}">×</button>
+            {/if}
           </span>
         {/each}
-      {/if}
-      <span class="word">for</span>
-    {/if}
-
-    <!-- Tracker chips -->
-    {#each q.query.trackers as t (t)}
-      <span class="value-chip">
-        {TRACKER_LABELS[t]}
-        {#if q.query.trackers.length > 1}
-          <button class="chip-x" onclick={() => removeTracker(t)} aria-label="Remove {TRACKER_LABELS[t]}">×</button>
-        {/if}
-      </span>
-    {/each}
-    <button
-      class="open-btn"
-      class:open={openPicker === 'tracker'}
-      onclick={() => togglePicker('tracker')}
-      aria-label="Edit project type"
-    >{openPicker === 'tracker' ? '−' : '+'}</button>
-
-    <!-- Active filter groups -->
-    {#each shownFields as fieldKey (fieldKey)}
-      {@const def = availableFilterFields.find(f => f.key === fieldKey)}
-      {#if def}
-        <span class="word">{def.phrase}</span>
-
-        {#if fieldKey === 'country_area'}
-          {#each q.query.filters.country_area ?? [] as c (c)}
-            <span class="value-chip">{c}<button class="chip-x" onclick={() => removeCountry(c)}>×</button></span>
-          {/each}
-        {:else}
-          {#each ((q.query.filters as Record<string, unknown>)[fieldKey] as string[] | undefined ?? []) as v (v)}
-            <span class="value-chip">{v}<button class="chip-x" onclick={() => toggleValue(fieldKey as keyof CoalQueryFilters, v)}>×</button></span>
-          {/each}
-        {/if}
-
         <button
           class="open-btn"
-          class:open={openPicker === fieldKey}
-          onclick={() => togglePicker(fieldKey)}
-          aria-label="Add {def.label}"
-        >{openPicker === fieldKey ? '−' : '+'}</button>
-      {/if}
-    {/each}
+          class:open={openPicker === 'tracker'}
+          onclick={() => togglePicker('tracker')}
+          aria-label="Edit project type"
+        >{openPicker === 'tracker' ? '−' : '+'}</button>
+      {/snippet}
 
-    <!-- Add filter -->
-    <button
-      class="add-filter-btn"
-      class:open={openPicker === '__fields'}
-      onclick={() => togglePicker('__fields')}
-    >{openPicker === '__fields' ? '− fewer filters' : '+ add filter'}</button>
-
-    <span class="sentence-end">.</span>
-  </div>
-
-  <!-- ── Picker panel (stable position, below sentence) ───────────────────── -->
-  {#if openPicker}
-    <div class="picker-panel">
-      <div class="panel-header">
-        <span class="panel-title">{panelTitle()}</span>
-        <button class="panel-close" onclick={closePicker}>Done</button>
-      </div>
-      <div class="panel-body" class:panel-body--country={openPicker === 'country_area'}>
-
-        {#if openPicker === 'tracker'}
+      {#snippet picker(fieldKey)}
+        {#if fieldKey === 'tracker'}
           {#each (['coal-plant', 'coal-mine'] as Tracker[]) as t}
             <button class="pill" class:active={q.query.trackers.includes(t)} onclick={() => toggleTracker(t)}>{TRACKER_LABELS[t]}</button>
           {/each}
-
-        {:else if openPicker === '__fields'}
-          {#each availableFilterFields as f}
-            <button class="pill" class:active={shownFields.includes(f.key)} onclick={() => toggleFilterField(f.key)}>{f.label}</button>
-          {/each}
-
-        {:else if openPicker === 'status'}
-          {#if statusOptions.length === 0}
-            <span class="loading-hint">Loading…</span>
-          {:else}
-            {#each statusOptions as s}
-              <button class="pill" class:active={q.query.filters.status?.includes(s)} onclick={() => toggleStatus(s)}>{s}</button>
-            {/each}
-          {/if}
-
-        {:else if openPicker === 'country_area'}
-          <input class="search-input" type="text" placeholder="Search countries…" aria-label="Search countries" bind:value={countrySearch} />
-          <div class="country-list">
-            {#each countryDropdown as c}
-              {@const sel = (q.query.filters.country_area ?? []).includes(c)}
-              <button class="country-opt" class:selected={sel} onclick={() => sel ? removeCountry(c) : addCountry(c)}>
-                <span class="country-check">{sel ? '✓' : ''}</span>{c}
-              </button>
-            {/each}
-          </div>
-
+        {:else if fieldKey === 'status'}
+          <StatusFilter bind:statusChecks statusGroups={STATUS_GROUPS} />
+        {:else if fieldKey === 'country_area'}
+          <CountryMultiSelect bind:selected={localSelectedCountries} countries={countryOptions} />
         {:else}
-          {#if otherOptions[openPicker]}
-            {#each otherOptions[openPicker] as val}
-              {@const isActive = ((q.query.filters as Record<string, unknown>)[openPicker] as string[] | undefined)?.includes(val)}
-              <button class="pill" class:active={isActive} onclick={() => toggleValue(openPicker as keyof CoalQueryFilters, val)}>{val}</button>
+          {#if otherOptions[fieldKey]}
+            {#each otherOptions[fieldKey] as val}
+              {@const isActive = ((q.query.filters as Record<string, unknown>)[fieldKey] as string[] | undefined)?.includes(val)}
+              <button class="pill" class:active={isActive} onclick={() => toggleValue(fieldKey as keyof CoalQueryFilters, val)}>{val}</button>
             {/each}
           {:else}
             <span class="loading-hint">Loading…</span>
           {/if}
         {/if}
-
-      </div>
-    </div>
-  {/if}
+      {/snippet}
+    </QuerySentenceBuilder>
+  </div>
 
   <!-- ── Output mode + summary options (visually grouped) ─────────────────── -->
   <div class="summary-card" class:summary-card--active={outputMode === 'summary'}>
@@ -849,10 +831,7 @@
   }
 
   /* Constrain intro/query sections, let table go full-width */
-  .top-bar,
-  .quick-starts,
-  .sentence,
-  .picker-panel,
+  .sentence-wrapper,
   .summary-card,
   .results-bar,
   .query-footer {
@@ -861,59 +840,16 @@
     margin-right: auto;
   }
 
-  /* ── Quick starts ────────────────────────────────────────────────────────── */
-  .quick-starts {
-    margin-bottom: var(--space-8, 32px);
+  .sentence-wrapper {
+    max-width: var(--container-md, 768px);
+    margin: 0 auto;
+    --sentence-max-width: var(--container-md, 768px);
   }
-  .qs-heading {
-    font-size: var(--font-size-xs, 10px);
-    font-weight: var(--font-weight-bold, 700);
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-widest, 0.08em);
-    color: var(--color-gray-400, #9eaaad);
-    margin: 0 0 var(--space-3, 12px);
-  }
-  .qs-item {
-    all: unset;
-    display: block;
-    cursor: pointer;
-    width: 100%;
-    padding: var(--space-3, 12px) var(--space-4, 16px);
-    font-size: var(--font-size-base, 14px);
-    line-height: var(--line-height-relaxed, 1.65);
-    color: var(--color-gray-600, #4c6267);
-    border-left: 2px solid var(--color-gray-200, #dce3e5);
-    margin-bottom: var(--space-1, 4px);
-    transition: color 0.12s, border-color 0.12s, background 0.12s;
-    border-radius: 0 4px 4px 0;
-  }
-  .qs-item:hover {
-    color: var(--gem-primary-blue, #1d4961);
-    border-color: var(--gem-primary-blue, #1d4961);
-    background: var(--gem-navy-10, #e9eef1);
-  }
-  .qs-arrow {
-    color: var(--color-gray-300, #becccf);
-    transition: color 0.12s;
-  }
-  .qs-item:hover .qs-arrow { color: var(--gem-primary-blue, #1d4961); }
 
-  /* ── Sentence ────────────────────────────────────────────────────────────── */
-  .sentence {
-    font-size: var(--font-size-lg, 18px);
-    line-height: 2.2;
-    color: var(--gem-primary-blue, #1d4961);
-    margin-bottom: 0;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-2, 8px);
-  }
   .word {
     color: var(--color-gray-600, #4c6267);
     white-space: nowrap;
   }
-  .sentence-end { color: var(--color-gray-300, #becccf); }
 
   /* ── Value chips ─────────────────────────────────────────────────────────── */
   .value-chip {
@@ -970,97 +906,6 @@
     color: #fff;
   }
 
-  .top-bar {
-    display: flex;
-    justify-content: flex-end;
-    margin-bottom: var(--space-4, 16px);
-  }
-  .clear-all-btn {
-    all: unset;
-    cursor: pointer;
-    font-size: var(--font-size-sm, 12px);
-    font-weight: var(--font-weight-semibold, 600);
-    color: var(--gem-orange, #fe4f2d);
-    border: 1px solid var(--gem-orange, #fe4f2d);
-    border-radius: 4px;
-    padding: var(--space-2, 8px) var(--space-4, 16px);
-    white-space: nowrap;
-    transition: background 0.12s, color 0.12s;
-  }
-  .clear-all-btn:hover {
-    background: var(--gem-orange, #fe4f2d);
-    color: #fff;
-  }
-
-  .add-filter-btn {
-    all: unset;
-    cursor: pointer;
-    font-size: var(--font-size-sm, 12px);
-    color: var(--color-gray-400, #9eaaad);
-    border: 1px dashed var(--color-gray-300, #becccf);
-    border-radius: 4px;
-    padding: 0.2em 0.6em;
-    white-space: nowrap;
-    transition: color 0.1s, border-color 0.1s;
-  }
-  .add-filter-btn:hover,
-  .add-filter-btn.open {
-    color: var(--gem-primary-blue, #1d4961);
-    border-color: var(--color-gray-400, #9eaaad);
-  }
-
-  /* ── Picker panel ────────────────────────────────────────────────────────── */
-  .picker-panel {
-    margin-top: var(--space-3, 12px);
-    border: 1px solid var(--color-gray-200, #dce3e5);
-    border-radius: 8px;
-    background: var(--gem-warm-white, #fffffe);
-    overflow: hidden;
-  }
-
-  .panel-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: var(--space-3, 12px) var(--space-4, 16px);
-    background: #fff;
-    border-bottom: 1px solid var(--color-gray-200, #dce3e5);
-  }
-  .panel-title {
-    font-size: var(--font-size-xs, 10px);
-    font-weight: var(--font-weight-bold, 700);
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-wider, 0.04em);
-    color: var(--color-gray-600, #4c6267);
-  }
-  .panel-close {
-    all: unset;
-    cursor: pointer;
-    font-size: var(--font-size-sm, 12px);
-    font-weight: var(--font-weight-semibold, 600);
-    color: var(--gem-primary-blue, #1d4961);
-    padding: var(--space-1, 4px) var(--space-3, 12px);
-    border: 1px solid var(--color-gray-300, #becccf);
-    border-radius: 4px;
-    background: #fff;
-    transition: background 0.1s;
-  }
-  .panel-close:hover { background: var(--gem-navy-10, #e9eef1); }
-
-  .panel-body {
-    padding: var(--space-4, 16px);
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2, 8px);
-    min-height: 48px;
-  }
-  .panel-body--country {
-    flex-direction: column;
-    flex-wrap: nowrap;
-    gap: var(--space-2, 8px);
-    padding: var(--space-3, 12px);
-  }
-
   /* ── Pills ───────────────────────────────────────────────────────────────── */
   .pill {
     all: unset;
@@ -1084,47 +929,6 @@
     color: #fff;
     border-color: var(--gem-primary-blue, #1d4961);
   }
-
-  /* ── Country picker ──────────────────────────────────────────────────────── */
-  .search-input {
-    width: 100%;
-    box-sizing: border-box;
-    padding: var(--space-2, 8px) var(--space-3, 12px);
-    font-size: var(--font-size-base, 14px);
-    border: 1px solid var(--color-gray-200, #dce3e5);
-    border-radius: 5px;
-    background: #fff;
-    color: var(--gem-primary-blue, #1d4961);
-    font-family: inherit;
-  }
-  .search-input:focus {
-    outline: none;
-    border-color: var(--gem-primary-blue, #1d4961);
-  }
-
-  .country-list {
-    max-height: 220px;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    border: 1px solid var(--color-gray-200, #dce3e5);
-    border-radius: 5px;
-    background: #fff;
-  }
-  .country-opt {
-    all: unset;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: var(--space-2, 8px);
-    padding: var(--space-2, 8px) var(--space-3, 12px);
-    font-size: var(--font-size-sm, 12px);
-    color: var(--color-gray-600, #4c6267);
-    transition: background 0.07s;
-  }
-  .country-opt:hover { background: var(--gem-navy-10, #e9eef1); }
-  .country-opt.selected { font-weight: var(--font-weight-semibold, 600); color: var(--gem-primary-blue, #1d4961); }
-  .country-check { width: 1rem; font-size: var(--font-size-sm, 12px); flex-shrink: 0; color: var(--gem-primary-blue, #1d4961); }
 
   .loading-hint { font-size: var(--font-size-sm, 12px); color: var(--color-gray-400, #9eaaad); font-style: italic; }
 
