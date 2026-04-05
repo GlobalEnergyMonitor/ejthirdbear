@@ -30,6 +30,7 @@
   import {
     getHierarchyCategories,
     getHierarchyOptionIds,
+    getHierarchyDefaultUnchecked,
     getHierarchyTree,
     getUiTrackerFromCatalogEntry,
     getAssetTypesFromUrl,
@@ -81,10 +82,10 @@
     geofence = null;
     dynamicStatusGroups = null;
 
-    // Initialize subclass checks from hierarchy option IDs — all checked by default
+    // Initialize subclass checks from hierarchy option IDs; defaultUnchecked options start false
     const optionIds = getHierarchyOptionIds(classId);
-    const initialCatalogChecks = Object.fromEntries(optionIds.map((id) => [id, true]));
-    catalogChildChecks = initialCatalogChecks;
+    const unchecked = new Set(getHierarchyDefaultUnchecked(classId));
+    catalogChildChecks = Object.fromEntries(optionIds.map((id) => [id, !unchecked.has(id)]));
 
     // Multi-tracker classes: use top-level status groups only (no substatuses).
     // Each tracker uses different sub-status values so merging them is misleading.

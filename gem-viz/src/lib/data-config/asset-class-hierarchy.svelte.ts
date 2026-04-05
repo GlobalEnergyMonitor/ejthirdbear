@@ -34,6 +34,8 @@ interface HierarchyAssetClass {
   labels?: Record<string, string>;
   /** Grouped subclass options */
   classGroups?: ClassGroup[];
+  /** Option IDs unchecked by default (excluded from the tile's default URL) */
+  defaultUnchecked?: string[];
 }
 
 interface HierarchyCategory {
@@ -125,9 +127,11 @@ export function getHierarchyCategories(
           const leafIds = getLeafOptionIds(ac);
 
           if (leafIds.length > 0) {
-            // Grouping tile: derive URL from combined leaf option URLs
-            const childUrls = leafIds.map((id: string) => byId.get(id)?.url).filter((u): u is string => !!u);
-            const childOwnerUrls = leafIds.map((id: string) => byId.get(id)?.owners_url).filter((u): u is string => !!u);
+            // Grouping tile: derive URL from combined leaf option URLs, excluding defaultUnchecked
+            const defaultUnchecked = new Set(ac.defaultUnchecked ?? []);
+            const defaultIds = leafIds.filter((id: string) => !defaultUnchecked.has(id));
+            const childUrls = defaultIds.map((id: string) => byId.get(id)?.url).filter((u): u is string => !!u);
+            const childOwnerUrls = defaultIds.map((id: string) => byId.get(id)?.owners_url).filter((u): u is string => !!u);
             if (childUrls.length === 0) return null;
             const label = (ac as HierarchyAssetClass & { label?: string }).label;
             if (!label) return null; // require label from hierarchy API
@@ -152,6 +156,16 @@ export function getHierarchyCategories(
         .filter((c: CatalogAssetClass) => !q || c.label.toLowerCase().includes(q)),
     }))
     .filter((cat: { classes: CatalogAssetClass[] }) => cat.classes.length > 0);
+}
+
+/**
+ * Returns option IDs that should be unchecked by default for a given tile.
+ */
+export function getHierarchyDefaultUnchecked(classId: string): string[] {
+  const hClass = getHierarchy().categories
+    .flatMap((cat: HierarchyCategory) => cat.assetClasses)
+    .find((ac: HierarchyAssetClass) => ac.id === classId);
+  return hClass?.defaultUnchecked ?? [];
 }
 
 /**
