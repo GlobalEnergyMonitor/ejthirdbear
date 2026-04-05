@@ -1,5 +1,4 @@
 {
-  "_comment": "Hierarchical organization of asset classes for the screener. Each 'id' references an entry in GET /catalog/asset-classes. IDs not yet in the flat list are silently filtered by the UI until the API adds them — see asset-class-hierarchy-gaps.md for the full list.",
   "categories": [
     {
       "id": "multi-tracker",
@@ -12,27 +11,39 @@
             {
               "id": "coal-related-coal-plants",
               "label": "Coal Plants",
-              "optionIds": ["coal-plants"]
+              "optionIds": [
+                "coal-plants"
+              ]
             },
             {
               "id": "coal-related-coal-mines",
               "label": "Coal Mines",
-              "optionIds": ["coal-mines"]
+              "optionIds": [
+                "coal-mines"
+              ]
             },
             {
               "id": "coal-related-iron-steel",
               "label": "Coal-based iron & steel",
-              "optionIds": ["blast-furnaces", "coal-dri"]
+              "optionIds": [
+                "blast-furnaces",
+                "coal-dri"
+              ]
             }
-          ]
+          ],
+          "label": "Coal-Related Assets"
         },
         {
           "id": "captive-power-data-centers",
           "description": "Power plants whose output goes specifically to data center operations.",
-          "optionIds": ["captive-gas-data-center", "captive-data-center"],
+          "optionIds": [
+            "captive-gas-data-center",
+            "captive-data-center"
+          ],
           "labels": {
             "captive-data-center": "Coal Plants for Data Centers"
-          }
+          },
+          "label": "Captive Power for Data Centers"
         }
       ]
     },
@@ -60,28 +71,64 @@
               ]
             },
             {
-              "id": "captive-other-industries",
-              "label": "Other Industries",
-              "description": "Coal mining, chemicals, pulp & paper, data centers, and other industrial uses",
+              "id": "captive-coal-mining-group",
+              "label": "Coal Mining & Products",
               "optionIds": [
-                "captive-coal-mining",
-                "captive-chemicals",
-                "captive-pulp-paper",
-                "captive-data-center",
-                "captive-other"
+                "captive-coal-mining"
+              ]
+            },
+            {
+              "id": "captive-chemicals-group",
+              "label": "Chemicals",
+              "optionIds": [
+                "captive-chemicals"
+              ]
+            },
+            {
+              "id": "captive-pulp-paper-group",
+              "label": "Pulp & Paper",
+              "optionIds": [
+                "captive-pulp-paper"
+              ]
+            },
+            {
+              "id": "captive-other-industries",
+              "label": "Other",
+              "optionIds": [
+                "captive-machinery",
+                "captive-cement-building",
+                "captive-oil-refining",
+                "captive-industrial-park",
+                "captive-agriculture",
+                "captive-textiles",
+                "captive-automobiles",
+                "captive-sugar",
+                "captive-rubber",
+                "captive-electronics",
+                "captive-cryptocurrency",
+                "captive-unknown"
               ]
             }
-          ]
+          ],
+          "label": "Captive Coal Plants"
         },
         {
           "id": "coal-plants-retirement",
           "description": "Coal plants grouped by whether they have a planned or expected retirement date.",
-          "optionIds": ["coal-no-retirement", "coal-has-retirement"]
+          "optionIds": [
+            "coal-no-retirement",
+            "coal-has-retirement"
+          ],
+          "label": "Coal Plants by Retirement Date"
         },
         {
           "id": "coal-conversions",
           "description": "Coal plants being converted to other fuel types.",
-          "optionIds": ["coal-converting-fossil", "coal-converting-bioenergy"]
+          "optionIds": [
+            "coal-converting-fossil",
+            "coal-converting-bioenergy"
+          ],
+          "label": "Coal Plant Conversions"
         }
       ]
     },
@@ -96,12 +143,19 @@
         {
           "id": "coal-mines-by-use",
           "description": "Metallurgical (coking) vs thermal coal mines.",
-          "optionIds": ["coal-met", "coal-thermal"]
+          "optionIds": [
+            "coal-met",
+            "coal-thermal"
+          ],
+          "label": "Coal Mines by Use"
         },
         {
-          "id": "coal-mines-by-closure",
-          "description": "Coal mines grouped by planned, expected, or recent closure date.",
-          "optionIds": ["coal-no-closure", "coal-has-closure", "coal-recently-closed"]
+          "id": "coal-mines-by-planned-closure",
+          "label": "Coal Mines by Planned Closure",
+          "optionIds": [
+            "coal-no-closure",
+            "coal-has-closure"
+          ]
         }
       ]
     },
@@ -112,12 +166,26 @@
         {
           "id": "fossil-steel",
           "description": "Iron and steel plants using coal or other fossil-based production methods.",
-          "optionIds": ["blast-furnaces", "coal-dri", "gas-dri", "dri-unknown"]
+          "optionIds": [
+            "blast-furnaces",
+            "coal-dri",
+            "gas-dri",
+            "dri-unknown"
+          ],
+          "defaultUnchecked": [
+            "dri-unknown"
+          ],
+          "label": "Fossil-Based Iron & Steel"
         },
         {
           "id": "bf-relinings",
           "description": "Blast furnaces grouped by their relining status.",
-          "optionIds": ["bf-relining-planned", "bf-relining-complete", "bf-relining-other"]
+          "optionIds": [
+            "bf-relining-planned",
+            "bf-relining-complete",
+            "bf-relining-other"
+          ],
+          "label": "BF by Relining Schedule"
         },
         {
           "id": "iron-mines",
@@ -154,16 +222,6 @@
       ]
     },
     {
-      "id": "chemical",
-      "label": "Chemical",
-      "assetClasses": [
-        {
-          "id": "chemical-plants",
-          "description": "Chemical production facilities."
-        }
-      ]
-    },
-    {
       "id": "cement",
       "label": "Cement",
       "assetClasses": [
@@ -173,23 +231,34 @@
         },
         {
           "id": "cement-by-plant-type",
-          "description": "Cement plants grouped by production type: clinker-only, grinding, or integrated.",
+          "description": "Clinker-only, grinding, or integrated.",
           "optionIds": [
             "cement-clinker-only",
             "cement-grinding",
             "cement-integrated",
             "cement-unknown-type"
-          ]
+          ],
+          "label": "Cement Plants by Plant Type"
         },
         {
           "id": "cement-by-kiln-fuel",
-          "description": "Clinker-producing plants grouped by whether they use fossil or alternate kiln fuel.",
-          "optionIds": ["cement-fossil-fuel", "cement-alternate-fuel", "cement-fuel-unknown"]
+          "description": "Fossil or alternate kiln fuel of clinker-producing plants.",
+          "optionIds": [
+            "cement-fossil-fuel",
+            "cement-alternate-fuel",
+            "cement-fuel-unknown"
+          ],
+          "label": "Clinker Plants by Kiln Fuel Type"
         },
         {
           "id": "cement-by-production-type",
-          "description": "Clinker-producing plants grouped by wet, semidry, or dry production process.",
-          "optionIds": ["cement-wet", "cement-semidry", "cement-dry"]
+          "description": "Wet, semidry, or dry production process.",
+          "optionIds": [
+            "cement-wet",
+            "cement-semidry",
+            "cement-dry"
+          ],
+          "label": "Clinker Plants by Production Type"
         }
       ]
     }

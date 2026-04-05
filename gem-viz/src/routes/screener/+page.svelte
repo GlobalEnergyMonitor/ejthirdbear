@@ -33,7 +33,8 @@
     getHierarchyTree,
     getUiTrackerFromCatalogEntry,
     getAssetTypesFromUrl,
-  } from '$lib/data-config/asset-class-hierarchy';
+    loadHierarchy,
+  } from '$lib/data-config/asset-class-hierarchy.svelte';
   import { GEM_DATA_EMAIL } from '$lib/external-links';
   import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
@@ -47,6 +48,10 @@
 
   // Categories and tiles driven entirely by hierarchy JSON + flat API list
   const classesByCategory = $derived(getHierarchyCategories(catalogClasses, searchQuery));
+
+  // Unfiltered flat list of all tiles (including synthesized grouping tiles) for lookups.
+  // Use this instead of catalogClasses.find() so grouping tiles resolve correctly.
+  const allClasses = $derived(getHierarchyCategories(catalogClasses, '').flatMap((cat) => cat.classes));
 
   /** Hierarchy-driven subclass tree for the selected tile (passed to AssetClassExpansion). */
   const hierarchyTree = $derived(
@@ -67,7 +72,7 @@
 
   // ─── Selection logic ───────────────────────────────────────────────
   function selectClass(classId) {
-    const catalogEntry = catalogClasses.find((c) => c.id === classId);
+    const catalogEntry = allClasses.find((c) => c.id === classId);
     if (!catalogEntry?.url) return;
 
     selectedClassId = classId;
@@ -217,7 +222,7 @@
   function buildClassData() {
     if (!selectedClassId) return [];
 
-    const catalogEntry = catalogClasses.find((c) => c.id === selectedClassId);
+    const catalogEntry = allClasses.find((c) => c.id === selectedClassId);
     if (!catalogEntry) return [];
 
     const label = catalogEntry.label ?? selectedClassId;
@@ -302,7 +307,8 @@
   });
 
   onMount(async () => {
-    // Fetch catalog asset classes (non-blocking, falls back to static if it fails)
+    // Fetch hierarchy and asset class filters in parallel (non-blocking)
+    loadHierarchy();
     fetchAssetClasses().then((classes) => {
       if (classes.length > 0) catalogClasses = classes;
     });
@@ -334,7 +340,7 @@
 
   const selectionSummary = $derived.by(() => {
     if (!selectedClassId) return '';
-    const catalogEntry = catalogClasses.find((c) => c.id === selectedClassId);
+    const catalogEntry = allClasses.find((c) => c.id === selectedClassId);
     const label = catalogEntry?.label ?? selectedClassId;
     const parts = [label].filter(Boolean).join(' ');
     const geo =
@@ -450,7 +456,7 @@
 
   <!-- Filter panel when class is selected -->
   {#if selectedClassId}
-    {@const catalogEntry = catalogClasses.find((c) => c.id === selectedClassId)}
+    {@const catalogEntry = allClasses.find((c) => c.id === selectedClassId)}
     {@const expansionClass = /** @type {any} */ ({
       id: selectedClassId,
       label: catalogEntry?.label ?? selectedClassId,

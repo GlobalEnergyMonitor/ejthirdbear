@@ -287,25 +287,51 @@ export function findSubtree(
   return undefined;
 }
 
-let _assetClassesCache: CatalogAssetClass[] | null = null;
-let _assetClassesFetchedAt = 0;
-const ASSET_CLASSES_TTL_MS = 60 * 60 * 1000; // 1 hour
+// TODO: remove static import and fetch from API once engineer deploys filters_cleaned.json
+// to /catalog/asset-class-filters. At that point also remove asset-class-filters.json from src/.
+import assetClassFiltersJson from '$lib/data-config/asset-class-filters.json';
 
-/** Fetch all asset class definitions from the catalog endpoint. Returns [] on error. */
+const ASSET_CLASSES_TTL_MS = 60 * 60 * 1000; // 1 hour
+// Pre-loaded from static JSON — fetchAssetClasses() returns this immediately without an API call.
+let _assetClassesCache: CatalogAssetClass[] | null = assetClassFiltersJson as CatalogAssetClass[];
+let _assetClassesFetchedAt = Date.now();
+
+/** Returns asset class filter definitions. Currently served from static JSON; will fetch from API once deployed. */
 export async function fetchAssetClasses(): Promise<CatalogAssetClass[]> {
   const now = Date.now();
   if (_assetClassesCache && now - _assetClassesFetchedAt < ASSET_CLASSES_TTL_MS) {
     return _assetClassesCache;
   }
   try {
-    const res = await fetch(`${CATALOG_API_BASE}/catalog/asset-classes?format=json`);
-    if (!res.ok) return [];
+    const res = await fetch(`${CATALOG_API_BASE}/catalog/asset-class-filters?format=json`);
+    if (!res.ok) return _assetClassesCache ?? [];
     const data: CatalogAssetClass[] = await res.json();
     _assetClassesCache = Array.isArray(data) ? data : [];
     _assetClassesFetchedAt = now;
     return _assetClassesCache;
   } catch {
-    return [];
+    return _assetClassesCache ?? [];
+  }
+}
+
+let _hierarchyCache: { categories: unknown[] } | null = null;
+let _hierarchyFetchedAt = 0;
+
+/** Fetch the asset class hierarchy from the catalog endpoint. Returns empty categories on error. */
+export async function fetchAssetClassHierarchy(): Promise<{ categories: unknown[] }> {
+  const now = Date.now();
+  if (_hierarchyCache && now - _hierarchyFetchedAt < ASSET_CLASSES_TTL_MS) {
+    return _hierarchyCache;
+  }
+  try {
+    const res = await fetch(`${CATALOG_API_BASE}/catalog/asset-class-hierarchy?format=json`);
+    if (!res.ok) return { categories: [] };
+    const data = await res.json();
+    _hierarchyCache = data && Array.isArray(data.categories) ? data : { categories: [] };
+    _hierarchyFetchedAt = now;
+    return _hierarchyCache;
+  } catch {
+    return { categories: [] };
   }
 }
 

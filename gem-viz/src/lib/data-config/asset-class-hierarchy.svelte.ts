@@ -10,6 +10,7 @@
  */
 
 import type { CatalogAssetClass, CatalogClassTree } from '$lib/api/catalog-api';
+import { combineChildUrls } from '$lib/api/catalog-api';
 import hierarchyJson from './asset-class-hierarchy.json';
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -72,19 +73,41 @@ export function getUiTrackerFromCatalogEntry(entry: CatalogAssetClass): string {
   return slugs.length > 0 ? (API_SLUG_TO_UI_TRACKER[slugs[0]] ?? '') : '';
 }
 
+// ── Module-level hierarchy cache ───────────────────────────────────────────
+
+// Loaded from static JSON for now. TODO: switch to fetchAssetClassHierarchy() once API engineer
+// deploys hierarchy_cleaned.json and filters_cleaned.json to the catalog endpoints.
+let _hierarchy: { categories: HierarchyCategory[] } = $state(
+  hierarchyJson as { categories: HierarchyCategory[] }
+);
+
+/** No-op until API is updated — hierarchy is loaded from static JSON. */
+// eslint-disable-next-line @typescript-eslint/no-empty-function
+export async function loadHierarchy(): Promise<void> {}
+
+function getHierarchy(): { categories: HierarchyCategory[] } {
+  return _hierarchy;
+}
+
 // ── Main API ───────────────────────────────────────────────────────────────
 
-const hierarchy = hierarchyJson as { categories: HierarchyCategory[] };
-
-/** All hierarchy asset class IDs in a flat set, for quick lookup. */
-const allHierarchyIds = new Set(
-  hierarchy.categories.flatMap((cat) => cat.assetClasses.map((ac) => ac.id))
-);
+/** Collect all leaf option IDs from a hierarchy asset class (flattening classGroups). */
+function getLeafOptionIds(ac: HierarchyAssetClass): string[] {
+  if (ac.optionIds) return ac.optionIds;
+  if (ac.classGroups) return ac.classGroups.flatMap((g: ClassGroup) => g.optionIds);
+  return [];
+}
 
 /**
  * Build the category list for the screener tile picker.
- * Returns categories in hierarchy order, each with catalog entries for their tiles.
- * Entries with no `url` (notes: "TBD") are excluded.
+ *
+ * Grouping tiles (those with optionIds/classGroups in the hierarchy) always derive
+ * their URL by combining all leaf option URLs — the hierarchy definition drives the
+ * query, not any static URL that may exist in the filters list.
+ * Labels for grouping tiles come from the hierarchy's `label` field (set in hierarchy API).
+ *
+ * Leaf tiles (no options) use the filters list URL directly.
+ * Tiles with no resolvable URL are excluded.
  */
 export function getHierarchyCategories(
   flatClasses: CatalogAssetClass[],
@@ -93,24 +116,42 @@ export function getHierarchyCategories(
   const byId = new Map(flatClasses.map((c) => [c.id, c]));
   const q = searchQuery.trim().toLowerCase();
 
-  return hierarchy.categories
-    .map((cat) => ({
+  return getHierarchy().categories
+    .map((cat: HierarchyCategory) => ({
       id: cat.id,
       label: cat.label,
       classes: cat.assetClasses
-        .map((ac) => {
+        .map((ac: HierarchyAssetClass): CatalogAssetClass | null => {
+          const leafIds = getLeafOptionIds(ac);
+
+          if (leafIds.length > 0) {
+            // Grouping tile: derive URL from combined leaf option URLs
+            const childUrls = leafIds.map((id: string) => byId.get(id)?.url).filter((u): u is string => !!u);
+            const childOwnerUrls = leafIds.map((id: string) => byId.get(id)?.owners_url).filter((u): u is string => !!u);
+            if (childUrls.length === 0) return null;
+            const label = (ac as HierarchyAssetClass & { label?: string }).label;
+            if (!label) return null; // require label from hierarchy API
+            return {
+              id: ac.id,
+              label,
+              category: cat.id,
+              description: ac.description,
+              url: combineChildUrls(childUrls),
+              owners_url: combineChildUrls(childOwnerUrls),
+            } as CatalogAssetClass;
+          }
+
+          // Leaf tile: use filters list entry directly
           const entry = byId.get(ac.id);
           if (!entry?.url) return null;
-          // Use hierarchy description as fallback when catalog has none
-          if (ac.description && !entry.description) {
-            return { ...entry, description: ac.description };
-          }
-          return entry;
+          return ac.description && !entry.description
+            ? { ...entry, description: ac.description }
+            : entry;
         })
         .filter((c): c is CatalogAssetClass => !!c)
-        .filter((c) => !q || c.label.toLowerCase().includes(q)),
+        .filter((c: CatalogAssetClass) => !q || c.label.toLowerCase().includes(q)),
     }))
-    .filter((cat) => cat.classes.length > 0);
+    .filter((cat: { classes: CatalogAssetClass[] }) => cat.classes.length > 0);
 }
 
 /**
@@ -118,12 +159,12 @@ export function getHierarchyCategories(
  * Returns an empty array for tiles with no subclass options.
  */
 export function getHierarchyOptionIds(classId: string): string[] {
-  const hClass = hierarchy.categories
-    .flatMap((cat) => cat.assetClasses)
-    .find((ac) => ac.id === classId);
+  const hClass = getHierarchy().categories
+    .flatMap((cat: HierarchyCategory) => cat.assetClasses)
+    .find((ac: HierarchyAssetClass) => ac.id === classId);
   if (!hClass) return [];
   if (hClass.optionIds) return hClass.optionIds;
-  if (hClass.classGroups) return hClass.classGroups.flatMap((g) => g.optionIds);
+  if (hClass.classGroups) return hClass.classGroups.flatMap((g: ClassGroup) => g.optionIds);
   return [];
 }
 
@@ -139,9 +180,9 @@ export function getHierarchyTree(
   flatClasses: CatalogAssetClass[]
 ): CatalogClassTree[] {
   const byId = new Map(flatClasses.map((c) => [c.id, c]));
-  const hClass = hierarchy.categories
-    .flatMap((cat) => cat.assetClasses)
-    .find((ac) => ac.id === classId);
+  const hClass = getHierarchy().categories
+    .flatMap((cat: HierarchyCategory) => cat.assetClasses)
+    .find((ac: HierarchyAssetClass) => ac.id === classId);
   if (!hClass) return [];
 
   const toLeaf = (id: string, labels?: Record<string, string>): CatalogClassTree | null => {
@@ -155,9 +196,9 @@ export function getHierarchyTree(
   };
 
   if (hClass.classGroups) {
-    return hClass.classGroups.flatMap((group) => {
+    return hClass.classGroups.flatMap((group: ClassGroup) => {
       const leaves = group.optionIds
-        .map((id) => toLeaf(id, group.labels))
+        .map((id: string) => toLeaf(id, group.labels))
         .filter(Boolean) as CatalogClassTree[];
       // Single-option group: promote the option directly (no parent wrapper, no refine button)
       if (leaves.length === 1) return leaves;
@@ -176,7 +217,7 @@ export function getHierarchyTree(
 
   if (hClass.optionIds) {
     return hClass.optionIds
-      .map((id) => toLeaf(id, hClass.labels))
+      .map((id: string) => toLeaf(id, hClass.labels))
       .filter(Boolean) as CatalogClassTree[];
   }
 
@@ -188,5 +229,7 @@ export function getHierarchyTree(
  * (vs a subclass option that only appears within a tile's expansion).
  */
 export function isHierarchyTile(classId: string): boolean {
-  return allHierarchyIds.has(classId);
+  return getHierarchy().categories.some((cat: HierarchyCategory) =>
+    cat.assetClasses.some((ac: HierarchyAssetClass) => ac.id === classId)
+  );
 }

@@ -1,0 +1,441 @@
+[
+  {
+    "id": "coal-plants",
+    "label": "Coal Plants",
+    "category": "coal-plant",
+    "url": "/assets?asset_type=coal-plant",
+    "owners_url": "/owners?asset_type=coal-plant"
+  },
+  {
+    "id": "captive-iron-steel",
+    "label": "Captive: Iron & Steel",
+    "category": "coal-plant",
+    "parent": "captive-coal-plants",
+    "url": "/assets?asset_type=coal-plant&captive__has=iron+%26+steel",
+    "owners_url": "/owners?asset_type=coal-plant&captive__has=iron+%26+steel"
+  },
+  {
+    "id": "captive-aluminum",
+    "label": "Captive: Aluminum",
+    "category": "coal-plant",
+    "parent": "captive-coal-plants",
+    "url": "/assets?asset_type=coal-plant&captive__has=aluminum",
+    "owners_url": "/owners?asset_type=coal-plant&captive__has=aluminum"
+  },
+  {
+    "id": "captive-nickel",
+    "label": "Captive: Nickel",
+    "category": "coal-plant",
+    "parent": "captive-coal-plants",
+    "url": "/assets?asset_type=coal-plant&captive__has=nickel",
+    "owners_url": "/owners?asset_type=coal-plant&captive__has=nickel"
+  },
+  {
+    "id": "captive-other-metals",
+    "label": "Captive: Other Metals & Mining",
+    "category": "coal-plant",
+    "parent": "captive-coal-plants",
+    "url": "/assets?asset_type=coal-plant&captive__has=other+metals+%26+mining",
+    "owners_url": "/owners?asset_type=coal-plant&captive__has=other+metals+%26+mining"
+  },
+  {
+    "id": "captive-coal-mining",
+    "label": "Captive: Coal Mining",
+    "category": "coal-plant",
+    "parent": "captive-coal-plants",
+    "url": "/assets?asset_type=coal-plant&captive__has=coal+mining+%26+coal+products",
+    "owners_url": "/owners?asset_type=coal-plant&captive__has=coal+mining+%26+coal+products"
+  },
+  {
+    "id": "captive-chemicals",
+    "label": "Captive: Chemicals",
+    "category": "coal-plant",
+    "parent": "captive-coal-plants",
+    "url": "/assets?asset_type=coal-plant&captive__has=chemicals",
+    "owners_url": "/owners?asset_type=coal-plant&captive__has=chemicals"
+  },
+  {
+    "id": "captive-pulp-paper",
+    "label": "Captive: Pulp & Paper",
+    "category": "coal-plant",
+    "parent": "captive-coal-plants",
+    "url": "/assets?asset_type=coal-plant&captive__has=pulp+%26+paper",
+    "owners_url": "/owners?asset_type=coal-plant&captive__has=pulp+%26+paper"
+  },
+  {
+    "id": "captive-data-center",
+    "label": "Captive: Data Center",
+    "category": "coal-plant",
+    "parent": "captive-coal-plants",
+    "url": "/assets?asset_type=coal-plant&captive__has=data+center",
+    "owners_url": "/owners?asset_type=coal-plant&captive__has=data+center"
+  },
+  {
+    "id": "coal-no-retirement",
+    "label": "No Planned Retirement",
+    "category": "coal-plant",
+    "parent": "coal-plants-retirement",
+    "url": "/assets?asset_type=coal-plant&planned_retirement__isnull=true",
+    "owners_url": "/owners?asset_type=coal-plant&planned_retirement__isnull=true"
+  },
+  {
+    "id": "coal-has-retirement",
+    "label": "Has Planned Retirement",
+    "category": "coal-plant",
+    "parent": "coal-plants-retirement",
+    "url": "/assets?asset_type=coal-plant&planned_retirement__isnull=false",
+    "owners_url": "/owners?asset_type=coal-plant&planned_retirement__isnull=false"
+  },
+  {
+    "id": "coal-converting-fossil",
+    "label": "Converting to Fossil Gas/Liquids",
+    "category": "coal-plant",
+    "parent": "coal-conversions",
+    "url": "/assets?asset_type=coal-plant&conversion_to_fuel__startswith=fossil",
+    "owners_url": "/owners?asset_type=coal-plant&conversion_to_fuel__startswith=fossil"
+  },
+  {
+    "id": "coal-converting-bioenergy",
+    "label": "Converting to Bioenergy",
+    "category": "coal-plant",
+    "parent": "coal-conversions",
+    "url": "/assets?asset_type=coal-plant&conversion_to_fuel__startswith=bioenergy",
+    "owners_url": "/owners?asset_type=coal-plant&conversion_to_fuel__startswith=bioenergy"
+  },
+  {
+    "id": "captive-gas-data-center",
+    "label": "Gas Plants for Data Centers",
+    "category": "multi-tracker",
+    "parent": "captive-power-data-centers",
+    "url": "/assets?asset_type=oil-gas-plant&captive_industry_type=data+center",
+    "owners_url": "/owners?asset_type=oil-gas-plant&captive_industry_type=data+center"
+  },
+  {
+    "id": "coal-mines",
+    "label": "Coal Mines",
+    "category": "coal-mine",
+    "url": "/assets?asset_type=coal-mine",
+    "owners_url": "/owners?asset_type=coal-mine"
+  },
+  {
+    "id": "coal-met",
+    "label": "Metallurgical Coal",
+    "category": "coal-mine",
+    "parent": "coal-mines-by-use",
+    "url": "/assets?asset_type=coal-mine&percentage_of_met_coal__gt=0",
+    "owners_url": "/owners?asset_type=coal-mine&percentage_of_met_coal__gt=0"
+  },
+  {
+    "id": "coal-thermal",
+    "label": "Thermal Coal",
+    "category": "coal-mine",
+    "parent": "coal-mines-by-use",
+    "url": "/assets?asset_type=coal-mine&percentage_of_thermal_coal__gt=0",
+    "owners_url": "/owners?asset_type=coal-mine&percentage_of_thermal_coal__gt=0"
+  },
+  {
+    "id": "coal-no-closure",
+    "label": "No Planned Closure",
+    "category": "coal-mine",
+    "parent": "coal-mines-by-planned-closure",
+    "url": "/assets?asset_type=coal-mine&closing_year__isnull=true",
+    "owners_url": "/owners?asset_type=coal-mine&closing_year__isnull=true"
+  },
+  {
+    "id": "coal-has-closure",
+    "label": "Has Planned Closure",
+    "category": "coal-mine",
+    "parent": "coal-mines-by-planned-closure",
+    "url": "/assets?asset_type=coal-mine&closing_year__isnull=false",
+    "owners_url": "/owners?asset_type=coal-mine&closing_year__isnull=false"
+  },
+  {
+    "id": "blast-furnaces",
+    "label": "Blast Furnaces",
+    "category": "steel-iron",
+    "parent": "fossil-steel",
+    "url": "/assets?asset_type=iron-steel-plant&furnace_category=blast_furnace",
+    "owners_url": "/owners?asset_type=iron-steel-plant&furnace_category=blast_furnace"
+  },
+  {
+    "id": "coal-dri",
+    "label": "Coal-Based DRI",
+    "category": "steel-iron",
+    "parent": "fossil-steel",
+    "url": "/assets?asset_type=iron-steel-plant&furnace_category=dri&current_or_initial_reductant=coal+(solid)",
+    "owners_url": "/owners?asset_type=iron-steel-plant&furnace_category=dri&current_or_initial_reductant=coal+(solid)"
+  },
+  {
+    "id": "gas-dri",
+    "label": "Gas-Based DRI",
+    "category": "steel-iron",
+    "parent": "fossil-steel",
+    "url": "/assets?asset_type=iron-steel-plant&furnace_category=dri&current_or_initial_reductant=gas",
+    "owners_url": "/owners?asset_type=iron-steel-plant&furnace_category=dri&current_or_initial_reductant=gas"
+  },
+  {
+    "id": "dri-unknown",
+    "label": "Unknown DRI Reductant",
+    "category": "steel-iron",
+    "parent": "fossil-steel",
+    "url": "/assets?asset_type=iron-steel-plant&furnace_category=dri&current_or_initial_reductant=unknown",
+    "owners_url": "/owners?asset_type=iron-steel-plant&furnace_category=dri&current_or_initial_reductant=unknown"
+  },
+  {
+    "id": "bf-relining-planned",
+    "label": "Planned Relinings",
+    "category": "steel-iron",
+    "parent": "bf-relinings",
+    "url": "/assets?asset_type=iron-steel-plant&furnace_category=blast_furnace&relining_statuses__has=planned",
+    "owners_url": "/owners?asset_type=iron-steel-plant&furnace_category=blast_furnace&relining_statuses__has=planned"
+  },
+  {
+    "id": "bf-relining-complete",
+    "label": "Completed Relinings",
+    "category": "steel-iron",
+    "parent": "bf-relinings",
+    "url": "/assets?asset_type=iron-steel-plant&furnace_category=blast_furnace&relining_statuses__has=complete",
+    "owners_url": "/owners?asset_type=iron-steel-plant&furnace_category=blast_furnace&relining_statuses__has=complete"
+  },
+  {
+    "id": "gas-plants",
+    "label": "Gas Plants",
+    "category": "oil-gas",
+    "url": "/assets?asset_type=oil-gas-plant",
+    "owners_url": "/owners?asset_type=oil-gas-plant"
+  },
+  {
+    "id": "gas-pipelines",
+    "label": "Gas Pipelines",
+    "category": "oil-gas",
+    "url": "/assets?asset_type=gas-pipeline",
+    "owners_url": "/owners?asset_type=gas-pipeline"
+  },
+  {
+    "id": "oil-pipelines",
+    "label": "Oil & NGL Pipelines",
+    "category": "oil-gas",
+    "url": "/assets?asset_type=oil-pipeline",
+    "owners_url": "/owners?asset_type=oil-pipeline"
+  },
+  {
+    "id": "iron-mines",
+    "label": "Iron Ore Mines",
+    "category": "steel-iron",
+    "url": "/assets?asset_type=iron-ore-mine",
+    "owners_url": "/owners?asset_type=iron-ore-mine"
+  },
+  {
+    "id": "bioenergy-power",
+    "label": "Bioenergy Power",
+    "category": "bioenergy",
+    "url": "/assets?asset_type=bioenergy-plant",
+    "owners_url": "/owners?asset_type=bioenergy-plant"
+  },
+  {
+    "id": "chemical-plants",
+    "label": "Chemical Plants",
+    "category": "chemical",
+    "notes": "TBD"
+  },
+  {
+    "id": "bioenergy-plants",
+    "label": "Bioenergy Plants",
+    "category": "bioenergy",
+    "notes": "TBD",
+    "url": "/assets?asset_type=bioenergy-plant",
+    "owners_url": "/owners?asset_type=bioenergy-plant"
+  },
+  {
+    "id": "cement-plants",
+    "label": "Cement & Concrete Plants",
+    "category": "cement",
+    "notes": "TBD",
+    "url": "/assets?asset_type=cement-plant",
+    "owners_url": "/owners?asset_type=cement-plant"
+  },
+  {
+    "id": "cement-clinker-only",
+    "label": "Clinker Only",
+    "category": "cement",
+    "parent": "cement-by-plant-type",
+    "url": "/assets?asset_type=cement-plant&plant_type=clinker+only",
+    "owners_url": "/owners?asset_type=cement-plant&plant_type=clinker+only"
+  },
+  {
+    "id": "cement-grinding",
+    "label": "Grinding",
+    "category": "cement",
+    "parent": "cement-by-plant-type",
+    "url": "/assets?asset_type=cement-plant&plant_type=grinding",
+    "owners_url": "/owners?asset_type=cement-plant&plant_type=grinding"
+  },
+  {
+    "id": "cement-integrated",
+    "label": "Integrated",
+    "category": "cement",
+    "parent": "cement-by-plant-type",
+    "url": "/assets?asset_type=cement-plant&plant_type=integrated",
+    "owners_url": "/owners?asset_type=cement-plant&plant_type=integrated"
+  },
+  {
+    "id": "cement-unknown-type",
+    "label": "Unknown Type",
+    "category": "cement",
+    "parent": "cement-by-plant-type",
+    "url": "/assets?asset_type=cement-plant&plant_type=unknown",
+    "owners_url": "/owners?asset_type=cement-plant&plant_type=unknown"
+  },
+  {
+    "id": "cement-fossil-fuel",
+    "label": "Fossil Fuel",
+    "category": "cement",
+    "parent": "cement-by-kiln-fuel",
+    "url": "/assets?asset_type=cement-plant&alternative_fuel=no",
+    "owners_url": "/owners?asset_type=cement-plant&alternative_fuel=no"
+  },
+  {
+    "id": "cement-alternate-fuel",
+    "label": "Alternate Fuel",
+    "category": "cement",
+    "parent": "cement-by-kiln-fuel",
+    "url": "/assets?asset_type=cement-plant&alternative_fuel=yes",
+    "owners_url": "/owners?asset_type=cement-plant&alternative_fuel=yes"
+  },
+  {
+    "id": "cement-fuel-unknown",
+    "label": "Unknown Fuel",
+    "category": "cement",
+    "parent": "cement-by-kiln-fuel",
+    "url": "/assets?asset_type=cement-plant&alternative_fuel=unknown",
+    "owners_url": "/owners?asset_type=cement-plant&alternative_fuel=unknown"
+  },
+  {
+    "id": "cement-wet",
+    "label": "Wet Process",
+    "category": "cement",
+    "parent": "cement-by-production-type",
+    "url": "/assets?asset_type=cement-plant&production_type=wet",
+    "owners_url": "/owners?asset_type=cement-plant&production_type=wet"
+  },
+  {
+    "id": "cement-semidry",
+    "label": "Semidry Process",
+    "category": "cement",
+    "parent": "cement-by-production-type",
+    "url": "/assets?asset_type=cement-plant&production_type=semidry",
+    "owners_url": "/owners?asset_type=cement-plant&production_type=semidry"
+  },
+  {
+    "id": "cement-dry",
+    "label": "Dry Process",
+    "category": "cement",
+    "parent": "cement-by-production-type",
+    "url": "/assets?asset_type=cement-plant&production_type=dry",
+    "owners_url": "/owners?asset_type=cement-plant&production_type=dry"
+  },
+  {
+    "id": "captive-machinery",
+    "label": "Captive: Machinery",
+    "category": "coal-plant",
+    "parent": "captive-coal-plants",
+    "url": "/assets?asset_type=coal-plant&captive__has=machinery",
+    "owners_url": "/owners?asset_type=coal-plant&captive__has=machinery"
+  },
+  {
+    "id": "captive-cement-building",
+    "label": "Captive: Cement & Building",
+    "category": "coal-plant",
+    "parent": "captive-coal-plants",
+    "url": "/assets?asset_type=coal-plant&captive__has=cement+%26+building",
+    "owners_url": "/owners?asset_type=coal-plant&captive__has=cement+%26+building"
+  },
+  {
+    "id": "captive-oil-refining",
+    "label": "Captive: Oil & Refining",
+    "category": "coal-plant",
+    "parent": "captive-coal-plants",
+    "url": "/assets?asset_type=coal-plant&captive__has=oil+%26+refining",
+    "owners_url": "/owners?asset_type=coal-plant&captive__has=oil+%26+refining"
+  },
+  {
+    "id": "captive-industrial-park",
+    "label": "Captive: Industrial Park",
+    "category": "coal-plant",
+    "parent": "captive-coal-plants",
+    "url": "/assets?asset_type=coal-plant&captive__has=industrial+park",
+    "owners_url": "/owners?asset_type=coal-plant&captive__has=industrial+park"
+  },
+  {
+    "id": "captive-agriculture",
+    "label": "Captive: Agriculture",
+    "category": "coal-plant",
+    "parent": "captive-coal-plants",
+    "url": "/assets?asset_type=coal-plant&captive__has=agriculture",
+    "owners_url": "/owners?asset_type=coal-plant&captive__has=agriculture"
+  },
+  {
+    "id": "captive-textiles",
+    "label": "Captive: Textiles",
+    "category": "coal-plant",
+    "parent": "captive-coal-plants",
+    "url": "/assets?asset_type=coal-plant&captive__has=textiles",
+    "owners_url": "/owners?asset_type=coal-plant&captive__has=textiles"
+  },
+  {
+    "id": "captive-automobiles",
+    "label": "Captive: Automobiles",
+    "category": "coal-plant",
+    "parent": "captive-coal-plants",
+    "url": "/assets?asset_type=coal-plant&captive__has=automobiles",
+    "owners_url": "/owners?asset_type=coal-plant&captive__has=automobiles"
+  },
+  {
+    "id": "captive-sugar",
+    "label": "Captive: Sugar",
+    "category": "coal-plant",
+    "parent": "captive-coal-plants",
+    "url": "/assets?asset_type=coal-plant&captive__has=sugar",
+    "owners_url": "/owners?asset_type=coal-plant&captive__has=sugar"
+  },
+  {
+    "id": "captive-rubber",
+    "label": "Captive: Rubber",
+    "category": "coal-plant",
+    "parent": "captive-coal-plants",
+    "url": "/assets?asset_type=coal-plant&captive__has=rubber",
+    "owners_url": "/owners?asset_type=coal-plant&captive__has=rubber"
+  },
+  {
+    "id": "captive-electronics",
+    "label": "Captive: Electronics",
+    "category": "coal-plant",
+    "parent": "captive-coal-plants",
+    "url": "/assets?asset_type=coal-plant&captive__has=electronics",
+    "owners_url": "/owners?asset_type=coal-plant&captive__has=electronics"
+  },
+  {
+    "id": "captive-cryptocurrency",
+    "label": "Captive: Cryptocurrency",
+    "category": "coal-plant",
+    "parent": "captive-coal-plants",
+    "url": "/assets?asset_type=coal-plant&captive__has=cryptocurrency",
+    "owners_url": "/owners?asset_type=coal-plant&captive__has=cryptocurrency"
+  },
+  {
+    "id": "captive-unknown",
+    "label": "Captive: Unknown",
+    "category": "coal-plant",
+    "parent": "captive-coal-plants",
+    "url": "/assets?asset_type=coal-plant&captive__has=unknown",
+    "owners_url": "/owners?asset_type=coal-plant&captive__has=unknown"
+  },
+  {
+    "id": "bf-relining-other",
+    "label": "Other Relinings (Unknown / In Progress / Cancelled)",
+    "category": "steel-iron",
+    "parent": "bf-relinings",
+    "url": "/assets?asset_type=iron-steel-plant&furnace_category=blast_furnace&relining_statuses__has=unknown&relining_statuses__has=in+progress&relining_statuses__has=cancelled",
+    "owners_url": "/owners?asset_type=iron-steel-plant&furnace_category=blast_furnace&relining_statuses__has=unknown&relining_statuses__has=in+progress&relining_statuses__has=cancelled"
+  }
+]
