@@ -189,6 +189,40 @@ export interface OwnershipGraphResponse {
   paths?: Record<string, Array<{ route: string[]; cumulative_pct: number }>>;
 }
 
+/** Root node returned when querying the graph at the location (L-prefix) level. */
+export interface LocationGraphRoot {
+  node_type: 'asset';
+  asset_id: string;
+  location_id: string;
+  unit_id: string | null;
+  asset_name: string;
+  project_name: string;
+  asset_type: string;
+  country: string;
+  latitude: number;
+  longitude: number;
+}
+
+/** A single ownership graph for one distinct ownership structure at a location. */
+export interface LocationGraph {
+  root: LocationGraphRoot;
+  nodes: GraphNode[];
+  edges: OwnershipGraphResponse['edges'];
+  paths?: OwnershipGraphResponse['paths'];
+}
+
+/**
+ * Response from /ownership/graph when root is a location-level L-prefix ID.
+ * Contains all distinct ownership structures across all units at that location.
+ */
+export interface LocationOwnershipGraphResponse {
+  location_id: string;
+  project_name: string;
+  unit_count: number;
+  distinct_graphs: number;
+  graphs: LocationGraph[];
+}
+
 export interface PaginatedResponse<T> {
   total: number | null;
   limit: number | null;
@@ -788,26 +822,74 @@ export async function getOwnershipGraph(params: {
     type: (raw.root.node_type as 'entity' | 'asset') || 'asset',
   };
 
-  // Normalize nodes: API returns entity_id/asset_id, node_type, name/asset_name
-  const nodes: GraphNode[] = (raw.nodes || []).map((n) => ({
-    id: String(n.entity_id || n.asset_id || ''),
-    Name: String(n.name || n.asset_name || ''),
-    type: (n.node_type as 'entity' | 'asset') || (n.asset_type ? 'asset' : 'entity'),
-    is_terminal: n.is_terminal as boolean | undefined,
-    is_root: n.is_root as boolean | undefined,
-    // Preserve useful raw fields for side panel and entity type classification
-    entity_id: n.entity_id as string | undefined,
-    headquarters_country: n.headquarters_country as string | undefined,
-    entity_type: n.entity_type as string | undefined,
-    publiclylisted: (n.publiclylisted || n.publicly_listed) as boolean | undefined,
-    asset_type: n.asset_type as string | undefined,
-  }));
+  const nodes = normalizeGraphNodes(raw.nodes || []);
 
   return {
     root,
     nodes,
     edges: raw.edges || [],
     paths: raw.paths,
+  };
+}
+
+/**
+ * Normalize raw graph nodes from the API into typed GraphNode objects.
+ * Shared between getOwnershipGraph and getLocationOwnershipGraph.
+ */
+function normalizeGraphNodes(nodes: Array<Record<string, unknown>>): GraphNode[] {
+  return nodes.map((n) => ({
+    id: String(n.entity_id || n.asset_id || ''),
+    Name: String(n.name || n.asset_name || ''),
+    type: (n.node_type as 'entity' | 'asset') || (n.asset_type ? 'asset' : 'entity'),
+    is_terminal: n.is_terminal as boolean | undefined,
+    is_root: n.is_root as boolean | undefined,
+    entity_id: n.entity_id as string | undefined,
+    headquarters_country: n.headquarters_country as string | undefined,
+    entity_type: n.entity_type as string | undefined,
+    publiclylisted: (n.publiclylisted || n.publicly_listed) as boolean | undefined,
+    asset_type: n.asset_type as string | undefined,
+  }));
+}
+
+/**
+ * Fetch all distinct ownership graphs for a location (L-prefix ID).
+ *
+ * Unlike getOwnershipGraph (which works at the unit level), this endpoint
+ * returns an array of distinct ownership structures across all units at
+ * the location, plus unit_count and distinct_graphs metadata.
+ */
+export async function getLocationOwnershipGraph(params: {
+  root: string;
+  direction?: 'up' | 'down';
+  max_depth?: number;
+}): Promise<LocationOwnershipGraphResponse> {
+  _currentReason = `getLocationOwnershipGraph ${params.direction || 'up'} ${params.root}`;
+  const raw = await fetchAPI<{
+    location_id: string;
+    project_name: string;
+    unit_count: number;
+    distinct_graphs: number;
+    graphs: Array<{
+      root: Record<string, unknown>;
+      nodes: Array<Record<string, unknown>>;
+      edges: LocationGraph['edges'];
+      paths?: LocationGraph['paths'];
+    }>;
+  }>(
+    `/ownership/graph${buildQuery({ root: params.root, direction: params.direction, max_depth: params.max_depth })}`
+  );
+
+  return {
+    location_id: raw.location_id,
+    project_name: raw.project_name,
+    unit_count: raw.unit_count,
+    distinct_graphs: raw.distinct_graphs,
+    graphs: (raw.graphs || []).map((g) => ({
+      root: g.root as unknown as LocationGraphRoot,
+      nodes: normalizeGraphNodes(g.nodes || []),
+      edges: g.edges || [],
+      paths: g.paths,
+    })),
   };
 }
 
