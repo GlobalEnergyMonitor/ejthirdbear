@@ -251,6 +251,7 @@
       // The graph endpoint works with L-prefix location IDs, so we strip the unit suffix.
       const merged = [];
       const seenLocationIds = new Set();
+      const unitCounts = new Map(); // locationId → unit count seen in this search batch
       const typesToSearch    = types.length   > 0 ? types.map(l => ASSET_TYPE_SLUG[l]) : [undefined];
       const statusesToSearch = statuses.length > 0 ? statuses : [undefined];
       const countryParam = countries.length > 0 ? countries : undefined;
@@ -266,11 +267,13 @@
           });
           for (const a of r.results) {
             const locationId = getLocationId(a.id);
+            // Count every unit hit, even duplicates, to build a unit count per location
+            unitCounts.set(locationId, (unitCounts.get(locationId) || 0) + 1);
             if (!seenLocationIds.has(locationId)) {
               seenLocationIds.add(locationId);
               merged.push({
                 id: locationId,
-                name: a.name,
+                name: String(a.raw?.project_name || a.name),
                 kind: 'asset',
                 country: a.country,
                 status: a.status,
@@ -279,6 +282,10 @@
             }
           }
         }
+      }
+      // Attach unit counts (lower bound — capped by fetch limit)
+      for (const item of merged) {
+        item.unit_count = unitCounts.get(item.id) || 1;
       }
       results = merged.slice(0, 40);
     } catch (err) {
@@ -520,6 +527,7 @@
                   {/if}
                   {#if item.asset_type}<span class="cc-result-type">{item.asset_type}</span>{/if}
                   {#if item.country}<span class="cc-result-country">{item.country}</span>{/if}
+                  {#if item.unit_count > 1}<span class="cc-result-units">{item.unit_count} units</span>{/if}
                 </span>
               </div>
               <svg class="cc-result-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -872,6 +880,11 @@
   .cc-result-country {
     font-size: 11px;
     color: var(--color-text-tertiary);
+  }
+  .cc-result-units {
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+    font-style: italic;
   }
   .cc-result-arrow {
     color: var(--color-text-tertiary);
