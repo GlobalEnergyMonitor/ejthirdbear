@@ -16,6 +16,15 @@
   import StatusFilter from '$lib/components/filters/StatusFilter.svelte';
   import CountryMultiSelect from '$lib/components/screener/CountryMultiSelect.svelte';
   import { STATUS_GROUPS } from '$lib/data-config/tracker-schema';
+  import type { DynamicStatusGroup } from '$lib/data-config/tracker-schema';
+
+  // Convert STATUS_GROUPS (plain string statuses) to DynamicStatusGroup format for StatusFilter
+  const COAL_STATUS_GROUPS: DynamicStatusGroup[] = STATUS_GROUPS.map(sg => ({
+    id: sg.id,
+    label: sg.label,
+    statuses: (sg.statuses as string[]).map(s => ({ value: s, count: 0 })),
+    totalCount: 0,
+  }));
 
   const q = getContext<CoalQueryState>(COAL_QUERY_KEY);
   const API_BASE = import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-api.thirdbear.net';
@@ -81,10 +90,26 @@
     { key: 'coal_grade',    label: 'Coal grade',       phrase: 'of coal grade'    },
   ];
 
+  const SHARED_FILTER_KEYS = new Set(
+    PLANT_FIELDS.filter(f => MINE_FIELDS.some(m => m.key === f.key)).map(f => f.key)
+  );
+
   const availableFilterFields = $derived<FilterFieldDef[]>(
     q.query.trackers.length === 2
-      ? [...new Map([...PLANT_FIELDS, ...MINE_FIELDS].map(f => [f.key, f])).values()]
+      ? PLANT_FIELDS.filter(f => SHARED_FILTER_KEYS.has(f.key))
       : q.query.trackers.includes('coal-plant') ? PLANT_FIELDS : MINE_FIELDS
+  );
+
+  const plantOnlyFilterFields = $derived<FilterFieldDef[]>(
+    q.query.trackers.length === 2
+      ? PLANT_FIELDS.filter(f => !SHARED_FILTER_KEYS.has(f.key))
+      : []
+  );
+
+  const mineOnlyFilterFields = $derived<FilterFieldDef[]>(
+    q.query.trackers.length === 2
+      ? MINE_FIELDS.filter(f => !SHARED_FILTER_KEYS.has(f.key))
+      : []
   );
 
   // ── Shown filter fields ────────────────────────────────────────────────────
@@ -148,7 +173,7 @@
   function buildStatusChecks(selected: string[] | undefined): Record<string, boolean> {
     const selectedSet = new Set(selected ?? []);
     const checks: Record<string, boolean> = {};
-    for (const sg of STATUS_GROUPS) {
+    for (const sg of COAL_STATUS_GROUPS) {
       for (const s of sg.statuses) {
         checks[`status-${sg.id}-${s.value}`] = selectedSet.has(s.value);
       }
@@ -209,8 +234,12 @@
   function handleRemoveValue(key: string, val: string) {
     if (key === 'country_area') {
       localSelectedCountries = localSelectedCountries.filter(c => c !== val);
+      if (localSelectedCountries.length === 0) shownFields = shownFields.filter(k => k !== key);
     } else {
-      toggleValue(key as keyof CoalQueryFilters, val);
+      const cur = (q.query.filters as Record<string, unknown>)[key] as string[] | undefined ?? [];
+      const next = cur.filter(v => v !== val);
+      q.setFilter(key as keyof CoalQueryFilters, next.length ? next as CoalQueryFilters[keyof CoalQueryFilters] : undefined);
+      if (next.length === 0) shownFields = shownFields.filter(k => k !== key);
     }
   }
 
@@ -244,15 +273,23 @@
   // ── Output mode + groupBy + aggregate ─────────────────────────────────────
 
   let outputMode = $state<'data' | 'summary'>('data');
+  let summaryPickerOpen = $state(false);
 
   $effect(() => {
     const hasSummary = q.query.groupBy.length > 0 || q.query.aggregates.length > 0;
     untrack(() => { if (hasSummary) outputMode = 'summary'; });
   });
 
+  // Auto-collapse summary picker once both groupBy and aggregates are selected
+  $effect(() => {
+    const configured = q.query.groupBy.length > 0 && q.query.aggregates.length > 0;
+    untrack(() => { if (configured) summaryPickerOpen = false; });
+  });
+
   function setOutputMode(mode: 'data' | 'summary') {
     outputMode = mode;
-    if (mode === 'data') { q.setGroupBy([]); q.setAggregates([]); }
+    if (mode === 'data') { q.setGroupBy([]); q.setAggregates([]); summaryPickerOpen = false; }
+    else { summaryPickerOpen = true; }
   }
 
   function clearAll() {
@@ -334,7 +371,7 @@
 
   // ── Results: table ─────────────────────────────────────────────────────────
 
-  type TableCol = { key: string; altKey?: string; label: string };
+  type TableCol = { key: string; altKey?: string | string[]; label: string };
 
   const tableCols = $derived<TableCol[]>((() => {
     const isPlant = q.query.trackers.includes('coal-plant');
@@ -342,20 +379,20 @@
     if (isPlant && !isMine) return [
       { key: 'asset_name', altKey: 'name', label: 'Name' },
       { key: 'country_area', altKey: 'country', label: 'Country' },
-      { key: 'status', label: 'Status' },
+      { key: 'status', altKey: ['Status', 'operating_status'], label: 'Status' },
       { key: 'capacity_mw', label: 'Cap. (MW)' },
       { key: 'combustion_technology', label: 'Technology' },
     ];
     if (isMine && !isPlant) return [
       { key: 'asset_name', altKey: 'name', label: 'Name' },
       { key: 'country_area', altKey: 'country', label: 'Country' },
-      { key: 'status', label: 'Status' },
+      { key: 'status', altKey: ['Status', 'operating_status'], label: 'Status' },
       { key: 'mine_type', label: 'Mine Type' },
     ];
     return [
       { key: 'asset_name', altKey: 'name', label: 'Name' },
       { key: 'country_area', altKey: 'country', label: 'Country' },
-      { key: 'status', label: 'Status' },
+      { key: 'status', altKey: ['Status', 'operating_status'], label: 'Status' },
       { key: 'asset_type', label: 'Type' },
     ];
   })());
@@ -382,8 +419,10 @@
     return rows.map(row => {
       const out = { ...row };
       for (const col of tableCols) {
-        if (col.altKey && out[col.key] == null && out[col.altKey] != null) {
-          out[col.key] = out[col.altKey];
+        if (out[col.key] != null || !col.altKey) continue;
+        const alts = Array.isArray(col.altKey) ? col.altKey : [col.altKey];
+        for (const alt of alts) {
+          if (out[alt] != null) { out[col.key] = out[alt]; break; }
         }
       }
       return out;
@@ -443,6 +482,25 @@
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = 'gem-coal-data.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  async function downloadSummaryCsv() {
+    const cols = summaryCols();
+    if (!summaryRows.length || !cols.length) return;
+    const header = cols.map(c => c.label);
+    const lines = [
+      header.join(','),
+      ...summaryRows.map(row => cols.map(c => {
+        const v = row[c.key] ?? '';
+        return `"${String(v).replace(/"/g, '""')}"`;
+      }).join(',')),
+    ];
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'gem-coal-summary.csv';
     a.click();
     URL.revokeObjectURL(a.href);
   }
@@ -512,6 +570,10 @@
     return String(v);
   }
 
+  // ── Sticky sentence collapse ───────────────────────────────────────────────
+
+  let sentenceCollapsed = $state(false);
+
   // ── Close picker (removes field if no values selected) ────────────────────
 
   function closePicker() {
@@ -566,12 +628,54 @@
         aggregates: [{ fn: 'avg', field: 'plant_age_years' }],
       }),
     },
+    {
+      sentence: 'Build your own selection…',
+      apply: () => q.applyQuery({ trackers: ['coal-plant', 'coal-mine'], filters: {} }),
+    },
   ];
 </script>
 
 <div class="builder">
 
-  <div class="sentence-wrapper">
+  <div class="sentence-wrapper" class:sentence-wrapper--sticky={q.isDirty}>
+    {#if q.isDirty}
+      <button
+        class="sentence-collapse-btn"
+        onclick={() => (sentenceCollapsed = !sentenceCollapsed)}
+        aria-expanded={!sentenceCollapsed}
+        aria-label={sentenceCollapsed ? 'Expand filters' : 'Collapse filters'}
+      >
+        {sentenceCollapsed ? '▼ Show filters' : '▲ Collapse'}
+      </button>
+    {/if}
+    {#if !sentenceCollapsed}
+    <!-- Summary sentence line (only in summary mode with selections) -->
+    {#if outputMode === 'summary' && (q.query.aggregates.length > 0 || q.query.groupBy.length > 0)}
+      <div class="summary-sentence">
+        <span class="summary-word">Calculate</span>
+        {#each q.query.aggregates as agg (agg.fn + agg.field)}
+          {@const af = aggregatableFields.find(f => f.key === agg.field)}
+          {@const spec = af?.aggregatable?.find(s => s.fn === agg.fn)}
+          <span class="value-chip value-chip--summary">
+            {spec?.label ?? `${agg.fn}(${agg.field})`}
+            <button class="chip-x chip-x--summary" onclick={() => toggleAggregate(agg.fn, agg.field)}>×</button>
+          </span>
+        {/each}
+        {#if q.query.groupBy.length > 0}
+          <span class="summary-word">by</span>
+          {#each q.query.groupBy as field (field)}
+            {@const gf = groupableFields.find(f => f.key === field)}
+            <span class="value-chip value-chip--summary">
+              {gf?.shortLabel ?? gf?.label ?? field}
+              <button class="chip-x chip-x--summary" onclick={() => toggleGroupBy(field)}>×</button>
+            </span>
+          {/each}
+        {/if}
+        <button class="summary-edit-inline-btn" onclick={() => (summaryPickerOpen = !summaryPickerOpen)}>
+          {summaryPickerOpen ? '− hide options' : '✎ edit'}
+        </button>
+      </div>
+    {/if}
     <QuerySentenceBuilder
       fields={availableFilterFields}
       filters={sentenceFilters}
@@ -586,28 +690,6 @@
       onClearAll={clearAll}
     >
       {#snippet subject()}
-        <!-- Summary prefix: aggregate + groupBy chips -->
-        {#if outputMode === 'summary' && (q.query.aggregates.length > 0 || q.query.groupBy.length > 0)}
-          {#each q.query.aggregates as agg (agg.fn + agg.field)}
-            {@const af = aggregatableFields.find(f => f.key === agg.field)}
-            {@const spec = af?.aggregatable?.find(s => s.fn === agg.fn)}
-            <span class="value-chip value-chip--summary">
-              {spec?.label ?? `${agg.fn}(${agg.field})`}
-              <button class="chip-x" onclick={() => toggleAggregate(agg.fn, agg.field)}>×</button>
-            </span>
-          {/each}
-          {#if q.query.groupBy.length > 0}
-            <span class="word">by</span>
-            {#each q.query.groupBy as field (field)}
-              {@const gf = groupableFields.find(f => f.key === field)}
-              <span class="value-chip value-chip--summary">
-                {gf?.shortLabel ?? gf?.label ?? field}
-                <button class="chip-x" onclick={() => toggleGroupBy(field)}>×</button>
-              </span>
-            {/each}
-          {/if}
-          <span class="word">for</span>
-        {/if}
         <!-- Tracker chips -->
         {#each q.query.trackers as t (t)}
           <span class="value-chip">
@@ -631,7 +713,7 @@
             <button class="pill" class:active={q.query.trackers.includes(t)} onclick={() => toggleTracker(t)}>{TRACKER_LABELS[t]}</button>
           {/each}
         {:else if fieldKey === 'status'}
-          <StatusFilter bind:statusChecks statusGroups={STATUS_GROUPS} />
+          <StatusFilter bind:statusChecks statusGroups={COAL_STATUS_GROUPS} />
         {:else if fieldKey === 'country_area'}
           <CountryMultiSelect bind:selected={localSelectedCountries} countries={countryOptions} />
         {:else}
@@ -645,73 +727,110 @@
           {/if}
         {/if}
       {/snippet}
+
+      {#snippet fieldPickerSuffix()}
+        {#if plantOnlyFilterFields.length > 0 || mineOnlyFilterFields.length > 0}
+          <div class="tracker-only-hint">
+            {#if plantOnlyFilterFields.length > 0}
+              <span class="tracker-only-label">Plants only:</span>
+              {#each plantOnlyFilterFields as f}
+                <span class="tracker-only-field">{f.label}</span>
+              {/each}
+            {/if}
+            {#if mineOnlyFilterFields.length > 0}
+              <span class="tracker-only-label">Mines only:</span>
+              {#each mineOnlyFilterFields as f}
+                <span class="tracker-only-field">{f.label}</span>
+              {/each}
+            {/if}
+          </div>
+        {/if}
+      {/snippet}
     </QuerySentenceBuilder>
+    {/if}
   </div>
 
-  <!-- ── Output mode + summary options (visually grouped) ─────────────────── -->
-  <div class="summary-card" class:summary-card--active={outputMode === 'summary'}>
-    <div class="output-section">
-      <span class="output-label">show me</span>
-      <label class="radio-label">
-        <input type="radio" name="output-mode" value="data" checked={outputMode === 'data'} onchange={() => setOutputMode('data')} />
-        individual records
-      </label>
-      <label class="radio-label">
-        <input type="radio" name="output-mode" value="summary" checked={outputMode === 'summary'} onchange={() => setOutputMode('summary')} />
-        summary statistics
-      </label>
-    </div>
+  <!-- ── Output mode (standalone) ─────────────────────────────────────────── -->
+  <div class="output-mode-row">
+    <span class="output-label">show me</span>
+    <button
+      class="mode-btn"
+      class:active={outputMode === 'data'}
+      onclick={() => setOutputMode('data')}
+    >individual records</button>
+    <button
+      class="mode-btn"
+      class:active={outputMode === 'summary'}
+      onclick={() => setOutputMode('summary')}
+    >summary statistics</button>
+  </div>
 
-    {#if outputMode === 'summary'}
-      <div class="summary-divider"></div>
-      <div class="summary-section">
-        <div class="summary-row">
-          <span class="output-label">group by</span>
-          <div class="value-pills">
-            {#each groupableFields as f}
-              <button class="value-pill" class:active={q.query.groupBy.includes(f.key)} onclick={() => toggleGroupBy(f.key)}>{f.shortLabel ?? f.label}</button>
-            {/each}
-          </div>
-        </div>
-        {#if q.query.groupBy.length > 0}
+  <!-- ── Summary config (collapsible, auto-hides once configured) ──────────── -->
+  {#if outputMode === 'summary'}
+    {#if summaryPickerOpen}
+      <div class="summary-card summary-card--active">
+        <div class="summary-section">
           <div class="summary-row">
-            <span class="output-label">calculate</span>
+            <span class="output-label">group by</span>
             <div class="value-pills">
-              {#each aggregatableFields as f}
-                {#each f.aggregatable ?? [] as spec}
-                  <button
-                    class="value-pill"
-                    class:active={q.query.aggregates.some(a => a.fn === spec.fn && a.field === f.key)}
-                    onclick={() => toggleAggregate(spec.fn, f.key)}
-                  >{spec.label}</button>
-                {/each}
+              {#each groupableFields as f}
+                <button class="value-pill" class:active={q.query.groupBy.includes(f.key)} onclick={() => toggleGroupBy(f.key)}>{f.shortLabel ?? f.label}</button>
               {/each}
             </div>
           </div>
-        {/if}
-        {#if q.showGranularityToggle}
-          <div class="summary-row">
-            <span class="output-label">granularity</span>
-            <label class="radio-label">
-              <input type="radio" name="granularity" value="project"
-                checked={q.query.granularity === 'project'}
-                onchange={() => q.setGranularity('project')} />
-              per plant
-            </label>
-            <label class="radio-label">
-              <input type="radio" name="granularity" value="unit"
-                checked={q.query.granularity === 'unit'}
-                onchange={() => q.setGranularity('unit')} />
-              per unit
-            </label>
-          </div>
-        {/if}
-        <p class="summary-notice">
-          Aggregation endpoints are live — see aggregate-api.ts for the data path.
-        </p>
+          {#if q.query.groupBy.length > 0}
+            <div class="summary-row">
+              <span class="output-label">calculate</span>
+              <div class="value-pills">
+                {#each aggregatableFields as f}
+                  {#each f.aggregatable ?? [] as spec}
+                    {@const isBoth = q.query.trackers.length === 2}
+                    {@const trackerScope = isBoth && f.trackers.length === 1 ? f.trackers[0] : null}
+                    <button
+                      class="value-pill"
+                      class:active={q.query.aggregates.some(a => a.fn === spec.fn && a.field === f.key)}
+                      onclick={() => toggleAggregate(spec.fn, f.key)}
+                    >
+                      {spec.label}
+                      {#if trackerScope}
+                        <span class="tracker-scope-badge">{trackerScope === 'coal-plant' ? 'Plants' : 'Mines'}</span>
+                      {/if}
+                    </button>
+                  {/each}
+                {/each}
+              </div>
+            </div>
+          {/if}
+          {#if q.showGranularityToggle}
+            <div class="summary-row">
+              <span class="output-label">granularity</span>
+              <label class="radio-label">
+                <input type="radio" name="granularity" value="project"
+                  checked={q.query.granularity === 'project'}
+                  onchange={() => q.setGranularity('project')} />
+                per plant
+              </label>
+              <label class="radio-label">
+                <input type="radio" name="granularity" value="unit"
+                  checked={q.query.granularity === 'unit'}
+                  onchange={() => q.setGranularity('unit')} />
+                per unit
+              </label>
+            </div>
+          {/if}
+          {#if q.query.groupBy.length > 0 && q.query.aggregates.length > 0}
+            <div class="summary-done-row">
+              <button class="summary-done-btn" onclick={() => (summaryPickerOpen = false)}>Done</button>
+            </div>
+          {/if}
+        </div>
       </div>
+    {:else if q.query.groupBy.length > 0 || q.query.aggregates.length > 0}
+      <button class="summary-edit-btn" onclick={() => (summaryPickerOpen = true)}>✎ Edit summary options</button>
+    {:else}
+      <button class="summary-edit-btn" onclick={() => (summaryPickerOpen = true)}>+ Choose group by & calculate</button>
     {/if}
-  </div>
+  {/if}
 
   <!-- ── Results ───────────────────────────────────────────────────────────── -->
   <div class="results-bar">
@@ -723,7 +842,7 @@
           {#each Object.entries(countResult.byType) as [type, n]}
             <span class="count-item">
               <strong>{fmt(n)}</strong>
-              {type === 'Coal Plant' ? 'plants' : type === 'Coal Mine' ? 'mines' : type}
+              {type === 'Coal Plant' ? 'plant units' : type === 'Coal Mine' ? 'mines' : type}
             </span>
           {/each}
           <span class="count-total">({fmt(countResult.total)} total)</span>
@@ -740,6 +859,10 @@
         <button class="result-btn" class:active={showTable} onclick={toggleTable}>
           {showTable ? 'Hide table' : 'View table'}
         </button>
+        <button class="result-btn" onclick={downloadCsv}>Download CSV</button>
+      {/if}
+      {#if outputMode === 'summary' && summaryRows.length > 0}
+        <button class="result-btn" onclick={downloadSummaryCsv}>Download CSV</button>
       {/if}
     </div>
   </div>
@@ -832,7 +955,6 @@
 
   /* Constrain intro/query sections, let table go full-width */
   .sentence-wrapper,
-  .summary-card,
   .results-bar,
   .query-footer {
     max-width: var(--container-md, 768px);
@@ -844,6 +966,36 @@
     max-width: var(--container-md, 768px);
     margin: 0 auto;
     --sentence-max-width: var(--container-md, 768px);
+  }
+
+  .sentence-wrapper--sticky {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: var(--color-bg-primary, #fff);
+    padding-top: var(--space-3, 12px);
+    padding-bottom: var(--space-2, 8px);
+    border-bottom: 1px solid var(--color-gray-100, #f1f5f5);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  }
+
+  .sentence-collapse-btn {
+    all: unset;
+    cursor: pointer;
+    display: block;
+    width: 100%;
+    max-width: var(--container-md, 768px);
+    margin: 0 auto var(--space-2, 8px);
+    font-size: var(--font-size-xs, 11px);
+    font-weight: 600;
+    color: var(--color-gray-400, #9eaaad);
+    text-align: right;
+    letter-spacing: 0.03em;
+    transition: color 0.1s;
+  }
+
+  .sentence-collapse-btn:hover {
+    color: var(--gem-primary-blue, #1d4961);
   }
 
   .word {
@@ -931,6 +1083,60 @@
   }
 
   .loading-hint { font-size: var(--font-size-sm, 12px); color: var(--color-gray-400, #9eaaad); font-style: italic; }
+
+  .tracker-only-hint {
+    width: 100%;
+    margin-top: var(--space-3, 12px);
+    padding-top: var(--space-3, 12px);
+    border-top: 1px solid var(--color-gray-100, #f1f5f5);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1, 4px) var(--space-2, 8px);
+    font-size: var(--font-size-xs, 11px);
+    color: var(--color-gray-400, #9eaaad);
+  }
+
+  .tracker-only-label {
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-gray-500, #7a9097);
+    margin-right: var(--space-1, 4px);
+    margin-left: var(--space-2, 8px);
+  }
+
+  .tracker-only-label:first-child {
+    margin-left: 0;
+  }
+
+  .tracker-only-field {
+    padding: 1px 8px;
+    border: 1px solid var(--color-gray-200, #dce3e5);
+    border-radius: 20px;
+    font-size: var(--font-size-xs, 11px);
+    color: var(--color-gray-400, #9eaaad);
+    background: var(--color-gray-50, #f8f9fa);
+    white-space: nowrap;
+  }
+
+  .tracker-scope-badge {
+    display: inline-block;
+    margin-left: 4px;
+    padding: 0 5px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    background: rgba(255,255,255,0.25);
+    color: inherit;
+    vertical-align: middle;
+    opacity: 0.8;
+  }
+  .value-pill:not(.active) .tracker-scope-badge {
+    background: var(--color-gray-100, #eceae3);
+    color: var(--color-gray-400, #9eaaad);
+  }
 
   /* ── Results bar ─────────────────────────────────────────────────────────── */
   .results-bar {
@@ -1076,28 +1282,15 @@
   .load-more-btn:hover:not(:disabled) { background: var(--gem-navy-10, #e9eef1); }
   .load-more-btn:disabled { opacity: 0.5; cursor: default; }
 
-  /* ── Summary card (output mode + group by + calculate) ───────────────────── */
-  .summary-card {
-    margin-top: var(--space-6, 24px);
-    border: 1px solid var(--color-gray-200, #dce3e5);
-    border-radius: 8px;
-    overflow: hidden;
-    transition: border-color 0.2s;
-  }
-  .summary-card--active {
-    border-color: var(--gem-primary-blue, #1d4961);
-  }
-
-  .output-section {
+  /* ── Output mode (standalone row) ────────────────────────────────────────── */
+  .output-mode-row {
     display: flex;
     align-items: center;
-    gap: var(--space-5, 20px);
-    padding: var(--space-4, 16px) var(--space-5, 20px);
-    font-size: var(--font-size-base, 14px);
-    background: #fff;
-  }
-  .summary-card--active .output-section {
-    background: var(--gem-navy-10, #e9eef1);
+    gap: var(--space-2, 8px);
+    margin-top: var(--space-6, 24px);
+    max-width: var(--container-md, 768px);
+    margin-left: auto;
+    margin-right: auto;
   }
 
   .output-label {
@@ -1106,11 +1299,77 @@
     font-weight: var(--font-weight-bold, 700);
     text-transform: uppercase;
     letter-spacing: var(--tracking-wider, 0.04em);
-    min-width: 80px;
     flex-shrink: 0;
+    margin-right: var(--space-2, 8px);
   }
-  .summary-card--active .output-label {
+
+  .mode-btn {
+    all: unset;
+    cursor: pointer;
+    padding: var(--space-2, 8px) var(--space-4, 16px);
+    border: 1.5px solid var(--color-gray-200, #dce3e5);
+    border-radius: 20px;
+    font-size: var(--font-size-sm, 12px);
+    font-weight: 500;
+    color: var(--color-gray-600, #4c6267);
+    background: #fff;
+    transition: all 0.12s;
+    white-space: nowrap;
+  }
+  .mode-btn:hover {
+    border-color: var(--gem-primary-blue, #1d4961);
     color: var(--gem-primary-blue, #1d4961);
+  }
+  .mode-btn.active {
+    background: var(--gem-primary-blue, #1d4961);
+    color: #fff;
+    border-color: var(--gem-primary-blue, #1d4961);
+  }
+
+  /* ── Summary card (group by + calculate, collapsible) ─────────────────────── */
+  .summary-card {
+    margin-top: var(--space-4, 16px);
+    border: 1px solid var(--gem-primary-blue, #1d4961);
+    border-radius: 8px;
+    overflow: hidden;
+    max-width: var(--container-md, 768px);
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .summary-edit-btn {
+    all: unset;
+    cursor: pointer;
+    display: block;
+    margin: var(--space-2, 8px) auto 0;
+    max-width: var(--container-md, 768px);
+    font-size: var(--font-size-xs, 11px);
+    color: var(--color-gray-400, #9eaaad);
+    transition: color 0.1s;
+  }
+  .summary-edit-btn:hover {
+    color: var(--gem-primary-blue, #1d4961);
+  }
+
+  .summary-done-row {
+    display: flex;
+    justify-content: flex-end;
+    padding-top: var(--space-2, 8px);
+  }
+  .summary-done-btn {
+    all: unset;
+    cursor: pointer;
+    font-size: var(--font-size-sm, 12px);
+    font-weight: 600;
+    color: var(--gem-primary-blue, #1d4961);
+    border: 1px solid var(--color-gray-300, #becccf);
+    border-radius: 4px;
+    padding: var(--space-1, 4px) var(--space-3, 12px);
+    background: #fff;
+    transition: background 0.1s;
+  }
+  .summary-done-btn:hover {
+    background: var(--gem-navy-10, #e9eef1);
   }
 
   .radio-label {
@@ -1127,11 +1386,6 @@
     width: 14px;
     height: 14px;
     cursor: pointer;
-  }
-
-  .summary-divider {
-    height: 1px;
-    background: var(--color-gray-200, #dce3e5);
   }
 
   .summary-section {
@@ -1173,24 +1427,46 @@
     color: #fff;
     border-color: var(--gem-primary-blue, #1d4961);
   }
-  .summary-notice {
-    font-size: var(--font-size-xs, 10px);
-    color: var(--color-gray-400, #9eaaad);
-    font-style: italic;
-    margin: var(--space-1, 4px) 0 0;
+  /* ── Summary sentence line ────────────────────────────────────────────────── */
+  .summary-sentence {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2, 8px);
+    font-size: var(--font-size-lg, 18px);
+    line-height: 2.2;
+    margin-bottom: var(--space-1, 4px);
   }
+  .summary-word {
+    color: var(--gem-teal, #2a7f8f);
+    white-space: nowrap;
+  }
+  .summary-edit-inline-btn {
+    all: unset;
+    cursor: pointer;
+    font-size: var(--font-size-sm, 12px);
+    color: var(--gem-teal, #2a7f8f);
+    border: 1px dashed var(--gem-teal, #2a7f8f);
+    border-radius: 4px;
+    padding: 0.2em 0.6em;
+    opacity: 0.7;
+    white-space: nowrap;
+    transition: opacity 0.1s;
+  }
+  .summary-edit-inline-btn:hover { opacity: 1; }
 
   /* ── Summary chips in sentence ────────────────────────────────────────────── */
   .value-chip--summary {
-    background: var(--gem-navy-10, #e9eef1);
-    border-color: var(--gem-primary-blue, #1d4961);
-    color: var(--gem-primary-blue, #1d4961);
+    background: var(--gem-teal-10, #e6f3f5);
+    border-color: var(--gem-teal, #2a7f8f);
+    color: var(--gem-teal, #2a7f8f);
   }
   .value-chip--summary .chip-x {
-    color: var(--color-gray-400, #9eaaad);
+    color: var(--gem-teal, #2a7f8f);
+    opacity: 0.6;
   }
   .value-chip--summary .chip-x:hover {
-    color: var(--gem-primary-blue, #1d4961);
+    opacity: 1;
   }
 
   /* ── API URL (debug) ─────────────────────────────────────────────────────── */

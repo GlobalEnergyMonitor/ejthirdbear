@@ -26,6 +26,7 @@
     onClearAll,
     subject,
     picker,
+    fieldPickerSuffix,
   }: {
     fields?: FilterFieldDef[];
     filters?: Record<string, string[]>;
@@ -40,6 +41,7 @@
     onClearAll?: () => void;
     subject?: Snippet;
     picker?: Snippet<[string]>;
+    fieldPickerSuffix?: Snippet;
   } = $props();
 
   const panelTitle = $derived.by(() => {
@@ -63,6 +65,10 @@
     }
   }
 
+  // Track whether any quick start has been used — hides the grid until clearAll
+  let quickStartUsed = $state(false);
+  $effect(() => { if (!isDirty) quickStartUsed = false; });
+
   function closePicker() {
     if (openPicker && openPicker !== '__fields') {
       const vals = filters[openPicker] ?? [];
@@ -75,20 +81,16 @@
   }
 </script>
 
-{#if isDirty}
-  <div class="top-bar">
-    <button class="clear-all-btn" onclick={onClearAll}>Clear all ×</button>
-  </div>
-{/if}
-
-{#if !isDirty && quickStarts.length > 0}
+{#if !isDirty && !quickStartUsed && quickStarts.length > 0}
   <div class="quick-starts">
     <p class="qs-heading">What would you like to explore?</p>
-    {#each quickStarts as qs}
-      <button class="qs-item" onclick={qs.apply}>
-        {qs.sentence} <span class="qs-arrow">→</span>
-      </button>
-    {/each}
+    <div class="qs-grid">
+      {#each quickStarts as qs}
+        <button class="qs-item" onclick={() => { quickStartUsed = true; qs.apply(); }}>
+          {qs.sentence}
+        </button>
+      {/each}
+    </div>
   </div>
 {/if}
 
@@ -120,9 +122,13 @@
     class="add-filter-btn"
     class:open={openPicker === '__fields'}
     onclick={() => togglePicker('__fields')}
-  >{openPicker === '__fields' ? '− fewer filters' : '+ add filter'}</button>
+  >{openPicker === '__fields' ? '− hide filters' : '+ add filter'}</button>
 
   <span class="sentence-end">.</span>
+
+  {#if isDirty}
+    <button class="clear-all-btn" onclick={onClearAll}>Clear all ×</button>
+  {/if}
 </div>
 
 {#if openPicker}
@@ -140,6 +146,7 @@
             onclick={() => toggleFilterField(f.key)}
           >{f.label}</button>
         {/each}
+        {@render fieldPickerSuffix?.()}
       {:else}
         {@render picker?.(openPicker)}
       {/if}
@@ -149,7 +156,6 @@
 
 <style>
   /* Allow consumer to constrain width via --sentence-max-width */
-  .top-bar,
   .quick-starts,
   .sentence,
   .picker-panel {
@@ -158,23 +164,18 @@
     margin-right: auto;
   }
 
-  .top-bar {
-    display: flex;
-    justify-content: flex-end;
-    margin-bottom: var(--space-4, 16px);
-  }
-
   .clear-all-btn {
     all: unset;
     cursor: pointer;
-    font-size: var(--font-size-sm, 12px);
+    font-size: var(--font-size-xs, 11px);
     font-weight: var(--font-weight-semibold, 600);
     color: var(--gem-orange, #fe4f2d);
-    border: 1px solid var(--gem-orange, #fe4f2d);
+    border: 1px solid currentColor;
     border-radius: 4px;
-    padding: var(--space-2, 8px) var(--space-4, 16px);
+    padding: 0.15em 0.5em;
     white-space: nowrap;
     transition: background 0.12s, color 0.12s;
+    flex-shrink: 0;
   }
 
   .clear-all-btn:hover {
@@ -195,34 +196,31 @@
     margin: 0 0 var(--space-3, 12px);
   }
 
+  .qs-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: var(--space-2, 8px);
+  }
+
   .qs-item {
     all: unset;
     display: block;
     cursor: pointer;
-    width: 100%;
     padding: var(--space-3, 12px) var(--space-4, 16px);
-    font-size: var(--font-size-base, 14px);
-    line-height: var(--line-height-relaxed, 1.65);
+    font-size: var(--font-size-sm, 13px);
+    line-height: var(--line-height-relaxed, 1.5);
     color: var(--color-gray-600, #4c6267);
-    border-left: 2px solid var(--color-gray-200, #dce3e5);
-    margin-bottom: var(--space-1, 4px);
+    border: 1.5px solid var(--color-gray-200, #dce3e5);
+    border-radius: 6px;
+    background: #fff;
     transition: color 0.12s, border-color 0.12s, background 0.12s;
-    border-radius: 0 4px 4px 0;
+    text-align: left;
   }
 
   .qs-item:hover {
     color: var(--gem-primary-blue, #1d4961);
     border-color: var(--gem-primary-blue, #1d4961);
     background: var(--gem-navy-10, #e9eef1);
-  }
-
-  .qs-arrow {
-    color: var(--color-gray-300, #becccf);
-    transition: color 0.12s;
-  }
-
-  .qs-item:hover .qs-arrow {
-    color: var(--gem-primary-blue, #1d4961);
   }
 
   .sentence {
@@ -327,7 +325,7 @@
     border: 1px solid var(--color-gray-200, #dce3e5);
     border-radius: 8px;
     background: var(--gem-warm-white, #fffffe);
-    overflow: hidden;
+    overflow: visible;
   }
 
   .panel-header {
@@ -337,6 +335,7 @@
     padding: var(--space-3, 12px) var(--space-4, 16px);
     background: #fff;
     border-bottom: 1px solid var(--color-gray-200, #dce3e5);
+    border-radius: 8px 8px 0 0;
   }
 
   .panel-title {
