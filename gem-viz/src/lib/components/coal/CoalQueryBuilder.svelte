@@ -825,8 +825,6 @@
           {/if}
         </div>
       </div>
-    {:else if q.query.groupBy.length > 0 || q.query.aggregates.length > 0}
-      <button class="summary-edit-btn" onclick={() => (summaryPickerOpen = true)}>✎ Edit summary options</button>
     {:else}
       <button class="summary-edit-btn" onclick={() => (summaryPickerOpen = true)}>+ Choose group by & calculate</button>
     {/if}
