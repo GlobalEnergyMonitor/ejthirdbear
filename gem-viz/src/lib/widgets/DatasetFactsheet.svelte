@@ -172,20 +172,6 @@
     modalOpen = false;
   }
 
-  // Lock body scroll when mobile modal is open (mobile only — desktop uses inline panel)
-  $effect(() => {
-    if (typeof document === 'undefined') return;
-    const isMobile = window.matchMedia('(max-width: 640px)').matches;
-    if (modalOpen && isMobile) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => {
-      document.body.style.overflow = '';
-    };
-  });
-
   // Auto-select initial field when fieldsMetadata arrives.
   // On first mount, fieldsMetadata may be empty (parent is still fetching),
   // so we watch for it to become populated rather than relying on onMount alone.
@@ -727,6 +713,7 @@
     .mobile-modal-body {
       padding: var(--space-4) var(--space-5) var(--space-6);
       overflow-y: auto;
+      overscroll-behavior: contain;
       flex: 1;
       display: flex;
       flex-direction: column;
