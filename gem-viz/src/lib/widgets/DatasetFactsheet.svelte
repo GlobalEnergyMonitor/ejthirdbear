@@ -172,10 +172,11 @@
     modalOpen = false;
   }
 
-  // Lock body scroll when mobile modal is open
+  // Lock body scroll when mobile modal is open (mobile only — desktop uses inline panel)
   $effect(() => {
     if (typeof document === 'undefined') return;
-    if (modalOpen) {
+    const isMobile = window.matchMedia('(max-width: 640px)').matches;
+    if (modalOpen && isMobile) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
