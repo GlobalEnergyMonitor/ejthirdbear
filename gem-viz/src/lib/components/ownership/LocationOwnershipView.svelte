@@ -9,7 +9,8 @@
    * LocationOwnershipGraphResponse from getLocationOwnershipGraph() as a prop.
    */
   import OwnershipTreeGraph from './OwnershipTreeGraph.svelte';
-  import type { LocationOwnershipGraphResponse } from '$lib/ownership-api';
+  import type { LocationOwnershipGraphResponse, LocationUnit } from '$lib/ownership-api';
+  import { fetchLocationUnits } from '$lib/ownership-api';
 
   interface Props {
     locationResponse: LocationOwnershipGraphResponse;
@@ -27,6 +28,7 @@
   }: Props = $props();
 
   let activeIndex = $state(0);
+  let unitsByAssetId = $state<Map<string, LocationUnit>>(new Map());
 
   const isMultiGraph = $derived(locationResponse.distinct_graphs > 1);
   const activeGraph = $derived(locationResponse.graphs[activeIndex] ?? locationResponse.graphs[0]);
@@ -34,10 +36,35 @@
   // OwnershipTreeGraph uses 'downstream' to mean the viewer is looking upstream (who owns this)
   const treeDirection = $derived(direction === 'up' ? 'downstream' : 'upstream');
 
-  // Reset active tab when location changes
+  /** Unit display name: strip project_name prefix from asset_name. */
+  function deriveUnitName(assetName: string, projectName: string): string {
+    if (assetName.startsWith(projectName)) {
+      const trimmed = assetName.slice(projectName.length).trim();
+      if (trimmed) return trimmed;
+    }
+    return assetName;
+  }
+
+  /** Unit chips for the currently active graph tab. */
+  const activeUnitNames = $derived(
+    activeGraph && unitsByAssetId.size > 0
+      ? activeGraph.asset_ids
+          .map((id) => unitsByAssetId.get(id))
+          .filter((u): u is LocationUnit => !!u)
+          .map((u) => deriveUnitName(u.asset_name, u.project_name))
+      : []
+  );
+
+  // Reset active tab when location changes, re-fetch units if multi-graph
   $effect(() => {
-    locationResponse; // track dependency
+    const resp = locationResponse; // track dependency
     activeIndex = 0;
+    unitsByAssetId = new Map();
+    if (resp.distinct_graphs > 1) {
+      fetchLocationUnits(resp.location_id).then((units) => {
+        unitsByAssetId = new Map(units.map((u) => [u.asset_id, u]));
+      });
+    }
   });
 </script>
 
@@ -48,7 +75,8 @@
         {locationResponse.distinct_graphs} distinct ownership structures across {locationResponse.unit_count} unit{locationResponse.unit_count !== 1 ? 's' : ''}
       </span>
       <div class="lov-tabs" role="tablist" aria-label="Ownership structures">
-        {#each locationResponse.graphs as _graph, i}
+        {#each locationResponse.graphs as graph, i}
+          {@const count = graph.asset_ids.length}
           <button
             class="lov-tab"
             class:active={activeIndex === i}
@@ -57,10 +85,17 @@
             tabindex={activeIndex === i ? 0 : -1}
             onclick={() => (activeIndex = i)}
           >
-            Structure {i + 1}
+            {count} {count === 1 ? 'unit' : 'units'}
           </button>
         {/each}
       </div>
+      {#if activeUnitNames.length > 0}
+        <div class="lov-unit-chips" aria-label="Units with this ownership structure">
+          {#each activeUnitNames as name}
+            <span class="lov-chip">{name}</span>
+          {/each}
+        </div>
+      {/if}
     </div>
   {:else if locationResponse.unit_count > 1}
     <div class="lov-shared-notice">
@@ -131,6 +166,22 @@
     background: var(--gem-navy, #1d4961);
     color: #fff;
     border-color: var(--gem-navy, #1d4961);
+  }
+
+  .lov-unit-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+  }
+
+  .lov-chip {
+    display: inline-block;
+    padding: 2px var(--space-2);
+    border-radius: 4px;
+    font-size: var(--font-size-xs);
+    background: var(--color-bg-secondary, #f3f4f6);
+    color: var(--color-text-secondary);
+    border: 1px solid var(--color-border);
   }
 
   .lov-shared-notice {

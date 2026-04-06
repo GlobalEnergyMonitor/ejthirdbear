@@ -209,6 +209,21 @@ export interface LocationGraph {
   nodes: GraphNode[];
   edges: OwnershipGraphResponse['edges'];
   paths?: OwnershipGraphResponse['paths'];
+  /** Asset IDs (unit-level) that share this ownership structure. */
+  asset_ids: string[];
+}
+
+/** A single unit returned by /locations/{id}. */
+export interface LocationUnit {
+  asset_id: string;
+  asset_name: string;
+  project_name: string;
+}
+
+/** Response from /locations/{id} — list of units at a location. */
+export interface LocationUnitsResponse {
+  location_id: string;
+  units: LocationUnit[];
 }
 
 /**
@@ -874,23 +889,39 @@ export async function getLocationOwnershipGraph(params: {
       nodes: Array<Record<string, unknown>>;
       edges: LocationGraph['edges'];
       paths?: LocationGraph['paths'];
+      asset_ids?: string[];
     }>;
   }>(
     `/ownership/graph${buildQuery({ root: params.root, direction: params.direction, max_depth: params.max_depth })}`
   );
+
+  const graphs = (raw.graphs || [])
+    .map((g) => ({
+      root: g.root as unknown as LocationGraphRoot,
+      nodes: normalizeGraphNodes(g.nodes || []),
+      edges: g.edges || [],
+      paths: g.paths,
+      asset_ids: g.asset_ids || [],
+    }))
+    .sort((a, b) => b.asset_ids.length - a.asset_ids.length);
 
   return {
     location_id: raw.location_id,
     project_name: raw.project_name,
     unit_count: raw.unit_count,
     distinct_graphs: raw.distinct_graphs,
-    graphs: (raw.graphs || []).map((g) => ({
-      root: g.root as unknown as LocationGraphRoot,
-      nodes: normalizeGraphNodes(g.nodes || []),
-      edges: g.edges || [],
-      paths: g.paths,
-    })),
+    graphs,
   };
+}
+
+/**
+ * Fetch all units at a location by location ID (L-prefix).
+ * Returns a list of units with asset_id, asset_name, and project_name.
+ */
+export async function fetchLocationUnits(locationId: string): Promise<LocationUnit[]> {
+  _currentReason = `fetchLocationUnits ${locationId}`;
+  const raw = await fetchAPI<{ units?: LocationUnit[] }>(`/locations/${encodeURIComponent(locationId)}`);
+  return raw.units || [];
 }
 
 // ============================================================================
