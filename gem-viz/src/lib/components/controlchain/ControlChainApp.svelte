@@ -10,10 +10,10 @@
    *                   (caller uses this to update URL params or hash)
    */
   import { onMount, untrack } from 'svelte';
-  import { listAssets, getAsset, getOwnershipGraph } from '$lib/ownership-api';
+  import { listAssets, getAsset, getLocationOwnershipGraph } from '$lib/ownership-api';
   import { readHashParam, writeHash } from '$lib/utils/hash-state';
   import AssetSearchBar from '$lib/components/search/AssetSearchBar.svelte';
-  import OwnershipTreeGraph from '$lib/components/ownership/OwnershipTreeGraph.svelte';
+  import LocationOwnershipView from '$lib/components/ownership/LocationOwnershipView.svelte';
   import StatusIcon from '$lib/components/tracker/StatusIcon.svelte';
   import { classifyOwnerType } from '$lib/components/ownership/ownership-tree-utils';
   import QuerySentenceBuilder from '$lib/components/filters/QuerySentenceBuilder.svelte';
@@ -43,13 +43,10 @@
   let hasSearched = $state(false);
 
   let selected = $state(null);
-  let treeNodes = $state([]);
-  let treeEdges = $state([]);
-  let treePaths = $state({});
-  let treeRootId = $state('');
+  /** Location-level graph response; null while loading or before any selection. */
+  let locationResponse = $state(/** @type {import('$lib/ownership-api').LocationOwnershipGraphResponse | null} */ (null));
   let loadingTree = $state(false);
   let treeError = $state('');
-  let treeDirection = $state('auto');
   let modalOpen = $state(false);
 
   // ── Filter state ──────────────────────────────────────────────────────────
@@ -99,22 +96,26 @@
   // Reset country search when picker closes
   $effect(() => { if (openPicker !== 'country') countrySearch = ''; });
 
-  // Mobile summary: data-driven sentences derived from tree data
+  // Mobile summary: data-driven sentences derived from the first graph's data
   const mobileSummary = $derived.by(() => {
-    if (treeNodes.length === 0 || !selected) return null;
+    if (!locationResponse || !selected) return null;
+    const firstGraph = locationResponse.graphs[0];
+    if (!firstGraph || firstGraph.nodes.length === 0) return null;
+
+    const treeNodes = firstGraph.nodes;
+    const treeEdges = firstGraph.edges;
+    const treeRootId = firstGraph.root.asset_id;
+
     const filtered = treeNodes.filter((n) => !PLACEHOLDER_ENTITY_IDS.has(n.entity_id || n.id));
     const entities = filtered.filter((n) => n.type !== 'asset' && n.id !== treeRootId);
     if (entities.length === 0) return null;
 
     const assetNode = filtered.find((n) => n.type === 'asset' || n.id === treeRootId);
-    const assetName = assetNode?.Name || assetNode?.name || selected.name || 'This asset';
-    const isDown = treeDirection !== 'upstream';
+    const assetName = assetNode?.Name || selected.name || 'This asset';
 
-    // Direct owners/subsidiaries
-    const directEdges = isDown
-      ? treeEdges.filter((e) => e.source === treeRootId)
-      : treeEdges.filter((e) => e.target === treeRootId);
-    const directIds = new Set(directEdges.map((e) => isDown ? e.target : e.source));
+    // Direct owners (ControlChain always fetches direction='up')
+    const directEdges = treeEdges.filter((e) => e.target === treeRootId);
+    const directIds = new Set(directEdges.map((e) => e.source));
     const directEntities = entities.filter((n) => directIds.has(n.id));
 
     // By type
@@ -137,8 +138,8 @@
     // Top owners by direct edge value
     const topOwners = directEntities
       .map((n) => {
-        const edge = directEdges.find((e) => (isDown ? e.target : e.source) === n.id);
-        return { name: n.name || n.Name || n.id, pct: edge?.value || 0 };
+        const edge = directEdges.find((e) => e.source === n.id);
+        return { name: n.Name || n.id, pct: edge?.value || 0 };
       })
       .sort((a, b) => b.pct - a.pct)
       .slice(0, 5);
@@ -146,10 +147,14 @@
     // Build sentences
     const lines = [];
     lines.push(
-      isDown
-        ? `${assetName} has ${directEntities.length} direct owner${directEntities.length !== 1 ? 's' : ''} and ${entities.length} entities in its ownership structure.`
-        : `${assetName} has ${directEntities.length} direct subsidiar${directEntities.length !== 1 ? 'ies' : 'y'} and ${entities.length} entities downstream.`
+      `${assetName} has ${directEntities.length} direct owner${directEntities.length !== 1 ? 's' : ''} and ${entities.length} entities in its ownership structure.`
     );
+
+    if (locationResponse.distinct_graphs > 1) {
+      lines.push(`This location has ${locationResponse.distinct_graphs} distinct ownership structures across ${locationResponse.unit_count} units.`);
+    } else if (locationResponse.unit_count > 1) {
+      lines.push(`All ${locationResponse.unit_count} units share identical ownership.`);
+    }
 
     if (topOwners.length > 0) {
       const ownerStr = topOwners
@@ -176,14 +181,15 @@
 
   let debounceTimer;
 
-  // Restore modal from hash deep-link (e.g. #asset=A12345)
+  // Restore modal from hash deep-link (e.g. #asset=L100000401789)
   onMount(async () => {
-    const assetId = readHashParam('asset');
-    if (assetId) {
+    const hashId = readHashParam('asset');
+    if (hashId) {
       try {
-        const asset = await getAsset(assetId);
+        const locationId = getLocationId(hashId);
+        const asset = await getAsset(locationId);
         if (asset) {
-          selectResult({ id: asset.id, name: asset.name, status: asset.status, country: asset.country, facilityType: asset.facilityType, capacity: asset.capacity });
+          selectResult({ id: locationId, name: asset.name, status: asset.status, country: asset.country, facilityType: asset.facilityType, capacity: asset.capacity });
         }
       } catch {
         // invalid deep-link, ignore
@@ -214,6 +220,17 @@
     }, 300);
   });
 
+  /**
+   * Extract the location-level ID (L-prefix) from a unit-level asset ID.
+   * e.g. "L100000401789_U100000140974" → "L100000401789"
+   *      "L100000104107_G100000102961" → "L100000104107"
+   *      "L100000401789"              → "L100000401789" (unchanged)
+   */
+  function getLocationId(assetId) {
+    const sep = assetId.indexOf('_');
+    return sep >= 0 ? assetId.slice(0, sep) : assetId;
+  }
+
   async function doSearch(q, type) {
     // Snapshot reactive arrays into plain arrays to avoid proxy issues in buildQuery
     const countries  = Array.from(filterCountries);
@@ -230,7 +247,11 @@
     searchError = '';
     hasSearched = true;
     try {
+      // Collect unit-level results from the API, then deduplicate at the location level.
+      // The graph endpoint works with L-prefix location IDs, so we strip the unit suffix.
       const merged = [];
+      const seenLocationIds = new Set();
+      const unitCounts = new Map(); // locationId → unit count seen in this search batch
       const typesToSearch    = types.length   > 0 ? types.map(l => ASSET_TYPE_SLUG[l]) : [undefined];
       const statusesToSearch = statuses.length > 0 ? statuses : [undefined];
       const countryParam = countries.length > 0 ? countries : undefined;
@@ -245,10 +266,14 @@
             country: countryParam,
           });
           for (const a of r.results) {
-            if (!merged.some(m => m.id === a.id)) {
+            const locationId = getLocationId(a.id);
+            // Count every unit hit, even duplicates, to build a unit count per location
+            unitCounts.set(locationId, (unitCounts.get(locationId) || 0) + 1);
+            if (!seenLocationIds.has(locationId)) {
+              seenLocationIds.add(locationId);
               merged.push({
-                id: a.id,
-                name: a.name,
+                id: locationId,
+                name: String(a.raw?.project_name || a.name),
                 kind: 'asset',
                 country: a.country,
                 status: a.status,
@@ -257,6 +282,10 @@
             }
           }
         }
+      }
+      // Attach unit counts (lower bound — capped by fetch limit)
+      for (const item of merged) {
+        item.unit_count = unitCounts.get(item.id) || 1;
       }
       results = merged.slice(0, 40);
     } catch (err) {
@@ -317,16 +346,14 @@
     hasSearched = false;
     selected = null;
     modalOpen = false;
-    treeNodes = [];
-    treeEdges = [];
+    locationResponse = null;
     onStateChange?.('', searchType);
   }
 
   function closeModal() {
     modalOpen = false;
     selected = null;
-    treeNodes = [];
-    treeEdges = [];
+    locationResponse = null;
     writeHash({ asset: null });
   }
 
@@ -336,17 +363,9 @@
     writeHash({ asset: item.id });
     loadingTree = true;
     treeError = '';
-    treeNodes = [];
-    treeEdges = [];
-    treePaths = {};
-    const direction = 'up';
-    treeDirection = direction;
+    locationResponse = null;
     try {
-      const graph = await getOwnershipGraph({ root: item.id, direction, max_depth: 5 });
-      treeNodes = graph.nodes || [];
-      treeEdges = graph.edges || [];
-      treePaths = graph.paths || {};
-      treeRootId = graph.root?.id || item.id;
+      locationResponse = await getLocationOwnershipGraph({ root: item.id, direction: 'up', max_depth: 5 });
     } catch (err) {
       treeError = err.message || 'Failed to load ownership tree';
     } finally {
@@ -508,6 +527,7 @@
                   {/if}
                   {#if item.asset_type}<span class="cc-result-type">{item.asset_type}</span>{/if}
                   {#if item.country}<span class="cc-result-country">{item.country}</span>{/if}
+                  {#if item.unit_count > 1}<span class="cc-result-units">{item.unit_count} units</span>{/if}
                 </span>
               </div>
               <svg class="cc-result-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -536,9 +556,7 @@
       <div class="cc-modal-header">
         <div>
           <h2>{selected.name}</h2>
-          <span class="cc-modal-sub"
-            >{treeDirection === 'up' ? 'WHO OWNS THIS?' : 'WHAT DOES THIS OWN?'}</span
-          >
+          <span class="cc-modal-sub">WHO OWNS THIS?</span>
         </div>
         <button class="cc-modal-close" onclick={closeModal} aria-label="Close">✕</button>
       </div>
@@ -551,17 +569,10 @@
           </div>
         {:else if treeError}
           <div class="cc-tree-error">{treeError}</div>
-        {:else if treeNodes.length > 0}
-          <!-- Desktop: full interactive graph -->
+        {:else if locationResponse}
+          <!-- Desktop: full interactive graph(s) -->
           <div class="cc-tree-wrap cc-desktop-only">
-            <OwnershipTreeGraph
-              nodes={treeNodes}
-              edges={treeEdges}
-              paths={treePaths}
-              rootId={treeRootId}
-              direction={treeDirection === 'up' ? 'downstream' : 'upstream'}
-              fullWidth={true}
-            />
+            <LocationOwnershipView {locationResponse} direction="up" fullWidth={true} />
           </div>
 
           <!-- Mobile: data-driven summary replacing the graph -->
@@ -601,7 +612,7 @@
             </div>
           {/if}
         {:else}
-          <div class="cc-tree-empty">No ownership data available for this {selected.kind}.</div>
+          <div class="cc-tree-empty">No ownership data available for this asset.</div>
         {/if}
       </div>
     </div>
@@ -869,6 +880,11 @@
   .cc-result-country {
     font-size: 11px;
     color: var(--color-text-tertiary);
+  }
+  .cc-result-units {
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+    font-style: italic;
   }
   .cc-result-arrow {
     color: var(--color-text-tertiary);
