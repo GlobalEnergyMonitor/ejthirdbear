@@ -7,6 +7,7 @@
   import { getAsset, resolveAssetId } from './widget-api';
   import ProjectCard from '$lib/components/cards/ProjectCard.svelte';
   import { errorMessage } from './widget-data';
+  import type { Asset } from '$lib/factsheet/types';
 
   interface Props {
     assetId: string;
@@ -19,7 +20,7 @@
 
   let loading = $state(true);
   let error = $state<string | null>(null);
-  let asset = $state<Record<string, any> | null>(null);
+  let asset = $state<Asset | null>(null);
 
   function toStr(v: unknown): string | undefined {
     return v != null ? String(v) : undefined;
@@ -61,7 +62,7 @@
         startYear: toNum(raw['Start year'] ?? raw['start_year']),
         technology: toStr(raw['Technology'] ?? raw['technology']),
         raw,
-      };
+      } as Asset;
     } catch (err) {
       error = errorMessage(err, 'Failed to load asset');
     } finally {
@@ -76,7 +77,7 @@
   {:else if error}
     <div class="embed-error"><p>{error}</p></div>
   {:else if asset}
-    <ProjectCard {asset} {showMap} {showOwnership} onNavigate={navigate} />
+    <ProjectCard {asset} />
   {:else}
     <div class="embed-error"><p>No data found</p></div>
   {/if}

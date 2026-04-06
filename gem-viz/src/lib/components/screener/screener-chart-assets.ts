@@ -181,7 +181,7 @@ export function drawAssetGroups(
     .each(function (locData) {
       const el = select(this);
       const unit = locData.units[0];
-      const name = cleanAssetName(unit.name);
+      const name = cleanAssetName(unit.name, unit.project_name);
 
       const type = unit.tracker.toLowerCase();
       let typeLabel = '';

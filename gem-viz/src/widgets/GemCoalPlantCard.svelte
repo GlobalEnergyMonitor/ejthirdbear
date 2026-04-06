@@ -75,7 +75,7 @@
       <p>{error}</p>
     </div>
   {:else if units.length > 0}
-    <CoalPlantCard units={units} open={true} initialTab={tab} ownershipLoader={getOwnershipGraph} />
+    <CoalPlantCard units={units} open={true} {tab} ownershipLoader={getOwnershipGraph} />
   {:else}
     <div class="embed-error">
       <p>No coal plant data available.</p>

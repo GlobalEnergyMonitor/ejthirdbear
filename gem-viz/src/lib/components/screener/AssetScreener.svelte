@@ -651,7 +651,7 @@
 
                   <!-- Asset label -->
                   <text x={params.assetMarkHeightCombined + 5} y="5" class="asset-name">
-                    {includeUnitNames ? loc.units[0].name : cleanAssetName(loc.units[0].name)}
+                    {includeUnitNames ? loc.units[0].name : cleanAssetName(loc.units[0].name, loc.units[0].project_name)}
                   </text>
                 </g>
               {/each}

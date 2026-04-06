@@ -4,10 +4,11 @@
  */
 
 /**
- * Remove trailing facility-type suffixes from an asset name.
- * E.g. "Bayswater Power Station Unit 1" → "Bayswater Power Station"
+ * Clean an asset name for display. Prefers project_name from API when available,
+ * otherwise falls back to trimming facility-type suffixes from asset_name.
  */
-export function cleanAssetName(name: string): string {
+export function cleanAssetName(name: string, projectName?: string): string {
+  if (projectName) return projectName;
   if (!name) return '';
   return name.replace(/\b(plant|station|project|center|centre|complex|facility)\b[\s\S]*$/i, '$1');
 }

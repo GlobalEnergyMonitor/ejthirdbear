@@ -639,7 +639,7 @@
         selectedOwnerIds.slice(0, 20).map(async (id) => {
           try {
             const entity = await getEntity(id);
-            return { entityId: id, name: entity?.name || entity?.full_name || id };
+            return { entityId: id, name: entity?.name || entity?.fullName || id };
           } catch {
             return { entityId: id, name: id };
           }

@@ -70,7 +70,7 @@
   <AssetSearchBar
     bind:value={query}
     bind:activeMode
-    {searchModes}
+    modes={searchModes}
     {showButton}
     onSearch={handleSearch}
   />

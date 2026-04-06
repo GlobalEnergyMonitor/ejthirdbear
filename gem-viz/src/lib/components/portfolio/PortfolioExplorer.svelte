@@ -8,11 +8,12 @@
    * Accepts entityId/hidePicker as props (used by both route page and widget).
    * Ported from Observable notebook: https://observablehq.com/d/5a1f34aee34fe4cf
    */
-  import { entityLink } from '$lib/links';
   import * as d3 from 'd3-selection';
   import * as d3Array from 'd3-array';
   import * as d3Hierarchy from 'd3-hierarchy';
   import * as d3Shape from 'd3-shape';
+  import { scaleOrdinal } from 'd3-scale';
+  import { schemeTableau10, schemePaired, schemeSet3 } from 'd3-scale-chromatic';
   import { transition } from 'd3-transition'; // side-effect import for selection.transition()
   import {
     colors,
@@ -27,8 +28,13 @@
   // PROPS
   // ============================================================================
   let {
-    entityId: initialEntityId = '',
-    hidePicker: initialHidePicker = false,
+    entityId = '',
+    hidePicker = false,
+    onStateChange = undefined,
+    /** Pixels to subtract from viewport height for chart area.
+     *  Default 320 accounts for navbar + header + footer.
+     *  Embeds/widgets with no navbar can pass a smaller value (e.g. 120). */
+    heightOffset = 320,
   } = $props();
 
   // ============================================================================
@@ -53,10 +59,11 @@
   // ============================================================================
   // STATE
   // ============================================================================
-  let selectedEntityId = $state(initialEntityId || SAMPLE_OWNERS[0][1]);
+  let selectedEntityId = $state(entityId || SAMPLE_OWNERS[0][1]);
   let customEntityId = $state('');
-  let hidePicker = $state(initialHidePicker);
   let loading = $state(false);
+  /** Guard: only fire onStateChange after the first user-driven interaction */
+  let userHasInteracted = $state(false);
   let error = $state('');
 
   /** Raw API response */
@@ -77,11 +84,21 @@
    * Each column stores a Set of selected values. Empty set = no filter for that column.
    * Intermediary stores { values: Set<name>, projectIds: Map<name, Set<projectId>> }
    */
+  /** Ownership share filter thresholds */
+  const OWNERSHIP_BUCKETS = [
+    { label: '50%+', min: 50, max: Infinity },
+    { label: '20–50%', min: 20, max: 50 },
+    { label: '5–20%', min: 5, max: 20 },
+    { label: '<5%', min: 0, max: 5 },
+    { label: 'Unknown', min: -1, max: -1 },
+  ];
+
   let filters = $state({
     country: new Set(),
     asset_type: new Set(),
     operating_status: new Set(),
     intermediary: new Set(),
+    ownership: new Set(),
   });
   /** Intermediary name → projectIds lookup (populated when intermediaries are clicked) */
   let intermediaryProjectIds = $state(new Map());
@@ -91,21 +108,33 @@
     filters.country.size > 0 ||
     filters.asset_type.size > 0 ||
     filters.operating_status.size > 0 ||
-    filters.intermediary.size > 0
+    filters.intermediary.size > 0 ||
+    filters.ownership.size > 0
   );
+
+  /** Get ownership bucket label for an asset */
+  function getOwnershipBucket(asset) {
+    const s = asset.ownership_share;
+    if (s == null || s === 0) return 'Unknown';
+    for (const b of OWNERSHIP_BUCKETS) {
+      if (b.min === -1) continue;
+      if (s >= b.min && s < b.max) return b.label;
+    }
+    return 'Unknown';
+  }
 
   /** Apply all active filters (OR within column, AND across columns) */
   let filteredResult = $derived.by(() => {
     if (!isFiltered || !apiData) return null;
     let assets = apiData.assets;
     if (filters.country.size > 0) {
-      assets = assets.filter((a) => filters.country.has(a.country));
+      assets = assets.filter((a) => filters.country.has(a.country || 'Unknown'));
     }
     if (filters.asset_type.size > 0) {
-      assets = assets.filter((a) => filters.asset_type.has(a.asset_type));
+      assets = assets.filter((a) => filters.asset_type.has(a.asset_type || 'Unknown'));
     }
     if (filters.operating_status.size > 0) {
-      assets = assets.filter((a) => filters.operating_status.has(a.operating_status));
+      assets = assets.filter((a) => filters.operating_status.has(a.operating_status || 'Unknown'));
     }
     if (filters.intermediary.size > 0) {
       // Union all projectIds from selected intermediaries
@@ -115,6 +144,9 @@
         if (pids) for (const p of pids) allPids.add(p);
       }
       assets = assets.filter((a) => allPids.has(a.location_id || a.unit_id || a.asset_id));
+    }
+    if (filters.ownership.size > 0) {
+      assets = assets.filter((a) => filters.ownership.has(getOwnershipBucket(a)));
     }
     return {
       data: { ...apiData, assets },
@@ -128,14 +160,39 @@
   let displaySummary = $derived(filteredResult ? filteredResult.summary : summary);
   let displayProjectGroups = $derived(filteredResult ? filteredResult.groups : projectGroups);
 
-  /** Color field: 'type' when multi-type, 'status' when single type */
-  let colorField = $derived(
-    summary && summary.byType.size > 1 ? 'type' : 'status'
-  );
+  /** Color field: user-toggleable, defaults to 'type' when multi-type */
+  const ALL_COLOR_FIELDS = ['type', 'status', 'country'];
+  let colorFieldOverride = $state('');
+  /** Only show options that have >1 distinct value (coloring by a single value is useless) */
+  let availableColorFields = $derived.by(() => {
+    if (!summary) return ALL_COLOR_FIELDS;
+    return ALL_COLOR_FIELDS.filter((f) => {
+      if (f === 'type') return summary.byType.size > 1;
+      if (f === 'status') return summary.byStatus.size > 1;
+      if (f === 'country') return summary.byCountry.size > 1;
+      return true;
+    });
+  });
+  let colorField = $derived.by(() => {
+    // If user override is still valid, use it
+    if (colorFieldOverride && availableColorFields.includes(colorFieldOverride)) return colorFieldOverride;
+    // Auto-select first available, prefer type > status > country
+    if (availableColorFields.length > 0) return availableColorFields[0];
+    return 'type';
+  });
 
-  /** Tree SVG params — squished tight to maximize density */
+  /** Extended palette for country colors — combines Tableau10 + Paired12 + Set3 for 30+ unique colors */
+  const EXTENDED_PALETTE = [...new Set([...schemeTableau10, ...schemePaired, ...schemeSet3])];
+
+  /** Country color scale — ordinal, built from data */
+  let countryColorScale = $derived.by(() => {
+    if (!summary) return scaleOrdinal(EXTENDED_PALETTE);
+    return scaleOrdinal(EXTENDED_PALETTE).domain([...summary.byCountry.keys()]);
+  });
+
+  /** Tree SVG params */
   const treeParams = {
-    rowHeight: 18,
+    rowHeight: 28,
     siblingSeparation: 1.0,
     cousinSeparation: 1.4,
     nodeRadius: 5,
@@ -145,7 +202,7 @@
   let containerHeight = $state(500);
 
   /** How many asset rows fit in one column (notebook: nRows = svgHeight / assetMarkHeightCombined) */
-  const ASSET_MARK_H = 26;
+  const ASSET_MARK_H = 40;
   let nRowsFit = $derived(Math.max(4, Math.floor(Math.max(300, containerHeight - 80) / ASSET_MARK_H)));
 
   /** Show tree only when all projects fit in a single column (notebook: projectGroups.length <= nRows) */
@@ -161,22 +218,31 @@
   /** Stored d3 tree root — needed for asset→tree cross-highlighting */
   let treeRoot = $state(null);
 
+  /** AbortController for in-flight fetch — prevents stale data on rapid entity switching */
+  let fetchController = null;
+
   // ============================================================================
   // DATA FETCHING
   // ============================================================================
   async function fetchData(entityId) {
+    // Cancel any in-flight fetch
+    if (fetchController) fetchController.abort();
+    fetchController = new AbortController();
+    const signal = fetchController.signal;
+
     loading = true;
     error = '';
     apiData = null;
     summary = null;
     projectGroups = [];
     intermediaries = [];
-    filters = { country: new Set(), asset_type: new Set(), operating_status: new Set(), intermediary: new Set() };
+    intermediaryProjectIds = new Map();
+    filters = { country: new Set(), asset_type: new Set(), operating_status: new Set(), intermediary: new Set(), ownership: new Set() };
 
     try {
       const resp = await fetch(
         `${API_BASE}/ownership/graph?root=${encodeURIComponent(entityId)}&direction=down&max_depth=5&format=json`,
-        { signal: AbortSignal.timeout(30_000) }
+        { signal }
       );
       if (!resp.ok) throw new Error(`API error: ${resp.status}`);
       const data = await resp.json();
@@ -213,9 +279,10 @@
       projectGroups = groups;
       intermediaries = interData;
     } catch (err) {
+      if (err.name === 'AbortError') return; // superseded by newer fetch
       error = err.message || 'Failed to fetch data';
     } finally {
-      loading = false;
+      if (!signal.aborted) loading = false;
     }
   }
 
@@ -253,7 +320,11 @@
       'assetCount',
       d3Array.rollup(assets, getStats, (d) => d.operating_status || 'Unknown')
     );
-    return { total, byCountry, byType, byStatus };
+    const byOwnership = sortMap(
+      'assetCount',
+      d3Array.rollup(assets, getStats, (d) => getOwnershipBucket(d))
+    );
+    return { total, byCountry, byType, byStatus, byOwnership };
   }
 
   // ============================================================================
@@ -303,7 +374,10 @@
     );
     const paths = [];
     const pathStrings = [];
+    const visited = new Set();
     function dfs(nodeId, path) {
+      if (visited.has(nodeId)) return; // cycle detection
+      visited.add(nodeId);
       const children = childrenOf.get(nodeId) || [];
       if (children.length === 0) {
         // Leaf — resolve to project ID. Skip dead-end entities.
@@ -314,6 +388,7 @@
           pathStrings.push(fullPath.join('/'));
         }
         // else: dead-end entity — intentionally dropped
+        visited.delete(nodeId);
         return;
       }
       for (const child of children) {
@@ -327,6 +402,7 @@
           dfs(child, [...path, child]);
         }
       }
+      visited.delete(nodeId);
     }
     dfs(rootEntityId, [rootEntityId]);
 
@@ -363,6 +439,7 @@
   // ============================================================================
   function applyFilter(field, value, projectIdSet) {
     if (!apiData) return;
+    userHasInteracted = true;
     const next = new Set(filters[field]);
     if (next.has(value)) {
       next.delete(value); // toggle off
@@ -384,6 +461,7 @@
       asset_type: new Set(),
       operating_status: new Set(),
       intermediary: new Set(),
+      ownership: new Set(),
     };
   }
 
@@ -422,7 +500,7 @@
       return;
     }
     const svg = d3.select(treeSvgEl);
-    svg.selectAll('*').remove();
+    svg.selectAll('*').interrupt().remove();
 
     // Build filtered graph for current project groups
     const currentGroups = displayProjectGroups;
@@ -489,7 +567,7 @@
       d.entityName = entity ? entity.name || entity.full_name : d.data.name;
       // Real ownership percentage from API edge
       const edge = edgeLookup.get(d.data.name);
-      d.ownershipPct = edge && typeof edge.value === 'number' ? edge.value / 100 : 1;
+      d.ownershipPct = edge && typeof edge.value === 'number' ? Math.max(0, Math.min(1, edge.value / 100)) : 1;
     });
 
     // Links
@@ -655,15 +733,15 @@
   function drawAssets() {
     if (!assetsSvgEl || !displayData) return;
     const svg = d3.select(assetsSvgEl);
-    svg.selectAll('*').remove();
+    svg.selectAll('*').interrupt().remove();
 
     const groups = displayProjectGroups;
     if (groups.length === 0) return;
 
-    const unitR = 6;
-    const labelX = 28;
-    const assetMarkH = 26; // combined mark height (notebook: assetMarkHeightCombined)
-    const assetMarkSingle = 16;
+    const unitR = 10;
+    const labelX = 36;
+    const assetMarkH = 40; // combined mark height — gives multi-unit flowers room
+    const assetMarkSingle = 24;
 
     // --- Grid layout (port of notebook's gridInfo + nRows) ---
     // svgHeight drives how many rows fit in one column
@@ -791,20 +869,28 @@
           }
         });
 
-      // Unit circles
+      // Unit circles — scale cluster radius so units don't overlap, capped to row height
       const N = proj.units.length;
       const TAU = Math.PI * 2;
-      const clusterR = N === 1 ? 0 : Math.min(unitR * 0.8, 6);
+      const maxClusterDiameter = assetMarkH - 4; // stay within row bounds
+      // Shrink individual circles as N grows
+      const individualR = N === 1 ? unitR : Math.max(2, Math.min(unitR * 0.6, maxClusterDiameter / (2 + N * 0.3)));
+      // For N units on a circle, minimum radius to avoid overlap: R >= N * r / π
+      const idealClusterR = N <= 1 ? 0 : (N * individualR) / Math.PI;
+      // Cap so total cluster diameter doesn't overflow the row
+      const clusterR = N === 1 ? 0 : Math.min(idealClusterR, (maxClusterDiameter / 2) - individualR);
 
       proj.units.forEach((unit, j) => {
         const cx = N === 1 ? unitR : unitR + clusterR * Math.cos((TAU * j) / N);
         const cy = N === 1 ? 0 : clusterR * Math.sin((TAU * j) / N);
-        const circleR = N === 1 ? unitR : unitR * 0.6;
+        const circleR = individualR;
 
         const unitColor =
           colorField === 'type'
             ? trackerColorMap.get(unit.asset_type) || colors.grey
-            : COLOR_BY_STATUS.get(unit.operating_status?.toLowerCase()) || colors.grey;
+            : colorField === 'status'
+            ? COLOR_BY_STATUS.get(unit.operating_status?.toLowerCase()) || colors.grey
+            : countryColorScale(unit.country || 'Unknown');
 
         row
           .append('circle')
@@ -837,20 +923,15 @@
           .append('circle')
           .attr('cx', unitR)
           .attr('cy', 0)
-          .attr('r', clusterR + unitR * 0.6 + 1)
+          .attr('r', clusterR + individualR + 1)
           .style('fill', 'none')
           .style('stroke', colors.gray300)
           .style('stroke-width', 1)
           .style('pointer-events', 'none');
       }
 
-      // Asset name label
-      let name = proj.units[0]?.asset_name || proj.projectID;
-      // Trim after key words like the notebook does
-      name = name.replace(
-        /\b(plant|station|project|center|centre|complex|facility)\b[\s\S]*$/i,
-        '$1'
-      );
+      // Asset name label — prefer project_name from API, fall back to asset_name
+      let name = proj.units[0]?.project_name || proj.units[0]?.asset_name || proj.projectID;
 
       const labelG = row.append('g').attr('transform', `translate(${labelX}, 0)`).style('pointer-events', 'none');
 
@@ -912,27 +993,58 @@
   // ============================================================================
   // REACTIVITY
   // ============================================================================
+  // Sync prop → local state when parent changes entityId
+  $effect(() => {
+    if (entityId) {
+      selectedEntityId = entityId;
+      // If a prop was provided (e.g. from URL), treat as intentional — enable URL sync
+      userHasInteracted = true;
+    }
+  });
+
   $effect(() => {
     if (selectedEntityId) {
       fetchData(selectedEntityId);
     }
   });
 
-  // Measure available height dynamically
+  // Notify parent of state changes for URL sync (skip initial mount to avoid
+  // injecting the default sample entity into the URL on page load)
   $effect(() => {
-    if (!chartContainer) return;
-    const ro = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        containerHeight = entry.contentRect.height || 500;
-      }
+    if (!onStateChange || !userHasInteracted) return;
+    onStateChange({
+      entity: selectedEntityId,
+      color: colorFieldOverride || undefined,
+      filters: Object.fromEntries(
+        Object.entries(filters)
+          .filter(([, v]) => v.size > 0)
+          .map(([k, v]) => [k, [...v].join(',')])
+      ),
     });
-    ro.observe(chartContainer);
-    return () => ro.disconnect();
+  });
+
+  // Derive available chart height from viewport — observing the chart-row itself
+  // creates a feedback loop (fewer items → shorter SVG → shorter container → redraw shorter).
+  // Using viewport height with a fixed offset for chrome is stable and non-circular.
+  $effect(() => {
+    if (typeof window === 'undefined') return;
+    const update = () => {
+      containerHeight = Math.max(300, window.innerHeight - heightOffset);
+    };
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
   });
 
   $effect(() => {
-    // Redraw when data or filter changes
-    if (displayData && displayProjectGroups.length > 0) {
+    // Redraw when data, filter, color, or container size changes.
+    // Read all reactive dependencies explicitly so the effect re-fires correctly.
+    const _data = displayData;
+    const _groups = displayProjectGroups;
+    const _color = colorField;
+    const _height = containerHeight;
+    const _showTree = showTree;
+    if (_data && _groups.length > 0) {
       // Use microtask to ensure DOM is ready
       queueMicrotask(() => {
         drawTree();
@@ -941,13 +1053,15 @@
     }
   });
 
-  function handleSelectEntity(entityId) {
-    selectedEntityId = entityId;
+  function handleSelectEntity(id) {
+    userHasInteracted = true;
+    selectedEntityId = id;
     customEntityId = '';
   }
 
   function handleCustomEntity() {
     if (customEntityId.trim()) {
+      userHasInteracted = true;
       selectedEntityId = customEntityId.trim();
     }
   }
@@ -1002,24 +1116,45 @@
 
     <!-- MAIN CHART AREA -->
     <div class="chart-row" bind:this={chartContainer}>
-      {#if showTree}
-        <div class="tree-container">
-          <svg bind:this={treeSvgEl}></svg>
+      {#if isFiltered && displayProjectGroups.length === 0}
+        <div class="empty-state">
+          <p>No assets match current filters.</p>
+          <button class="clear-btn" onclick={clearFilter}>Clear filters</button>
+        </div>
+      {:else}
+        {#if showTree}
+          <div class="tree-container">
+            <svg bind:this={treeSvgEl}></svg>
+          </div>
+        {/if}
+        <div class="assets-container" class:full-width={!showTree}>
+          <svg bind:this={assetsSvgEl}></svg>
         </div>
       {/if}
-      <div class="assets-container" class:full-width={!showTree}>
-        <svg bind:this={assetsSvgEl}></svg>
-      </div>
     </div>
 
     <!-- FILTER FOOTER — cross-column additive (AND), same-column click toggles -->
     <div class="chart-footer">
-      {#if isFiltered}
-        {@const activeLabels = Object.values(filters).flatMap((s) => [...s])}
-        <button class="clear-filter-inline" class:many={activeLabels.length > 3} onclick={clearFilter}>
-          Clear: {activeLabels.join(' + ')}
-        </button>
-      {/if}
+      <div class="footer-toolbar">
+        {#if isFiltered}
+          {@const activeLabels = Object.values(filters).flatMap((s) => [...s])}
+          <button class="clear-filter-inline" class:many={activeLabels.length > 3} onclick={clearFilter}>
+            Clear: {activeLabels.join(' + ')}
+          </button>
+        {/if}
+        {#if availableColorFields.length > 1}
+        <div class="color-toggle">
+          <span class="color-toggle-label">Color by:</span>
+          {#each availableColorFields as opt}
+            <button
+              class="color-toggle-btn"
+              class:active={colorField === opt}
+              onclick={() => { userHasInteracted = true; colorFieldOverride = opt; }}
+            >{opt}</button>
+          {/each}
+        </div>
+        {/if}
+      </div>
       <div class="footer-columns">
       <div class="summary-section">
         <p class="subtitle">By Location</p>
@@ -1038,6 +1173,9 @@
               onclick={() => applyFilter('country', country)}
               onkeydown={(e) => e.key === 'Enter' && applyFilter('country', country)}
             >
+              {#if colorField === 'country'}
+                <span class="legend-dot" style="background: {countryColorScale(country)}"></span>
+              {/if}
               {country} ({isFiltered ? (filteredCount ?? 0) : data.assetCount})
             </div>
           {/each}
@@ -1094,6 +1232,35 @@
         </div>
       </div>
 
+      {#if summary.byOwnership && summary.byOwnership.size > 1}
+      <div class="summary-section">
+        <p class="subtitle">Ownership Share</p>
+        <div class="summary-table">
+          {#each OWNERSHIP_BUCKETS as bucket}
+            {@const data = summary.byOwnership?.get(bucket.label)}
+            {#if data}
+              {@const isActive = filters.ownership.has(bucket.label)}
+              {@const filteredCount = displaySummary?.byOwnership?.get(bucket.label)?.assetCount}
+              {@const hasResults = !isFiltered || filteredCount != null}
+              <div
+                class="summary-row"
+                class:active={isActive}
+                class:dimmed={isFiltered && !isActive && hasResults}
+                class:faded={isFiltered && !isActive && !hasResults}
+                role="button"
+                tabindex="0"
+                onclick={() => applyFilter('ownership', bucket.label)}
+                onkeydown={(e) => e.key === 'Enter' && applyFilter('ownership', bucket.label)}
+              >
+                {bucket.label} ({isFiltered ? (filteredCount ?? 0) : data.assetCount})
+              </div>
+            {/if}
+          {/each}
+        </div>
+      </div>
+      {/if}
+
+      {#if intermediaries.length > 0}
       <div class="summary-section">
         <p class="subtitle">Intermediaries</p>
         <div class="summary-table">
@@ -1113,6 +1280,7 @@
           {/each}
         </div>
       </div>
+      {/if}
       </div>
     </div>
   {/if}
@@ -1324,6 +1492,33 @@
     opacity: 0.2;
   }
 
+  /* ---- Empty state ---- */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 200px;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    gap: var(--space-3);
+  }
+  .empty-state p { margin: 0; }
+  .clear-btn {
+    padding: var(--space-1) var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-bg-secondary);
+    color: var(--color-text-primary);
+    font-size: var(--font-size-xs);
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .clear-btn:hover {
+    background: var(--color-bg-tertiary);
+  }
+
   /* ---- Utils ---- */
   .loading {
     padding: var(--space-10);
@@ -1340,14 +1535,23 @@
   .footer-columns {
     display: flex;
     align-items: start;
-    gap: var(--space-10, 40px);
+    gap: var(--space-6, 24px);
     width: 100%;
+    flex-wrap: wrap;
+  }
+  .footer-columns > .summary-section {
+    min-width: 120px;
+    flex: 1;
+  }
+  .footer-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-2);
+    flex-wrap: wrap;
   }
   .clear-filter-inline {
-    display: block;
-    width: 100%;
     padding: var(--space-1) var(--space-3);
-    margin-bottom: var(--space-2);
     border: 1px solid rgba(157, 247, 229, 0.4);
     border-radius: var(--radius-sm);
     background: rgba(255, 255, 255, 0.08);
@@ -1364,5 +1568,85 @@
   }
   .clear-filter-inline:hover {
     background: rgba(255, 255, 255, 0.15);
+  }
+  .color-toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    margin-left: auto;
+  }
+  .color-toggle-label {
+    font-size: var(--font-size-xs);
+    color: rgba(255, 255, 255, 0.6);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .color-toggle-btn {
+    padding: 2px 8px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: var(--font-size-xs);
+    font-family: inherit;
+    cursor: pointer;
+    text-transform: capitalize;
+    transition: all var(--duration-fast) ease;
+  }
+  .color-toggle-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+  .color-toggle-btn.active {
+    background: rgba(157, 247, 229, 0.2);
+    border-color: var(--gem-mint, #9df7e5);
+    color: var(--gem-mint, #9df7e5);
+    font-weight: var(--font-weight-bold);
+  }
+
+  /* ---- Mobile ---- */
+  @media (max-width: 768px) {
+    .portfolio-explorer {
+      padding: var(--space-2);
+    }
+    .selector-bar {
+      flex-direction: column;
+      gap: var(--space-2);
+    }
+    .selector-chips {
+      flex-wrap: wrap;
+    }
+    .chart-header {
+      flex-direction: column;
+      gap: var(--space-2);
+      padding: var(--space-2) var(--space-3);
+    }
+    .chart-header .name-wrapper {
+      max-width: none;
+    }
+    .chart-row {
+      max-height: none;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .tree-container {
+      display: none;
+    }
+    .footer-columns {
+      flex-direction: column;
+      gap: var(--space-4);
+    }
+    .chart-footer {
+      padding: var(--space-2) var(--space-3);
+    }
+    .summary-table {
+      max-height: 120px;
+    }
+    .footer-toolbar {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .color-toggle {
+      margin-left: 0;
+    }
   }
 </style>

@@ -21,7 +21,7 @@
   }: {
     units: CoalPlantUnit[];
     open?: boolean;
-    initialTab?: string;
+    tab?: string;
     ownershipLoader?: (_params: {
       root: string;
       direction: 'up' | 'down';
@@ -479,9 +479,10 @@
     'Additional Details',
   ] as const;
   type TabName = (typeof TABS)[number];
-  let activeTab = $state<TabName>(
-    initialTab && TABS.includes(initialTab as TabName) ? (initialTab as TabName) : 'Overview'
-  );
+  function resolveTab(t: string): TabName {
+    return t && TABS.includes(t as TabName) ? (t as TabName) : 'Overview';
+  }
+  let activeTab = $state<TabName>(resolveTab(tab));
   let ownershipActivated = $state(false);
 
   $effect(() => {
