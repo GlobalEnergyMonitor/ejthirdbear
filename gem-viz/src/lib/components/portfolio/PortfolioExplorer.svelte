@@ -749,8 +749,9 @@
     const nRows = Math.max(4, Math.floor(svgH / assetMarkH));
     const nProjects = groups.length;
     const colsNeeded = Math.ceil(nProjects / nRows);
-    const minColWidth = 300;
-    const colWidth = Math.max(minColWidth, assetMarkH * 12);
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+    const minColWidth = isMobile ? 200 : 300;
+    const colWidth = Math.max(minColWidth, assetMarkH * (isMobile ? 8 : 12));
     const svgWidthNeeded = colsNeeded * colWidth;
 
     // Single column = show tree + align to leaf positions
@@ -1067,7 +1068,7 @@
   }
 </script>
 
-<div class="portfolio-explorer">
+<div class="portfolio-explorer" class:embed-mode={heightOffset < 200} style:--chart-max-height={heightOffset < 200 ? 'none' : `calc(100vh - 260px)`}>
   <!-- ENTITY SELECTOR -->
   {#if !hidePicker}
   <div class="selector-bar">
@@ -1413,7 +1414,7 @@
     display: flex;
     overflow: auto;
     min-height: 200px;
-    max-height: calc(100vh - 260px);
+    max-height: var(--chart-max-height, calc(100vh - 260px));
   }
   .tree-container {
     flex-shrink: 0;
@@ -1603,6 +1604,52 @@
     font-weight: var(--font-weight-bold);
   }
 
+  /* ---- Print ---- */
+  @media print {
+    .portfolio-explorer {
+      padding: 0;
+    }
+    .selector-bar {
+      display: none;
+    }
+    .chart-row {
+      max-height: none;
+      overflow: visible;
+    }
+    .tree-container svg,
+    .assets-container svg {
+      overflow: visible;
+    }
+    .chart-header {
+      break-after: avoid;
+    }
+    .chart-footer {
+      break-inside: avoid;
+      background: #1d4961;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .summary-table {
+      max-height: none;
+      overflow: visible;
+    }
+    .summary-row {
+      cursor: default;
+    }
+    .summary-row:hover {
+      background: none;
+    }
+    .footer-toolbar .clear-filter-inline {
+      display: none;
+    }
+    .color-toggle {
+      display: none;
+    }
+    .empty-state .clear-btn {
+      display: none;
+    }
+  }
+
   /* ---- Mobile ---- */
   @media (max-width: 768px) {
     .portfolio-explorer {
@@ -1611,9 +1658,17 @@
     .selector-bar {
       flex-direction: column;
       gap: var(--space-2);
+      align-items: stretch;
     }
     .selector-chips {
       flex-wrap: wrap;
+    }
+    .custom-input {
+      margin-left: 0;
+    }
+    .custom-input input {
+      width: 100%;
+      min-width: 0;
     }
     .chart-header {
       flex-direction: column;
@@ -1624,7 +1679,8 @@
       max-width: none;
     }
     .chart-row {
-      max-height: none;
+      max-height: 60vh;
+      min-height: 200px;
       overflow-x: auto;
       -webkit-overflow-scrolling: touch;
     }
@@ -1638,8 +1694,15 @@
     .chart-footer {
       padding: var(--space-2) var(--space-3);
     }
+    .summary-section {
+      min-width: 0;
+      width: 100%;
+    }
     .summary-table {
       max-height: 120px;
+    }
+    .summary-row {
+      font-size: var(--font-size-xs);
     }
     .footer-toolbar {
       flex-direction: column;

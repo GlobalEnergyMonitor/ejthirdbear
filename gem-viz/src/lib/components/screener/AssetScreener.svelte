@@ -448,7 +448,44 @@
       {/each}
     </div>
 
-    <!-- Main SVG -->
+    <!-- Mobile fallback: card-based list for small screens -->
+    <div class="mobile-fallback">
+      {#each subsidiaryGroups as group}
+        {@const entity = entityMap.get(group.id)}
+        {@const edge = matchedEdges.get(group.id)}
+        <details class="mobile-group" open={subsidiaryGroups.length <= 5}>
+          <summary class="mobile-group-header">
+            <span class="mobile-group-name">{group.isDirect ? 'Directly owned' : (entity?.Name || group.id)}</span>
+            {#if edge?.value}
+              <span class="mobile-group-pct">{edge.value.toFixed(1)}%</span>
+            {/if}
+            <span class="mobile-group-count">{group.locations.length} assets</span>
+          </summary>
+          <div class="mobile-group-assets">
+            {#each group.locations as loc}
+              {@const unit = loc.units[0]}
+              {@const status = regroupStatus(unit.status || unit.Status)}
+              <a
+                href={assetLink(unit)}
+                class="mobile-asset-row"
+              >
+                <span
+                  class="mobile-asset-dot"
+                  style:background-color={colorByTracker.get(unit.tracker) || colors.grey}
+                ></span>
+                <span class="mobile-asset-name">{cleanAssetName(unit.name, unit.project_name)}</span>
+                {#if loc.units.length > 1}
+                  <span class="mobile-unit-count">{loc.units.length} units</span>
+                {/if}
+                <span class="mobile-asset-status" class:operating={status === 'operating'} class:planned={status === 'planned'} class:retired={status === 'retired'} class:cancelled={status === 'cancelled'}>{status}</span>
+              </a>
+            {/each}
+          </div>
+        </details>
+      {/each}
+    </div>
+
+    <!-- Main SVG (desktop) -->
     <div class="chart-wrapper">
       <svg width={svgWidth} height={svgHeight + margin.top + margin.bottom}>
         <defs>
@@ -1107,4 +1144,157 @@
     font-size: var(--font-size-xs);
     text-transform: uppercase;
   }
+
+  /* --- Print --- */
+  @media print {
+    .chart-wrapper {
+      display: block;
+      overflow: visible;
+    }
+    .chart-wrapper svg {
+      width: 100%;
+      height: auto;
+    }
+    .mobile-fallback {
+      display: none;
+    }
+    .status-filter {
+      display: none;
+    }
+    .tooltip {
+      display: none;
+    }
+    .legend-container {
+      break-inside: avoid;
+    }
+    .chart-header {
+      break-after: avoid;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+  }
+
+  /* --- Mobile Fallback --- */
+  .mobile-fallback {
+    display: none;
+  }
+
+  @media (max-width: 768px) {
+    .mobile-fallback {
+      display: block;
+    }
+    .chart-wrapper {
+      display: none;
+    }
+    .legend-container {
+      display: none;
+    }
+    .chart-header {
+      flex-direction: column;
+      gap: var(--space-2);
+    }
+    .name-wrapper {
+      min-width: 0;
+    }
+    .status-filter {
+      flex-wrap: wrap;
+    }
+  }
+
+  .mobile-group {
+    border: 1px solid var(--color-border, #e2e8f0);
+    border-radius: var(--radius-md, 6px);
+    margin-bottom: var(--space-2);
+    overflow: hidden;
+  }
+  .mobile-group-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    background: var(--color-bg-secondary, #f7fafc);
+    cursor: pointer;
+    font-family: var(--font-family);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    list-style: none;
+  }
+  .mobile-group-header::-webkit-details-marker {
+    display: none;
+  }
+  .mobile-group-header::before {
+    content: '▸';
+    font-size: 10px;
+    transition: transform 0.15s ease;
+  }
+  .mobile-group[open] > .mobile-group-header::before {
+    transform: rotate(90deg);
+  }
+  .mobile-group-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .mobile-group-pct {
+    font-family: var(--font-family-data, monospace);
+    font-weight: var(--font-weight-bold);
+    color: var(--gem-teal, #0d7377);
+    font-size: var(--font-size-xs);
+    white-space: nowrap;
+  }
+  .mobile-group-count {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary, #a0aec0);
+    white-space: nowrap;
+  }
+  .mobile-group-assets {
+    padding: 0;
+  }
+  .mobile-asset-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-3);
+    border-top: 1px solid var(--color-border, #e2e8f0);
+    text-decoration: none;
+    color: inherit;
+    font-size: var(--font-size-xs);
+  }
+  .mobile-asset-row:hover {
+    background: var(--color-bg-secondary, #f7fafc);
+  }
+  .mobile-asset-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .mobile-asset-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-family-data, monospace);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .mobile-unit-count {
+    font-size: 10px;
+    color: var(--color-text-tertiary, #a0aec0);
+    white-space: nowrap;
+  }
+  .mobile-asset-status {
+    font-size: 10px;
+    text-transform: capitalize;
+    padding: 1px 6px;
+    border-radius: var(--radius-sm, 3px);
+    white-space: nowrap;
+  }
+  .mobile-asset-status.operating { color: var(--gem-teal, #0d7377); background: rgba(13, 115, 119, 0.1); }
+  .mobile-asset-status.planned { color: var(--gem-orange, #f59e0b); background: rgba(245, 158, 11, 0.1); }
+  .mobile-asset-status.retired { color: var(--color-text-tertiary, #a0aec0); background: rgba(160, 174, 192, 0.1); }
+  .mobile-asset-status.cancelled { color: var(--color-text-tertiary, #a0aec0); background: rgba(160, 174, 192, 0.1); }
 </style>

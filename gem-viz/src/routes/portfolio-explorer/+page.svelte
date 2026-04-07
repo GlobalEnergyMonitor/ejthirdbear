@@ -9,6 +9,9 @@
 
   const entityId = $page.url.searchParams.get('entity') || '';
   const hidePicker = $page.url.searchParams.get('hidePicker') === 'true';
+  const isEmbed = $page.url.searchParams.get('embed') === 'true';
+  /** In embed mode the navbar is hidden, so subtract less chrome height */
+  const heightOffset = isEmbed ? 120 : 320;
 
   /** Sync component state → URL via replaceState */
   function handleStateChange(state) {
@@ -37,4 +40,4 @@
   <meta name="description" content="Explore an entity's downstream asset portfolio with interactive ownership tree and crossfilter breakdowns." />
 </svelte:head>
 
-<PortfolioExplorer {entityId} {hidePicker} onStateChange={handleStateChange} />
+<PortfolioExplorer {entityId} {hidePicker} {heightOffset} onStateChange={handleStateChange} />
