@@ -35,6 +35,8 @@
      *  Default 320 accounts for navbar + header + footer.
      *  Embeds/widgets with no navbar can pass a smaller value (e.g. 120). */
     heightOffset = 320,
+    linkBase = '',
+    linkTarget = '',
   } = $props();
 
   // ============================================================================
@@ -181,6 +183,33 @@
     return 'type';
   });
 
+  /** Whether any non-intermediary filter is active (for computing intermediary counts) */
+  let hasNonIntermediaryFilter = $derived(
+    filters.country.size > 0 ||
+    filters.asset_type.size > 0 ||
+    filters.operating_status.size > 0
+  );
+
+  /** Intermediaries with counts updated to reflect current non-intermediary filters */
+  let displayIntermediaries = $derived.by(() => {
+    if (!hasNonIntermediaryFilter || !apiData) return intermediaries;
+    let assets = apiData.assets;
+    if (filters.country.size > 0) {
+      assets = assets.filter((a) => filters.country.has(a.country));
+    }
+    if (filters.asset_type.size > 0) {
+      assets = assets.filter((a) => filters.asset_type.has(a.asset_type));
+    }
+    if (filters.operating_status.size > 0) {
+      assets = assets.filter((a) => filters.operating_status.has(a.operating_status));
+    }
+    const filteredProjectIds = new Set(assets.map((a) => a.location_id || a.unit_id || a.asset_id));
+    return intermediaries.map((inter) => {
+      const count = [...inter.projectIds].filter((pid) => filteredProjectIds.has(pid)).length;
+      return { ...inter, filteredCount: count };
+    });
+  });
+
   /** Extended palette for country colors — combines Tableau10 + Paired12 + Set3 for 30+ unique colors */
   const EXTENDED_PALETTE = [...new Set([...schemeTableau10, ...schemePaired, ...schemeSet3])];
 
@@ -217,6 +246,11 @@
 
   /** Stored d3 tree root — needed for asset→tree cross-highlighting */
   let treeRoot = $state(null);
+
+  /** Selected project for detail modal — null when closed */
+  let selectedProject = $state(null);
+  /** Modal position (viewport coords for fixed positioning) */
+  let modalPos = $state({ x: 0, y: 0 });
 
   /** AbortController for in-flight fetch — prevents stale data on rapid entity switching */
   let fetchController = null;
@@ -447,6 +481,7 @@
       next.add(value); // toggle on
     }
     filters = { ...filters, [field]: next };
+    selectedProject = null;
     // Store intermediary projectIds when needed
     if (field === 'intermediary' && projectIdSet) {
       const nextMap = new Map(intermediaryProjectIds);
@@ -868,6 +903,11 @@
               .duration(200)
               .style('opacity', 1);
           }
+        })
+        .on('click', function (event) {
+          event.stopPropagation();
+          modalPos = { x: event.clientX, y: event.clientY };
+          selectedProject = proj;
         });
 
       // Unit circles — scale cluster radius so units don't overlap, capped to row height
@@ -1054,10 +1094,38 @@
     }
   });
 
+  // Close modal on Escape key
+  $effect(() => {
+    if (!selectedProject) return;
+    function onKey(e) {
+      if (e.key === 'Escape') selectedProject = null;
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  });
+
+  /** Build asset URL respecting linkBase override */
+  function buildAssetUrl(assetId) {
+    if (linkBase) return `${linkBase.replace(/\/$/, '')}/asset/${assetId}`;
+    return assetLink(assetId);
+  }
+
+  /** Navigate a link: postMessage for widget mode, normal for route mode */
+  function handleLinkClick(e, url) {
+    if (linkTarget && (linkTarget === 'parent' || linkTarget === 'message')) {
+      e.preventDefault();
+      window.parent?.postMessage({ type: 'gem-navigate', url }, '*');
+    } else if (linkTarget === 'self') {
+      e.preventDefault();
+      window.location.href = url;
+    }
+  }
+
   function handleSelectEntity(id) {
     userHasInteracted = true;
     selectedEntityId = id;
     customEntityId = '';
+    selectedProject = null;
   }
 
   function handleCustomEntity() {
@@ -1133,6 +1201,45 @@
         </div>
       {/if}
     </div>
+
+    <!-- ASSET DETAIL MODAL -->
+    {#if selectedProject}
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div class="modal-backdrop" onclick={() => (selectedProject = null)} onkeydown={(e) => e.key === 'Escape' && (selectedProject = null)}>
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+          class="asset-modal"
+          role="dialog"
+          tabindex="-1"
+          style="left: {Math.min(modalPos.x, window.innerWidth - 380)}px; top: {Math.min(modalPos.y + 8, window.innerHeight - 420)}px;"
+          onclick={(e) => e.stopPropagation()}
+          onkeydown={(e) => e.key === 'Escape' && (selectedProject = null)}
+        >
+          <button class="modal-close" onclick={() => (selectedProject = null)}>&times;</button>
+          <div class="modal-header">
+            <h4>{selectedProject.units[0]?.asset_name || selectedProject.projectID}</h4>
+            {#if selectedProject.units.length > 1}
+              <span class="unit-badge">{selectedProject.units.length} units</span>
+            {/if}
+          </div>
+          <div class="modal-units">
+            {#each selectedProject.units as unit}
+              <div class="modal-unit">
+                <div class="unit-row"><span class="unit-label">Type</span><span class="unit-value">{unit.asset_type || '—'}</span></div>
+                <div class="unit-row"><span class="unit-label">Status</span><span class="unit-value"><span class="status-dot" style="background: {COLOR_BY_STATUS.get(unit.operating_status?.toLowerCase()) || colors.grey}"></span>{unit.operating_status || '—'}</span></div>
+                {#if unit.capacity_value}<div class="unit-row"><span class="unit-label">Capacity</span><span class="unit-value">{unit.capacity_value.toLocaleString()} {unit.capacity_unit || 'MW'}</span></div>{/if}
+                <div class="unit-row"><span class="unit-label">Country</span><span class="unit-value">{unit.country || '—'}</span></div>
+                {#if unit.ownership_share}<div class="unit-row"><span class="unit-label">Ownership</span><span class="unit-value">{unit.ownership_share}%</span></div>{/if}
+                {#if unit.latitude && unit.longitude}<div class="unit-row"><span class="unit-label">Coords</span><span class="unit-value coords">{unit.latitude.toFixed(3)}, {unit.longitude.toFixed(3)}</span></div>{/if}
+                {#if selectedProject.units.length > 1}<div class="unit-row"><span class="unit-label">Unit</span><span class="unit-value">{unit.asset_name || unit.asset_id}</span></div>{/if}
+                <a class="asset-link" href={buildAssetUrl(unit.asset_id)} target="_blank" rel="noopener" onclick={(e) => handleLinkClick(e, buildAssetUrl(unit.asset_id))}>View full asset page &rarr;</a>
+              </div>
+              {#if selectedProject.units.length > 1}<hr class="unit-divider" />{/if}
+            {/each}
+          </div>
+        </div>
+      </div>
+    {/if}
 
     <!-- FILTER FOOTER — cross-column additive (AND), same-column click toggles -->
     <div class="chart-footer">
@@ -1265,18 +1372,21 @@
       <div class="summary-section">
         <p class="subtitle">Intermediaries</p>
         <div class="summary-table">
-          {#each intermediaries as inter}
+          {#each displayIntermediaries as inter}
             {@const isActive = filters.intermediary.has(inter.name)}
+            {@const count = hasNonIntermediaryFilter ? inter.filteredCount : inter.assetCount}
+            {@const hasResults = !hasNonIntermediaryFilter || inter.filteredCount > 0}
             <div
               class="summary-row"
               class:active={isActive}
-              class:dimmed={isFiltered && !isActive}
+              class:dimmed={isFiltered && !isActive && hasResults}
+              class:faded={isFiltered && !isActive && !hasResults}
               role="button"
               tabindex="0"
               onclick={() => applyFilter('intermediary', inter.name, inter.projectIds)}
               onkeydown={(e) => e.key === 'Enter' && applyFilter('intermediary', inter.name, inter.projectIds)}
             >
-              {inter.name} ({inter.assetCount})
+              {inter.name} ({count})
             </div>
           {/each}
         </div>
@@ -1712,4 +1822,24 @@
       margin-left: 0;
     }
   }
+
+  /* ---- Asset Detail Modal ---- */
+  .modal-backdrop { position: fixed; inset: 0; z-index: 10000; background: rgba(0,0,0,0.15); }
+  .asset-modal { position: fixed; z-index: 10001; background: var(--color-bg-primary, #fff); border: 1px solid var(--color-border, #e0e0e0); border-radius: var(--radius-lg, 8px); box-shadow: 0 8px 30px rgba(0,0,0,0.18); padding: var(--space-4, 16px); min-width: 260px; max-width: 360px; max-height: 400px; overflow-y: auto; scrollbar-width: thin; }
+  .modal-close { position: absolute; top: 8px; right: 8px; background: none; border: none; font-size: 20px; cursor: pointer; color: var(--color-text-secondary, #666); line-height: 1; padding: 2px 6px; border-radius: 4px; }
+  .modal-close:hover { background: var(--color-bg-secondary, #f5f5f5); color: var(--color-text-primary, #333); }
+  .modal-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding-right: 20px; }
+  .modal-header h4 { margin: 0; font-size: 14px; font-weight: 700; color: var(--gem-navy, #1d4961); line-height: 1.3; }
+  .unit-badge { flex-shrink: 0; font-size: 11px; background: var(--color-bg-tertiary, #eee); color: var(--color-text-secondary, #666); padding: 1px 6px; border-radius: 999px; font-weight: 500; }
+  .modal-units { display: flex; flex-direction: column; gap: 4px; }
+  .modal-unit { display: flex; flex-direction: column; gap: 3px; }
+  .unit-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
+  .unit-label { color: var(--color-text-secondary, #888); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; font-size: 10px; flex-shrink: 0; }
+  .unit-value { color: var(--color-text-primary, #333); text-align: right; display: flex; align-items: center; gap: 4px; }
+  .unit-value.coords { font-family: var(--font-mono, monospace); font-size: 10px; }
+  .status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .asset-link { display: inline-block; margin-top: 4px; font-size: 11px; color: var(--gem-teal, #007b7f); text-decoration: none; font-weight: 500; }
+  .asset-link:hover { text-decoration: underline; }
+  .unit-divider { border: none; border-top: 1px solid var(--color-border, #e0e0e0); margin: 8px 0; }
+  .unit-divider:last-child { display: none; }
 </style>

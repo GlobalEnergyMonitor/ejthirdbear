@@ -5,6 +5,7 @@
    */
   import { onMount } from 'svelte';
   import { loadEntityPortfolio, errorMessage, type EmbedPortfolio } from './widget-data';
+  import { navigate as navTo } from './widget-links';
   import OwnershipFlower from '$lib/components/network/OwnershipFlower.svelte';
 
   type FlowerSize = 'small' | 'medium' | 'large';
@@ -15,6 +16,8 @@
     size?: string;
     showLabels?: boolean;
     showTitle?: boolean;
+    linkBase?: string;
+    linkTarget?: string;
     theme?: 'light' | 'dark';
   }
 
@@ -23,6 +26,8 @@
     size = 'medium',
     showLabels = true,
     showTitle = true,
+    linkBase = '',
+    linkTarget = '',
     theme = 'light',
   }: Props = $props();
 
@@ -34,8 +39,8 @@
   let error = $state<string | null>(null);
   let portfolio = $state<EmbedPortfolio | null>(null);
 
-  function navigate(url: string) {
-    window.open(url, '_blank', 'noopener');
+  function handleNavigate(url: string) {
+    navTo(url, linkTarget);
   }
 
   onMount(async () => {
@@ -69,7 +74,7 @@
       size={validSize}
       {showLabels}
       {showTitle}
-      onNavigate={navigate}
+      onNavigate={handleNavigate}
     />
   {:else if entityId && portfolio}
     <div class="embed-loading">

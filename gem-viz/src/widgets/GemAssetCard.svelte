@@ -4,7 +4,7 @@
    * Mirrors embed/asset/+page.svelte but uses widget-api.
    */
   import { onMount } from 'svelte';
-  import { entityLink } from './widget-links';
+  import { entityLink, navigate as navTo } from './widget-links';
   import { getAsset, getOwnershipGraph, resolveAssetId } from './widget-api';
   import { errorMessage } from './widget-data';
   import { colorByStatus, colors } from '$lib/design-tokens';
@@ -15,10 +15,12 @@
     assetId: string;
     showOwners?: boolean;
     showMap?: boolean;
+    linkBase?: string;
+    linkTarget?: string;
     theme?: 'light' | 'dark';
   }
 
-  let { assetId, showOwners = true, showMap = false, theme = 'light' }: Props = $props();
+  let { assetId, showOwners = true, showMap = false, linkBase = '', linkTarget = '', theme = 'light' }: Props = $props();
 
   let loading = $state(true);
   let error = $state<string | null>(null);
@@ -106,7 +108,7 @@
         <h2>Owners ({ownerRows.length})</h2>
         <div class="owners-list">
           {#each ownerRows as row}
-            <a href={entityLink(row.edge.source)} class="owner-row" target="_blank" rel="noopener">
+            <a href={entityLink(row.edge.source, linkBase)} class="owner-row" target="_blank" rel="noopener" onclick={(e) => { if (linkTarget) { e.preventDefault(); navTo(entityLink(row.edge.source, linkBase), linkTarget); } }}>
               <span class="owner-name">{row.owner?.Name || row.edge.source}</span>
               {#if row.edge.value != null}
                 <span class="owner-share">

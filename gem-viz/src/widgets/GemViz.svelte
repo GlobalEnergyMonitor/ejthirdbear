@@ -30,7 +30,8 @@
 </script>
 
 {#if widget}
-  <svelte:component this={widget} {...rest} />
+  {@const Widget = widget}
+  <Widget {...rest} />
 {:else}
   <div class="embed-error">
     <p>Unknown visualization: <code>{name}</code></p>

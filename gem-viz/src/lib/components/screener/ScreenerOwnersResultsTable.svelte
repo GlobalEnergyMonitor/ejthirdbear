@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { link } from '$lib/links';
+
   export let filteredOwners = [];
   export let classDescription = '';
   export let searchQuery = '';
@@ -7,6 +9,23 @@
   export let bulkMatchProvenance: Record<string, string[]> = {};
   export let onToggleExpanded: (_entityId: string, _event?: MouseEvent) => void;
   export let onClearSearch: () => void;
+  /** Base URL override for links (e.g., Drupal host) */
+  export let linkBase = '';
+  /** Navigation mode: 'parent'|'message' → postMessage, else new tab */
+  export let linkTarget = '';
+
+  function portfolioUrl(entityId: string): string {
+    if (linkBase) return `${linkBase.replace(/\/$/, '')}/portfolio-explorer?entity=${entityId}`;
+    return link(`portfolio-explorer?entity=${entityId}`);
+  }
+
+  function handlePortfolioClick(e: MouseEvent, url: string) {
+    if (linkTarget === 'parent' || linkTarget === 'message') {
+      e.preventDefault();
+      e.stopPropagation();
+      window.parent?.postMessage({ type: 'gem-navigate', url }, '*');
+    }
+  }
 </script>
 
 <div class="owners-table-wrap">
@@ -33,6 +52,18 @@
                 🔍
                 <span class="match-tooltip">Matched from: {terms.join(', ')}</span>
               </span>
+            {/if}
+            {#if owner.entityId}
+              <a
+                class="portfolio-link"
+                href={portfolioUrl(owner.entityId)}
+                target="_blank"
+                rel="noopener"
+                title="Explore {owner.name}'s full portfolio"
+                onclick={(e) => { e.stopPropagation(); handlePortfolioClick(e, portfolioUrl(owner.entityId)); }}
+              >
+                Portfolio &rarr;
+              </a>
             {/if}
           </td>
           <td class="td-count">
@@ -174,6 +205,24 @@
     text-decoration: underline;
     text-underline-offset: 2px;
     color: var(--gem-teal, #2a7f8f);
+  }
+
+  .portfolio-link {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--gem-teal, #2a7f8f);
+    text-decoration: none;
+    opacity: 0;
+    transition: opacity 120ms ease;
+    white-space: nowrap;
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+  .portfolio-link:hover {
+    text-decoration: underline;
+  }
+  .owner-row:hover .portfolio-link {
+    opacity: 1;
   }
 
   /* ── Count cell ─────────────────────────────── */

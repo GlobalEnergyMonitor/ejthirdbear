@@ -11,12 +11,10 @@
 
   interface Props {
     assetId: string;
-    showMap?: boolean;
-    showOwnership?: boolean;
     theme?: 'light' | 'dark';
   }
 
-  let { assetId, showMap = true, showOwnership = true, theme = 'light' }: Props = $props();
+  let { assetId, theme = 'light' }: Props = $props();
 
   let loading = $state(true);
   let error = $state<string | null>(null);
@@ -28,10 +26,6 @@
   function toNum(v: unknown): number | undefined {
     const n = Number(v);
     return isFinite(n) ? n : undefined;
-  }
-
-  function navigate(url: string) {
-    window.open(url, '_blank', 'noopener');
   }
 
   onMount(async () => {

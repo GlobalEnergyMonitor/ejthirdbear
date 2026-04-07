@@ -4,7 +4,7 @@
    * Mirrors embed/entity/+page.svelte but uses widget-api (no SvelteKit deps).
    */
   import { onMount } from 'svelte';
-  import { assetLink, entityLink } from './widget-links';
+  import { assetLink, entityLink, navigate as navTo } from './widget-links';
   import { loadEntityPortfolio, errorMessage, type EmbedPortfolio } from './widget-data';
   import OwnershipFlower from '$lib/components/network/OwnershipFlower.svelte';
   import TrackerIcon from '$lib/components/tracker/TrackerIcon.svelte';
@@ -19,6 +19,8 @@
     showChart?: boolean;
     showMap?: boolean;
     maxAssets?: number;
+    linkBase?: string;
+    linkTarget?: string;
     theme?: 'light' | 'dark';
   }
 
@@ -29,6 +31,8 @@
     showChart = false,
     showMap = false,
     maxAssets = 10,
+    linkBase = '',
+    linkTarget = '',
     theme = 'light',
   }: Props = $props();
 
@@ -62,8 +66,8 @@
     );
   });
 
-  function navigate(url: string) {
-    window.open(url, '_blank', 'noopener');
+  function handleNavigate(url: string) {
+    navTo(url, linkTarget);
   }
 
   onMount(async () => {
@@ -112,7 +116,7 @@
             size="small"
             showTitle={false}
             showLabels={false}
-            onNavigate={navigate}
+            onNavigate={handleNavigate}
           />
         </div>
       {/if}
@@ -132,7 +136,7 @@
     {#if showAssets && displayAssets.length > 0}
       <div class="asset-list">
         {#each displayAssets as asset}
-          <a href={assetLink(asset.id)} class="asset-row" target="_blank" rel="noopener">
+          <a href={assetLink(asset.id, linkBase)} class="asset-row" target="_blank" rel="noopener" onclick={(e) => { if (linkTarget) { e.preventDefault(); handleNavigate(assetLink(asset.id, linkBase)); } }}>
             <TrackerIcon tracker={asset.tracker} size={12} />
             <span class="asset-name">{asset.name || asset.id}</span>
             {#if asset.status}
@@ -151,7 +155,7 @@
       <div class="asset-list">
         <h2>Subsidiaries ({subsidiaries.length})</h2>
         {#each subsidiaries.slice(0, maxAssets) as sub}
-          <a href={entityLink(sub.id)} class="asset-row" target="_blank" rel="noopener">
+          <a href={entityLink(sub.id, linkBase)} class="asset-row" target="_blank" rel="noopener" onclick={(e) => { if (linkTarget) { e.preventDefault(); handleNavigate(entityLink(sub.id, linkBase)); } }}>
             <span class="asset-name">{sub.name}</span>
             {#if sub.ownershipPct != null}
               <span class="capacity">{sub.ownershipPct.toFixed(1)}%</span>

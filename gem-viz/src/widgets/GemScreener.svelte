@@ -66,10 +66,14 @@
     classes: classesProp = '',
     owners: ownersProp = '',
     step: stepProp = 0,
+    linkBase = '',
+    linkTarget = '',
   }: {
     classes?: string;
     owners?: string;
     step?: number;
+    linkBase?: string;
+    linkTarget?: string;
   } = $props();
 
   // ============================================================================
@@ -921,6 +925,8 @@
           {viewMode}
           selectedOwnerCount={selectedOwnerIds.length}
           {bulkMatchProvenance}
+          {linkBase}
+          {linkTarget}
           onToggleExpanded={openChartModal}
           onClearSearch={() => { resultsSearchQuery = ''; }}
         />
@@ -1204,6 +1210,7 @@
     line-height: 1.4;
     display: -webkit-box;
     -webkit-line-clamp: 2;
+    line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
   }

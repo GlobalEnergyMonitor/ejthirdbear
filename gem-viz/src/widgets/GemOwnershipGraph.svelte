@@ -5,6 +5,7 @@
    */
   import { onMount } from 'svelte';
   import { getOwnershipGraph } from './widget-api';
+  import { navigate as navTo } from './widget-links';
   import OwnershipTreeGraph from '$lib/components/ownership/OwnershipTreeGraph.svelte';
   import { errorMessage } from './widget-data';
 
@@ -12,17 +13,19 @@
     entityId: string;
     direction?: 'up' | 'down';
     compact?: boolean;
+    linkBase?: string;
+    linkTarget?: string;
     theme?: 'light' | 'dark';
   }
 
-  let { entityId, direction = 'down', compact = false, theme = 'light' }: Props = $props();
+  let { entityId, direction = 'down', compact = false, linkBase = '', linkTarget = '', theme = 'light' }: Props = $props();
 
   let loading = $state(true);
   let error = $state<string | null>(null);
   let graphData = $state<{ nodes: any[]; edges: any[]; rootEntityName?: string } | null>(null);
 
-  function navigate(url: string) {
-    window.open(url, '_blank', 'noopener');
+  function handleNavigate(url: string) {
+    navTo(url, linkTarget);
   }
 
   onMount(async () => {
@@ -52,6 +55,7 @@
       edges={graphData.edges}
       rootId={entityId}
       {compact}
+      onNavigate={handleNavigate}
     />
   {:else}
     <div class="embed-error">

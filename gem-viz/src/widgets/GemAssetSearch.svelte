@@ -4,7 +4,7 @@
    * Mirrors embed/asset-search/+page.svelte (simplified — no hash state).
    */
   import AssetSearchBar from '$lib/components/search/AssetSearchBar.svelte';
-  import { assetLink, entityLink } from '$lib/links';
+  import { assetLink, entityLink, link, navigate } from './widget-links';
 
   interface Props {
     q?: string;
@@ -14,6 +14,7 @@
     open?: string;
     helper?: string;
     linkBase?: string;
+    linkTarget?: string;
     theme?: 'light' | 'dark';
   }
 
@@ -25,6 +26,7 @@
     open: openMode = 'self',
     helper = '',
     linkBase = '',
+    linkTarget = '',
     theme = 'light',
   }: Props = $props();
 
@@ -48,21 +50,19 @@
     const trimmed = value.trim();
     if (!trimmed) return;
 
-    const base = linkBase || '';
+    // Resolve linkTarget: explicit prop wins, then legacy openMode mapping
+    const target = linkTarget || (openMode === 'parent' ? 'parent' : 'blank');
+
     let url: string;
     if (/^[EG]\d+/.test(trimmed)) {
-      url = trimmed.startsWith('E') ? entityLink(trimmed) : assetLink(trimmed);
+      url = trimmed.startsWith('E') ? entityLink(trimmed, linkBase) : assetLink(trimmed, linkBase);
     } else if (searchMode === 'owner') {
-      url = `${base}/search?q=${encodeURIComponent(trimmed)}&type=entities`;
+      url = link(`search?q=${encodeURIComponent(trimmed)}&type=entities`, linkBase);
     } else {
-      url = `${base}/search?q=${encodeURIComponent(trimmed)}`;
+      url = link(`search?q=${encodeURIComponent(trimmed)}`, linkBase);
     }
 
-    if (openMode === 'parent') {
-      window.parent?.postMessage({ type: 'gem-navigate', url }, '*');
-    } else {
-      window.open(url, '_blank', 'noopener');
-    }
+    navigate(url, target);
   }
 </script>
 
