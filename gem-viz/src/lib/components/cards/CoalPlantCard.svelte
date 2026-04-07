@@ -10,6 +10,7 @@
     RETIRED_STATUSES,
     getStatusGroupId,
   } from '$lib/data-config/tracker-schema';
+  import CardShell from './shell/CardShell.svelte';
 
   // ── Props ──────────────────────────────────────────────────────────────────
 
@@ -488,6 +489,14 @@
     if (activeTab === 'Ownership') ownershipActivated = true;
   });
 
+  // CardShell needs StatusGroup type for the badge
+  const statusGroup = $derived(
+    (() => {
+      const s = units[0]?.coal_plant_fields?.status ?? '';
+      return (getStatusGroupId(s) ?? 'operating') as 'operating' | 'planned' | 'retired' | 'cancelled';
+    })()
+  );
+
   // ── Timeline chart ─────────────────────────────────────────────────────────
 
   const TL = { labelW: 90, badgeW: 130, rowH: 52, barH: 8, axisH: 28 };
@@ -640,45 +649,30 @@
   }
 </script>
 
-<details class="coal-plant-card" {open}>
-  <!-- ── Compact summary ─────────────────────────────────────────────────── -->
-  <summary class="card-compact" onclick={(e) => { if (window.getSelection()?.toString()) e.preventDefault(); }}>
-    <div class="compact-left">
-      <h3 class="compact-name">{plantName}</h3>
-      <div class="compact-location">{locationStr}</div>
-      {#if altNames}
-        <div class="compact-also">Also: {altNames}</div>
-      {/if}
-    </div>
-    <div class="compact-badges">
-      {#each compactChips as chip}
-        <span class="status-chip {chip.cls}">
-          <span class="chip-status">{chip.label}</span>
-          <span class="chip-capacity">{formatMW(chip.capacity)}</span>
-        </span>
-      {/each}
-    </div>
-  </summary>
+<CardShell
+  name={plantName}
+  {altNames}
+  statusLabel={capitalize(units[0]?.coal_plant_fields?.status ?? '')}
+  {statusGroup}
+  {locationStr}
+  {wikiUrl}
+  sourceLabel="Database: {database}"
+  tabs={TABS}
+  {initialTab}
+  {open}
+  bind:activeTab
+>
+  {#snippet compactRight()}
+    {#each compactChips as chip}
+      <span class="status-chip {chip.cls}">
+        <span class="chip-status">{chip.label}</span>
+        <span class="chip-capacity">{formatMW(chip.capacity)}</span>
+      </span>
+    {/each}
+  {/snippet}
 
-  <!-- ── Full card ───────────────────────────────────────────────────────── -->
-  <div class="card-full">
-    <!-- Tab bar -->
-    <div class="tab-bar" role="tablist" aria-label="Coal plant detail tabs">
-      {#each TABS as tab}
-        <button
-          class="tab-btn"
-          class:active={activeTab === tab}
-          role="tab"
-          aria-selected={activeTab === tab}
-          onclick={() => (activeTab = tab)}>{tab}</button
-        >
-      {/each}
-    </div>
-
-    <!-- Tab content (grid-stacked so all tabs are measured; only active is visible) -->
-    <div class="tabs-wrapper">
-      <!-- ── Overview ──────────────────────────────────────────────────── -->
-      <div class="tab-panel" class:active={activeTab === 'Overview'}>
+  {#snippet tabContent(tab)}
+    {#if tab === 'Overview'}
         {#if overviewNarrative || otherUnitsNote}
           <p class="narrative">{overviewNarrative ?? ''}{overviewNarrative && otherUnitsNote ? ' ' : ''}{otherUnitsNote ?? ''}</p>
         {/if}
@@ -766,11 +760,7 @@
             {/if}
           </div>
         </div>
-      </div>
-      <!-- /Overview -->
-
-      <!-- ── Timeline ──────────────────────────────────────────────────── -->
-      <div class="tab-panel" class:active={activeTab === 'Timeline'}>
+    {:else if tab === 'Timeline'}
         <p class="narrative">{unitsNarrative}</p>
         <div class="timeline-heading">Operational Timeline by Unit</div>
 
@@ -959,12 +949,7 @@
             {/each}
           </svg>
         </div>
-      </div>
-      <!-- /Timeline -->
-
-
-      <!-- ── Emissions & Phaseout ───────────────────────────────────────── -->
-      <div class="tab-panel" class:active={activeTab === 'Emissions & Phaseout'}>
+    {:else if tab === 'Emissions & Phaseout'}
         {#if alignmentStatus}
           <div class="alignment-banner alignment-{alignmentStatus}">
             {#if alignmentStatus === 'aligned'}
@@ -1045,11 +1030,7 @@
 
           </div>
         </div>
-      </div>
-      <!-- /Emissions & Phaseout -->
-
-      <!-- ── Ownership ──────────────────────────────────────────────────── -->
-      <div class="tab-panel" class:active={activeTab === 'Ownership'}>
+    {:else if tab === 'Ownership'}
         {#if ownershipActivated && units[0]?.asset_id}
           <div class="ownership-tree-wrap">
             <AssetOwnershipTree
@@ -1065,11 +1046,7 @@
         {:else if ownershipActivated}
           <div class="ownership-status">No ownership data available</div>
         {/if}
-      </div>
-      <!-- /Ownership -->
-
-      <!-- ── Additional Details ─────────────────────────────────────────── -->
-      <div class="tab-panel" class:active={activeTab === 'Additional Details'}>
+    {:else if tab === 'Additional Details'}
         {#if additionalDetails.length > 0}
           <dl class="details-list">
             {#each additionalDetails as row}
@@ -1082,91 +1059,17 @@
         {:else}
           <p class="narrative muted">No additional fields with data for this plant.</p>
         {/if}
-      </div>
-      <!-- /Additional Details -->
-    </div>
-    <!-- /tabs-wrapper -->
+    {/if}
+  {/snippet}
+</CardShell>
 
-    <!-- Footer -->
-    <footer class="card-footer">
-      <span>Database: {database}</span>
-      {#if wikiUrl}
-        · <a href={wikiUrl} target="_blank" rel="noopener noreferrer">Learn more on the GEM Wiki</a>
-      {/if}
-    </footer>
+{#if tlTooltip}
+  <div class="tl-tooltip" style="left:{tlTooltip.x + 14}px; top:{tlTooltip.y + 10}px;">
+    {tlTooltip.text}
   </div>
-  <!-- /card-full -->
-
-  {#if tlTooltip}
-    <div class="tl-tooltip" style="left:{tlTooltip.x + 14}px; top:{tlTooltip.y + 10}px;">
-      {tlTooltip.text}
-    </div>
-  {/if}
-</details>
+{/if}
 
 <style>
-  .coal-plant-card {
-    font-family: var(--gem-font, 'Plus Jakarta Sans', system-ui, sans-serif);
-    background: #fff;
-    border-radius: 8px;
-    border: 1px solid rgba(0, 0, 0, 0.1);
-    overflow: hidden;
-  }
-
-  /* ── Compact ──────────────────────────────────────────── */
-  .card-compact {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 1rem 1.25rem;
-    cursor: pointer;
-    list-style: none;
-    user-select: none;
-  }
-  .card-compact::-webkit-details-marker {
-    display: none;
-  }
-
-  .compact-name {
-    margin: 0;
-    font-size: 1rem;
-    font-weight: 700;
-    color: #111;
-  }
-  .compact-left {
-    min-width: 0;
-  }
-  .compact-name,
-  .compact-location,
-  .compact-also {
-    user-select: text;
-  }
-  .compact-location {
-    font-size: 0.8rem;
-    color: #666;
-    margin-top: 0.15rem;
-  }
-  .compact-also {
-    font-size: 0.75rem;
-    color: #999;
-    margin-top: 0.15rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  details[open] .compact-also {
-    white-space: normal;
-    overflow: visible;
-    text-overflow: unset;
-  }
-  .compact-badges {
-    display: flex;
-    gap: 0.4rem;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    flex-shrink: 0;
-  }
   .status-chip {
     display: flex;
     flex-direction: column;
@@ -1205,67 +1108,6 @@
     color: #333;
   }
 
-  /* ── Full card ────────────────────────────────────────── */
-  .card-full {
-    border-top: 1px solid rgba(0, 0, 0, 0.08);
-  }
-
-  /* ── Tab bar ──────────────────────────────────────────── */
-  .tab-bar {
-    display: flex;
-    padding: 0 1.75rem;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-    overflow-x: auto;
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
-  }
-  .tab-btn {
-    all: unset;
-    cursor: pointer;
-    padding: 0.85rem 1.25rem;
-    font-size: 0.85rem;
-    font-weight: 500;
-    color: #666;
-    border-bottom: 2px solid transparent;
-    white-space: nowrap;
-    transition:
-      color 0.15s,
-      border-color 0.15s;
-    margin-bottom: -1px;
-  }
-  .tab-btn:hover {
-    color: #111;
-  }
-  .tab-btn.active {
-    color: #111;
-    border-bottom-color: #111;
-    font-weight: 600;
-  }
-
-  /* ── Tab content ──────────────────────────────────────── */
-  /* Grid-stacking: all panels occupy the same cell so the wrapper
-     naturally takes the height of the tallest tab. Each panel scrolls
-     independently if it exceeds 80vh. Inactive panels are hidden but
-     still contribute to the measured height. */
-  .tabs-wrapper {
-    display: grid;
-    min-width: 0;
-    overflow: hidden;
-  }
-  .tab-panel {
-    grid-area: 1 / 1;
-    min-width: 0;
-    padding: 1.5rem 1.75rem;
-    min-height: 220px;
-    max-height: 80vh;
-    overflow-x: hidden;
-    overflow-y: auto;
-  }
-  .tab-panel:not(.active) {
-    visibility: hidden;
-    pointer-events: none;
-    overflow: hidden;
-  }
   .narrative {
     font-size: 0.9rem;
     color: #222;
@@ -1663,21 +1505,6 @@
     font-family: 'SF Mono', 'Fira Code', monospace;
   }
 
-  /* ── Footer ───────────────────────────────────────────── */
-  .card-footer {
-    padding: 0.75rem 1.75rem;
-    border-top: 1px solid rgba(0, 0, 0, 0.08);
-    font-size: 0.75rem;
-    color: #888;
-  }
-  .card-footer a {
-    color: #555;
-    text-decoration: underline;
-  }
-  .card-footer a:hover {
-    color: #111;
-  }
-
   /* ── Responsive ───────────────────────────────────────── */
   @media (max-width: 700px) {
     .overview-grid,
@@ -1687,10 +1514,6 @@
     }
     .summary-row {
       grid-template-columns: 110px 90px 65px 1fr;
-      font-size: 0.8rem;
-    }
-    .tab-btn {
-      padding: 0.75rem 0.75rem;
       font-size: 0.8rem;
     }
   }

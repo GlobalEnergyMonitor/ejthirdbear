@@ -1008,6 +1008,7 @@ export const getAPIBase = () => API_BASE;
 // =============================================================================
 
 import type { CoalPlantLocation } from '$lib/components/cards/coal-plant-types';
+import type { CoalMineAsset } from '$lib/components/cards/coal-mine-types';
 
 /**
  * Fetch all units for a coal plant by location ID.
@@ -1016,4 +1017,13 @@ import type { CoalPlantLocation } from '$lib/components/cards/coal-plant-types';
 export async function fetchCoalPlantLocation(locationId: string): Promise<CoalPlantLocation> {
   _currentReason = `fetchCoalPlantLocation ${locationId}`;
   return fetchAPI<CoalPlantLocation>(`/locations/${encodeURIComponent(locationId)}`);
+}
+
+/**
+ * Fetch a single coal mine asset by asset ID.
+ * Returns top-line asset fields plus a coal_mine_fields object.
+ */
+export async function fetchCoalMineAsset(assetId: string): Promise<CoalMineAsset> {
+  _currentReason = `fetchCoalMineAsset ${assetId}`;
+  return fetchAPI<CoalMineAsset>(`/assets/${encodeURIComponent(assetId)}?format=json`);
 }

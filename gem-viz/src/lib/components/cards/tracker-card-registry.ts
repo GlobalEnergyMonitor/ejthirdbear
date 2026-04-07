@@ -58,6 +58,17 @@ const registry: Record<string, TrackerCardConfig> = {
     label: 'Coal Plant Details',
   },
 
+  'Coal Mine': {
+    loadComponent: () => import('./CoalMineCard.svelte'),
+    fetchProps: async (asset) => {
+      const { fetchCoalMineAsset } = await import('$lib/ownership-api');
+      const mine = await fetchCoalMineAsset(asset.id);
+      if (!mine?.coal_mine_fields) return null;
+      return { asset: mine, open: true };
+    },
+    label: 'Coal Mine Details',
+  },
+
   // Future tracker cards go here:
   // 'Oil & Gas Plant': { ... },
   // 'Iron & Steel Plant': { ... },
