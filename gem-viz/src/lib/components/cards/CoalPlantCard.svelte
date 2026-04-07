@@ -16,12 +16,12 @@
   let {
     units: allUnits,
     open = false,
-    initialTab,
+    initialTab = '',
     ownershipLoader,
   }: {
     units: CoalPlantUnit[];
     open?: boolean;
-    tab?: string;
+    initialTab?: string;
     ownershipLoader?: (_params: {
       root: string;
       direction: 'up' | 'down';
@@ -482,7 +482,7 @@
   function resolveTab(t: string): TabName {
     return t && TABS.includes(t as TabName) ? (t as TabName) : 'Overview';
   }
-  let activeTab = $state<TabName>(resolveTab(tab));
+  let activeTab = $state<TabName>(resolveTab(initialTab));
   let ownershipActivated = $state(false);
 
   $effect(() => {
