@@ -292,7 +292,7 @@ import assetClassFiltersJson from '$lib/data-config/asset-class-filters.json';
 
 const ASSET_CLASSES_TTL_MS = 60 * 60 * 1000; // 1 hour
 let _assetClassesCache: CatalogAssetClass[] | null = assetClassFiltersJson as CatalogAssetClass[];
-let _assetClassesFetchedAt = 0;
+let _assetClassesFetchedAt = Date.now();
 
 /** Returns asset class filter definitions. Currently served from static JSON; will fetch from API once deployed. */
 export async function fetchAssetClasses(): Promise<CatalogAssetClass[]> {

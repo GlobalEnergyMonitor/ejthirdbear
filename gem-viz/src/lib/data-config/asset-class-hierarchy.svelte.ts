@@ -82,11 +82,22 @@ let _hierarchy: { categories: HierarchyCategory[] } = $state(
   hierarchyJson as { categories: HierarchyCategory[] }
 );
 
-/** Fetch hierarchy from the API, replacing the static JSON fallback. */
+/**
+ * Fetch hierarchy from the API, replacing the static JSON fallback.
+ *
+ * NOTE: The API response currently omits `label` on grouping asset classes,
+ * which causes getHierarchyCategories() to filter them out (line 144).
+ * Until the API includes labels, skip the replacement to keep static JSON.
+ */
 export async function loadHierarchy(): Promise<void> {
   try {
     const data = await fetchAssetClassHierarchy();
-    if (data.categories.length > 0) {
+    // Only replace if the API data actually has labels on grouping tiles;
+    // without labels, getHierarchyCategories() drops all multi-class tiles.
+    const firstGrouping = (data.categories ?? [])
+      .flatMap((c: { assetClasses?: Array<{ optionIds?: string[]; classGroups?: unknown[]; label?: string }> }) => c.assetClasses ?? [])
+      .find((ac: { optionIds?: string[]; classGroups?: unknown[] }) => ac.optionIds || ac.classGroups);
+    if (firstGrouping && (firstGrouping as { label?: string }).label) {
       _hierarchy = data as { categories: HierarchyCategory[] };
     }
   } catch {
