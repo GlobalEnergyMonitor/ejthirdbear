@@ -162,7 +162,6 @@ const PLANT_FIELDS: CoalField[] = [
     category: 'Size',
     aggregatable: [
       { fn: 'sum', label: 'Total capacity (MW)', unit: 'MW' },
-      { fn: 'avg', label: 'Average capacity (MW)', unit: 'MW' },
     ],
   },
   {
@@ -191,9 +190,6 @@ const PLANT_FIELDS: CoalField[] = [
     shortLabel: 'Age',
     trackers: ['coal-plant'],
     category: 'Age',
-    aggregatable: [
-      { fn: 'avg', label: 'Average plant age (years)', unit: 'years' },
-    ],
   },
   {
     key: 'remaining_plant_lifetime_years',
@@ -201,9 +197,6 @@ const PLANT_FIELDS: CoalField[] = [
     shortLabel: 'Remaining life',
     trackers: ['coal-plant'],
     category: 'Age',
-    aggregatable: [
-      { fn: 'avg', label: 'Average remaining lifetime (years)', unit: 'years' },
-    ],
   },
   {
     key: 'start_year',
@@ -278,7 +271,6 @@ const MINE_FIELDS: CoalField[] = [
     category: 'Size',
     aggregatable: [
       { fn: 'sum', label: 'Total capacity (Mtpa)', unit: 'Mtpa' },
-      { fn: 'avg', label: 'Average capacity (Mtpa)', unit: 'Mtpa' },
     ],
   },
   {
@@ -289,7 +281,6 @@ const MINE_FIELDS: CoalField[] = [
     category: 'Size',
     aggregatable: [
       { fn: 'sum', label: 'Total production (Mtpa)', unit: 'Mtpa' },
-      { fn: 'avg', label: 'Average production (Mtpa)', unit: 'Mtpa' },
     ],
   },
   {
@@ -300,7 +291,6 @@ const MINE_FIELDS: CoalField[] = [
     category: 'Size',
     aggregatable: [
       { fn: 'sum', label: 'Total workforce', unit: 'workers' },
-      { fn: 'avg', label: 'Average workforce size', unit: 'workers' },
     ],
   },
   {

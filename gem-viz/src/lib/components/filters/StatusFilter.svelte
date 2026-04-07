@@ -90,14 +90,15 @@
             indeterminate={isGroupIndeterminate(sg.id)}
             onchange={() => toggleGroup(sg.id)}
           />
-          <span class="group-label">{sg.label}</span>
+          <span
+            class="group-label"
+            class:tooltip-hint={!!STATUS_GROUP_DESCRIPTIONS[sg.id]}
+            data-tooltip={STATUS_GROUP_DESCRIPTIONS[sg.id] ?? null}
+          >{sg.label}</span>
           {#if sg.totalCount > 0}
             <span class="count-badge">{sg.totalCount.toLocaleString()}</span>
           {/if}
         </label>
-        {#if STATUS_GROUP_DESCRIPTIONS[sg.id]}
-          <span class="group-desc">{STATUS_GROUP_DESCRIPTIONS[sg.id]}</span>
-        {/if}
         {#if hasRefine}
           <button class="refine-toggle" onclick={() => toggleRefine(`status-${sg.id}`)}>
             {expandedRefine[`status-${sg.id}`] ? '▼' : '▶'} Refine
@@ -111,12 +112,11 @@
                   type="checkbox"
                   bind:checked={statusChecks[`status-${sg.id}-${statusItem.value}`]}
                 />
-                <span class="refine-copy">
-                  <span class="refine-label">{statusItem.value}</span>
-                  {#if STATUS_VALUE_DESCRIPTIONS[statusItem.value]}
-                    <span class="refine-desc">{STATUS_VALUE_DESCRIPTIONS[statusItem.value]}</span>
-                  {/if}
-                </span>
+                <span
+                  class="refine-label"
+                  class:tooltip-hint={!!STATUS_VALUE_DESCRIPTIONS[statusItem.value]}
+                  data-tooltip={STATUS_VALUE_DESCRIPTIONS[statusItem.value] ?? null}
+                >{statusItem.value}</span>
                 {#if statusItem.count > 0}
                   <span class="count-badge small">{statusItem.count.toLocaleString()}</span>
                 {/if}
@@ -135,6 +135,7 @@
 
 <style>
   .filter-section {
+    width: 100%;
     margin-bottom: var(--space-4, 16px);
   }
 
@@ -226,10 +227,6 @@
     color: var(--color-text-primary);
   }
 
-  .group-desc {
-    font-size: var(--font-size-sm, 13px);
-    color: var(--color-text-tertiary);
-  }
 
   .count-badge {
     font-size: 11px;
@@ -277,7 +274,7 @@
 
   .refine-option {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: var(--space-2, 8px);
     cursor: pointer;
     font-size: var(--font-size-sm, 13px);
@@ -286,14 +283,8 @@
 
   .refine-option input[type='checkbox'] {
     margin: 0;
+    flex-shrink: 0;
     cursor: pointer;
-  }
-
-  .refine-copy {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    gap: 2px;
   }
 
   .refine-label {
@@ -301,8 +292,33 @@
     color: var(--color-text-primary);
   }
 
-  .refine-desc {
-    font-size: 11px;
-    color: var(--color-text-tertiary);
+  /* CSS-only tooltip for group labels and refine values */
+  .tooltip-hint {
+    text-decoration: underline dotted var(--color-text-tertiary);
+    text-underline-offset: 3px;
+    cursor: help;
+    position: relative;
+  }
+
+  .tooltip-hint[data-tooltip]:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    width: 220px;
+    padding: 6px 10px;
+    background: var(--color-text-primary, #1a2332);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.4;
+    text-transform: none;
+    letter-spacing: 0;
+    text-decoration: none;
+    border-radius: 3px;
+    white-space: normal;
+    pointer-events: none;
+    z-index: 200;
   }
 </style>

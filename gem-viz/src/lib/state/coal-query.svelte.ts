@@ -211,7 +211,7 @@ export class CoalQueryState {
       return this.query.granularity === 'unit' ? 'units & mines' : 'projects';
     }
     if (hasMine) return 'mines';
-    return this.query.granularity === 'unit' ? 'units' : 'plants';
+    return this.query.granularity === 'unit' ? 'units' : 'plant units';
   });
 
   // ── Initialisation ───────────────────────────────────────────────────────

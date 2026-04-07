@@ -280,11 +280,6 @@
     untrack(() => { if (hasSummary) outputMode = 'summary'; });
   });
 
-  // Auto-collapse summary picker once both groupBy and aggregates are selected
-  $effect(() => {
-    const configured = q.query.groupBy.length > 0 && q.query.aggregates.length > 0;
-    untrack(() => { if (configured) summaryPickerOpen = false; });
-  });
 
   function setOutputMode(mode: 'data' | 'summary') {
     outputMode = mode;
@@ -511,9 +506,56 @@
   let summaryLoading = $state(false);
   let summaryError   = $state<string | null>(null);
 
+  let sortCol = $state<string | null>(null);
+  let sortDir = $state<'asc' | 'desc'>('asc');
+
+  function setSort(key: string) {
+    if (sortCol === key) {
+      sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      sortCol = key;
+      sortDir = 'asc';
+    }
+  }
+
+  // Reset sort when groupBy changes so default order applies
+  $effect(() => {
+    void q.query.groupBy;
+    untrack(() => { sortCol = null; sortDir = 'asc'; });
+  });
+
+  const sortedSummaryRows = $derived.by(() => {
+    const rows = summaryRows;
+    const col = sortCol;
+    const groupKeys = q.query.groupBy;
+    if (!col) {
+      // Default: sort by groupBy columns left to right (ascending)
+      if (groupKeys.length === 0) return rows;
+      return [...rows].sort((a, b) => {
+        for (const k of groupKeys) {
+          const av = String(a[k] ?? '');
+          const bv = String(b[k] ?? '');
+          const cmp = av.localeCompare(bv, undefined, { numeric: true, sensitivity: 'base' });
+          if (cmp !== 0) return cmp;
+        }
+        return 0;
+      });
+    }
+    return [...rows].sort((a, b) => {
+      const av = a[col] ?? '';
+      const bv = b[col] ?? '';
+      const numA = Number(av);
+      const numB = Number(bv);
+      const isNum = !isNaN(numA) && !isNaN(numB);
+      const cmp = isNum ? numA - numB : String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: 'base' });
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  });
+
   // Column definitions for the summary table
   const summaryCols = $derived(() => {
-    const cols: { key: string; label: string }[] = [];
+    const cols: { key: string; label: string; tracker?: string }[] = [];
+    const isBoth = q.query.trackers.length === 2;
     // Group-by columns first
     for (const gk of q.query.groupBy) {
       const f = getField(gk);
@@ -526,6 +568,7 @@
       cols.push({
         key: `${agg.fn}:${agg.field}`,
         label: spec?.label ?? `${agg.fn}(${agg.field})`,
+        tracker: isBoth && f?.trackers.length === 1 ? f.trackers[0] : undefined,
       });
     }
     return cols;
@@ -607,12 +650,12 @@
       },
     },
     {
-      sentence: 'Average mine workforce size by country',
+      sentence: 'Total mine workforce by country',
       apply: () => q.applyQuery({
         trackers: ['coal-mine'],
         filters: { status: ['operating'] },
         groupBy: ['country_area'],
-        aggregates: [{ fn: 'avg', field: 'workforce_size' }],
+        aggregates: [{ fn: 'sum', field: 'workforce_size' }],
       }),
     },
     {
@@ -622,15 +665,6 @@
         filters: {},
         groupBy: ['mine_type'],
         aggregates: [{ fn: 'sum', field: 'capacity_mtpa' }],
-      }),
-    },
-    {
-      sentence: 'Median age of operating coal plants by country',
-      apply: () => q.applyQuery({
-        trackers: ['coal-plant'],
-        filters: { status: ['operating'] },
-        groupBy: ['country_area'],
-        aggregates: [{ fn: 'avg', field: 'plant_age_years' }],
       }),
     },
     {
@@ -653,7 +687,7 @@
         {sentenceCollapsed ? '▼ Show filters' : '▲ Collapse'}
       </button>
     {/if}
-    {#if !sentenceCollapsed}
+    <div class="sentence-content" class:sentence-content--collapsed={sentenceCollapsed}>
     <!-- Summary sentence line (only in summary mode with selections) -->
     {#if outputMode === 'summary' && (q.query.aggregates.length > 0 || q.query.groupBy.length > 0)}
       <div class="summary-sentence">
@@ -793,7 +827,7 @@
         {/if}
       {/snippet}
     </QuerySentenceBuilder>
-    {/if}
+    </div>
   </div>
 
   <!-- ── Output mode (standalone) ─────────────────────────────────────────── -->
@@ -845,23 +879,6 @@
                   {/each}
                 {/each}
               </div>
-            </div>
-          {/if}
-          {#if q.showGranularityToggle}
-            <div class="summary-row">
-              <span class="output-label">granularity</span>
-              <label class="radio-label">
-                <input type="radio" name="granularity" value="project"
-                  checked={q.query.granularity === 'project'}
-                  onchange={() => q.setGranularity('project')} />
-                per plant
-              </label>
-              <label class="radio-label">
-                <input type="radio" name="granularity" value="unit"
-                  checked={q.query.granularity === 'unit'}
-                  onchange={() => q.setGranularity('unit')} />
-                per unit
-              </label>
             </div>
           {/if}
           {#if q.query.groupBy.length > 0 && q.query.aggregates.length > 0}
@@ -952,12 +969,22 @@
           <thead>
             <tr>
               {#each summaryCols() as col}
-                <th>{col.label}</th>
+                <th>
+                  <button class="sort-btn" onclick={() => setSort(col.key)}>
+                    {col.label}
+                    {#if col.tracker}
+                      <span class="col-tracker-badge">{col.tracker === 'coal-plant' ? 'Plants' : 'Mines'}</span>
+                    {/if}
+                    <span class="sort-indicator">
+                      {sortCol === col.key ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}
+                    </span>
+                  </button>
+                </th>
               {/each}
             </tr>
           </thead>
           <tbody>
-            {#each summaryRows as row}
+            {#each sortedSummaryRows as row}
               <tr>
                 {#each summaryCols() as col}
                   <td>{fmtVal(row[col.key])}</td>
@@ -1040,6 +1067,26 @@
 
   .sentence-collapse-btn:hover {
     color: var(--gem-primary-blue, #1d4961);
+  }
+
+  .sentence-content {
+    position: relative;
+  }
+
+  .sentence-content--collapsed {
+    max-height: 2.4em;
+    overflow: hidden;
+  }
+
+  .sentence-content--collapsed::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 1.8em;
+    background: linear-gradient(to bottom, transparent, var(--color-bg-primary, #fff));
+    pointer-events: none;
   }
 
   .word {
@@ -1277,12 +1324,11 @@
     background: #fff;
     color: var(--color-gray-600, #4c6267);
     font-weight: var(--font-weight-bold, 700);
+    padding: 0;
     font-size: var(--font-size-xs, 10px);
     text-transform: uppercase;
     letter-spacing: var(--tracking-wider, 0.04em);
-    padding: var(--space-3, 12px) var(--space-4, 16px);
     text-align: left;
-    border-bottom: 2px solid var(--color-gray-200, #dce3e5);
     white-space: nowrap;
   }
   .data-table td {
@@ -1296,6 +1342,53 @@
   }
   .data-table tr:last-child td { border-bottom: none; }
   .data-table tbody tr:hover td { background: var(--gem-navy-10, #e9eef1); }
+
+  .sort-btn {
+    all: unset;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    width: 100%;
+    padding: var(--space-3, 12px) var(--space-4, 16px);
+    font-size: inherit;
+    font-weight: inherit;
+    font-family: inherit;
+    color: inherit;
+    text-transform: inherit;
+    letter-spacing: inherit;
+    border-bottom: 2px solid var(--color-gray-200, #dce3e5);
+    white-space: nowrap;
+    transition: color 0.1s;
+  }
+
+  .sort-btn:hover {
+    color: var(--gem-primary-blue, #1d4961);
+  }
+
+  .col-tracker-badge {
+    display: inline-block;
+    padding: 0 5px;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: var(--color-gray-100, #eceae3);
+    color: var(--color-gray-500, #6b7280);
+    vertical-align: middle;
+    flex-shrink: 0;
+  }
+
+  .sort-indicator {
+    font-size: 10px;
+    color: var(--color-gray-400, #9eaaad);
+    flex-shrink: 0;
+  }
+
+  .sort-btn:hover .sort-indicator {
+    color: var(--gem-primary-blue, #1d4961);
+  }
 
   .summary-count {
     padding: var(--space-2, 8px) var(--space-4, 16px);
