@@ -771,6 +771,10 @@ export async function getOwnersByFilter(
       totalCount: owners.length,
     };
 
+    if (import.meta.env.DEV) {
+      console.log(`[screener-api] /owners OK — ${owners.length} owners via rest-api in ${result.queryTimeMs.toFixed(0)}ms`);
+    }
+
     ownersByFilterCache.set(cacheKey, { data: result, timestamp: Date.now() });
 
     logQuery({

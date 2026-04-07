@@ -61,12 +61,12 @@ export async function resolveAssetId(assetId: string): Promise<string> {
     return gPrefixToCompoundCache.get(assetId)!;
   }
 
-  // Resolve via server-side endpoint (id-map.json stays server-only)
+  // Resolve via /resolve/{id} API endpoint
   try {
-    const res = await fetch(`/api/resolve-id?id=${encodeURIComponent(assetId)}`);
+    const res = await fetch(`${API_BASE}/resolve/${encodeURIComponent(assetId)}`);
     if (res.ok) {
       const data = await res.json();
-      const resolved = data.resolved as string;
+      const resolved = data.assets?.[0]?.asset_id as string | undefined;
       if (resolved && resolved !== assetId) {
         if (gPrefixToCompoundCache.size > 5000) gPrefixToCompoundCache.clear();
         gPrefixToCompoundCache.set(assetId, resolved);

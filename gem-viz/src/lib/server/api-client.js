@@ -4,26 +4,34 @@
  * Includes server-side ID resolution for G-prefix IDs
  */
 
-import idMap from './id-map.json';
-
 const API_BASE = 'https://gem-api.thirdbear.net';
 
 /**
- * Resolve G-prefix ID to compound ID using pre-built mapping
+ * Resolve G-prefix ID to compound ID via /resolve/{id} API
  * @param {string} assetId
- * @returns {string}
+ * @returns {Promise<string>}
  */
-function resolveAssetId(assetId) {
+async function resolveAssetId(assetId) {
   // Only resolve G-prefix IDs
   if (!assetId.startsWith('G') || assetId.includes('_')) {
     return assetId;
   }
-  // Look up in mapping, fall back to original
-  const resolved = idMap[assetId];
-  if (resolved) {
-    console.log(`[Server ID] Resolved ${assetId} → ${resolved}`);
+  try {
+    const res = await fetch(`${API_BASE}/resolve/${encodeURIComponent(assetId)}`, {
+      headers: { Accept: 'application/json' },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const resolved = data.assets?.[0]?.asset_id;
+      if (resolved) {
+        console.log(`[Server ID] Resolved ${assetId} → ${resolved}`);
+        return resolved;
+      }
+    }
+  } catch {
+    // API unavailable — return as-is
   }
-  return resolved || assetId;
+  return assetId;
 }
 
 /**
@@ -122,7 +130,7 @@ async function fetchJSON(path, timeout = 30000) {
 export async function fetchAssetData(assetId) {
   try {
     // Resolve G-prefix to compound ID
-    const resolvedId = resolveAssetId(assetId);
+    const resolvedId = await resolveAssetId(assetId);
 
     const [rawAsset, rawGraph] = await Promise.all([
       fetchJSON(`/assets/${encodeURIComponent(resolvedId)}`),

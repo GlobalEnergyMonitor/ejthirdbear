@@ -1,9 +1,8 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import idMap from '$lib/server/id-map.json';
 import { GEM_CORS_ORIGINS } from '$lib/external-links';
 
-const map = idMap as Record<string, string>;
+const API_BASE = import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-api.thirdbear.net';
 
 // CORS: allow dynamic widget embeds on Drupal to call this endpoint
 const ALLOWED_ORIGINS = GEM_CORS_ORIGINS;
@@ -24,7 +23,7 @@ export const OPTIONS: RequestHandler = ({ request }) => {
   return new Response(null, { status: 204, headers: corsHeaders(request) });
 };
 
-export const GET: RequestHandler = ({ url, request }) => {
+export const GET: RequestHandler = async ({ url, request }) => {
   const ids = url.searchParams.getAll('id');
   const headers = corsHeaders(request);
 
@@ -33,14 +32,29 @@ export const GET: RequestHandler = ({ url, request }) => {
   }
 
   if (ids.length === 1) {
-    const resolved = map[ids[0]] ?? ids[0];
+    const resolved = await resolveViaApi(ids[0]);
     return json({ resolved }, { headers });
   }
 
   // Batch mode
   const results: Record<string, string> = {};
-  for (const id of ids) {
-    results[id] = map[id] ?? id;
-  }
+  await Promise.all(ids.map(async (id) => {
+    results[id] = await resolveViaApi(id);
+  }));
   return json({ results }, { headers });
 };
+
+/** Call the /resolve/{id} API and extract the compound asset_id. */
+async function resolveViaApi(id: string): Promise<string> {
+  try {
+    const res = await fetch(`${API_BASE}/resolve/${encodeURIComponent(id)}`);
+    if (res.ok) {
+      const data = await res.json();
+      const assetId = data.assets?.[0]?.asset_id;
+      if (assetId) return assetId;
+    }
+  } catch {
+    // API unavailable — return as-is
+  }
+  return id;
+}

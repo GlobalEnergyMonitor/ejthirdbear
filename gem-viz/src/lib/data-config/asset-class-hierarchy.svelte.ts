@@ -10,7 +10,7 @@
  */
 
 import type { CatalogAssetClass, CatalogClassTree } from '$lib/api/catalog-api';
-import { combineChildUrls } from '$lib/api/catalog-api';
+import { combineChildUrls, fetchAssetClassHierarchy } from '$lib/api/catalog-api';
 import hierarchyJson from './asset-class-hierarchy.json';
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -77,15 +77,22 @@ export function getUiTrackerFromCatalogEntry(entry: CatalogAssetClass): string {
 
 // ── Module-level hierarchy cache ───────────────────────────────────────────
 
-// Loaded from static JSON for now. TODO: switch to fetchAssetClassHierarchy() once API engineer
-// deploys hierarchy_cleaned.json and filters_cleaned.json to the catalog endpoints.
+// Static JSON used as instant fallback; API fetch replaces it on first loadHierarchy() call.
 let _hierarchy: { categories: HierarchyCategory[] } = $state(
   hierarchyJson as { categories: HierarchyCategory[] }
 );
 
-/** No-op until API is updated — hierarchy is loaded from static JSON. */
-// eslint-disable-next-line @typescript-eslint/no-empty-function
-export async function loadHierarchy(): Promise<void> {}
+/** Fetch hierarchy from the API, replacing the static JSON fallback. */
+export async function loadHierarchy(): Promise<void> {
+  try {
+    const data = await fetchAssetClassHierarchy();
+    if (data.categories.length > 0) {
+      _hierarchy = data as { categories: HierarchyCategory[] };
+    }
+  } catch {
+    // Keep static JSON fallback
+  }
+}
 
 function getHierarchy(): { categories: HierarchyCategory[] } {
   return _hierarchy;

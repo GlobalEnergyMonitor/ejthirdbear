@@ -7,12 +7,11 @@
 
 const API_BASE = import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-api.thirdbear.net';
 
-// Catalog asset-classes endpoint is on staging until backend deploys to prod.
-// Once prod is live this will just equal API_BASE.
+// Catalog API base — now on prod alongside the main API.
 const CATALOG_API_BASE =
   import.meta.env.PUBLIC_CATALOG_API_BASE_URL ||
   import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL ||
-  'https://gem-ownership-api-staging.fly.dev';
+  'https://gem-api.thirdbear.net';
 
 // =============================================================================
 // TYPES
@@ -287,14 +286,9 @@ export function findSubtree(
   return undefined;
 }
 
-// TODO: remove static import and fetch from API once engineer deploys filters_cleaned.json
-// to /catalog/asset-class-filters. At that point also remove asset-class-filters.json from src/.
-import assetClassFiltersJson from '$lib/data-config/asset-class-filters.json';
-
 const ASSET_CLASSES_TTL_MS = 60 * 60 * 1000; // 1 hour
-// Pre-loaded from static JSON — fetchAssetClasses() returns this immediately without an API call.
-let _assetClassesCache: CatalogAssetClass[] | null = assetClassFiltersJson as CatalogAssetClass[];
-let _assetClassesFetchedAt = Date.now();
+let _assetClassesCache: CatalogAssetClass[] | null = null;
+let _assetClassesFetchedAt = 0;
 
 /** Returns asset class filter definitions. Currently served from static JSON; will fetch from API once deployed. */
 export async function fetchAssetClasses(): Promise<CatalogAssetClass[]> {
