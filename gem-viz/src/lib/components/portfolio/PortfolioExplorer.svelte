@@ -15,7 +15,7 @@
   import * as d3Shape from 'd3-shape';
   import { scaleOrdinal } from 'd3-scale';
   import { schemeTableau10, schemePaired, schemeSet3 } from 'd3-scale-chromatic';
-  import { transition } from 'd3-transition'; // side-effect import for selection.transition()
+
   import {
     colors,
     trackerColorMap,
@@ -415,9 +415,7 @@
 
     // DFS to collect all paths from root to leaf projects.
     // Dead-end entities (subsidiaries with no assets) are excluded.
-    const entityIds = new Set(
-      graph.nodes.filter((n) => n.node_type === 'entity').map((n) => n.entity_id)
-    );
+
     const paths = [];
     const pathStrings = [];
     const visited = new Set();
@@ -461,7 +459,7 @@
   // ============================================================================
   // INTERMEDIARIES
   // ============================================================================
-  function computeIntermediaries(entities, treePaths, rootEntityId) {
+  function computeIntermediaries(entities, treePaths, _rootEntityId) {
     return entities
       .map((e) => {
         const connectedLeafs = new Set(
@@ -1224,7 +1222,6 @@
     {#if selectedProject}
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div class="modal-backdrop" onclick={() => (selectedProject = null)} onkeydown={(e) => e.key === 'Escape' && (selectedProject = null)}>
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
           class="asset-modal"
           role="dialog"

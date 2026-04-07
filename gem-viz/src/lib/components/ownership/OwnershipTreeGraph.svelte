@@ -126,7 +126,6 @@
   let frozenId = $state<string | null>(null);
   let frozenMeta = $state<FrozenMeta | null>(null);
   let frozenNodeData = $state<{ nodesTouched: string[]; edgeIndices: number[] } | null>(null);
-  let hasEverFrozen = $state(false);
   let hasAutoFit = false;
   let tooltipX = $state(0);
   let tooltipY = $state(0);
@@ -893,7 +892,6 @@
       // Freeze on this node
       frozenId = n.id;
       frozenMeta = buildFocusMeta(n.id);
-      hasEverFrozen = true;
       const entityId = filteredNodes.find((node) => node.id === n.id)?.entity_id || n.id;
       frozenNodeData = pathsTouchedMap.get(entityId) || null;
     }
@@ -931,7 +929,6 @@
     hoveredId = null;
     hoveredNodeData = null;
     hoverSource = null;
-    if (id || data) hasEverFrozen = true;
   }
 
   function handleNodeLeave() {
@@ -1749,7 +1746,6 @@
           {countryRanks}
           {panelOpen}
           {entranceAnimDone}
-          {hasEverFrozen}
           {onNavigate}
           onHover={handlePanelHover}
           onLeave={handleNodeLeave}
@@ -1766,11 +1762,9 @@
         {hoveredGraphNode}
         {hoveredLayoutNode}
         {frozenId}
-        {hasEverFrozen}
         {hoverSource}
         {tooltipX}
         {tooltipY}
-        {isLargeGraph}
         {rootId}
         {edges}
       />

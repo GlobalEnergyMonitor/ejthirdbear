@@ -380,20 +380,6 @@
     color: var(--color-text-primary);
   }
 
-  .debug-option {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    font-size: var(--font-size-sm);
-    color: var(--color-text-tertiary);
-    cursor: pointer;
-    user-select: none;
-  }
-
-  .debug-option input[type='checkbox'] {
-    cursor: pointer;
-  }
-
   /* Shared */
   .search-error {
     padding: var(--space-2) var(--space-3);

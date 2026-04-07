@@ -12,11 +12,9 @@
     hoveredGraphNode,
     hoveredLayoutNode,
     frozenId,
-    hasEverFrozen,
     hoverSource,
     tooltipX,
     tooltipY,
-    isLargeGraph,
     rootId,
     edges,
   }: {
@@ -24,11 +22,9 @@
     hoveredGraphNode: GraphNode | null;
     hoveredLayoutNode: { pct?: number } | null;
     frozenId: string | null;
-    hasEverFrozen: boolean;
     hoverSource: 'graph' | 'panel' | null;
     tooltipX: number;
     tooltipY: number;
-    isLargeGraph: boolean;
     rootId: string;
     edges: GraphEdge[];
   } = $props();

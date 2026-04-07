@@ -16,7 +16,7 @@
   import { fetchCoalPlantLocation, resolveAssetId } from '$lib/ownership-api';
   import type { CoalPlantUnit } from '$lib/components/cards/coal-plant-types';
   import CoalPlantCard from '$lib/components/cards/CoalPlantCard.svelte';
-  import { errorMessage, readHash, writeHash } from '../embed-utils';
+  import { errorMessage, readHash } from '../embed-utils';
 
   // URL params (converted to $state so hash can override on mount)
   let assetId = $state($page.url.searchParams.get('id'));

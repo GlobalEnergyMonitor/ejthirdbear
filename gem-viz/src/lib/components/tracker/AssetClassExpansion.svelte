@@ -910,48 +910,6 @@
     color: var(--color-text-tertiary);
   }
 
-  .status-toolbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-3, 12px);
-    margin-bottom: var(--space-3, 12px);
-    flex-wrap: wrap;
-  }
-
-  .status-presets {
-    display: flex;
-    gap: var(--space-2, 8px);
-    flex-wrap: wrap;
-  }
-
-  .preset-btn {
-    font-size: var(--font-size-sm, 13px);
-    border: 1px solid var(--color-border, #e5e7eb);
-    background: var(--color-bg-primary, #fff);
-    color: var(--color-text-secondary);
-    border-radius: var(--radius-sm, 4px);
-    padding: 2px var(--space-2, 8px);
-    cursor: pointer;
-    font-family: inherit;
-  }
-
-  .preset-btn:hover {
-    border-color: var(--gem-teal, #2a7f8f);
-    color: var(--color-text-primary);
-  }
-
-  .status-count {
-    font-size: var(--font-size-sm, 13px);
-    color: var(--color-text-tertiary);
-  }
-
-  .status-warning {
-    margin: var(--space-2, 8px) 0 0 0;
-    font-size: var(--font-size-sm, 13px);
-    color: #b45309;
-  }
-
   .refine-toggle {
     background: none;
     border: none;
@@ -1004,55 +962,10 @@
     cursor: pointer;
   }
 
-  .count-badge {
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--color-text-tertiary);
-    background: var(--color-gray-100, #f1f5f9);
-    padding: 1px 6px;
-    border-radius: 9999px;
-    margin-left: auto;
-  }
-
-  .count-badge.small {
-    font-size: 10px;
-    padding: 0 4px;
-  }
-
   .refine-label {
     text-transform: capitalize;
     flex: 1;
     min-width: 0;
-  }
-
-  /* CSS-only tooltip for status group labels and refine-panel values */
-  .tooltip-hint {
-    text-decoration: underline dotted var(--color-text-tertiary);
-    text-underline-offset: 3px;
-    cursor: help;
-    position: relative;
-  }
-
-  .tooltip-hint[data-tooltip]:hover::after {
-    content: attr(data-tooltip);
-    position: absolute;
-    bottom: calc(100% + 6px);
-    left: 50%;
-    transform: translateX(-50%);
-    width: 220px;
-    padding: 6px 10px;
-    background: var(--color-text-primary, #1a2332);
-    color: #fff;
-    font-size: 12px;
-    font-weight: 400;
-    line-height: 1.4;
-    text-transform: none;
-    letter-spacing: 0;
-    text-decoration: none;
-    border-radius: 3px;
-    white-space: normal;
-    pointer-events: none;
-    z-index: 200;
   }
 
   /* ── Responsive ───────────────────────────────────────────────────── */

@@ -5,7 +5,7 @@
    */
   import { goto } from '$app/navigation';
   import { entityLink } from '$lib/links';
-  import type { GraphNode, GraphEdge } from '$lib/component-data/graph-types';
+  import type { GraphNode } from '$lib/component-data/graph-types';
   import { getNodeColors, COUNTRY_COLORS, COUNTRY_GRAY, OWNERSHIP_ENTITY_COLORS, pieArc, type ColorMode } from './ownership-tree-utils';
 
   let {
@@ -27,7 +27,6 @@
     countryRanks,
     panelOpen = true,
     entranceAnimDone = false,
-    hasEverFrozen = false,
     onNavigate = undefined,
     onHover,
     onLeave,
@@ -55,17 +54,16 @@
     countryRanks: Map<string, number>;
     panelOpen: boolean;
     entranceAnimDone: boolean;
-    hasEverFrozen: boolean;
-    onNavigate?: (url: string) => void;
-    onHover: (id: string, data: { nodesTouched: string[]; edgeIndices: number[] } | null) => void;
+    onNavigate?: (_url: string) => void;
+    onHover: (_id: string, _data: { nodesTouched: string[]; edgeIndices: number[] } | null) => void;
     onLeave: () => void;
     onFreeze: (
-      id: string | null,
-      data: { nodesTouched: string[]; edgeIndices: number[] } | null,
-      meta?: { kind: 'entity' | 'asset' | 'country' | 'entity-type'; label: string; facts: string[] } | null
+      _id: string | null,
+      _data: { nodesTouched: string[]; edgeIndices: number[] } | null,
+      _meta?: { kind: 'entity' | 'asset' | 'country' | 'entity-type'; label: string; facts: string[] } | null
     ) => void;
     onTogglePanel: () => void;
-    isNodeInFrozenPath: (id: string) => boolean;
+    isNodeInFrozenPath: (_id: string) => boolean;
     minOwnershipPct?: number;
     showSlider?: boolean;
   } = $props();

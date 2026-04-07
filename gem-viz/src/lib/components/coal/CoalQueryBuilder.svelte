@@ -1222,11 +1222,6 @@
     pointer-events: none;
   }
 
-  .word {
-    color: var(--color-gray-600, #4c6267);
-    white-space: nowrap;
-  }
-
   /* ── Value chips ─────────────────────────────────────────────────────────── */
   .value-chip {
     display: inline-flex;
@@ -1640,22 +1635,6 @@
   }
   .summary-done-btn:hover {
     background: var(--gem-navy-10, #e9eef1);
-  }
-
-  .radio-label {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-2, 8px);
-    font-size: var(--font-size-base, 14px);
-    color: var(--color-gray-600, #4c6267);
-    cursor: pointer;
-    user-select: none;
-  }
-  input[type='radio'] {
-    accent-color: var(--gem-primary-blue, #1d4961);
-    width: 14px;
-    height: 14px;
-    cursor: pointer;
   }
 
   .summary-section {

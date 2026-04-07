@@ -273,16 +273,6 @@
     flex: 1;
   }
 
-  .count {
-    font-variant-numeric: tabular-nums;
-    background: var(--color-text-primary);
-    color: var(--color-white);
-    padding: 2px 6px;
-    font-size: var(--font-size-xs);
-    min-width: 18px;
-    text-align: center;
-  }
-
   .panel-content {
     padding: var(--space-3) var(--space-4) var(--space-4);
     animation: panelExpand 0.2s ease-out;

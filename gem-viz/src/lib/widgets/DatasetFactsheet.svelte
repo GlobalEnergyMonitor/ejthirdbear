@@ -8,7 +8,6 @@
    * - Cached queries with TTL
    * - Shared types and utilities
    */
-  import { onMount } from 'svelte';
   import {
     fetchFieldStats,
     fetchRowCount,

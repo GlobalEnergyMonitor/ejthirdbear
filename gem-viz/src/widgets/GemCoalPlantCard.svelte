@@ -25,7 +25,6 @@
   let loading = $state(true);
   let error = $state<string | null>(null);
   let units = $state<CoalPlantUnit[]>([]);
-  let plantName = $state('');
 
   const sourceId = $derived((id || assetId || '').trim());
 
@@ -58,7 +57,6 @@
       }
 
       units = location.units;
-      plantName = location.asset_name || locationId;
     } catch (err) {
       error = errorMessage(err, 'Failed to load coal plant data');
     } finally {

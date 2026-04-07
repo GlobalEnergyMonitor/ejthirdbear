@@ -17,7 +17,6 @@
     showFlower?: boolean;
     showAssets?: boolean;
     showChart?: boolean;
-    showMap?: boolean;
     maxAssets?: number;
     linkBase?: string;
     linkTarget?: string;
@@ -29,7 +28,6 @@
     showFlower = true,
     showAssets = true,
     showChart = false,
-    showMap = false,
     maxAssets = 10,
     linkBase = '',
     linkTarget = '',

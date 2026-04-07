@@ -21,7 +21,7 @@
   const PLACEHOLDER_ENTITY_IDS = new Set(['E100001015587', 'E100000123261', 'E100000132388']);
 
   /** @type {{ initialQuery?: string, initialType?: string, onStateChange?: (q: string, type: string) => void }} */
-  let { initialQuery = '', initialType = 'all', onStateChange } = $props();
+  let { initialQuery = '', initialType: _initialType = 'all', onStateChange } = $props();
 
   const modes = [
     { id: 'assets', label: 'Assets', placeholder: 'Search assets by name, ID, owner, or country...' },
@@ -231,7 +231,7 @@
     return sep >= 0 ? assetId.slice(0, sep) : assetId;
   }
 
-  async function doSearch(q, type) {
+  async function doSearch(q, _type) {
     // Snapshot reactive arrays into plain arrays to avoid proxy issues in buildQuery
     const countries  = Array.from(filterCountries);
     const types      = Array.from(filterAssetTypes);
