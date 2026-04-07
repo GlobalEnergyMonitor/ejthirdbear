@@ -9,9 +9,11 @@
   let {
     statusGroups,
     statusChecks = $bindable({}),
+    showRefine = true,
   }: {
     statusGroups: DynamicStatusGroup[];
     statusChecks?: Record<string, boolean>;
+    showRefine?: boolean;
   } = $props();
 
   let expandedRefine: Record<string, boolean> = $state({});
@@ -81,7 +83,7 @@
 
   <div class="group-row">
     {#each statusGroups as sg (sg.id)}
-      {@const hasRefine = sg.statuses.length > 1}
+      {@const hasRefine = showRefine && sg.statuses.length > 1}
       <div class="group-item">
         <label class="group-checkbox">
           <input

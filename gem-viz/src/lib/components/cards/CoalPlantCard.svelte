@@ -16,6 +16,7 @@
   let {
     units: allUnits,
     open = false,
+    initialTab,
     ownershipLoader,
   }: {
     units: CoalPlantUnit[];

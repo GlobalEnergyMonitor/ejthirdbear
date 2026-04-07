@@ -45,7 +45,10 @@ export interface CoalField {
   category: string;              // Mirrors API fieldCategoriesOrdered
   filterable?: FilterType;
   groupable?: boolean;
+  groupableSingleTrackerOnly?: boolean; // If true, only show in group-by when a single tracker is selected
   aggregatable?: AggregateSpec[];
+  apiFieldKey?: string;          // Override API field key in URL (defaults to key)
+  skipPlantCollapse?: boolean;   // Skip location_id collapse even in project granularity mode
 }
 
 // ── Shared fields (present in both trackers with the same API key) ─────────
@@ -69,6 +72,14 @@ const SHARED: CoalField[] = [
     groupable: true,
   },
   {
+    key: 'sub_status',
+    label: 'Sub-status',
+    trackers: ['coal-plant', 'coal-mine'],
+    category: 'Main',
+    groupable: true,
+    groupableSingleTrackerOnly: true,
+  },
+  {
     key: 'coal_type',
     label: 'Coal type',
     trackers: ['coal-plant', 'coal-mine'],
@@ -82,6 +93,39 @@ const SHARED: CoalField[] = [
     trackers: ['coal-plant', 'coal-mine'],
     category: 'Ownership',
     filterable: 'text',
+  },
+];
+
+// ── Count pseudo-fields (use status as API proxy, never shown as filters) ──
+
+const COUNT_FIELDS: CoalField[] = [
+  {
+    key: '_count_plants',
+    label: 'Count of plants',
+    shortLabel: '# Plants',
+    trackers: ['coal-plant'],
+    category: 'Count',
+    apiFieldKey: 'status',
+    aggregatable: [{ fn: 'count', label: 'Count of plants' }],
+  },
+  {
+    key: '_count_plant_units',
+    label: 'Count of plant units',
+    shortLabel: '# Plant units',
+    trackers: ['coal-plant'],
+    category: 'Count',
+    apiFieldKey: 'status',
+    skipPlantCollapse: true,
+    aggregatable: [{ fn: 'count', label: 'Count of plant units' }],
+  },
+  {
+    key: '_count_mines',
+    label: 'Count of mines',
+    shortLabel: '# Mines',
+    trackers: ['coal-mine'],
+    category: 'Count',
+    apiFieldKey: 'status',
+    aggregatable: [{ fn: 'count', label: 'Count of mines' }],
   },
 ];
 
@@ -329,7 +373,7 @@ const MINE_FIELDS: CoalField[] = [
 
 // ── Master list ────────────────────────────────────────────────────────────
 
-export const COAL_FIELDS: CoalField[] = [...SHARED, ...PLANT_FIELDS, ...MINE_FIELDS];
+export const COAL_FIELDS: CoalField[] = [...SHARED, ...PLANT_FIELDS, ...MINE_FIELDS, ...COUNT_FIELDS];
 
 // ── Lookup helpers ─────────────────────────────────────────────────────────
 
@@ -346,7 +390,17 @@ export function getFilterableFields(trackers: Tracker[]): CoalField[] {
 }
 
 export function getGroupableFields(trackers: Tracker[]): CoalField[] {
-  return getFieldsForTrackers(trackers).filter((f) => f.groupable);
+  const isMulti = trackers.length > 1;
+  return COAL_FIELDS.filter((f) => {
+    if (!f.groupable) return false;
+    // When multiple trackers selected: field must cover ALL selected trackers
+    if (isMulti) {
+      if (f.groupableSingleTrackerOnly) return false;
+      return trackers.every((t) => f.trackers.includes(t));
+    }
+    // Single tracker: field must apply to that tracker
+    return f.trackers.includes(trackers[0]);
+  });
 }
 
 export function getAggregatableFields(trackers: Tracker[]): CoalField[] {

@@ -24,7 +24,7 @@ import {
   type Tracker,
   type Granularity,
 } from '$lib/data-config/coal-field-schema';
-import { STATUS_GROUPS } from '$lib/data-config/tracker-schema';
+import { STATUS_GROUPS, displayStatusToApiKey, isCoarseStatus } from '$lib/data-config/tracker-schema';
 
 const API_BASE = import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-api.thirdbear.net';
 
@@ -35,7 +35,9 @@ const API_BASE = import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-a
  * - all other categorical filter arrays → field_key=val (passed through as-is)
  */
 export function appendCoalFilters(p: URLSearchParams, filters: CoalQueryFilters): void {
-  // Status: map individual values to status= or sub_status= based on group membership
+  // Status: map individual values to status= or sub_status= based on group membership.
+  // The API only accepts status= for coarse groups (operating/planned/retired).
+  // All other values must be sent as sub_status= in snake_case API format.
   if (filters.status?.length) {
     const selectedSet = new Set(filters.status);
     const handledVals = new Set<string>();
@@ -44,17 +46,29 @@ export function appendCoalFilters(p: URLSearchParams, filters: CoalQueryFilters)
       const inGroup = (sg.statuses as readonly string[]).filter((s) => selectedSet.has(s));
       if (inGroup.length === 0) continue;
 
-      if (inGroup.length === sg.statuses.length) {
+      if (inGroup.length === sg.statuses.length && isCoarseStatus(sg.id)) {
+        // Full group selected and API supports status=groupId
         p.append('status', sg.id);
       } else {
-        for (const v of inGroup) p.append('sub_status', v);
+        // Partial group or non-coarse group (e.g. cancelled) → individual sub_status values
+        for (const v of inGroup) {
+          const apiKey = displayStatusToApiKey(v);
+          if (apiKey) p.append('sub_status', apiKey);
+        }
       }
       for (const v of inGroup) handledVals.add(v);
     }
 
-    // Any selected values not matched by STATUS_GROUPS go as sub_status
+    // Any selected values not matched by STATUS_GROUPS
     for (const v of filters.status) {
-      if (!handledVals.has(v)) p.append('sub_status', v);
+      if (!handledVals.has(v)) {
+        if (isCoarseStatus(v)) {
+          p.append('status', v);
+        } else {
+          const apiKey = displayStatusToApiKey(v);
+          if (apiKey) p.append('sub_status', apiKey);
+        }
+      }
     }
   }
 

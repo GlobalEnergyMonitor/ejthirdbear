@@ -37,6 +37,7 @@ import {
   type Tracker,
   type AggFn,
 } from './coal-field-schema';
+import { STATUS_GROUPS, displayStatusToApiKey, isCoarseStatus } from './tracker-schema';
 
 const API_BASE = import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-api.thirdbear.net';
 
@@ -51,25 +52,6 @@ export interface SummaryRow {
   [key: string]: string | number | null;
 }
 
-// ── API URL builder ────────────────────────────────────────────────────────
-
-function buildAggregateUrl(
-  tracker: Tracker,
-  fieldKey: string,
-  fn: AggFn,
-  filters: Record<string, string[]>,
-  groupBy: string[],
-): string {
-  const trackerSlug = tracker.endsWith('s') ? tracker : tracker + 's';
-  const url = new URL(
-    `${API_BASE}/catalog/metadata/${trackerSlug}/fields/${fieldKey}/${fn}`
-  );
-  for (const [key, values] of Object.entries(filters)) {
-    for (const v of values) url.searchParams.append(key, v);
-  }
-  for (const g of groupBy) url.searchParams.append('group_by', g);
-  return url.toString();
-}
 
 // ── Single-tracker fetch ───────────────────────────────────────────────────
 
@@ -92,19 +74,49 @@ async function fetchOneTrackerAggregate(
   const needsPlantCollapse =
     query.granularity === 'project' &&
     tracker === 'coal-plant' &&
-    field.aggregatable != null;
+    field.aggregatable != null &&
+    !field.skipPlantCollapse;
 
   const apiGroupBy = needsPlantCollapse
     ? ['location_id', ...query.groupBy]
     : [...query.groupBy];
 
-  // Build filter params
-  const filters: Record<string, string[]> = {};
+  // Build filter params using the same group-aware status logic as appendCoalFilters
+  const url = new URL(
+    `${API_BASE}/catalog/metadata/${tracker.endsWith('s') ? tracker : tracker + 's'}/fields/${field.apiFieldKey ?? aggregate.field}/${aggregate.fn}`
+  );
   const f = query.filters;
-  if (f.status?.length) filters.status = f.status;
-  if (f.country_area?.length) filters.country = f.country_area;
-
-  const url = buildAggregateUrl(tracker, aggregate.field, aggregate.fn, filters, apiGroupBy);
+  if (f.status?.length) {
+    const selectedSet = new Set(f.status);
+    const handled = new Set<string>();
+    for (const sg of STATUS_GROUPS) {
+      const inGroup = (sg.statuses as readonly string[]).filter((s) => selectedSet.has(s));
+      if (inGroup.length === 0) continue;
+      if (inGroup.length === sg.statuses.length && isCoarseStatus(sg.id)) {
+        url.searchParams.append('status', sg.id);
+      } else {
+        for (const v of inGroup) {
+          const apiKey = displayStatusToApiKey(v);
+          if (apiKey) url.searchParams.append('sub_status', apiKey);
+        }
+      }
+      for (const v of inGroup) handled.add(v);
+    }
+    for (const v of f.status) {
+      if (!handled.has(v)) {
+        if (isCoarseStatus(v)) {
+          url.searchParams.append('status', v);
+        } else {
+          const apiKey = displayStatusToApiKey(v);
+          if (apiKey) url.searchParams.append('sub_status', apiKey);
+        }
+      }
+    }
+  }
+  if (f.country_area?.length) {
+    for (const c of f.country_area) url.searchParams.append('country', c);
+  }
+  for (const g of apiGroupBy) url.searchParams.append('group_by', g);
   const response = await fetch(url);
 
   if (!response.ok) {
