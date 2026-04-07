@@ -20,6 +20,7 @@
 
   // URL params (converted to $state so hash can override on mount)
   let assetId = $state($page.url.searchParams.get('id'));
+  let initialTab = $state($page.url.searchParams.get('tab') ?? '');
 
   // State
   let loading = $state(true);
@@ -54,6 +55,7 @@
     // Read hash — hash params override query params for deep-linking
     const h = readHash();
     if (h.id) assetId = h.id;
+    if (h.tab) initialTab = h.tab;
 
     if (!assetId) {
       error = 'Missing required parameter: id';
@@ -95,7 +97,7 @@
       {/if}
     </div>
   {:else if units.length > 0}
-    <CoalPlantCard {units} open={true} />
+    <CoalPlantCard {units} open={true} {initialTab} />
   {/if}
 </div>
 

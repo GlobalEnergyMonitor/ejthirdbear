@@ -63,7 +63,7 @@
       {/if}
     </div>
   {:else if displayAssets.length > 0}
-    <AssetRingVisualization assets={displayAssets} />
+    <AssetRingVisualization assets={displayAssets} size={400} />
   {:else}
     <div class="embed-empty">No assets found for this entity</div>
   {/if}
@@ -73,5 +73,8 @@
   .ring-embed {
     width: 100%;
     min-height: 400px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 </style>

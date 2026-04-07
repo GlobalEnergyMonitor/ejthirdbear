@@ -87,6 +87,8 @@
       if (skipRawKeys.has(k)) continue;
       // Skip if any config field references this raw key
       if (configuredKeys.has(`raw.${k}`)) continue;
+      // Skip nested objects/arrays — they clutter the raw dump
+      if (typeof v === 'object') continue;
       extras.push({ label: k, value: String(v) });
     }
     return extras;
