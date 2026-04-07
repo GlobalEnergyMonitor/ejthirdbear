@@ -8,6 +8,7 @@
    * Accepts entityId/hidePicker as props (used by both route page and widget).
    * Ported from Observable notebook: https://observablehq.com/d/5a1f34aee34fe4cf
    */
+  import { assetLink } from '$lib/links';
   import * as d3 from 'd3-selection';
   import * as d3Array from 'd3-array';
   import * as d3Hierarchy from 'd3-hierarchy';
