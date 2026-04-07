@@ -1,15 +1,54 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+
   /**
    * CountryMultiSelect — searchable combobox for selecting multiple countries.
    * Type to filter, click to add as chips, X to remove.
+   *
+   * Country list is fetched from the GEM geography taxonomy endpoint.
+   * If `countries` prop is provided (non-empty), only those countries that
+   * appear in both the taxonomy and the prop are shown (useful for faceted
+   * filtering in contexts like the asset-class screener).
    */
+
+  const GEO_TAXONOMY_URL = 'https://gem-ownership-api.fly.dev/catalog/taxonomy/geography?format=json';
+  const WANTED_REGIONS = ['Africa', 'Asia', 'Europe', 'Latin America and the Caribbean', 'North America', 'Oceania'];
 
   interface Props {
     selected: string[];
-    countries: readonly string[];
+    /** Optional filter: if non-empty, only show intersection with taxonomy. */
+    countries?: readonly string[];
   }
 
-  let { selected = $bindable(), countries }: Props = $props();
+  let { selected = $bindable(), countries = [] }: Props = $props();
+
+  // ── Taxonomy fetch ────────────────────────────────────────────────
+  let taxonomyCountries = $state<string[]>([]);
+  let apiRegionGroups = $state<CountryGroup[]>([]);
+
+  onMount(async () => {
+    try {
+      const resp = await fetch(GEO_TAXONOMY_URL);
+      const data = await resp.json() as { country: { values: string[] }; region: Record<string, string[]> };
+      taxonomyCountries = data.country.values;
+      apiRegionGroups = WANTED_REGIONS
+        .filter(r => data.region[r]?.length)
+        .map(r => ({
+          id: r.toLowerCase().replace(/[\s&]+/g, '-'),
+          label: r,
+          aliases: [r.toLowerCase()],
+          members: data.region[r],
+        }));
+    } catch { /* fail silently — countries prop used as fallback */ }
+  });
+
+  /** Effective country list: taxonomy (filtered by prop if provided) or prop alone. */
+  const effectiveCountries = $derived.by(() => {
+    if (taxonomyCountries.length === 0) return [...countries];
+    if (countries.length === 0) return taxonomyCountries;
+    const propSet = new Set(countries);
+    return taxonomyCountries.filter(c => propSet.has(c));
+  });
 
   // ── Country group presets ─────────────────────────────────────────
   interface CountryGroup {
@@ -19,7 +58,8 @@
     members: string[];
   }
 
-  const COUNTRY_GROUPS: CountryGroup[] = [
+  // Static groups — Southeast Asia and Middle East removed (covered by API regions)
+  const STATIC_GROUPS: CountryGroup[] = [
     {
       id: 'g7',
       label: 'G7',
@@ -156,51 +196,16 @@
         'United States',
       ],
     },
-    {
-      id: 'southeast-asia',
-      label: 'Southeast Asia',
-      aliases: ['southeast asia', 'asean', 'se asia'],
-      members: [
-        'Brunei',
-        'Cambodia',
-        'Indonesia',
-        'Laos',
-        'Malaysia',
-        'Myanmar',
-        'Philippines',
-        'Singapore',
-        'Thailand',
-        'Vietnam',
-        'Timor-Leste',
-      ],
-    },
-    {
-      id: 'middle-east',
-      label: 'Middle East',
-      aliases: ['middle east', 'mena'],
-      members: [
-        'Bahrain',
-        'Iran',
-        'Iraq',
-        'Israel',
-        'Jordan',
-        'Kuwait',
-        'Lebanon',
-        'Oman',
-        'Qatar',
-        'Saudi Arabia',
-        'Syria',
-        'T\u00FCrkiye',
-        'United Arab Emirates',
-        'Yemen',
-      ],
-    },
   ];
+
+  /** All groups: static political groups first, then API geographic regions. */
+  const allGroups = $derived([...STATIC_GROUPS, ...apiRegionGroups]);
 
   // ── Matching logic ────────────────────────────────────────────────
   let query = $state('');
   let open = $state(false);
   let highlightIndex = $state(-1);
+  let pendingDelete = $state(false);
   let inputEl: HTMLInputElement | undefined = $state();
   let listEl: HTMLUListElement | undefined = $state();
   const listboxId = 'country-multi-select-listbox';
@@ -208,8 +213,8 @@
   /** Groups whose alias matches the current query (only groups that would add new countries) */
   const matchedGroups = $derived.by(() => {
     const q = query.toLowerCase().trim();
-    if (!q) return COUNTRY_GROUPS;
-    return COUNTRY_GROUPS.filter((g) => g.aliases.some((a) => a.includes(q)));
+    if (!q) return allGroups;
+    return allGroups.filter((g) => g.label.toLowerCase().includes(q) || g.aliases.some((a) => a.includes(q)));
   });
 
   /** Groups that still have unselected members, with precomputed new-count */
@@ -221,7 +226,7 @@
 
   const filtered = $derived.by(() => {
     const q = query.toLowerCase().trim();
-    const available = countries.filter((c) => !selected.includes(c));
+    const available = effectiveCountries.filter((c) => !selected.includes(c));
     if (!q) return available.slice(0, 50);
     return available.filter((c) => c.toLowerCase().includes(q));
   });
@@ -235,6 +240,7 @@
     }
     query = '';
     highlightIndex = -1;
+    pendingDelete = false;
     inputEl?.focus();
   }
 
@@ -288,7 +294,14 @@
       open = false;
       highlightIndex = -1;
     } else if (e.key === 'Backspace' && query === '' && selected.length > 0) {
-      selected = selected.slice(0, -1);
+      if (pendingDelete) {
+        selected = selected.slice(0, -1);
+        pendingDelete = false;
+      } else {
+        pendingDelete = true;
+      }
+    } else if (e.key !== 'Backspace') {
+      pendingDelete = false;
     }
   }
 
@@ -324,8 +337,8 @@
 <div class="country-multi-select">
   {#if selected.length > 0}
     <div class="selected-chips">
-      {#each selected as country (country)}
-        <span class="chip">
+      {#each selected as country, i (country)}
+        <span class="chip" class:chip--pending-delete={pendingDelete && i === selected.length - 1}>
           <span class="chip-label">{country}</span>
           <button
             type="button"
@@ -423,6 +436,12 @@
     line-height: 1.4;
   }
 
+  .chip--pending-delete {
+    background: rgba(220, 38, 38, 0.1);
+    border-color: rgba(220, 38, 38, 0.4);
+    outline: 2px solid rgba(220, 38, 38, 0.3);
+  }
+
   .chip-label {
     max-width: 160px;
     overflow: hidden;
@@ -499,7 +518,7 @@
     top: 100%;
     left: 0;
     right: 0;
-    max-height: 240px;
+    max-height: 360px;
     overflow-y: auto;
     margin: 0;
     padding: 0;

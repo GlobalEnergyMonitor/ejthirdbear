@@ -21,6 +21,7 @@
     shownFields = $bindable<string[]>([]),
     panelTitles = {},
     columnPickerKeys = [],
+    startWord = 'See',
     onRemoveValue,
     onRemoveField,
     onClearAll,
@@ -36,6 +37,7 @@
     shownFields?: string[];
     panelTitles?: Record<string, string>;
     columnPickerKeys?: string[];
+    startWord?: string;
     onRemoveValue?: (key: string, val: string) => void;
     onRemoveField?: (key: string) => void;
     onClearAll?: () => void;
@@ -95,7 +97,7 @@
 {/if}
 
 <div class="sentence">
-  <span class="word">See</span>
+  <span class="word">{startWord}</span>
 
   {@render subject?.()}
 

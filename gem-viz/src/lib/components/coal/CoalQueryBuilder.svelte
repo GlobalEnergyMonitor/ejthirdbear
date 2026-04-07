@@ -589,10 +589,10 @@
 
   const QUICK_STARTS: QuickStart[] = [
     {
-      sentence: 'Planned captive coal plants in Indonesia',
+      sentence: 'Planned captive coal plants for metals',
       apply: () => q.applyQuery({
         trackers: ['coal-plant'],
-        filters: { status: ['announced', 'pre-permit', 'permitted', 'construction'], country_area: ['Indonesia'], captive: ['Yes'] },
+        filters: { status: ['announced', 'pre-permit', 'permitted', 'construction'], captive: ['iron & steel', 'aluminum', 'nickel', 'other metals & mining'] },
       }),
     },
     {
@@ -607,15 +607,20 @@
       },
     },
     {
-      sentence: 'Coal mines with a workforce over 1,000',
-      apply: () => q.applyQuery({ trackers: ['coal-mine'], filters: { status: ['operating'] } }),
-    },
-    {
-      sentence: 'Total coal mine capacity by province in India',
+      sentence: 'Average mine workforce size by country',
       apply: () => q.applyQuery({
         trackers: ['coal-mine'],
-        filters: { country_area: ['India'] },
-        groupBy: ['subnational_unit_province_state'],
+        filters: { status: ['operating'] },
+        groupBy: ['country_area'],
+        aggregates: [{ fn: 'avg', field: 'workforce_size' }],
+      }),
+    },
+    {
+      sentence: 'Coal mine capacity by mine type',
+      apply: () => q.applyQuery({
+        trackers: ['coal-mine'],
+        filters: {},
+        groupBy: ['mine_type'],
         aggregates: [{ fn: 'sum', field: 'capacity_mtpa' }],
       }),
     },
@@ -684,7 +689,8 @@
       bind:openPicker
       bind:shownFields
       panelTitles={{ tracker: 'Project type' }}
-      columnPickerKeys={['country_area']}
+      columnPickerKeys={['country_area', 'captive']}
+      startWord={outputMode === 'summary' && (q.query.aggregates.length > 0 || q.query.groupBy.length > 0) ? 'for' : 'See'}
       onRemoveValue={handleRemoveValue}
       onRemoveField={handleRemoveField}
       onClearAll={clearAll}
@@ -715,7 +721,47 @@
         {:else if fieldKey === 'status'}
           <StatusFilter bind:statusChecks statusGroups={COAL_STATUS_GROUPS} />
         {:else if fieldKey === 'country_area'}
-          <CountryMultiSelect bind:selected={localSelectedCountries} countries={countryOptions} />
+          <CountryMultiSelect bind:selected={localSelectedCountries} />
+        {:else if fieldKey === 'captive'}
+          {@const captiveGroups = [
+            { label: 'Metals', values: ['iron & steel', 'aluminum', 'nickel', 'other metals & mining'] },
+            { label: 'Coal mining', values: ['coal mining & coal products'] },
+            { label: 'Chemicals', values: ['chemicals'] },
+            { label: 'Pulp & paper', values: ['pulp & paper'] },
+            { label: 'Other industries', values: ['cement & building', 'oil & refining', 'industrial park', 'machinery', 'agriculture', 'textiles', 'automobiles', 'sugar', 'rubber', 'data center'] },
+          ]}
+          {@const captiveSelected = (q.query.filters.captive ?? []) as string[]}
+          <div class="captive-groups">
+            {#each captiveGroups as grp}
+              {@const allChecked = grp.values.every(v => captiveSelected.includes(v))}
+              {@const someChecked = grp.values.some(v => captiveSelected.includes(v))}
+              <div class="captive-group">
+                <button
+                  class="captive-group-header"
+                  class:all-checked={allChecked}
+                  class:some-checked={someChecked && !allChecked}
+                  onclick={() => {
+                    const cur = q.query.filters.captive ?? [];
+                    if (allChecked) {
+                      q.setFilter('captive', cur.filter(v => !grp.values.includes(v)) as string[] || undefined);
+                    } else {
+                      const next = [...new Set([...cur, ...grp.values])];
+                      q.setFilter('captive', next.length ? next : undefined);
+                    }
+                  }}
+                >{grp.label}</button>
+                <div class="captive-group-pills">
+                  {#each grp.values as val}
+                    <button
+                      class="pill"
+                      class:active={captiveSelected.includes(val)}
+                      onclick={() => toggleValue('captive', val)}
+                    >{val}</button>
+                  {/each}
+                </div>
+              </div>
+            {/each}
+          </div>
         {:else}
           {#if otherOptions[fieldKey]}
             {#each otherOptions[fieldKey] as val}
@@ -1501,4 +1547,53 @@
     transition: background 0.1s;
   }
   .api-copy-btn:hover { background: var(--gem-navy-10, #e9eef1); }
+
+  /* ── Captive grouped picker ───────────────────────────────────────────────── */
+  .captive-groups {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3, 12px);
+    width: 100%;
+  }
+  .captive-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2, 8px);
+  }
+  .captive-group-header {
+    all: unset;
+    cursor: pointer;
+    font-size: var(--font-size-xs, 11px);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-gray-500, #7a9097);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2, 8px);
+  }
+  .captive-group-header::before {
+    content: '☐';
+    font-size: 13px;
+  }
+  .captive-group-header.some-checked::before {
+    content: '▪';
+    color: var(--gem-primary-blue, #1d4961);
+  }
+  .captive-group-header.all-checked {
+    color: var(--gem-primary-blue, #1d4961);
+  }
+  .captive-group-header.all-checked::before {
+    content: '☑';
+    color: var(--gem-primary-blue, #1d4961);
+  }
+  .captive-group-header:hover {
+    color: var(--gem-primary-blue, #1d4961);
+  }
+  .captive-group-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1, 4px) var(--space-2, 8px);
+    padding-left: var(--space-4, 16px);
+  }
 </style>
