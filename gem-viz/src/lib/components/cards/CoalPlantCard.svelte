@@ -1732,7 +1732,7 @@
   }
 
   /* ── Responsive ───────────────────────────────────────── */
-  @media (max-width: 700px) {
+  @media (max-width: 768px) {
     .overview-grid,
     .coal-grid,
     .emissions-grid {

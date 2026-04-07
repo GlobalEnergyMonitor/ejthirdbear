@@ -250,7 +250,7 @@
     margin-top: var(--space-1);
   }
 
-  @media (max-width: 600px) {
+  @media (max-width: 640px) {
     li a {
       flex-direction: column;
       gap: 0;

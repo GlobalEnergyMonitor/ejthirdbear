@@ -855,7 +855,7 @@
     letter-spacing: 0.5px;
   }
 
-  @media (max-width: 600px) {
+  @media (max-width: 640px) {
     .palette {
       top: 10%;
       width: 95%;
@@ -1034,7 +1034,7 @@
     font-style: normal;
   }
 
-  @media (max-width: 500px) {
+  @media (max-width: 640px) {
     .help-content {
       grid-template-columns: 1fr;
     }

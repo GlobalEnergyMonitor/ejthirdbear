@@ -248,7 +248,7 @@
     height: 200px;
   }
 
-  @media (max-width: 480px) {
+  @media (max-width: 640px) {
     .asset-embed {
       max-width: 100%;
       padding: 8px;

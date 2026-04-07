@@ -236,7 +236,7 @@
     border-color: var(--color-black);
   }
 
-  @media (max-width: 720px) {
+  @media (max-width: 768px) {
     .section-header {
       flex-direction: column;
       align-items: flex-start;

@@ -10,6 +10,14 @@
   const entityId = $page.url.searchParams.get('entity') || '';
   const hidePicker = $page.url.searchParams.get('hidePicker') === 'true';
   const isEmbed = $page.url.searchParams.get('embed') === 'true';
+  const initialColor = $page.url.searchParams.get('color') || '';
+  const initialFilters = {
+    country: $page.url.searchParams.get('country') || '',
+    asset_type: $page.url.searchParams.get('asset_type') || '',
+    operating_status: $page.url.searchParams.get('operating_status') || '',
+    intermediary: $page.url.searchParams.get('intermediary') || '',
+    ownership: $page.url.searchParams.get('ownership') || '',
+  };
   /** In embed mode the navbar is hidden, so subtract less chrome height */
   const heightOffset = isEmbed ? 120 : 320;
 
@@ -40,4 +48,4 @@
   <meta name="description" content="Explore an entity's downstream asset portfolio with interactive ownership tree and crossfilter breakdowns." />
 </svelte:head>
 
-<PortfolioExplorer {entityId} {hidePicker} {heightOffset} onStateChange={handleStateChange} />
+<PortfolioExplorer {entityId} {hidePicker} {heightOffset} {initialColor} {initialFilters} onStateChange={handleStateChange} />

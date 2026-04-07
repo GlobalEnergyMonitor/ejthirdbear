@@ -169,7 +169,7 @@
     margin-bottom: var(--space-12);
   }
 
-  @media (max-width: 500px) {
+  @media (max-width: 640px) {
     .card-grid {
       grid-template-columns: 1fr;
     }

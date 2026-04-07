@@ -38,6 +38,10 @@
     heightOffset = 320,
     linkBase = '',
     linkTarget = '',
+    /** Initial color field to restore from URL (type | status | country) */
+    initialColor = '',
+    /** Initial filters to restore from URL — keys are filter names, values are comma-separated strings */
+    initialFilters = {},
   } = $props();
 
   // ============================================================================
@@ -96,12 +100,17 @@
     { label: 'Unknown', min: -1, max: -1 },
   ];
 
+  /** Parse comma-separated filter string into a Set, empty string → empty Set */
+  function parseFilterParam(val) {
+    return val ? new Set(val.split(',').map((s) => s.trim()).filter(Boolean)) : new Set();
+  }
+
   let filters = $state({
-    country: new Set(),
-    asset_type: new Set(),
-    operating_status: new Set(),
-    intermediary: new Set(),
-    ownership: new Set(),
+    country: parseFilterParam(initialFilters.country),
+    asset_type: parseFilterParam(initialFilters.asset_type),
+    operating_status: parseFilterParam(initialFilters.operating_status),
+    intermediary: parseFilterParam(initialFilters.intermediary),
+    ownership: parseFilterParam(initialFilters.ownership),
   });
   /** Intermediary name → projectIds lookup (populated when intermediaries are clicked) */
   let intermediaryProjectIds = $state(new Map());
@@ -165,7 +174,7 @@
 
   /** Color field: user-toggleable, defaults to 'type' when multi-type */
   const ALL_COLOR_FIELDS = ['type', 'status', 'country'];
-  let colorFieldOverride = $state('');
+  let colorFieldOverride = $state(initialColor);
   /** Only show options that have >1 distinct value (coloring by a single value is useless) */
   let availableColorFields = $derived.by(() => {
     if (!summary) return ALL_COLOR_FIELDS;
@@ -205,10 +214,12 @@
       assets = assets.filter((a) => filters.operating_status.has(a.operating_status));
     }
     const filteredProjectIds = new Set(assets.map((a) => a.location_id || a.unit_id || a.asset_id));
-    return intermediaries.map((inter) => {
-      const count = [...inter.projectIds].filter((pid) => filteredProjectIds.has(pid)).length;
-      return { ...inter, filteredCount: count };
-    });
+    return intermediaries
+      .map((inter) => {
+        const count = [...inter.projectIds].filter((pid) => filteredProjectIds.has(pid)).length;
+        return { ...inter, filteredCount: count };
+      })
+      .sort((a, b) => b.filteredCount - a.filteredCount);
   });
 
   /** Extended palette for country colors — combines Tableau10 + Paired12 + Set3 for 30+ unique colors */
@@ -915,12 +926,18 @@
       const N = proj.units.length;
       const TAU = Math.PI * 2;
       const maxClusterDiameter = assetMarkH - 4; // stay within row bounds
-      // Shrink individual circles as N grows
-      const individualR = N === 1 ? unitR : Math.max(2, Math.min(unitR * 0.6, maxClusterDiameter / (2 + N * 0.3)));
-      // For N units on a circle, minimum radius to avoid overlap: R >= N * r / π
-      const idealClusterR = N <= 1 ? 0 : (N * individualR) / Math.PI;
-      // Cap so total cluster diameter doesn't overflow the row
-      const clusterR = N === 1 ? 0 : Math.min(idealClusterR, (maxClusterDiameter / 2) - individualR);
+      const halfMax = maxClusterDiameter / 2;
+
+      // For N circles on a ring, non-overlap requires: clusterR >= individualR / sin(π/N)
+      // Combined with row cap: clusterR + individualR <= halfMax
+      // So: individualR <= halfMax / (1/sin(π/N) + 1)
+      let individualR = unitR;
+      let clusterR = 0;
+      if (N > 1) {
+        const sinFactor = Math.sin(Math.PI / N);
+        individualR = Math.max(2, Math.min(unitR * 0.6, halfMax / (1 / sinFactor + 1)));
+        clusterR = individualR / sinFactor;
+      }
 
       proj.units.forEach((unit, j) => {
         const cx = N === 1 ? unitR : unitR + clusterR * Math.cos((TAU * j) / N);
@@ -1282,9 +1299,7 @@
               onclick={() => applyFilter('country', country)}
               onkeydown={(e) => e.key === 'Enter' && applyFilter('country', country)}
             >
-              {#if colorField === 'country'}
-                <span class="legend-dot" style="background: {countryColorScale(country)}"></span>
-              {/if}
+              <span class="legend-dot" style="background: {countryColorScale(country)}"></span>
               {country} ({isFiltered ? (filteredCount ?? 0) : data.assetCount})
             </div>
           {/each}
@@ -1527,6 +1542,11 @@
     min-height: 200px;
     max-height: var(--chart-max-height, calc(100vh - 260px));
   }
+  /* In embed mode, let content flow naturally so the iframe auto-resizes */
+  .embed-mode .chart-row {
+    overflow: visible;
+    max-height: none;
+  }
   .tree-container {
     flex-shrink: 0;
     position: sticky;
@@ -1579,8 +1599,8 @@
   }
   .legend-dot {
     display: inline-block;
-    width: 8px;
-    height: 8px;
+    width: 12px;
+    height: 12px;
     border-radius: var(--radius-full, 50%);
     flex-shrink: 0;
     border: 1px solid rgba(255, 255, 255, 0.3);
@@ -1821,6 +1841,18 @@
     }
     .color-toggle {
       margin-left: 0;
+    }
+    .summary-row {
+      padding: var(--space-1) var(--space-2);
+      min-height: 32px;
+    }
+    .asset-modal {
+      left: var(--space-3) !important;
+      right: var(--space-3) !important;
+      top: auto !important;
+      bottom: var(--space-3) !important;
+      max-width: none;
+      max-height: 50vh;
     }
   }
 

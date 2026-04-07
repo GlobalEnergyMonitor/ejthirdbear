@@ -588,7 +588,7 @@
     }
   }
 
-  @media (max-width: 700px) {
+  @media (max-width: 768px) {
     .globe-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
       grid-template-areas:

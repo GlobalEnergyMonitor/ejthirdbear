@@ -199,7 +199,7 @@
     box-sizing: border-box;
   }
 
-  @media (max-width: 480px) {
+  @media (max-width: 640px) {
     .search-embed {
       max-width: 100%;
       padding: 8px;

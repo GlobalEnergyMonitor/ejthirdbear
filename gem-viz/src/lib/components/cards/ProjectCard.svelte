@@ -611,7 +611,7 @@
   /* =============================================
      RESPONSIVE: Mobile layout
      ============================================= */
-  @media (max-width: 600px) {
+  @media (max-width: 640px) {
     .project-card {
       border-radius: 0 10px 10px 10px;
     }

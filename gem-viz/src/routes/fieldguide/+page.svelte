@@ -202,7 +202,7 @@
     transform: translateX(2px);
   }
 
-  @media (max-width: 720px) {
+  @media (max-width: 768px) {
     .tracker-grid {
       grid-template-columns: 1fr;
     }

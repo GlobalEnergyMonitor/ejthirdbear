@@ -1030,7 +1030,9 @@
 
   @media (max-width: 768px) {
     .cc-desktop-only {
-      display: none;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      max-width: 100%;
     }
     .cc-mobile-summary {
       display: block;

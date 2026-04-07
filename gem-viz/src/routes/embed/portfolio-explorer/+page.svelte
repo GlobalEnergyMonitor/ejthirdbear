@@ -20,11 +20,13 @@
     const h = readHash();
     if (h.id || h.entity) entityId = h.id || h.entity;
     if (h.hidePicker === 'false') hidePicker = false;
+    const color = h.color || $page.url.searchParams.get('color') || '';
 
     if (entityId) {
       // Load the full portfolio-explorer page in an iframe with embed=true to hide navbar
       const params = new URLSearchParams({ entity: entityId, embed: 'true' });
       if (hidePicker) params.set('hidePicker', 'true');
+      if (color) params.set('color', color);
       iframeSrc = `/portfolio-explorer/?${params.toString()}`;
     }
   });

@@ -386,9 +386,15 @@
     color: var(--color-border);
   }
 
-  @media (max-width: 720px) {
+  @media (max-width: 768px) {
     .cards-grid {
       grid-template-columns: 1fr;
+    }
+    .tracker-tab {
+      padding: var(--space-2) var(--space-4);
+      min-height: 44px;
+      display: flex;
+      align-items: center;
     }
   }
 </style>

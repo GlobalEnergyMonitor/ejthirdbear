@@ -135,7 +135,7 @@
   }
 
   /* Narrow iframe in Drupal sidebar columns */
-  @media (max-width: 500px) {
+  @media (max-width: 640px) {
     .factsheet-embed :global(.factsheet) {
       max-height: none;
       flex-direction: column;

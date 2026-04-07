@@ -716,7 +716,7 @@
     font-size: var(--font-size-lg);
   }
 
-  @media (max-width: 600px) {
+  @media (max-width: 640px) {
     .toc ul {
       flex-direction: column;
       gap: var(--space-2);

@@ -304,7 +304,7 @@
     margin-top: var(--space-4);
   }
 
-  @media (max-width: 480px) {
+  @media (max-width: 640px) {
     .entity-embed {
       max-width: 100%;
       padding: 8px;

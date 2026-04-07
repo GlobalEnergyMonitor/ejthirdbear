@@ -163,7 +163,7 @@
   .widget-cell.wide {
     grid-column: span 2;
   }
-  @media (max-width: 700px) {
+  @media (max-width: 768px) {
     .widget-cell.wide {
       grid-column: span 1;
     }

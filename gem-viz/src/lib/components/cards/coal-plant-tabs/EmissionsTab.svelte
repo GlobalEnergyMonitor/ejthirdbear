@@ -281,7 +281,7 @@
     color: #555;
   }
 
-  @media (max-width: 700px) {
+  @media (max-width: 768px) {
     .emissions-grid {
       grid-template-columns: 1fr;
     }

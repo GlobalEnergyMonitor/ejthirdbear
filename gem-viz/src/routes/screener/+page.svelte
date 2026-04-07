@@ -767,6 +767,11 @@
       grid-template-columns: 1fr;
     }
 
+    .picker-tile {
+      padding: var(--space-3);
+      min-height: 44px;
+    }
+
     .support-cta {
       flex-direction: column;
       align-items: stretch;
