@@ -292,7 +292,7 @@
       const selectedChildUrls = catalogChildren
         .filter((c: any) => catalogChildChecks[c.id] !== false && c.url)
         .map((c: any) => c.url);
-      catalogUrl = buildCatalogUrl(catalogEntry.url, selectedChildUrls, selectedStatuses, geoFilters);
+      catalogUrl = buildCatalogUrl(catalogEntry.url, selectedChildUrls, { statusValues: selectedStatuses, substatusValues: [] }, geoFilters);
     }
 
     return [{

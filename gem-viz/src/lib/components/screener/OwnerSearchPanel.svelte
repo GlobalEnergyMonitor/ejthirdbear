@@ -6,6 +6,7 @@
   let {
     singleSearchQuery = $bindable(''),
     bulkSearchText = $bindable(''),
+    strictMatchOnly = $bindable(false),
     searchLoading = false,
     searchError = null,
     exampleCompanies = [],
@@ -18,6 +19,7 @@
   }: {
     singleSearchQuery?: string;
     bulkSearchText?: string;
+    strictMatchOnly?: boolean;
     searchLoading?: boolean;
     searchError?: string | null;
     exampleCompanies?: ExampleCompany[];

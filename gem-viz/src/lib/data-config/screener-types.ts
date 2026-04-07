@@ -21,6 +21,7 @@ export interface ScreenerSelectedClass {
     geofence?: number[][];
   };
   selectedSubClasses?: string[];
+  selectedSubClassLabels?: string[];
   /**
    * Fully resolved asset URL from the catalog API — includes asset_type, subclass,
    * status, and country params. When present, the results page uses this directly

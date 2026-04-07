@@ -278,6 +278,7 @@
                 country: a.country,
                 status: a.status,
                 asset_type: a.facilityType,
+                unit_count: 1,
               });
             }
           }
