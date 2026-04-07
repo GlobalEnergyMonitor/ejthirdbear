@@ -1,10 +1,10 @@
 /**
  * Data adapter: transforms REST API ownership graph into chart visualization data.
  *
- * Flow: getOwnershipGraph() → walk edges → enrich asset nodes → build chart structures
+ * Flow: getOwnershipGraph() → walk edges → build chart structures from graph node metadata
  */
 
-import { getOwnershipGraph, getAsset, type GraphNode, type AssetSummary } from '$lib/ownership-api';
+import { getOwnershipGraph, type GraphNode, type AssetSummary } from '$lib/ownership-api';
 import { getStatusGroup } from '$lib/design-tokens';
 import { STATUS_GROUPS } from '$lib/data-config/tracker-schema';
 
@@ -72,8 +72,7 @@ export interface ScreenerChartData {
 // Constants
 // ---------------------------------------------------------------------------
 
-const BATCH_SIZE = 25;
-const MAX_ASSET_FETCHES = 150;
+// No batch fetching needed — graph API returns full asset metadata on each node.
 
 // ---------------------------------------------------------------------------
 // Layout params (shared with render module)
@@ -97,7 +96,7 @@ export const LAYOUT = {
 
 /**
  * Fetch ownership graph and transform into chart-ready data.
- * Enriches asset nodes with details (status, tracker) via parallel getAsset() calls.
+ * Uses asset metadata from graph response directly (no individual getAsset() calls).
  */
 export async function fetchChartData(
   entityId: string,
@@ -197,23 +196,9 @@ export async function fetchChartData(
     for (const id of assets) allAssetIds.add(id);
   }
 
-  // Fetch asset details in parallel batches
-  onProgress?.(`Fetching details for ${Math.min(allAssetIds.size, MAX_ASSET_FETCHES)} assets...`);
+  // The graph API already returns full asset metadata (operating_status, asset_type,
+  // location_id, capacity, etc.) on each node — no need for individual getAsset() calls.
   const assetDetails = new Map<string, AssetSummary>();
-  const assetIdsToFetch = Array.from(allAssetIds).slice(0, MAX_ASSET_FETCHES);
-
-  for (let i = 0; i < assetIdsToFetch.length; i += BATCH_SIZE) {
-    const batch = assetIdsToFetch.slice(i, i + BATCH_SIZE);
-    const results = await Promise.allSettled(batch.map((id) => getAsset(id)));
-    results.forEach((result, idx) => {
-      if (result.status === 'fulfilled' && result.value) {
-        assetDetails.set(batch[idx], result.value);
-      }
-    });
-    onProgress?.(
-      `Loaded ${Math.min(i + BATCH_SIZE, assetIdsToFetch.length)} / ${assetIdsToFetch.length} assets`
-    );
-  }
 
   // Helper: get ownership % from edge to this asset
   function getOwnershipPct(assetId: string): number {
@@ -221,21 +206,15 @@ export async function fetchChartData(
     return parents.length > 0 ? parents[0].value || 100 : 100;
   }
 
-  // Convert graph node → ChartUnit
+  // Convert graph node → ChartUnit (all data from graph response, zero extra fetches)
   function toChartUnit(assetId: string, isDirect: boolean): ChartUnit {
-    const detail = assetDetails.get(assetId);
     const graphNode = nodeMap.get(assetId);
-    const name = detail?.name || graphNode?.Name || assetId;
-    const tracker = graphNode?.asset_type || detail?.facilityType || 'Unknown';
-    const status = detail?.status || 'unknown';
-    const subStatus = detail?.subStatus || '';
+    const name = graphNode?.Name || assetId;
+    const tracker = graphNode?.asset_type || 'Unknown';
+    const status = graphNode?.operating_status || 'unknown';
+    const subStatus = graphNode?.operating_sub_status || '';
     const pct = getOwnershipPct(assetId);
-
-    // Extract locationID from compound ID (L_G → L part)
-    let locationID = assetId;
-    if (assetId.includes('_')) {
-      locationID = assetId.split('_')[0];
-    }
+    const locationID = graphNode?.location_id || (assetId.includes('_') ? assetId.split('_')[0] : assetId);
 
     return {
       id: assetId,

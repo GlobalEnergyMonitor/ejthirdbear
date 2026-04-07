@@ -156,7 +156,15 @@ export interface GraphNode {
   is_root?: boolean;
   entity_id?: string;
   headquarters_country?: string;
+  entity_type?: string;
+  publiclylisted?: boolean;
   asset_type?: string;
+  operating_status?: string;
+  operating_sub_status?: string;
+  location_id?: string;
+  capacity_value?: number;
+  capacity_unit?: string;
+  country?: string;
 }
 
 export interface GraphEdge {
@@ -863,6 +871,12 @@ function normalizeGraphNodes(nodes: Array<Record<string, unknown>>): GraphNode[]
     entity_type: n.entity_type as string | undefined,
     publiclylisted: (n.publiclylisted || n.publicly_listed) as boolean | undefined,
     asset_type: n.asset_type as string | undefined,
+    operating_status: n.operating_status as string | undefined,
+    operating_sub_status: n.operating_sub_status as string | undefined,
+    location_id: n.location_id as string | undefined,
+    capacity_value: n.capacity_value as number | undefined,
+    capacity_unit: n.capacity_unit as string | undefined,
+    country: n.country as string | undefined,
   }));
 }
 
