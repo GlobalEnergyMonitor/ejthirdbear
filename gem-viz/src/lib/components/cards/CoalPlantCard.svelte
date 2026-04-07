@@ -1107,11 +1107,63 @@
 
 <style>
   .coal-plant-card {
+    /* ── Theme tokens (light defaults) ─────────────────── */
+    --card-bg: #fff;
+    --card-text: #111;
+    --card-text-2: #222;
+    --card-text-3: #333;
+    --card-text-muted: #555;
+    --card-text-dim: #666;
+    --card-text-faint: #888;
+    --card-text-faintest: #999;
+    --card-text-ghost: #aaa;
+    --card-border: var(--card-border);
+    --card-border-light: var(--card-border-light);
+    --card-border-medium: var(--card-border-medium);
+    --card-border-strong: var(--card-border-strong);
+    --card-surface-muted: #e0e0e0;
+    --card-svg-grid: #ebebeb;
+    --card-svg-faint: #bbb;
+    --card-svg-now: #ccc;
+    --card-banner-green-bg: #f0fdf4;
+    --card-banner-green-text: #166534;
+    --card-banner-amber-bg: #fffbeb;
+    --card-banner-amber-text: #92400e;
+    --card-banner-orange-bg: #fff7ed;
+    --card-banner-orange-text: #9a3412;
+
     font-family: var(--gem-font, 'Plus Jakarta Sans', system-ui, sans-serif);
-    background: #fff;
+    background: var(--card-bg);
     border-radius: 8px;
-    border: 1px solid rgba(0, 0, 0, 0.1);
+    border: 1px solid var(--card-border);
     overflow: hidden;
+  }
+
+  /* ── Dark theme ────────────────────────────────────────── */
+  :global(.dark) .coal-plant-card {
+    --card-bg: #1a2332;
+    --card-text: #e5e7eb;
+    --card-text-2: #d1d5db;
+    --card-text-3: #c0c4ca;
+    --card-text-muted: #9ca3af;
+    --card-text-dim: #8b92a0;
+    --card-text-faint: #6b7280;
+    --card-text-faintest: #5a6170;
+    --card-text-ghost: #4b5563;
+    --card-border: rgba(255, 255, 255, 0.12);
+    --card-border-light: rgba(255, 255, 255, 0.06);
+    --card-border-medium: rgba(255, 255, 255, 0.08);
+    --card-border-strong: rgba(255, 255, 255, 0.18);
+    --card-surface-muted: #374151;
+    --card-svg-grid: #2d3748;
+    --card-svg-faint: #4b5563;
+    --card-svg-now: #4b5563;
+    --card-banner-green-bg: #064e3b;
+    --card-banner-green-text: #6ee7b7;
+    --card-banner-amber-bg: #78350f;
+    --card-banner-amber-text: #fbbf24;
+    --card-banner-orange-bg: #7c2d12;
+    --card-banner-orange-text: #fb923c;
   }
 
   /* ── Compact ──────────────────────────────────────────── */
@@ -1133,7 +1185,7 @@
     margin: 0;
     font-size: 1rem;
     font-weight: 700;
-    color: #111;
+    color: var(--card-text);
   }
   .compact-left {
     min-width: 0;
@@ -1145,12 +1197,12 @@
   }
   .compact-location {
     font-size: 0.8rem;
-    color: #666;
+    color: var(--card-text-dim);
     margin-top: 0.15rem;
   }
   .compact-also {
     font-size: 0.75rem;
-    color: #999;
+    color: var(--card-text-faintest);
     margin-top: 0.15rem;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1194,28 +1246,28 @@
     color: #fff;
   }
   .chip-retired {
-    background: #e0e0e0;
-    color: #333;
+    background: var(--card-surface-muted);
+    color: var(--card-text-3);
   }
   .chip-cancelled {
-    background: #e0e0e0;
-    color: #333;
+    background: var(--card-surface-muted);
+    color: var(--card-text-3);
   }
   .chip-mothballed {
-    background: #e0e0e0;
-    color: #333;
+    background: var(--card-surface-muted);
+    color: var(--card-text-3);
   }
 
   /* ── Full card ────────────────────────────────────────── */
   .card-full {
-    border-top: 1px solid rgba(0, 0, 0, 0.08);
+    border-top: 1px solid var(--card-border-medium);
   }
 
   /* ── Tab bar ──────────────────────────────────────────── */
   .tab-bar {
     display: flex;
     padding: 0 1.75rem;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    border-bottom: 1px solid var(--card-border);
     overflow-x: auto;
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
@@ -1226,7 +1278,7 @@
     padding: 0.85rem 1.25rem;
     font-size: 0.85rem;
     font-weight: 500;
-    color: #666;
+    color: var(--card-text-dim);
     border-bottom: 2px solid transparent;
     white-space: nowrap;
     transition:
@@ -1235,11 +1287,11 @@
     margin-bottom: -1px;
   }
   .tab-btn:hover {
-    color: #111;
+    color: var(--card-text);
   }
   .tab-btn.active {
-    color: #111;
-    border-bottom-color: #111;
+    color: var(--card-text);
+    border-bottom-color: var(--card-text);
     font-weight: 600;
   }
 
@@ -1269,19 +1321,19 @@
   }
   .narrative {
     font-size: 0.9rem;
-    color: #222;
+    color: var(--card-text-2);
     margin: 0 0 1.5rem;
     line-height: 1.6;
   }
   .narrative.muted {
-    color: #999;
+    color: var(--card-text-faintest);
     font-style: italic;
   }
   /* ── Shared field styles ──────────────────────────────── */
   .field-label {
     font-size: 0.78rem;
     font-weight: 600;
-    color: #111;
+    color: var(--card-text);
     margin-bottom: 0.2rem;
     display: flex;
     align-items: center;
@@ -1289,14 +1341,14 @@
   }
   .field-value {
     font-size: 0.9rem;
-    color: #222;
+    color: var(--card-text-2);
   }
   .field-value.muted {
-    color: #999;
+    color: var(--card-text-faintest);
   }
   .field-coords {
     font-size: 0.75rem;
-    color: #aaa;
+    color: var(--card-text-ghost);
     margin-top: 0.1rem;
   }
 
@@ -1306,7 +1358,7 @@
     justify-content: center;
     width: 14px;
     height: 14px;
-    background: #111;
+    background: var(--card-text);
     color: #fff;
     border-radius: 50%;
     font-size: 0.6rem;
@@ -1324,7 +1376,7 @@
     height: 12px;
     font-size: 0.55rem;
     vertical-align: middle;
-    background: #888;
+    background: var(--card-text-faint);
   }
   .info-dot::after {
     content: attr(data-tip);
@@ -1370,16 +1422,16 @@
     color: #fff;
   }
   .badge-retired {
-    background: #e0e0e0;
-    color: #444;
+    background: var(--card-surface-muted);
+    color: var(--card-text-3);
   }
   .badge-cancelled {
-    background: #e0e0e0;
-    color: #444;
+    background: var(--card-surface-muted);
+    color: var(--card-text-3);
   }
   .badge-mothballed {
-    background: #e0e0e0;
-    color: #444;
+    background: var(--card-surface-muted);
+    color: var(--card-text-3);
   }
 
   /* ── Overview tab ─────────────────────────────────────── */
@@ -1392,7 +1444,7 @@
   .summary-heading {
     font-size: 0.8rem;
     font-weight: 700;
-    color: #111;
+    color: var(--card-text);
     margin-bottom: 0.6rem;
   }
   .summary-row {
@@ -1400,7 +1452,7 @@
     grid-template-columns: 130px 90px 70px 1fr 1fr 1fr 50px;
     gap: 0;
     padding: 0.5rem 0;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    border-bottom: 1px solid var(--card-border-light);
     font-size: 0.85rem;
     align-items: center;
   }
@@ -1410,10 +1462,10 @@
   .summary-header {
     font-size: 0.7rem;
     font-weight: 600;
-    color: #666;
+    color: var(--card-text-dim);
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.15);
+    border-bottom: 1px solid var(--card-border-strong);
     padding-bottom: 0.4rem;
   }
 
@@ -1430,10 +1482,10 @@
     all: unset;
     cursor: pointer;
     font-size: 0.72rem;
-    color: #888;
+    color: var(--card-text-faint);
   }
   .table-view-toggle:hover {
-    color: #333;
+    color: var(--card-text-3);
   }
   .summary-table--by-unit .summary-row {
     grid-template-columns: 130px 1fr 90px 1fr 1fr 1fr 70px;
@@ -1449,7 +1501,7 @@
   .timeline-heading {
     font-size: 0.8rem;
     font-weight: 700;
-    color: #111;
+    color: var(--card-text);
     margin-bottom: 0.75rem;
   }
   .timeline-wrap {
@@ -1460,7 +1512,7 @@
   /* ── Ownership tab ────────────────────────────────── */
   .ownership-status {
     font-size: 0.82rem;
-    color: #888;
+    color: var(--card-text-faint);
     padding: 1rem 0;
   }
   .ownership-status.error {
@@ -1488,52 +1540,52 @@
   :global(.tl-axis-label) {
     font-family: var(--gem-font, system-ui, sans-serif);
     font-size: 11px;
-    fill: #888;
+    fill: var(--card-text-faint);
   }
   :global(.tl-gridline) {
-    stroke: #ebebeb;
+    stroke: var(--card-svg-grid);
     stroke-width: 1;
   }
   :global(.tl-now-line) {
-    stroke: #ccc;
+    stroke: var(--card-svg-now);
     stroke-width: 1;
   }
   :global(.tl-unit-name) {
     font-family: var(--gem-font, system-ui, sans-serif);
     font-size: 11px;
-    fill: #111;
+    fill: var(--card-text);
     font-weight: 500;
   }
   :global(.tl-unit-cap) {
     font-family: var(--gem-font, system-ui, sans-serif);
     font-size: 10px;
-    fill: #999;
+    fill: var(--card-text-faintest);
   }
   :global(.tl-bar) {
-    fill: #111;
+    fill: var(--card-text);
   }
   :global(.tl-bar.tl-bar-retired) {
-    fill: #bbb;
+    fill: var(--card-svg-faint);
   }
   :global(.tl-bar.tl-bar-mothballed) {
-    fill: #bbb;
+    fill: var(--card-svg-faint);
   }
   :global(.tl-bar.tl-bar-cancelled) {
-    fill: #ccc;
+    fill: var(--card-svg-now);
   }
   :global(.tl-bar.tl-bar-planned) {
     fill: #ca4a50;
   }
   :global(.tl-bar.tl-bar-future) {
     fill: none;
-    stroke: #111;
+    stroke: var(--card-text);
     stroke-width: 2;
   }
   :global(.tl-dot) {
-    fill: #111;
+    fill: var(--card-text);
   }
   :global(.tl-dot.tl-bar-mothballed) {
-    fill: #bbb;
+    fill: var(--card-svg-faint);
   }
 
   .tl-badge-wrap {
@@ -1544,7 +1596,7 @@
   }
   .tl-planned-note {
     font-size: 0.65rem;
-    color: #777;
+    color: var(--card-text-dim);
     font-style: italic;
     line-height: 1.3;
   }
@@ -1558,16 +1610,16 @@
     margin-bottom: 1.5rem;
   }
   .alignment-aligned {
-    background: #f0fdf4;
-    color: #166534;
+    background: var(--card-banner-green-bg);
+    color: var(--card-banner-green-text);
   }
   .alignment-needs-acceleration {
-    background: #fffbeb;
-    color: #92400e;
+    background: var(--card-banner-amber-bg);
+    color: var(--card-banner-amber-text);
   }
   .alignment-not-aligned {
-    background: #fff7ed;
-    color: #9a3412;
+    background: var(--card-banner-orange-bg);
+    color: var(--card-banner-orange-text);
   }
 
   .emissions-grid {
@@ -1584,12 +1636,12 @@
     all: unset;
     cursor: pointer;
     font-size: 0.72rem;
-    color: #888;
+    color: var(--card-text-faint);
     margin-left: 0.4rem;
     white-space: nowrap;
   }
   .emissions-expand-btn:hover {
-    color: #333;
+    color: var(--card-text-3);
   }
 
   .unit-emissions-list {
@@ -1603,7 +1655,7 @@
     align-items: center;
     gap: 0.5rem;
     font-size: 0.82rem;
-    color: #333;
+    color: var(--card-text-3);
   }
   .unit-emission-dot {
     width: 8px;
@@ -1621,7 +1673,7 @@
   .unit-emission-dot.chip-retired,
   .unit-emission-dot.chip-cancelled,
   .unit-emission-dot.chip-mothballed {
-    background: #bbb;
+    background: var(--card-svg-faint);
   }
 
   .unit-emission-name {
@@ -1630,7 +1682,7 @@
     white-space: nowrap;
   }
   .unit-emission-vals {
-    color: #555;
+    color: var(--card-text-muted);
   }
 
   /* ── Additional Details tab ──────────────────────────── */
@@ -1646,7 +1698,7 @@
     grid-template-columns: 220px 1fr;
     gap: 0 1.5rem;
     padding: 0.45rem 0;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    border-bottom: 1px solid var(--card-border-light);
     align-items: baseline;
   }
   .details-row:last-child {
@@ -1655,28 +1707,28 @@
   .details-row dt {
     font-size: 0.78rem;
     font-weight: 600;
-    color: #555;
+    color: var(--card-text-muted);
   }
   .details-row dd {
     margin: 0;
     font-size: 0.85rem;
-    color: #222;
+    color: var(--card-text-2);
     font-family: 'SF Mono', 'Fira Code', monospace;
   }
 
   /* ── Footer ───────────────────────────────────────────── */
   .card-footer {
     padding: 0.75rem 1.75rem;
-    border-top: 1px solid rgba(0, 0, 0, 0.08);
+    border-top: 1px solid var(--card-border-medium);
     font-size: 0.75rem;
-    color: #888;
+    color: var(--card-text-faint);
   }
   .card-footer a {
-    color: #555;
+    color: var(--card-text-muted);
     text-decoration: underline;
   }
   .card-footer a:hover {
-    color: #111;
+    color: var(--card-text);
   }
 
   /* ── Responsive ───────────────────────────────────────── */
