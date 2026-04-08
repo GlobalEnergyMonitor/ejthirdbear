@@ -2,10 +2,19 @@ name: Build and Deploy
 
 on:
   push:
-    branches: [main]
+    branches: [main, staging]
     paths:
       - 'gem-viz/**'
   workflow_dispatch:
+    inputs:
+      target:
+        description: 'Deploy target'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
 
 env:
   DO_SPACES_BUCKET: ejthirdbear
@@ -13,11 +22,13 @@ env:
   DO_SPACES_ENDPOINT: https://sfo3.digitaloceanspaces.com
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: gem-viz
+    outputs:
+      version: ${{ steps.version.outputs.version }}
 
     steps:
       - name: Checkout
@@ -46,6 +57,66 @@ jobs:
         id: version
         run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
 
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: gem-viz/build/
+
+  deploy-staging:
+    needs: build
+    if: github.ref == 'refs/heads/staging' || (github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'staging')
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gem-viz
+    environment: staging
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Fly.io
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy to Fly.io staging
+        run: flyctl deploy --config fly.staging.toml --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Deployment summary
+        run: |
+          echo "## Staging Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "**Fly staging:** https://gem-viz-staging.fly.dev/" >> $GITHUB_STEP_SUMMARY
+
+  deploy-production:
+    needs: build
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'production')
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gem-viz
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: build-output
+          path: gem-viz/build/
+
+      - name: Get version
+        id: version
+        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+
       - name: Deploy to Digital Ocean Spaces
         run: |
           VERSION=${{ steps.version.outputs.version }}
@@ -59,18 +130,18 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.DO_SPACES_SECRET_KEY }}
           AWS_DEFAULT_REGION: us-east-1
 
-      - name: Deploy to Fly.io staging
+      - name: Setup Fly.io
         uses: superfly/flyctl-actions/setup-flyctl@master
 
-      - name: Fly deploy staging
-        run: flyctl deploy --config fly.staging.toml --remote-only
+      - name: Deploy to Fly.io production
+        run: flyctl deploy --config fly.toml --remote-only
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
       - name: Deployment summary
         run: |
           VERSION=${{ steps.version.outputs.version }}
-          echo "## Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "## Production Deployment Complete" >> $GITHUB_STEP_SUMMARY
           echo "**Version:** v${VERSION}" >> $GITHUB_STEP_SUMMARY
           echo "**DO Spaces:** https://${DO_SPACES_BUCKET}.${DO_SPACES_REGION}.digitaloceanspaces.com/gem-viz/v${VERSION}/" >> $GITHUB_STEP_SUMMARY
-          echo "**Fly staging:** https://gem-viz-staging.fly.dev/" >> $GITHUB_STEP_SUMMARY
+          echo "**Fly production:** https://gem-viz.fly.dev/" >> $GITHUB_STEP_SUMMARY
