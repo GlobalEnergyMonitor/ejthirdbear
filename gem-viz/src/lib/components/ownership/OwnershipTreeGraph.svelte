@@ -1998,7 +1998,7 @@
     dominant-baseline: hanging;
   }
 
-  /* Focus indicator — floats over the SVG when a path is pinned */
+  /* Focus indicator — pins to the top of the scroll container when a path is clicked */
   .focus-indicator {
     display: flex;
     align-items: flex-start;
@@ -2010,10 +2010,8 @@
     border-radius: 4px;
     font-size: var(--font-size-sm, 0.8125rem);
     color: var(--tree-navy, #1d4961);
-    position: absolute;
+    position: sticky;
     top: 0;
-    left: 0;
-    right: 0;
     z-index: 5;
     animation: tooltip-in 0.15s ease-out;
   }

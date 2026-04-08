@@ -420,7 +420,7 @@
       {#if ownershipActivated}
         <div class="ownership-tree-wrap">
           <AssetOwnershipTree
-            assetId={asset.asset_id}
+            assetId={asset.location_id}
             compact={false}
             fullWidth={true}
             showViewFull={false}

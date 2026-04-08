@@ -87,6 +87,7 @@
 
   const f = $derived(units[0]?.coal_plant_fields);
   const plantName = $derived(f?.plant_name ?? units[0]?.asset_name ?? '');
+  const locationId = $derived(units[0]?.location_id ?? null);
   const wikiUrl = $derived(f?.wiki_url ?? null);
   const database = $derived(f?.database ?? 'Global Coal Plant Tracker, January 2026');
 
@@ -1034,7 +1035,7 @@
         {#if ownershipActivated && units[0]?.asset_id}
           <div class="ownership-tree-wrap">
             <AssetOwnershipTree
-              assetId={units[0].asset_id}
+              assetId={locationId}
               compact={false}
               fullWidth={true}
               showViewFull={false}

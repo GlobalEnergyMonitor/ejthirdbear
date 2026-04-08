@@ -915,6 +915,86 @@ export async function getLocationOwnershipGraph(params: {
 }
 
 /**
+ * Unified ownership graph fetch — works with any asset or location ID.
+ *
+ * Calls /ownership/graph and inspects the response shape:
+ * - If the API returns { graphs: [...] } (location-level ID), all graphs are returned.
+ * - If the API returns { root, nodes, edges } (unit-level ID), it is wrapped in the
+ *   same multi-graph shape so callers always receive a LocationOwnershipGraphResponse.
+ *
+ * Use this instead of getOwnershipGraph / getLocationOwnershipGraph when the ID type
+ * is not known in advance or may vary (e.g. AssetOwnershipTree).
+ */
+export async function getOwnershipGraphs(params: {
+  root: string;
+  direction?: 'up' | 'down';
+  max_depth?: number;
+}): Promise<LocationOwnershipGraphResponse> {
+  _currentReason = `getOwnershipGraphs ${params.direction || 'up'} ${params.root}`;
+  const resolvedRoot = await resolveAssetId(params.root);
+  const raw = await fetchAPI<Record<string, unknown>>(
+    `/ownership/graph${buildQuery({ root: resolvedRoot, direction: params.direction, max_depth: params.max_depth })}`
+  );
+
+  // Location-level response: { location_id, graphs: [...] }
+  if (Array.isArray(raw.graphs)) {
+    const graphs = (raw.graphs as Array<{
+      root: Record<string, unknown>;
+      nodes: Array<Record<string, unknown>>;
+      edges: LocationGraph['edges'];
+      paths?: LocationGraph['paths'];
+      asset_ids?: string[];
+    }>)
+      .map((g) => ({
+        root: g.root as unknown as LocationGraphRoot,
+        nodes: normalizeGraphNodes(g.nodes || []),
+        edges: g.edges || [],
+        paths: g.paths,
+        asset_ids: g.asset_ids || [],
+      }))
+      .sort((a, b) => b.asset_ids.length - a.asset_ids.length);
+
+    return {
+      location_id: String(raw.location_id || ''),
+      project_name: String(raw.project_name || ''),
+      unit_count: Number(raw.unit_count || 0),
+      distinct_graphs: Number(raw.distinct_graphs || graphs.length),
+      graphs,
+    };
+  }
+
+  // Unit-level response: { root, nodes, edges } — wrap in multi-graph shape
+  const rootRaw = (raw.root || {}) as Record<string, unknown>;
+  const rootAssetId = String(rootRaw.entity_id || rootRaw.asset_id || resolvedRoot);
+  return {
+    location_id: '',
+    project_name: String(rootRaw.name || rootRaw.asset_name || ''),
+    unit_count: 1,
+    distinct_graphs: 1,
+    graphs: [
+      {
+        root: {
+          node_type: 'asset',
+          asset_id: rootAssetId,
+          location_id: '',
+          unit_id: null,
+          asset_name: String(rootRaw.name || rootRaw.asset_name || ''),
+          project_name: '',
+          asset_type: String(rootRaw.asset_type || ''),
+          country: '',
+          latitude: 0,
+          longitude: 0,
+        },
+        nodes: normalizeGraphNodes((raw.nodes as Array<Record<string, unknown>>) || []),
+        edges: (raw.edges as LocationGraph['edges']) || [],
+        paths: raw.paths as LocationGraph['paths'],
+        asset_ids: [rootAssetId],
+      },
+    ],
+  };
+}
+
+/**
  * Fetch all units at a location by location ID (L-prefix).
  * Returns a list of units with asset_id, asset_name, and project_name.
  */
