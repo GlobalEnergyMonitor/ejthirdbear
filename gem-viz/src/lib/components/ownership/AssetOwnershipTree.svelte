@@ -1,25 +1,28 @@
 <script lang="ts">
   /**
    * AssetOwnershipTree - Shared fetched ownership tree for an asset.
-   * Fetches ownership graph via REST API and renders OwnershipTreeGraph.
+   * Fetches ownership graph via REST API and renders LocationOwnershipView.
    * Used by compact card embeds and full-width ownership tabs.
+   *
+   * Accepts both unit-level asset IDs (single tree) and location-level IDs
+   * (renders tabbed multi-structure view via LocationOwnershipView). The API
+   * response shape determines which mode is used automatically.
    */
   import { assetLink } from '$lib/links';
-  import OwnershipTreeGraph from './OwnershipTreeGraph.svelte';
+  import LocationOwnershipView from './LocationOwnershipView.svelte';
   import Spinner from '$lib/components/feedback/Spinner.svelte';
-  import type { GraphNode, GraphEdge, OwnershipPathEntry } from '$lib/component-data/graph-types';
-
-  type OwnershipGraphResult = {
-    nodes?: GraphNode[];
-    edges?: GraphEdge[];
-    paths?: Record<string, OwnershipPathEntry[]>;
-  };
+  import type { GraphNode, GraphEdge, LocationOwnershipGraphResponse } from '$lib/ownership-api';
+  import type { OwnershipPathEntry } from '$lib/component-data/graph-types';
 
   type OwnershipGraphLoader = (_params: {
     root: string;
     direction: 'up' | 'down';
     max_depth: number;
-  }) => Promise<OwnershipGraphResult>;
+  }) => Promise<{
+    nodes?: GraphNode[];
+    edges?: GraphEdge[];
+    paths?: Record<string, OwnershipPathEntry[]>;
+  }>;
 
   interface Props {
     assetId: string;
@@ -44,54 +47,71 @@
 
   let loading = $state(true);
   let error = $state<string | null>(null);
-  let nodes = $state<GraphNode[]>([]);
-  let edges = $state<GraphEdge[]>([]);
-  let paths = $state<Record<string, OwnershipPathEntry[]>>({});
+  let locationResponse = $state<LocationOwnershipGraphResponse | null>(null);
   let lastLoadKey = $state('');
   let requestSeq = 0;
-
-  async function defaultOwnershipLoader(params: {
-    root: string;
-    direction: 'up' | 'down';
-    max_depth: number;
-  }): Promise<OwnershipGraphResult> {
-    const { getOwnershipGraph } = await import('$lib/ownership-api');
-    return getOwnershipGraph(params);
-  }
 
   async function loadGraph(
     loadAssetId: string,
     depth: number,
     loadKey: string,
-    loader: OwnershipGraphLoader
+    loader: OwnershipGraphLoader | undefined
   ) {
     const currentSeq = ++requestSeq;
     loading = true;
     error = null;
-    nodes = [];
-    edges = [];
-    paths = {};
+    locationResponse = null;
 
     try {
-      const result = await loader({
-        root: loadAssetId,
-        direction: 'up',
-        max_depth: depth,
-      });
+      let result: LocationOwnershipGraphResponse;
+
+      if (loader) {
+        // Custom loader — single-graph path (backward compat); wrap into location shape
+        const raw = await loader({ root: loadAssetId, direction: 'up', max_depth: depth });
+        const nodes = raw.nodes || [];
+        result = {
+          location_id: '',
+          project_name: '',
+          unit_count: 1,
+          distinct_graphs: 1,
+          graphs: nodes.length > 1
+            ? [{
+                root: {
+                  node_type: 'asset',
+                  asset_id: loadAssetId,
+                  location_id: '',
+                  unit_id: null,
+                  asset_name: '',
+                  project_name: '',
+                  asset_type: '',
+                  country: '',
+                  latitude: 0,
+                  longitude: 0,
+                },
+                nodes,
+                edges: raw.edges || [],
+                paths: raw.paths,
+                asset_ids: [loadAssetId],
+              }]
+            : [],
+        };
+      } else {
+        const { getOwnershipGraphs } = await import('$lib/ownership-api');
+        result = await getOwnershipGraphs({ root: loadAssetId, direction: 'up', max_depth: depth });
+      }
 
       if (currentSeq !== requestSeq) return;
-      nodes = result.nodes || [];
-      edges = result.edges || [];
-      paths = result.paths || {};
 
-      // Don't show tree if only the root asset node exists (no owners)
-      if (nodes.length <= 1) {
+      const hasOwners = result.graphs.some((g) => g.nodes.length > 1);
+      if (!hasOwners) {
         error = 'no-owners';
+      } else {
+        locationResponse = result;
       }
     } catch (err) {
       if (currentSeq !== requestSeq) return;
       error = err instanceof Error ? err.message : 'Failed to load ownership data';
-      if (import.meta.env.DEV) console.warn(`[AssetOwnershipTree] Failed for ${loadAssetId}:`, error);
+      if (import.meta.env.DEV) console.warn(`[AssetOwnershipTree] Failed for ${loadAssetId}:`, err);
     } finally {
       if (currentSeq === requestSeq) {
         loading = false;
@@ -103,10 +123,9 @@
   $effect(() => {
     const loadAssetId = assetId;
     const depth = maxDepth;
-    const loader = ownershipLoader ?? defaultOwnershipLoader;
     const loadKey = `${loadAssetId}:${depth}:${ownershipLoader ? 'custom' : 'default'}`;
     if (!loadAssetId || loadKey === lastLoadKey) return;
-    void loadGraph(loadAssetId, depth, loadKey, loader);
+    void loadGraph(loadAssetId, depth, loadKey, ownershipLoader);
   });
 </script>
 
@@ -120,16 +139,8 @@
     <div class="tree-empty">{emptyMessage}</div>
   {:else if error}
     <div class="tree-error">{errorMessage}</div>
-  {:else}
-    <OwnershipTreeGraph
-      {nodes}
-      {edges}
-      {paths}
-      rootId={assetId}
-      {compact}
-      {fullWidth}
-      direction="upstream"
-    />
+  {:else if locationResponse}
+    <LocationOwnershipView {locationResponse} direction="up" {fullWidth} />
     {#if showViewFull}
       <a class="view-full" href={assetLink(assetId)}>View full ownership details &rarr;</a>
     {/if}

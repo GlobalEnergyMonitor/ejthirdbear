@@ -136,10 +136,10 @@
     </div>
   </div>
 
-  <!-- Section 2: By Headquarter Country -->
+  <!-- Section 2: By Headquarters Country -->
   {#if ownersByCountry.length > 0}
     <div class="tabular-section">
-      <h4>By Headquarter Country</h4>
+      <h4>By Headquarters Country</h4>
       <div class="tabular-rows-wrap">
       <div class="tabular-rows">
         {#each ownersByCountry as [country, data]}

@@ -10,13 +10,14 @@
     RETIRED_STATUSES,
     getStatusGroupId,
   } from '$lib/data-config/tracker-schema';
+  import CardShell from './shell/CardShell.svelte';
 
   // ── Props ──────────────────────────────────────────────────────────────────
 
   let {
     units: allUnits,
     open = false,
-    initialTab = '',
+    initialTab,
     ownershipLoader,
   }: {
     units: CoalPlantUnit[];
@@ -86,6 +87,7 @@
 
   const f = $derived(units[0]?.coal_plant_fields);
   const plantName = $derived(f?.plant_name ?? units[0]?.asset_name ?? '');
+  const locationId = $derived(units[0]?.location_id ?? null);
   const wikiUrl = $derived(f?.wiki_url ?? null);
   const database = $derived(f?.database ?? 'Global Coal Plant Tracker, January 2026');
 
@@ -479,15 +481,22 @@
     'Additional Details',
   ] as const;
   type TabName = (typeof TABS)[number];
-  function resolveTab(t: string): TabName {
-    return t && TABS.includes(t as TabName) ? (t as TabName) : 'Overview';
-  }
-  let activeTab = $state<TabName>(resolveTab(initialTab));
+  let activeTab = $state<TabName>(
+    initialTab && TABS.includes(initialTab as TabName) ? (initialTab as TabName) : 'Overview'
+  );
   let ownershipActivated = $state(false);
 
   $effect(() => {
     if (activeTab === 'Ownership') ownershipActivated = true;
   });
+
+  // CardShell needs StatusGroup type for the badge
+  const statusGroup = $derived(
+    (() => {
+      const s = units[0]?.coal_plant_fields?.status ?? '';
+      return (getStatusGroupId(s) ?? 'operating') as 'operating' | 'planned' | 'retired' | 'cancelled';
+    })()
+  );
 
   // ── Timeline chart ─────────────────────────────────────────────────────────
 
@@ -641,45 +650,30 @@
   }
 </script>
 
-<details class="coal-plant-card" {open}>
-  <!-- ── Compact summary ─────────────────────────────────────────────────── -->
-  <summary class="card-compact" onclick={(e) => { if (window.getSelection()?.toString()) e.preventDefault(); }}>
-    <div class="compact-left">
-      <h3 class="compact-name">{plantName}</h3>
-      <div class="compact-location">{locationStr}</div>
-      {#if altNames}
-        <div class="compact-also">Also: {altNames}</div>
-      {/if}
-    </div>
-    <div class="compact-badges">
-      {#each compactChips as chip}
-        <span class="status-chip {chip.cls}">
-          <span class="chip-status">{chip.label}</span>
-          <span class="chip-capacity">{formatMW(chip.capacity)}</span>
-        </span>
-      {/each}
-    </div>
-  </summary>
+<CardShell
+  name={plantName}
+  {altNames}
+  statusLabel={capitalize(units[0]?.coal_plant_fields?.status ?? '')}
+  {statusGroup}
+  {locationStr}
+  {wikiUrl}
+  sourceLabel="Database: {database}"
+  tabs={TABS}
+  {initialTab}
+  {open}
+  bind:activeTab
+>
+  {#snippet compactRight()}
+    {#each compactChips as chip}
+      <span class="status-chip {chip.cls}">
+        <span class="chip-status">{chip.label}</span>
+        <span class="chip-capacity">{formatMW(chip.capacity)}</span>
+      </span>
+    {/each}
+  {/snippet}
 
-  <!-- ── Full card ───────────────────────────────────────────────────────── -->
-  <div class="card-full">
-    <!-- Tab bar -->
-    <div class="tab-bar" role="tablist" aria-label="Coal plant detail tabs">
-      {#each TABS as tab}
-        <button
-          class="tab-btn"
-          class:active={activeTab === tab}
-          role="tab"
-          aria-selected={activeTab === tab}
-          onclick={() => (activeTab = tab)}>{tab}</button
-        >
-      {/each}
-    </div>
-
-    <!-- Tab content (grid-stacked so all tabs are measured; only active is visible) -->
-    <div class="tabs-wrapper">
-      <!-- ── Overview ──────────────────────────────────────────────────── -->
-      <div class="tab-panel" class:active={activeTab === 'Overview'}>
+  {#snippet tabContent(tab)}
+    {#if tab === 'Overview'}
         {#if overviewNarrative || otherUnitsNote}
           <p class="narrative">{overviewNarrative ?? ''}{overviewNarrative && otherUnitsNote ? ' ' : ''}{otherUnitsNote ?? ''}</p>
         {/if}
@@ -767,11 +761,7 @@
             {/if}
           </div>
         </div>
-      </div>
-      <!-- /Overview -->
-
-      <!-- ── Timeline ──────────────────────────────────────────────────── -->
-      <div class="tab-panel" class:active={activeTab === 'Timeline'}>
+    {:else if tab === 'Timeline'}
         <p class="narrative">{unitsNarrative}</p>
         <div class="timeline-heading">Operational Timeline by Unit</div>
 
@@ -960,12 +950,7 @@
             {/each}
           </svg>
         </div>
-      </div>
-      <!-- /Timeline -->
-
-
-      <!-- ── Emissions & Phaseout ───────────────────────────────────────── -->
-      <div class="tab-panel" class:active={activeTab === 'Emissions & Phaseout'}>
+    {:else if tab === 'Emissions & Phaseout'}
         {#if alignmentStatus}
           <div class="alignment-banner alignment-{alignmentStatus}">
             {#if alignmentStatus === 'aligned'}
@@ -1046,15 +1031,11 @@
 
           </div>
         </div>
-      </div>
-      <!-- /Emissions & Phaseout -->
-
-      <!-- ── Ownership ──────────────────────────────────────────────────── -->
-      <div class="tab-panel" class:active={activeTab === 'Ownership'}>
+    {:else if tab === 'Ownership'}
         {#if ownershipActivated && units[0]?.asset_id}
           <div class="ownership-tree-wrap">
             <AssetOwnershipTree
-              assetId={units[0].asset_id}
+              assetId={locationId}
               compact={false}
               fullWidth={true}
               showViewFull={false}
@@ -1066,11 +1047,7 @@
         {:else if ownershipActivated}
           <div class="ownership-status">No ownership data available</div>
         {/if}
-      </div>
-      <!-- /Ownership -->
-
-      <!-- ── Additional Details ─────────────────────────────────────────── -->
-      <div class="tab-panel" class:active={activeTab === 'Additional Details'}>
+    {:else if tab === 'Additional Details'}
         {#if additionalDetails.length > 0}
           <dl class="details-list">
             {#each additionalDetails as row}
@@ -1083,143 +1060,17 @@
         {:else}
           <p class="narrative muted">No additional fields with data for this plant.</p>
         {/if}
-      </div>
-      <!-- /Additional Details -->
-    </div>
-    <!-- /tabs-wrapper -->
+    {/if}
+  {/snippet}
+</CardShell>
 
-    <!-- Footer -->
-    <footer class="card-footer">
-      <span>Database: {database}</span>
-      {#if wikiUrl}
-        · <a href={wikiUrl} target="_blank" rel="noopener noreferrer">Learn more on the GEM Wiki</a>
-      {/if}
-    </footer>
+{#if tlTooltip}
+  <div class="tl-tooltip" style="left:{tlTooltip.x + 14}px; top:{tlTooltip.y + 10}px;">
+    {tlTooltip.text}
   </div>
-  <!-- /card-full -->
-
-  {#if tlTooltip}
-    <div class="tl-tooltip" style="left:{tlTooltip.x + 14}px; top:{tlTooltip.y + 10}px;">
-      {tlTooltip.text}
-    </div>
-  {/if}
-</details>
+{/if}
 
 <style>
-  .coal-plant-card {
-    /* ── Theme tokens (light defaults) ─────────────────── */
-    --card-bg: #fff;
-    --card-text: #111;
-    --card-text-2: #222;
-    --card-text-3: #333;
-    --card-text-muted: #555;
-    --card-text-dim: #666;
-    --card-text-faint: #888;
-    --card-text-faintest: #999;
-    --card-text-ghost: #aaa;
-    --card-border: var(--card-border);
-    --card-border-light: var(--card-border-light);
-    --card-border-medium: var(--card-border-medium);
-    --card-border-strong: var(--card-border-strong);
-    --card-surface-muted: #e0e0e0;
-    --card-svg-grid: #ebebeb;
-    --card-svg-faint: #bbb;
-    --card-svg-now: #ccc;
-    --card-banner-green-bg: #f0fdf4;
-    --card-banner-green-text: #166534;
-    --card-banner-amber-bg: #fffbeb;
-    --card-banner-amber-text: #92400e;
-    --card-banner-orange-bg: #fff7ed;
-    --card-banner-orange-text: #9a3412;
-
-    font-family: var(--gem-font, 'Plus Jakarta Sans', system-ui, sans-serif);
-    background: var(--card-bg);
-    border-radius: 8px;
-    border: 1px solid var(--card-border);
-    overflow: hidden;
-  }
-
-  /* ── Dark theme ────────────────────────────────────────── */
-  :global(.dark) .coal-plant-card {
-    --card-bg: #1a2332;
-    --card-text: #e5e7eb;
-    --card-text-2: #d1d5db;
-    --card-text-3: #c0c4ca;
-    --card-text-muted: #9ca3af;
-    --card-text-dim: #8b92a0;
-    --card-text-faint: #6b7280;
-    --card-text-faintest: #5a6170;
-    --card-text-ghost: #4b5563;
-    --card-border: rgba(255, 255, 255, 0.12);
-    --card-border-light: rgba(255, 255, 255, 0.06);
-    --card-border-medium: rgba(255, 255, 255, 0.08);
-    --card-border-strong: rgba(255, 255, 255, 0.18);
-    --card-surface-muted: #374151;
-    --card-svg-grid: #2d3748;
-    --card-svg-faint: #4b5563;
-    --card-svg-now: #4b5563;
-    --card-banner-green-bg: #064e3b;
-    --card-banner-green-text: #6ee7b7;
-    --card-banner-amber-bg: #78350f;
-    --card-banner-amber-text: #fbbf24;
-    --card-banner-orange-bg: #7c2d12;
-    --card-banner-orange-text: #fb923c;
-  }
-
-  /* ── Compact ──────────────────────────────────────────── */
-  .card-compact {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 1rem 1.25rem;
-    cursor: pointer;
-    list-style: none;
-    user-select: none;
-  }
-  .card-compact::-webkit-details-marker {
-    display: none;
-  }
-
-  .compact-name {
-    margin: 0;
-    font-size: 1rem;
-    font-weight: 700;
-    color: var(--card-text);
-  }
-  .compact-left {
-    min-width: 0;
-  }
-  .compact-name,
-  .compact-location,
-  .compact-also {
-    user-select: text;
-  }
-  .compact-location {
-    font-size: 0.8rem;
-    color: var(--card-text-dim);
-    margin-top: 0.15rem;
-  }
-  .compact-also {
-    font-size: 0.75rem;
-    color: var(--card-text-faintest);
-    margin-top: 0.15rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  details[open] .compact-also {
-    white-space: normal;
-    overflow: visible;
-    text-overflow: unset;
-  }
-  .compact-badges {
-    display: flex;
-    gap: 0.4rem;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    flex-shrink: 0;
-  }
   .status-chip {
     display: flex;
     flex-direction: column;
@@ -1246,94 +1097,33 @@
     color: #fff;
   }
   .chip-retired {
-    background: var(--card-surface-muted);
-    color: var(--card-text-3);
+    background: #e0e0e0;
+    color: #333;
   }
   .chip-cancelled {
-    background: var(--card-surface-muted);
-    color: var(--card-text-3);
+    background: #e0e0e0;
+    color: #333;
   }
   .chip-mothballed {
-    background: var(--card-surface-muted);
-    color: var(--card-text-3);
+    background: #e0e0e0;
+    color: #333;
   }
 
-  /* ── Full card ────────────────────────────────────────── */
-  .card-full {
-    border-top: 1px solid var(--card-border-medium);
-  }
-
-  /* ── Tab bar ──────────────────────────────────────────── */
-  .tab-bar {
-    display: flex;
-    padding: 0 1.75rem;
-    border-bottom: 1px solid var(--card-border);
-    overflow-x: auto;
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
-  }
-  .tab-btn {
-    all: unset;
-    cursor: pointer;
-    padding: 0.85rem 1.25rem;
-    font-size: 0.85rem;
-    font-weight: 500;
-    color: var(--card-text-dim);
-    border-bottom: 2px solid transparent;
-    white-space: nowrap;
-    transition:
-      color 0.15s,
-      border-color 0.15s;
-    margin-bottom: -1px;
-  }
-  .tab-btn:hover {
-    color: var(--card-text);
-  }
-  .tab-btn.active {
-    color: var(--card-text);
-    border-bottom-color: var(--card-text);
-    font-weight: 600;
-  }
-
-  /* ── Tab content ──────────────────────────────────────── */
-  /* Grid-stacking: all panels occupy the same cell so the wrapper
-     naturally takes the height of the tallest tab. Each panel scrolls
-     independently if it exceeds 80vh. Inactive panels are hidden but
-     still contribute to the measured height. */
-  .tabs-wrapper {
-    display: grid;
-    min-width: 0;
-    overflow: hidden;
-  }
-  .tab-panel {
-    grid-area: 1 / 1;
-    min-width: 0;
-    padding: 1.5rem 1.75rem;
-    min-height: 220px;
-    max-height: 80vh;
-    overflow-x: hidden;
-    overflow-y: auto;
-  }
-  .tab-panel:not(.active) {
-    visibility: hidden;
-    pointer-events: none;
-    overflow: hidden;
-  }
   .narrative {
     font-size: 0.9rem;
-    color: var(--card-text-2);
+    color: #222;
     margin: 0 0 1.5rem;
     line-height: 1.6;
   }
   .narrative.muted {
-    color: var(--card-text-faintest);
+    color: #999;
     font-style: italic;
   }
   /* ── Shared field styles ──────────────────────────────── */
   .field-label {
     font-size: 0.78rem;
     font-weight: 600;
-    color: var(--card-text);
+    color: #111;
     margin-bottom: 0.2rem;
     display: flex;
     align-items: center;
@@ -1341,14 +1131,14 @@
   }
   .field-value {
     font-size: 0.9rem;
-    color: var(--card-text-2);
+    color: #222;
   }
   .field-value.muted {
-    color: var(--card-text-faintest);
+    color: #999;
   }
   .field-coords {
     font-size: 0.75rem;
-    color: var(--card-text-ghost);
+    color: #aaa;
     margin-top: 0.1rem;
   }
 
@@ -1358,7 +1148,7 @@
     justify-content: center;
     width: 14px;
     height: 14px;
-    background: var(--card-text);
+    background: #111;
     color: #fff;
     border-radius: 50%;
     font-size: 0.6rem;
@@ -1376,7 +1166,7 @@
     height: 12px;
     font-size: 0.55rem;
     vertical-align: middle;
-    background: var(--card-text-faint);
+    background: #888;
   }
   .info-dot::after {
     content: attr(data-tip);
@@ -1422,16 +1212,16 @@
     color: #fff;
   }
   .badge-retired {
-    background: var(--card-surface-muted);
-    color: var(--card-text-3);
+    background: #e0e0e0;
+    color: #444;
   }
   .badge-cancelled {
-    background: var(--card-surface-muted);
-    color: var(--card-text-3);
+    background: #e0e0e0;
+    color: #444;
   }
   .badge-mothballed {
-    background: var(--card-surface-muted);
-    color: var(--card-text-3);
+    background: #e0e0e0;
+    color: #444;
   }
 
   /* ── Overview tab ─────────────────────────────────────── */
@@ -1444,7 +1234,7 @@
   .summary-heading {
     font-size: 0.8rem;
     font-weight: 700;
-    color: var(--card-text);
+    color: #111;
     margin-bottom: 0.6rem;
   }
   .summary-row {
@@ -1452,7 +1242,7 @@
     grid-template-columns: 130px 90px 70px 1fr 1fr 1fr 50px;
     gap: 0;
     padding: 0.5rem 0;
-    border-bottom: 1px solid var(--card-border-light);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
     font-size: 0.85rem;
     align-items: center;
   }
@@ -1462,10 +1252,10 @@
   .summary-header {
     font-size: 0.7rem;
     font-weight: 600;
-    color: var(--card-text-dim);
+    color: #666;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    border-bottom: 1px solid var(--card-border-strong);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.15);
     padding-bottom: 0.4rem;
   }
 
@@ -1482,10 +1272,10 @@
     all: unset;
     cursor: pointer;
     font-size: 0.72rem;
-    color: var(--card-text-faint);
+    color: #888;
   }
   .table-view-toggle:hover {
-    color: var(--card-text-3);
+    color: #333;
   }
   .summary-table--by-unit .summary-row {
     grid-template-columns: 130px 1fr 90px 1fr 1fr 1fr 70px;
@@ -1501,7 +1291,7 @@
   .timeline-heading {
     font-size: 0.8rem;
     font-weight: 700;
-    color: var(--card-text);
+    color: #111;
     margin-bottom: 0.75rem;
   }
   .timeline-wrap {
@@ -1512,7 +1302,7 @@
   /* ── Ownership tab ────────────────────────────────── */
   .ownership-status {
     font-size: 0.82rem;
-    color: var(--card-text-faint);
+    color: #888;
     padding: 1rem 0;
   }
   .ownership-status.error {
@@ -1540,52 +1330,52 @@
   :global(.tl-axis-label) {
     font-family: var(--gem-font, system-ui, sans-serif);
     font-size: 11px;
-    fill: var(--card-text-faint);
+    fill: #888;
   }
   :global(.tl-gridline) {
-    stroke: var(--card-svg-grid);
+    stroke: #ebebeb;
     stroke-width: 1;
   }
   :global(.tl-now-line) {
-    stroke: var(--card-svg-now);
+    stroke: #ccc;
     stroke-width: 1;
   }
   :global(.tl-unit-name) {
     font-family: var(--gem-font, system-ui, sans-serif);
     font-size: 11px;
-    fill: var(--card-text);
+    fill: #111;
     font-weight: 500;
   }
   :global(.tl-unit-cap) {
     font-family: var(--gem-font, system-ui, sans-serif);
     font-size: 10px;
-    fill: var(--card-text-faintest);
+    fill: #999;
   }
   :global(.tl-bar) {
-    fill: var(--card-text);
+    fill: #111;
   }
   :global(.tl-bar.tl-bar-retired) {
-    fill: var(--card-svg-faint);
+    fill: #bbb;
   }
   :global(.tl-bar.tl-bar-mothballed) {
-    fill: var(--card-svg-faint);
+    fill: #bbb;
   }
   :global(.tl-bar.tl-bar-cancelled) {
-    fill: var(--card-svg-now);
+    fill: #ccc;
   }
   :global(.tl-bar.tl-bar-planned) {
     fill: #ca4a50;
   }
   :global(.tl-bar.tl-bar-future) {
     fill: none;
-    stroke: var(--card-text);
+    stroke: #111;
     stroke-width: 2;
   }
   :global(.tl-dot) {
-    fill: var(--card-text);
+    fill: #111;
   }
   :global(.tl-dot.tl-bar-mothballed) {
-    fill: var(--card-svg-faint);
+    fill: #bbb;
   }
 
   .tl-badge-wrap {
@@ -1596,7 +1386,7 @@
   }
   .tl-planned-note {
     font-size: 0.65rem;
-    color: var(--card-text-dim);
+    color: #777;
     font-style: italic;
     line-height: 1.3;
   }
@@ -1610,16 +1400,16 @@
     margin-bottom: 1.5rem;
   }
   .alignment-aligned {
-    background: var(--card-banner-green-bg);
-    color: var(--card-banner-green-text);
+    background: #f0fdf4;
+    color: #166534;
   }
   .alignment-needs-acceleration {
-    background: var(--card-banner-amber-bg);
-    color: var(--card-banner-amber-text);
+    background: #fffbeb;
+    color: #92400e;
   }
   .alignment-not-aligned {
-    background: var(--card-banner-orange-bg);
-    color: var(--card-banner-orange-text);
+    background: #fff7ed;
+    color: #9a3412;
   }
 
   .emissions-grid {
@@ -1636,12 +1426,12 @@
     all: unset;
     cursor: pointer;
     font-size: 0.72rem;
-    color: var(--card-text-faint);
+    color: #888;
     margin-left: 0.4rem;
     white-space: nowrap;
   }
   .emissions-expand-btn:hover {
-    color: var(--card-text-3);
+    color: #333;
   }
 
   .unit-emissions-list {
@@ -1655,7 +1445,7 @@
     align-items: center;
     gap: 0.5rem;
     font-size: 0.82rem;
-    color: var(--card-text-3);
+    color: #333;
   }
   .unit-emission-dot {
     width: 8px;
@@ -1673,7 +1463,7 @@
   .unit-emission-dot.chip-retired,
   .unit-emission-dot.chip-cancelled,
   .unit-emission-dot.chip-mothballed {
-    background: var(--card-svg-faint);
+    background: #bbb;
   }
 
   .unit-emission-name {
@@ -1682,7 +1472,7 @@
     white-space: nowrap;
   }
   .unit-emission-vals {
-    color: var(--card-text-muted);
+    color: #555;
   }
 
   /* ── Additional Details tab ──────────────────────────── */
@@ -1698,7 +1488,7 @@
     grid-template-columns: 220px 1fr;
     gap: 0 1.5rem;
     padding: 0.45rem 0;
-    border-bottom: 1px solid var(--card-border-light);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
     align-items: baseline;
   }
   .details-row:last-child {
@@ -1707,32 +1497,17 @@
   .details-row dt {
     font-size: 0.78rem;
     font-weight: 600;
-    color: var(--card-text-muted);
+    color: #555;
   }
   .details-row dd {
     margin: 0;
     font-size: 0.85rem;
-    color: var(--card-text-2);
+    color: #222;
     font-family: 'SF Mono', 'Fira Code', monospace;
   }
 
-  /* ── Footer ───────────────────────────────────────────── */
-  .card-footer {
-    padding: 0.75rem 1.75rem;
-    border-top: 1px solid var(--card-border-medium);
-    font-size: 0.75rem;
-    color: var(--card-text-faint);
-  }
-  .card-footer a {
-    color: var(--card-text-muted);
-    text-decoration: underline;
-  }
-  .card-footer a:hover {
-    color: var(--card-text);
-  }
-
   /* ── Responsive ───────────────────────────────────────── */
-  @media (max-width: 768px) {
+  @media (max-width: 700px) {
     .overview-grid,
     .coal-grid,
     .emissions-grid {
@@ -1740,10 +1515,6 @@
     }
     .summary-row {
       grid-template-columns: 110px 90px 65px 1fr;
-      font-size: 0.8rem;
-    }
-    .tab-btn {
-      padding: 0.75rem 0.75rem;
       font-size: 0.8rem;
     }
   }
