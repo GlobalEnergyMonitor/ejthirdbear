@@ -53,6 +53,7 @@
       asset = {
         id: data.id,
         name: data.name || assetId,
+        locationId: data.locationId ?? undefined,
         status: data.status || '',
         capacity: data.capacity ?? undefined,
         capacityUnit: data.capacityUnit ?? undefined,
@@ -121,7 +122,7 @@
     <ProjectCard {asset} variant="full" open={true} showLink={true}>
       {#snippet ownership()}
         {#if showOwnership && resolvedId}
-          <AssetOwnershipTree assetId={resolvedId} />
+          <AssetOwnershipTree assetId={asset.locationId || resolvedId} />
         {/if}
       {/snippet}
       {#snippet map()}

@@ -86,6 +86,8 @@
     direction?: 'auto' | 'upstream' | 'downstream';
     /** expands graph area and moves owner list under the chart */
     fullWidth?: boolean;
+    /** removes max-height cap on .graph-wrap — used by embed context */
+    expandHeight?: boolean;
     /** Optional label for the root asset (passed by some callers, reserved for future use) */
     assetName?: string;
     /** Optional navigation callback — used by dynamic embeds instead of goto() */
@@ -114,6 +116,7 @@
     compact = false,
     direction = 'auto',
     fullWidth = false,
+    expandHeight = false,
     onNavigate,
   }: Props = $props();
 
@@ -1463,6 +1466,7 @@
         <div
           class="graph-wrap"
           class:panning={isPanning}
+          class:expand-height={expandHeight}
           bind:this={graphWrapEl}
           role="application"
           onpointerdown={startPan}
@@ -1843,6 +1847,10 @@
   .full-width .graph-wrap {
     min-width: 0;
     max-height: min(74vh, 760px);
+  }
+  .graph-wrap.expand-height {
+    max-height: 4000px;
+    overflow: visible;
   }
   .graph-wrap > svg {
     display: block;
@@ -2269,6 +2277,10 @@
     }
     .full-width .graph-wrap {
       max-height: 62vh;
+    }
+    .graph-wrap.expand-height {
+      max-height: 4000px;
+      overflow: visible;
     }
     .graph-wrap > svg {
       min-height: 250px;

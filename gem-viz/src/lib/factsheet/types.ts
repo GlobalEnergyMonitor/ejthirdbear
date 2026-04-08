@@ -6,6 +6,7 @@
 export interface Asset {
   id: string;
   name: string;
+  locationId?: string;
   unitName?: string;
   status: string;
   capacity?: number;

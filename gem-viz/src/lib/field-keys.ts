@@ -39,6 +39,8 @@ export const FK_OWNER_ENTITY_ID = [
 export const FK_PARENT = ['Parent', 'parent'] as const;
 export const FK_PARENT_ENTITY_ID = ['Parent GEM Entity ID', 'parent_entity_id'] as const;
 
+export const FK_LOCATION_ID = ['Location ID', 'location_id'] as const;
+
 export const FK_ENTITY_ID = ['Entity ID', 'GEM Entity ID', 'entity_id', 'id'] as const;
 export const FK_ENTITY_NAME = ['Name', 'Entity Name', 'entity_name', 'name'] as const;
 export const FK_FULL_NAME = ['Full Name', 'full_name'] as const;

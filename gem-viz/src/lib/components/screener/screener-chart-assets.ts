@@ -110,8 +110,8 @@ export function drawAssetGroups(
         .attr('class', 'unit-ring')
         .attr('r', r)
         .style('fill', 'none')
-        .style('stroke', '#aab2c0')
-        .style('stroke-width', '2px')
+        .style('stroke', colors.gray300)
+        .style('stroke-width', '1px')
         .style('pointer-events', 'none');
     }
 
@@ -119,7 +119,7 @@ export function drawAssetGroups(
     const ownershipArc = d3Arc<{ endAngle: number }>()
       .innerRadius(0)
       .outerRadius(circleR + 0.625)
-      .startAngle(0);
+      .startAngle(-Math.PI / 2);
 
     // Unit circles
     const unitMarks = unitGroup
@@ -129,9 +129,9 @@ export function drawAssetGroups(
       .attr('class', 'unit-mark')
       .each(function (p, j) {
         (p as ChartUnit & { _x: number; _y: number })._x =
-          N === 1 ? 0 : r * Math.cos((TAU * j) / N);
-        (p as ChartUnit & { _x: number; _y: number })._y =
-          N === 1 ? 0 : r * Math.sin((TAU * j) / N);
+          N === 1 ? 0 : r * Math.cos((TAU * j) / N - Math.PI / 2);
+        (p as ChartUnit & { _y: number; _x: number })._y =
+          N === 1 ? 0 : r * Math.sin((TAU * j) / N - Math.PI / 2);
       })
       .attr('transform', (p) => {
         const px = (p as ChartUnit & { _x: number })._x ?? 0;
@@ -155,12 +155,12 @@ export function drawAssetGroups(
       .append('path')
       .attr('class', 'unit-ownership-arc')
       .attr('d', (p) =>
-        ownershipArc({ endAngle: 2 * Math.PI * (p.spotlightOwnershipSharePct / 100) })
+        ownershipArc({ endAngle: -Math.PI / 2 + 2 * Math.PI * (p.spotlightOwnershipSharePct / 100) })
       )
       .style('fill', colors.midnight)
-      .style('fill-opacity', 0.1)
+      .style('fill-opacity', 0.15)
       .style('stroke', 'white')
-      .style('stroke-width', '1.25px')
+      .style('stroke-width', '1px')
       .style('stroke-opacity', 0.6)
       .style('pointer-events', 'none');
 

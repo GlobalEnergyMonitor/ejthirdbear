@@ -32,6 +32,7 @@ function assetSummaryToAsset(a: AssetSummary): Asset {
   return {
     id: a.id,
     name: a.name,
+    locationId: a.locationId ?? undefined,
     status: a.status || '',
     capacity: a.capacity ?? undefined,
     capacityUnit: a.capacityUnit ?? undefined,

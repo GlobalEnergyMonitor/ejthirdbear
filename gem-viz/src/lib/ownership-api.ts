@@ -22,6 +22,7 @@ import {
   FK_OWNER_ENTITY_ID,
   FK_PARENT,
   FK_PARENT_ENTITY_ID,
+  FK_LOCATION_ID,
   FK_ENTITY_ID,
   FK_ENTITY_NAME,
   FK_FULL_NAME,
@@ -110,6 +111,7 @@ export interface AssetOwner {
 export interface AssetSummary {
   id: string;
   name: string;
+  locationId?: string | null;
   facilityType?: string | null;
   status?: string | null;
   subStatus?: string | null;
@@ -444,6 +446,7 @@ function normalizeAsset(raw: RawAsset): AssetSummary {
   return {
     id,
     name: String(pickKey(raw, FK_NAME) || id).trim(),
+    locationId: str(FK_LOCATION_ID),
     facilityType: str(FK_FACILITY_TYPE),
     status: str(FK_STATUS),
     subStatus: str(FK_SUB_STATUS),

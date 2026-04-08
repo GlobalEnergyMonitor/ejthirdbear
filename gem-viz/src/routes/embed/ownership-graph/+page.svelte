@@ -72,6 +72,8 @@
       edges={graphData.edges}
       rootId={entityId}
       {compact}
+      fullWidth
+      expandHeight
     />
   {:else}
     <div class="embed-empty">
@@ -84,7 +86,5 @@
   .graph-embed {
     width: 100%;
     min-height: 500px;
-    max-height: 80vh;
-    overflow: auto;
   }
 </style>

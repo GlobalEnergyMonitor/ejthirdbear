@@ -146,7 +146,7 @@
           <ProjectCard {asset} percentiles={getPercentiles(asset)} {variant}>
             {#snippet ownership()}
               {#if expandedCards.has(asset.id)}
-                <AssetOwnershipTree assetId={asset.id} />
+                <AssetOwnershipTree assetId={asset.locationId || asset.id} />
               {/if}
             {/snippet}
             {#snippet map()}

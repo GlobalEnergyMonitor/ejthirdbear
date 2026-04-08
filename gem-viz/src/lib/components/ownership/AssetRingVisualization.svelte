@@ -134,6 +134,18 @@
       </text>
     </g>
 
+    <!-- Connecting ring for multi-unit locations -->
+    {#if displayAssets.length > 1}
+      <circle
+        cx={centerX}
+        cy={centerY}
+        r={ringRadius}
+        fill="none"
+        stroke={colors.gray300}
+        stroke-width="1"
+      />
+    {/if}
+
     <!-- Asset units -->
     {#each unitPositions as pos}
       <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -157,6 +169,7 @@
           fill={getStatusColor(pos.asset.status)}
           stroke={colors.gray700}
           stroke-width="1"
+          style="mix-blend-mode: multiply"
         />
 
         <!-- Ownership pie overlay -->
@@ -164,7 +177,10 @@
           <path
             d={ownershipArcPath(pos.asset.share, unitRadius * 0.7)}
             fill={colors.navy}
-            fill-opacity="0.6"
+            fill-opacity="0.15"
+            stroke="white"
+            stroke-width="1"
+            stroke-opacity="0.6"
           />
         {/if}
 

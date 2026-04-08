@@ -256,6 +256,10 @@
   let treeSvgEl = $state(null);
   let assetsSvgEl = $state(null);
 
+  /** Horizontal scroll fade state */
+  let canScrollLeft = $state(false);
+  let canScrollRight = $state(false);
+
   /** Stored d3 tree root — needed for asset→tree cross-highlighting */
   let treeRoot = $state(null);
 
@@ -263,6 +267,26 @@
   let selectedProject = $state(null);
   /** Modal position (viewport coords for fixed positioning) */
   let modalPos = $state({ x: 0, y: 0 });
+
+  /** Track horizontal scroll position for fade affordance */
+  $effect(() => {
+    if (!chartContainer) return;
+    const el = chartContainer;
+    const handler = () => {
+      canScrollLeft = el.scrollLeft > 10;
+      canScrollRight = el.scrollLeft < el.scrollWidth - el.clientWidth - 10;
+    };
+    el.addEventListener('scroll', handler, { passive: true });
+    // Defer initial check so layout is complete
+    const raf = requestAnimationFrame(() => handler());
+    const ro = new ResizeObserver(() => handler());
+    ro.observe(el);
+    return () => {
+      el.removeEventListener('scroll', handler);
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
+  });
 
   /** AbortController for in-flight fetch — prevents stale data on rapid entity switching */
   let fetchController = null;
@@ -938,8 +962,8 @@
       }
 
       proj.units.forEach((unit, j) => {
-        const cx = N === 1 ? unitR : unitR + clusterR * Math.cos((TAU * j) / N);
-        const cy = N === 1 ? 0 : clusterR * Math.sin((TAU * j) / N);
+        const cx = N === 1 ? unitR : unitR + clusterR * Math.cos((TAU * j) / N - Math.PI / 2);
+        const cy = N === 1 ? 0 : clusterR * Math.sin((TAU * j) / N - Math.PI / 2);
         const circleR = individualR;
 
         const unitColor =
@@ -960,13 +984,13 @@
 
         // Ownership pie slice if partial ownership
         if (unit.ownership_share && unit.ownership_share < 100 && unit.ownership_share > 1) {
-          const pieArc = d3Shape.arc().innerRadius(0).outerRadius(circleR + 0.5).startAngle(0);
+          const pieArc = d3Shape.arc().innerRadius(0).outerRadius(circleR + 0.5).startAngle(-Math.PI / 2);
           row
             .append('path')
             .attr('transform', `translate(${cx},${cy})`)
-            .attr('d', pieArc({ endAngle: (2 * Math.PI * unit.ownership_share) / 100 }))
+            .attr('d', pieArc({ endAngle: -Math.PI / 2 + (2 * Math.PI * unit.ownership_share) / 100 }))
             .style('fill', colors.navy)
-            .style('fill-opacity', 0.1)
+            .style('fill-opacity', 0.15)
             .style('stroke', 'white')
             .style('stroke-width', 1)
             .style('stroke-opacity', 0.6)
@@ -1200,7 +1224,12 @@
     </div>
 
     <!-- MAIN CHART AREA -->
-    <div class="chart-row" bind:this={chartContainer}>
+    <div
+      class="chart-row"
+      class:fade-left={canScrollLeft}
+      class:fade-right={canScrollRight}
+      bind:this={chartContainer}
+    >
       {#if isFiltered && displayProjectGroups.length === 0}
         <div class="empty-state">
           <p>No assets match current filters.</p>
@@ -1539,6 +1568,19 @@
     min-height: 200px;
     max-height: var(--chart-max-height, calc(100vh - 260px));
   }
+  /* Horizontal scroll fade affordance */
+  .chart-row.fade-right {
+    mask-image: linear-gradient(to right, black calc(100% - 48px), transparent);
+    -webkit-mask-image: linear-gradient(to right, black calc(100% - 48px), transparent);
+  }
+  .chart-row.fade-left {
+    mask-image: linear-gradient(to left, black calc(100% - 48px), transparent);
+    -webkit-mask-image: linear-gradient(to left, black calc(100% - 48px), transparent);
+  }
+  .chart-row.fade-left.fade-right {
+    mask-image: linear-gradient(to right, transparent, black 48px, black calc(100% - 48px), transparent);
+    -webkit-mask-image: linear-gradient(to right, transparent, black 48px, black calc(100% - 48px), transparent);
+  }
   /* In embed mode, let content flow naturally so the iframe auto-resizes */
   .embed-mode .chart-row {
     overflow: visible;
@@ -1811,6 +1853,10 @@
       min-height: 200px;
       overflow-x: auto;
       -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .chart-row::-webkit-scrollbar {
+      display: none;
     }
     .tree-container {
       display: none;

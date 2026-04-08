@@ -11,8 +11,8 @@
   import { assetLink } from '$lib/links';
   import LocationOwnershipView from './LocationOwnershipView.svelte';
   import Spinner from '$lib/components/feedback/Spinner.svelte';
-  import type { GraphNode, GraphEdge, LocationOwnershipGraphResponse } from '$lib/ownership-api';
-  import type { OwnershipPathEntry } from '$lib/component-data/graph-types';
+  import type { LocationOwnershipGraphResponse } from '$lib/ownership-api';
+  import type { GraphNode, GraphEdge, OwnershipPathEntry } from '$lib/component-data/graph-types';
 
   type OwnershipGraphLoader = (_params: {
     root: string;
@@ -69,6 +69,8 @@
         // Custom loader — single-graph path (backward compat); wrap into location shape
         const raw = await loader({ root: loadAssetId, direction: 'up', max_depth: depth });
         const nodes = raw.nodes || [];
+        // Cast to LocationOwnershipGraphResponse — graph-types.GraphNode is structurally
+        // compatible at runtime but has looser type declarations than ownership-api.GraphNode
         result = {
           location_id: '',
           project_name: '',
@@ -77,7 +79,7 @@
           graphs: nodes.length > 1
             ? [{
                 root: {
-                  node_type: 'asset',
+                  node_type: 'asset' as const,
                   asset_id: loadAssetId,
                   location_id: '',
                   unit_id: null,
@@ -88,9 +90,9 @@
                   latitude: 0,
                   longitude: 0,
                 },
-                nodes,
-                edges: raw.edges || [],
-                paths: raw.paths,
+                nodes: nodes as LocationOwnershipGraphResponse['graphs'][0]['nodes'],
+                edges: (raw.edges || []) as LocationOwnershipGraphResponse['graphs'][0]['edges'],
+                paths: raw.paths as LocationOwnershipGraphResponse['graphs'][0]['paths'],
                 asset_ids: [loadAssetId],
               }]
             : [],
