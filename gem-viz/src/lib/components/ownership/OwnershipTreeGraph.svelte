@@ -1291,9 +1291,18 @@
     writeTreeHash(_color, _min, _focus);
   });
 
-  // Re-run layout when data changes
+  // Re-run layout when data changes; reset zoom/fit so the new graph is fully visible
   $effect(() => {
-    if (dagre && renderNodes.length > 0) runLayout();
+    if (dagre && renderNodes.length > 0) {
+      runLayout();
+      // After re-layout with new data, reset fit state and re-apply auto-fit
+      // so the full graph is visible (skip on first mount — entrance animation handles it)
+      if (hasAutoFit) {
+        hasAutoFit = false;
+        entranceAnimDone = true;
+        tick().then(() => applyAutoFit());
+      }
+    }
   });
 
   // Clear frozen state if the pinned node gets faded out by ownership filter
