@@ -59,4 +59,26 @@
     align-items: center;
     gap: var(--space-2);
   }
+
+  @media (max-width: 768px) {
+    .section-header {
+      margin-top: var(--space-6);
+      gap: var(--space-2);
+    }
+
+    .section-copy {
+      min-width: 0;
+      width: 100%;
+    }
+
+    .section-title {
+      font-size: var(--font-size-base);
+    }
+
+    .section-meta {
+      width: 100%;
+      justify-content: flex-start;
+      flex-wrap: wrap;
+    }
+  }
 </style>
