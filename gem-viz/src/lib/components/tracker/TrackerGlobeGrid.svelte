@@ -578,7 +578,7 @@
     border-radius: var(--radius-full);
   }
 
-  @media (max-width: 900px) {
+  @media (max-width: 1024px) {
     .globe-overview {
       justify-content: stretch;
     }

@@ -672,9 +672,7 @@
     .project-card.compact .project-details {
       padding: 0.75rem 1rem;
     }
-  }
 
-  @media (max-width: 380px) {
     .details-section {
       grid-template-columns: 1fr;
     }

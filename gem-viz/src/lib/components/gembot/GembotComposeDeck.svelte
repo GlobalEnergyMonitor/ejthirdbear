@@ -220,7 +220,7 @@
     overflow: hidden;
   }
 
-  @media (max-width: 1200px) {
+  @media (max-width: 1280px) {
     .compose-deck__layout {
       grid-template-columns: 1fr;
     }

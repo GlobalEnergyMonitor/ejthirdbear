@@ -464,7 +464,7 @@
     color: #111;
   }
 
-  @media (max-width: 800px) {
+  @media (max-width: 768px) {
     .main-area {
       grid-template-columns: 1fr;
     }

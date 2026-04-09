@@ -857,8 +857,7 @@
     }
   }
 
-  /* Extra small screens */
-  @media (max-width: 400px) {
+  @media (max-width: 640px) {
     .dist-row {
       grid-template-columns: 60px 1fr 32px;
     }
