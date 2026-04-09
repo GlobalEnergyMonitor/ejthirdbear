@@ -758,9 +758,13 @@
   }
 
   /* Responsive */
-  @media (max-width: 640px) {
+  @media (max-width: 768px) {
     .selection-badge {
       max-width: 100%;
+    }
+
+    .picker-section {
+      gap: var(--space-4);
     }
 
     .picker-grid {
@@ -768,7 +772,7 @@
     }
 
     .picker-tile {
-      padding: var(--space-3);
+      padding: var(--space-3) var(--space-4);
       min-height: 44px;
     }
 

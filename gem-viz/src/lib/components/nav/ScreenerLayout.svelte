@@ -52,12 +52,6 @@
   );
 </script>
 
-<div class="mobile-fallback">
-  <h2>Asset Class Screener</h2>
-  <p>The screener is designed for desktop use. For the best experience, please visit on a larger screen.</p>
-  <a href="/" class="mobile-fallback-link">Back to home</a>
-</div>
-
 <main class="screener-page">
   <div class="screener-layout {maxWidthClass}">
     {#if showStepNav}
@@ -187,58 +181,18 @@
     }
   }
 
-  /* Mobile fallback */
-  .mobile-fallback {
-    display: none;
-  }
-
-  @media (max-width: 640px) {
-    .mobile-fallback {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      padding: var(--space-8) var(--space-5);
-      min-height: 60vh;
-      gap: var(--space-4);
-    }
-
-    .mobile-fallback h2 {
-      font-size: var(--font-size-xl);
-      font-weight: 600;
-      margin: 0;
-    }
-
-    .mobile-fallback p {
-      font-size: var(--font-size-base);
-      color: var(--color-text-secondary);
-      max-width: 320px;
-      line-height: 1.5;
-      margin: 0;
-    }
-
-    .mobile-fallback-link {
-      display: inline-block;
-      padding: var(--space-3) var(--space-5);
-      background: var(--gem-primary-blue);
-      color: white;
-      border-radius: var(--radius-sm);
-      text-decoration: none;
-      font-size: var(--font-size-sm);
-    }
-
-    .screener-page {
-      display: none;
-    }
-
+  @media (max-width: 768px) {
     .screener-layout {
-      padding: var(--space-8) var(--space-5) 80px;
+      padding: var(--space-6) var(--space-4) 80px;
     }
 
     .screener-header {
       grid-template-columns: 1fr;
-      gap: var(--space-4);
+      gap: var(--space-3);
+    }
+
+    .subtitle {
+      font-size: var(--font-size-base);
     }
 
     .header-right {
@@ -246,8 +200,12 @@
       width: 100%;
     }
 
+    .screener-content {
+      gap: var(--space-6);
+    }
+
     .screener-footer {
-      padding: var(--space-3) var(--space-5);
+      padding: var(--space-3) var(--space-4);
     }
   }
 
