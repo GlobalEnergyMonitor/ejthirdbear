@@ -179,6 +179,45 @@
     return { lines, topOwners, byType, byCountry: topCountries, totalEntities: entities.length };
   });
 
+  /** Vertical chain paths for mobile: owner → intermediaries → asset with pcts */
+  const mobileChains = $derived.by(() => {
+    if (!locationResponse || !selected) return [];
+    const firstGraph = locationResponse.graphs[0];
+    if (!firstGraph) return [];
+
+    const { nodes, edges, paths } = firstGraph;
+    if (!paths || Object.keys(paths).length === 0) return [];
+
+    const nodeMap = new Map(nodes.map((n) => [n.id, n]));
+    const edgeMap = new Map(edges.map((e) => [`${e.source}->${e.target}`, e]));
+
+    const chains = [];
+    for (const [_ownerId, routes] of Object.entries(paths)) {
+      for (const route of routes) {
+        if (!route.route || route.route.length < 2) continue;
+        const steps = route.route.map((id, i) => {
+          const node = nodeMap.get(id);
+          const name = node?.Name || id;
+          const isAsset = node?.type === 'asset' || i === route.route.length - 1;
+          const ownerType = !isAsset && node ? classifyOwnerType(node) : null;
+          const country = node?.headquarters_country || node?.country || null;
+          // Edge pct: from this node to next
+          let edgePct = null;
+          if (i < route.route.length - 1) {
+            const nextId = route.route[i + 1];
+            const edge = edgeMap.get(`${id}->${nextId}`);
+            if (edge?.value != null) edgePct = edge.value;
+          }
+          return { id, name, isAsset, ownerType, country, edgePct };
+        });
+        chains.push({ steps, cumulativePct: route.cumulative_pct });
+      }
+    }
+    // Sort by cumulative pct descending, limit to top 10
+    chains.sort((a, b) => (b.cumulativePct ?? 0) - (a.cumulativePct ?? 0));
+    return chains.slice(0, 10);
+  });
+
   let debounceTimer;
 
   // Restore modal from hash deep-link (e.g. #asset=L100000401789)
@@ -579,40 +618,50 @@
             <LocationOwnershipView {locationResponse} direction="up" fullWidth={true} />
           </div>
 
-          <!-- Mobile: data-driven summary replacing the graph -->
-          {#if mobileSummary}
+          <!-- Mobile: vertical ownership chains -->
+          {#if mobileChains.length > 0}
+            <div class="cc-mobile-chains">
+              {#if mobileSummary}
+                <p class="cc-chains-intro">{mobileSummary.lines[0]}</p>
+              {/if}
+              {#each mobileChains as chain, ci}
+                <div class="cc-chain" class:cc-chain-border={ci > 0}>
+                  <div class="cc-chain-header">
+                    <span class="cc-chain-label">Path {ci + 1}</span>
+                    {#if chain.cumulativePct != null && chain.cumulativePct > 0}
+                      <span class="cc-chain-total">{chain.cumulativePct.toFixed(1)}% effective</span>
+                    {/if}
+                  </div>
+                  <ol class="cc-chain-steps">
+                    {#each chain.steps as step, si}
+                      <li class="cc-step" class:cc-step-asset={step.isAsset}>
+                        <div class="cc-step-connector">
+                          <div class="cc-step-dot" class:cc-step-dot-asset={step.isAsset}></div>
+                          {#if si < chain.steps.length - 1}
+                            <div class="cc-step-line"></div>
+                          {/if}
+                        </div>
+                        <div class="cc-step-content">
+                          <span class="cc-step-name">{step.name}</span>
+                          <span class="cc-step-meta">
+                            {#if step.ownerType}<span class="cc-step-type">{step.ownerType}</span>{/if}
+                            {#if step.country}<span class="cc-step-country">{step.country}</span>{/if}
+                          </span>
+                        </div>
+                        {#if step.edgePct != null && step.edgePct > 0}
+                          <span class="cc-step-pct">{step.edgePct.toFixed(1)}%</span>
+                        {/if}
+                      </li>
+                    {/each}
+                  </ol>
+                </div>
+              {/each}
+            </div>
+          {:else if mobileSummary}
             <div class="cc-mobile-summary">
               {#each mobileSummary.lines as line}
                 <p class="cc-summary-line">{line}</p>
               {/each}
-
-              {#if mobileSummary.topOwners.length > 0}
-                <div class="cc-summary-section">
-                  <h4>Top Owners</h4>
-                  <ul class="cc-summary-list">
-                    {#each mobileSummary.topOwners as o}
-                      <li>
-                        <span class="cc-owner-name">{o.name}</span>
-                        {#if o.pct > 0}<span class="cc-owner-pct">{o.pct.toFixed(1)}%</span>{/if}
-                      </li>
-                    {/each}
-                  </ul>
-                </div>
-              {/if}
-
-              {#if mobileSummary.byCountry.length > 0}
-                <div class="cc-summary-section">
-                  <h4>By Headquarters</h4>
-                  <ul class="cc-summary-list">
-                    {#each mobileSummary.byCountry as [country, count]}
-                      <li>
-                        <span class="cc-owner-name">{country}</span>
-                        <span class="cc-owner-pct">{count} owner{count !== 1 ? 's' : ''}</span>
-                      </li>
-                    {/each}
-                  </ul>
-                </div>
-              {/if}
             </div>
           {/if}
         {:else}
@@ -1026,20 +1075,19 @@
     text-align: center;
   }
 
-  /* Mobile: hide graph, show summary */
+  /* Mobile: hide graph, show chains */
+  .cc-mobile-chains,
   .cc-mobile-summary {
     display: none;
   }
 
   @media (max-width: 768px) {
     .cc-desktop-only {
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-      max-width: 100%;
+      display: none;
     }
+    .cc-mobile-chains,
     .cc-mobile-summary {
       display: block;
-      padding: var(--space-2) 0;
     }
     .cc-modal {
       width: 100vw;
@@ -1053,43 +1101,118 @@
     }
   }
 
+  /* Chain view */
+  .cc-chains-intro {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    margin: 0 0 var(--space-4) 0;
+    line-height: 1.5;
+  }
+
+  .cc-chain {
+    padding: var(--space-3) 0;
+  }
+  .cc-chain-border {
+    border-top: 1px solid var(--color-border);
+    margin-top: var(--space-2);
+  }
+  .cc-chain-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-2);
+  }
+  .cc-chain-label {
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-text-tertiary);
+  }
+  .cc-chain-total {
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--gem-navy, #1d4961);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .cc-chain-steps {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .cc-step {
+    display: grid;
+    grid-template-columns: 20px 1fr auto;
+    gap: 0 var(--space-2);
+    min-height: 40px;
+    align-items: start;
+  }
+  .cc-step-connector {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
+    padding-top: 6px;
+  }
+  .cc-step-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--color-border);
+    border: 2px solid var(--color-bg-primary);
+    box-shadow: 0 0 0 1.5px var(--color-border);
+    flex-shrink: 0;
+  }
+  .cc-step-dot-asset {
+    background: var(--gem-navy, #1d4961);
+    box-shadow: 0 0 0 1.5px var(--gem-navy, #1d4961);
+  }
+  .cc-step-line {
+    width: 1.5px;
+    flex: 1;
+    background: var(--color-border);
+    min-height: 16px;
+  }
+  .cc-step-content {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 2px 0 var(--space-2) 0;
+  }
+  .cc-step-name {
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    color: var(--color-text-primary);
+    line-height: 1.3;
+  }
+  .cc-step-asset .cc-step-name {
+    font-weight: 600;
+    color: var(--gem-navy, #1d4961);
+  }
+  .cc-step-meta {
+    display: flex;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+  }
+  .cc-step-type,
+  .cc-step-country {
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+  }
+  .cc-step-pct {
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    font-variant-numeric: tabular-nums;
+    padding-top: 4px;
+    white-space: nowrap;
+  }
+
   .cc-summary-line {
     font-size: var(--font-size-sm);
     color: var(--color-text-primary);
     line-height: 1.5;
     margin: 0 0 var(--space-2) 0;
-  }
-  .cc-summary-section {
-    margin-top: var(--space-4);
-  }
-  .cc-summary-section h4 {
-    font-size: var(--font-size-xs);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--color-text-tertiary);
-    margin: 0 0 var(--space-2) 0;
-    font-weight: 600;
-  }
-  .cc-summary-list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-  }
-  .cc-summary-list li {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: var(--space-1) 0;
-    font-size: var(--font-size-sm);
-    border-bottom: 1px solid var(--color-border);
-  }
-  .cc-owner-name {
-    color: var(--color-text-primary);
-    font-weight: 500;
-  }
-  .cc-owner-pct {
-    color: var(--color-text-secondary);
-    font-variant-numeric: tabular-nums;
-    font-size: var(--font-size-xs);
   }
 </style>
