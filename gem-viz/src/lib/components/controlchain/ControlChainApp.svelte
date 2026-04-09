@@ -1002,12 +1002,6 @@
     text-transform: none;
     letter-spacing: normal;
   }
-  .cc-modal-sub {
-    font-size: var(--font-size-xs);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--color-text-tertiary);
-  }
   .cc-modal-close {
     background: none;
     border: 1px solid var(--color-border);
