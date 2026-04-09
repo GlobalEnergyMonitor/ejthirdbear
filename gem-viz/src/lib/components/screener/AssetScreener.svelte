@@ -21,6 +21,7 @@
   } from '$lib/design-tokens';
   import { cleanAssetName, wrapTextLines } from './screener-utils';
   import { STATUS_GROUPS } from '$lib/data-config/tracker-schema';
+  import { scaleR } from '$lib/components/ownership/molecule-renderer';
 
   // Props - can receive pre-fetched portfolio data or fetch its own
   let {
@@ -143,14 +144,6 @@
     assetMarkHeightSingle: 16,
     assetMarkHeightCombined: 26,
   };
-
-  // Scale for combined unit radius
-  function scaleR(n) {
-    if (n <= 2) return 0.5;
-    if (n <= 10) return 0.5 + (n - 2) * (0.5 / 8);
-    if (n <= 20) return 1 + (n - 10) * (0.5 / 10);
-    return 1.5;
-  }
 
   // Build subsidiary groups with layout
   let subsidiaryGroups = $derived.by(() => {

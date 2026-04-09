@@ -170,27 +170,45 @@ export function computePositions(
 }
 
 /**
- * Compute ring and unit radii given a bounding diameter and unit count.
- * Uses the non-overlap formula: clusterR >= unitR / sin(π/N).
+ * Ring-radius scale factor based on unit count.
+ * Matches Observable notebook scale_r: d3.scaleLinear()
+ *   .domain([2, 10, 20]).range([0.5, 1, 1.5]).clamp(true)
+ * Extended with additional steps for very large counts so the
+ * ring grows gently instead of clamping at 1.5.
+ */
+export function scaleR(n: number): number {
+  // Piecewise linear: [2→0.5, 10→1.0, 20→1.5, 40→2.0]
+  if (n <= 2) return 0.5;
+  if (n <= 10) return 0.5 + ((n - 2) / 8) * 0.5;       // 2→10: 0.5→1.0
+  if (n <= 20) return 1.0 + ((n - 10) / 10) * 0.5;      // 10→20: 1.0→1.5
+  if (n <= 40) return 1.5 + ((n - 20) / 20) * 0.5;      // 20→40: 1.5→2.0
+  return 2.0;                                             // 40+: clamp at 2.0
+}
+
+/**
+ * Compute ring and unit radii given layout parameters and unit count.
+ *
+ * Follows the Observable notebook approach:
+ *  - ringRadius = baseRadius * scaleR(N)
+ *  - unitRadius = (assetMarkHeightSingle / 2) * 0.6
+ *
+ * The `maxDiameter` is used as `assetMarkHeightCombined` (the base for ring sizing).
+ * An optional `singleUnitDiameter` maps to `assetMarkHeightSingle` (for unit dot size).
  */
 export function computeMoleculeRadii(
   maxDiameter: number,
   unitCount: number,
-  opts?: { minUnitRadius?: number; maxUnitRadius?: number },
+  opts?: { singleUnitDiameter?: number; minUnitRadius?: number; maxUnitRadius?: number },
 ): { ringRadius: number; unitRadius: number } {
-  const { minUnitRadius = 2, maxUnitRadius = 10 } = opts ?? {};
-  const halfMax = maxDiameter / 2;
+  const { singleUnitDiameter, minUnitRadius = 2, maxUnitRadius = 10 } = opts ?? {};
+  const singleD = singleUnitDiameter ?? maxDiameter * 0.6;
 
   if (unitCount <= 1) {
-    return { ringRadius: 0, unitRadius: Math.min(maxUnitRadius, halfMax) };
+    return { ringRadius: 0, unitRadius: Math.min(maxUnitRadius, singleD / 2) };
   }
 
-  const sinFactor = Math.sin(Math.PI / unitCount);
-  const unitRadius = Math.max(
-    minUnitRadius,
-    Math.min(maxUnitRadius * 0.6, halfMax / (1 / sinFactor + 1)),
-  );
-  const ringRadius = unitRadius / sinFactor;
+  const ringRadius = (maxDiameter / 2) * scaleR(unitCount);
+  const unitRadius = Math.max(minUnitRadius, Math.min(maxUnitRadius, (singleD / 2) * 0.6));
 
   return { ringRadius, unitRadius };
 }

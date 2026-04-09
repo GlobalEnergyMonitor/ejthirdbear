@@ -15,5 +15,5 @@ export { default as EntityPortfolioHeader } from './EntityPortfolioHeader.svelte
 export { default as EntityPortfolioFilters } from './EntityPortfolioFilters.svelte';
 export { default as AssetRingVisualization } from './AssetRingVisualization.svelte';
 export { default as AssetOwnershipTree } from './AssetOwnershipTree.svelte';
-export { drawMolecule, computeMoleculeRadii, computePositions } from './molecule-renderer';
+export { drawMolecule, computeMoleculeRadii, computePositions, scaleR } from './molecule-renderer';
 export type { MoleculeUnit, MoleculeOptions, MoleculeRenderResult } from './molecule-renderer';
