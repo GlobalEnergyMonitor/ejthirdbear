@@ -28,10 +28,20 @@ export const handle: Handle = async ({ event, resolve }) => {
   // dynamically imported from external sites (e.g. GEM Drupal pages)
   if (
     event.url.pathname.startsWith('/widgets') ||
-    event.url.pathname === '/embed.js'
+    event.url.pathname === '/embed.js' ||
+    event.url.pathname === '/version.json'
   ) {
     response.headers.set('Access-Control-Allow-Origin', '*');
     response.headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  }
+
+  // Prevent browser/CDN caching of embed entry points so deploys propagate immediately
+  if (
+    event.url.pathname === '/embed.js' ||
+    event.url.pathname === '/widgets/index.js' ||
+    event.url.pathname === '/version.json'
+  ) {
+    response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
   }
 
   return response;
