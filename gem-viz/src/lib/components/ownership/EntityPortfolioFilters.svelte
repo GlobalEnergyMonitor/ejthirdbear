@@ -295,6 +295,11 @@
   }
 
   @media (max-width: 768px) {
+    .entity-portfolio-filters {
+      padding: var(--space-3);
+      gap: var(--space-3);
+    }
+
     .chip-list {
       gap: var(--space-1);
     }
@@ -302,6 +307,19 @@
     .filter-chip {
       padding: 3px 8px;
       font-size: var(--font-size-xs);
+    }
+
+    .chip-label {
+      max-width: 92px;
+    }
+
+    .filter-actions {
+      justify-content: stretch;
+    }
+
+    .clear-btn {
+      width: 100%;
+      min-height: 40px;
     }
   }
 </style>
