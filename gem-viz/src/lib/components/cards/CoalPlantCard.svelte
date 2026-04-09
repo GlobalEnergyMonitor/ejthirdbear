@@ -481,10 +481,16 @@
     'Additional Details',
   ] as const;
   type TabName = (typeof TABS)[number];
-  let activeTab = $state<TabName>(
-    initialTab && TABS.includes(initialTab as TabName) ? (initialTab as TabName) : 'Overview'
-  );
+  function normalizeTab(tab?: string): TabName {
+    return tab && TABS.includes(tab as TabName) ? (tab as TabName) : 'Overview';
+  }
+
+  let activeTab = $state<TabName>('Overview');
   let ownershipActivated = $state(false);
+
+  $effect(() => {
+    activeTab = normalizeTab(initialTab);
+  });
 
   $effect(() => {
     if (activeTab === 'Ownership') ownershipActivated = true;

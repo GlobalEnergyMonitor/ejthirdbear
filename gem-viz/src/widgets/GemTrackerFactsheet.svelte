@@ -28,7 +28,11 @@
   let categoriesOrdered = $state<string[]>([]);
   let loading = $state(true);
   let error = $state<string | null>(null);
-  let selectedField = $state(field);
+  let selectedField = $state('');
+
+  $effect(() => {
+    selectedField = field;
+  });
 
   onMount(async () => {
     if (!tracker) {
