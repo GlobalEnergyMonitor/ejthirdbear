@@ -97,6 +97,7 @@ export interface LabelPosition {
   dy: number;
   below: boolean;
   small?: boolean;
+  above?: boolean;
 }
 
 /**
