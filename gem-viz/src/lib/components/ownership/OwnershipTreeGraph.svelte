@@ -1081,7 +1081,9 @@
   /** Calculate the zoom level that fits the full graph inside the container */
   function calcFitZoom(): number {
     if (!graphWrapEl) return 1;
-    const rect = graphWrapEl.getBoundingClientRect();
+    // Use the SVG element's actual rendered size (respects CSS overrides like 70vh !important)
+    const svgEl = graphWrapEl.querySelector('svg');
+    const rect = svgEl ? svgEl.getBoundingClientRect() : graphWrapEl.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return 1;
     // Don't zoom in past 1x, but zoom out so the whole tree is visible
     return Math.max(ZOOM.min, Math.min(1, rect.width / fullW, rect.height / fullH));
@@ -1102,7 +1104,8 @@
     // Without this, the centered viewBox shows the top of the tree (distant owners) and
     // the user has to scroll down to find the asset.
     if (graphDirection === 'downstream' && graphWrapEl) {
-      const rect = graphWrapEl.getBoundingClientRect();
+      const svgEl = graphWrapEl.querySelector('svg');
+      const rect = svgEl ? svgEl.getBoundingClientRect() : graphWrapEl.getBoundingClientRect();
       const vbW_at_z = fullW / z;
       // Height of SVG content visible in the container (in SVG units)
       const visH = rect.height * vbW_at_z / rect.width;
@@ -1127,7 +1130,8 @@
     panXSpring.set(0);
     // For BT graphs taller than the container, pan to show the root at the bottom
     if (graphDirection === 'upstream' && graphWrapEl) {
-      const rect = graphWrapEl.getBoundingClientRect();
+      const svgEl = graphWrapEl.querySelector('svg');
+      const rect = svgEl ? svgEl.getBoundingClientRect() : graphWrapEl.getBoundingClientRect();
       const vbY_base = -svgMargins.top + (fullH - fullH / z) / 2;
       const visH = rect.height * (fullW / z) / rect.width;
       const neededPan = (gHeight + svgMargins.bottom) - (vbY_base + visH);
