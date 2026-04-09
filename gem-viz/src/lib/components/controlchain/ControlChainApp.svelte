@@ -706,6 +706,11 @@
     white-space: nowrap;
   }
 
+  .cc-filter-pill:focus-visible {
+    outline: 2px solid var(--gem-teal, #2a7f8f);
+    outline-offset: 2px;
+  }
+
   .cc-filter-pill:hover {
     border-color: var(--gem-navy, #1d4961);
     color: var(--gem-navy, #1d4961);
@@ -744,6 +749,7 @@
     color: var(--color-text-secondary);
     cursor: pointer;
     padding: 3px 0;
+    min-height: 32px;
   }
 
   .cc-country-item input[type='checkbox'] {
@@ -790,6 +796,10 @@
   .cc-chip:hover {
     border-color: var(--gem-navy, #1d4961);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  }
+  .cc-chip:focus-visible {
+    outline: 2px solid var(--gem-teal, #2a7f8f);
+    outline-offset: 2px;
   }
   .cc-kind {
     font-size: 10px;
@@ -1098,6 +1108,26 @@
     }
     .cc-modal-backdrop {
       padding: 0;
+    }
+    .cc-filter-pill,
+    .cc-chip {
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+    }
+    .cc-country-item {
+      min-height: 44px;
+      padding: 8px 0;
+    }
+    .cc-result {
+      min-height: 44px;
+    }
+    .cc-modal-close {
+      min-height: 44px;
+      min-width: 44px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
     }
   }
 

@@ -216,7 +216,6 @@
     aria-modal="true"
     aria-label="Field detail: {selectedField.columnName}"
   >
-    <div class="drag-handle" aria-hidden="true"></div>
     <div class="mobile-modal-header">
       <h4>Field: {selectedField.columnName}</h4>
       <button type="button" class="modal-close" onclick={closeModal} aria-label="Close">✕</button>
@@ -471,6 +470,12 @@
     text-align: left;
   }
 
+  .category-header:focus-visible {
+    outline: 2px solid var(--gem-teal, #2a7f8f);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm, 4px);
+  }
+
   .category-header h4::before {
     content: '+';
     color: var(--gem-teal);
@@ -652,6 +657,18 @@
       display: none;
     }
 
+    .field-bubble {
+      min-height: 44px;
+      padding: var(--space-2) var(--space-3);
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .category-header {
+      min-height: 44px;
+      padding: var(--space-2) 0;
+    }
+
     /* Modal */
     .mobile-modal-backdrop {
       position: fixed;
@@ -672,15 +689,6 @@
       max-height: 75vh;
       display: flex;
       flex-direction: column;
-    }
-
-    .drag-handle {
-      width: 36px;
-      height: 4px;
-      background: var(--color-border);
-      border-radius: 2px;
-      margin: 8px auto 0;
-      flex-shrink: 0;
     }
 
     .mobile-modal-header {
@@ -705,7 +713,12 @@
       font-size: var(--font-size-md);
       color: var(--gem-teal);
       cursor: pointer;
-      padding: var(--space-1) var(--space-2);
+      padding: var(--space-2) var(--space-3);
+      min-height: 44px;
+      min-width: 44px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       line-height: 1;
     }
 
@@ -722,7 +735,7 @@
   }
 
   /* Hide modal elements on desktop */
-  @media (min-width: 769px) {
+  @media (min-width: 768px) {
     .mobile-modal-backdrop,
     .mobile-modal {
       display: none;

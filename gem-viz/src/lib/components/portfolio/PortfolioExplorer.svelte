@@ -1885,9 +1885,24 @@
     .color-toggle {
       margin-left: 0;
     }
+    .chip {
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+    }
+    .go-btn {
+      min-height: 44px;
+    }
+    .custom-input input {
+      min-height: 44px;
+    }
+    .color-toggle-btn {
+      min-height: 36px;
+      padding: 4px 12px;
+    }
     .summary-row {
       padding: var(--space-1) var(--space-2);
-      min-height: 32px;
+      min-height: 44px;
     }
     .asset-modal {
       left: var(--space-3) !important;

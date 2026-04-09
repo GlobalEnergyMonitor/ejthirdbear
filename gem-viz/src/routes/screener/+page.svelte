@@ -581,6 +581,11 @@
     cursor: pointer;
     line-height: 1;
     padding: 0;
+    min-width: 32px;
+    min-height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .clear-btn:hover {
@@ -773,6 +778,10 @@
 
     .picker-tile {
       padding: var(--space-3) var(--space-4);
+      min-height: 44px;
+    }
+
+    .support-btn {
       min-height: 44px;
     }
 
