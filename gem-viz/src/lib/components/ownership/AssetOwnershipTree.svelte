@@ -17,7 +17,7 @@
   type OwnershipGraphLoader = (_params: {
     root: string;
     direction: 'up' | 'down';
-    max_depth: number;
+    max_depth?: number;
   }) => Promise<{
     nodes?: GraphNode[];
     edges?: GraphEdge[];
@@ -28,7 +28,7 @@
     assetId: string;
     compact?: boolean;
     fullWidth?: boolean;
-    maxDepth?: number;
+    expandHeight?: boolean;
     showViewFull?: boolean;
     emptyMessage?: string;
     errorMessage?: string;
@@ -38,7 +38,7 @@
     assetId,
     compact = true,
     fullWidth = false,
-    maxDepth = 20,
+    expandHeight = false,
     showViewFull = compact,
     emptyMessage = 'No ownership data available',
     errorMessage = 'Could not load ownership tree',
@@ -53,7 +53,6 @@
 
   async function loadGraph(
     loadAssetId: string,
-    depth: number,
     loadKey: string,
     loader: OwnershipGraphLoader | undefined
   ) {
@@ -67,7 +66,7 @@
 
       if (loader) {
         // Custom loader — single-graph path (backward compat); wrap into location shape
-        const raw = await loader({ root: loadAssetId, direction: 'up', max_depth: depth });
+        const raw = await loader({ root: loadAssetId, direction: 'up' });
         const nodes = raw.nodes || [];
         // Cast to LocationOwnershipGraphResponse — graph-types.GraphNode is structurally
         // compatible at runtime but has looser type declarations than ownership-api.GraphNode
@@ -99,7 +98,7 @@
         };
       } else {
         const { getOwnershipGraphs } = await import('$lib/ownership-api');
-        result = await getOwnershipGraphs({ root: loadAssetId, direction: 'up', max_depth: depth });
+        result = await getOwnershipGraphs({ root: loadAssetId, direction: 'up' });
       }
 
       if (currentSeq !== requestSeq) return;
@@ -124,10 +123,9 @@
 
   $effect(() => {
     const loadAssetId = assetId;
-    const depth = maxDepth;
-    const loadKey = `${loadAssetId}:${depth}:${ownershipLoader ? 'custom' : 'default'}`;
+    const loadKey = `${loadAssetId}:${ownershipLoader ? 'custom' : 'default'}`;
     if (!loadAssetId || loadKey === lastLoadKey) return;
-    void loadGraph(loadAssetId, depth, loadKey, ownershipLoader);
+    void loadGraph(loadAssetId, loadKey, ownershipLoader);
   });
 </script>
 
@@ -142,7 +140,7 @@
   {:else if error}
     <div class="tree-error">{errorMessage}</div>
   {:else if locationResponse}
-    <LocationOwnershipView {locationResponse} direction="up" {fullWidth} />
+    <LocationOwnershipView {locationResponse} direction="up" {fullWidth} {expandHeight} />
     {#if showViewFull}
       <a class="view-full" href={assetLink(assetId)}>View full ownership details &rarr;</a>
     {/if}

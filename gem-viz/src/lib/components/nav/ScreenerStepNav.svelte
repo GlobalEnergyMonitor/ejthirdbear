@@ -209,6 +209,30 @@
     }
   }
 
+  /* Mobile */
+  @media (max-width: 768px) {
+    .step-nav {
+      gap: 0;
+      margin-bottom: var(--space-4);
+      padding-bottom: var(--space-4);
+    }
+    .step {
+      padding: var(--space-2) var(--space-2);
+      min-height: 44px;
+    }
+    .step-label {
+      font-size: var(--font-size-xs);
+    }
+    .step-num {
+      width: 24px;
+      height: 24px;
+      font-size: var(--font-size-sm);
+    }
+    .step-line {
+      width: 20px;
+    }
+  }
+
   /* Reduced motion */
   @media (prefers-reduced-motion: reduce) {
     .step-line-fill,

@@ -26,7 +26,7 @@
     ownershipLoader?: (_params: {
       root: string;
       direction: 'up' | 'down';
-      max_depth: number;
+      max_depth?: number;
     }) => Promise<{
       nodes?: GraphNode[];
       edges?: GraphEdge[];
@@ -1507,7 +1507,7 @@
   }
 
   /* ── Responsive ───────────────────────────────────────── */
-  @media (max-width: 700px) {
+  @media (max-width: 768px) {
     .overview-grid,
     .coal-grid,
     .emissions-grid {

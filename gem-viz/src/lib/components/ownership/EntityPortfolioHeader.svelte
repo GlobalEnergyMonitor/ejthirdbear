@@ -243,12 +243,39 @@
       gap: var(--space-4);
     }
 
+    .entity-name {
+      font-size: var(--font-size-xl);
+      margin-bottom: var(--space-2);
+    }
+
+    .stat strong {
+      font-size: var(--font-size-base);
+    }
+
+    .stat-label {
+      font-size: var(--font-size-sm);
+    }
+
     .header-flower {
       align-self: center;
     }
 
     .entity-portfolio-header {
       padding: var(--space-4);
+    }
+  }
+
+  @media (max-width: 640px) {
+    .stats-row {
+      gap: 0;
+    }
+
+    .stat {
+      gap: 3px;
+    }
+
+    .stat-divider {
+      padding: 0 2px;
     }
   }
 </style>

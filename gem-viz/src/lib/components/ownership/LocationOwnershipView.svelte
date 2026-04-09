@@ -17,6 +17,7 @@
     /** 'up' = show owners (upstream); 'down' = show subsidiaries (downstream) */
     direction?: 'up' | 'down';
     fullWidth?: boolean;
+    expandHeight?: boolean;
     class?: string;
   }
 
@@ -24,6 +25,7 @@
     locationResponse,
     direction = 'up',
     fullWidth = true,
+    expandHeight = false,
     class: className = '',
   }: Props = $props();
 
@@ -111,6 +113,7 @@
       rootId={activeGraph.root.asset_id}
       direction={treeDirection}
       {fullWidth}
+      {expandHeight}
     />
   {:else}
     <div class="lov-empty">No ownership data available.</div>

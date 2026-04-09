@@ -123,7 +123,7 @@
     position: sticky;
     top: 0;
     z-index: 1000;
-    padding: 0 20px 12px 20px;
+    padding: 0 var(--space-5) var(--space-3);
   }
 
   .site-nav {
@@ -139,7 +139,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 12px 24px;
+    padding: var(--space-3) var(--space-6);
     height: 64px;
     box-sizing: border-box;
   }
@@ -240,6 +240,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    min-width: 44px;
     width: 36px;
     height: 36px;
     padding: 0;
@@ -285,6 +286,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    min-width: 44px;
     width: 44px;
     height: 44px;
     padding: 0;
@@ -307,7 +309,7 @@
     flex-direction: column;
     background: #fff;
     border-top: 1px solid #eee;
-    padding: 12px 16px 20px;
+    padding: var(--space-3) var(--space-4) var(--space-5);
   }
 
   .mobile-menu a {
@@ -317,6 +319,7 @@
     color: #444;
     text-decoration: none;
     padding: 14px 12px;
+    min-height: 44px;
     border-radius: 6px;
     display: flex;
     align-items: center;
@@ -340,6 +343,7 @@
     gap: 10px;
     margin-top: 8px;
     padding: 14px 16px;
+    min-height: 44px;
     border: 1px solid #ddd;
     border-radius: 6px;
     background: transparent;
@@ -367,7 +371,7 @@
 
   @media (max-width: 768px) {
     .nav-wrapper {
-      padding: 0 12px 8px 12px;
+      padding: 0 var(--space-3) var(--space-2);
     }
 
     .site-nav {
@@ -375,7 +379,7 @@
     }
 
     .nav-inner {
-      padding: 10px 16px;
+      padding: 10px var(--space-4);
       height: 56px;
     }
 
@@ -398,6 +402,31 @@
 
     .mobile-menu {
       display: flex;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .nav-inner {
+      padding-inline: var(--space-3);
+    }
+
+    .logo-text {
+      font-size: 30px;
+      letter-spacing: -1px;
+    }
+
+    .logo-suffix {
+      font-size: 12px;
+    }
+
+    .mobile-menu {
+      padding-inline: var(--space-3);
+      padding-bottom: var(--space-4);
+    }
+
+    .mobile-menu a,
+    .search-btn-mobile {
+      width: 100%;
     }
   }
 

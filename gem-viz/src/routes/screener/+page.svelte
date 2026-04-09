@@ -581,6 +581,11 @@
     cursor: pointer;
     line-height: 1;
     padding: 0;
+    min-width: 32px;
+    min-height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .clear-btn:hover {
@@ -758,9 +763,13 @@
   }
 
   /* Responsive */
-  @media (max-width: 640px) {
+  @media (max-width: 768px) {
     .selection-badge {
       max-width: 100%;
+    }
+
+    .picker-section {
+      gap: var(--space-4);
     }
 
     .picker-grid {
@@ -768,7 +777,11 @@
     }
 
     .picker-tile {
-      padding: var(--space-3);
+      padding: var(--space-3) var(--space-4);
+      min-height: 44px;
+    }
+
+    .support-btn {
       min-height: 44px;
     }
 

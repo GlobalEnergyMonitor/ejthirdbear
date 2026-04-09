@@ -43,7 +43,7 @@ export async function loadEntityPortfolio(
   // Fetch entity details + downstream graph in parallel
   const [entity, graphDown] = await Promise.all([
     getEntity(entityId),
-    getOwnershipGraph({ root: entityId, direction: 'down', max_depth: 5 }),
+    getOwnershipGraph({ root: entityId, direction: 'down' }),
   ]);
 
   const entityName = entity?.name || entityId;

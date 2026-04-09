@@ -109,6 +109,13 @@
   --container-2xl: 1680px; /* Wide layouts, dashboards */
   --container-full: 100%;
 
+  /* Canonical responsive breakpoints. Mirror `src/lib/responsive.ts` and Tailwind defaults. */
+  --breakpoint-xs: 640px;
+  --breakpoint-sm: 768px;
+  --breakpoint-md: 1024px;
+  --breakpoint-lg: 1280px;
+  --breakpoint-xl: 1536px;
+
   /* Site gutter/edge padding */
   --site-gutter: var(--space-6);
   --site-gutter-lg: var(--space-12);
@@ -346,7 +353,7 @@
    stays readable without manual zooming.
    ============================================================================ */
 
-@media (min-width: 1400px) {
+@media (min-width: 1280px) {
   :root {
     --font-size-xs: 13px;
     --font-size-sm: 15px;
@@ -357,7 +364,7 @@
   }
 }
 
-@media (min-width: 1800px) {
+@media (min-width: 1536px) {
   :root {
     --font-size-xs: 14px;
     --font-size-sm: 16px;

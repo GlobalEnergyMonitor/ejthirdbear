@@ -10,6 +10,7 @@
   import { browser } from '$app/environment';
   import { entityLink, assetLink } from '$lib/links';
   import { track } from '$lib/analytics';
+  import { BREAKPOINTS, getViewportWidth } from '$lib/responsive';
   import { sum } from 'd3-array';
   // d3-shape line/curveBasis now imported via ownership-tree-utils
   import type {
@@ -132,7 +133,7 @@
   let hasAutoFit = false;
   let tooltipX = $state(0);
   let tooltipY = $state(0);
-  let viewportWidth = $state(1280);
+  let viewportWidth = $state(BREAKPOINTS.lg as number);
   // Spring-animated zoom/pan for smooth transitions
   const zoomSpring = spring(1, { stiffness: 0.2, damping: 0.85 });
   const panXSpring = spring(0, { stiffness: 0.2, damping: 0.85 });
@@ -180,7 +181,7 @@
   const renderSubset = $derived.by(() => {
     const totalNodes = filteredNodes.length;
     const totalEdges = filteredEdges.length;
-    const MAX_RENDER_NODES = fullWidthMode ? (viewportWidth < 900 ? 120 : 220) : 320;
+    const MAX_RENDER_NODES = fullWidthMode ? (viewportWidth < BREAKPOINTS.md ? 120 : 220) : 320;
     const MAX_CHILDREN_PER_PARENT = fullWidthMode ? 18 : 24;
 
     if (compact || totalNodes <= MAX_RENDER_NODES) {
@@ -294,7 +295,9 @@
   const largeGraphMinWidth = $derived(
     fullWidthMode ? Math.max(720, Math.min(1400, viewportWidth - 64)) : 800
   );
-  const largeGraphMinHeight = $derived(fullWidthMode ? (viewportWidth < 900 ? 460 : 620) : 600);
+  const largeGraphMinHeight = $derived(
+    fullWidthMode ? (viewportWidth < BREAKPOINTS.md ? 460 : 620) : 600
+  );
   const graphBaseWidth = $derived(Math.max(gWidth, largeGraphMinWidth));
   const graphBaseHeight = $derived(Math.max(gHeight, largeGraphMinHeight));
 
@@ -1242,7 +1245,7 @@
 
   onMount(() => {
     const onResize = () => {
-      viewportWidth = window.innerWidth || 1280;
+      viewportWidth = getViewportWidth();
     };
     onResize();
     window.addEventListener('resize', onResize, { passive: true });
@@ -1806,7 +1809,7 @@
     display: flex;
     gap: 12px;
   }
-  @container (max-width: 700px) {
+  @container (max-width: 768px) {
     .full-width .container {
       flex-direction: column;
     }
@@ -2206,6 +2209,7 @@
   @media (max-width: 768px) {
     .container {
       flex-direction: column;
+      gap: 12px;
     }
     .graph-wrap {
       max-height: none;
@@ -2213,15 +2217,19 @@
     .full-width .graph-wrap {
       max-height: 62vh;
     }
+    .graph-area {
+      min-width: 0;
+    }
     .graph-wrap.expand-height {
-      max-height: 4000px;
-      overflow: visible;
+      max-height: 100vh;
+      overflow: auto;
     }
     .graph-wrap > svg {
       min-height: 250px;
     }
     .graph-controls {
       gap: 8px;
+      flex-wrap: wrap;
     }
     .node circle {
       transform: scale(1.15);

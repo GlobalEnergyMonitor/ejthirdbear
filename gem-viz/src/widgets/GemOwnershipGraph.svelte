@@ -35,7 +35,7 @@
       return;
     }
     try {
-      graphData = await getOwnershipGraph({ root: entityId, direction, max_depth: 12 });
+      graphData = await getOwnershipGraph({ root: entityId, direction });
     } catch (err) {
       error = errorMessage(err, 'Failed to load ownership graph');
     } finally {

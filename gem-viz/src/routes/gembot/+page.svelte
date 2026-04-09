@@ -1194,13 +1194,13 @@
     grid-template-columns: minmax(360px, 0.72fr) minmax(860px, 1.28fr);
   }
 
-  @media (max-width: 1400px) {
+  @media (max-width: 1280px) {
     .chat-layout.compose-active {
       grid-template-columns: minmax(320px, 0.8fr) minmax(640px, 1.2fr);
     }
   }
 
-  @media (max-width: 900px) {
+  @media (max-width: 1024px) {
     .chat-layout {
       grid-template-columns: 1fr;
     }

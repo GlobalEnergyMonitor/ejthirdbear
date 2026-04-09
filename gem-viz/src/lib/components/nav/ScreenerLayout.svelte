@@ -181,14 +181,18 @@
     }
   }
 
-  @media (max-width: 640px) {
+  @media (max-width: 768px) {
     .screener-layout {
-      padding: var(--space-8) var(--space-5) 80px;
+      padding: var(--space-6) var(--space-4) 80px;
     }
 
     .screener-header {
       grid-template-columns: 1fr;
-      gap: var(--space-4);
+      gap: var(--space-3);
+    }
+
+    .subtitle {
+      font-size: var(--font-size-base);
     }
 
     .header-right {
@@ -196,8 +200,12 @@
       width: 100%;
     }
 
+    .screener-content {
+      gap: var(--space-6);
+    }
+
     .screener-footer {
-      padding: var(--space-3) var(--space-5);
+      padding: var(--space-3) var(--space-4);
     }
   }
 

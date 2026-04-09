@@ -122,7 +122,7 @@ async function fetchOwnershipGraphDown(entityId: string): Promise<{
   rootName: string;
 }> {
   try {
-    const fetchUrl = `${API_BASE}/ownership/graph?root=${encodeURIComponent(entityId)}&direction=down&max_depth=5`;
+    const fetchUrl = `${API_BASE}/ownership/graph?root=${encodeURIComponent(entityId)}&direction=down`;
     const t0 = performance.now();
     const resp = await fetch(fetchUrl, { signal: AbortSignal.timeout(30_000) });
     logApiCall({

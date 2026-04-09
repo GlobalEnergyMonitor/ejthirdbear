@@ -701,7 +701,7 @@
     font-weight: 500;
   }
 
-  @media (max-width: 900px) {
+  @media (max-width: 1024px) {
     .specimens {
       padding: 2rem 1rem 4rem;
     }
@@ -710,6 +710,48 @@
     }
     header h1 {
       font-size: 1.25rem;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .specimens {
+      padding: 1.5rem 0.75rem 3rem;
+    }
+
+    .specimen {
+      padding: 0.875rem;
+    }
+
+    .specimen-head {
+      gap: 0.5rem;
+    }
+
+    .sample-picker {
+      padding-inline: 0.375rem;
+    }
+
+    .sample-btn {
+      min-height: 36px;
+      padding: 0.25rem 0.5rem;
+    }
+
+    .meta-params td:first-child {
+      width: 72px;
+      padding-right: 0.5rem;
+    }
+
+    .options {
+      display: block;
+      overflow-x: auto;
+    }
+
+    .options th,
+    .options td {
+      white-space: nowrap;
+    }
+
+    .cp {
+      min-height: 32px;
     }
   }
 </style>

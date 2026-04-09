@@ -234,7 +234,7 @@
     }
   }
 
-  @media (max-width: 900px) {
+  @media (max-width: 1024px) {
     .page.home {
       padding: var(--space-4) var(--space-5) var(--space-6);
     }

@@ -194,7 +194,7 @@
     font-weight: 500;
   }
 
-  @media (max-width: 900px) {
+  @media (max-width: 1024px) {
     .results-grid {
       grid-template-columns: repeat(2, 1fr);
     }

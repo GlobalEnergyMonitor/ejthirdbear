@@ -9,6 +9,7 @@
    * Ported from Observable notebook: https://observablehq.com/d/5a1f34aee34fe4cf
    */
   import { assetLink } from '$lib/links';
+  import { isViewportBelow } from '$lib/responsive';
   import * as d3 from 'd3-selection';
   import * as d3Array from 'd3-array';
   import * as d3Hierarchy from 'd3-hierarchy';
@@ -259,6 +260,9 @@
   /** Horizontal scroll fade state */
   let canScrollLeft = $state(false);
   let canScrollRight = $state(false);
+  let hasHorizontalOverflow = $state(false);
+  let scrollThumbWidth = $state(100);
+  let scrollThumbOffset = $state(0);
 
   /** Stored d3 tree root — needed for asset→tree cross-highlighting */
   let treeRoot = $state(null);
@@ -268,19 +272,34 @@
   /** Modal position (viewport coords for fixed positioning) */
   let modalPos = $state({ x: 0, y: 0 });
 
+  function updateScrollState() {
+    if (!chartContainer) return;
+    const { scrollLeft, scrollWidth, clientWidth } = chartContainer;
+    const maxScroll = Math.max(scrollWidth - clientWidth, 0);
+    const overflow = maxScroll > 12;
+    const thumbWidth = scrollWidth > 0 ? (clientWidth / scrollWidth) * 100 : 100;
+
+    hasHorizontalOverflow = overflow;
+    canScrollLeft = overflow && scrollLeft > 10;
+    canScrollRight = overflow && scrollLeft < maxScroll - 10;
+    scrollThumbWidth = overflow ? Math.min(100, Math.max(thumbWidth, 18)) : 100;
+    scrollThumbOffset = maxScroll > 0 ? (scrollLeft / maxScroll) * (100 - scrollThumbWidth) : 0;
+  }
+
   /** Track horizontal scroll position for fade affordance */
   $effect(() => {
     if (!chartContainer) return;
     const el = chartContainer;
-    const handler = () => {
-      canScrollLeft = el.scrollLeft > 10;
-      canScrollRight = el.scrollLeft < el.scrollWidth - el.clientWidth - 10;
-    };
+    const assetsEl = assetsSvgEl;
+    const treeEl = treeSvgEl;
+    const handler = () => updateScrollState();
     el.addEventListener('scroll', handler, { passive: true });
     // Defer initial check so layout is complete
     const raf = requestAnimationFrame(() => handler());
     const ro = new ResizeObserver(() => handler());
     ro.observe(el);
+    if (assetsEl) ro.observe(assetsEl);
+    if (treeEl) ro.observe(treeEl);
     return () => {
       el.removeEventListener('scroll', handler);
       cancelAnimationFrame(raf);
@@ -311,7 +330,7 @@
 
     try {
       const resp = await fetch(
-        `${API_BASE}/ownership/graph?root=${encodeURIComponent(entityId)}&direction=down&max_depth=5&format=json`,
+        `${API_BASE}/ownership/graph?root=${encodeURIComponent(entityId)}&direction=down&format=json`,
         { signal }
       );
       if (!resp.ok) throw new Error(`API error: ${resp.status}`);
@@ -818,7 +837,7 @@
     const nRows = Math.max(4, Math.floor(svgH / assetMarkH));
     const nProjects = groups.length;
     const colsNeeded = Math.ceil(nProjects / nRows);
-    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+    const isMobile = isViewportBelow('sm');
     const minColWidth = isMobile ? 200 : 300;
     const colWidth = Math.max(minColWidth, assetMarkH * (isMobile ? 8 : 12));
     const svgWidthNeeded = colsNeeded * colWidth;
@@ -1130,6 +1149,7 @@
       queueMicrotask(() => {
         drawTree();
         drawAssets();
+        requestAnimationFrame(() => updateScrollState());
       });
     }
   });
@@ -1224,25 +1244,50 @@
     </div>
 
     <!-- MAIN CHART AREA -->
-    <div
-      class="chart-row"
-      class:fade-left={canScrollLeft}
-      class:fade-right={canScrollRight}
-      bind:this={chartContainer}
-    >
-      {#if isFiltered && displayProjectGroups.length === 0}
-        <div class="empty-state">
-          <p>No assets match current filters.</p>
-          <button class="clear-btn" onclick={clearFilter}>Clear filters</button>
-        </div>
-      {:else}
-        {#if showTree}
-          <div class="tree-container">
-            <svg bind:this={treeSvgEl}></svg>
+    <div class="chart-shell">
+      <div
+        class="chart-row"
+        class:fade-left={canScrollLeft}
+        class:fade-right={canScrollRight}
+        bind:this={chartContainer}
+      >
+        {#if isFiltered && displayProjectGroups.length === 0}
+          <div class="empty-state">
+            <p>No assets match current filters.</p>
+            <button class="clear-btn" onclick={clearFilter}>Clear filters</button>
+          </div>
+        {:else}
+          {#if showTree}
+            <div class="tree-container">
+              <svg bind:this={treeSvgEl}></svg>
+            </div>
+          {/if}
+          <div class="assets-container" class:full-width={!showTree}>
+            <svg bind:this={assetsSvgEl}></svg>
           </div>
         {/if}
-        <div class="assets-container" class:full-width={!showTree}>
-          <svg bind:this={assetsSvgEl}></svg>
+      </div>
+      {#if hasHorizontalOverflow}
+        <div class="scroll-indicator" aria-hidden="true">
+          <span class="scroll-cue" class:visible={canScrollLeft}>← Back</span>
+          <div class="scroll-meter">
+            <span class="scroll-copy scroll-copy-desktop">
+              {canScrollRight ? 'Scroll to see more assets' : 'End of asset list'}
+            </span>
+            <span class="scroll-copy scroll-copy-mobile">
+              {canScrollRight ? 'Swipe for more' : 'End of list'}
+            </span>
+            <div class="scroll-rail">
+              <span
+                class="scroll-thumb"
+                style={`width: ${scrollThumbWidth}%; left: ${scrollThumbOffset}%;`}
+              ></span>
+            </div>
+          </div>
+          <span class="scroll-cue scroll-cue-right" class:visible={canScrollRight}>
+            <span class="scroll-cue-desktop">More →</span>
+            <span class="scroll-cue-mobile">Swipe →</span>
+          </span>
         </div>
       {/if}
     </div>
@@ -1561,6 +1606,10 @@
   }
 
   /* ---- Chart Row ---- */
+  .chart-shell {
+    background: var(--color-bg-primary, #fff);
+    border-bottom: 1px solid rgba(29, 73, 97, 0.08);
+  }
   /* Single scroll container for both tree + assets so SVG lines stay aligned */
   .chart-row {
     display: flex;
@@ -1607,6 +1656,70 @@
   .assets-container svg {
     overflow: visible;
     font-family: var(--font-family, 'Plus Jakarta Sans', sans-serif);
+  }
+  .scroll-indicator {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3, 12px);
+    padding: 10px var(--space-5, 20px) 12px;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, rgba(244, 249, 250, 0.92) 36%, rgba(244, 249, 250, 1) 100%);
+    border-top: 1px solid rgba(29, 73, 97, 0.08);
+  }
+  .scroll-meter {
+    min-width: 0;
+    flex: 1;
+  }
+  .scroll-copy {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgba(29, 73, 97, 0.68);
+  }
+  .scroll-copy-mobile {
+    display: none;
+  }
+  .scroll-rail {
+    position: relative;
+    height: 7px;
+    border-radius: 999px;
+    background:
+      linear-gradient(90deg, rgba(29, 73, 97, 0.12), rgba(0, 123, 127, 0.16));
+    overflow: hidden;
+  }
+  .scroll-thumb {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    min-width: 18%;
+    border-radius: inherit;
+    background:
+      linear-gradient(90deg, rgba(0, 123, 127, 0.92), rgba(29, 73, 97, 0.92));
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.4);
+  }
+  .scroll-cue {
+    flex-shrink: 0;
+    min-width: 60px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(29, 73, 97, 0.32);
+    opacity: 0;
+    transition: opacity var(--duration-fast, 120ms) ease, color var(--duration-fast, 120ms) ease;
+  }
+  .scroll-cue.visible {
+    opacity: 1;
+    color: rgba(29, 73, 97, 0.78);
+  }
+  .scroll-cue-right {
+    text-align: right;
+  }
+  .scroll-cue-mobile {
+    display: none;
   }
 
   /* ---- Footer / Summary Tables ---- */
@@ -1858,6 +1971,23 @@
     .chart-row::-webkit-scrollbar {
       display: none;
     }
+    .scroll-indicator {
+      gap: var(--space-2, 8px);
+      padding: 10px var(--space-3, 12px) 12px;
+    }
+    .scroll-cue {
+      min-width: auto;
+      font-size: 10px;
+      letter-spacing: 0.06em;
+    }
+    .scroll-copy-desktop,
+    .scroll-cue-desktop {
+      display: none;
+    }
+    .scroll-copy-mobile,
+    .scroll-cue-mobile {
+      display: inline;
+    }
     .tree-container {
       display: none;
     }
@@ -1873,7 +2003,7 @@
       width: 100%;
     }
     .summary-table {
-      max-height: 120px;
+      max-height: none;
     }
     .summary-row {
       font-size: var(--font-size-xs);
@@ -1885,9 +2015,24 @@
     .color-toggle {
       margin-left: 0;
     }
+    .chip {
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+    }
+    .go-btn {
+      min-height: 44px;
+    }
+    .custom-input input {
+      min-height: 44px;
+    }
+    .color-toggle-btn {
+      min-height: 36px;
+      padding: 4px 12px;
+    }
     .summary-row {
       padding: var(--space-1) var(--space-2);
-      min-height: 32px;
+      min-height: 44px;
     }
     .asset-modal {
       left: var(--space-3) !important;
