@@ -1374,81 +1374,6 @@
             <!-- Ownership slider moved to OwnershipPanel -->
           </div>
         {/if}
-        {#if frozenMeta}
-          {@const rootNode = filteredNodes.find((n) => n.id === rootId)}
-          {@const rootName = rootNode?.name || rootNode?.Name || rootId}
-          {@const frozenNode = nodes.find((n) => n.id === frozenId)}
-          {@const isAssetNode = frozenNode?.type === 'asset' || frozenId === rootId}
-          {@const frozenName = frozenNode?.full_name || frozenNode?.name || frozenNode?.Name || frozenId}
-          {@const frozenPct = pathsMap.get(frozenNode?.entity_id || frozenId) || edgePctMap.get(frozenNode?.entity_id || frozenId) || 0}
-          {@const frozenEdge = renderEdges.find((e) => e.target === (frozenNode?.entity_id || frozenId) || e.target === frozenId)}
-          {@const frozenDirectPct = frozenEdge?.value ?? 0}
-          {@const frozenPathEntries = paths[frozenNode?.entity_id || frozenId] || []}
-          {@const frozenPathCount = frozenPathEntries.length}
-          {@const frozenHqParts = [frozenNode?.headquarters_country, frozenNode?.headquarters_subdivision].filter(Boolean)}
-          {@const frozenOwnerCategory = !isAssetNode && frozenNode ? classifyOwnerType(frozenNode) : ''}
-          <div class="focus-indicator">
-            <div class="focus-copy">
-              {#if frozenMeta.kind === 'entity' && frozenMeta.entityId}
-                <p class="focus-sentence">
-                  <strong>{frozenMeta.label}</strong>
-                  is a <span class="focus-fact">{frozenMeta.entityType || 'entity'}</span>
-                  {#if frozenMeta.country}based in <span class="focus-fact">{frozenMeta.country}</span>{/if}
-                  <span class="focus-fact id">{frozenMeta.entityId}</span>
-                  {#if frozenMeta.cumulativePct}
-                    with <span class="focus-fact pct">{frozenMeta.cumulativePct.toFixed(1)}%</span> cumulative ownership of {rootName}.
-                  {/if}
-                </p>
-                {#if frozenMeta.smallShPct || frozenMeta.natPersonPct || frozenMeta.unknownPct}
-                  <p class="focus-sentence upstream">
-                    Owned by:
-                    {#if frozenMeta.smallShPct}<span class="focus-fact warn">{frozenMeta.smallShPct.toFixed(1)}% small shareholders</span>{/if}
-                    {#if frozenMeta.natPersonPct}<span class="focus-fact warn">{frozenMeta.natPersonPct.toFixed(1)}% natural persons</span>{/if}
-                    {#if frozenMeta.unknownPct}<span class="focus-fact warn">{frozenMeta.unknownPct.toFixed(1)}% unknown</span>{/if}
-                  </p>
-                {/if}
-                {#if frozenMeta.entityId}
-                  <a
-                    class="focus-profile-link"
-                    href={entityLink(frozenMeta.entityId)}
-                    onclick={(e) => { if (onNavigate) { e.preventDefault(); onNavigate(entityLink(frozenMeta.entityId!)); } }}
-                  >View full profile &rarr;</a>
-                {/if}
-              {:else}
-                <span class="focus-label">
-                  {focusKindLabel(frozenMeta)}: <strong>{frozenMeta.label}</strong>
-                  {#if (frozenMeta.kind === 'country' || frozenMeta.kind === 'entity-type') && frozenMeta.facts.length > 0}
-                    <span class="focus-count">({frozenMeta.facts[0]})</span>
-                  {/if}
-                </span>
-                {#if frozenMeta.facts.length > 0 && frozenMeta.kind !== 'country' && frozenMeta.kind !== 'entity-type'}
-                  <div class="focus-facts">
-                    {#each frozenMeta.facts as fact}
-                      <span class="focus-fact">{fact}</span>
-                    {/each}
-                  </div>
-                {/if}
-                {#if frozenMeta.kind === 'asset' && frozenId}
-                  <a
-                    class="focus-profile-link"
-                    href={assetLink(frozenId)}
-                    onclick={(e) => { if (onNavigate) { e.preventDefault(); onNavigate(assetLink(frozenId!)); } }}
-                  >View asset profile &rarr;</a>
-                {/if}
-              {/if}
-            </div>
-            <button
-              type="button"
-              class="focus-clear"
-              onclick={() => {
-                frozenId = null;
-                frozenMeta = null;
-                frozenNodeData = null;
-              }}
-              aria-label="Clear focus">&#10005;</button
-            >
-          </div>
-        {/if}
         <div
           class="graph-wrap"
           class:panning={isPanning}
@@ -1462,6 +1387,81 @@
           onpointerleave={endPan}
           onwheel={onGraphWheel}
         >
+          {#if frozenMeta}
+            {@const rootNode = filteredNodes.find((n) => n.id === rootId)}
+            {@const rootName = rootNode?.name || rootNode?.Name || rootId}
+            {@const frozenNode = nodes.find((n) => n.id === frozenId)}
+            {@const isAssetNode = frozenNode?.type === 'asset' || frozenId === rootId}
+            {@const frozenName = frozenNode?.full_name || frozenNode?.name || frozenNode?.Name || frozenId}
+            {@const frozenPct = pathsMap.get(frozenNode?.entity_id || frozenId) || edgePctMap.get(frozenNode?.entity_id || frozenId) || 0}
+            {@const frozenEdge = renderEdges.find((e) => e.target === (frozenNode?.entity_id || frozenId) || e.target === frozenId)}
+            {@const frozenDirectPct = frozenEdge?.value ?? 0}
+            {@const frozenPathEntries = paths[frozenNode?.entity_id || frozenId] || []}
+            {@const frozenPathCount = frozenPathEntries.length}
+            {@const frozenHqParts = [frozenNode?.headquarters_country, frozenNode?.headquarters_subdivision].filter(Boolean)}
+            {@const frozenOwnerCategory = !isAssetNode && frozenNode ? classifyOwnerType(frozenNode) : ''}
+            <div class="focus-indicator">
+              <div class="focus-copy">
+                {#if frozenMeta.kind === 'entity' && frozenMeta.entityId}
+                  <p class="focus-sentence">
+                    <strong>{frozenMeta.label}</strong>
+                    is a <span class="focus-fact">{frozenMeta.entityType || 'entity'}</span>
+                    {#if frozenMeta.country}based in <span class="focus-fact">{frozenMeta.country}</span>{/if}
+                    <span class="focus-fact id">{frozenMeta.entityId}</span>
+                    {#if frozenMeta.cumulativePct}
+                      with <span class="focus-fact pct">{frozenMeta.cumulativePct.toFixed(1)}%</span> cumulative ownership of {rootName}.
+                    {/if}
+                  </p>
+                  {#if frozenMeta.smallShPct || frozenMeta.natPersonPct || frozenMeta.unknownPct}
+                    <p class="focus-sentence upstream">
+                      Owned by:
+                      {#if frozenMeta.smallShPct}<span class="focus-fact warn">{frozenMeta.smallShPct.toFixed(1)}% small shareholders</span>{/if}
+                      {#if frozenMeta.natPersonPct}<span class="focus-fact warn">{frozenMeta.natPersonPct.toFixed(1)}% natural persons</span>{/if}
+                      {#if frozenMeta.unknownPct}<span class="focus-fact warn">{frozenMeta.unknownPct.toFixed(1)}% unknown</span>{/if}
+                    </p>
+                  {/if}
+                  {#if frozenMeta.entityId}
+                    <a
+                      class="focus-profile-link"
+                      href={entityLink(frozenMeta.entityId)}
+                      onclick={(e) => { if (onNavigate) { e.preventDefault(); onNavigate(entityLink(frozenMeta.entityId!)); } }}
+                    >View full profile &rarr;</a>
+                  {/if}
+                {:else}
+                  <span class="focus-label">
+                    {focusKindLabel(frozenMeta)}: <strong>{frozenMeta.label}</strong>
+                    {#if (frozenMeta.kind === 'country' || frozenMeta.kind === 'entity-type') && frozenMeta.facts.length > 0}
+                      <span class="focus-count">({frozenMeta.facts[0]})</span>
+                    {/if}
+                  </span>
+                  {#if frozenMeta.facts.length > 0 && frozenMeta.kind !== 'country' && frozenMeta.kind !== 'entity-type'}
+                    <div class="focus-facts">
+                      {#each frozenMeta.facts as fact}
+                        <span class="focus-fact">{fact}</span>
+                      {/each}
+                    </div>
+                  {/if}
+                  {#if frozenMeta.kind === 'asset' && frozenId}
+                    <a
+                      class="focus-profile-link"
+                      href={assetLink(frozenId)}
+                      onclick={(e) => { if (onNavigate) { e.preventDefault(); onNavigate(assetLink(frozenId!)); } }}
+                    >View asset profile &rarr;</a>
+                  {/if}
+                {/if}
+              </div>
+              <button
+                type="button"
+                class="focus-clear"
+                onclick={() => {
+                  frozenId = null;
+                  frozenMeta = null;
+                  frozenNodeData = null;
+                }}
+                aria-label="Clear focus">&#10005;</button
+              >
+            </div>
+          {/if}
           <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
           <svg
             viewBox="{vbX} {vbY} {vbW} {vbH}"
@@ -1823,6 +1823,7 @@
     overflow: hidden;
     cursor: grab;
     touch-action: none;
+    position: relative;
   }
   .graph-wrap.panning {
     cursor: grabbing;
@@ -1987,7 +1988,7 @@
     dominant-baseline: hanging;
   }
 
-  /* Focus indicator — pins to the top of the scroll container when a path is clicked */
+  /* Focus indicator — floats above the graph, does not affect layout */
   .focus-indicator {
     display: flex;
     align-items: flex-start;
@@ -1999,8 +2000,10 @@
     border-radius: 4px;
     font-size: var(--font-size-sm, 0.8125rem);
     color: var(--tree-navy, #1d4961);
-    position: sticky;
-    top: 0;
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    right: 8px;
     z-index: 5;
     animation: tooltip-in 0.15s ease-out;
   }
