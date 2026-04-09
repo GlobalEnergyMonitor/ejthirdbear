@@ -593,7 +593,7 @@
      ═══════════════════════════════════════════════════════════════════ */
 
   .report-page {
-    max-width: 960px;
+    max-width: var(--container-reading);
     margin: 0 auto;
     padding: var(--space-8) var(--space-6);
     font-feature-settings: 'tnum' 1; /* tabular numbers */

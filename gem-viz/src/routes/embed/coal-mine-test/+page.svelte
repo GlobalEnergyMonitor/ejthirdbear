@@ -196,7 +196,7 @@
 <style>
   .test-wrapper {
     width: 100%;
-    max-width: 1100px;
+    max-width: var(--container-lg);
     font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
     padding: 1.5rem;
     box-sizing: border-box;
@@ -309,7 +309,7 @@
   }
   .test-wrapper.embedded {
     padding: 0;
-    max-width: 900px;
+    max-width: var(--container-md);
   }
 
   /* ── Card area ───────────────────────────────────── */

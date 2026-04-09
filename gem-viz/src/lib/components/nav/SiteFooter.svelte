@@ -45,7 +45,7 @@
   }
 
   .footer-content {
-    max-width: 1200px;
+    max-width: var(--container-content);
     margin: 0 auto;
     display: flex;
     justify-content: space-between;

@@ -10,7 +10,7 @@
   import { browser } from '$app/environment';
   import { entityLink, assetLink } from '$lib/links';
   import { track } from '$lib/analytics';
-  import { BREAKPOINTS, getViewportWidth } from '$lib/responsive';
+  import { BREAKPOINTS, LAYOUT, getViewportWidth } from '$lib/responsive';
   import { sum } from 'd3-array';
   // d3-shape line/curveBasis now imported via ownership-tree-utils
   import type {
@@ -293,7 +293,12 @@
   const hiddenNodeCount = $derived(renderSubset.hiddenNodes);
   const hiddenEdgeCount = $derived(renderSubset.hiddenEdges);
   const largeGraphMinWidth = $derived(
-    fullWidthMode ? Math.max(720, Math.min(1400, viewportWidth - 64)) : 800
+    fullWidthMode
+      ? Math.max(
+          LAYOUT.ownershipGraph.minWidth,
+          Math.min(LAYOUT.ownershipGraph.maxWidth, viewportWidth - LAYOUT.ownershipGraph.viewportGutter)
+        )
+      : LAYOUT.ownershipGraph.inlineWidth
   );
   const largeGraphMinHeight = $derived(
     fullWidthMode ? (viewportWidth < BREAKPOINTS.md ? 460 : 620) : 600
@@ -1974,9 +1979,6 @@
   .node-lbl.right-label {
     text-anchor: start;
     dominant-baseline: middle;
-  }
-  .node-lbl.small {
-    /* opacity: 0.85;*/
   }
   .node.hovered .node-lbl {
     font-weight: 600;

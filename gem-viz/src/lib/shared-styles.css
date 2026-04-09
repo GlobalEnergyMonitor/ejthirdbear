@@ -103,8 +103,11 @@
 
   --container-xs: 540px; /* Narrow content (forms, login) */
   --container-sm: 720px; /* Single column content */
+  --container-narrow: 800px; /* Tight app surfaces */
   --container-md: 900px; /* Medium content */
+  --container-reading: 960px; /* Report/prose widths */
   --container-lg: 1100px; /* Article/screener width */
+  --container-content: 1200px; /* Standard page width */
   --container-xl: 1400px; /* Main content container */
   --container-2xl: 1680px; /* Wide layouts, dashboards */
   --container-full: 100%;

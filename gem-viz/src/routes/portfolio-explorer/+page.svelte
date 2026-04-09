@@ -6,6 +6,7 @@
    */
   import { page } from '$app/stores';
   import PortfolioExplorer from '$lib/components/portfolio/PortfolioExplorer.svelte';
+  import { LAYOUT } from '$lib/responsive';
 
   const entityId = $page.url.searchParams.get('entity') || '';
   const hidePicker = $page.url.searchParams.get('hidePicker') === 'true';
@@ -19,7 +20,9 @@
     ownership: $page.url.searchParams.get('ownership') || '',
   };
   /** In embed mode the navbar is hidden, so subtract less chrome height */
-  const heightOffset = isEmbed ? 120 : 320;
+  const heightOffset = isEmbed
+    ? LAYOUT.portfolio.embedHeightOffset
+    : LAYOUT.portfolio.defaultHeightOffset;
 
   /** Sync component state → URL via replaceState */
   function handleStateChange(state) {

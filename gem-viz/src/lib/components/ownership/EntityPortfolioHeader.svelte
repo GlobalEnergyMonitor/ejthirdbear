@@ -167,7 +167,7 @@
     justify-content: space-between;
     align-items: flex-start;
     gap: var(--space-8);
-    max-width: 1200px;
+    max-width: var(--container-content);
     margin: 0 auto;
   }
 

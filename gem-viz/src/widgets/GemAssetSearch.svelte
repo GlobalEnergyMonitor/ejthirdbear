@@ -43,8 +43,16 @@
     return resolved.length > 0 ? resolved : [modeDefaults.asset];
   });
 
-  let query = $state(q);
-  let activeMode = $state(mode);
+  let query = $state('');
+  let activeMode = $state('asset');
+
+  $effect(() => {
+    query = q;
+  });
+
+  $effect(() => {
+    activeMode = mode;
+  });
 
   function handleSearch(value: string, searchMode: string) {
     const trimmed = value.trim();

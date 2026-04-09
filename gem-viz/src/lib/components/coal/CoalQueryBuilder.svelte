@@ -1134,8 +1134,20 @@
 </div>
 
 {#if modalOpen}
-  <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-  <div class="plant-modal-backdrop" onclick={(e) => { if (e.target === e.currentTarget) closeModal(); }}>
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <div
+    class="plant-modal-backdrop"
+    role="button"
+    tabindex="0"
+    aria-label="Close coal plant details"
+    onclick={(e) => { if (e.target === e.currentTarget) closeModal(); }}
+    onkeydown={(e) => {
+      if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape')) {
+        e.preventDefault();
+        closeModal();
+      }
+    }}
+  >
     <div class="plant-modal" role="dialog" aria-modal="true" aria-label="Coal plant details">
       <button class="plant-modal-close" onclick={closeModal} aria-label="Close">×</button>
       {#if modalLoading}
