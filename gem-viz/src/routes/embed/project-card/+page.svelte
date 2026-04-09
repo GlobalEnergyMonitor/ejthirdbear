@@ -122,7 +122,7 @@
     <ProjectCard {asset} variant="full" open={true} showLink={true}>
       {#snippet ownership()}
         {#if showOwnership && resolvedId}
-          <AssetOwnershipTree assetId={asset.locationId || resolvedId} />
+          <AssetOwnershipTree assetId={asset.locationId || resolvedId} expandHeight />
         {/if}
       {/snippet}
       {#snippet map()}

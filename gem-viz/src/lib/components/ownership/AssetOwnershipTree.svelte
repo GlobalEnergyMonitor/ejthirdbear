@@ -28,6 +28,7 @@
     assetId: string;
     compact?: boolean;
     fullWidth?: boolean;
+    expandHeight?: boolean;
     showViewFull?: boolean;
     emptyMessage?: string;
     errorMessage?: string;
@@ -37,6 +38,7 @@
     assetId,
     compact = true,
     fullWidth = false,
+    expandHeight = false,
     showViewFull = compact,
     emptyMessage = 'No ownership data available',
     errorMessage = 'Could not load ownership tree',
@@ -138,7 +140,7 @@
   {:else if error}
     <div class="tree-error">{errorMessage}</div>
   {:else if locationResponse}
-    <LocationOwnershipView {locationResponse} direction="up" {fullWidth} />
+    <LocationOwnershipView {locationResponse} direction="up" {fullWidth} {expandHeight} />
     {#if showViewFull}
       <a class="view-full" href={assetLink(assetId)}>View full ownership details &rarr;</a>
     {/if}
