@@ -268,12 +268,15 @@
     return `${base}/embed/${w.slug}?${w.key}=${activeVal(w)}`;
   }
 
+  /** Canonical production origin for embed snippets — ensures Drupal/WordPress
+   *  always loads embed.js from the live server, not from wherever this page is viewed. */
+  const EMBED_ORIGIN = 'https://gem-viz.fly.dev';
+
   function snippet(w) {
     const p = w.hash ? `/embed/${w.slug}#${w.hash}` : `/embed/${w.slug}?${w.key}=${activeVal(w)}`;
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const modeAttr = DYNAMIC_WIDGETS.has(w.slug) ? ' data-mode="dynamic"' : '';
     return (
-      `<div class="gem-embed" data-src="${p}" data-height="${w.h}"${modeAttr}>\n<script src="${origin}/embed.js"><` +
+      `<div class="gem-embed" data-src="${p}" data-height="${w.h}"${modeAttr}>\n<script src="${EMBED_ORIGIN}/embed.js"><` +
       `/script>\n</div>`
     );
   }
