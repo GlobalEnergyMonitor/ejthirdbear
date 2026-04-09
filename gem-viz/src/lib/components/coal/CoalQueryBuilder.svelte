@@ -1054,10 +1054,10 @@
           columns={dataTableCols}
           data={tableRows}
           pageSize={50}
-          showGlobalSearch={true}
+          showGlobalSearch={false}
           showColumnFilters={false}
           showPagination={true}
-          showExport={true}
+          showExport={false}
           showColumnToggle={false}
           stickyHeader={true}
           striped={true}
