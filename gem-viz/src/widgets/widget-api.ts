@@ -1,15 +1,27 @@
 /**
- * Widget API client — standalone version of ownership-api.ts for dynamic embeds.
- * No SvelteKit dependencies ($app/*, import.meta.env, api-log.svelte).
- * Configurable API base URL for cross-origin usage from Drupal.
+ * Widget API client — thin adapter over ownership-api.ts for dynamic embeds.
+ *
+ * Adds runtime-configurable API base URL (for cross-origin Drupal usage)
+ * and a widget-specific resolveAssetId that calls the app's /api/resolve-id.
+ *
+ * All normalize/helper logic is imported from ownership-api.ts (single source of truth).
  */
 
 import {
   API_SLUG_TO_TYPE as _SCHEMA_SLUG_TO_TYPE,
-  API_TYPE_TO_SLUG as _SCHEMA_TYPE_TO_SLUG,
   IDENTIFIER_TO_API_SLUG as _SCHEMA_ID_TO_SLUG,
 } from '$lib/data-config/tracker-schema';
-import { buildQuery } from '$lib/ownership-api';
+import {
+  buildQuery,
+  toNumber,
+  pickKey,
+  extractEntityId,
+  pct,
+  normalizeEntity,
+  normalizeAsset,
+  normalizePaginated,
+  normalizeEntityGraph,
+} from '$lib/ownership-api';
 
 // Re-export types from ownership-api so widget wrappers can import from one place
 export type {
@@ -21,6 +33,20 @@ export type {
   GraphNode,
   GraphEdge,
   PaginatedResponse,
+  RawEntity,
+  RawAsset,
+} from '$lib/ownership-api';
+
+import type {
+  EntitySummary,
+  AssetSummary,
+  AssetOwner,
+  PaginatedResponse,
+  EntityGraphResponse,
+  OwnershipGraphResponse,
+  GraphNode,
+  RawEntity,
+  RawAsset,
 } from '$lib/ownership-api';
 
 // ============================================================================
@@ -44,7 +70,7 @@ export function getAppBase() {
 }
 
 // ============================================================================
-// API CLIENT (no api-log dependency)
+// API CLIENT (widget-specific: runtime-configurable base URL, no api-log)
 // ============================================================================
 
 const API_TIMEOUT_MS = 30_000;
@@ -115,39 +141,7 @@ async function _doFetch<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 // ============================================================================
-// HELPERS (same as ownership-api.ts)
-// ============================================================================
-
-function toNumber(value: unknown): number | null {
-  if (value === null || value === undefined) return null;
-  if (typeof value === 'number' && !Number.isNaN(value)) return value;
-  if (typeof value === 'string') {
-    const parsed = Number(value.replace(/[^0-9.-]/g, ''));
-    return Number.isNaN(parsed) ? null : parsed;
-  }
-  return null;
-}
-
-function pickKey<T extends Record<string, unknown>>(obj: T, keys: readonly string[]): unknown {
-  for (const key of keys) {
-    if (obj[key] !== undefined && obj[key] !== null && obj[key] !== '') return obj[key];
-  }
-  return undefined;
-}
-
-function extractEntityId(value: unknown): string | null {
-  if (!value) return null;
-  if (typeof value === 'string') {
-    const match = value.match(/E\d+/);
-    return match ? match[0] : value;
-  }
-  return null;
-}
-
-const pct = (v?: number) => (typeof v === 'number' ? v : null);
-
-// ============================================================================
-// RESOLVE ASSET ID (uses absolute URL to gem-viz.fly.dev)
+// RESOLVE ASSET ID (widget-specific: uses app's /api/resolve-id endpoint)
 // ============================================================================
 
 const gPrefixToCompoundCache = new Map<string, string>();
@@ -174,112 +168,7 @@ export async function resolveAssetId(assetId: string): Promise<string> {
 }
 
 // ============================================================================
-// NORMALIZE (same as ownership-api.ts)
-// ============================================================================
-
-interface RawEntity {
-  [key: string]: unknown;
-}
-interface RawAsset {
-  [key: string]: unknown;
-}
-
-import type {
-  EntitySummary,
-  AssetSummary,
-  AssetOwner,
-  PaginatedResponse,
-} from '$lib/ownership-api';
-import {
-  FK_ID,
-  FK_NAME,
-  FK_FACILITY_TYPE,
-  FK_STATUS,
-  FK_SUB_STATUS,
-  FK_CAPACITY,
-  FK_CAPACITY_UNIT,
-  FK_COUNTRY,
-  FK_LATITUDE,
-  FK_LONGITUDE,
-  FK_OWNER,
-  FK_OWNER_ENTITY_ID,
-  FK_PARENT,
-  FK_PARENT_ENTITY_ID,
-  FK_ENTITY_ID,
-  FK_ENTITY_NAME,
-  FK_FULL_NAME,
-  FK_HQ_COUNTRY,
-} from '$lib/field-keys';
-
-function normalizeEntity(raw: RawEntity): EntitySummary | null {
-  const idRaw = pickKey(raw, FK_ENTITY_ID);
-  const id = extractEntityId(idRaw) || String(idRaw || '').trim();
-  if (!id) return null;
-  const str = (keys: readonly string[]) => {
-    const v = pickKey(raw, keys);
-    return v ? String(v) : null;
-  };
-  return {
-    id,
-    name: String(pickKey(raw, FK_ENTITY_NAME) || id).trim() || id,
-    fullName: str(FK_FULL_NAME),
-    headquartersCountry: str(FK_HQ_COUNTRY),
-    raw,
-  };
-}
-
-function normalizeAsset(raw: RawAsset): AssetSummary {
-  const str = (keys: readonly string[]) => {
-    const v = pickKey(raw, keys);
-    return v ? String(v) : null;
-  };
-  const num = (keys: readonly string[]) => toNumber(pickKey(raw, keys));
-  const id = String(pickKey(raw, FK_ID) || '').trim();
-  return {
-    id,
-    name: String(pickKey(raw, FK_NAME) || id).trim(),
-    facilityType: str(FK_FACILITY_TYPE),
-    status: str(FK_STATUS),
-    subStatus: str(FK_SUB_STATUS),
-    capacity: num(FK_CAPACITY),
-    capacityUnit: str(FK_CAPACITY_UNIT),
-    country: str(FK_COUNTRY),
-    latitude: num(FK_LATITUDE),
-    longitude: num(FK_LONGITUDE),
-    ownerName: str(FK_OWNER),
-    ownerEntityId: extractEntityId(pickKey(raw, FK_OWNER_ENTITY_ID)),
-    parentName: str(FK_PARENT),
-    parentEntityId: extractEntityId(pickKey(raw, FK_PARENT_ENTITY_ID)),
-    owners: normalizeOwners(raw),
-    raw,
-  };
-}
-
-function normalizeOwners(raw: RawAsset): AssetOwner[] | undefined {
-  const arr = raw.owners;
-  if (!Array.isArray(arr) || arr.length === 0) return undefined;
-  return (arr as Array<Record<string, unknown>>).map((o) => ({
-    entityId: String(o.entity_id || ''),
-    name: String(o.name || ''),
-    ownershipShare: toNumber(o.ownership_share),
-    hqCountry: o.hq_country ? String(o.hq_country) : null,
-  }));
-}
-
-function normalizePaginated<T>(raw: T[] | PaginatedResponse<T>): PaginatedResponse<T> {
-  if (Array.isArray(raw))
-    return { total: null, limit: null, offset: null, count: raw.length, results: raw };
-  return {
-    total: raw.total ?? null,
-    limit: raw.limit ?? null,
-    offset: raw.offset ?? null,
-    count: raw.count ?? raw.results?.length ?? 0,
-    results: raw.results ?? [],
-  };
-}
-
-// ============================================================================
-// ENTITY ENDPOINTS
+// ENTITY ENDPOINTS (use widget fetchAPI + shared normalizers)
 // ============================================================================
 
 export async function getEntity(entityId: string): Promise<EntitySummary | null> {
@@ -308,28 +197,6 @@ interface RawEntityGraph {
   }>;
   edges: Array<{ from_entity_id: string; to_entity_id: string; ownership_percentage?: number }>;
   terminal_node_ids?: string[];
-}
-
-import type { EntityGraphResponse, OwnershipGraphResponse, GraphNode } from '$lib/ownership-api';
-
-function normalizeEntityGraph(raw: RawEntityGraph): EntityGraphResponse {
-  return {
-    rootEntityId: raw.root_entity_id,
-    rootEntityName: raw.root_entity_name,
-    nodes: (raw.nodes || []).map((n) => ({
-      id: n.entity_id,
-      Name: n.entity_name,
-      type: 'entity' as const,
-      is_terminal: n.is_terminal,
-      is_root: n.is_root,
-    })),
-    edges: (raw.edges || []).map((e) => ({
-      source: e.from_entity_id,
-      target: e.to_entity_id,
-      value: pct(e.ownership_percentage),
-    })),
-    terminalIds: raw.terminal_node_ids || [],
-  };
 }
 
 async function getEntityGraph(

@@ -390,7 +390,7 @@ async function _doFetch<T>(url: string, options?: RequestInit): Promise<T> {
   }
 }
 
-function toNumber(value: unknown): number | null {
+export function toNumber(value: unknown): number | null {
   if (value === null || value === undefined) return null;
   if (typeof value === 'number' && !Number.isNaN(value)) return value;
   if (typeof value === 'string') {
@@ -400,14 +400,14 @@ function toNumber(value: unknown): number | null {
   return null;
 }
 
-function pickKey<T extends Record<string, unknown>>(obj: T, keys: readonly string[]): unknown {
+export function pickKey<T extends Record<string, unknown>>(obj: T, keys: readonly string[]): unknown {
   for (const key of keys) {
     if (obj[key] !== undefined && obj[key] !== null && obj[key] !== '') return obj[key];
   }
   return undefined;
 }
 
-function extractEntityId(value: unknown): string | null {
+export function extractEntityId(value: unknown): string | null {
   if (!value) return null;
   if (typeof value === 'string') {
     const match = value.match(/E\d+/);
@@ -416,7 +416,7 @@ function extractEntityId(value: unknown): string | null {
   return null;
 }
 
-function normalizeEntity(raw: RawEntity): EntitySummary | null {
+export function normalizeEntity(raw: RawEntity): EntitySummary | null {
   const idRaw = pickKey(raw, FK_ENTITY_ID);
   const id = extractEntityId(idRaw) || String(idRaw || '').trim();
   if (!id) return null; // skip ghost entries with empty IDs
@@ -434,7 +434,7 @@ function normalizeEntity(raw: RawEntity): EntitySummary | null {
   };
 }
 
-function normalizeAsset(raw: RawAsset): AssetSummary {
+export function normalizeAsset(raw: RawAsset): AssetSummary {
   // Helpers: pick first non-empty key as string or number
   const str = (keys: readonly string[]) => {
     const v = pickKey(raw, keys);
@@ -464,7 +464,7 @@ function normalizeAsset(raw: RawAsset): AssetSummary {
   };
 }
 
-function normalizeOwners(raw: RawAsset): AssetOwner[] | undefined {
+export function normalizeOwners(raw: RawAsset): AssetOwner[] | undefined {
   const arr = raw.owners;
   if (!Array.isArray(arr) || arr.length === 0) return undefined;
   return (arr as Array<Record<string, unknown>>).map((o) => ({
@@ -475,7 +475,7 @@ function normalizeOwners(raw: RawAsset): AssetOwner[] | undefined {
   }));
 }
 
-function normalizePaginated<T>(raw: T[] | PaginatedResponse<T>): PaginatedResponse<T> {
+export function normalizePaginated<T>(raw: T[] | PaginatedResponse<T>): PaginatedResponse<T> {
   if (Array.isArray(raw))
     return { total: null, limit: null, offset: null, count: raw.length, results: raw };
   return {
@@ -537,7 +537,7 @@ export async function getEntity(entityId: string): Promise<EntitySummary | null>
 }
 
 // Helper: extract ownership percentage from API row
-const pct = (v?: number) => (typeof v === 'number' ? v : null);
+export const pct = (v?: number) => (typeof v === 'number' ? v : null);
 
 export async function getEntityOwners(entityId: string): Promise<DirectOwnership[]> {
   _currentReason = `getEntityOwners ${entityId}`;
@@ -584,7 +584,7 @@ interface RawEntityGraph {
   terminal_node_ids?: string[];
 }
 
-function normalizeEntityGraph(raw: RawEntityGraph): EntityGraphResponse {
+export function normalizeEntityGraph(raw: RawEntityGraph): EntityGraphResponse {
   return {
     rootEntityId: raw.root_entity_id,
     rootEntityName: raw.root_entity_name,
