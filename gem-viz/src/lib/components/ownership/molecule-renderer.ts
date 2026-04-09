@@ -8,7 +8,7 @@
  * Reference: Observable notebook 5a1f34aee34fe4cf (EJ Fox, GEM).
  *
  * Visual spec (from Observable, with -π/2 start angle):
- *  - Ring: stroke #aab2c0, 1px, fill none (only if N > 1)
+ *  - Ring: stroke #aab2c0, 2px, fill none (only if N > 1)
  *  - Units: mix-blend-mode multiply, isolation isolate on parent <g>
  *  - Ownership arc: d3.arc innerRadius 0, outerRadius circleR + 0.625,
  *    startAngle -π/2, fill colors.midnight, fill-opacity 0.1,
@@ -64,7 +64,7 @@ const OWNERSHIP_STROKE_WIDTH = 1.25;
 const OWNERSHIP_STROKE_OPACITY = 0.6;
 
 const DEFAULT_RING_STROKE = '#aab2c0';
-const DEFAULT_RING_STROKE_WIDTH = 1;
+const DEFAULT_RING_STROKE_WIDTH = 2;
 
 // ---------------------------------------------------------------------------
 // Core drawing function
