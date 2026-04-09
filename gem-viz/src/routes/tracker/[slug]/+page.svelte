@@ -64,6 +64,7 @@
     unit?: string;
     sampleValues?: string[];
     values?: number[];
+    allowedValues?: string[] | null;
   }
 
   // Map human-readable field names to API code_friendly_name keys
@@ -140,6 +141,7 @@
             unit: stats.unit_name_short,
             sampleValues: stats.sample_values,
             values: stats.values,
+            allowedValues: stats.allowed_values,
           };
         }
       }

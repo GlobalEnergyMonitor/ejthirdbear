@@ -369,7 +369,9 @@
   );
 
   // Process paths: compute cumulative ownership % and track which nodes/edges
-  // each terminal entity touches (for hover-based path highlighting)
+  // each terminal entity touches (for hover-based path highlighting).
+  // Matches Observable notebook: trust all API-provided paths (cycles already
+  // handled server-side via the recursive CTE's visited list).
   const pathsData = $derived.by(() => {
     const pctMap = new Map<string, number>();
     const touchedMap = new Map<string, { nodesTouched: string[]; edgeIndices: number[] }>();
@@ -378,30 +380,17 @@
     // O(1) edge lookup instead of O(n) findIndex per path segment
     const edgeIndex = new Map<string, number>();
     renderEdges.forEach((e, i) => edgeIndex.set(`${e.source}->${e.target}`, i));
-    const cycleClosingEdges = new Set(
-      edges.filter((e) => e.closes_cycle).map((e) => `${e.source}->${e.target}`)
-    );
 
     for (const [id, arr] of Object.entries(paths)) {
       if (!Array.isArray(arr)) continue;
-      const nonCyclePaths = arr.filter((p: OwnershipPathEntry) => {
-        if (!p.route || p.route.length < 2) return true;
-        for (let i = 0; i < p.route.length - 1; i++) {
-          if (cycleClosingEdges.has(`${p.route[i]}->${p.route[i + 1]}`)) {
-            return false;
-          }
-        }
-        return true;
-      });
-      const usablePaths = nonCyclePaths.length > 0 ? nonCyclePaths : arr;
 
       // Sum all path cumulative percentages for this terminal
-      pctMap.set(id, sum(usablePaths.map((p: OwnershipPathEntry) => p.cumulative_pct || 0)));
+      pctMap.set(id, sum(arr.map((p: OwnershipPathEntry) => p.cumulative_pct || 0)));
 
       // Collect every node and edge on any route to this terminal
       const nodesTouched = new Set<string>();
       const edgeIndices = new Set<number>();
-      for (const p of usablePaths) {
+      for (const p of arr) {
         if (!p.route) continue;
         for (let i = 0; i < p.route.length; i++) {
           nodesTouched.add(p.route[i]);
@@ -723,9 +712,6 @@
     // Observable: edge weights influence dagre layout priority
     // asset edges = 3, both small = 1, one small = 2, normal = 3
     renderEdges.forEach((e) => {
-      // Cycle-closing edges are skipped in dagre to prevent rank inversions —
-      // they still render as SVG paths but don't influence the layout.
-      if (e.closes_cycle) return;
       const srcIsAsset =
         e.source === rootId || renderNodes.find((n) => n.id === e.source)?.type === 'asset';
       const tgtIsAsset =

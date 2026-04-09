@@ -135,10 +135,10 @@ export async function getFieldsForTracker(
         return mapApiFields(apiData.fieldsDetail, expandValues);
       }
     } catch {
-      // fall through to fallback
+      // API unreachable — return empty, don't show phantom factsheet
     }
   }
-  return getFallbackFields();
+  return [];
 }
 
 /**
@@ -164,7 +164,7 @@ export async function getTrackerFieldData(trackerSlug: string): Promise<{
       // fall through to fallback
     }
   }
-  return { fields: getFallbackFields(), categoriesOrdered: [] };
+  return { fields: [], categoriesOrdered: [] };
 }
 
 function mapApiFields(fields: CatalogFieldDetail[], expandValues: boolean): FieldMeta[] {

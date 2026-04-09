@@ -65,6 +65,7 @@
     sampleValues?: string[];
     /** Pre-sorted numeric values for histogram (only for numeric fields) */
     values?: number[];
+    allowedValues?: string[] | null;
   }
 
   type FieldType = 'numeric' | 'enum' | 'text';
@@ -126,17 +127,16 @@
     return defs;
   });
 
-  // Resolve field type from API metadata (data_type + data_sub_type)
-  // Falls back to heuristic only when metadata is missing
+  // Resolve field type from API metadata
   function resolveFieldType(field: FieldInfo, stats: FieldStatsResult | null): FieldType {
-    // Prefer API data_type from stats response, then from field metadata
     const dt = stats?.dataType || field.dataType;
     const dst = stats?.dataSubType || field.dataSubType;
     if (dt === 'numeric') return 'numeric';
+    // allowed_values from API is the primary signal for categorical fields
+    if (stats?.allowedValues && stats.allowedValues.length > 0) return 'enum';
     if (dt === 'text' && (dst === 'categorical' || dst === 'ordinal' || dst === 'accuracy'))
       return 'enum';
     if (dt === 'boolean') return 'enum';
-    // datetime/year with value_counts → show as enum bars
     if (dt === 'datetime' && stats?.distribution && stats.distribution.length > 0) return 'enum';
     if (dt === 'datetime') return 'text';
     if (dt === 'text') return 'text';
