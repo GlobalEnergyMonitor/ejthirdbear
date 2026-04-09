@@ -110,7 +110,6 @@ async function getAssetDetails(args: ToolArgs): Promise<ToolResult> {
       const graph = await getOwnershipGraph({
         root: asset.ownerEntityId,
         direction: 'up',
-        max_depth: 5,
       });
       data.ownershipChain = graph.nodes.slice(0, 20).map((n) => ({
         id: n.id,

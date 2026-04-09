@@ -828,7 +828,6 @@ export async function getAsset(assetId: string): Promise<AssetSummary> {
 export async function getOwnershipGraph(params: {
   root: string;
   direction?: 'up' | 'down';
-  max_depth?: number;
 }): Promise<OwnershipGraphResponse> {
   _currentReason = `getOwnershipGraph ${params.direction || 'up'} ${params.root}`;
   const resolvedRoot = await resolveAssetId(params.root);
@@ -838,7 +837,7 @@ export async function getOwnershipGraph(params: {
     edges: OwnershipGraphResponse['edges'];
     paths?: OwnershipGraphResponse['paths'];
   }>(
-    `/ownership/graph${buildQuery({ root: resolvedRoot, direction: params.direction, max_depth: params.max_depth })}`
+    `/ownership/graph${buildQuery({ root: resolvedRoot, direction: params.direction })}`
   );
 
   // Normalize root node
@@ -893,7 +892,6 @@ function normalizeGraphNodes(nodes: Array<Record<string, unknown>>): GraphNode[]
 export async function getLocationOwnershipGraph(params: {
   root: string;
   direction?: 'up' | 'down';
-  max_depth?: number;
 }): Promise<LocationOwnershipGraphResponse> {
   _currentReason = `getLocationOwnershipGraph ${params.direction || 'up'} ${params.root}`;
   const raw = await fetchAPI<{
@@ -909,7 +907,7 @@ export async function getLocationOwnershipGraph(params: {
       asset_ids?: string[];
     }>;
   }>(
-    `/ownership/graph${buildQuery({ root: params.root, direction: params.direction, max_depth: params.max_depth })}`
+    `/ownership/graph${buildQuery({ root: params.root, direction: params.direction })}`
   );
 
   const graphs = (raw.graphs || [])
@@ -945,12 +943,11 @@ export async function getLocationOwnershipGraph(params: {
 export async function getOwnershipGraphs(params: {
   root: string;
   direction?: 'up' | 'down';
-  max_depth?: number;
 }): Promise<LocationOwnershipGraphResponse> {
   _currentReason = `getOwnershipGraphs ${params.direction || 'up'} ${params.root}`;
   const resolvedRoot = await resolveAssetId(params.root);
   const raw = await fetchAPI<Record<string, unknown>>(
-    `/ownership/graph${buildQuery({ root: resolvedRoot, direction: params.direction, max_depth: params.max_depth })}`
+    `/ownership/graph${buildQuery({ root: resolvedRoot, direction: params.direction })}`
   );
 
   // Location-level response: { location_id, graphs: [...] }

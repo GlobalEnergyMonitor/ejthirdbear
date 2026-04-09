@@ -389,7 +389,6 @@ export async function getAsset(assetId: string): Promise<AssetSummary> {
 export async function getOwnershipGraph(params: {
   root: string;
   direction?: 'up' | 'down';
-  max_depth?: number;
 }): Promise<OwnershipGraphResponse> {
   const resolvedRoot = await resolveAssetId(params.root);
   const raw = await fetchAPI<{
@@ -398,7 +397,7 @@ export async function getOwnershipGraph(params: {
     edges: OwnershipGraphResponse['edges'];
     paths?: OwnershipGraphResponse['paths'];
   }>(
-    `/ownership/graph${buildQuery({ root: resolvedRoot, direction: params.direction, max_depth: params.max_depth })}`
+    `/ownership/graph${buildQuery({ root: resolvedRoot, direction: params.direction })}`
   );
 
   const root = {

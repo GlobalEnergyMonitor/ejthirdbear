@@ -106,11 +106,6 @@ export const TOOLS = [
             description:
               'Direction to traverse: "up" for owners, "down" for holdings, "both" for full picture',
           },
-          max_depth: {
-            type: 'number',
-            description:
-              'Maximum depth to traverse (default 5, max 10). Higher depth = more complete but slower.',
-          },
         },
         required: ['root_id', 'direction'],
       },

@@ -20,7 +20,7 @@
   import { getOwnershipGraph } from '$lib/ownership-api';
 
   // Props
-  let { entityId = '', entityName: _entityName = '', maxHops = 2, height = 300 } = $props();
+  let { entityId = '', entityName: _entityName = '', height = 300 } = $props();
 
   // State
   let container;
@@ -62,10 +62,10 @@
 
       // Fetch ownership graph in both directions via REST API
       const [graphDown, graphUp] = await Promise.all([
-        getOwnershipGraph({ root: entityId, direction: 'down', max_depth: maxHops }).catch(
+        getOwnershipGraph({ root: entityId, direction: 'down' }).catch(
           () => null
         ),
-        getOwnershipGraph({ root: entityId, direction: 'up', max_depth: maxHops }).catch(
+        getOwnershipGraph({ root: entityId, direction: 'up' }).catch(
           () => null
         ),
       ]);

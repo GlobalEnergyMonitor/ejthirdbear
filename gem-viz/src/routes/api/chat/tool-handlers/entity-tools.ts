@@ -126,7 +126,6 @@ async function getEntityOwnersHandler(args: ToolArgs): Promise<ToolResult> {
       const graph = await getOwnershipGraph({
         root: entityId,
         direction: 'up',
-        max_depth: 10,
       });
       const childIds = new Set(graph.edges.map((e) => e.source));
       const ultimateParents = graph.nodes
@@ -144,12 +143,10 @@ async function getEntityOwnersHandler(args: ToolArgs): Promise<ToolResult> {
 async function getOwnershipGraphHandler(args: ToolArgs): Promise<ToolResult> {
   const rootId = args.root_id as string;
   const direction = args.direction as string;
-  const maxDepth = Math.min((args.max_depth as number) || 5, 10);
-
   if (direction === 'both') {
     const [upGraph, downGraph] = await Promise.all([
-      getOwnershipGraph({ root: rootId, direction: 'up', max_depth: maxDepth }),
-      getOwnershipGraph({ root: rootId, direction: 'down', max_depth: maxDepth }),
+      getOwnershipGraph({ root: rootId, direction: 'up' }),
+      getOwnershipGraph({ root: rootId, direction: 'down' }),
     ]);
     const nodeMap = new Map<string, (typeof upGraph.nodes)[0]>();
     for (const n of [...upGraph.nodes, ...downGraph.nodes]) nodeMap.set(n.id, n);
@@ -179,7 +176,6 @@ async function getOwnershipGraphHandler(args: ToolArgs): Promise<ToolResult> {
   const graph = await getOwnershipGraph({
     root: rootId,
     direction: validDir,
-    max_depth: maxDepth,
   });
   return {
     success: true,

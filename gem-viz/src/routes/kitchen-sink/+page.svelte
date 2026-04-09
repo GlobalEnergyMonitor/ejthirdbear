@@ -98,7 +98,7 @@
     featuredLoading = true;
     featuredError = '';
     try {
-      const result = await getOwnershipGraph({ root: assetId, direction: 'up', max_depth: 12 });
+      const result = await getOwnershipGraph({ root: assetId, direction: 'up' });
       featuredGraphData = result;
     } catch (e) {
       featuredError = e.message || 'Failed to load';
