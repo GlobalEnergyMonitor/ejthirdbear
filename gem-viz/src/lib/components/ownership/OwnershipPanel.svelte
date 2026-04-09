@@ -32,6 +32,7 @@
     onLeave,
     onFreeze,
     onTogglePanel,
+    onChangeColorMode = undefined,
     isNodeInFrozenPath,
     minOwnershipPct = $bindable(0),
     showSlider = false,
@@ -63,6 +64,7 @@
       _meta?: { kind: 'entity' | 'asset' | 'country' | 'entity-type'; label: string; facts: string[] } | null
     ) => void;
     onTogglePanel: () => void;
+    onChangeColorMode?: (_mode: ColorMode) => void;
     isNodeInFrozenPath: (_id: string) => boolean;
     minOwnershipPct?: number;
     showSlider?: boolean;
@@ -72,6 +74,26 @@
     const u = entityLink(entityNid);
     onNavigate ? onNavigate(u) : goto(u);
   }
+
+  let ownerRowsEl = $state<HTMLElement | null>(null);
+  let countryRowsEl = $state<HTMLElement | null>(null);
+  let typeRowsEl = $state<HTMLElement | null>(null);
+  let ownerOverflows = $state(false);
+  let countryOverflows = $state(false);
+  let typeOverflows = $state(false);
+
+  function trackOverflow(el: HTMLElement | null, set: (v: boolean) => void) {
+    if (!el) return;
+    const check = () => set(el.scrollHeight > el.clientHeight);
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }
+
+  $effect(() => trackOverflow(ownerRowsEl, (v) => { ownerOverflows = v; }));
+  $effect(() => trackOverflow(countryRowsEl, (v) => { countryOverflows = v; }));
+  $effect(() => trackOverflow(typeRowsEl, (v) => { typeOverflows = v; }));
 </script>
 
 <div class="panel" class:open={panelOpen} style="opacity: {entranceAnimDone ? 1 : 0}">
@@ -91,8 +113,8 @@
   <!-- Section 1: Owner Entities -->
   <div class="tabular-section">
     <h4>Owner Entities</h4>
-    <div class="tabular-rows-wrap">
-    <div class="tabular-rows">
+    <div class="tabular-rows-wrap" class:has-overflow={ownerOverflows}>
+    <div class="tabular-rows" bind:this={ownerRowsEl}>
       {#each sortedOwnersList as o}
         {@const _rowColors = getNodeColors(o.id, rootId, nodes, colorMode, countryRanks)}
         {@const isOwnerFaded = fadedNodeIds.has(o.id)}
@@ -139,9 +161,29 @@
   <!-- Section 2: By Headquarters Country -->
   {#if ownersByCountry.length > 0}
     <div class="tabular-section">
-      <h4>By Headquarters Country</h4>
-      <div class="tabular-rows-wrap">
-      <div class="tabular-rows">
+      <button
+        class="section-header-btn"
+        class:color-active={colorMode === 'country'}
+        data-tooltip="Color nodes by country"
+        onclick={() => onChangeColorMode?.(colorMode === 'country' ? 'entity-type' : 'country')}
+        type="button"
+      >
+        By Headquarters Country
+        <svg viewBox="0 0 14 14" width="11" height="11" aria-hidden="true" class="section-header-icon">
+          <circle cx="7" cy="7" r="6" fill="none" stroke="currentColor" stroke-width="1"/>
+          {#if colorMode === 'country'}
+            <path d="M7 7 L7 1 A6 6 0 0 1 12.2 10 Z" fill={COUNTRY_COLORS[0]?.bg ?? 'currentColor'} />
+            <path d="M7 7 L12.2 10 A6 6 0 0 1 1.8 10 Z" fill={COUNTRY_COLORS[1]?.bg ?? 'currentColor'} />
+            <path d="M7 7 L1.8 10 A6 6 0 0 1 7 1 Z" fill={COUNTRY_COLORS[2]?.bg ?? 'currentColor'} />
+          {:else}
+            <path d="M7 7 L7 1 A6 6 0 0 1 12.2 10 Z" fill="currentColor" opacity="0.5"/>
+            <path d="M7 7 L12.2 10 A6 6 0 0 1 1.8 10 Z" fill="currentColor" opacity="0.28"/>
+            <path d="M7 7 L1.8 10 A6 6 0 0 1 7 1 Z" fill="currentColor" opacity="0.1"/>
+          {/if}
+        </svg>
+      </button>
+      <div class="tabular-rows-wrap" class:has-overflow={countryOverflows}>
+      <div class="tabular-rows" bind:this={countryRowsEl}>
         {#each ownersByCountry as [country, data]}
           {@const cRank = countryRanks.get(country)}
           {@const cColor = cRank != null && cRank < COUNTRY_COLORS.length ? COUNTRY_COLORS[cRank] : COUNTRY_GRAY}
@@ -208,9 +250,29 @@
   <!-- Section 3: By Entity Type -->
   {#if ownersByType.length > 0}
     <div class="tabular-section">
-      <h4>By Entity Type</h4>
-      <div class="tabular-rows-wrap">
-      <div class="tabular-rows">
+      <button
+        class="section-header-btn"
+        class:color-active={colorMode === 'entity-type'}
+        data-tooltip="Color nodes by entity type"
+        onclick={() => onChangeColorMode?.(colorMode === 'entity-type' ? 'country' : 'entity-type')}
+        type="button"
+      >
+        By Entity Type
+        <svg viewBox="0 0 14 14" width="11" height="11" aria-hidden="true" class="section-header-icon">
+          <circle cx="7" cy="7" r="6" fill="none" stroke="currentColor" stroke-width="1"/>
+          {#if colorMode === 'entity-type'}
+            <path d="M7 7 L7 1 A6 6 0 0 1 12.2 10 Z" fill={OWNERSHIP_ENTITY_COLORS['Government']?.bg ?? 'currentColor'} />
+            <path d="M7 7 L12.2 10 A6 6 0 0 1 1.8 10 Z" fill={OWNERSHIP_ENTITY_COLORS['Publicly Listed Corp.']?.bg ?? 'currentColor'} />
+            <path d="M7 7 L1.8 10 A6 6 0 0 1 7 1 Z" fill={OWNERSHIP_ENTITY_COLORS['Private Company']?.bg ?? 'currentColor'} />
+          {:else}
+            <path d="M7 7 L7 1 A6 6 0 0 1 12.2 10 Z" fill="currentColor" opacity="0.5"/>
+            <path d="M7 7 L12.2 10 A6 6 0 0 1 1.8 10 Z" fill="currentColor" opacity="0.28"/>
+            <path d="M7 7 L1.8 10 A6 6 0 0 1 7 1 Z" fill="currentColor" opacity="0.1"/>
+          {/if}
+        </svg>
+      </button>
+      <div class="tabular-rows-wrap" class:has-overflow={typeOverflows}>
+      <div class="tabular-rows" bind:this={typeRowsEl}>
         {#each ownersByType as [type, data]}
           {@const eColor = OWNERSHIP_ENTITY_COLORS[type] || OWNERSHIP_ENTITY_COLORS['Other']}
           <div
@@ -340,23 +402,81 @@
     margin: 0 0 4px;
     font-weight: 600;
   }
+  .section-header-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    width: 100%;
+    padding: 0 0 4px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--tree-teal, #004f61);
+    font-weight: 600;
+    text-align: left;
+    border-radius: 3px;
+    transition: background 0.12s ease;
+    position: relative;
+  }
+  .section-header-btn:hover {
+    background: rgba(0, 79, 97, 0.06);
+  }
+  .section-header-btn::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 4px);
+    left: 0;
+    background: var(--tree-navy, #1d4961);
+    color: #fff;
+    font-size: 0.6rem;
+    font-weight: 500;
+    padding: 2px 6px;
+    border-radius: 3px;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .section-header-btn:hover::after {
+    opacity: 1;
+  }
+  .section-header-icon {
+    flex-shrink: 0;
+    opacity: 0.3;
+    transition: opacity 0.15s ease;
+  }
+  .section-header-btn.color-active .section-header-icon,
+  .section-header-btn:hover .section-header-icon {
+    opacity: 1;
+  }
   .tabular-rows-wrap {
     position: relative;
-    max-height: 350px;
+    max-height: 120px;
+    overflow: hidden;
   }
   .tabular-rows-wrap::after {
     content: '';
-    position: sticky;
+    position: absolute;
     bottom: 0;
-    display: block;
+    left: 0;
+    right: 0;
+    display: none;
     height: 32px;
     pointer-events: none;
     background: linear-gradient(to bottom, transparent, var(--tree-warm-white, #f2f2eb));
   }
+  .tabular-rows-wrap.has-overflow::after {
+    display: block;
+  }
   .tabular-rows {
     display: flex;
     flex-direction: column;
-    max-height: 350px;
+    max-height: 120px;
     overflow-y: auto;
     scrollbar-width: thin;
     scrollbar-color: rgba(0, 79, 97, 0.3) transparent;

@@ -298,18 +298,21 @@
   }
 
   function toggleAssetType(label) {
+    query = '';
     filterAssetTypes = filterAssetTypes.includes(label)
       ? filterAssetTypes.filter(v => v !== label)
       : [...filterAssetTypes, label];
   }
 
   function toggleCountry(country) {
+    query = '';
     filterCountries = filterCountries.includes(country)
       ? filterCountries.filter(v => v !== country)
       : [...filterCountries, country];
   }
 
   function toggleStatus(s) {
+    query = '';
     filterStatuses = filterStatuses.includes(s)
       ? filterStatuses.filter(v => v !== s)
       : [...filterStatuses, s];
@@ -366,7 +369,7 @@
     treeError = '';
     locationResponse = null;
     try {
-      locationResponse = await getLocationOwnershipGraph({ root: item.id, direction: 'up', max_depth: 5 });
+      locationResponse = await getLocationOwnershipGraph({ root: item.id, direction: 'up', max_depth: 20 });
     } catch (err) {
       treeError = err.message || 'Failed to load ownership tree';
     } finally {
@@ -406,6 +409,7 @@
 
   <div class="cc-filters">
     <QuerySentenceBuilder
+      startWord="Or: See"
       fields={FILTER_FIELDS}
       filters={sentenceFilters}
       isDirty={filtersDirty}
@@ -556,8 +560,7 @@
     <div class="cc-modal" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()} role="dialog" tabindex="-1">
       <div class="cc-modal-header">
         <div>
-          <h2>{selected.name}</h2>
-          <span class="cc-modal-sub">WHO OWNS THIS?</span>
+          <h2>Owners of {selected.name}</h2>
         </div>
         <button class="cc-modal-close" onclick={closeModal} aria-label="Close">✕</button>
       </div>

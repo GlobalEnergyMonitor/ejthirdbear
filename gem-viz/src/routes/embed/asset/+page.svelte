@@ -64,7 +64,7 @@
       resolvedId = await resolveAssetId(assetId);
       const [assetData, graphData] = await Promise.all([
         getAsset(resolvedId),
-        getOwnershipGraph({ root: resolvedId, direction: 'up', max_depth: 5 }),
+        getOwnershipGraph({ root: resolvedId, direction: 'up', max_depth: 20 }),
       ]);
       asset = assetData;
       graph = graphData;

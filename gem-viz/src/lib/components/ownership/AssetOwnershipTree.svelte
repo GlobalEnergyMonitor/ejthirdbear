@@ -38,7 +38,7 @@
     assetId,
     compact = true,
     fullWidth = false,
-    maxDepth = 3,
+    maxDepth = 20,
     showViewFull = compact,
     emptyMessage = 'No ownership data available',
     errorMessage = 'Could not load ownership tree',

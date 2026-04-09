@@ -604,8 +604,8 @@
   // then picks centered/offset/stacked placement based on horizontal spacing.
   // In 'deep-narrow' mode, labels shift to the right of nodes to save vertical space.
   function computeLabelPositions(lnodes: LayoutNode[], ranks: Map<string, number>) {
-    // Label gap and estimated width scale with node radius
-    const labelGap = Math.round(nodeR * 0.22);
+    // Label gap and estimated width scale with node radius (tight: just outside visual circle)
+    const labelGap = Math.round(nodeR * 0.12);
     const labelW = Math.round(labelMaxChars * 6); // ~6px per char at current font size
 
     // Deep-narrow mode: all labels to the right of the node
@@ -630,9 +630,9 @@
     for (const nodesAtRank of byRank.values()) {
       nodesAtRank.sort((a: LayoutNode, b: LayoutNode) => a.x - b.x);
 
-      // Single node — simple centered placement
+      // Single node — simple centered placement below node
       if (nodesAtRank.length === 1) {
-        nodesAtRank[0].labelPos = { dx: 0, dy: nodesAtRank[0].r + labelGap, below: false };
+        nodesAtRank[0].labelPos = { dx: 0, dy: nodeR + labelGap, below: false };
         continue;
       }
 
@@ -642,7 +642,7 @@
       );
       if (allClear) {
         nodesAtRank.forEach((n: LayoutNode) => {
-          n.labelPos = { dx: 0, dy: n.r + labelGap, below: false };
+          n.labelPos = { dx: 0, dy: nodeR + labelGap, below: false };
         });
         continue;
       }
@@ -650,13 +650,13 @@
       // Two nodes — try offsetting left label to avoid collision
       if (nodesAtRank.length === 2 && nodesAtRank[0].x > labelW) {
         nodesAtRank[0].labelPos = { dx: -labelW - nodesAtRank[0].r, dy: 0, below: false };
-        nodesAtRank[1].labelPos = { dx: 0, dy: nodesAtRank[1].r + labelGap, below: false };
+        nodesAtRank[1].labelPos = { dx: 0, dy: nodeR + labelGap, below: false };
         continue;
       }
 
       // Fallback: stack all labels below nodes with smaller font
       nodesAtRank.forEach((n: LayoutNode) => {
-        n.labelPos = { dx: 0, dy: n.r * 2 + labelGap * 0.25, below: true, small: true };
+        n.labelPos = { dx: 0, dy: nodeR + labelGap, below: true, small: true };
       });
     }
   }
@@ -677,8 +677,9 @@
       nodesep: dynamicNodeSep, // Observable: sizeDependantNodeSeparation
       ranksep: compact ? 28 : DAGRE.ranksep,
       edgesep: DAGRE.edgesep,
-      marginx: compact ? 15 : nodeR, // Observable: nodeRadius
-      marginy: compact ? 12 : nodeR, // Observable: nodeRadius
+      // Reduced from nodeR — GRAPH_MARGIN already adds outer SVG whitespace
+      marginx: compact ? 15 : Math.ceil(nodeR * 0.5),
+      marginy: compact ? 12 : Math.ceil(nodeR * 0.55),
     });
     g.setDefaultEdgeLabel(() => ({}));
 
@@ -714,6 +715,9 @@
     // Observable: edge weights influence dagre layout priority
     // asset edges = 3, both small = 1, one small = 2, normal = 3
     renderEdges.forEach((e) => {
+      // Cycle-closing edges are skipped in dagre to prevent rank inversions —
+      // they still render as SVG paths but don't influence the layout.
+      if (e.closes_cycle) return;
       const srcIsAsset =
         e.source === rootId || renderNodes.find((n) => n.id === e.source)?.type === 'asset';
       const tgtIsAsset =
@@ -763,7 +767,7 @@
         pct,
         r,
         isSmallOwnership,
-        labelPos: { dx: 0, dy: r + Math.round(nodeR * 0.22), below: false, small: false },
+        labelPos: { dx: 0, dy: nodeR + Math.round(nodeR * 0.12), below: false, small: false },
         rank: 0, // will be filled after nodeRanks is computed
       };
     });
@@ -965,11 +969,7 @@
     const e = layoutEdges[idx];
     if (e && fadedEdgeIds.has(`${e.source}->${e.target}`)) return OPACITY.fadedEdge;
     if (!activeNodeData) {
-      if (isLargeGraph) return OPACITY.largeGraphEdge;
       if (!e) return 1;
-      const srcNode = layoutNodes.find((nd) => nd.id === e.source);
-      const srcPct = srcNode?.pct ?? 100;
-      if (srcPct < SMALL_OWNERSHIP_PCT) return e.imputed_share ? 0.8 : 0.6;
       return 1;
     }
     return activeNodeData.edgeIndices.includes(idx)
@@ -1098,16 +1098,49 @@
     if (hasAutoFit || compact) return;
     hasAutoFit = true;
     const fitZoom = calcFitZoom();
+    const z = fitZoom < 1 ? fitZoom : 1;
     if (fitZoom < 1) {
       zoomSpring.set(fitZoom, { hard: true });
+    }
+
+    // For upstream ownership view (graphDirection='downstream' = TB layout, asset at high y),
+    // anchor the root (coal plant / asset) at the bottom of the visible area.
+    // Without this, the centered viewBox shows the top of the tree (distant owners) and
+    // the user has to scroll down to find the asset.
+    if (graphDirection === 'downstream' && graphWrapEl) {
+      const rect = graphWrapEl.getBoundingClientRect();
+      const vbW_at_z = fullW / z;
+      // Height of SVG content visible in the container (in SVG units)
+      const visH = rect.height * vbW_at_z / rect.width;
+      // Default vbY when pan=0 (centered on the full dagre layout)
+      const vbY_base = -svgMargins.top + (fullH - fullH / z) / 2;
+      // Bottom of the full graph content in SVG coords (dagre gHeight + bottom margin)
+      const graphBottom = gHeight + svgMargins.bottom;
+      // The visible bottom without any pan
+      const visibleBottomNoPan = vbY_base + visH;
+      // How much we need to pan down to bring graphBottom into view
+      const neededPan = graphBottom - visibleBottomNoPan;
+      if (neededPan > 0) {
+        panYSpring.set(neededPan, { hard: true });
+      }
     }
   }
 
   function resetView() {
     const fitZoom = calcFitZoom();
+    const z = fitZoom < 1 ? fitZoom : 1;
     zoomSpring.set(fitZoom);
     panXSpring.set(0);
-    panYSpring.set(0);
+    // For BT graphs taller than the container, pan to show the root at the bottom
+    if (graphDirection === 'upstream' && graphWrapEl) {
+      const rect = graphWrapEl.getBoundingClientRect();
+      const vbY_base = -svgMargins.top + (fullH - fullH / z) / 2;
+      const visH = rect.height * (fullW / z) / rect.width;
+      const neededPan = (gHeight + svgMargins.bottom) - (vbY_base + visH);
+      panYSpring.set(neededPan > 0 ? neededPan : 0);
+    } else {
+      panYSpring.set(0);
+    }
   }
 
   async function runEntranceAnimation() {
@@ -1321,7 +1354,7 @@
                     stroke-linecap="round"
                   />
                 </svg>
-                Known
+                Known %
               </span>
               <span class="legend-item">
                 <svg class="legend-swatch" viewBox="0 0 24 8" width="24" height="8">
@@ -1335,7 +1368,7 @@
                     stroke-linecap="round"
                   />
                 </svg>
-                Estimated
+                Imputed %
               </span>
             </div>
             <!-- Ownership slider moved to OwnershipPanel -->
@@ -1374,16 +1407,33 @@
                     {#if frozenMeta.unknownPct}<span class="focus-fact warn">{frozenMeta.unknownPct.toFixed(1)}% unknown</span>{/if}
                   </p>
                 {/if}
+                {#if frozenMeta.entityId}
+                  <a
+                    class="focus-profile-link"
+                    href={entityLink(frozenMeta.entityId)}
+                    onclick={(e) => { if (onNavigate) { e.preventDefault(); onNavigate(entityLink(frozenMeta.entityId!)); } }}
+                  >View full profile &rarr;</a>
+                {/if}
               {:else}
-                <span class="focus-label"
-                  >{focusKindLabel(frozenMeta)}: <strong>{frozenMeta.label}</strong></span
-                >
-                {#if frozenMeta.facts.length > 0}
+                <span class="focus-label">
+                  {focusKindLabel(frozenMeta)}: <strong>{frozenMeta.label}</strong>
+                  {#if (frozenMeta.kind === 'country' || frozenMeta.kind === 'entity-type') && frozenMeta.facts.length > 0}
+                    <span class="focus-count">({frozenMeta.facts[0]})</span>
+                  {/if}
+                </span>
+                {#if frozenMeta.facts.length > 0 && frozenMeta.kind !== 'country' && frozenMeta.kind !== 'entity-type'}
                   <div class="focus-facts">
                     {#each frozenMeta.facts as fact}
                       <span class="focus-fact">{fact}</span>
                     {/each}
                   </div>
+                {/if}
+                {#if frozenMeta.kind === 'asset' && frozenId}
+                  <a
+                    class="focus-profile-link"
+                    href={assetLink(frozenId)}
+                    onclick={(e) => { if (onNavigate) { e.preventDefault(); onNavigate(assetLink(frozenId!)); } }}
+                  >View asset profile &rarr;</a>
                 {/if}
               {/if}
             </div>
@@ -1397,70 +1447,6 @@
               }}
               aria-label="Clear focus">&#10005;</button
             >
-          </div>
-          <div class="frozen-detail-card">
-            {#if isAssetNode}
-              <div class="fdc-name">{frozenName}</div>
-              <div class="fdc-meta">
-                {frozenNode?.asset_type || frozenNode?.assetType || 'Asset'}
-                {#if frozenNode?.operating_status || frozenNode?.status}
-                  <span class="fdc-sep">&middot;</span>
-                  {frozenNode?.operating_status || frozenNode?.status}
-                {/if}
-              </div>
-              {#if frozenNode?.country}
-                <div class="fdc-meta">{frozenNode.country}</div>
-              {/if}
-              {#if frozenNode?.capacity_value}
-                <div class="fdc-meta">{frozenNode.capacity_value} {frozenNode.capacity_unit || 'MW'}</div>
-              {/if}
-              <a
-                class="fdc-link"
-                href={assetLink(frozenId)}
-                onclick={(e) => {
-                  if (onNavigate) {
-                    e.preventDefault();
-                    onNavigate(assetLink(frozenId));
-                  }
-                }}
-              >View asset profile &rarr;</a>
-            {:else}
-              <div class="fdc-name">{frozenName}</div>
-              <div class="fdc-meta">
-                {frozenOwnerCategory}
-                {#if frozenNode?.legal_entity_type}
-                  <span class="fdc-sep">&middot;</span>
-                  {frozenNode.legal_entity_type}
-                {/if}
-              </div>
-              {#if frozenHqParts.length > 0}
-                <div class="fdc-meta fdc-hq">{frozenHqParts.join(' \u00b7 ')}</div>
-              {/if}
-              {#if frozenPct > 0}
-                <div class="fdc-ownership">
-                  <span class="fdc-pct">{frozenPct.toFixed(1)}%</span>
-                  <span class="fdc-pct-label">cumulative</span>
-                  {#if frozenDirectPct > 0 && Math.abs(frozenDirectPct - frozenPct) > 0.05}
-                    <span class="fdc-sep">&middot;</span>
-                    <span class="fdc-pct">{frozenDirectPct.toFixed(1)}%</span>
-                    <span class="fdc-pct-label">direct{#if frozenEdge?.imputed_share} (est.){/if}</span>
-                  {/if}
-                </div>
-              {/if}
-              {#if frozenPathCount > 1}
-                <div class="fdc-paths">{frozenPathCount} ownership paths to this entity</div>
-              {/if}
-              <a
-                class="fdc-link"
-                href={entityLink(frozenNode?.entity_id || frozenId)}
-                onclick={(e) => {
-                  if (onNavigate) {
-                    e.preventDefault();
-                    onNavigate(entityLink(frozenNode?.entity_id || frozenId));
-                  }
-                }}
-              >View full profile &rarr;</a>
-            {/if}
           </div>
         {/if}
         <div
@@ -1556,7 +1542,7 @@
                   Math.max(0.9, 0.9 + Math.pow(Math.min(sourcePct, 50) / 50, 2) * 0.85)
                 )}
                 {@const strokeW = baseWidth * scaleFactor * getEdgeWidthMultiplier(idx)}
-                {@const edgeOpacity = isSmall ? (e.imputed_share ? 0.8 : 0.6) : 1}
+                {@const edgeOpacity = isSmall ? 0.88 : 1}
                 {@const edgeRank = Math.max(sourceNode?.rank ?? 0, targetNode?.rank ?? 0)}
                 <g
                   class="edge"
@@ -1587,8 +1573,8 @@
               <!-- Nodes -->
               {#each layoutNodes as n (n.id)}
                 {@const showLabel = shouldShowLabel(n)}
-                {@const wrapped = wrapText(n.label, labelMaxChars)}
-                {@const pos = n.labelPos || { dx: 0, dy: n.r + 12, below: false, small: false }}
+                {@const pos = n.labelPos || { dx: 0, dy: nodeR + 8, below: false, small: false }}
+                {@const wrapped = wrapText(n.label, pos.small ? Math.min(labelMaxChars, 10) : labelMaxChars)}
                 {@const isFaded = fadedNodeIds.has(n.id)}
                 {@const opacity = getNodeOpacity(n)}
                 <g
@@ -1629,10 +1615,10 @@
                         ? n.label.slice(0, maxChars - 1).trim() + '…'
                         : n.label}
                     {#if assetType && !compact}
-                      <text class="asset-sub-lbl" fill={C.mint} dy="-0.15em">{assetType}</text>
-                      <text class="asset-main-lbl" fill="white" dy="1.15em">{displayLabel}</text>
+                      <text class="asset-sub-lbl" fill={C.mint} dy="-0.6em">{assetType}</text>
+                      <text class="asset-main-lbl" fill="white" dy="0.7em">{displayLabel}</text>
                     {:else}
-                      <text class="asset-main-lbl" fill="white" dy="0.35em"
+                      <text class="asset-main-lbl" fill="white" dy="0"
                         >{compact
                           ? n.label.length > Math.floor(n.w / 6)
                             ? n.label.slice(0, Math.floor(n.w / 6) - 1).trim() + '…'
@@ -1755,6 +1741,7 @@
           onLeave={handleNodeLeave}
           onFreeze={handlePanelFreeze}
           onTogglePanel={() => (panelOpen = !panelOpen)}
+          onChangeColorMode={(mode) => { colorMode = mode; hashInitializedColor = true; }}
           {isNodeInFrozenPath}
           bind:minOwnershipPct
           showSlider={renderSubset.nodes.length > 5}
@@ -1871,10 +1858,10 @@
   }
   .compact .asset-main-lbl,
   .compact .node-lbl {
-    font-size: 9px;
+    font-size: 10px;
   }
   .compact .edge-lbl {
-    font-size: 8px;
+    font-size: 9px;
   }
   .node,
   .edge {
@@ -1967,7 +1954,7 @@
     letter-spacing: 0.02em;
   }
   .node-lbl {
-    font-size: 0.65rem;
+    font-size: 0.82rem;
     letter-spacing: 0.02em;
     font-weight: normal;
     dominant-baseline: hanging;
@@ -1985,7 +1972,7 @@
     dominant-baseline: middle;
   }
   .node-lbl.small {
-    font-size: 9px;
+    /* opacity: 0.85;*/
   }
   .node.hovered .node-lbl {
     font-weight: 600;
@@ -2026,6 +2013,11 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .focus-count {
+    font-size: 0.78em;
+    opacity: 0.75;
+    font-weight: normal;
   }
   .focus-facts {
     display: flex;
@@ -2082,77 +2074,17 @@
     background: rgba(0, 79, 97, 0.1);
   }
 
-  /* Frozen detail card — expanded info when a node is pinned */
-  .frozen-detail-card {
-    padding: 8px 12px;
-    background: var(--tree-warm-white, #f2f2eb);
-    border: 1px solid rgba(0, 79, 97, 0.12);
-    border-radius: 6px;
-    margin-bottom: 8px;
-    animation: fdc-enter 0.2s ease-out;
-  }
-  @keyframes fdc-enter {
-    from {
-      opacity: 0;
-      transform: translateY(-4px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-  .fdc-name {
-    font-size: 0.85rem;
-    font-weight: 700;
-    color: var(--tree-navy, #1d4961);
-    line-height: 1.3;
-    margin-bottom: 2px;
-  }
-  .fdc-meta {
-    font-size: 0.72rem;
-    color: var(--tree-teal, #004f61);
-    opacity: 0.85;
-    line-height: 1.4;
-  }
-  .fdc-sep {
-    opacity: 0.5;
-    margin: 0 2px;
-  }
-  .fdc-ownership {
-    font-size: 0.72rem;
-    margin-top: 4px;
-    color: var(--tree-navy, #1d4961);
-    display: flex;
-    align-items: baseline;
-    gap: 3px;
-    flex-wrap: wrap;
-  }
-  .fdc-pct {
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-    color: var(--tree-teal, #004f61);
-  }
-  .fdc-pct-label {
-    opacity: 0.7;
-    font-size: 0.68rem;
-  }
-  .fdc-paths {
-    font-size: 0.68rem;
-    margin-top: 3px;
-    color: var(--tree-navy, #1d4961);
-    opacity: 0.65;
-  }
-  .fdc-link {
+  .focus-profile-link {
     display: inline-block;
     font-size: 0.68rem;
-    margin-top: 5px;
+    margin-top: 4px;
     color: var(--tree-teal, #004f61);
     text-decoration: none;
     font-weight: 600;
     opacity: 0.8;
     transition: opacity 0.1s;
   }
-  .fdc-link:hover {
+  .focus-profile-link:hover {
     opacity: 1;
     text-decoration: underline;
   }

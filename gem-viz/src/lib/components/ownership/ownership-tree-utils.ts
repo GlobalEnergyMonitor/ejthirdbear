@@ -28,7 +28,7 @@ export const LARGE_GRAPH_THRESHOLD = 30;
 export const ZOOM = { min: 0.75, max: 8, wheelStep: 0.1 } as const;
 
 /** SVG margins around the dagre layout */
-export const GRAPH_MARGIN = { top: 20, right: 30, bottom: 60, left: 40 } as const;
+export const GRAPH_MARGIN = { top: 20, right: 30, bottom: 24, left: 40 } as const;
 
 /** Opacity values for various node/edge states */
 export const OPACITY = {
@@ -36,7 +36,7 @@ export const OPACITY = {
   fadedEdge: 0.08,
   inactiveNode: 0.1,
   largeGraphBase: 0.92,
-  largeGraphEdge: 0.22,
+  largeGraphEdge: 0.55,
   frozenPathEdge: 0.06,
   hoverPathEdge: 0.1,
 } as const;
