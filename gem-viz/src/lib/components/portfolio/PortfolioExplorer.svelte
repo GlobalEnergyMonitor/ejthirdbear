@@ -9,11 +9,12 @@
    * Ported from Observable notebook: https://observablehq.com/d/5a1f34aee34fe4cf
    */
   import { assetLink } from '$lib/links';
-  import { isViewportBelow } from '$lib/responsive';
+  import { LAYOUT, clampViewportPosition, isViewportBelow } from '$lib/responsive';
   import * as d3 from 'd3-selection';
   import * as d3Array from 'd3-array';
   import * as d3Hierarchy from 'd3-hierarchy';
   import * as d3Shape from 'd3-shape';
+  import { drawMolecule, computeMoleculeRadii } from '$lib/components/ownership/molecule-renderer';
   import { scaleOrdinal } from 'd3-scale';
   import { schemeTableau10, schemePaired, schemeSet3 } from 'd3-scale-chromatic';
 
@@ -36,7 +37,7 @@
     /** Pixels to subtract from viewport height for chart area.
      *  Default 320 accounts for navbar + header + footer.
      *  Embeds/widgets with no navbar can pass a smaller value (e.g. 120). */
-    heightOffset = 320,
+    heightOffset = LAYOUT.portfolio.defaultHeightOffset,
     linkBase = '',
     linkTarget = '',
     /** Initial color field to restore from URL (type | status | country) */
@@ -67,7 +68,27 @@
   // ============================================================================
   // STATE
   // ============================================================================
-  let selectedEntityId = $state(entityId || SAMPLE_OWNERS[0][1]);
+  function createEmptyFilters() {
+    return {
+      country: new Set(),
+      asset_type: new Set(),
+      operating_status: new Set(),
+      intermediary: new Set(),
+      ownership: new Set(),
+    };
+  }
+
+  function serializeFilterParams(filterParams) {
+    return JSON.stringify({
+      country: filterParams.country || '',
+      asset_type: filterParams.asset_type || '',
+      operating_status: filterParams.operating_status || '',
+      intermediary: filterParams.intermediary || '',
+      ownership: filterParams.ownership || '',
+    });
+  }
+
+  let selectedEntityId = $state(SAMPLE_OWNERS[0][1]);
   let customEntityId = $state('');
   let loading = $state(false);
   /** Guard: only fire onStateChange after the first user-driven interaction */
@@ -106,13 +127,8 @@
     return val ? new Set(val.split(',').map((s) => s.trim()).filter(Boolean)) : new Set();
   }
 
-  let filters = $state({
-    country: parseFilterParam(initialFilters.country),
-    asset_type: parseFilterParam(initialFilters.asset_type),
-    operating_status: parseFilterParam(initialFilters.operating_status),
-    intermediary: parseFilterParam(initialFilters.intermediary),
-    ownership: parseFilterParam(initialFilters.ownership),
-  });
+  let filters = $state(createEmptyFilters());
+  let lastSyncedFilterSignature = $state('');
   /** Intermediary name → projectIds lookup (populated when intermediaries are clicked) */
   let intermediaryProjectIds = $state(new Map());
 
@@ -175,7 +191,8 @@
 
   /** Color field: user-toggleable, defaults to 'type' when multi-type */
   const ALL_COLOR_FIELDS = ['type', 'status', 'country'];
-  let colorFieldOverride = $state(initialColor);
+  let colorFieldOverride = $state('');
+  let lastSyncedColor = $state('');
   /** Only show options that have >1 distinct value (coloring by a single value is useless) */
   let availableColorFields = $derived.by(() => {
     if (!summary) return ALL_COLOR_FIELDS;
@@ -245,7 +262,12 @@
 
   /** How many asset rows fit in one column (notebook: nRows = svgHeight / assetMarkHeightCombined) */
   const ASSET_MARK_H = 40;
-  let nRowsFit = $derived(Math.max(4, Math.floor(Math.max(300, containerHeight - 80) / ASSET_MARK_H)));
+  let nRowsFit = $derived(
+    Math.max(
+      4,
+      Math.floor(Math.max(LAYOUT.portfolio.chartMinHeight, containerHeight - 80) / ASSET_MARK_H)
+    )
+  );
 
   /** Show tree only when all projects fit in a single column (notebook: projectGroups.length <= nRows) */
   let showTree = $derived(
@@ -271,6 +293,22 @@
   let selectedProject = $state(null);
   /** Modal position (viewport coords for fixed positioning) */
   let modalPos = $state({ x: 0, y: 0 });
+  let assetModalStyle = $derived.by(() => {
+    if (typeof window === 'undefined') return '';
+    const left = clampViewportPosition(
+      modalPos.x,
+      LAYOUT.portfolio.modal.maxWidth,
+      window.innerWidth,
+      LAYOUT.portfolio.modal.viewportPadding
+    );
+    const top = clampViewportPosition(
+      modalPos.y + LAYOUT.portfolio.modal.anchorOffsetY,
+      LAYOUT.portfolio.modal.maxHeight,
+      window.innerHeight,
+      LAYOUT.portfolio.modal.viewportPadding
+    );
+    return `left: ${left}px; top: ${top}px;`;
+  });
 
   function updateScrollState() {
     if (!chartContainer) return;
@@ -963,72 +1001,28 @@
           selectedProject = proj;
         });
 
-      // Unit circles — scale cluster radius so units don't overlap, capped to row height
+      // Unit circles via shared molecule renderer
       const N = proj.units.length;
-      const TAU = Math.PI * 2;
-      const maxClusterDiameter = assetMarkH - 4; // stay within row bounds
-      const halfMax = maxClusterDiameter / 2;
+      const maxClusterDiameter = assetMarkH - 4;
+      const { ringRadius: molRingR, unitRadius: molUnitR } = computeMoleculeRadii(
+        maxClusterDiameter, N, { maxUnitRadius: unitR }
+      );
 
-      // For N circles on a ring, non-overlap requires: clusterR >= individualR / sin(π/N)
-      // Combined with row cap: clusterR + individualR <= halfMax
-      // So: individualR <= halfMax / (1/sin(π/N) + 1)
-      let individualR = unitR;
-      let clusterR = 0;
-      if (N > 1) {
-        const sinFactor = Math.sin(Math.PI / N);
-        individualR = Math.max(2, Math.min(unitR * 0.6, halfMax / (1 / sinFactor + 1)));
-        clusterR = individualR / sinFactor;
-      }
-
-      proj.units.forEach((unit, j) => {
-        const cx = N === 1 ? unitR : unitR + clusterR * Math.cos((TAU * j) / N - Math.PI / 2);
-        const cy = N === 1 ? 0 : clusterR * Math.sin((TAU * j) / N - Math.PI / 2);
-        const circleR = individualR;
-
-        const unitColor =
+      const moleculeUnits = proj.units.map((unit) => ({
+        color:
           colorField === 'type'
             ? trackerColorMap.get(unit.asset_type) || colors.grey
             : colorField === 'status'
             ? COLOR_BY_STATUS.get(unit.operating_status?.toLowerCase()) || colors.grey
-            : countryColorScale(unit.country || 'Unknown');
+            : countryColorScale(unit.country || 'Unknown'),
+        ownershipPct: unit.ownership_share,
+      }));
 
-        row
-          .append('circle')
-          .attr('cx', cx)
-          .attr('cy', cy)
-          .attr('r', circleR)
-          .style('fill', unitColor)
-          .style('mix-blend-mode', 'multiply')
-          .style('pointer-events', 'none');
-
-        // Ownership pie slice if partial ownership
-        if (unit.ownership_share && unit.ownership_share < 100 && unit.ownership_share > 1) {
-          const pieArc = d3Shape.arc().innerRadius(0).outerRadius(circleR + 0.5).startAngle(-Math.PI / 2);
-          row
-            .append('path')
-            .attr('transform', `translate(${cx},${cy})`)
-            .attr('d', pieArc({ endAngle: -Math.PI / 2 + (2 * Math.PI * unit.ownership_share) / 100 }))
-            .style('fill', colors.navy)
-            .style('fill-opacity', 0.15)
-            .style('stroke', 'white')
-            .style('stroke-width', 1)
-            .style('stroke-opacity', 0.6)
-            .style('pointer-events', 'none');
-        }
+      const moleculeG = row.append('g').attr('transform', `translate(${unitR},0)`);
+      drawMolecule(moleculeG, moleculeUnits, {
+        ringRadius: molRingR,
+        unitRadius: molUnitR,
       });
-
-      // Ring connecting multi-unit projects
-      if (N > 1) {
-        row
-          .append('circle')
-          .attr('cx', unitR)
-          .attr('cy', 0)
-          .attr('r', clusterR + individualR + 1)
-          .style('fill', 'none')
-          .style('stroke', colors.gray300)
-          .style('stroke-width', 1)
-          .style('pointer-events', 'none');
-      }
 
       // Asset name label — prefer project_name from API, fall back to asset_name
       let name = proj.units[0]?.project_name || proj.units[0]?.asset_name || proj.projectID;
@@ -1103,6 +1097,26 @@
   });
 
   $effect(() => {
+    const nextSignature = serializeFilterParams(initialFilters);
+    if (nextSignature === lastSyncedFilterSignature) return;
+
+    filters = {
+      country: parseFilterParam(initialFilters.country),
+      asset_type: parseFilterParam(initialFilters.asset_type),
+      operating_status: parseFilterParam(initialFilters.operating_status),
+      intermediary: parseFilterParam(initialFilters.intermediary),
+      ownership: parseFilterParam(initialFilters.ownership),
+    };
+    lastSyncedFilterSignature = nextSignature;
+  });
+
+  $effect(() => {
+    if (initialColor === lastSyncedColor) return;
+    colorFieldOverride = initialColor;
+    lastSyncedColor = initialColor;
+  });
+
+  $effect(() => {
     if (selectedEntityId) {
       fetchData(selectedEntityId);
     }
@@ -1129,7 +1143,7 @@
   $effect(() => {
     if (typeof window === 'undefined') return;
     const update = () => {
-      containerHeight = Math.max(300, window.innerHeight - heightOffset);
+      containerHeight = Math.max(LAYOUT.portfolio.chartMinHeight, window.innerHeight - heightOffset);
     };
     update();
     window.addEventListener('resize', update);
@@ -1196,7 +1210,13 @@
   }
 </script>
 
-<div class="portfolio-explorer" class:embed-mode={heightOffset < 200} style:--chart-max-height={heightOffset < 200 ? 'none' : `calc(100vh - 260px)`}>
+<div
+  class="portfolio-explorer"
+  class:embed-mode={heightOffset < 200}
+  style:--chart-max-height={heightOffset < 200 ? 'none' : `calc(100vh - ${LAYOUT.portfolio.chartMaxHeightOffset}px)`}
+  style:--portfolio-modal-max-width={`${LAYOUT.portfolio.modal.maxWidth}px`}
+  style:--portfolio-modal-max-height={`${LAYOUT.portfolio.modal.maxHeight}px`}
+>
   <!-- ENTITY SELECTOR -->
   {#if !hidePicker}
   <div class="selector-bar">
@@ -1300,7 +1320,7 @@
           class="asset-modal"
           role="dialog"
           tabindex="-1"
-          style="left: {Math.min(modalPos.x, window.innerWidth - 380)}px; top: {Math.min(modalPos.y + 8, window.innerHeight - 420)}px;"
+          style={assetModalStyle}
           onclick={(e) => e.stopPropagation()}
           onkeydown={(e) => e.key === 'Escape' && (selectedProject = null)}
         >
@@ -2046,7 +2066,7 @@
 
   /* ---- Asset Detail Modal ---- */
   .modal-backdrop { position: fixed; inset: 0; z-index: 10000; background: rgba(0,0,0,0.15); }
-  .asset-modal { position: fixed; z-index: 10001; background: var(--color-bg-primary, #fff); border: 1px solid var(--color-border, #e0e0e0); border-radius: var(--radius-lg, 8px); box-shadow: 0 8px 30px rgba(0,0,0,0.18); padding: var(--space-4, 16px); min-width: 260px; max-width: 360px; max-height: 400px; overflow-y: auto; scrollbar-width: thin; }
+  .asset-modal { position: fixed; z-index: 10001; background: var(--color-bg-primary, #fff); border: 1px solid var(--color-border, #e0e0e0); border-radius: var(--radius-lg, 8px); box-shadow: 0 8px 30px rgba(0,0,0,0.18); padding: var(--space-4, 16px); min-width: 260px; max-width: var(--portfolio-modal-max-width, 360px); max-height: var(--portfolio-modal-max-height, 400px); overflow-y: auto; scrollbar-width: thin; }
   .modal-close { position: absolute; top: 8px; right: 8px; background: none; border: none; font-size: 20px; cursor: pointer; color: var(--color-text-secondary, #666); line-height: 1; padding: 2px 6px; border-radius: 4px; }
   .modal-close:hover { background: var(--color-bg-secondary, #f5f5f5); color: var(--color-text-primary, #333); }
   .modal-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding-right: 20px; }
