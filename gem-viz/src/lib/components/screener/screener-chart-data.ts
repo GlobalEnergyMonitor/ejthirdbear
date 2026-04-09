@@ -7,6 +7,7 @@
 import { getOwnershipGraph, type GraphNode, type AssetSummary } from '$lib/ownership-api';
 import { getStatusGroup } from '$lib/design-tokens';
 import { STATUS_GROUPS } from '$lib/data-config/tracker-schema';
+import { scaleR } from '$lib/components/ownership/molecule-renderer';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -304,12 +305,6 @@ export function buildSubsidiaryGroups(chartData: ScreenerChartData): SubsidiaryG
   }
 
   if (groups.length === 0) return [];
-
-  const scaleR = (n: number): number => {
-    if (n <= 2) return 0.5;
-    if (n >= 20) return 1.5;
-    return 0.5 + (n - 2) / 18;
-  };
 
   let subsidiariesData: SubsidiaryGroupData[] = groups.map(([id, units]) => {
     // Group units by location

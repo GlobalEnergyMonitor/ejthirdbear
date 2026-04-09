@@ -21,6 +21,7 @@
   } from '$lib/design-tokens';
   import { cleanAssetName, wrapTextLines } from './screener-utils';
   import { STATUS_GROUPS } from '$lib/data-config/tracker-schema';
+  import { scaleR } from '$lib/components/ownership/molecule-renderer';
 
   // Props - can receive pre-fetched portfolio data or fetch its own
   let {
@@ -143,14 +144,6 @@
     assetMarkHeightSingle: 16,
     assetMarkHeightCombined: 26,
   };
-
-  // Scale for combined unit radius
-  function scaleR(n) {
-    if (n <= 2) return 0.5;
-    if (n <= 10) return 0.5 + (n - 2) * (0.5 / 8);
-    if (n <= 20) return 1 + (n - 10) * (0.5 / 10);
-    return 1.5;
-  }
 
   // Build subsidiary groups with layout
   let subsidiaryGroups = $derived.by(() => {
@@ -657,33 +650,34 @@
                     <!-- Single unit -->
                     {@const unit = loc.units[0]}
                     {@const unitStatus = regroupStatus(unit.status || unit.Status)}
-                    <circle r={loc.r} fill={getAssetColor(unit)} class="asset-circle" />
+                    <g style="isolation: isolate;">
+                      <circle r={loc.r} fill={getAssetColor(unit)} style="mix-blend-mode: multiply;" />
+                    </g>
                     {@render statusIconSvg(unitStatus, 0, 0, loc.r)}
                   {:else}
-                    <!-- Multiple units - ring layout -->
+                    <!-- Multiple units - molecule ring (matches molecule-renderer.ts spec) -->
                     {@const n = loc.units.length}
                     {@const TAU = Math.PI * 2}
-                    <!-- Background circle -->
-                    <circle r={loc.r} fill="none" stroke={colors.gray300} stroke-width="2" />
-                    <!-- Unit circles with mix-blend-mode multiply -->
-                    <g class="unit-ring" style="isolation: isolate;">
-                      {#each loc.units as unit, ui}
-                        {@const angle = (TAU * ui) / n}
-                        {@const cx = loc.r * Math.cos(angle)}
-                        {@const cy = loc.r * Math.sin(angle)}
-                        {@const unitR = (params.assetMarkHeightSingle / 2) * 0.6}
-                        {@const unitStatus = regroupStatus(unit.status || unit.Status)}
+                    {@const START = -Math.PI / 2}
+                    {@const unitR = (params.assetMarkHeightSingle / 2) * 0.6}
+                    <!-- Connecting ring -->
+                    <circle r={loc.r} fill="none" stroke="#aab2c0" stroke-width="2" />
+                    <!-- Unit circles -->
+                    {#each loc.units as unit, ui}
+                      {@const angle = START + (TAU * ui) / n}
+                      {@const cx = loc.r * Math.cos(angle)}
+                      {@const cy = loc.r * Math.sin(angle)}
+                      {@const unitStatus = regroupStatus(unit.status || unit.Status)}
+                      <g transform="translate({cx},{cy})" style="isolation: isolate;">
                         <circle
-                          {cx}
-                          {cy}
                           r={unitR}
                           fill={getAssetColor(unit)}
                           class="unit-circle"
                           style="mix-blend-mode: multiply;"
                         />
-                        {@render statusIconSvg(unitStatus, cx, cy, unitR)}
-                      {/each}
-                    </g>
+                      </g>
+                      {@render statusIconSvg(unitStatus, cx, cy, unitR)}
+                    {/each}
                   {/if}
 
                   <!-- Asset label -->
@@ -1007,13 +1001,8 @@
     cursor: pointer;
   }
 
-  .asset-circle,
   .unit-circle {
     transition: r var(--duration-fast) var(--ease-out);
-  }
-
-  .asset-group:hover .asset-circle {
-    r: 10;
   }
 
   /* Asset names use data typography (Barlow Semi-Condensed UPPERCASE) */

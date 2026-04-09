@@ -1,13 +1,16 @@
 <script lang="ts">
   /**
    * AssetRingVisualization - Ring-of-circles for multi-unit assets
-   * Shows assets arranged in a circular ring with status coloring and ownership pies
+   * Shows assets arranged in a circular ring with status coloring and ownership pies.
    *
-   * Used for visualizing multiple units at a single location
+   * Thin Svelte wrapper around the shared molecule-renderer D3 function.
+   * Adds interactive features (hover, click, tooltips, center summary).
    */
   import { goto } from '$app/navigation';
+  import { select } from 'd3';
   import { assetLink } from '$lib/links';
   import { getStatusColor, getTrackerColor, colors } from '$lib/design-tokens';
+  import { drawMolecule, computePositions, type MoleculeUnit } from './molecule-renderer';
 
   interface Asset {
     id: string;
@@ -41,7 +44,7 @@
     onNavigate,
   }: Props = $props();
 
-  let svgEl: SVGSVGElement | null = $state(null);
+  let moleculeG: SVGGElement | null = $state(null);
   let hoveredAsset: Asset | null = $state(null);
 
   // Limit displayed assets
@@ -56,28 +59,53 @@
     Math.min(20, (2 * Math.PI * ringRadius) / (displayAssets.length * 2.5))
   );
 
-  // Calculate positions for each unit
+  // Positions for interactive overlays (tooltips, hover, click)
   const unitPositions = $derived.by(() => {
     if (displayAssets.length === 0) return [];
-
-    const angleStep = (2 * Math.PI) / displayAssets.length;
-    const startAngle = -Math.PI / 2; // Start from top
-
-    return displayAssets.map((asset, i) => {
-      const angle = startAngle + i * angleStep;
-      return {
-        asset,
-        x: centerX + ringRadius * Math.cos(angle),
-        y: centerY + ringRadius * Math.sin(angle),
-        angle,
-      };
-    });
+    const positions = computePositions(displayAssets.length, ringRadius);
+    return displayAssets.map((asset, i) => ({
+      asset,
+      x: centerX + positions[i].x,
+      y: centerY + positions[i].y,
+    }));
   });
 
   // Total capacity
   const totalCapacity = $derived(
     displayAssets.reduce((sum, a) => sum + (Number(a.capacityMw) || 0), 0)
   );
+
+  // Draw molecule via shared renderer whenever inputs change
+  $effect(() => {
+    if (!moleculeG || displayAssets.length === 0) return;
+    const g = select(moleculeG);
+    g.selectAll('*').remove();
+
+    const moleculeUnits: MoleculeUnit[] = displayAssets.map((a) => ({
+      color: getStatusColor(a.status),
+      ownershipPct: a.share,
+    }));
+
+    drawMolecule(g, moleculeUnits, {
+      ringRadius,
+      unitRadius,
+      showOwnership,
+    });
+
+    // Add tracker dots on top of each molecule-unit group
+    g.selectAll<SVGGElement, MoleculeUnit>('.molecule-unit').each(function (_d, i) {
+      const asset = displayAssets[i];
+      if (asset?.tracker) {
+        select(this)
+          .append('circle')
+          .attr('r', 3)
+          .attr('cy', -unitRadius + 3)
+          .style('fill', getTrackerColor(asset.tracker))
+          .style('stroke', colors.white)
+          .style('stroke-width', 0.5);
+      }
+    });
+  });
 
   function handleUnitClick(asset: Asset) {
     if (interactive) {
@@ -89,30 +117,10 @@
   function handleUnitHover(asset: Asset | null) {
     hoveredAsset = asset;
   }
-
-  // Draw ownership pie arc
-  function ownershipArcPath(share: number, radius: number): string {
-    if (!share || share <= 0) return '';
-    const normalizedShare = Math.min(share, 100) / 100;
-    const endAngle = normalizedShare * 2 * Math.PI - Math.PI / 2;
-    const startAngle = -Math.PI / 2;
-    const largeArc = normalizedShare > 0.5 ? 1 : 0;
-
-    const x1 = radius * Math.cos(startAngle);
-    const y1 = radius * Math.sin(startAngle);
-    const x2 = radius * Math.cos(endAngle);
-    const y2 = radius * Math.sin(endAngle);
-
-    if (normalizedShare >= 1) {
-      return `M 0 ${-radius} A ${radius} ${radius} 0 1 1 0 ${radius} A ${radius} ${radius} 0 1 1 0 ${-radius}`;
-    }
-
-    return `M 0 0 L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2} Z`;
-  }
 </script>
 
 <div class="asset-ring-visualization">
-  <svg bind:this={svgEl} width={size} height={size} aria-label="Asset ring visualization">
+  <svg width={size} height={size} aria-label="Asset ring visualization">
     <!-- Center summary -->
     <g transform="translate({centerX}, {centerY})">
       <circle r={ringRadius * 0.4} fill={colors.gray100} stroke={colors.gray300} stroke-width="1" />
@@ -134,19 +142,10 @@
       </text>
     </g>
 
-    <!-- Connecting ring for multi-unit locations -->
-    {#if displayAssets.length > 1}
-      <circle
-        cx={centerX}
-        cy={centerY}
-        r={ringRadius}
-        fill="none"
-        stroke={colors.gray300}
-        stroke-width="1"
-      />
-    {/if}
+    <!-- D3-rendered molecule (ring + unit circles + ownership arcs) -->
+    <g bind:this={moleculeG} transform="translate({centerX}, {centerY})"></g>
 
-    <!-- Asset units -->
+    <!-- Interactive overlay: invisible hit areas for hover/click/keyboard -->
     {#each unitPositions as pos}
       <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
       <g
@@ -163,37 +162,7 @@
         onfocus={() => handleUnitHover(pos.asset)}
         onblur={() => handleUnitHover(null)}
       >
-        <!-- Base circle with status color -->
-        <circle
-          r={unitRadius}
-          fill={getStatusColor(pos.asset.status)}
-          stroke={colors.gray700}
-          stroke-width="1"
-          style="mix-blend-mode: multiply"
-        />
-
-        <!-- Ownership pie overlay -->
-        {#if showOwnership && pos.asset.share}
-          <path
-            d={ownershipArcPath(pos.asset.share, unitRadius * 0.7)}
-            fill={colors.navy}
-            fill-opacity="0.15"
-            stroke="white"
-            stroke-width="1"
-            stroke-opacity="0.6"
-          />
-        {/if}
-
-        <!-- Tracker indicator dot -->
-        {#if pos.asset.tracker}
-          <circle
-            r={3}
-            cy={-unitRadius + 3}
-            fill={getTrackerColor(pos.asset.tracker)}
-            stroke={colors.white}
-            stroke-width="0.5"
-          />
-        {/if}
+        <circle r={unitRadius} fill="transparent" />
       </g>
     {/each}
 

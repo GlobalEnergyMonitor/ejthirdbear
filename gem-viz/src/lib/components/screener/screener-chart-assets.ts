@@ -6,7 +6,6 @@
 
 import {
   select,
-  arc as d3Arc,
   path as d3Path,
   scaleLinear,
   format,
@@ -15,6 +14,7 @@ import {
 } from 'd3';
 import { colors, statusColors } from '$lib/design-tokens';
 import { PLANNED_STATUSES } from '$lib/data-config/tracker-schema';
+import { drawMolecule, type MoleculeUnit } from '$lib/components/ownership/molecule-renderer';
 import type {
   ScreenerChartData,
   SubsidiaryGroupData,
@@ -93,80 +93,35 @@ export function drawAssetGroups(
       collapseAssetHover(select(this), locData);
     });
 
-  // Draw unit circles for each location
+  // Draw unit circles for each location via shared molecule renderer
   assets.each(function (locData) {
     const el = select<SVGGElement, LocationGroup>(this);
     const unitGroup = el.append('g').attr('class', 'unit-group');
     const N = locData.units.length;
-    const TAU = Math.PI * 2;
     const r = locData.r;
     const littleR = (LAYOUT.assetMarkHeightSingle / 2) * 0.6;
     const circleR = N === 1 ? r : littleR;
 
-    // Ring for multi-unit locations
-    if (N > 1) {
-      unitGroup
-        .append('circle')
-        .attr('class', 'unit-ring')
-        .attr('r', r)
-        .style('fill', 'none')
-        .style('stroke', colors.gray300)
-        .style('stroke-width', '1px')
-        .style('pointer-events', 'none');
-    }
+    // Normalize to MoleculeUnit[]
+    const moleculeUnits: MoleculeUnit[] = locData.units.map((u) => ({
+      color: getColor(u),
+      ownershipPct: u.spotlightOwnershipSharePct,
+    }));
 
-    // Ownership arc generator
-    const ownershipArc = d3Arc<{ endAngle: number }>()
-      .innerRadius(0)
-      .outerRadius(circleR + 0.625)
-      .startAngle(-Math.PI / 2);
+    const { positions } = drawMolecule(unitGroup, moleculeUnits, {
+      ringRadius: r,
+      unitRadius: circleR,
+    });
 
-    // Unit circles
-    const unitMarks = unitGroup
-      .selectAll<SVGGElement, ChartUnit>('.unit-mark')
-      .data(locData.units)
-      .join('g')
-      .attr('class', 'unit-mark')
-      .each(function (p, j) {
-        (p as ChartUnit & { _x: number; _y: number })._x =
-          N === 1 ? 0 : r * Math.cos((TAU * j) / N - Math.PI / 2);
-        (p as ChartUnit & { _y: number; _x: number })._y =
-          N === 1 ? 0 : r * Math.sin((TAU * j) / N - Math.PI / 2);
-      })
-      .attr('transform', (p) => {
-        const px = (p as ChartUnit & { _x: number })._x ?? 0;
-        const py = (p as ChartUnit & { _y: number })._y ?? 0;
-        return `translate(${px},${py})`;
-      })
-      .style('isolation', 'isolate');
+    // Stash positions on data for hover expand/collapse
+    locData.units.forEach((p, j) => {
+      (p as ChartUnit & { _x: number; _y: number })._x = positions[j].x;
+      (p as ChartUnit & { _y: number; _x: number })._y = positions[j].y;
+    });
 
-    // Filled circle
-    unitMarks
-      .append('circle')
-      .attr('class', 'unit-circle')
-      .attr('r', circleR)
-      .style('fill', (d) => getColor(d))
-      .style('mix-blend-mode', 'multiply')
-      .style('pointer-events', 'none');
-
-    // Partial ownership indicator
-    unitMarks
-      .filter((p) => p.spotlightOwnershipSharePct > 1 && p.spotlightOwnershipSharePct < 100)
-      .append('path')
-      .attr('class', 'unit-ownership-arc')
-      .attr('d', (p) =>
-        ownershipArc({ endAngle: -Math.PI / 2 + 2 * Math.PI * (p.spotlightOwnershipSharePct / 100) })
-      )
-      .style('fill', colors.midnight)
-      .style('fill-opacity', 0.15)
-      .style('stroke', 'white')
-      .style('stroke-width', '1px')
-      .style('stroke-opacity', 0.6)
-      .style('pointer-events', 'none');
-
-    // Status icons
-    unitMarks.each(function (p) {
-      addStatusIcon(select(this), p.status_agg, circleR);
+    // Status icons (appended to each molecule-unit group)
+    unitGroup.selectAll<SVGGElement, MoleculeUnit>('.molecule-unit').each(function (_d, j) {
+      addStatusIcon(select(this) as any, locData.units[j].status_agg, circleR);
     });
   });
 
