@@ -135,7 +135,7 @@ export async function fetchAssetData(assetId) {
     const [rawAsset, rawGraph] = await Promise.all([
       fetchJSON(`/assets/${encodeURIComponent(resolvedId)}`),
       fetchJSON(
-        `/ownership/graph?root=${encodeURIComponent(resolvedId)}&direction=up&max_depth=12`
+        `/ownership/graph?root=${encodeURIComponent(resolvedId)}&direction=up`
       ),
     ]);
     // Normalize to match client-side expected format

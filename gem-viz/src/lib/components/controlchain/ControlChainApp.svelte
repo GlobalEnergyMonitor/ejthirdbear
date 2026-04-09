@@ -369,7 +369,7 @@
     treeError = '';
     locationResponse = null;
     try {
-      locationResponse = await getLocationOwnershipGraph({ root: item.id, direction: 'up', max_depth: 20 });
+      locationResponse = await getLocationOwnershipGraph({ root: item.id, direction: 'up' });
     } catch (err) {
       treeError = err.message || 'Failed to load ownership tree';
     } finally {

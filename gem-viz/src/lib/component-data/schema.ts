@@ -143,7 +143,6 @@ export async function fetchOwnershipChain(assetId: string): Promise<OwnershipCha
     const graph = await ownershipAPI.getOwnershipGraph({
       root: assetId,
       direction: 'up',
-      max_depth: 10,
     });
 
     // Convert graph nodes to chain format

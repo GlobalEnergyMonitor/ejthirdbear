@@ -26,7 +26,7 @@
     ownershipLoader?: (_params: {
       root: string;
       direction: 'up' | 'down';
-      max_depth: number;
+      max_depth?: number;
     }) => Promise<{
       nodes?: GraphNode[];
       edges?: GraphEdge[];

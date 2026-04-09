@@ -38,7 +38,7 @@ export async function fetchAssetData(assetId: string): Promise<AssetDataResult> 
 
     const [asset, graph] = await Promise.all([
       getAsset(resolvedId),
-      getOwnershipGraph({ root: resolvedId, direction: 'up', max_depth: 12 }),
+      getOwnershipGraph({ root: resolvedId, direction: 'up' }),
     ]);
     return {
       asset,

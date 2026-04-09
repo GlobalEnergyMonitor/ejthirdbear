@@ -131,7 +131,6 @@
       const graph = await getOwnershipGraph({
         root: item.id,
         direction: 'up',
-        max_depth: 3,
       });
 
       treeNodes = graph.nodes || [];

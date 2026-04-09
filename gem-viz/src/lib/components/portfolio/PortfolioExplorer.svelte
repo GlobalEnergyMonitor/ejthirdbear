@@ -311,7 +311,7 @@
 
     try {
       const resp = await fetch(
-        `${API_BASE}/ownership/graph?root=${encodeURIComponent(entityId)}&direction=down&max_depth=5&format=json`,
+        `${API_BASE}/ownership/graph?root=${encodeURIComponent(entityId)}&direction=down&format=json`,
         { signal }
       );
       if (!resp.ok) throw new Error(`API error: ${resp.status}`);
