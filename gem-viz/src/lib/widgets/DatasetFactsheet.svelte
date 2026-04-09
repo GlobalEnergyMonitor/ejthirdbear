@@ -637,7 +637,7 @@
 
 
   /* Mobile: hide right panel, show modal instead */
-  @media (max-width: 640px) {
+  @media (max-width: 768px) {
     .factsheet {
       flex-direction: column;
     }
@@ -722,7 +722,7 @@
   }
 
   /* Hide modal elements on desktop */
-  @media (min-width: 641px) {
+  @media (min-width: 769px) {
     .mobile-modal-backdrop,
     .mobile-modal {
       display: none;

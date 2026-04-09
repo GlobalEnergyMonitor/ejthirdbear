@@ -387,14 +387,33 @@
   }
 
   @media (max-width: 768px) {
-    .cards-grid {
-      grid-template-columns: 1fr;
+    main {
+      padding: var(--space-6) var(--space-3);
     }
+
+    .tracker-tabs {
+      margin-bottom: var(--space-4);
+      gap: var(--space-1);
+    }
+
     .tracker-tab {
       padding: var(--space-2) var(--space-4);
       min-height: 44px;
       display: flex;
       align-items: center;
+      font-size: var(--font-size-xs);
+    }
+
+    .cards-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .footer-section {
+      flex-direction: column;
+    }
+
+    .page-footer {
+      flex-wrap: wrap;
     }
   }
 </style>
