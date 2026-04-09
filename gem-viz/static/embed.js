@@ -119,18 +119,37 @@
   // ==========================================================================
 
   var widgetModulePromise = null;
+  var versionPromise = null;
+
+  /** Fetch deploy version from server (for cache busting widget imports). */
+  var getVersion = function () {
+    if (versionPromise) return versionPromise;
+    versionPromise = fetch(baseUrl + '/version.json', { cache: 'no-cache' })
+      .then(function (r) { return r.ok ? r.json() : {}; })
+      .then(function (j) { return j.version || j.commit || ''; })
+      .catch(function () { return ''; });
+    return versionPromise;
+  };
 
   /**
-   * Load the widget module from the server (cached).
+   * Load the widget module from the server (cached per deploy version).
    * Returns the { configure, mountWidget, parseSrc } exports.
    */
   var loadWidgetModule = function () {
     if (widgetModulePromise) return widgetModulePromise;
-    var widgetUrl = isLocalDev
-      ? baseUrl + '/src/widgets/index.ts?t=' + Date.now()
-      : baseUrl + '/widgets/index.js';
-    widgetModulePromise = import(/* webpackIgnore: true */ widgetUrl).catch(function (err) {
-      widgetModulePromise = null; // allow retry
+    if (isLocalDev) {
+      var devUrl = baseUrl + '/src/widgets/index.ts?t=' + Date.now();
+      widgetModulePromise = import(/* webpackIgnore: true */ devUrl).catch(function (err) {
+        widgetModulePromise = null;
+        throw err;
+      });
+      return widgetModulePromise;
+    }
+    widgetModulePromise = getVersion().then(function (v) {
+      var url = baseUrl + '/widgets/index.js' + (v ? '?v=' + v : '?v=' + Date.now());
+      return import(/* webpackIgnore: true */ url);
+    }).catch(function (err) {
+      widgetModulePromise = null;
       throw err;
     });
     return widgetModulePromise;
