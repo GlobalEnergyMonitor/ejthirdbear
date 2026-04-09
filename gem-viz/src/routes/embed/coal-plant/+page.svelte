@@ -104,7 +104,7 @@
 <style>
   .embed-wrapper {
     width: 100%;
-    max-width: 900px;
+    max-width: var(--container-md);
     font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
   }
 </style>

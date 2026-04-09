@@ -224,7 +224,7 @@
 <style>
   main {
     width: 100%;
-    max-width: 1200px;
+    max-width: var(--container-content);
     margin: 0 auto;
     padding: var(--space-10) var(--space-5);
     font-family: var(--font-family-sans);
@@ -232,7 +232,7 @@
 
   .embed-container {
     padding: var(--space-5);
-    max-width: 900px;
+    max-width: var(--container-md);
     margin: 0 auto;
   }
 

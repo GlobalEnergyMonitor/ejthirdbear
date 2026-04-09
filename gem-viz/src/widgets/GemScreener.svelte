@@ -1011,7 +1011,7 @@
   .gem-screener {
     font-family: var(--font-family, 'Plus Jakarta Sans', sans-serif);
     color: var(--color-text-primary, #1a2332);
-    max-width: 1200px;
+    max-width: var(--container-content);
     margin: 0 auto;
   }
 

@@ -110,7 +110,7 @@
 <style>
   .page {
     width: 100%;
-    max-width: 1200px;
+    max-width: var(--container-content);
     margin: 0 auto;
     padding: var(--space-10) var(--space-5);
     font-family: var(--font-family-sans);

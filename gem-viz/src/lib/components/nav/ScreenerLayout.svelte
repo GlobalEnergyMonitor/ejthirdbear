@@ -95,17 +95,17 @@
   }
 
   .screener-layout {
-    max-width: 960px;
+    max-width: var(--container-reading);
     margin: 0 auto;
     padding: var(--space-12) var(--space-8) 80px;
   }
 
   .screener-layout.max-w-narrow {
-    max-width: 800px;
+    max-width: var(--container-narrow);
   }
 
   .screener-layout.max-w-wide {
-    max-width: 1100px;
+    max-width: var(--container-lg);
   }
 
   .screener-header {

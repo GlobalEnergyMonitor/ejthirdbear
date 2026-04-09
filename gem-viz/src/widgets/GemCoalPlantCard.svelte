@@ -84,7 +84,7 @@
 <style>
   .coal-plant-embed {
     width: 100%;
-    max-width: 900px;
+    max-width: var(--container-md);
     font-family: var(--font-family);
   }
 

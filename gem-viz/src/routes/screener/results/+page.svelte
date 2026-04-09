@@ -1146,7 +1146,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    max-width: 1400px;
+    max-width: var(--container-xl);
     margin: 0 auto;
   }
 
