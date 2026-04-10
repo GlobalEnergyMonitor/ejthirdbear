@@ -10,6 +10,7 @@
   import { colorByStatus, colors } from '$lib/design-tokens';
   import StatusIcon from '$lib/components/tracker/StatusIcon.svelte';
   import OwnershipPie from '$lib/components/charts/OwnershipPie.svelte';
+  import AssetMap from '$lib/components/map/AssetMap.svelte';
 
   interface Props {
     assetId: string;
@@ -97,9 +98,7 @@
 
     {#if showMap && asset?.latitude && asset?.longitude}
       <div class="map-section">
-        <div class="map-placeholder" style="height: 200px; background: var(--color-bg-tertiary); display: flex; align-items: center; justify-content: center; font-size: var(--font-size-sm); color: var(--color-text-tertiary); border: var(--border-width) solid var(--color-border);">
-          {asset.latitude.toFixed(4)}, {asset.longitude.toFixed(4)} — {asset.country || 'Unknown'}
-        </div>
+        <AssetMap assetId={resolvedId || assetId} />
       </div>
     {/if}
 
@@ -214,5 +213,11 @@
     font-size: var(--font-size-sm);
     color: var(--color-text-secondary);
     font-variant-numeric: tabular-nums;
+  }
+  @media (max-width: 640px) {
+    .asset-embed { max-width: 100%; padding: 8px; }
+    h1 { font-size: var(--font-size-lg); }
+    .meta-row { flex-wrap: wrap; }
+    .owner-row { flex-wrap: wrap; }
   }
 </style>

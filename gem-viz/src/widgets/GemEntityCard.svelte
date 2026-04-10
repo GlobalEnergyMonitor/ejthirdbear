@@ -11,12 +11,14 @@
   import StatusIcon from '$lib/components/tracker/StatusIcon.svelte';
 
   import AssetScreenerChart from '$lib/components/screener/AssetScreenerChart.svelte';
+  import EntityMap from '$lib/components/map/EntityMap.svelte';
 
   interface Props {
     entityId: string;
     showFlower?: boolean;
     showAssets?: boolean;
     showChart?: boolean;
+    showMap?: boolean;
     maxAssets?: number;
     linkBase?: string;
     linkTarget?: string;
@@ -28,6 +30,7 @@
     showFlower = true,
     showAssets = true,
     showChart = false,
+    showMap = false,
     maxAssets = 10,
     linkBase = '',
     linkTarget = '',
@@ -131,6 +134,16 @@
       </div>
     {/if}
 
+    {#if showChart && entityId}
+      <AssetScreenerChart {entityId} entityName={entityName} />
+    {/if}
+
+    {#if showMap && assets.length > 0}
+      <div class="map-section">
+        <EntityMap assets={assets} height={250} />
+      </div>
+    {/if}
+
     {#if showAssets && displayAssets.length > 0}
       <div class="asset-list">
         {#each displayAssets as asset}
@@ -160,12 +173,6 @@
             {/if}
           </a>
         {/each}
-      </div>
-    {/if}
-
-    {#if showChart}
-      <div class="chart-section">
-        <AssetScreenerChart {entityId} entityName={entityName} />
       </div>
     {/if}
   {/if}
@@ -266,5 +273,14 @@
     letter-spacing: var(--tracking-caps);
     color: var(--color-text-tertiary);
     margin: 0 0 var(--space-2) 0;
+  }
+  .map-section {
+    margin-top: var(--space-4);
+  }
+  @media (max-width: 640px) {
+    .entity-embed { max-width: 100%; padding: 8px; }
+    h1 { font-size: var(--font-size-lg); }
+    .entity-header { flex-wrap: wrap; }
+    .asset-row { flex-wrap: wrap; }
   }
 </style>
