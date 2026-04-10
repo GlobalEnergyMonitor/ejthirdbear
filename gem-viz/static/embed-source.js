@@ -104,13 +104,25 @@
 
   var widgetModulePromise = null;
   var versionPromise = null;
+  var versionInfo = null;
 
   /** Fetch deploy version from server (for cache busting widget imports). */
   var getVersion = function () {
     if (versionPromise) return versionPromise;
     versionPromise = fetch(baseUrl + '/version.json', { cache: 'no-cache' })
       .then(function (r) { return r.ok ? r.json() : {}; })
-      .then(function (j) { return j.version || j.commit || ''; })
+      .then(function (j) {
+        versionInfo = j;
+        if (j.commit) {
+          console.log(
+            '[GEM Embed] ' + (j.semver ? 'v' + j.semver + ' ' : '') +
+            '(' + j.commit + ')' +
+            ' | built ' + (j.buildTime || j.timestamp || '') +
+            ' | ' + (j.message || '')
+          );
+        }
+        return j.version || j.commit || '';
+      })
       .catch(function () { return ''; });
     return versionPromise;
   };
@@ -221,8 +233,33 @@
         // Mark as loaded
         loadedEmbeds[embedId] = true;
 
+        // Stamp version on container for inspection
+        if (versionInfo && versionInfo.commit) {
+          container.setAttribute('data-gem-version', versionInfo.commit);
+          container.setAttribute('data-gem-built', versionInfo.buildTime || versionInfo.timestamp || '');
+        }
+
         // Mount widget into shadow root
-        return mod.mountWidget(shadow, parsed.type, parsed.props);
+        return mod.mountWidget(shadow, parsed.type, parsed.props).then(function () {
+          // Add version footer inside shadow DOM
+          if (versionInfo && versionInfo.commit) {
+            var vEl = document.createElement('div');
+            vEl.className = 'gem-version-stamp';
+            vEl.textContent = 'GEM' +
+              (versionInfo.semver ? ' v' + versionInfo.semver : '') +
+              ' (' + versionInfo.commit + ')' +
+              (versionInfo.buildTime ? ' · ' + versionInfo.buildTime : '');
+            vEl.title = versionInfo.message || '';
+            var vs = vEl.style;
+            vs.fontSize = '10px';
+            vs.color = '#9ca3af';
+            vs.textAlign = 'right';
+            vs.padding = '4px 8px 2px';
+            vs.fontFamily = 'system-ui, sans-serif';
+            vs.opacity = '0.6';
+            shadow.appendChild(vEl);
+          }
+        });
       })
       .catch(function (err) {
         if (!err) return;
@@ -269,5 +306,28 @@
     document.addEventListener('DOMContentLoaded', init);
   } else {
     init();
+  }
+
+  // Watch for dynamically-added .gem-embed elements (e.g. SPA frameworks,
+  // Svelte/React hydration, Drupal AJAX page updates).
+  if ('MutationObserver' in window) {
+    var mo = new MutationObserver(function (mutations) {
+      mutations.forEach(function (m) {
+        m.addedNodes.forEach(function (node) {
+          if (node.nodeType !== 1) return;
+          // Check the added node itself
+          if (node.classList && node.classList.contains(EMBED_CLASS) && node.getAttribute('data-src')) {
+            if (!node.getAttribute('data-gem-initialized')) mountEmbed(node);
+          }
+          // Check descendants of the added node
+          if (node.querySelectorAll) {
+            node.querySelectorAll('.' + EMBED_CLASS + '[data-src]').forEach(function (el) {
+              if (!el.getAttribute('data-gem-initialized')) mountEmbed(el);
+            });
+          }
+        });
+      });
+    });
+    mo.observe(document.body, { childList: true, subtree: true });
   }
 })();
