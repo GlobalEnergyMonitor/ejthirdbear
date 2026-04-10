@@ -106,9 +106,6 @@
     country?: string;
     entityId?: string;
     cumulativePct?: number;
-    smallShPct?: number;
-    natPersonPct?: number;
-    unknownPct?: number;
   };
 
   let {
@@ -877,21 +874,6 @@
     const entityId = node.entity_id || id;
     const pct = pathsMap.get(entityId) || edgePctMap.get(entityId) || 0;
 
-    // Proxy ownership breakdown by known entity IDs
-    let smallShPct = 0;
-    let natPersonPct = 0;
-    let unknownPct = 0;
-    // Use unfiltered `nodes` — proxy entities are excluded from filteredNodes
-    for (const n of nodes) {
-      if (n.type === 'asset' || n.id === rootId) continue;
-      const eid = n.entity_id || n.id;
-      const oPct = pathsMap.get(eid) || edgePctMap.get(eid) || 0;
-      if (oPct <= 0) continue;
-      if (eid === PROXY_SMALL_SH) smallShPct += oPct;
-      else if (eid === PROXY_NAT_PERSON) natPersonPct += oPct;
-      else if (eid === PROXY_UNKNOWN) unknownPct += oPct;
-    }
-
     const ownerType = classifyOwnerType(node);
     const country = node.headquarters_country || '';
     const facts = [ownerType, country || 'HQ unknown', entityId].filter(Boolean) as string[];
@@ -903,9 +885,6 @@
       country,
       entityId,
       cumulativePct: pct,
-      smallShPct: smallShPct > 0 ? smallShPct : undefined,
-      natPersonPct: natPersonPct > 0 ? natPersonPct : undefined,
-      unknownPct: unknownPct > 0.5 ? unknownPct : undefined,
     };
   }
 
@@ -1440,15 +1419,37 @@
             {@const rootNode = filteredNodes.find((n) => n.id === rootId)}
             {@const rootName = rootNode?.name || rootNode?.Name || rootId}
             {@const frozenNode = nodes.find((n) => n.id === frozenId)}
-            {@const isAssetNode = frozenNode?.type === 'asset' || frozenId === rootId}
-            {@const frozenName = frozenNode?.full_name || frozenNode?.name || frozenNode?.Name || frozenId}
-            {@const frozenPct = pathsMap.get(frozenNode?.entity_id || frozenId) || edgePctMap.get(frozenNode?.entity_id || frozenId) || 0}
-            {@const frozenEdge = renderEdges.find((e) => e.target === (frozenNode?.entity_id || frozenId) || e.target === frozenId)}
-            {@const frozenDirectPct = frozenEdge?.value ?? 0}
-            {@const frozenPathEntries = paths[frozenNode?.entity_id || frozenId] || []}
-            {@const frozenPathCount = frozenPathEntries.length}
-            {@const frozenHqParts = [frozenNode?.headquarters_country, frozenNode?.headquarters_subdivision].filter(Boolean)}
-            {@const frozenOwnerCategory = !isAssetNode && frozenNode ? classifyOwnerType(frozenNode) : ''}
+            {@const immediateOwners = (() => {
+                // In the downstream-direction graph, edges are parent-pointers:
+                // source=child → target=parent. So X's owners are e.target where e.source===X.
+                const real = filteredEdges
+                  .filter((e) => e.source === frozenId)
+                  .map((e) => {
+                    const ownerNode = nodes.find((n) => n.id === e.target);
+                    return {
+                      name: ownerNode?.name || ownerNode?.Name || e.target,
+                      pct: e.value != null ? Number(e.value) : null,
+                      isProxy: false as const,
+                    };
+                  });
+                // Proxy owners use the opposite convention (source=proxy → target=owned),
+                // so they're found by e.target===frozenId in raw edges.
+                const proxy = edges
+                  .filter((e) => e.target === frozenId)
+                  .flatMap((e) => {
+                    const ownerNode = nodes.find((n) => n.id === e.source);
+                    const eid = ownerNode?.entity_id || e.source;
+                    const proxyName =
+                      eid === PROXY_SMALL_SH ? 'small shareholders' :
+                      eid === PROXY_NAT_PERSON ? 'natural persons' :
+                      eid === PROXY_UNKNOWN ? 'unknown' : null;
+                    if (!proxyName) return [];
+                    return [{ name: proxyName, pct: e.value != null ? Number(e.value) : null, isProxy: true as const }];
+                  });
+                return [...real, ...proxy]
+                  .filter((o) => o.pct == null || o.pct > 0)
+                  .sort((a, b) => (b.pct ?? 0) - (a.pct ?? 0));
+              })()}
             <div class="focus-indicator">
               <div class="focus-copy">
                 {#if frozenMeta.kind === 'entity' && frozenMeta.entityId}
@@ -1461,12 +1462,12 @@
                       with <span class="focus-fact pct">{frozenMeta.cumulativePct.toFixed(1)}%</span> cumulative ownership of {rootName}.
                     {/if}
                   </p>
-                  {#if frozenMeta.smallShPct || frozenMeta.natPersonPct || frozenMeta.unknownPct}
+                  {#if immediateOwners.length > 0}
                     <p class="focus-sentence upstream">
                       Owned by:
-                      {#if frozenMeta.smallShPct}<span class="focus-fact warn">{frozenMeta.smallShPct.toFixed(1)}% small shareholders</span>{/if}
-                      {#if frozenMeta.natPersonPct}<span class="focus-fact warn">{frozenMeta.natPersonPct.toFixed(1)}% natural persons</span>{/if}
-                      {#if frozenMeta.unknownPct}<span class="focus-fact warn">{frozenMeta.unknownPct.toFixed(1)}% unknown</span>{/if}
+                      {#each immediateOwners as owner}
+                        <span class="focus-fact" class:warn={owner.isProxy}>{owner.pct != null ? owner.pct.toFixed(1) + '% ' : ''}{owner.name}</span>
+                      {/each}
                     </p>
                   {/if}
                   {#if frozenMeta.entityId}

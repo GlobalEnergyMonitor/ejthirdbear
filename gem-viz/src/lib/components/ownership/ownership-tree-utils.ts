@@ -135,6 +135,68 @@ export function edgePath(pts: LayoutPoint[]): string {
   );
 }
 
+/**
+ * Trim edge points so the path starts at the visual boundary of a node
+ * (circle or rect) rather than dagre's bounding box edge. Call with pts
+ * starting at the node end (reverse+call+reverse for source trimming).
+ */
+export function trimEdgeToNode(
+  pts: LayoutPoint[],
+  cx: number,
+  cy: number,
+  r: number,
+  isRect: boolean,
+  w: number,
+  h: number
+): LayoutPoint[] {
+  if (pts.length < 2) return pts;
+
+  const outside = (p: LayoutPoint) =>
+    isRect
+      ? Math.abs(p.x - cx) > w / 2 || Math.abs(p.y - cy) > h / 2
+      : Math.hypot(p.x - cx, p.y - cy) > r;
+
+  // Walk from pts[0] (node end) until we exit the boundary
+  let i = 0;
+  while (i < pts.length - 1 && !outside(pts[i])) i++;
+  if (i === 0) return pts;
+
+  const p0 = pts[i - 1]; // last inside point
+  const p1 = pts[i];     // first outside point
+
+  let t = 0.5;
+  if (isRect) {
+    let lo = 0, hi = 1;
+    for (let k = 0; k < 10; k++) {
+      t = (lo + hi) / 2;
+      const x = p0.x + t * (p1.x - p0.x);
+      const y = p0.y + t * (p1.y - p0.y);
+      if (Math.abs(x - cx) > w / 2 || Math.abs(y - cy) > h / 2) hi = t;
+      else lo = t;
+    }
+  } else {
+    const dx = p1.x - p0.x, dy = p1.y - p0.y;
+    const fx = p0.x - cx, fy = p0.y - cy;
+    const a = dx * dx + dy * dy;
+    const b = 2 * (fx * dx + fy * dy);
+    const c = fx * fx + fy * fy - r * r;
+    const disc = b * b - 4 * a * c;
+    if (disc >= 0 && a > 0) {
+      const sq = Math.sqrt(disc);
+      const t1 = (-b - sq) / (2 * a);
+      const t2 = (-b + sq) / (2 * a);
+      const valid = [t1, t2].filter((v) => v >= 0 && v <= 1);
+      if (valid.length) t = Math.min(...valid);
+    }
+  }
+
+  const intersect: LayoutPoint = {
+    x: p0.x + t * (p1.x - p0.x),
+    y: p0.y + t * (p1.y - p0.y),
+  };
+  return [intersect, ...pts.slice(i)];
+}
+
 /** Get paired colors for a node based on active color mode. */
 export function getNodeColors(
   nodeId: string,
