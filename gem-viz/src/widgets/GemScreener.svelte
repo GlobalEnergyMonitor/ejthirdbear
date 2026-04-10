@@ -67,12 +67,16 @@
     classes: classesProp = '',
     owners: ownersProp = '',
     step: stepProp = 0,
+    modalEntity: modalEntityProp = '',
+    modalName: modalNameProp = '',
     linkBase = '',
     linkTarget = '',
   }: {
     classes?: string;
     owners?: string;
     step?: number;
+    modalEntity?: string;
+    modalName?: string;
     linkBase?: string;
     linkTarget?: string;
   } = $props();
@@ -729,7 +733,18 @@
           if (ownersProp) {
             selectedOwnerIds = ownersProp.split(',').filter((id) => id.trim());
             currentStep = stepProp || 3;
-            loadResults();
+            loadResults().then(() => {
+              // Deep link: open modal for a specific entity after results load
+              if (modalEntityProp) {
+                const match = owners.find((o) => o.entityId === modalEntityProp);
+                if (match) {
+                  chartModalOwner = match;
+                } else {
+                  // Entity not in filtered results — open modal with just the ID/name
+                  chartModalOwner = { entityId: modalEntityProp, name: modalNameProp || modalEntityProp };
+                }
+              }
+            });
           } else {
             currentStep = stepProp || 2;
             loadOwnersForClass();
@@ -738,6 +753,14 @@
         }
       } catch { /* ignore */ }
     }
+
+    // No classes param — but if modalEntity is provided, open it directly on step 3
+    if (modalEntityProp) {
+      chartModalOwner = { entityId: modalEntityProp, name: modalNameProp || modalEntityProp };
+      currentStep = stepProp || 3;
+      return;
+    }
+
     currentStep = stepProp || 1;
   });
 </script>

@@ -161,14 +161,14 @@
   }
 
   .lov-tab:hover {
-    border-color: var(--gem-navy, #1d4961);
-    color: var(--gem-navy, #1d4961);
+    border-color: var(--gem-navy);
+    color: var(--gem-navy);
   }
 
   .lov-tab.active {
-    background: var(--gem-navy, #1d4961);
+    background: var(--gem-navy);
     color: #fff;
-    border-color: var(--gem-navy, #1d4961);
+    border-color: var(--gem-navy);
   }
 
   .lov-unit-chips {

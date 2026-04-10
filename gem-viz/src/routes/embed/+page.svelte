@@ -39,7 +39,7 @@
   let copiedSlug = $state<string | null>(null);
 
   function embedCode(w: WidgetSpec): string {
-    return `<div class="gem-embed" data-src="${w.dataSrc}" data-height="${w.height || 500}"></div>\n<script src="${ORIGIN}/embed.js"><\/script>`;
+    return `<!-- Custom Element (recommended) -->\n<gem-embed src="${w.dataSrc}" height="${w.height || 500}"></gem-embed>\n\n<!-- Class-based (CMS fallback) -->\n<div class="gem-embed" data-src="${w.dataSrc}" data-height="${w.height || 500}"></div>\n\n<script src="${ORIGIN}/embed.js"><\/script>`;
   }
 
   function copyCode(w: WidgetSpec) {
@@ -68,7 +68,8 @@
 
   <p class="intro">
     All widgets render via Shadow DOM — no iframes. CSS is isolated from the host page.
-    Each widget loads on-demand when scrolled into view.
+    Each widget loads on-demand when scrolled into view. Use the <code>&lt;gem-embed&gt;</code> Custom Element
+    or the class-based <code>&lt;div class="gem-embed"&gt;</code> for CMS environments that strip unknown tags.
   </p>
 
   <div class="widget-grid">

@@ -615,8 +615,8 @@
 
   .multi-tracker-note {
     padding: var(--space-2, 8px) var(--space-3, 12px);
-    background: rgba(42, 127, 143, 0.08);
-    border: 1px solid rgba(42, 127, 143, 0.2);
+    background: var(--gem-teal-10);
+    border: 1px solid var(--gem-teal-25);
     border-radius: var(--radius-sm, 4px);
     font-size: var(--font-size-sm, 13px);
     color: var(--color-text-secondary);
@@ -653,15 +653,15 @@
   }
 
   .step-tab.active {
-    background: var(--gem-teal, #2a7f8f);
-    border-color: var(--gem-teal, #2a7f8f);
+    background: var(--gem-teal);
+    border-color: var(--gem-teal);
     color: #fff;
   }
 
   .step-tab.completed {
-    background: rgba(42, 127, 143, 0.08);
-    border-color: var(--gem-teal, #2a7f8f);
-    color: var(--gem-teal, #2a7f8f);
+    background: var(--gem-teal-10);
+    border-color: var(--gem-teal);
+    color: var(--gem-teal);
   }
 
   .step-tab.optional {
@@ -778,8 +778,8 @@
   }
 
   .footer-btn.primary {
-    background: var(--gem-teal, #2a7f8f);
-    border: 1px solid var(--gem-teal, #2a7f8f);
+    background: var(--gem-teal);
+    border: 1px solid var(--gem-teal);
     color: #fff;
   }
 
@@ -794,8 +794,8 @@
     padding: 10px 16px;
     font-size: 14px;
     font-weight: 600;
-    background: var(--gem-teal, #2a7f8f);
-    border: 1px solid var(--gem-teal, #2a7f8f);
+    background: var(--gem-teal);
+    border: 1px solid var(--gem-teal);
     color: #fff;
   }
 
@@ -811,7 +811,7 @@
   }
 
   .footer-btn.secondary:hover:not(:disabled) {
-    border-color: var(--gem-teal, #2a7f8f);
+    border-color: var(--gem-teal);
   }
 
   .footer-btn.geo-opt-in {
@@ -825,8 +825,8 @@
   }
 
   .footer-btn.geo-opt-in:hover {
-    border-color: var(--gem-teal, #2a7f8f);
-    color: var(--gem-teal, #2a7f8f);
+    border-color: var(--gem-teal);
+    color: var(--gem-teal);
   }
 
   .footer-btn:disabled {
@@ -927,7 +927,7 @@
   }
 
   .refine-toggle:hover {
-    color: var(--gem-teal, #2a7f8f);
+    color: var(--gem-teal);
   }
 
   .refine-toggle.nested {

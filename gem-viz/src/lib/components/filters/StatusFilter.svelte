@@ -178,7 +178,7 @@
   }
 
   .preset-btn:hover {
-    border-color: var(--gem-teal, #2a7f8f);
+    border-color: var(--gem-teal);
     color: var(--color-text-primary);
   }
 
@@ -262,7 +262,7 @@
   }
 
   .refine-toggle:hover {
-    color: var(--gem-teal, #2a7f8f);
+    color: var(--gem-teal);
   }
 
   .refine-panel {

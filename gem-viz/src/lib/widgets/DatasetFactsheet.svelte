@@ -476,7 +476,7 @@
   }
 
   .category-header:focus-visible {
-    outline: 2px solid var(--gem-teal, #2a7f8f);
+    outline: 2px solid var(--gem-teal);
     outline-offset: 2px;
     border-radius: var(--radius-sm, 4px);
   }

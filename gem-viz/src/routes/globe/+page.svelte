@@ -723,17 +723,17 @@
 
   :global(.maplibregl-ctrl-group) {
     border-radius: var(--radius-md);
-    border: 1px solid rgba(29, 73, 97, 0.2);
-    box-shadow: 0 8px 24px rgba(0, 36, 48, 0.16);
+    border: var(--border-width) solid var(--gem-teal-25);
+    box-shadow: var(--shadow-lg);
   }
 
   :global(.asset-tooltip .maplibregl-popup-content) {
     padding: var(--space-2) var(--space-3);
     border-radius: var(--radius-md);
-    border: 1px solid rgba(29, 73, 97, 0.2);
+    border: var(--border-width) solid var(--gem-teal-25);
     background: rgba(255, 255, 255, 0.95);
     color: var(--color-text-primary);
-    box-shadow: 0 8px 24px rgba(0, 36, 48, 0.22);
+    box-shadow: var(--shadow-lg);
   }
 
   :global(.asset-tooltip .maplibregl-popup-tip) {

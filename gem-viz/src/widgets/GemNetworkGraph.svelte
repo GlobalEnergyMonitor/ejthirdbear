@@ -8,16 +8,15 @@
   interface Props {
     entityId: string;
     height?: number;
-    maxHops?: number;
     theme?: 'light' | 'dark';
   }
 
-  let { entityId, height = 500, maxHops = 3, theme = 'light' }: Props = $props();
+  let { entityId, height = 500, theme = 'light' }: Props = $props();
 </script>
 
 <div class="network-embed" class:dark={theme === 'dark'} style="height: {height}px;">
   {#if entityId}
-    <MiniNetworkGraph {entityId} {height} {maxHops} />
+    <MiniNetworkGraph {entityId} {height} />
   {:else}
     <div class="embed-error"><p>Missing required parameter: entityId</p></div>
   {/if}

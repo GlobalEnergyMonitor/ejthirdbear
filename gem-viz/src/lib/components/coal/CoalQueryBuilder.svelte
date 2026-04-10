@@ -1817,18 +1817,18 @@
     margin-bottom: var(--space-1, 4px);
   }
   .summary-word {
-    color: var(--gem-teal, #2a7f8f);
+    color: var(--gem-teal);
     white-space: nowrap;
   }
 
   /* ── Summary chips in sentence ────────────────────────────────────────────── */
   .value-chip--summary {
     background: var(--gem-teal-10, #e6f3f5);
-    border-color: var(--gem-teal, #2a7f8f);
-    color: var(--gem-teal, #2a7f8f);
+    border-color: var(--gem-teal);
+    color: var(--gem-teal);
   }
   .value-chip--summary .chip-x {
-    color: var(--gem-teal, #2a7f8f);
+    color: var(--gem-teal);
     opacity: 0.6;
   }
   .value-chip--summary .chip-x:hover {

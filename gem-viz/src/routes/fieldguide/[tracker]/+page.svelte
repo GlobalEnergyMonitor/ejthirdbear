@@ -132,6 +132,7 @@
           owner: a.ownerName ?? primaryOwner(i)?.name ?? undefined,
           ownershipShare: primaryOwner(i)?.ownershipShare ?? undefined,
           tracker: trackerName,
+          raw: a.raw,
         }));
       })
       .catch(() => {});

@@ -609,8 +609,8 @@
   }
 
   .picker-search-input:focus {
-    border-color: var(--gem-teal, #2a7f8f);
-    box-shadow: 0 0 0 2px rgba(42, 127, 143, 0.15);
+    border-color: var(--gem-teal);
+    box-shadow: 0 0 0 2px var(--gem-teal-25);
   }
 
   .picker-search-input::placeholder {
@@ -669,9 +669,9 @@
   }
 
   .picker-tile.selected {
-    border-color: var(--gem-teal, #2a7f8f);
-    background: rgba(42, 127, 143, 0.04);
-    box-shadow: 0 2px 8px rgba(42, 127, 143, 0.12);
+    border-color: var(--gem-teal);
+    background: var(--gem-teal-10);
+    box-shadow: 0 2px 8px var(--gem-teal-25);
   }
 
   .tile-label {

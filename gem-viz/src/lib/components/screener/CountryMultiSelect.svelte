@@ -428,8 +428,8 @@
     align-items: center;
     gap: 2px;
     padding: 2px var(--space-2, 8px);
-    background: rgba(42, 127, 143, 0.1);
-    border: 1px solid rgba(42, 127, 143, 0.3);
+    background: var(--gem-teal-10);
+    border: var(--border-width) solid var(--gem-teal-25);
     border-radius: var(--radius-sm, 4px);
     font-size: var(--font-size-sm, 13px);
     color: var(--color-text-primary, #1a202c);
@@ -495,7 +495,7 @@
 
   .search-input:focus {
     outline: none;
-    border-bottom-color: var(--gem-teal, #2a7f8f);
+    border-bottom-color: var(--gem-teal);
   }
 
   .search-input::placeholder {
@@ -539,20 +539,20 @@
 
   .dropdown-item:hover,
   .dropdown-item.highlighted {
-    background: rgba(42, 127, 143, 0.08);
+    background: var(--gem-teal-10);
   }
 
   .group-item {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--space-2, 8px);
-    background: rgba(42, 127, 143, 0.03);
+    gap: var(--space-2);
+    background: var(--color-bg-secondary);
   }
 
   .group-name {
-    font-weight: 600;
-    color: var(--gem-teal, #2a7f8f);
+    font-weight: var(--font-weight-semibold);
+    color: var(--gem-teal);
   }
 
   .group-count {

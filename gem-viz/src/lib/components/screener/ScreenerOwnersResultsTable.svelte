@@ -97,17 +97,17 @@
 
 <style>
   .owners-table-wrap {
-    border: 1px solid var(--color-gray-200, #e2e8f0);
-    border-radius: 2px;
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
     overflow: hidden;
   }
 
   .owners-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 14px;
+    font-size: var(--font-size-sm);
     line-height: 1.4;
-    font-family: Georgia, serif;
+    font-family: var(--font-family);
   }
 
   /* ── Header ─────────────────────────────────── */
@@ -116,14 +116,14 @@
   }
 
   th {
-    padding: 8px 12px;
-    font-size: 10px;
-    font-weight: 500;
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
     text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--color-text-tertiary, #94a3b8);
+    letter-spacing: var(--tracking-widest);
+    color: var(--color-text-tertiary);
     text-align: left;
-    background: var(--color-gray-50, #f8fafc);
+    background: var(--color-bg-secondary);
   }
 
   .th-count {
@@ -142,7 +142,7 @@
   }
 
   .owner-row.even {
-    background: rgba(0, 0, 0, 0.015);
+    background: var(--color-bg-secondary);
   }
 
   .owner-row.even:hover {
@@ -159,7 +159,7 @@
   .td-company {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2);
   }
 
   .owner-name {
@@ -183,18 +183,19 @@
   .match-tooltip {
     display: none;
     position: absolute;
-    bottom: calc(100% + 6px);
+    bottom: calc(100% + var(--space-2));
     left: 50%;
     transform: translateX(-50%);
-    background: #1e293b;
-    color: #fff;
-    font-size: 11px;
-    font-family: var(--font-family-mono, monospace);
-    font-weight: 400;
-    padding: 4px 8px;
+    background: var(--gem-navy);
+    color: var(--gem-white);
+    font-size: var(--font-size-xs);
+    font-family: var(--font-family-mono);
+    font-weight: var(--font-weight-regular);
+    padding: var(--space-1) var(--space-2);
     white-space: nowrap;
-    z-index: 20;
+    z-index: var(--z-tooltip, 20);
     pointer-events: none;
+    border-radius: var(--radius-sm);
   }
 
   .match-badge:hover .match-tooltip {
@@ -204,13 +205,13 @@
   .owner-row:hover .owner-name {
     text-decoration: underline;
     text-underline-offset: 2px;
-    color: var(--gem-teal, #2a7f8f);
+    color: var(--gem-teal);
   }
 
   .portfolio-link {
     font-size: 10px;
     font-weight: 500;
-    color: var(--gem-teal, #2a7f8f);
+    color: var(--gem-teal);
     text-decoration: none;
     opacity: 0;
     transition: opacity 120ms ease;
@@ -266,7 +267,7 @@
   .clear-link {
     background: none;
     border: none;
-    color: var(--gem-teal, #2a7f8f);
+    color: var(--gem-teal);
     text-decoration: underline;
     cursor: pointer;
     font: inherit;

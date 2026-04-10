@@ -163,7 +163,7 @@
     align-items: center;
     gap: 8px;
     font-size: 0.75rem;
-    color: var(--gem-teal, #2a7f8f);
+    color: var(--gem-teal);
     padding: 0.75rem 0;
   }
   .tree-empty,
@@ -176,7 +176,7 @@
     display: inline-block;
     margin-top: 0.25rem;
     font-size: 0.7rem;
-    color: var(--gem-teal, #2a7f8f);
+    color: var(--gem-teal);
     text-decoration: none;
   }
   .view-full:hover {

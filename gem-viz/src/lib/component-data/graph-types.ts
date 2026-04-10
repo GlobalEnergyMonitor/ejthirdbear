@@ -116,6 +116,8 @@ export interface LayoutNode {
   pct: number;
   /** Circle radius for entity nodes (0 for asset nodes) */
   r: number;
+  /** Actual visible circle radius after padding/stroke adjustments (for edge trimming) */
+  visualR: number;
   /** Whether this is a small ownership node (< 2% cumulative) — gets half-size rendering */
   isSmallOwnership: boolean;
   /** Computed label position from the placement algorithm */

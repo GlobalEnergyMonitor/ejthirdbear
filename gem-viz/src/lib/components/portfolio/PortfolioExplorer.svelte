@@ -2102,7 +2102,7 @@
   .modal-close { position: absolute; top: 8px; right: 8px; background: none; border: none; font-size: 20px; cursor: pointer; color: var(--color-text-secondary, #666); line-height: 1; padding: 2px 6px; border-radius: 4px; }
   .modal-close:hover { background: var(--color-bg-secondary, #f5f5f5); color: var(--color-text-primary, #333); }
   .modal-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding-right: 20px; }
-  .modal-header h4 { margin: 0; font-size: 14px; font-weight: 700; color: var(--gem-navy, #1d4961); line-height: 1.3; }
+  .modal-header h4 { margin: 0; font-size: 14px; font-weight: 700; color: var(--gem-navy); line-height: 1.3; }
   .unit-badge { flex-shrink: 0; font-size: 11px; background: var(--color-bg-tertiary, #eee); color: var(--color-text-secondary, #666); padding: 1px 6px; border-radius: 999px; font-weight: 500; }
   .modal-units { display: flex; flex-direction: column; gap: 4px; }
   .modal-unit { display: flex; flex-direction: column; gap: 3px; }

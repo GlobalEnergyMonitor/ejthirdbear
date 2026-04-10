@@ -581,7 +581,7 @@
   }
   .embed-btn:hover {
     opacity: 1;
-    background: var(--gem-teal, #2a7f8f);
+    background: var(--gem-teal);
     color: white;
   }
   .viz-description {

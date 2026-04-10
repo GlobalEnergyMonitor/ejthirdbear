@@ -12,7 +12,6 @@
   import { formatRatioAsPct } from '$lib/utils/format';
   import {
     getTrackerCardConfig,
-    getConfiguredKeys,
     resolveFieldValue,
     type CardField,
   } from '$lib/factsheet/tracker-card-config';
@@ -61,38 +60,6 @@
   });
 
   const activeTab = $derived(visibleTabs[activeTabIndex] ?? visibleTabs[0]);
-
-  // Collect extra raw fields not in any tab config
-  const extraFields = $derived.by(() => {
-    if (!asset.raw) return [];
-    const configuredKeys = getConfiguredKeys(cardConfig);
-    // Also skip keys that map to typed Asset props we already show
-    const skipRawKeys = new Set([
-      'id',
-      'name',
-      'status',
-      'capacity',
-      'country',
-      'latitude',
-      'longitude',
-      'owners',
-      'ownerName',
-      'parentName',
-      'facilityType',
-      'capacityUnit',
-    ]);
-    const extras: { label: string; value: string }[] = [];
-    for (const [k, v] of Object.entries(asset.raw)) {
-      if (v == null || v === '') continue;
-      if (skipRawKeys.has(k)) continue;
-      // Skip if any config field references this raw key
-      if (configuredKeys.has(`raw.${k}`)) continue;
-      // Skip nested objects/arrays — they clutter the raw dump
-      if (typeof v === 'object') continue;
-      extras.push({ label: k, value: String(v) });
-    }
-    return extras;
-  });
 
   // --- Format a field value for display ---
   function formatField(field: CardField, asset: Asset): string | undefined {
@@ -149,13 +116,15 @@
   </div>
 {/snippet}
 
-<!-- Field cell for tabbed view: shows "NA" for empty configured fields -->
+<!-- Field cell for tabbed view: skip if no value -->
 {#snippet fieldCell(field)}
   {@const val = formatField(field, asset)}
-  <div class="detail">
-    <span class="detail-label">{field.label}</span>
-    <span class:na={!val}>{val || 'NA'}</span>
-  </div>
+  {#if val}
+    <div class="detail">
+      <span class="detail-label">{field.label}</span>
+      <span>{val}</span>
+    </div>
+  {/if}
 {/snippet}
 
 <details class="project-card" class:compact={variant === 'compact'} {open}>
@@ -243,21 +212,6 @@
             {/each}
           </div>
 
-          <!-- Show extra raw fields on Overview tab -->
-          {#if activeTab.name === 'Overview' && extraFields.length > 0}
-            <div class="extra-fields">
-              <div class="section-title">More fields</div>
-              <div class="field-grid">
-                {#each extraFields as ef}
-                  <div class="detail">
-                    <span class="detail-label">{ef.label}</span>
-                    <span>{ef.value}</span>
-                  </div>
-                {/each}
-              </div>
-            </div>
-          {/if}
-
           <!-- Ownership snippet in Ownership tab -->
           {#if activeTab.name === 'Ownership' && ownership}
             <div class="snippet-section">
@@ -308,10 +262,10 @@
 
     font-family: var(--gem-font, 'Plus Jakarta Sans', system-ui, sans-serif);
     background: var(--gem-white);
-    border-radius: 0px 14px 14px 14px;
-    box-shadow: 0 8px 20px rgba(0, 36, 48, 0.08);
+    border-radius: 0 var(--radius-card) var(--radius-card) var(--radius-card);
+    box-shadow: var(--shadow-lg);
     overflow: hidden;
-    border: 1px solid rgba(0, 74, 99, 0.1);
+    border: var(--border-width) solid var(--color-border);
     margin-bottom: 1rem;
   }
 
@@ -354,7 +308,7 @@
 
   .badge {
     padding: 0.35rem 0.65rem;
-    border-radius: 999px;
+    border-radius: var(--radius-full);
     font-size: 0.65rem;
     font-weight: 600;
     text-transform: uppercase;
@@ -370,8 +324,8 @@
     color: var(--gem-navy);
   }
   .status-retired {
-    background: #6e8c91;
-    color: white;
+    background: var(--gem-teal-50);
+    color: var(--gem-white);
   }
   .status-unknown {
     background: var(--color-gray-200, #ddd);
@@ -396,15 +350,15 @@
   /* Divider between header and tabs */
   .divider {
     height: 1px;
-    background: rgba(0, 74, 99, 0.12);
-    margin-bottom: 0.75rem;
+    background: var(--color-border);
+    margin-bottom: var(--space-3);
   }
 
   /* Tab bar */
   .tab-bar {
     display: flex;
     gap: 0;
-    border-bottom: 1px solid rgba(0, 74, 99, 0.12);
+    border-bottom: var(--border-width) solid var(--color-border);
     margin-bottom: 1rem;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
@@ -441,12 +395,6 @@
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 0.8rem 1rem;
-  }
-
-  .extra-fields {
-    margin-top: 1rem;
-    padding-top: 0.75rem;
-    border-top: 1px dashed rgba(0, 74, 99, 0.15);
   }
 
   .card-footer {
@@ -498,11 +446,6 @@
     text-decoration: none;
   }
 
-  .detail span.na {
-    color: rgba(0, 36, 48, 0.3);
-    font-style: italic;
-  }
-
   .links-row {
     flex-direction: row;
     flex-wrap: wrap;
@@ -518,7 +461,7 @@
     padding: 0.4rem 0.65rem;
     background: var(--gem-navy);
     color: var(--gem-white);
-    border-radius: 999px;
+    border-radius: var(--radius-full);
     font-size: 0.75rem;
     font-weight: 600;
     text-decoration: none;
@@ -566,7 +509,7 @@
     width: 100%;
     min-width: 40px;
     background: rgba(0, 74, 99, 0.18);
-    border-radius: 999px;
+    border-radius: var(--radius-full);
   }
   .percentile-tick {
     position: absolute;

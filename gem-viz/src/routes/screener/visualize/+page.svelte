@@ -940,7 +940,7 @@
   }
 
   .owner-name-btn:hover h2 {
-    color: var(--gem-teal, #2a7f8f);
+    color: var(--gem-teal);
   }
 
   .owner-switch-hint {
@@ -950,7 +950,7 @@
   }
 
   .owner-name-btn:hover .owner-switch-hint {
-    color: var(--gem-teal, #2a7f8f);
+    color: var(--gem-teal);
   }
 
   /* Owner picker modal */
@@ -1047,7 +1047,7 @@
   }
 
   .picker-item.current {
-    background: rgba(42, 127, 143, 0.06);
+    background: var(--gem-teal-10);
   }
 
   .picker-name {
@@ -1070,7 +1070,7 @@
     font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: var(--gem-teal, #2a7f8f);
+    color: var(--gem-teal);
     white-space: nowrap;
   }
 

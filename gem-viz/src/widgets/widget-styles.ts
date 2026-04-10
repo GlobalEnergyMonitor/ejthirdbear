@@ -75,6 +75,10 @@ export const FALLBACK_CSS = `
   --space-8: 32px;
 
   --gem-primary-blue: #1d4961;
+  --gem-teal: #1d4961;
+  --gem-teal-50: #8ea4b0;
+  --gem-teal-25: #c7d1d8;
+  --gem-teal-10: #e9eef1;
   --gem-navy: #1a1a2e;
   --gem-mint: #00b388;
   --gem-orange: #e07c38;
@@ -96,9 +100,17 @@ export const FALLBACK_CSS = `
   --color-success: #34a853;
   --color-success-light: #e6f4ea;
 
+  --color-gray-200: #dce3e5;
+  --color-gray-400: #9eaaad;
+
   --border-width: 1px;
   --radius-sm: 2px;
+  --radius-md: 4px;
   --radius-card: 16px;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.12);
 
   --transition-fast: 0.15s ease;
   --duration-fast: 150ms;
@@ -170,6 +182,9 @@ export async function loadFullCSS(): Promise<string> {
       return r.text();
     })
     .then((css) => {
+      // Strip @import rules — fonts already injected by ensureFonts(),
+      // and @import is not allowed in constructable stylesheets (replaceSync throws)
+      css = css.replace(/@import\s+url\([^)]*\)\s*;?\s*/g, '');
       // Remap :root to :host for Shadow DOM
       fullCssCache = css.replace(/:root\b/g, ':host');
       return fullCssCache;
@@ -183,13 +198,44 @@ export async function loadFullCSS(): Promise<string> {
   return fullCssPromise;
 }
 
+// =============================================================================
+// Constructable Stylesheets — share one parsed CSSStyleSheet across all widgets
+// =============================================================================
+
+const supportsAdoptedStyleSheets =
+  typeof ShadowRoot !== 'undefined' && 'adoptedStyleSheets' in ShadowRoot.prototype;
+
+/** Single shared sheet, starts with fallback CSS, upgrades to full CSS when loaded */
+let sharedSheet: CSSStyleSheet | null = null;
+
+function getSharedSheet(): CSSStyleSheet {
+  if (!sharedSheet) {
+    sharedSheet = new CSSStyleSheet();
+    sharedSheet.replaceSync(FALLBACK_CSS);
+    // Kick off async upgrade — all adopters update automatically
+    loadFullCSS().then((css) => {
+      if (css !== FALLBACK_CSS && sharedSheet) {
+        sharedSheet.replaceSync(css);
+      }
+    });
+  }
+  return sharedSheet;
+}
+
 /**
  * Inject CSS into a Shadow DOM root.
- * Immediately applies fallback tokens, then upgrades to full CSS when loaded.
+ * Uses constructable stylesheets when available (one parsed sheet shared across
+ * all widget instances). Falls back to <style> element injection.
  */
 export function injectStyles(shadowRoot: ShadowRoot): void {
   ensureFonts();
 
+  if (supportsAdoptedStyleSheets) {
+    shadowRoot.adoptedStyleSheets = [getSharedSheet()];
+    return;
+  }
+
+  // Fallback: <style> element injection (pre-Safari 16.4)
   const style = document.createElement('style');
   style.textContent = FALLBACK_CSS;
   shadowRoot.prepend(style);

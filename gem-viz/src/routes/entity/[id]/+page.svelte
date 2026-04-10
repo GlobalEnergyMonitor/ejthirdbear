@@ -436,7 +436,7 @@
           Ownership Network
           {@render embedBtn(`/embed/network-3d?entityId=${entityId}`)}
         </h3>
-        <MiniNetworkGraph {entityId} height={500} maxHops={3} />
+        <MiniNetworkGraph {entityId} height={500} />
       </div>
 
       <!-- Asset distribution -->

@@ -46,6 +46,17 @@ export function portfolioLink(entityId: string, linkBase?: string): string {
 export function navigate(url: string, linkTarget?: string): void {
   const mode = (linkTarget || 'blank').toLowerCase();
 
+  // Dispatch cancelable gem:navigate event — host page can preventDefault() to block
+  if (typeof CustomEvent !== 'undefined') {
+    const event = new CustomEvent('gem:navigate', {
+      bubbles: true,
+      cancelable: true,
+      detail: { url, target: mode },
+    });
+    document.dispatchEvent(event);
+    if (event.defaultPrevented) return;
+  }
+
   if (mode === 'parent' || mode === 'message') {
     // Send navigation intent to host page — Drupal can intercept and handle
     window.parent?.postMessage({ type: 'gem-navigate', url }, '*');

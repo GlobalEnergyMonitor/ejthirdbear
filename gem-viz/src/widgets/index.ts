@@ -138,6 +138,15 @@ export async function mountWidget(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const instance = mount(mod.default as any, { target, props });
   mountedWidgets.set(shadowRoot, instance);
+
+  // Dispatch gem:loaded for direct API users (embed-source.js dispatches a richer version)
+  shadowRoot.host?.dispatchEvent(
+    new CustomEvent('gem:loaded', {
+      composed: true,
+      bubbles: true,
+      detail: { widgetType },
+    })
+  );
 }
 
 /**

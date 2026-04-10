@@ -106,15 +106,15 @@
   }
 
   .toggle-btn:hover {
-    color: var(--gem-teal, #2a7f8f);
+    color: var(--gem-teal);
   }
 
   .active-badge {
     padding: 1px var(--space-2, 8px);
     font-size: 11px;
-    background: rgba(42, 127, 143, 0.1);
-    color: var(--gem-teal, #2a7f8f);
-    border-radius: var(--radius-sm, 4px);
+    background: var(--gem-teal-10);
+    color: var(--gem-teal);
+    border-radius: var(--radius-sm);
   }
 
   .geofence-body {
@@ -130,7 +130,7 @@
   }
 
   .hint a {
-    color: var(--gem-teal, #2a7f8f);
+    color: var(--gem-teal);
     text-decoration: underline;
     text-underline-offset: 2px;
   }
@@ -149,16 +149,16 @@
 
   .geojson-textarea:focus {
     outline: none;
-    border-color: var(--gem-teal, #2a7f8f);
+    border-color: var(--gem-teal);
   }
 
   .geojson-textarea.has-error {
-    border-color: #e53e3e;
+    border-color: var(--color-error);
   }
 
   .error-msg {
-    font-size: var(--font-size-sm, 13px);
-    color: #e53e3e;
+    font-size: var(--font-size-sm);
+    color: var(--color-error);
     margin: var(--space-1, 4px) 0 0 0;
   }
 
@@ -171,7 +171,7 @@
 
   .summary-text {
     font-size: var(--font-size-sm, 13px);
-    color: var(--gem-teal, #2a7f8f);
+    color: var(--gem-teal);
     font-weight: 500;
   }
 

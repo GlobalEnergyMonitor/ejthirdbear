@@ -1,10 +1,11 @@
 {
-  "version": "02df883",
-  "commit": "02df883",
-  "message": "ci: remove broken deploy workflow (token expired, deploying locally)",
+  "version": "23c8a21",
+  "semver": "0.8.2",
+  "commit": "23c8a21",
+  "message": "fix: add MutationObserver to embed.js for dynamically-added widgets",
   "author": "EJ Fox",
-  "timestamp": "2026-04-10T18:45:54.987Z",
-  "deployed": "2026-04-10T18:45:54.987Z",
-  "buildTime": "4/10/2026, 11:45:55 AM",
+  "timestamp": "2026-04-10T16:08:12.022Z",
+  "deployed": "2026-04-10T16:08:12.022Z",
+  "buildTime": "4/10/2026, 12:08:12 PM",
   "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.8.2"
 }
