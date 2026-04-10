@@ -940,6 +940,7 @@
               entityName={chartModalOwner.name}
               assetClassName={chartAssetClassName}
               trackerSlug={chartTrackerSlug}
+              fillHeight={true}
             />
           </div>
         </div>
@@ -1277,12 +1278,6 @@
     min-height: 0;
   }
 
-  .chart-modal-body :global(.sticky-section) {
-    max-height: none;
-    height: 100%;
-    border: none;
-    border-radius: 0;
-  }
 
   /* Viz grid */
   .viz-grid {

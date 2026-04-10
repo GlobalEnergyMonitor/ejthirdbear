@@ -35,6 +35,7 @@
     trackerFilter = undefined,
     onDataLoaded = undefined,
     onContainerReady = undefined,
+    fillHeight = false,
   } = $props();
 
   // State
@@ -261,7 +262,7 @@
   });
 </script>
 
-<section class="sticky-section">
+<section class="sticky-section" class:fill-height={fillHeight}>
   <div id="chart-header">
     <div class="name-wrapper">
       <p class="subtitle">Owner</p>
@@ -409,9 +410,16 @@
     font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
     max-height: 760px;
     overflow: auto;
-    border: 1px solid var(--color-gray-200, #e4e7eb);
-    border-radius: 8px;
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-xl);
     background: var(--color-gray-50, #fafaf7);
+  }
+
+  .sticky-section.fill-height {
+    max-height: none;
+    height: 100%;
+    border: none;
+    border-radius: 0;
   }
 
   #chart-header {
@@ -422,9 +430,9 @@
     align-items: flex-start;
     gap: 2em;
     padding: 0.5em 1.4em;
-    border-bottom: 3px solid #d8d8ce;
-    background: var(--gem-primary-blue, #004a63);
-    color: #ffffff;
+    border-bottom: 3px solid var(--color-border);
+    background: var(--gem-primary-blue);
+    color: var(--gem-white);
   }
 
   .name-wrapper {
@@ -436,7 +444,7 @@
     text-transform: uppercase;
     letter-spacing: 0.08em;
     font-weight: 500;
-    color: #7dc8c0;
+    color: var(--gem-mint);
     margin: 0 0 0.5em 0;
   }
 
@@ -444,7 +452,7 @@
     margin: 0;
     font-size: 1.15rem;
     font-weight: 700;
-    color: #ffffff;
+    color: var(--gem-white);
   }
 
   .company-details {
@@ -499,7 +507,7 @@
     max-width: 100%;
     text-align: center;
     font-style: italic;
-    color: #002c40;
+    color: var(--gem-primary-blue);
     font-weight: 500;
     font-size: 0.95em;
     margin: 0.6em auto 0.8em auto;
@@ -513,8 +521,8 @@
 
   .intermediary-foldouts {
     padding: 0.75em 1.2em 0.25em 1.2em;
-    border-top: 1px solid #e1e4de;
-    background: rgba(255, 255, 255, 0.55);
+    border-top: var(--border-width) solid var(--color-border);
+    background: var(--color-bg-primary);
   }
 
   .intermediary-header {
@@ -534,9 +542,9 @@
   }
 
   .intermediary-item {
-    border: 1px solid #d8d8ce;
-    border-radius: 6px;
-    background: #ffffff;
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-bg-primary);
     overflow: hidden;
   }
 
@@ -558,7 +566,7 @@
   .intermediary-name {
     font-size: 0.95em;
     font-weight: 700;
-    color: var(--gem-primary-blue, #004a63);
+    color: var(--gem-primary-blue);
   }
 
   .intermediary-meta {
@@ -597,7 +605,7 @@
     bottom: 0;
     z-index: 20;
     padding: 0.6em 1.2em 1em 1.2em;
-    border-top: 3px solid var(--gem-primary-blue, #004a63);
+    border-top: 3px solid var(--gem-primary-blue);
     background: var(--color-gray-50, #fafaf7);
     color: var(--color-text-primary, #002c40);
     backdrop-filter: blur(4px);
@@ -611,7 +619,7 @@
     font-weight: 700;
     letter-spacing: 0.07em;
     margin: 0.2em 0 0.5em 0;
-    color: var(--gem-primary-blue, #004a63);
+    color: var(--gem-primary-blue);
   }
 
   .legend-container .title span {
@@ -629,7 +637,7 @@
   }
 
   #legend-status {
-    border-bottom: 2px solid #e6e6e6;
+    border-bottom: 2px solid var(--color-border);
     width: fit-content;
     margin: 0 auto 1em auto;
     padding: 0.5em 3em;

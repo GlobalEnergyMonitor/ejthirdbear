@@ -923,6 +923,7 @@
           filteredAssetCount={chartModalOwner.filteredAssets}
           statusFilter={selectedClasses[0]?.filters?.statuses}
           trackerFilter={selectedClasses[0]?.gemTrackers}
+          fillHeight={true}
         />
       </div>
     </div>
@@ -969,7 +970,7 @@
   }
 
   .parse-error a {
-    color: var(--gem-teal, #2a7f8f);
+    color: var(--gem-teal);
     font-size: var(--font-size-sm);
   }
 
@@ -1015,7 +1016,7 @@
   }
 
   .edit-link:hover {
-    color: var(--gem-teal, #2a7f8f);
+    color: var(--gem-teal);
   }
 
   /* ── Results section ────────────────────────── */
@@ -1160,7 +1161,7 @@
     align-items: center;
     gap: var(--space-2);
     padding: 10px 24px;
-    background: var(--gem-primary-blue, #004a63);
+    background: var(--gem-primary-blue);
     color: var(--color-white);
     font-size: var(--font-size-base);
     font-weight: 600;
@@ -1172,7 +1173,7 @@
   }
 
   .btn-visualize:hover {
-    background: var(--gem-teal, #2a7f8f);
+    background: var(--gem-teal);
   }
 
   /* ── Fullscreen chart modal ──────────────────── */
@@ -1238,13 +1239,6 @@
     min-height: 0;
   }
 
-  /* Override chart's internal max-height so it fills the modal */
-  .chart-modal-body :global(.sticky-section) {
-    max-height: none;
-    height: 100%;
-    border: none;
-    border-radius: 0;
-  }
 
   /* ── Tier 2: matched entities with no assets ───────────────────────────── */
   .tier2-section {
