@@ -12,7 +12,7 @@
   import DatasetFactsheet from '$lib/widgets/DatasetFactsheet.svelte';
   import { OwnershipTreeGraph, AssetRingVisualization } from '$lib/components/ownership';
 
-  import { getEntityGraphUp, getEntityGraphDown } from '$lib/ownership-api';
+  import { getOwnershipGraph } from '$lib/ownership-api';
   import { loadEntityPortfolio, errorMessage, boolParam, intParam, readHash } from '../embed-utils';
   import { getFieldsForTracker } from '$lib/catalog-field-meta';
   import {
@@ -109,9 +109,8 @@
         const entityId = param('entityId');
         if (!entityId) throw new Error('Missing required parameter: entityId');
 
-        const direction = param('direction') || 'down';
-        const fetchFn = direction === 'down' ? getEntityGraphDown : getEntityGraphUp;
-        const graphData = await fetchFn(entityId);
+        const direction = (param('direction') || 'down') as 'up' | 'down';
+        const graphData = await getOwnershipGraph({ root: entityId, direction });
 
         if (!graphData?.nodes?.length || graphData.nodes.length <= 1) {
           emptyMessage = `No ${direction === 'down' ? 'downstream' : 'upstream'} ownership data found`;
@@ -123,7 +122,7 @@
         componentProps = {
           nodes: graphData.nodes,
           edges: graphData.edges,
-          paths: (graphData as any).paths || {},
+          paths: graphData.paths,
           rootId: entityId,
         };
         loading = false;

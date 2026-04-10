@@ -53,8 +53,11 @@
     <OwnershipTreeGraph
       nodes={graphData.nodes}
       edges={graphData.edges}
+      paths={graphData.paths}
       rootId={entityId}
       {compact}
+      fullWidth
+      expandHeight
       onNavigate={handleNavigate}
     />
   {:else}

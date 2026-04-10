@@ -12,8 +12,8 @@
    */
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
-  import { getEntityGraphUp, getEntityGraphDown } from '$lib/ownership-api';
-  import type { EntityGraphResponse } from '$lib/ownership-api';
+  import { getOwnershipGraph } from '$lib/ownership-api';
+  import type { OwnershipGraphResponse } from '$lib/ownership-api';
   import OwnershipTreeGraph from '$lib/components/ownership/OwnershipTreeGraph.svelte';
   import { errorMessage, boolParam, readHash } from '../embed-utils';
 
@@ -25,7 +25,7 @@
   // State
   let loading = $state(true);
   let error = $state<string | null>(null);
-  let graphData = $state<EntityGraphResponse | null>(null);
+  let graphData = $state<OwnershipGraphResponse | null>(null);
 
   onMount(async () => {
     // Read hash — hash params override query params for deep-linking
@@ -41,8 +41,7 @@
     }
 
     try {
-      const fetchFn = direction === 'down' ? getEntityGraphDown : getEntityGraphUp;
-      graphData = await fetchFn(entityId);
+      graphData = await getOwnershipGraph({ root: entityId, direction: direction as 'up' | 'down' });
     } catch (err) {
       error = errorMessage(err, 'Failed to load ownership graph');
     } finally {
@@ -70,6 +69,7 @@
     <OwnershipTreeGraph
       nodes={graphData.nodes}
       edges={graphData.edges}
+      paths={graphData.paths}
       rootId={entityId}
       {compact}
       fullWidth
