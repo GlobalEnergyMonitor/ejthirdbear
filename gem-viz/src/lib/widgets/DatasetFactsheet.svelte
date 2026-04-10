@@ -182,13 +182,18 @@
     const hashField = readHashParam('field');
     const targetName = hashField || initialField || 'Status';
     const targetField = fieldsMetadata.find((f) => f.columnName === targetName && !f.fieldValue);
-    if (targetField) {
-      if (targetField.category && !expandedCategories.has(targetField.category)) {
-        expandedCategories = new Set([...expandedCategories, targetField.category]);
-      }
+    // On mobile, don't auto-select — wait for user to tap a bubble
+    if (targetField && window.innerWidth >= 768) {
       await loadStats(targetField);
     }
     loading = false;
+  }
+
+  /** Strip spurious ".0" from whole-number floats (e.g. year fields stored as 2020.0) */
+  function formatStatValue(v: string | number | null): string {
+    if (v == null) return '';
+    const s = String(v);
+    return /^\d+\.0$/.test(s) ? s.slice(0, -2) : s;
   }
 
   $effect(() => {
@@ -246,7 +251,7 @@
               {#each fieldStats.filter((s) => s.value !== null && s.value !== '') as stat}
                 {@const barPct = pctBase > 0 ? (stat.count / pctBase) * 100 : 0}
                 <div class="value-row">
-                  <span class="field-value">{stat.value}</span>
+                  <span class="field-value">{formatStatValue(stat.value)}</span>
                   <span class="value-bar-wrap">
                     <span class="value-bar" style="width: {barPct.toFixed(1)}%"></span>
                   </span>
@@ -360,7 +365,7 @@
               {#each fieldStats.filter((s) => s.value !== null && s.value !== '') as stat}
                 {@const barPct = pctBase > 0 ? (stat.count / pctBase) * 100 : 0}
                 <div class="value-row">
-                  <span class="field-value">{stat.value}</span>
+                  <span class="field-value">{formatStatValue(stat.value)}</span>
                   <span class="value-bar-wrap">
                     <span class="value-bar" style="width: {barPct.toFixed(1)}%"></span>
                   </span>
@@ -492,6 +497,11 @@
     flex-wrap: wrap;
     gap: var(--space-1);
     margin-top: var(--space-2);
+  }
+
+  .field-category-group.expanded .category-fields {
+    flex-direction: column;
+    flex-wrap: nowrap;
   }
 
   .field-name {
