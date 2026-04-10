@@ -1088,78 +1088,54 @@
     zoomSpring.set(next);
   }
 
-  /** Calculate the zoom level that fits the full graph inside the container */
-  function calcFitZoom(): number {
-    if (!graphWrapEl) return 1;
-    // Use the SVG element's actual rendered size (respects CSS overrides like 70vh !important)
+  /**
+   * Measure the actual rendered SVG content bounds and compute zoom + pan
+   * that centers all content with padding inside the viewBox.
+   * This is the source of truth for initial fit and reset — no guessing.
+   */
+  function fitToContent(hard = true) {
+    if (!graphWrapEl) return;
     const svgEl = graphWrapEl.querySelector('svg');
-    const rect = svgEl ? svgEl.getBoundingClientRect() : graphWrapEl.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return 1;
-    // Don't zoom in past 1x, but zoom out so the whole tree is visible
-    return Math.max(ZOOM.min, Math.min(1, rect.width / fullW, rect.height / fullH));
+    if (!svgEl) return;
+    const contentGroup = svgEl.querySelector('g');
+    if (!contentGroup) return;
+
+    const bbox = contentGroup.getBBox();
+    if (bbox.width === 0 || bbox.height === 0) return;
+
+    const pad = 50;
+    const needW = bbox.width + pad * 2;
+    const needH = bbox.height + pad * 2;
+
+    // Zoom out just enough so the viewBox can contain the padded content bbox.
+    // zoom = min(fullW/needW, fullH/needH) but never zoom IN past 1.
+    const z = Math.max(ZOOM.min, Math.min(1, fullW / needW, fullH / needH));
+
+    // Pan so the viewBox center aligns with the content center.
+    // At panX=panY=0 the viewBox center is at:
+    //   cx0 = -margins.left + fullW/2
+    //   cy0 = -margins.top  + fullH/2
+    // We want it at (bbox center):
+    const contentCX = bbox.x + bbox.width / 2;
+    const contentCY = bbox.y + bbox.height / 2;
+    const defaultCX = -svgMargins.left + fullW / 2;
+    const defaultCY = -svgMargins.top + fullH / 2;
+
+    const opts = hard ? { hard: true } : undefined;
+    zoomSpring.set(z, opts);
+    panXSpring.set(contentCX - defaultCX, opts);
+    panYSpring.set(contentCY - defaultCY, opts);
   }
 
-  /** Apply auto-fit zoom once after initial layout + entrance animation */
+  /** Apply auto-fit once after initial layout + entrance animation */
   function applyAutoFit() {
     if (hasAutoFit || compact) return;
     hasAutoFit = true;
-    const fitZoom = calcFitZoom();
-    const z = fitZoom < 1 ? fitZoom : 1;
-    if (fitZoom < 1) {
-      zoomSpring.set(fitZoom, { hard: true });
-    }
-
-    if (!graphWrapEl) return;
-    const svgEl = graphWrapEl.querySelector('svg');
-    const rect = svgEl ? svgEl.getBoundingClientRect() : graphWrapEl.getBoundingClientRect();
-    if (rect.width === 0) return;
-
-    // How tall is the visible area in SVG coordinate units?
-    const vbW_at_z = fullW / z;
-    const visH = rect.height * vbW_at_z / rect.width;
-    // How tall is the graph content in SVG units?
-    const contentH = fullH / z;
-
-    if (graphDirection === 'downstream' && contentH > visH) {
-      // Graph is taller than the visible area — anchor the root (asset) at the bottom
-      const vbY_base = -svgMargins.top + (fullH - contentH) / 2;
-      const graphBottom = gHeight + svgMargins.bottom;
-      const visibleBottomNoPan = vbY_base + visH;
-      const neededPan = graphBottom - visibleBottomNoPan;
-      if (neededPan > 0) {
-        panYSpring.set(neededPan, { hard: true });
-      }
-    } else if (visH > contentH) {
-      // Visible area is taller than graph — center the graph vertically via panY
-      const excessSvgUnits = (visH - contentH) / 2;
-      panYSpring.set(-excessSvgUnits, { hard: true });
-    }
+    fitToContent(true);
   }
 
   function resetView() {
-    const fitZoom = calcFitZoom();
-    const z = fitZoom < 1 ? fitZoom : 1;
-    zoomSpring.set(fitZoom);
-    panXSpring.set(0);
-
-    if (!graphWrapEl) { panYSpring.set(0); return; }
-    const svgEl = graphWrapEl.querySelector('svg');
-    const rect = svgEl ? svgEl.getBoundingClientRect() : graphWrapEl.getBoundingClientRect();
-    if (rect.width === 0) { panYSpring.set(0); return; }
-
-    const vbW_at_z = fullW / z;
-    const visH = rect.height * vbW_at_z / rect.width;
-    const contentH = fullH / z;
-
-    if (graphDirection === 'upstream' && contentH > visH) {
-      const vbY_base = -svgMargins.top + (fullH - contentH) / 2;
-      const neededPan = (gHeight + svgMargins.bottom) - (vbY_base + visH);
-      panYSpring.set(neededPan > 0 ? neededPan : 0);
-    } else if (visH > contentH) {
-      panYSpring.set(-(visH - contentH) / 2);
-    } else {
-      panYSpring.set(0);
-    }
+    fitToContent(false);
   }
 
   async function runEntranceAnimation() {
@@ -1250,12 +1226,13 @@
           (el as HTMLElement).style.removeProperty('transform');
         });
         if (panel) (panel as HTMLElement).style.removeProperty('opacity');
-        applyAutoFit();
+        // Wait for CSS layout to settle (e.g. height: 70vh from modal) before measuring
+        requestAnimationFrame(() => applyAutoFit());
       });
     } catch {
       // anime.js failed to load — skip animation
       entranceAnimDone = true;
-      applyAutoFit();
+      requestAnimationFrame(() => applyAutoFit());
     }
   }
 
@@ -1311,7 +1288,7 @@
       if (hasAutoFit) {
         hasAutoFit = false;
         entranceAnimDone = true;
-        tick().then(() => applyAutoFit());
+        tick().then(() => requestAnimationFrame(() => applyAutoFit()));
       }
     }
   });
