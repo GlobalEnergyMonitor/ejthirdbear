@@ -42,6 +42,7 @@
       asset = {
         id: data.id,
         name: data.name || assetId,
+        locationId: data.locationId ?? undefined,
         status: data.status || '',
         capacity: data.capacity ?? undefined,
         capacityUnit: data.capacityUnit ?? undefined,
@@ -55,6 +56,22 @@
         state: toStr(raw['Subnational unit (province, state)'] ?? raw['State'] ?? raw['state']),
         startYear: toNum(raw['Start year'] ?? raw['start_year']),
         technology: toStr(raw['Technology'] ?? raw['technology']),
+        coalType: toStr(raw['Coal type'] ?? raw['coal_type']),
+        mineType: toStr(raw['Mine type'] ?? raw['mine_type']),
+        miningMethod: toStr(raw['Mining method'] ?? raw['mining_method']),
+        wikiUrl: toStr(raw['Wiki URL'] ?? raw['wiki_url']),
+        location: toStr(raw['Location'] ?? raw['location']),
+        unitName: toStr(raw['Unit Name'] ?? raw['unit_name']),
+        database: toStr(raw['Database'] ?? raw['database'] ?? raw['source_file']),
+        plantAge: toNum(raw['Plant age (years)'] ?? raw['plant_age']),
+        remainingLifetime: toNum(raw['Remaining lifetime (years)'] ?? raw['remaining_lifetime']),
+        plannedRetirement: toNum(raw['Planned retirement'] ?? raw['planned_retirement']),
+        capacityFactor: toNum(raw['Capacity factor'] ?? raw['capacity_factor']),
+        annualCO2: toNum(raw['Annual CO2 (million tonnes / annum)'] ?? raw['annual_co2']),
+        lifetimeCO2: toNum(raw['Lifetime CO2 (million tonnes)'] ?? raw['lifetime_co2']),
+        heatRate: toNum(raw['Heat rate (Btu per kWh)'] ?? raw['heat_rate']),
+        production: toNum(raw['Production'] ?? raw['production']),
+        productionUnit: toStr(raw['Production unit'] ?? raw['production_unit']),
         raw,
       } as Asset;
     } catch (err) {
@@ -71,7 +88,7 @@
   {:else if error}
     <div class="embed-error"><p>{error}</p></div>
   {:else if asset}
-    <ProjectCard {asset} />
+    <ProjectCard {asset} variant="full" open={true} showLink={true} />
   {:else}
     <div class="embed-error"><p>No data found</p></div>
   {/if}

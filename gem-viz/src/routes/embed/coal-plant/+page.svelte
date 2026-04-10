@@ -13,7 +13,7 @@
    */
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
-  import { fetchCoalPlantLocation, resolveAssetId } from '$lib/ownership-api';
+  import { fetchCoalPlantLocation, resolveAssetId, getOwnershipGraph } from '$lib/ownership-api';
   import type { CoalPlantUnit } from '$lib/components/cards/coal-plant-types';
   import CoalPlantCard from '$lib/components/cards/CoalPlantCard.svelte';
   import { errorMessage, readHash } from '../embed-utils';
@@ -97,7 +97,7 @@
       {/if}
     </div>
   {:else if units.length > 0}
-    <CoalPlantCard {units} open={true} {initialTab} />
+    <CoalPlantCard {units} open={true} {initialTab} ownershipLoader={getOwnershipGraph} />
   {/if}
 </div>
 
