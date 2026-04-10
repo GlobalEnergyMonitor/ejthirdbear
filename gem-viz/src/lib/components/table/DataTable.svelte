@@ -339,9 +339,6 @@
         </div>
       {/if}
 
-      <div class="result-count">
-        {formatCount(sortedData.length)} of {formatCount(data.length)} rows
-      </div>
     </div>
 
     <div class="toolbar-right">
@@ -592,11 +589,6 @@
     color: var(--color-text-secondary);
   }
 
-  .result-count {
-    font-size: 11px;
-    color: var(--color-text-secondary);
-    font-weight: 500;
-  }
 
   /* Column toggle menu */
   .column-toggle {

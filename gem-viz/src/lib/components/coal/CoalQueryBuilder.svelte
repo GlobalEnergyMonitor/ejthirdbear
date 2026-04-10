@@ -17,6 +17,8 @@
   import CountryMultiSelect from '$lib/components/screener/CountryMultiSelect.svelte';
   import CoalPlantCard from '$lib/components/cards/CoalPlantCard.svelte';
   import type { CoalPlantUnit } from '$lib/components/cards/coal-plant-types';
+  import CoalMineCard from '$lib/components/cards/CoalMineCard.svelte';
+  import type { CoalMineAsset } from '$lib/components/cards/coal-mine-types';
   import { STATUS_GROUPS, discoverStatusGroups } from '$lib/data-config/tracker-schema';
   import type { DynamicStatusGroup } from '$lib/data-config/tracker-schema';
 
@@ -358,6 +360,7 @@
   const groupableFields    = $derived(getGroupableFields(q.query.trackers));
   const aggregatableFields = $derived(getAggregatableFields(q.query.trackers));
 
+
   function toggleGroupBy(field: string) {
     const cur = q.query.groupBy;
     q.setGroupBy(cur.includes(field) ? cur.filter(f => f !== field) : [...cur, field]);
@@ -442,7 +445,8 @@
       { key: 'country_area', altKey: 'country', label: 'Country' },
       { key: 'status', altKey: ['Status', 'operating_status'], label: 'Status' },
       { key: 'sub_status', altKey: 'operating_sub_status', label: 'Sub-status' },
-      { key: 'mine_type', label: 'Mine Type' },
+      { key: 'capacity_value', label: 'Capacity (Mtpa)' },
+      { key: 'capacity_unit', label: 'Unit' },
     ];
     return [
       { key: 'asset_name', altKey: 'name', label: 'Name' },
@@ -459,7 +463,7 @@
       key: c.key,
       label: c.label,
       sortable: true,
-      type: c.key === 'capacity_mw' ? 'number' as const : 'string' as const,
+      type: (c.key === 'capacity_mw' || c.key === 'capacity_value') ? 'number' as const : 'string' as const,
     }))
   );
 
@@ -521,6 +525,44 @@
     return () => window.removeEventListener('keydown', onKeydown);
   });
 
+  // ── Coal mine card modal ───────────────────────────────────────────────────
+
+  let mineModalOpen    = $state(false);
+  let mineAsset        = $state<CoalMineAsset | null>(null);
+  let mineModalLoading = $state(false);
+  let mineModalError   = $state<string | null>(null);
+
+  async function openMineModal(row: Record<string, unknown>) {
+    const assetId = row['asset_id'] ?? row['gem_mine_id'] ?? row['id'];
+    if (!assetId || typeof assetId !== 'string') return;
+    mineAsset = null;
+    mineModalError = null;
+    mineModalLoading = true;
+    mineModalOpen = true;
+    try {
+      const { fetchCoalMineAsset } = await import('$lib/ownership-api');
+      mineAsset = await fetchCoalMineAsset(assetId);
+      if (!mineAsset) mineModalError = 'No mine data found.';
+    } catch {
+      mineModalError = 'Failed to load mine details.';
+    } finally {
+      mineModalLoading = false;
+    }
+  }
+
+  function closeMineModal() {
+    mineModalOpen = false;
+    mineAsset = null;
+    mineModalError = null;
+  }
+
+  $effect(() => {
+    if (!mineModalOpen) return;
+    function onKeydown(e: KeyboardEvent) { if (e.key === 'Escape') closeMineModal(); }
+    window.addEventListener('keydown', onKeydown);
+    return () => window.removeEventListener('keydown', onKeydown);
+  });
+
   // Normalize rows: flatten nested tracker fields and resolve altKeys
   function normalizeRows(rows: Record<string, unknown>[]): Record<string, unknown>[] {
     return rows.map(row => {
@@ -569,10 +611,14 @@
     if (showTable && tableRows.length === 0) loadTable(true);
   }
 
-  // Re-fetch table when query changes (if table is open)
+  // Re-fetch table when query changes (if table is open); clear stale rows if hidden
+  // so the next toggleTable() sees length === 0 and reloads.
   $effect(() => {
     void assetsUrl; // track as dependency
-    untrack(() => { if (showTable) loadTable(true); });
+    untrack(() => {
+      if (showTable) loadTable(true);
+      else { tableRows = []; tableOffset = 0; }
+    });
   });
 
   async function downloadCsv() {
@@ -996,6 +1042,13 @@
                 {/each}
               </div>
             </div>
+            {#if q.query.trackers.length === 2}
+              <div class="groupby-tracker-hint">
+                <span class="groupby-hint-text">Additional group-by options available when summarizing just plants or just mines.</span>
+                <button class="groupby-tracker-pill" onclick={() => q.setTrackers(['coal-plant'])}>use only plants</button>
+                <button class="groupby-tracker-pill" onclick={() => q.setTrackers(['coal-mine'])}>use only mines</button>
+              </div>
+            {/if}
           {/if}
           {#if q.query.aggregates.length > 0 && q.query.groupBy.length > 0}
             <div class="summary-done-row">
@@ -1034,7 +1087,7 @@
     <div class="results-actions">
       {#if outputMode === 'data' && countResult && countResult.total > 0}
         <button class="result-btn" class:active={showTable} onclick={toggleTable}>
-          {showTable ? 'Hide table' : 'View table'}
+          {showTable ? 'Hide table' : countResult && countResult.total > PAGE ? 'Preview table' : 'View table'}
         </button>
         <button class="result-btn" onclick={downloadCsv}>Download CSV</button>
       {/if}
@@ -1061,7 +1114,10 @@
           showColumnToggle={false}
           stickyHeader={true}
           striped={true}
-          onRowClick={(row) => openPlantModal(row)}
+          onRowClick={(row) => {
+            if (row['asset_type'] === 'Coal Mine') openMineModal(row);
+            else openPlantModal(row);
+          }}
         />
         {#if tableHasMore}
           <div class="load-more-wrap">
@@ -1156,6 +1212,34 @@
         <div class="plant-modal-error">{modalError}</div>
       {:else if modalUnits}
         <CoalPlantCard units={modalUnits} open={true} />
+      {/if}
+    </div>
+  </div>
+{/if}
+
+{#if mineModalOpen}
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <div
+    class="plant-modal-backdrop"
+    role="button"
+    tabindex="0"
+    aria-label="Close coal mine details"
+    onclick={(e) => { if (e.target === e.currentTarget) closeMineModal(); }}
+    onkeydown={(e) => {
+      if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape')) {
+        e.preventDefault();
+        closeMineModal();
+      }
+    }}
+  >
+    <div class="plant-modal" role="dialog" aria-modal="true" aria-label="Coal mine details">
+      <button class="plant-modal-close" onclick={closeMineModal} aria-label="Close">×</button>
+      {#if mineModalLoading}
+        <div class="plant-modal-loading">Loading mine details…</div>
+      {:else if mineModalError}
+        <div class="plant-modal-error">{mineModalError}</div>
+      {:else if mineAsset}
+        <CoalMineCard asset={mineAsset} open={true} />
       {/if}
     </div>
   </div>
@@ -1349,6 +1433,40 @@
     color: var(--color-gray-400, #9eaaad);
     background: var(--color-gray-50, #f8f9fa);
     white-space: nowrap;
+  }
+
+  .groupby-tracker-hint {
+    width: 100%;
+    margin-top: var(--space-3, 12px);
+    padding-top: var(--space-3, 12px);
+    border-top: 1px solid var(--color-gray-100, #f1f5f5);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1, 4px) var(--space-2, 8px);
+    font-size: var(--font-size-xs, 11px);
+    color: var(--color-gray-400, #9eaaad);
+  }
+
+  .groupby-hint-text {
+    flex: 1 1 100%;
+    margin-bottom: var(--space-1, 4px);
+  }
+
+  .groupby-tracker-pill {
+    padding: 2px 10px;
+    border: 1px solid var(--color-teal-300, #5bb5c0);
+    border-radius: 20px;
+    font-size: var(--font-size-xs, 11px);
+    color: var(--color-teal-600, #2a7f8a);
+    background: var(--color-teal-50, #f0fafb);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s;
+  }
+
+  .groupby-tracker-pill:hover {
+    background: var(--color-teal-100, #d8f2f5);
   }
 
   .tracker-scope-badge {
@@ -1821,7 +1939,7 @@
     border-radius: 10px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
     width: 100%;
-    max-width: 860px;
+    max-width: 1140px;
     padding: var(--space-6, 24px);
     margin: auto;
   }
