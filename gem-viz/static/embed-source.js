@@ -1,29 +1,20 @@
 /* eslint-env browser */
 /**
- * GEM Embed Loader v3
+ * GEM Embed Loader v4
  * Drop-in script for embedding GEM visualizations on any page.
+ * Renders widgets directly via Shadow DOM (Flourish-style, no iframes).
  *
- * Supports two modes:
- *   - dynamic (default): Renders widget directly in the page via Shadow DOM (no iframe)
- *   - iframe: Creates an iframe pointing to the embed route
- *
- * Usage (dynamic — default):
+ * Usage:
  *   <div class="gem-embed" data-src="/embed/entity?id=E12345"></div>
  *   <script src="https://gem-viz.fly.dev/embed.js"></script>
  *
- * Usage (iframe — opt-in):
- *   <div class="gem-embed" data-src="/embed/entity?id=E12345" data-mode="iframe"></div>
- *   <script src="https://gem-viz.fly.dev/embed.js"></script>
- *
  * Features:
+ *   - Shadow DOM CSS isolation
  *   - Loading skeleton while content initializes
- *   - IntersectionObserver: embeds only created when scrolled into view
+ *   - IntersectionObserver: embeds only mount when scrolled into view
  *   - Auto dark-mode detection (prefers-color-scheme)
  *   - Double-init guard (safe to include script multiple times)
  *   - Load timeout with fallback link after 15s
- *   - postMessage auto-resize from embedded content (iframe mode)
- *   - Shadow DOM CSS isolation (dynamic mode)
- *   - Automatic iframe fallback if dynamic mode fails
  */
 (function () {
   // Double-init guard
@@ -58,13 +49,6 @@
   // Detect host page dark mode preference
   var prefersDark =
     window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-
-  var normalizeSrc = function (src) {
-    if (!src) return '';
-    if (/^https?:\/\//i.test(src)) return src;
-    var withSlash = src.startsWith('/') ? src : '/' + src;
-    return baseUrl ? baseUrl + withSlash : withSlash;
-  };
 
   // Inject minimal loading skeleton styles (once)
   var style = document.createElement('style');
@@ -115,7 +99,7 @@
   var loadedEmbeds = {};
 
   // ==========================================================================
-  // DYNAMIC MODE — Shadow DOM + widget JS chunks
+  // WIDGET MODULE LOADING
   // ==========================================================================
 
   var widgetModulePromise = null;
@@ -155,11 +139,11 @@
     return widgetModulePromise;
   };
 
-  /**
-   * Create a dynamic (non-iframe) embed using Shadow DOM.
-   * Falls back to iframe mode on failure.
-   */
-  var createDynamic = function (container, index) {
+  // ==========================================================================
+  // MOUNT WIDGET INTO SHADOW DOM
+  // ==========================================================================
+
+  var mountEmbed = function (container) {
     var dataSrc = container.getAttribute('data-src');
     if (!dataSrc) return;
 
@@ -173,14 +157,21 @@
     var height = container.getAttribute('data-height') || '400';
     var themeAttr = container.getAttribute('data-theme');
     var paramsAttr = container.getAttribute('data-params');
-    var dynLinkBase = container.getAttribute('data-link-base');
-    var dynLinkTarget = container.getAttribute('data-link-target');
+    var linkBase = container.getAttribute('data-link-base');
+    var linkTarget = container.getAttribute('data-link-target');
 
     var theme = themeAttr || (prefersDark ? 'dark' : 'light');
 
     // Show loading skeleton
     container.innerHTML = '';
     showLoading(container, parseInt(height, 10));
+
+    // Timeout fallback
+    setTimeout(function () {
+      if (!loadedEmbeds[embedId]) {
+        showTimeout(container, baseUrl + dataSrc);
+      }
+    }, LOAD_TIMEOUT_MS);
 
     // Load the widget module and mount
     loadWidgetModule()
@@ -194,13 +185,10 @@
           throw new Error('Could not parse widget type from: ' + dataSrc);
         }
 
-        // If this route doesn't have a dynamic widget, fall back quietly to iframe mode.
+        // Check widget is available
         var available = typeof mod.listWidgets === 'function' ? mod.listWidgets() : [];
         if (available.length && available.indexOf(parsed.type) === -1) {
-          container.removeAttribute('data-gem-initialized');
-          container.innerHTML = '';
-          createIframe(container, index);
-          return null;
+          throw new Error('Unknown widget type: ' + parsed.type + '. Available: ' + available.join(', '));
         }
 
         // Merge extra params from data-params attribute
@@ -220,8 +208,8 @@
 
         // Add theme and link rewriting props
         parsed.props.theme = theme;
-        if (dynLinkBase) parsed.props.linkBase = dynLinkBase;
-        if (dynLinkTarget) parsed.props.linkTarget = dynLinkTarget;
+        if (linkBase) parsed.props.linkBase = linkBase;
+        if (linkTarget) parsed.props.linkTarget = linkTarget;
 
         // Create Shadow DOM
         var shadow = container.attachShadow({ mode: 'open' });
@@ -238,173 +226,29 @@
       })
       .catch(function (err) {
         if (!err) return;
-        console.warn('[GEM Embed] Dynamic mode failed, falling back to iframe:', err.message || err);
-        // Reset and fall back to iframe
-        container.removeAttribute('data-gem-initialized');
-        container.innerHTML = '';
-        createIframe(container, index);
+        console.error('[GEM Embed] Failed to mount widget:', err.message || err);
+        showError(container, err.message || 'Widget failed to load');
       });
   };
 
   // ==========================================================================
-  // IFRAME MODE (existing behavior)
+  // INIT — lazy-load embeds via IntersectionObserver
   // ==========================================================================
-
-  var createIframe = function (container, _index) {
-    var dataSrc = container.getAttribute('data-src');
-    if (!dataSrc) return;
-
-    // Skip if already initialized
-    if (container.getAttribute('data-gem-initialized')) return;
-    container.setAttribute('data-gem-initialized', 'true');
-
-    var embedId = container.getAttribute('data-embed-id') ||
-      ('gem-embed-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7));
-    container.setAttribute('data-embed-id', embedId);
-
-    var width = container.getAttribute('data-width') || '100%';
-    var height = container.getAttribute('data-height') || '600';
-    var title = container.getAttribute('data-title') || 'GEM Visualization';
-    var autoHeightAttr = container.getAttribute('data-autoheight');
-    var themeAttr = container.getAttribute('data-theme');
-    var paddingAttr = container.getAttribute('data-padding');
-    var paramsAttr = container.getAttribute('data-params');
-    var brandingAttr = container.getAttribute('data-branding');
-    var linkBaseAttr = container.getAttribute('data-link-base');
-    var linkTargetAttr = container.getAttribute('data-link-target');
-    var allowAttr = container.getAttribute('data-allow');
-    var sandboxAttr = container.getAttribute('data-sandbox');
-
-    var src = normalizeSrc(dataSrc);
-    if (!src) return;
-
-    var url = new URL(src, window.location.href);
-    // Auto-add embed=true for non-embed paths so root layout strips chrome
-    if (!url.pathname.startsWith('/embed')) {
-      url.searchParams.set('embed', 'true');
-    }
-    if (!url.searchParams.has('embedId')) url.searchParams.set('embedId', embedId);
-    if (!url.searchParams.has('autoHeight')) {
-      var autoHeight = autoHeightAttr === null || autoHeightAttr.toLowerCase() !== 'false';
-      url.searchParams.set('autoHeight', autoHeight ? 'true' : 'false');
-    }
-    // Auto dark mode: use explicit theme if set, otherwise detect from host page
-    if (!url.searchParams.has('theme')) {
-      var theme = themeAttr || (prefersDark ? 'dark' : 'light');
-      url.searchParams.set('theme', theme);
-    }
-    if (paddingAttr && !url.searchParams.has('padding')) {
-      url.searchParams.set('padding', paddingAttr);
-    }
-    if (brandingAttr && !url.searchParams.has('branding')) {
-      url.searchParams.set('branding', brandingAttr);
-    }
-    if (linkBaseAttr && !url.searchParams.has('linkBase')) {
-      url.searchParams.set('linkBase', linkBaseAttr);
-    }
-    if (linkTargetAttr && !url.searchParams.has('linkTarget')) {
-      url.searchParams.set('linkTarget', linkTargetAttr);
-    }
-    if (paramsAttr) {
-      var trimmed = paramsAttr.trim();
-      if (trimmed.startsWith('{')) {
-        try {
-          var parsed = JSON.parse(trimmed);
-          Object.entries(parsed).forEach(function (entry) {
-            if (entry[1] === undefined || entry[1] === null) return;
-            if (!url.searchParams.has(entry[0])) url.searchParams.set(entry[0], '' + entry[1]);
-          });
-        } catch {
-          // Ignore invalid JSON params
-        }
-      } else {
-        try {
-          var extraParams = new URLSearchParams(
-            trimmed.startsWith('?') ? trimmed.slice(1) : trimmed
-          );
-          extraParams.forEach(function (value, key) {
-            if (!url.searchParams.has(key)) url.searchParams.set(key, value);
-          });
-        } catch {
-          // Ignore invalid query params
-        }
-      }
-    }
-
-    var finalUrl = url.toString();
-
-    // Show loading skeleton
-    container.innerHTML = '';
-    showLoading(container, parseInt(height, 10));
-
-    var iframe = document.createElement('iframe');
-    iframe.src = finalUrl;
-    iframe.width = width;
-    iframe.height = height;
-    iframe.loading = 'lazy';
-    iframe.title = title;
-    iframe.setAttribute('frameborder', '0');
-    iframe.style.border = '0';
-    iframe.style.width = width;
-    iframe.style.display = 'block';
-    iframe.style.opacity = '0';
-    iframe.style.transition = 'opacity 0.3s ease';
-    if (allowAttr) iframe.setAttribute('allow', allowAttr);
-    if (sandboxAttr) iframe.setAttribute('sandbox', sandboxAttr);
-
-    // On iframe load, fade in and remove skeleton
-    iframe.onload = function () {
-      loadedEmbeds[embedId] = true;
-      var loading = container.querySelector('.' + EMBED_CLASS + '-loading');
-      if (loading) loading.remove();
-      iframe.style.opacity = '1';
-    };
-
-    container.appendChild(iframe);
-
-    // Timeout fallback
-    setTimeout(function () {
-      if (!loadedEmbeds[embedId]) {
-        var loading = container.querySelector('.' + EMBED_CLASS + '-loading');
-        if (loading) {
-          showTimeout(container, finalUrl);
-          // Keep the iframe in case it loads eventually
-          container.appendChild(iframe);
-        }
-      }
-    }, LOAD_TIMEOUT_MS);
-  };
-
-  // ==========================================================================
-  // INIT — route each embed to the right mode
-  // ==========================================================================
-
-  var embedCounter = 0;
-
-  var initContainer = function (container) {
-    var mode = (container.getAttribute('data-mode') || 'dynamic').toLowerCase();
-    if (mode === 'dynamic') {
-      createDynamic(container, embedCounter++);
-    } else {
-      createIframe(container, embedCounter++);
-    }
-  };
 
   var init = function () {
     var embeds = document.querySelectorAll('.' + EMBED_CLASS + '[data-src]');
 
-    // Use IntersectionObserver for lazy initialization (if available)
     if ('IntersectionObserver' in window) {
       var observer = new IntersectionObserver(
         function (entries) {
           entries.forEach(function (entry) {
             if (entry.isIntersecting) {
               observer.unobserve(entry.target);
-              initContainer(entry.target);
+              mountEmbed(entry.target);
             }
           });
         },
-        { rootMargin: '200px' } // Start loading 200px before visible
+        { rootMargin: '200px' }
       );
       embeds.forEach(function (container) {
         if (container.getAttribute('data-gem-initialized')) return;
@@ -415,61 +259,9 @@
         observer.disconnect();
       });
     } else {
-      // Fallback: init all immediately
       embeds.forEach(function (container) {
-        initContainer(container);
+        mountEmbed(container);
       });
-    }
-  };
-
-  var onMessage = function (event) {
-    var data = event && event.data;
-    if (!data || data.source !== 'gem-embed') return;
-
-    var embedId = data.embedId;
-    if (!embedId) return;
-
-    var container = document.querySelector('.' + EMBED_CLASS + '[data-embed-id="' + embedId + '"]');
-    if (!container) return;
-
-    var iframe = container.querySelector('iframe');
-    if (!iframe) return;
-
-    if (data.type === 'resize') {
-      var height = parseInt(data.height, 10);
-      if (!isFinite(height) || height <= 0) return;
-      iframe.style.height = height + 'px';
-      iframe.setAttribute('height', '' + height);
-    }
-
-    if (data.type === 'ready') {
-      if (!loadedEmbeds[embedId]) {
-        loadedEmbeds[embedId] = true;
-        var loadingReady = container.querySelector('.' + EMBED_CLASS + '-loading');
-        if (loadingReady) loadingReady.remove();
-        iframe.style.opacity = '1';
-      }
-      if (window.__GEM_EMBED_DEBUG__) {
-        console.log('[GEM Embed] ready', embedId, data.route);
-      }
-      return;
-    }
-
-    if (data.type === 'error') {
-      // Cancel the timeout, mark as loaded (to prevent timeout overlay), show error UI
-      loadedEmbeds[embedId] = true;
-      showError(container, data.message || '');
-      // Keep iframe hidden behind error UI
-      iframe.style.display = 'none';
-      return;
-    }
-
-    // Mark as loaded on any message from the embed (resize or unknown)
-    if (!loadedEmbeds[embedId]) {
-      loadedEmbeds[embedId] = true;
-      var loading = container.querySelector('.' + EMBED_CLASS + '-loading');
-      if (loading) loading.remove();
-      iframe.style.opacity = '1';
     }
   };
 
@@ -478,6 +270,4 @@
   } else {
     init();
   }
-
-  window.addEventListener('message', onMessage, false);
 })();

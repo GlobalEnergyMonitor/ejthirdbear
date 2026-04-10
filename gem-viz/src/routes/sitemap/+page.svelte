@@ -103,48 +103,10 @@
       ],
     },
     {
-      title: 'Embeds',
-      description: 'Embeddable widgets for external use',
+      title: 'Widgets',
+      description: 'Shadow DOM widgets for embedding on external pages (Drupal, etc.)',
       routes: [
-        { path: '/embed', name: 'Embed Index', description: 'Overview of available embeds' },
-        { path: '/embed/asset', name: 'Asset Embed', description: 'Embed an asset card' },
-        { path: '/embed/entity', name: 'Entity Embed', description: 'Embed an entity card' },
-        {
-          path: '/embed/coal-plant',
-          name: 'Coal Plant Card',
-          description: 'Rich coal plant detail card with 6 tabs',
-        },
-        {
-          path: '/embed/viz',
-          name: 'Modular Embed',
-          description: 'Generic embed for modular visualizations',
-        },
-        {
-          path: '/embed/asset-ring',
-          name: 'Asset Ring',
-          description: 'Circular asset visualization',
-        },
-        { path: '/embed/network-3d', name: '3D Network', description: '3D ownership network' },
-        {
-          path: '/embed/ownership-flower',
-          name: 'Ownership Flower',
-          description: 'Radial ownership diagram',
-        },
-        {
-          path: '/embed/ownership-graph',
-          name: 'Control Chain',
-          description: 'Interactive control chain tree',
-        },
-        {
-          path: '/embed/tracker-factsheet',
-          name: 'Tracker Factsheet',
-          description: 'Embeddable tracker stats',
-        },
-        {
-          path: '/embed/ultimate-owners',
-          name: 'Ultimate Owners',
-          description: 'Ultimate beneficial owners widget',
-        },
+        { path: '/widgets/', name: 'Widget Chunks', description: 'Built widget JS modules' },
       ],
     },
   ];

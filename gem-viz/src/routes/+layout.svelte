@@ -28,7 +28,6 @@
   // Track page views (skip embeds to avoid inflating counts)
   afterNavigate(({ to }) => {
     if (to?.url.searchParams.get('embed') === 'true') return;
-    if (to?.url.pathname.startsWith('/embed') || to?.url.pathname.startsWith('/e/')) return;
     trackPageView(to?.url.pathname ?? '/');
   });
 
@@ -44,9 +43,7 @@
   <SeoMeta />
 </svelte:head>
 
-{#if $page.url.pathname.startsWith('/embed') || $page.url.pathname.startsWith('/e/')}
-  {@render children()}
-{:else if $page.url.searchParams.get('embed') === 'true'}
+{#if $page.url.searchParams.get('embed') === 'true'}
   <EmbedShell
     theme={$page.url.searchParams.get('theme') || 'light'}
     padding={$page.url.searchParams.get('padding') || '16'}
