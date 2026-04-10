@@ -55,6 +55,7 @@
 
   // Shared
   import AssetClassesPanel from '$lib/components/tracker/AssetClassesPanel.svelte';
+  import ScreenerStepNav from '$lib/components/nav/ScreenerStepNav.svelte';
   import type { ScreenerSelectedClass } from '$lib/data-config/screener-types';
   import type { DynamicStatusGroup } from '$lib/data-config/tracker-schema';
   import { getEntity } from './widget-api';
@@ -709,15 +710,6 @@
   }
 
   // ============================================================================
-  // STEP NAV COMPONENT (inline, replaces ScreenerStepNav)
-  // ============================================================================
-  const STEPS = [
-    { num: 1, label: 'Select Asset Class' },
-    { num: 2, label: 'Search Owners' },
-    { num: 3, label: 'Results' },
-    { num: 4, label: 'Visualize' },
-  ];
-
   // ============================================================================
   // INIT
   // ============================================================================
@@ -751,25 +743,8 @@
 </script>
 
 <div class="gem-screener">
-  <!-- Step Nav -->
-  <nav class="step-nav">
-    {#each STEPS as step}
-      {@const isActive = currentStep === step.num}
-      {@const isCompleted = currentStep > step.num}
-      {@const isReachable = step.num <= currentStep}
-      <button
-        class="step-item"
-        class:active={isActive}
-        class:completed={isCompleted}
-        class:reachable={isReachable}
-        disabled={!isReachable}
-        onclick={() => { if (isReachable) currentStep = step.num; }}
-      >
-        <span class="step-num">{step.num}</span>
-        <span class="step-label">{step.label}</span>
-      </button>
-    {/each}
-  </nav>
+  <!-- Step Nav — reuses ScreenerStepNav from $lib -->
+  <ScreenerStepNav currentStep={currentStep} isEmbed={true} onStepClick={(n) => { currentStep = n; }} />
 
   <div class="step-content">
     <!-- ════════════════════════════════════════════════════════════════ -->
@@ -1013,79 +988,6 @@
     color: var(--color-text-primary, #1a2332);
     max-width: var(--container-content);
     margin: 0 auto;
-  }
-
-  /* Step Nav */
-  .step-nav {
-    display: flex;
-    gap: 0;
-    border-bottom: 2px solid var(--color-gray-200, #e5e7eb);
-    margin-bottom: var(--space-5, 1.25rem);
-  }
-
-  .step-item {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    gap: var(--space-2, 0.5rem);
-    padding: var(--space-3, 0.75rem) var(--space-4, 1rem);
-    background: none;
-    border: none;
-    border-bottom: 3px solid transparent;
-    cursor: pointer;
-    font-size: var(--font-size-sm, 0.875rem);
-    color: var(--color-text-tertiary, #94a3b8);
-    transition: all 150ms ease;
-    margin-bottom: -2px;
-  }
-
-  .step-item:disabled {
-    cursor: default;
-    opacity: 0.5;
-  }
-
-  .step-item.active {
-    color: var(--gem-teal, #1d4961);
-    border-bottom-color: var(--gem-teal, #1d4961);
-    font-weight: 600;
-  }
-
-  .step-item.completed {
-    color: var(--color-text-secondary, #64748b);
-  }
-
-  .step-item.reachable:not(:disabled):hover {
-    color: var(--gem-teal, #1d4961);
-  }
-
-  .step-num {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    background: var(--color-gray-200, #e5e7eb);
-    font-size: var(--font-size-xs, 0.75rem);
-    font-weight: 600;
-  }
-
-  .step-item.active .step-num {
-    background: var(--gem-teal, #1d4961);
-    color: white;
-  }
-
-  .step-item.completed .step-num {
-    background: var(--gem-teal, #1d4961);
-    color: white;
-  }
-
-  .step-label {
-    display: none;
-  }
-
-  @media (min-width: 640px) {
-    .step-label { display: inline; }
   }
 
   /* Step Header */

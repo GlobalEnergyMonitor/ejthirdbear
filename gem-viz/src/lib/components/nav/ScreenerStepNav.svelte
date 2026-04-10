@@ -11,10 +11,17 @@
    *   currentStep: number,
    *   classesParam?: string,
    *   ownersParam?: string,
-   *   isEmbed?: boolean
+   *   isEmbed?: boolean,
+   *   onStepClick?: (stepNum: number) => void
    * }}
    */
-  let { currentStep = 1, classesParam = '', ownersParam = '', isEmbed = false } = $props();
+  let { currentStep = 1, classesParam = '', ownersParam = '', isEmbed = false, onStepClick }: {
+    currentStep?: number;
+    classesParam?: string;
+    ownersParam?: string;
+    isEmbed?: boolean;
+    onStepClick?: (stepNum: number) => void;
+  } = $props();
 
   const steps = [
     { num: 1, label: 'Asset Classes', path: 'screener' },
@@ -55,25 +62,37 @@
       </div>
     {/if}
     {#if isCompleted(step.num)}
-      <a href={getStepUrl(step)} class="step completed" style="--step-delay: {i * 0.05}s">
-        <span class="step-num">
-          <svg
-            class="check-icon"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="3"
-          >
-            <polyline points="20 6 9 17 4 12"></polyline>
-          </svg>
-        </span>
-        <span class="step-label">{step.label}</span>
-      </a>
+      {#if onStepClick}
+        <button class="step completed" style="--step-delay: {i * 0.05}s" onclick={() => onStepClick(step.num)}>
+          <span class="step-num">
+            <svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          </span>
+          <span class="step-label">{step.label}</span>
+        </button>
+      {:else}
+        <a href={getStepUrl(step)} class="step completed" style="--step-delay: {i * 0.05}s">
+          <span class="step-num">
+            <svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          </span>
+          <span class="step-label">{step.label}</span>
+        </a>
+      {/if}
     {:else if isClickable(step.num)}
-      <a href={getStepUrl(step)} class="step reachable" style="--step-delay: {i * 0.05}s">
-        <span class="step-num">{step.num}</span>
-        <span class="step-label">{step.label}</span>
-      </a>
+      {#if onStepClick}
+        <button class="step reachable" style="--step-delay: {i * 0.05}s" onclick={() => onStepClick(step.num)}>
+          <span class="step-num">{step.num}</span>
+          <span class="step-label">{step.label}</span>
+        </button>
+      {:else}
+        <a href={getStepUrl(step)} class="step reachable" style="--step-delay: {i * 0.05}s">
+          <span class="step-num">{step.num}</span>
+          <span class="step-label">{step.label}</span>
+        </a>
+      {/if}
     {:else}
       <div class="step" class:active={isActive(step.num)} style="--step-delay: {i * 0.05}s">
         <span class="step-num">{step.num}</span>
@@ -102,6 +121,10 @@
     opacity: 0.5;
     text-decoration: none;
     color: inherit;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font: inherit;
     transition: opacity var(--duration-slow) var(--ease-in-out-quad);
   }
 
