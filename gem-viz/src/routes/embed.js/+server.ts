@@ -1,12 +1,11 @@
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
-let _cached: string | null = null;
-
 function getEmbedJs(): string {
-  if (_cached) return _cached;
-  _cached = readFileSync(resolve('static/embed-source.js'), 'utf-8');
-  return _cached;
+  // Always read from disk — no in-memory cache.
+  // The file is small and this avoids stale content after deploys
+  // (especially with Fly.io machine suspend preserving process memory).
+  return readFileSync(resolve('static/embed-source.js'), 'utf-8');
 }
 
 export function GET() {

@@ -14,11 +14,37 @@ export const handle: Handle = async ({ event, resolve }) => {
   const isWidgetRoute =
     event.url.pathname.startsWith('/widgets') ||
     event.url.pathname === '/embed.js' ||
+    event.url.pathname === '/version.json' ||
     event.url.searchParams.get('embed') === 'true';
 
   if (!isWidgetRoute) {
     response.headers.set('Cross-Origin-Opener-Policy', 'same-origin');
     response.headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
+  }
+
+  // Widget assets: CORP + Timing headers for cross-origin embedding
+  if (event.url.pathname.startsWith('/widgets')) {
+    response.headers.set('Cross-Origin-Resource-Policy', 'cross-origin');
+    response.headers.set('Timing-Allow-Origin', '*');
+
+    // Content-hashed chunks/assets — immutable, cache forever
+    if (
+      event.url.pathname.startsWith('/widgets/chunks/') ||
+      event.url.pathname.startsWith('/widgets/assets/')
+    ) {
+      response.headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+    }
+
+    // Widget entry point — always revalidate so deploys take effect immediately
+    if (event.url.pathname === '/widgets/index.js') {
+      response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    }
+  }
+
+  // version.json — never cache, used for widget cache-busting
+  if (event.url.pathname === '/version.json') {
+    response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    response.headers.set('Access-Control-Allow-Origin', '*');
   }
 
   return response;

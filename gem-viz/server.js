@@ -23,6 +23,22 @@ const server = createServer((req, res) => {
   if (url.startsWith('/widgets') || url === '/embed.js') {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.setHeader('Timing-Allow-Origin', '*');
+  }
+
+  // Content-hashed widget chunks/assets — immutable, cache forever
+  if (url.startsWith('/widgets/chunks/') || url.startsWith('/widgets/assets/')) {
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  }
+
+  // Widget entry point + version manifest — never cache, always fetch fresh
+  if (url === '/version.json' || url.startsWith('/version.json?')) {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+  if (url === '/widgets/index.js' || url.startsWith('/widgets/index.js?')) {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   }
 
   handler(req, res);
