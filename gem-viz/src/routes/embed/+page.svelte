@@ -53,7 +53,7 @@
   <title>Widget Embeds — Global Energy Monitor</title>
   <meta name="description" content="Copy-paste embed codes for GEM ownership visualizations. Shadow DOM widgets — no iframes." />
   <!-- Load embed.js exactly as an external page would — full dogfooding -->
-  <script src="{ORIGIN}/embed.js"></script>
+  <script src="/embed.js"></script>
 </svelte:head>
 
 <div class="page-container--wide">
