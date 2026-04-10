@@ -22,7 +22,15 @@ try {
   message = execSync('git log -1 --format=%s', { encoding: 'utf8' }).trim();
   author = execSync('git log -1 --format=%an', { encoding: 'utf8' }).trim();
 } catch {
-  console.warn('WARNING: Unable to read git info (running in CI/detached state?)');
+  // No .git dir (e.g. Docker build) — fall back to env vars from build args
+  commit = process.env.GIT_COMMIT || 'unknown';
+  message = process.env.GIT_MESSAGE || '';
+  author = process.env.GIT_AUTHOR || '';
+  if (commit !== 'unknown') {
+    console.log('Using git info from build args');
+  } else {
+    console.warn('WARNING: Unable to read git info (running in CI/detached state?)');
+  }
 }
 
 // Get package version for deploy URL
@@ -40,6 +48,7 @@ const deployUrl = `${DEPLOY_BASE_URL}/v${pkgVersion}`;
 
 const versionInfo = {
   version: commit,
+  semver: pkgVersion,
   commit,
   message,
   author,
