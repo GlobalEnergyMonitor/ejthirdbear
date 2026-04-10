@@ -361,6 +361,20 @@
   const aggregatableFields = $derived(getAggregatableFields(q.query.trackers));
 
 
+  /** Switch to a single tracker, pruning aggregates and groupBy to only valid fields. */
+  function switchToSingleTracker(tracker: Tracker) {
+    const newTrackers: Tracker[] = [tracker];
+    const validAggKeys = new Set(
+      getAggregatableFields(newTrackers).map(f => f.key)
+    );
+    const validGroupKeys = new Set(
+      getGroupableFields(newTrackers).map(f => f.key)
+    );
+    q.setTrackers(newTrackers);
+    q.setAggregates(q.query.aggregates.filter(a => validAggKeys.has(a.field)));
+    q.setGroupBy(q.query.groupBy.filter(k => validGroupKeys.has(k)));
+  }
+
   function toggleGroupBy(field: string) {
     const cur = q.query.groupBy;
     q.setGroupBy(cur.includes(field) ? cur.filter(f => f !== field) : [...cur, field]);
@@ -973,18 +987,9 @@
       {#snippet fieldPickerSuffix()}
         {#if plantOnlyFilterFields.length > 0 || mineOnlyFilterFields.length > 0}
           <div class="tracker-only-hint">
-            {#if plantOnlyFilterFields.length > 0}
-              <span class="tracker-only-label">Plants only:</span>
-              {#each plantOnlyFilterFields as f}
-                <span class="tracker-only-field">{f.label}</span>
-              {/each}
-            {/if}
-            {#if mineOnlyFilterFields.length > 0}
-              <span class="tracker-only-label">Mines only:</span>
-              {#each mineOnlyFilterFields as f}
-                <span class="tracker-only-field">{f.label}</span>
-              {/each}
-            {/if}
+            <span class="groupby-hint-text">Additional filter fields available when filtering just plants or just mines.</span>
+            <button class="groupby-tracker-pill" onclick={() => switchToSingleTracker('coal-plant')}>use only plants</button>
+            <button class="groupby-tracker-pill" onclick={() => switchToSingleTracker('coal-mine')}>use only mines</button>
           </div>
         {/if}
       {/snippet}
@@ -1045,8 +1050,8 @@
             {#if q.query.trackers.length === 2}
               <div class="groupby-tracker-hint">
                 <span class="groupby-hint-text">Additional group-by options available when summarizing just plants or just mines.</span>
-                <button class="groupby-tracker-pill" onclick={() => q.setTrackers(['coal-plant'])}>use only plants</button>
-                <button class="groupby-tracker-pill" onclick={() => q.setTrackers(['coal-mine'])}>use only mines</button>
+                <button class="groupby-tracker-pill" onclick={() => switchToSingleTracker('coal-plant')}>use only plants</button>
+                <button class="groupby-tracker-pill" onclick={() => switchToSingleTracker('coal-mine')}>use only mines</button>
               </div>
             {/if}
           {/if}
