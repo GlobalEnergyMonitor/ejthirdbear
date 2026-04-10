@@ -25,7 +25,7 @@
     resolveApiSlug,
     fetchStatusFacets,
     fetchStatusTaxonomy,
-  } from '$lib/ownership-api';
+  } from './widget-api';
   import {
     fetchAssetClasses,
     buildCatalogUrl,
@@ -57,7 +57,7 @@
   import AssetClassesPanel from '$lib/components/tracker/AssetClassesPanel.svelte';
   import type { ScreenerSelectedClass } from '$lib/data-config/screener-types';
   import type { DynamicStatusGroup } from '$lib/data-config/tracker-schema';
-  import { getEntity } from '$lib/ownership-api';
+  import { getEntity } from './widget-api';
 
   // ============================================================================
   // PROPS
@@ -1045,8 +1045,8 @@
   }
 
   .step-item.active {
-    color: var(--gem-teal, #2a7f8f);
-    border-bottom-color: var(--gem-teal, #2a7f8f);
+    color: var(--gem-teal, #1d4961);
+    border-bottom-color: var(--gem-teal, #1d4961);
     font-weight: 600;
   }
 
@@ -1055,7 +1055,7 @@
   }
 
   .step-item.reachable:not(:disabled):hover {
-    color: var(--gem-teal, #2a7f8f);
+    color: var(--gem-teal, #1d4961);
   }
 
   .step-num {
@@ -1071,12 +1071,12 @@
   }
 
   .step-item.active .step-num {
-    background: var(--gem-teal, #2a7f8f);
+    background: var(--gem-teal, #1d4961);
     color: white;
   }
 
   .step-item.completed .step-num {
-    background: var(--gem-teal, #2a7f8f);
+    background: var(--gem-teal, #1d4961);
     color: white;
   }
 
@@ -1122,7 +1122,7 @@
   /* Action buttons */
   .action-btn {
     padding: var(--space-2, 0.5rem) var(--space-4, 1rem);
-    background: var(--gem-teal, #2a7f8f);
+    background: var(--gem-teal, #1d4961);
     color: white;
     border: none;
     border-radius: var(--radius-sm, 4px);
@@ -1157,8 +1157,8 @@
   }
 
   .picker-search-input:focus {
-    border-color: var(--gem-teal, #2a7f8f);
-    box-shadow: 0 0 0 2px rgba(42, 127, 143, 0.15);
+    border-color: var(--gem-teal, #1d4961);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--gem-teal, #1d4961) 15%, transparent);
   }
 
   .picker-category-label {
@@ -1190,12 +1190,12 @@
 
   .picker-tile:hover {
     border-color: var(--color-gray-400, #9ca3af);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    box-shadow: var(--shadow-md, 0 2px 8px rgba(0, 0, 0, 0.08));
   }
 
   .picker-tile.selected {
-    border-color: var(--gem-teal, #2a7f8f);
-    background: rgba(42, 127, 143, 0.04);
+    border-color: var(--gem-teal, #1d4961);
+    background: var(--gem-teal-10, #e9eef1);
   }
 
   .tile-label {
@@ -1233,7 +1233,7 @@
   }
 
   .show-all-btn:hover {
-    border-color: var(--gem-teal, #2a7f8f);
+    border-color: var(--gem-teal, #1d4961);
   }
 
   /* Results search */
@@ -1252,7 +1252,7 @@
   .error {
     padding: var(--space-4, 1rem);
     color: var(--color-error, #dc2626);
-    background: rgba(220, 38, 38, 0.05);
+    background: color-mix(in srgb, var(--color-error, #dc2626) 5%, transparent);
     border-radius: var(--radius-sm, 4px);
     font-size: var(--font-size-sm, 0.875rem);
   }
@@ -1319,7 +1319,7 @@
   .chart-modal-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: color-mix(in srgb, var(--color-text-primary, #000) 50%, transparent);
     z-index: 100;
   }
 
@@ -1335,7 +1335,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    box-shadow: var(--shadow-lg, 0 4px 16px rgba(0, 0, 0, 0.12));
   }
 
   .chart-modal-header {

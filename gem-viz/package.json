@@ -7,7 +7,7 @@
     "dev": "NODE_ENV=development vite dev",
     "prefetch:api": "node scripts/prefetch-data.js",
     "prefetch:api:resume": "node scripts/prefetch-data.js --resume",
-    "build": "node scripts/inject-version.js && node scripts/generate-geojson.js && NODE_OPTIONS=--max-old-space-size=8192 vite build",
+    "build": "node scripts/inject-version.js && node scripts/generate-geojson.js && npm run build:widgets && NODE_OPTIONS=--max-old-space-size=8192 vite build",
     "build:full": "npm run prefetch:api && npm run build",
     "preview": "vite preview",
     "deploy": "npm run build && node scripts/deploy.js",
@@ -22,7 +22,7 @@
     "spot-check": "node scripts/spot-check.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "build:widgets": "vite build --config vite.widgets.config.ts"
+    "build:widgets": "vite build --config vite.widgets.config.ts && cp src/lib/shared-styles.css static/widgets/shared-styles.css"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

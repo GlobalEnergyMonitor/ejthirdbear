@@ -24,25 +24,9 @@ export const handle: Handle = async ({ event, resolve }) => {
     response.headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
   }
 
-  // Add CORS headers for widget assets and embed.js so they can be
-  // dynamically imported from external sites (e.g. GEM Drupal pages)
-  if (
-    event.url.pathname.startsWith('/widgets') ||
-    event.url.pathname === '/embed.js' ||
-    event.url.pathname === '/version.json'
-  ) {
-    response.headers.set('Access-Control-Allow-Origin', '*');
-    response.headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  }
-
-  // Prevent browser/CDN caching of embed entry points so deploys propagate immediately
-  if (
-    event.url.pathname === '/embed.js' ||
-    event.url.pathname === '/widgets/index.js' ||
-    event.url.pathname === '/version.json'
-  ) {
-    response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
-  }
+  // Note: /widgets/* and /version.json are static files — they bypass hooks.
+  // Their CORS/cache headers must be set elsewhere (e.g. CDN config or Fly proxy).
+  // /embed.js is a server route (+server.ts) and sets its own headers directly.
 
   return response;
 };

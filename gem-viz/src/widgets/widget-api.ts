@@ -306,6 +306,27 @@ export function resolveApiSlug(tracker: string): string | null {
 }
 
 // ============================================================================
+// STATUS FACETS & TAXONOMY (widget equivalents of ownership-api re-exports)
+// ============================================================================
+
+import { normalizeSubStatus } from '$lib/data-config/tracker-schema';
+import { fetchCatalogTaxonomy } from '$lib/api/catalog-api';
+export { fetchCatalogTaxonomy as fetchStatusTaxonomy };
+export type { StatusTaxonomy } from '$lib/api/catalog-api';
+
+export async function fetchStatusFacets(assetTypeSlug?: string): Promise<Map<string, number>> {
+  const res = await listAssets({ asset_type: assetTypeSlug, facets: true, limit: 1 });
+  const rawFacets = res.facets?.sub_status ?? res.facets?.status ?? {};
+  const normalized = new Map<string, number>();
+  for (const [k, v] of Object.entries(rawFacets)) {
+    const mapped = normalizeSubStatus(k);
+    if (!mapped) continue;
+    normalized.set(mapped, (normalized.get(mapped) ?? 0) + v);
+  }
+  return normalized;
+}
+
+// ============================================================================
 // COAL PLANT LOCATION
 // ============================================================================
 
