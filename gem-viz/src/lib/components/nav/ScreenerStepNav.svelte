@@ -15,13 +15,7 @@
    *   onStepClick?: (stepNum: number) => void
    * }}
    */
-  let { currentStep = 1, classesParam = '', ownersParam = '', isEmbed = false, onStepClick }: {
-    currentStep?: number;
-    classesParam?: string;
-    ownersParam?: string;
-    isEmbed?: boolean;
-    onStepClick?: (stepNum: number) => void;
-  } = $props();
+  let { currentStep = 1, classesParam = '', ownersParam = '', isEmbed = false, onStepClick = undefined } = $props();
 
   const steps = [
     { num: 1, label: 'Asset Classes', path: 'screener' },
