@@ -52,6 +52,8 @@
 <svelte:head>
   <title>Widget Embeds — Global Energy Monitor</title>
   <meta name="description" content="Copy-paste embed codes for GEM ownership visualizations. Shadow DOM widgets — no iframes." />
+  <!-- Load embed.js exactly as an external page would — full dogfooding -->
+  <script src="{ORIGIN}/embed.js"></script>
 </svelte:head>
 
 <div class="page-container--wide">
@@ -75,6 +77,10 @@
         <div class="widget-header">
           <h2>{w.name}</h2>
           <p class="widget-desc">{w.description}</p>
+        </div>
+
+        <div class="widget-specimen">
+          <div class="gem-embed" data-src={w.dataSrc} data-height={String(w.height || 500)}></div>
         </div>
 
         <div class="widget-code">
@@ -124,6 +130,12 @@
     font-size: var(--font-size-sm);
     color: var(--color-text-secondary);
     margin: 0;
+  }
+
+  .widget-specimen {
+    padding: var(--space-4);
+    min-height: 200px;
+    border-bottom: 1px solid var(--color-border-light);
   }
 
   .widget-code {
