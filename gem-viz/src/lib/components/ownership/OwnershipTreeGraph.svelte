@@ -19,6 +19,7 @@
     OwnershipPathEntry,
     LayoutNode,
     LayoutEdge,
+    LayoutPoint,
     DagreEdge,
   } from '$lib/component-data/graph-types';
   import OwnershipPanel from './OwnershipPanel.svelte';
@@ -30,6 +31,7 @@
     wrapText,
     pieArc,
     edgePath,
+    trimEdgeToNode,
     getNodeColors,
     COUNTRY_COLORS,
     COUNTRY_GRAY,
@@ -711,7 +713,12 @@
     });
     // Observable: edge weights influence dagre layout priority
     // asset edges = 3, both small = 1, one small = 2, normal = 3
+    // Note: cycle-closing edges are excluded from dagre layout to prevent
+    // rank inversions (e.g. Blackrock Advisors appearing below BlackRock).
+    // The Observable notebook's dagre-d3 has internal cycle-breaking that
+    // plain dagre lacks. Paths still include cycle edges (fixed above).
     renderEdges.forEach((e) => {
+      if (e.closes_cycle) return;
       const srcIsAsset =
         e.source === rootId || renderNodes.find((n) => n.id === e.source)?.type === 'asset';
       const tgtIsAsset =
@@ -750,6 +757,11 @@
       // Observable: make_tiny = dynamicSizing && curPct < 2
       const isSmallOwnership = !isAsset && pct < 2;
       const r = isAsset ? 0 : isSmallOwnership ? nodeR * 0.5 : nodeR;
+      // Compute the actual visual circle radius (matches rendering logic)
+      const circlePad = Math.round(nodeR * 0.18);
+      const visualR = isAsset
+        ? 0
+        : r - (isSmallOwnership ? 0.75 : 2) - circlePad * (isSmallOwnership ? 0.5 : 1);
       return {
         id,
         x: pos.x,
@@ -760,6 +772,7 @@
         label: orig?.name || orig?.Name || id,
         pct,
         r,
+        visualR,
         isSmallOwnership,
         labelPos: { dx: 0, dy: nodeR + Math.round(nodeR * 0.12), below: false, small: false },
         rank: 0, // will be filled after nodeRanks is computed
@@ -774,12 +787,30 @@
     computeLabelPositions(rawLayoutNodes, nodeRanks);
     layoutNodes = rawLayoutNodes;
 
+    // Build a lookup from layout nodes for edge trimming
+    const layoutNodeById = new Map(rawLayoutNodes.map((n) => [n.id, n]));
+
     layoutEdges = g.edges().map((e: DagreEdge) => {
       const orig = edgeByKey.get(`${e.v}->${e.w}`);
+      let pts: LayoutPoint[] = g.edge(e).points;
+      // Trim edge endpoints to circle/rect boundary instead of dagre bounding box
+      const srcNode = layoutNodeById.get(e.v);
+      const tgtNode = layoutNodeById.get(e.w);
+      if (tgtNode) {
+        // Use visualR (actual drawn circle radius) so arrows touch the visible circle
+        const trimR = tgtNode.isAsset ? 0 : (tgtNode.visualR + 2); // +2 for stroke
+        pts = trimEdgeToNode(pts, tgtNode.x, tgtNode.y, trimR, tgtNode.isAsset, tgtNode.w, tgtNode.h);
+      }
+      if (srcNode) {
+        const trimR = srcNode.isAsset ? 0 : (srcNode.visualR + 2);
+        const rev = [...pts].reverse();
+        const trimmed = trimEdgeToNode(rev, srcNode.x, srcNode.y, trimR, srcNode.isAsset, srcNode.w, srcNode.h);
+        pts = trimmed.reverse();
+      }
       return {
         source: e.v,
         target: e.w,
-        points: g.edge(e).points,
+        points: pts,
         value: orig?.value || 0,
         imputed_share: orig?.imputed_share || false,
       };
@@ -1099,27 +1130,30 @@
       zoomSpring.set(fitZoom, { hard: true });
     }
 
-    // For upstream ownership view (graphDirection='downstream' = TB layout, asset at high y),
-    // anchor the root (coal plant / asset) at the bottom of the visible area.
-    // Without this, the centered viewBox shows the top of the tree (distant owners) and
-    // the user has to scroll down to find the asset.
-    if (graphDirection === 'downstream' && graphWrapEl) {
-      const svgEl = graphWrapEl.querySelector('svg');
-      const rect = svgEl ? svgEl.getBoundingClientRect() : graphWrapEl.getBoundingClientRect();
-      const vbW_at_z = fullW / z;
-      // Height of SVG content visible in the container (in SVG units)
-      const visH = rect.height * vbW_at_z / rect.width;
-      // Default vbY when pan=0 (centered on the full dagre layout)
-      const vbY_base = -svgMargins.top + (fullH - fullH / z) / 2;
-      // Bottom of the full graph content in SVG coords (dagre gHeight + bottom margin)
+    if (!graphWrapEl) return;
+    const svgEl = graphWrapEl.querySelector('svg');
+    const rect = svgEl ? svgEl.getBoundingClientRect() : graphWrapEl.getBoundingClientRect();
+    if (rect.width === 0) return;
+
+    // How tall is the visible area in SVG coordinate units?
+    const vbW_at_z = fullW / z;
+    const visH = rect.height * vbW_at_z / rect.width;
+    // How tall is the graph content in SVG units?
+    const contentH = fullH / z;
+
+    if (graphDirection === 'downstream' && contentH > visH) {
+      // Graph is taller than the visible area — anchor the root (asset) at the bottom
+      const vbY_base = -svgMargins.top + (fullH - contentH) / 2;
       const graphBottom = gHeight + svgMargins.bottom;
-      // The visible bottom without any pan
       const visibleBottomNoPan = vbY_base + visH;
-      // How much we need to pan down to bring graphBottom into view
       const neededPan = graphBottom - visibleBottomNoPan;
       if (neededPan > 0) {
         panYSpring.set(neededPan, { hard: true });
       }
+    } else if (visH > contentH) {
+      // Visible area is taller than graph — center the graph vertically via panY
+      const excessSvgUnits = (visH - contentH) / 2;
+      panYSpring.set(-excessSvgUnits, { hard: true });
     }
   }
 
@@ -1128,14 +1162,22 @@
     const z = fitZoom < 1 ? fitZoom : 1;
     zoomSpring.set(fitZoom);
     panXSpring.set(0);
-    // For BT graphs taller than the container, pan to show the root at the bottom
-    if (graphDirection === 'upstream' && graphWrapEl) {
-      const svgEl = graphWrapEl.querySelector('svg');
-      const rect = svgEl ? svgEl.getBoundingClientRect() : graphWrapEl.getBoundingClientRect();
-      const vbY_base = -svgMargins.top + (fullH - fullH / z) / 2;
-      const visH = rect.height * (fullW / z) / rect.width;
+
+    if (!graphWrapEl) { panYSpring.set(0); return; }
+    const svgEl = graphWrapEl.querySelector('svg');
+    const rect = svgEl ? svgEl.getBoundingClientRect() : graphWrapEl.getBoundingClientRect();
+    if (rect.width === 0) { panYSpring.set(0); return; }
+
+    const vbW_at_z = fullW / z;
+    const visH = rect.height * vbW_at_z / rect.width;
+    const contentH = fullH / z;
+
+    if (graphDirection === 'upstream' && contentH > visH) {
+      const vbY_base = -svgMargins.top + (fullH - contentH) / 2;
       const neededPan = (gHeight + svgMargins.bottom) - (vbY_base + visH);
       panYSpring.set(neededPan > 0 ? neededPan : 0);
+    } else if (visH > contentH) {
+      panYSpring.set(-(visH - contentH) / 2);
     } else {
       panYSpring.set(0);
     }
@@ -1478,7 +1520,7 @@
             style={isLargeGraph
               ? `width: ${Math.round(graphBaseWidth)}px; min-height: ${Math.round(graphBaseHeight)}px;`
               : !compact
-                ? `max-width: ${fullW + 40}px; max-height: ${fullH + 40}px;`
+                ? `max-width: ${fullW + 40}px;`
                 : ''}
             onclick={(ev) => {
               // Click on SVG background (not a node) unfreezes
@@ -1505,7 +1547,7 @@
                 id="arr"
                 markerWidth="10"
                 markerHeight="10"
-                refX="4"
+                refX="5"
                 refY="5"
                 orient="auto"
                 markerUnits="strokeWidth"
@@ -1517,7 +1559,7 @@
                 id="arr-imputed"
                 markerWidth="10"
                 markerHeight="10"
-                refX="4"
+                refX="5"
                 refY="5"
                 orient="auto"
                 markerUnits="strokeWidth"
@@ -1844,8 +1886,13 @@
     max-height: min(74vh, 760px);
   }
   .graph-wrap.expand-height {
-    max-height: 4000px;
-    overflow: visible;
+    max-height: none;
+    height: 70vh;
+    min-height: 400px;
+    overflow: hidden;
+  }
+  .graph-wrap.expand-height > svg {
+    height: 100%;
   }
   .graph-wrap > svg {
     display: block;
