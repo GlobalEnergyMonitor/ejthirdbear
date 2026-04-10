@@ -109,6 +109,7 @@ const OWNERSHIP_API_BASE = getAPIBase();
 export const EXCLUDED_ENTITY_IDS = new Set([
   'E100001015587', // small shareholders
   'E100000123261', // natural person(s)
+  'E100000132388', // unknown
 ]);
 
 /** Enable detailed console logging */
