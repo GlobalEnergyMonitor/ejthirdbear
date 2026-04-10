@@ -18,6 +18,9 @@
   import { renderChart } from './screener-chart-render';
   import { matchesStatusFilter } from '$lib/data-config/tracker-schema';
   import Spinner from '$lib/components/feedback/Spinner.svelte';
+  import NestedIntermediaryPanel from '$lib/components/portfolio/NestedIntermediaryPanel.svelte';
+
+  const API_BASE = import.meta.env?.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-api.thirdbear.net';
 
   // Props
   let {
@@ -51,7 +54,15 @@
   // use tracker coloring unless there's ≤1 tracker type AND >1 status to differentiate
   const colorByTracker = $derived(!(trackerLegend.length <= 1 && statusLegend.length > 1));
   let intermediarySummaries = $state([]);
+  let expandedSubIds = $state(new Set());
   let destroyed = false;
+
+  function toggleSubExpand(id) {
+    const next = new Set(expandedSubIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    expandedSubIds = next;
+  }
 
   const hasFilteredAssetCount = $derived(
     typeof filteredAssetCount === 'number' && !Number.isNaN(filteredAssetCount)
@@ -151,6 +162,7 @@
             id: subId,
             name: chartData.entityMap.get(subId)?.Name || subId,
             matchedAssetCount: units.length,
+            matchedAssetIds: new Set(units.map((u) => u.id)),
             ownershipPct: chartData.matchedEdges.get(subId)?.value ?? null,
             totalDescendants: intermediary?.total_descendants ?? 0,
             maxGenerations: intermediary?.max_generations ?? 0,
@@ -298,35 +310,34 @@
       </div>
       <div class="intermediary-list">
         {#each intermediarySummaries as summary (summary.id)}
-          <details class="intermediary-item" open={intermediarySummaries.length === 1}>
-            <summary class="intermediary-summary">
-              <span class="intermediary-name">{summary.name}</span>
-              <span class="intermediary-meta">
-                {summary.matchedAssetCount} matching {summary.matchedAssetCount === 1
-                  ? assetClassName || 'asset'
-                  : assetClassName || 'assets'}
-              </span>
-            </summary>
-            <p class="intermediary-detail">
-              {#if formatOwnershipPct(summary.ownershipPct)}
-                <strong>{entityName || entityId}</strong> holds
-                <strong>{formatOwnershipPct(summary.ownershipPct)}</strong> of
-                <strong>{summary.name}</strong>.
-              {/if}
-              {#if summary.totalDescendants === 1}
-                This ownership path passes through <strong>1 intermediary company</strong>.
-              {:else}
-                This ownership path passes through
-                <strong>{summary.totalDescendants} intermediary companies</strong>.
-              {/if}
-              {#if summary.maxGenerations > 1}
-                The longest chain reaches <strong>{summary.maxGenerations}</strong> layers below the
-                direct subsidiary.
-              {:else}
-                The chain stays within <strong>1 layer</strong> below the direct subsidiary.
-              {/if}
-            </p>
-          </details>
+          {@const isExpanded = expandedSubIds.has(summary.id)}
+          <div class="intermediary-item">
+            <div class="intermediary-summary">
+              <div class="intermediary-summary-left">
+                <span class="intermediary-name">{summary.name}</span>
+                <span class="intermediary-meta">
+                  {summary.matchedAssetCount} matching {summary.matchedAssetCount === 1
+                    ? assetClassName || 'asset'
+                    : assetClassName || 'assets'}
+                  {#if formatOwnershipPct(summary.ownershipPct)}
+                    · {formatOwnershipPct(summary.ownershipPct)} owned
+                  {/if}
+                </span>
+              </div>
+              <button
+                class="expand-hierarchy-btn"
+                class:expanded={isExpanded}
+                onclick={() => toggleSubExpand(summary.id)}
+              >
+                {isExpanded ? '▼ Collapse' : '▶ Expand hierarchy'}
+              </button>
+            </div>
+            {#if isExpanded}
+              <div class="nested-panel-wrapper">
+                <NestedIntermediaryPanel entityId={summary.id} {API_BASE} matchedAssetIds={summary.matchedAssetIds} />
+              </div>
+            {/if}
+          </div>
         {/each}
       </div>
     </section>
@@ -535,12 +546,13 @@
     justify-content: space-between;
     gap: 1em;
     padding: 0.8em 1em;
-    cursor: pointer;
-    list-style: none;
   }
 
-  .intermediary-summary::-webkit-details-marker {
-    display: none;
+  .intermediary-summary-left {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2em;
+    min-width: 0;
   }
 
   .intermediary-name {
@@ -552,15 +564,32 @@
   .intermediary-meta {
     font-size: 0.82em;
     color: var(--color-text-tertiary, #61717b);
-    text-align: right;
   }
 
-  .intermediary-detail {
-    margin: 0;
-    padding: 0 1em 0.9em 1em;
-    font-size: 0.88em;
-    line-height: 1.55;
-    color: var(--color-text-primary, #1f2f38);
+  .expand-hierarchy-btn {
+    flex-shrink: 0;
+    padding: 0.35em 0.85em;
+    border: 1.5px solid var(--gem-primary-blue, #004a63);
+    border-radius: 5px;
+    background: transparent;
+    color: var(--gem-primary-blue, #004a63);
+    font-size: 0.8em;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 120ms ease, color 120ms ease;
+    white-space: nowrap;
+  }
+
+  .expand-hierarchy-btn:hover,
+  .expand-hierarchy-btn.expanded {
+    background: var(--gem-primary-blue, #004a63);
+    color: #fff;
+  }
+
+  .nested-panel-wrapper {
+    border-top: 1px solid #e1e4de;
+    margin-left: 1em;
   }
 
   #legend-container {

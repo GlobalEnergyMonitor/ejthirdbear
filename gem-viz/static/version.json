@@ -1,10 +1,10 @@
 {
-  "version": "0.8.0",
-  "commit": "b79fe7c",
-  "message": "chore(release): v0.8.0",
-  "author": "EJ Fox",
-  "timestamp": "2026-04-02T00:00:00.000Z",
-  "deployed": "2026-04-02T00:00:00.000Z",
-  "buildTime": "4/2/2026",
-  "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.8.0"
+  "version": "80ca662",
+  "commit": "80ca662",
+  "message": "fix(ownership): add trimEdgeToNode + WIP upstream owners in focus indicator",
+  "author": "Stephen Osserman",
+  "timestamp": "2026-04-10T05:55:46.727Z",
+  "deployed": "2026-04-10T05:55:46.727Z",
+  "buildTime": "4/9/2026, 10:55:46 PM",
+  "deployUrl": "https://ejthirdbear.sfo3.digitaloceanspaces.com/gem-viz/v0.8.2"
 }

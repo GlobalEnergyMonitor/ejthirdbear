@@ -24,6 +24,7 @@
     statusColorsGranular,
     ownershipColors,
   } from '$lib/design-tokens';
+  import NestedIntermediaryPanel from './NestedIntermediaryPanel.svelte';
 
   const API_BASE = import.meta.env?.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-api.thirdbear.net';
 
@@ -131,6 +132,16 @@
   let lastSyncedFilterSignature = $state('');
   /** Intermediary name → projectIds lookup (populated when intermediaries are clicked) */
   let intermediaryProjectIds = $state(new Map());
+
+  /** Set of intermediary entity_ids that are expanded (fold-out) */
+  let expandedIntermediaryIds = $state(new Set());
+
+  function toggleIntermediaryFoldout(entityId) {
+    const next = new Set(expandedIntermediaryIds);
+    if (next.has(entityId)) next.delete(entityId);
+    else next.add(entityId);
+    expandedIntermediaryIds = next;
+  }
 
   /** Whether any filter is active */
   let isFiltered = $derived(
@@ -1483,17 +1494,28 @@
             {@const isActive = filters.intermediary.has(inter.name)}
             {@const count = hasNonIntermediaryFilter ? inter.filteredCount : inter.assetCount}
             {@const hasResults = !hasNonIntermediaryFilter || inter.filteredCount > 0}
-            <div
-              class="summary-row"
-              class:active={isActive}
-              class:dimmed={isFiltered && !isActive && hasResults}
-              class:faded={isFiltered && !isActive && !hasResults}
-              role="button"
-              tabindex="0"
-              onclick={() => applyFilter('intermediary', inter.name, inter.projectIds)}
-              onkeydown={(e) => e.key === 'Enter' && applyFilter('intermediary', inter.name, inter.projectIds)}
-            >
-              {inter.name} ({count})
+            {@const isExpanded = expandedIntermediaryIds.has(inter.entity_id)}
+            <div class="summary-row-wrapper">
+              <div
+                class="summary-row"
+                class:active={isActive}
+                class:dimmed={isFiltered && !isActive && hasResults}
+                class:faded={isFiltered && !isActive && !hasResults}
+                role="button"
+                tabindex="0"
+                onclick={() => applyFilter('intermediary', inter.name, inter.projectIds)}
+                onkeydown={(e) => e.key === 'Enter' && applyFilter('intermediary', inter.name, inter.projectIds)}
+              >
+                {inter.name} ({count})
+              </div>
+              <button
+                class="foldout-btn"
+                class:expanded={isExpanded}
+                onclick={() => toggleIntermediaryFoldout(inter.entity_id)}
+                title="{isExpanded ? 'Collapse' : 'Expand'} {inter.name} sub-portfolio"
+              >
+                {isExpanded ? '▼' : '▶'}
+              </button>
             </div>
           {/each}
         </div>
@@ -1501,6 +1523,16 @@
       {/if}
       </div>
     </div>
+  <!-- EXPANDED INTERMEDIARY PANELS — appear below the main chart card, indented right -->
+  {#if intermediaries.length > 0}
+    {#each displayIntermediaries as inter}
+      {#if expandedIntermediaryIds.has(inter.entity_id)}
+        <div class="foldout-panel-wrapper">
+          <NestedIntermediaryPanel entityId={inter.entity_id} {API_BASE} />
+        </div>
+      {/if}
+    {/each}
+  {/if}
   {/if}
 </div>
 
@@ -2083,4 +2115,40 @@
   .asset-link:hover { text-decoration: underline; }
   .unit-divider { border: none; border-top: 1px solid var(--color-border, #e0e0e0); margin: 8px 0; }
   .unit-divider:last-child { display: none; }
+
+  /* ---- Intermediary fold-out ---- */
+  .summary-row-wrapper {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+  }
+  .summary-row-wrapper .summary-row {
+    flex: 1;
+    min-width: 0;
+  }
+  .foldout-btn {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.5);
+    cursor: pointer;
+    padding: 0 var(--space-1);
+    font-size: 9px;
+    line-height: 1;
+    flex-shrink: 0;
+    transition: color var(--duration-fast) ease;
+    font-family: inherit;
+  }
+  .foldout-btn:hover,
+  .foldout-btn.expanded {
+    color: var(--gem-mint, #9df7e5);
+  }
+
+  /* ---- Expanded nested portfolio panels ---- */
+  .foldout-panel-wrapper {
+    margin-left: var(--space-6, 24px);
+    margin-top: var(--space-2);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    box-shadow: -3px 0 0 var(--gem-teal, #007b7f);
+  }
 </style>
