@@ -1221,45 +1221,49 @@
   .chart-modal-backdrop {
     position: fixed;
     inset: 0;
-    background: color-mix(in srgb, var(--color-text-primary, #000) 50%, transparent);
+    background: rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     z-index: 100;
   }
 
   .chart-modal {
     position: fixed;
-    top: 5vh;
-    left: 5vw;
-    right: 5vw;
-    bottom: 5vh;
+    inset: 3vh 3vw;
     background: var(--color-bg-primary, #fff);
-    border-radius: var(--radius-md, 8px);
+    border-radius: 8px;
     z-index: 101;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    box-shadow: var(--shadow-lg, 0 4px 16px rgba(0, 0, 0, 0.12));
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   }
 
   .chart-modal-header {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    padding: var(--space-4, 1rem) var(--space-5, 1.25rem);
-    border-bottom: 1px solid var(--color-gray-200, #e5e7eb);
+    justify-content: space-between;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--color-border, #e5e7eb);
+    flex-shrink: 0;
   }
 
   .chart-modal-header h3 {
     margin: 0;
-    font-size: var(--font-size-lg, 1.125rem);
+    font-size: var(--font-size-md, 1rem);
+    font-weight: 500;
+    color: var(--color-text-secondary, #64748b);
+    font-family: Georgia, serif;
   }
 
   .chart-modal-close {
     background: none;
     border: none;
-    font-size: var(--font-size-xl, 1.25rem);
     cursor: pointer;
     color: var(--color-text-tertiary, #94a3b8);
-    padding: var(--space-1, 0.25rem);
+    font-size: var(--font-size-lg, 1.125rem);
+    padding: 4px 8px;
+    line-height: 1;
   }
 
   .chart-modal-close:hover {
@@ -1268,8 +1272,16 @@
 
   .chart-modal-body {
     flex: 1;
-    overflow: auto;
-    padding: var(--space-4, 1rem);
+    overflow-y: auto;
+    padding: 0;
+    min-height: 0;
+  }
+
+  .chart-modal-body :global(.sticky-section) {
+    max-height: none;
+    height: 100%;
+    border: none;
+    border-radius: 0;
   }
 
   /* Viz grid */
