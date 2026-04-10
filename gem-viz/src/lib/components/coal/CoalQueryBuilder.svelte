@@ -803,7 +803,7 @@
       }),
     },
     {
-      sentence: 'Total mine workforce by country',
+      sentence: 'Total coal mine workforce by country',
       apply: () => q.applyQuery({
         trackers: ['coal-mine'],
         filters: { status: ['operating'] },
