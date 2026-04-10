@@ -286,30 +286,22 @@ export function findSubtree(
   return undefined;
 }
 
-// Static JSON used as instant fallback so tiles render synchronously;
-// API fetch replaces it on first fetchAssetClasses() call.
-import assetClassFiltersJson from '$lib/data-config/asset-class-filters.json';
-
 const ASSET_CLASSES_TTL_MS = 60 * 60 * 1000; // 1 hour
-let _assetClassesCache: CatalogAssetClass[] | null = assetClassFiltersJson as CatalogAssetClass[];
-let _assetClassesFetchedAt = 0; // Start expired so first call always fetches from API
+let _assetClassesCache: CatalogAssetClass[] | null = null;
+let _assetClassesFetchedAt = 0;
 
-/** Returns asset class filter definitions. Currently served from static JSON; will fetch from API once deployed. */
+/** Fetch asset class filter definitions from the API. No static fallback — API is the source of truth. */
 export async function fetchAssetClasses(): Promise<CatalogAssetClass[]> {
   const now = Date.now();
   if (_assetClassesCache && now - _assetClassesFetchedAt < ASSET_CLASSES_TTL_MS) {
     return _assetClassesCache;
   }
-  try {
-    const res = await fetch(`${CATALOG_API_BASE}/catalog/asset-class-filters?format=json`);
-    if (!res.ok) return _assetClassesCache ?? [];
-    const data: CatalogAssetClass[] = await res.json();
-    _assetClassesCache = Array.isArray(data) ? data : [];
-    _assetClassesFetchedAt = now;
-    return _assetClassesCache;
-  } catch {
-    return _assetClassesCache ?? [];
-  }
+  const res = await fetch(`${CATALOG_API_BASE}/catalog/asset-class-filters?format=json`);
+  if (!res.ok) throw new Error(`Failed to fetch asset classes: ${res.status}`);
+  const data: CatalogAssetClass[] = await res.json();
+  _assetClassesCache = Array.isArray(data) ? data : [];
+  _assetClassesFetchedAt = now;
+  return _assetClassesCache;
 }
 
 let _hierarchyCache: { categories: unknown[] } | null = null;
