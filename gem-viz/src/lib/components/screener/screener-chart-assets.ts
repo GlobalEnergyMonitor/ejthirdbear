@@ -41,6 +41,7 @@ export function drawAssetGroups(
     window.location.assign(href);
   };
 
+  // For expanded subsidiaries, render no direct locations (they go into sub-groups below)
   const outerGroups = group
     .selectAll<SVGGElement, SubsidiaryGroupData>('.subsidiary-asset-group')
     .data(data)
@@ -49,10 +50,10 @@ export function drawAssetGroups(
     .attr('id', (d) => `subsidiary-asset-group-${d.id}`)
     .attr('transform', (d) => `translate(${LAYOUT.assetsX}, ${d.top})`);
 
-  // For each location within the subsidiary
+  // For each location within the subsidiary — skip if expanded (assets come from sub-groups)
   const assets = outerGroups
     .selectAll<SVGGElement, LocationGroup>('.asset')
-    .data((d) => d.locations)
+    .data((d) => (d.expansion ? [] : d.locations))
     .join('g')
     .attr('class', 'asset')
     .attr('id', (d) => `asset-${d.locationID}`)
@@ -71,6 +72,80 @@ export function drawAssetGroups(
       }
     });
 
+  renderAssetLocations(assets, getColor, getAssetHref);
+
+  // For expanded subsidiaries, render assets from each sub-group (and recursively for nested expansions)
+  for (const d of data) {
+    if (!d.expansion) continue;
+    for (const sg of d.expansion.subGroups) {
+      const sgShift = LAYOUT.assetsX + LAYOUT.expansionShift;
+
+      if (sg.expansion && sg.expansion.subGroups.length > 0) {
+        // Sub-group is itself expanded — render its sub-sub-group assets with extra shift
+        for (const ssg of sg.expansion.subGroups) {
+          const ssgG = group
+            .append('g')
+            .attr('class', 'subsidiary-asset-group subsidiary-asset-subgroup subsidiary-asset-subgroup--depth2')
+            .attr('id', `subsidiary-asset-group-${CSS.escape(ssg.id)}`)
+            .attr('transform', `translate(${sgShift + LAYOUT.expansionShift}, ${ssg.top})`);
+
+          const ssgAssets = ssgG
+            .selectAll<SVGGElement, LocationGroup>('.asset')
+            .data(ssg.locations)
+            .join('g')
+            .attr('class', 'asset')
+            .attr('id', (loc) => `asset-${loc.locationID}`)
+            .attr('transform', (loc) => `translate(0, ${loc.y})`)
+            .style('cursor', 'pointer')
+            .attr('role', 'link')
+            .attr('tabindex', 0)
+            .attr('aria-label', (loc) => `Open asset ${loc.units[0]?.name || loc.units[0]?.id || loc.locationID}`)
+            .on('click', (_event, locData) => { openAsset(locData.units[0]?.id); })
+            .on('keydown', (event, locData) => {
+              if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openAsset(locData.units[0]?.id); }
+            });
+
+          renderAssetLocations(ssgAssets, getColor, getAssetHref);
+        }
+      } else {
+        // Normal sub-group: render its direct assets
+        const subG = group
+          .append('g')
+          .attr('class', 'subsidiary-asset-group subsidiary-asset-subgroup')
+          .attr('id', `subsidiary-asset-group-${CSS.escape(sg.id)}`)
+          .attr('transform', `translate(${sgShift}, ${sg.top})`);
+
+        const subAssets = subG
+          .selectAll<SVGGElement, LocationGroup>('.asset')
+          .data(sg.locations)
+          .join('g')
+          .attr('class', 'asset')
+          .attr('id', (loc) => `asset-${loc.locationID}`)
+          .attr('transform', (loc) => `translate(0, ${loc.y})`)
+          .style('cursor', 'pointer')
+          .attr('role', 'link')
+          .attr('tabindex', 0)
+          .attr('aria-label', (loc) => `Open asset ${loc.units[0]?.name || loc.units[0]?.id || loc.locationID}`)
+          .on('click', (_event, locData) => { openAsset(locData.units[0]?.id); })
+          .on('keydown', (event, locData) => {
+            if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openAsset(locData.units[0]?.id); }
+          });
+
+        renderAssetLocations(subAssets, getColor, getAssetHref);
+      }
+    }
+  }
+}
+
+/**
+ * Shared rendering logic for a selection of location groups.
+ * Used for both top-level subsidiary assets and sub-group assets.
+ */
+function renderAssetLocations(
+  assets: Selection<SVGGElement, LocationGroup, SVGGElement, SubsidiaryGroupData>,
+  getColor: (_unit: ChartUnit) => string,
+  _getAssetHref: (_assetId: string) => string
+): void {
   // Hover background rect (invisible hit area, expands on hover)
   assets
     .append('rect')
@@ -405,10 +480,35 @@ export function drawCommonAssetLines(
   interface LineDatum {
     subsidiary: SubsidiaryGroupData;
     location: LocationGroup;
+    locationTop: number; // global top of the group that owns this location
     offsetX: number;
+    xShift: number; // additional horizontal shift (expansionShift for sub-group assets)
   }
 
   const lineData: LineDatum[][] = [];
+
+  /**
+   * Find a location by asset ID, searching top-level locations and, if the
+   * subsidiary is expanded, its sub-group locations too.
+   */
+  function findLocation(
+    subsidiary: SubsidiaryGroupData,
+    assetId: string
+  ): { location: LocationGroup; locationTop: number; xShift: number } | null {
+    // Check direct locations first (non-expanded subsidiaries)
+    const direct = subsidiary.locations.find((loc) => loc.units.some((u) => u.id === assetId));
+    if (direct) return { location: direct, locationTop: subsidiary.top, xShift: 0 };
+
+    // Check sub-group locations for expanded subsidiaries
+    if (subsidiary.expansion) {
+      for (const sg of subsidiary.expansion.subGroups) {
+        const inSub = sg.locations.find((loc) => loc.units.some((u) => u.id === assetId));
+        if (inSub) return { location: inSub, locationTop: sg.top, xShift: LAYOUT.expansionShift };
+      }
+    }
+
+    return null;
+  }
 
   chartData.multiplePathAssets.forEach((subsidiaryIds, assetId) => {
     const points: LineDatum[] = [];
@@ -417,25 +517,30 @@ export function drawCommonAssetLines(
       const subsidiary = subsidiaryGroups.find((s) => s.id === subId);
       if (!subsidiary) continue;
 
-      const location = subsidiary.locations.find((loc) => loc.units.some((u) => u.id === assetId));
-      if (!location) continue;
+      const found = findLocation(subsidiary, assetId);
+      if (!found) continue;
 
-      // Try to get text width from rendered label
-      const labelEl = assetGroup
-        .select(`#subsidiary-asset-group-${subId}`)
-        .select(`#asset-${location.locationID}`)
-        .select('text');
+      const { location, locationTop, xShift } = found;
+
+      // Try to get text width from rendered label — search in direct group or sub-group
+      const groupSel = assetGroup.select(`#subsidiary-asset-group-${subId}`);
+      const subGroupSel = assetGroup.select(`#subsidiary-asset-group-${CSS.escape(`${subId}`)}`);
+      const labelEl = groupSel.empty()
+        ? subGroupSel.select(`#asset-${location.locationID}`).select('text')
+        : groupSel.select(`#asset-${location.locationID}`).select('text');
       const bbox = labelEl.node() ? (labelEl.node() as SVGTextElement).getBBox() : { width: 100 };
 
       points.push({
         subsidiary,
         location,
+        locationTop,
+        xShift,
         offsetX: bbox.width + LAYOUT.assetMarkHeightCombined + 15,
       });
     }
 
     if (points.length !== 2) return;
-    points.sort((a, b) => a.subsidiary.top - b.subsidiary.top);
+    points.sort((a, b) => a.locationTop - b.locationTop);
 
     // Dedup
     const startId = points[0].location.locationID;
@@ -452,10 +557,10 @@ export function drawCommonAssetLines(
 
   for (const points of lineData) {
     const p = d3Path();
-    const xS = LAYOUT.assetsX + points[0].offsetX;
-    const yS = points[0].subsidiary.top + points[0].location.y;
-    const xE = LAYOUT.assetsX + points[1].offsetX;
-    const yE = points[1].subsidiary.top + points[1].location.y;
+    const xS = LAYOUT.assetsX + points[0].xShift + points[0].offsetX;
+    const yS = points[0].locationTop + points[0].location.y;
+    const xE = LAYOUT.assetsX + points[1].xShift + points[1].offsetX;
+    const yE = points[1].locationTop + points[1].location.y;
 
     const R = scaleDistance(yE - yS) + Math.random() * 45 + 5;
     p.moveTo(xS, yS);

@@ -10,7 +10,11 @@ import { select, type Selection } from 'd3';
 import { statusColors, getTrackerColor } from '$lib/design-tokens';
 import type { ScreenerChartData, SubsidiaryGroupData, ChartUnit } from './screener-chart-data';
 import { LAYOUT } from './screener-chart-data';
-import { drawSubsidiaryRegions, drawSubsidiaryLabels } from './screener-chart-subsidiaries';
+import {
+  drawSubsidiaryRegions,
+  drawSubsidiaryLabels,
+  drawSubsidiarySubRegions,
+} from './screener-chart-subsidiaries';
 import { drawAssetGroups, drawCommonAssetLines } from './screener-chart-assets';
 import { drawLegend, type ColorField } from './screener-chart-legend';
 
@@ -31,6 +35,8 @@ export interface RenderOptions {
   colorField?: ColorField;
   showLegend?: boolean;
   assetHref?: (_assetId: string) => string;
+  expandedSubIds?: Set<string>;
+  onExpandSubsidiary?: (_subId: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -105,8 +111,14 @@ export function renderChart(
   const assetGroup = main.append('g').attr('class', 'assets');
   const lineGroup = main.append('g').attr('class', 'shared-lines');
 
+  const expandOptions = {
+    expandedSubIds: options.expandedSubIds,
+    onExpandSubsidiary: options.onExpandSubsidiary,
+  };
+
   drawSubsidiaryRegions(regionGroup, subsidiaryGroups, contentHeight, MARGIN.top);
-  drawSubsidiaryLabels(labelGroup, subsidiaryGroups, chartData);
+  drawSubsidiarySubRegions(regionGroup, subsidiaryGroups, MARGIN.top);
+  drawSubsidiaryLabels(labelGroup, subsidiaryGroups, chartData, expandOptions);
   drawAssetGroups(assetGroup, subsidiaryGroups, getUnitColor, assetHref);
   drawCommonAssetLines(assetGroup, lineGroup, subsidiaryGroups, chartData, contentHeight);
 

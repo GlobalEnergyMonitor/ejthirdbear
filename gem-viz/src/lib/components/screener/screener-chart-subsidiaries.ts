@@ -26,12 +26,13 @@ const COL_STROKE = '#d8d8ce';
 export function subsidiaryPath(
   d: SubsidiaryGroupData,
   yOffset: number,
-  strokeOnly = false
+  strokeOnly = false,
+  extraWidth = 0
 ): string {
   const p = d3Path();
   const xS = 0;
   const yS = d.top;
-  const xE = LAYOUT.subsidX + LAYOUT.assetsX - LAYOUT.regionPadding - LAYOUT.assetSpacing * 2;
+  const xE = LAYOUT.subsidX + LAYOUT.assetsX - LAYOUT.regionPadding - LAYOUT.assetSpacing * 2 + extraWidth;
   const yE = d.bottom;
   const radius = LAYOUT.yPadding;
   const xSU = xS;
@@ -72,16 +73,94 @@ export function drawSubsidiaryRegions(
 
   regions
     .append('path')
-    .attr('d', (d) => subsidiaryPath(d, -marginTop - 5))
+    .attr('d', (d) => subsidiaryPath(d, -marginTop - 5, false, d.expansion ? LAYOUT.expansionShift : 0))
     .style('fill', 'url(#gradient-fade)');
 
   regions
     .append('path')
-    .attr('d', (d) => subsidiaryPath(d, -marginTop - 5, true))
+    .attr('d', (d) => subsidiaryPath(d, -marginTop - 5, true, d.expansion ? LAYOUT.expansionShift : 0))
     .style('fill', 'none')
     .style('stroke', COL_STROKE)
     .style('stroke-width', '3px')
     .style('stroke-linecap', 'round');
+}
+
+// ---------------------------------------------------------------------------
+// Sub-subsidiary nested region shapes
+// ---------------------------------------------------------------------------
+
+export function drawSubsidiarySubRegions(
+  group: Selection<SVGGElement, unknown, null, undefined>,
+  data: SubsidiaryGroupData[],
+  _marginTop: number
+): void {
+  const r = LAYOUT.yPadding * 0.6;  // ≈ 24px — entry curve radius
+  const stemX = LAYOUT.subsidX;
+  const xE = LAYOUT.subsidX + LAYOUT.assetsX - LAYOUT.regionPadding - LAYOUT.assetSpacing * 2;
+  const markR = (LAYOUT.subsidiaryMarkHeight / 2) * 0.7;
+
+  for (const d of data) {
+    if (!d.expansion) continue;
+    const subGroups = d.expansion.subGroups;
+    if (subGroups.length === 0) continue;
+
+    const lastSg = subGroups[subGroups.length - 1];
+
+    // Single continuous stem from parent pie center down to where the last entry curve starts.
+    const stemStartY = d.top + 26 + markR;  // parent pie center
+    const stemEndY = lastSg.top - r;
+    group.append('line')
+      .attr('class', 'expansion-stem')
+      .attr('x1', stemX).attr('y1', stemStartY)
+      .attr('x2', stemX).attr('y2', stemEndY)
+      .style('stroke', COL_STROKE).style('stroke-width', '1.5px');
+
+    // Each sub-region: solid entry curve from stem → solid top edge. No fill.
+    for (const sg of subGroups) {
+      const subG = group.append('g').attr('class', 'sub-subsidiary-region');
+      const yS = sg.top;
+
+      const strokeP = d3Path();
+      strokeP.moveTo(stemX, yS - r);
+      strokeP.bezierCurveTo(stemX, yS - r * 0.2, stemX + r * 0.2, yS, stemX + r, yS);
+      strokeP.lineTo(xE, yS);
+
+      subG.append('path')
+        .attr('d', strokeP.toString())
+        .style('fill', 'none')
+        .style('stroke', COL_STROKE)
+        .style('stroke-width', '1.5px');
+
+      // Recursive: if this sub-group is itself expanded, draw its nested stem + entry curves
+      if (sg.expansion && sg.expansion.subGroups.length > 0) {
+        const subSubGroups = sg.expansion.subGroups;
+        const stemX2 = LAYOUT.subsidX + Math.round(LAYOUT.yPadding * 0.6); // = subLabelOriginX
+        const lastSsg = subSubGroups[subSubGroups.length - 1];
+
+        // Stem from sub-group label area down to last sub-sub-region
+        const stemStartY2 = sg.top + 26 + markR;
+        group.append('line')
+          .attr('class', 'expansion-stem expansion-stem--depth2')
+          .attr('x1', stemX2).attr('y1', stemStartY2)
+          .attr('x2', stemX2).attr('y2', lastSsg.top - r)
+          .style('stroke', COL_STROKE).style('stroke-width', '1.5px');
+
+        for (const ssg of subSubGroups) {
+          const ssgG = group.append('g').attr('class', 'sub-subsidiary-region sub-subsidiary-region--depth2');
+          const ysS = ssg.top;
+          const sp = d3Path();
+          sp.moveTo(stemX2, ysS - r);
+          sp.bezierCurveTo(stemX2, ysS - r * 0.2, stemX2 + r * 0.2, ysS, stemX2 + r, ysS);
+          sp.lineTo(xE, ysS);
+          ssgG.append('path')
+            .attr('d', sp.toString())
+            .style('fill', 'none')
+            .style('stroke', COL_STROKE)
+            .style('stroke-width', '1.5px');
+        }
+      }
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -91,7 +170,11 @@ export function drawSubsidiaryRegions(
 export function drawSubsidiaryLabels(
   group: Selection<SVGGElement, unknown, null, undefined>,
   data: SubsidiaryGroupData[],
-  chartData: ScreenerChartData
+  chartData: ScreenerChartData,
+  options?: {
+    expandedSubIds?: Set<string>;
+    onExpandSubsidiary?: (id: string) => void;
+  }
 ): void {
   const markR = (LAYOUT.subsidiaryMarkHeight / 2) * 0.7;
   const labelX = markR + 8;
@@ -181,8 +264,147 @@ export function drawSubsidiaryLabels(
   const BAR_X = 200;
   items.each(function (d) {
     drawMiniBarChartsForItem(select(this), d, markR - 4, BAR_X);
-    drawIntermediaryPathForItem(select(this), d, markR * 2 + 18);
+    drawIntermediaryPathForItem(select(this), d, markR * 2 + 18, options);
   });
+
+  // Draw sub-group labels for expanded subsidiaries.
+  // Sub-labels are indented by the entry-curve radius so they sit inside the sub-region.
+  const subEntryR = Math.round(LAYOUT.yPadding * 0.6); // = 24 — matches drawSubsidiarySubRegions
+  const subLabelOriginX = LAYOUT.subsidX + subEntryR;  // = 44
+
+  for (const d of data) {
+    if (!d.expansion) continue;
+
+    // Build ownership chain prefix for tooltips: spotlight → primary subsidiary
+    const spotlightName = chartData.spotlightOwner.Name;
+    const parentEdge = chartData.matchedEdges.get(d.id);
+    const parentPct = parentEdge?.value != null ? `${Math.round(parentEdge.value)}%` : '?%';
+    const parentName = chartData.entityMap.get(d.id)?.Name ?? d.id;
+
+    for (const sg of d.expansion.subGroups) {
+      const isDirect = sg.id.endsWith(':direct');
+
+      const subLabel = group
+        .append('g')
+        .attr('class', 'sub-subsidiary-label')
+        .attr('transform', `translate(${subLabelOriginX}, ${sg.top + 26})`);
+
+      const rawName = d.expansion.entityMap.get(sg.id)?.Name ?? (isDirect ? 'Directly owned' : sg.id);
+      const name = rawName.length > 28 ? rawName.slice(0, 27) + '\u2026' : rawName;
+
+      if (!isDirect) {
+        // Ownership pie with multiline ownership-chain tooltip on hover
+        const pieCircle = subLabel.append('circle')
+          .attr('cx', 0)
+          .attr('cy', markR)
+          .attr('r', markR + 0.625)
+          .style('fill', '#cce1e6')
+          .style('stroke', '#ffffff')
+          .style('stroke-width', '1.25px')
+          .style('cursor', 'default');
+
+        const subEdge = d.expansion.matchedEdges.get(sg.id);
+        if (subEdge?.value != null) {
+          const subPct = `${Math.round(subEdge.value)}%`;
+          const chainLines = [
+            `${spotlightName} owns`,
+            `${parentPct} of ${parentName}, which owns`,
+            `${subPct} of ${rawName}`,
+          ];
+          pieCircle
+            .on('mouseover', () => showMultilineTooltip(subLabel, markR * 2 + 6, -8, chainLines))
+            .on('mouseout', () => subLabel.select('.ownership-chain-tooltip').remove());
+
+          const subArc = d3Arc<{ endAngle: number }>()
+            .innerRadius(0)
+            .outerRadius(markR)
+            .startAngle(0)
+            .cornerRadius(markR * 0.1);
+          subLabel.append('path')
+            .attr('transform', `translate(0, ${markR})`)
+            .attr('d', subArc({ endAngle: 2 * Math.PI * (subEdge.value / 100) }))
+            .style('fill', colors.teal)
+            .style('pointer-events', 'none');
+        }
+      }
+
+      subLabel.append('text')
+        .attr('x', isDirect ? 0 : labelX)
+        .attr('y', isDirect ? 0 : markR)
+        .attr('dy', '0.35em')
+        .style('fill', colors.navy)
+        .style('font-size', '14px')
+        .style('font-weight', 500)
+        .style('letter-spacing', '0.03em')
+        .text(name);
+
+      // If this sub-subsidiary has further intermediaries, draw the indicator + expand button
+      if (sg.intermediary_data) {
+        drawIntermediaryPathForItem(
+          subLabel as unknown as Selection<SVGGElement, SubsidiaryGroupData, null, undefined>,
+          sg,
+          markR * 2 + 10,
+          { ...options, xOffset: subEntryR }
+        );
+      }
+
+      // If this sub-subsidiary is itself expanded, draw its sub-sub-labels
+      if (sg.expansion) {
+        const subSubEntryR = subEntryR;
+        const subSubLabelOriginX = subLabelOriginX + subSubEntryR;
+        const subParentEdge = d.expansion.matchedEdges.get(sg.id);
+        const subParentPct = subParentEdge?.value != null ? `${Math.round(subParentEdge.value)}%` : '?%';
+
+        for (const ssg of sg.expansion.subGroups) {
+          const isSubDirect = ssg.id.endsWith(':direct');
+          const subSubLabel = group
+            .append('g')
+            .attr('class', 'sub-subsidiary-label sub-subsidiary-label--depth2')
+            .attr('transform', `translate(${subSubLabelOriginX}, ${ssg.top + 26})`);
+
+          const ssgRawName = sg.expansion.entityMap.get(ssg.id)?.Name ?? (isSubDirect ? 'Directly owned' : ssg.id);
+          const ssgName = ssgRawName.length > 28 ? ssgRawName.slice(0, 27) + '\u2026' : ssgRawName;
+
+          if (!isSubDirect) {
+            const ssgPie = subSubLabel.append('circle')
+              .attr('cx', 0).attr('cy', markR)
+              .attr('r', markR + 0.625)
+              .style('fill', '#cce1e6').style('stroke', '#ffffff').style('stroke-width', '1.25px')
+              .style('cursor', 'default');
+
+            const ssgEdge = sg.expansion.matchedEdges.get(ssg.id);
+            if (ssgEdge?.value != null) {
+              const ssgPct = `${Math.round(ssgEdge.value)}%`;
+              const ssgChainLines = [
+                `${spotlightName} owns`,
+                `${parentPct} of ${parentName}, which owns`,
+                `${subParentPct} of ${rawName}, which owns`,
+                `${ssgPct} of ${ssgRawName}`,
+              ];
+              ssgPie
+                .on('mouseover', () => showMultilineTooltip(subSubLabel, markR * 2 + 6, -8, ssgChainLines))
+                .on('mouseout', () => subSubLabel.select('.ownership-chain-tooltip').remove());
+
+              const ssgArc = d3Arc<{ endAngle: number }>()
+                .innerRadius(0).outerRadius(markR).startAngle(0).cornerRadius(markR * 0.1);
+              subSubLabel.append('path')
+                .attr('transform', `translate(0, ${markR})`)
+                .attr('d', ssgArc({ endAngle: 2 * Math.PI * (ssgEdge.value / 100) }))
+                .style('fill', colors.teal).style('pointer-events', 'none');
+            }
+          }
+
+          subSubLabel.append('text')
+            .attr('x', isSubDirect ? 0 : labelX)
+            .attr('y', isSubDirect ? 0 : markR)
+            .attr('dy', '0.35em')
+            .style('fill', colors.navy).style('font-size', '14px')
+            .style('font-weight', 500).style('letter-spacing', '0.03em')
+            .text(ssgName);
+        }
+      }
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -327,7 +549,12 @@ function showBarTooltip(
 function drawIntermediaryPathForItem(
   item: Selection<SVGGElement, SubsidiaryGroupData, null, undefined>,
   d: SubsidiaryGroupData,
-  startY: number
+  startY: number,
+  options?: {
+    expandedSubIds?: Set<string>;
+    onExpandSubsidiary?: (id: string) => void;
+    xOffset?: number;
+  }
 ): void {
   if (d.id === 'Directly owned') return;
 
@@ -335,82 +562,139 @@ function drawIntermediaryPathForItem(
   if (!intermediary) return;
 
   const radius = LAYOUT.yPadding;
-  const endWidth = LAYOUT.assetsX - LAYOUT.regionPadding - LAYOUT.subsidX - radius - 20;
+  const endWidth = LAYOUT.assetsX - LAYOUT.regionPadding - LAYOUT.subsidX - radius - 20 - (options?.xOffset ?? 0);
   const COL_HINT = '#61615c';
+
+  const isExpanded = options?.expandedSubIds?.has(d.id) ?? false;
 
   const g = item.append('g').attr('class', 'intermediary-path-group');
 
-  const path = d3Path();
-  const xS = 0;
-  const yS = startY;
-  const xE = radius;
-  const yE = startY + radius;
-  path.moveTo(xS, yS - 10);
-  path.lineTo(xS, yS);
-  path.bezierCurveTo(xS, yS + radius * 0.8, xE - radius * 0.8, yE, xE, yE);
-  path.lineTo(xE + endWidth, yE);
+  if (!isExpanded) {
+    const path = d3Path();
+    const xS = 0;
+    const yS = startY;
+    const xE = radius;
+    const yE = startY + radius;
+    path.moveTo(xS, yS - 10);
+    path.lineTo(xS, yS);
+    path.bezierCurveTo(xS, yS + radius * 0.8, xE - radius * 0.8, yE, xE, yE);
+    path.lineTo(xE + endWidth, yE);
 
-  g.append('path')
-    .attr('class', 'intermediary-path')
-    .attr('d', path.toString())
-    .style('fill', 'none')
-    .style('stroke', COL_STROKE)
-    .style('stroke-width', 1.5);
+    g.append('path')
+      .attr('class', 'intermediary-path')
+      .attr('d', path.toString())
+      .style('fill', 'none')
+      .style('stroke', COL_STROKE)
+      .style('stroke-width', 1.5);
 
-  if (intermediary.total_descendants > 1) {
-    const circles = g
-      .append('g')
-      .attr('class', 'intermediary-circles')
-      .attr('transform', `translate(${190}, ${startY + radius})`)
-      .style('isolation', 'isolate');
+    if (intermediary.total_descendants > 1) {
+      const circles = g
+        .append('g')
+        .attr('class', 'intermediary-circles')
+        .attr('transform', `translate(${190}, ${startY + radius})`)
+        .style('isolation', 'isolate');
 
-    const N = intermediary.total_descendants;
-    const maxCircles = Math.min(N, 12);
-    for (let i = 0; i < maxCircles; i++) {
-      circles
-        .append('circle')
-        .attr('cx', i * 8)
-        .attr('r', (LAYOUT.subsidiaryMarkHeight / 2) * 0.5)
-        .style('fill', '#cacaca')
-        .style('mix-blend-mode', 'multiply');
+      const N = intermediary.total_descendants;
+      const maxCircles = Math.min(N, 12);
+      for (let i = 0; i < maxCircles; i++) {
+        circles
+          .append('circle')
+          .attr('cx', i * 8)
+          .attr('r', (LAYOUT.subsidiaryMarkHeight / 2) * 0.5)
+          .style('fill', '#cacaca')
+          .style('mix-blend-mode', 'multiply');
+      }
     }
+
+    g.append('text')
+      .attr('transform', `translate(${radius - 10}, ${startY + radius + 14})`)
+      .style('font-size', '14px')
+      .style('font-weight', 500)
+      .style('font-style', 'italic')
+      .style('letter-spacing', '0.03em')
+      .style('fill', COL_HINT)
+      .text(
+        intermediary.total_descendants === 1
+          ? 'Assets are directly owned by intermediary'
+          : '(Some) assets are owned through other intermediaries'
+      );
   }
 
-  g.append('text')
-    .attr('transform', `translate(${radius - 10}, ${startY + radius + 14})`)
-    .style('font-size', '14px')
-    .style('font-weight', 500)
-    .style('font-style', 'italic')
-    .style('letter-spacing', '0.03em')
-    .style('fill', COL_HINT)
-    .text(
-      intermediary.total_descendants === 1
-        ? 'Assets are directly owned by intermediary'
-        : '(Some) assets are owned through other intermediaries'
-    );
-
   if (intermediary.total_descendants > 1) {
+    const foldY = isExpanded ? startY + 40 : startY + radius + 34;
     const fold = g
       .append('g')
-      .attr('transform', `translate(${radius - 2}, ${startY + radius + 34})`);
+      .attr('transform', `translate(${radius - 2}, ${foldY})`);
+
+    fold
+      .style('cursor', 'pointer')
+      .on('click', () => options?.onExpandSubsidiary?.(d.id));
+
     fold
       .append('rect')
       .attr('x', -8)
       .attr('y', -3)
-      .attr('width', 68)
+      .attr('width', isExpanded ? 92 : 68)
       .attr('height', 18)
       .attr('rx', 4)
       .attr('ry', 4)
-      .style('fill', '#dee4e7');
+      .style('fill', isExpanded ? colors.teal : '#dee4e7');
+
     fold
       .append('text')
       .attr('dy', '1em')
       .style('font-size', '14px')
       .style('font-weight', 700)
       .style('letter-spacing', '0.03em')
-      .style('fill', colors.teal)
-      .text('Details below');
+      .style('fill', isExpanded ? '#ffffff' : colors.teal)
+      .text(isExpanded ? '▼ Collapse' : '▶ Expand');
   }
+}
+
+// ---------------------------------------------------------------------------
+// Multiline ownership chain tooltip
+// ---------------------------------------------------------------------------
+
+function showMultilineTooltip(
+  group: Selection<SVGGElement, unknown, null, undefined>,
+  x: number,
+  y: number,
+  lines: string[]
+): void {
+  group.select('.ownership-chain-tooltip').remove();
+  const tip = group
+    .append('g')
+    .attr('class', 'ownership-chain-tooltip')
+    .attr('transform', `translate(${x}, ${y})`)
+    .style('pointer-events', 'none');
+
+  const LINE_H = 17;
+  const PAD = 8;
+
+  lines.forEach((line, i) => {
+    tip
+      .append('text')
+      .attr('x', PAD)
+      .attr('y', i * LINE_H + 13)
+      .style('font-size', '12px')
+      .style('fill', '#ffffff')
+      .text(line);
+  });
+
+  let maxW = 80;
+  tip.selectAll<SVGTextElement, unknown>('text').each(function () {
+    maxW = Math.max(maxW, this.getBBox().width);
+  });
+
+  tip
+    .insert('rect', 'text')
+    .attr('x', 0)
+    .attr('y', 0)
+    .attr('width', maxW + PAD * 2)
+    .attr('height', lines.length * LINE_H + PAD * 2)
+    .attr('rx', 4)
+    .attr('ry', 4)
+    .style('fill', '#004a63');
 }
 
 // ---------------------------------------------------------------------------

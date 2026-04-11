@@ -14,11 +14,14 @@
     statusColorsProspective,
     prospectiveStatuses,
   } from '$lib/design-tokens';
-  import { fetchChartData, buildSubsidiaryGroups } from './screener-chart-data';
+  import {
+    fetchChartData,
+    fetchSubExpansion,
+    buildSubsidiaryGroups,
+  } from './screener-chart-data';
   import { renderChart } from './screener-chart-render';
   import { matchesStatusFilter } from '$lib/data-config/tracker-schema';
   import Spinner from '$lib/components/feedback/Spinner.svelte';
-  import NestedIntermediaryPanel from '$lib/components/portfolio/NestedIntermediaryPanel.svelte';
 
   const API_BASE = import.meta.env?.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-api.thirdbear.net';
 
@@ -54,16 +57,15 @@
   // Mirrors the colorField logic in screener-chart-render.ts:
   // use tracker coloring unless there's ≤1 tracker type AND >1 status to differentiate
   const colorByTracker = $derived(!(trackerLegend.length <= 1 && statusLegend.length > 1));
-  let intermediarySummaries = $state([]);
-  let expandedSubIds = $state(new Set());
-  let destroyed = false;
 
-  function toggleSubExpand(id) {
-    const next = new Set(expandedSubIds);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    expandedSubIds = next;
-  }
+  // Subsidiary expansion state
+  let expansions = $state(new Map()); // Map<subId, SubsidiaryExpansion>
+  let expansionLoading = $state(new Set()); // Set<subId> — which are currently loading
+
+  // Stable reference to the filtered chart data for use in toggleExpansion
+  let currentChartData = null;
+
+  let destroyed = false;
 
   const hasFilteredAssetCount = $derived(
     typeof filteredAssetCount === 'number' && !Number.isNaN(filteredAssetCount)
@@ -84,6 +86,68 @@
     return Number.isInteger(value) ? `${value}%` : `${value.toFixed(1)}%`;
   }
 
+  function rerenderWithExpansions(exp) {
+    if (!container || !currentChartData) return;
+    if (chartCleanup) {
+      chartCleanup();
+      chartCleanup = null;
+    }
+    const subsidiaryGroups = buildSubsidiaryGroups(currentChartData, exp);
+    const containerWidth = container.clientWidth || 960;
+    chartCleanup = renderChart(container, currentChartData, subsidiaryGroups, {
+      width: containerWidth,
+      colorField: 'tracker',
+      showLegend: false,
+      assetHref: (assetId) => `${base}/asset/${encodeURIComponent(assetId)}`,
+      expandedSubIds: new Set(exp.keys()),
+      onExpandSubsidiary: toggleExpansion,
+    });
+  }
+
+  async function toggleExpansion(subId) {
+    if (expansions.has(subId)) {
+      // Collapse — also collapse any nested expansions of this entity
+      const next = new Map(expansions);
+      const collapsedExp = next.get(subId);
+      next.delete(subId);
+      // Remove any expansions for this entity's sub-groups too (clean up nested state)
+      if (collapsedExp) {
+        for (const sg of collapsedExp.subGroups) next.delete(sg.id);
+      }
+      expansions = next;
+      rerenderWithExpansions(next);
+      return;
+    }
+
+    // Find parent units: check top-level subsidiaries first, then existing expansion sub-groups
+    let parentUnits = currentChartData?.subsidiariesMatched?.get(subId) ?? null;
+    if (!parentUnits?.length) {
+      for (const [, exp] of expansions) {
+        const sg = exp.subGroups.find((sg) => sg.id === subId);
+        if (sg) {
+          parentUnits = sg.locations.flatMap((loc) => loc.units);
+          break;
+        }
+      }
+    }
+    if (!parentUnits?.length) return;
+
+    expansionLoading = new Set([...expansionLoading, subId]);
+    try {
+      const expansion = await fetchSubExpansion(subId, parentUnits);
+      const next = new Map(expansions);
+      next.set(subId, expansion);
+      expansions = next;
+      rerenderWithExpansions(next);
+    } catch (err) {
+      if (import.meta.env.DEV) console.error('[AssetScreenerChart] fetchSubExpansion error:', err);
+    } finally {
+      const s = new Set(expansionLoading);
+      s.delete(subId);
+      expansionLoading = s;
+    }
+  }
+
   async function loadAndRender() {
     if (!entityId || !container) return;
 
@@ -91,7 +155,11 @@
       loading = true;
       error = null;
       isEmpty = false;
-      intermediarySummaries = [];
+
+      // Reset expansion state when entity changes
+      expansions = new Map();
+      expansionLoading = new Set();
+      currentChartData = null;
 
       // Clean up previous render
       if (chartCleanup) {
@@ -151,24 +219,13 @@
         return;
       }
 
-      // Build subsidiary group layout
-      const subsidiaryGroups = buildSubsidiaryGroups(chartData);
+      // Store filtered chart data for expansion fetches
+      currentChartData = chartData;
+
+      // Build subsidiary group layout (no expansions yet on initial load)
+      const subsidiaryGroups = buildSubsidiaryGroups(chartData, new Map());
       totalAssets = chartData.assets.length;
       directSubsidiaries = chartData.subsidiariesMatched.size;
-      intermediarySummaries = Array.from(chartData.subsidiariesMatched.entries())
-        .filter(([subId]) => chartData.intermediaryData.has(subId))
-        .map(([subId, units]) => {
-          const intermediary = chartData.intermediaryData.get(subId);
-          return {
-            id: subId,
-            name: chartData.entityMap.get(subId)?.Name || subId,
-            matchedAssetCount: units.length,
-            matchedAssetIds: new Set(units.map((u) => u.id)),
-            ownershipPct: chartData.matchedEdges.get(subId)?.value ?? null,
-            totalDescendants: intermediary?.total_descendants ?? 0,
-            maxGenerations: intermediary?.max_generations ?? 0,
-          };
-        });
 
       const trackers = Array.from(
         new Set(chartData.assets.map((a) => a.tracker).filter((t) => t && t !== 'Unknown'))
@@ -221,6 +278,8 @@
         colorField: 'tracker',
         showLegend: false,
         assetHref: (assetId) => `${base}/asset/${encodeURIComponent(assetId)}`,
+        expandedSubIds: new Set(expansions.keys()),
+        onExpandSubsidiary: toggleExpansion,
       });
 
       loading = false;
@@ -280,6 +339,12 @@
         {/if}
       </p>
     </div>
+    {#if expansionLoading.size > 0}
+      <div class="expansion-loading-hint">
+        <Spinner size={14} />
+        <span>Loading sub-graph…</span>
+      </div>
+    {/if}
   </div>
 
   {#if loading}
@@ -300,49 +365,6 @@
   <div class="chart-wrapper" class:hidden={loading || !!error || isEmpty}>
     <div bind:this={container} class="chart-render"></div>
   </div>
-
-  {#if intermediarySummaries.length > 0}
-    <section class="intermediary-foldouts" class:hidden={loading || !!error || isEmpty}>
-      <div class="intermediary-header">
-        <p class="title">Intermediary Paths</p>
-        <p class="intermediary-copy">
-          Some subsidiaries hold the matched assets through additional intermediary companies.
-        </p>
-      </div>
-      <div class="intermediary-list">
-        {#each intermediarySummaries as summary (summary.id)}
-          {@const isExpanded = expandedSubIds.has(summary.id)}
-          <div class="intermediary-item">
-            <div class="intermediary-summary">
-              <div class="intermediary-summary-left">
-                <span class="intermediary-name">{summary.name}</span>
-                <span class="intermediary-meta">
-                  {summary.matchedAssetCount} matching {summary.matchedAssetCount === 1
-                    ? assetClassName || 'asset'
-                    : assetClassName || 'assets'}
-                  {#if formatOwnershipPct(summary.ownershipPct)}
-                    · {formatOwnershipPct(summary.ownershipPct)} owned
-                  {/if}
-                </span>
-              </div>
-              <button
-                class="expand-hierarchy-btn"
-                class:expanded={isExpanded}
-                onclick={() => toggleSubExpand(summary.id)}
-              >
-                {isExpanded ? '▼ Collapse' : '▶ Expand hierarchy'}
-              </button>
-            </div>
-            {#if isExpanded}
-              <div class="nested-panel-wrapper">
-                <NestedIntermediaryPanel entityId={summary.id} {API_BASE} matchedAssetIds={summary.matchedAssetIds} />
-              </div>
-            {/if}
-          </div>
-        {/each}
-      </div>
-    </section>
-  {/if}
 
   <div id="additional-info" class:hidden={loading || !!error || isEmpty}>
     <p>
@@ -466,6 +488,16 @@
     font-size: 0.85em;
   }
 
+  .expansion-loading-hint {
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+    margin-left: auto;
+    font-size: 0.8em;
+    opacity: 0.75;
+    font-style: italic;
+  }
+
   .chart-wrapper {
     overflow: visible;
     background: var(--color-gray-50, #fafaf7);
@@ -517,87 +549,6 @@
     display: inline-block;
     padding: 0.8em;
     border-top: 2px solid var(--gem-orange, #d45f42);
-  }
-
-  .intermediary-foldouts {
-    padding: 0.75em 1.2em 0.25em 1.2em;
-    border-top: var(--border-width) solid var(--color-border);
-    background: var(--color-bg-primary);
-  }
-
-  .intermediary-header {
-    margin-bottom: 0.7em;
-  }
-
-  .intermediary-copy {
-    margin: 0.3em 0 0 0;
-    font-size: 0.88em;
-    color: var(--color-text-secondary, #43525b);
-  }
-
-  .intermediary-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.55em;
-  }
-
-  .intermediary-item {
-    border: var(--border-width) solid var(--color-border);
-    border-radius: var(--radius-lg);
-    background: var(--color-bg-primary);
-    overflow: hidden;
-  }
-
-  .intermediary-summary {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1em;
-    padding: 0.8em 1em;
-  }
-
-  .intermediary-summary-left {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2em;
-    min-width: 0;
-  }
-
-  .intermediary-name {
-    font-size: 0.95em;
-    font-weight: 700;
-    color: var(--gem-primary-blue);
-  }
-
-  .intermediary-meta {
-    font-size: 0.82em;
-    color: var(--color-text-tertiary, #61717b);
-  }
-
-  .expand-hierarchy-btn {
-    flex-shrink: 0;
-    padding: 0.35em 0.85em;
-    border: 1.5px solid var(--gem-primary-blue, #004a63);
-    border-radius: 5px;
-    background: transparent;
-    color: var(--gem-primary-blue, #004a63);
-    font-size: 0.8em;
-    font-weight: 600;
-    font-family: inherit;
-    cursor: pointer;
-    transition: background 120ms ease, color 120ms ease;
-    white-space: nowrap;
-  }
-
-  .expand-hierarchy-btn:hover,
-  .expand-hierarchy-btn.expanded {
-    background: var(--gem-primary-blue, #004a63);
-    color: #fff;
-  }
-
-  .nested-panel-wrapper {
-    border-top: 1px solid #e1e4de;
-    margin-left: 1em;
   }
 
   #legend-container {
