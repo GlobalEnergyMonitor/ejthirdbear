@@ -84,22 +84,31 @@ let _hierarchy: { categories: HierarchyCategory[] } = $state(
 
 /**
  * Fetch hierarchy from the API, replacing the static JSON fallback.
- *
- * NOTE: The API response currently omits `label` on grouping asset classes,
- * which causes getHierarchyCategories() to filter them out (line 144).
- * Until the API includes labels, skip the replacement to keep static JSON.
+ * Fills in missing labels from the static JSON when the API omits them.
  */
 export async function loadHierarchy(): Promise<void> {
   try {
     const data = await fetchAssetClassHierarchy();
-    // Only replace if the API data actually has labels on grouping tiles;
-    // without labels, getHierarchyCategories() drops all multi-class tiles.
-    const firstGrouping = (data.categories ?? [])
-      .flatMap((c: { assetClasses?: Array<{ optionIds?: string[]; classGroups?: unknown[]; label?: string }> }) => c.assetClasses ?? [])
-      .find((ac: { optionIds?: string[]; classGroups?: unknown[] }) => ac.optionIds || ac.classGroups);
-    if (firstGrouping && (firstGrouping as { label?: string }).label) {
-      _hierarchy = data as { categories: HierarchyCategory[] };
+    if (!data?.categories?.length) return;
+
+    // Build a lookup of labels from static JSON for fallback
+    const staticLabels = new Map<string, string>();
+    for (const cat of hierarchyJson.categories) {
+      for (const ac of cat.assetClasses) {
+        if (ac.label) staticLabels.set(ac.id, ac.label);
+      }
     }
+
+    // Fill in missing labels from static JSON
+    for (const cat of data.categories as HierarchyCategory[]) {
+      for (const ac of cat.assetClasses) {
+        if (!(ac as HierarchyAssetClass & { label?: string }).label && staticLabels.has(ac.id)) {
+          (ac as HierarchyAssetClass & { label?: string }).label = staticLabels.get(ac.id);
+        }
+      }
+    }
+
+    _hierarchy = data as { categories: HierarchyCategory[] };
   } catch {
     // Keep static JSON fallback
   }
@@ -151,8 +160,9 @@ export function getHierarchyCategories(
             const childUrls = defaultIds.map((id: string) => byId.get(id)?.url).filter((u): u is string => !!u);
             const childOwnerUrls = defaultIds.map((id: string) => byId.get(id)?.owners_url).filter((u): u is string => !!u);
             if (childUrls.length === 0) return null;
-            const label = (ac as HierarchyAssetClass & { label?: string }).label;
-            if (!label) return null; // require label from hierarchy API
+            // Use API label, or synthesize from ID (e.g. "coal-related" → "Coal Related")
+            const label = (ac as HierarchyAssetClass & { label?: string }).label
+              || ac.id.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
             return {
               id: ac.id,
               label,
