@@ -33,7 +33,7 @@
     { slug: 'tracker-factsheet', name: 'Tracker Factsheet', description: 'Field metadata explorer for a tracker', dataSrc: '/embed/tracker-factsheet?tracker=coal-plant', height: 500 },
     { slug: 'coal-data-explorer', name: 'Coal Data Explorer', description: 'Interactive coal plant data query builder', dataSrc: '/embed/coal-data-explorer', height: 600 },
     { slug: 'screener', name: 'Asset Class Screener', description: 'Multi-step asset class screening tool', dataSrc: '/embed/screener', height: 700 },
-    { slug: 'portfolio-explorer', name: 'Portfolio Explorer', description: 'Interactive portfolio analysis', dataSrc: '/embed/portfolio-explorer?id=E100000000650', height: 600 },
+    { slug: 'portfolio-explorer', name: 'Portfolio Explorer', description: 'Search for an owner to explore their downstream asset portfolio', dataSrc: '/embed/portfolio-explorer', height: 500 },
   ];
 
   let copiedSlug = $state<string | null>(null);
