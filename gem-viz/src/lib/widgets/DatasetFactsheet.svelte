@@ -595,12 +595,17 @@
 
   .value-row {
     display: grid;
-    grid-template-columns: minmax(80px, max-content) 1fr auto;
+    grid-template-columns: minmax(80px, 180px) 1fr auto;
     align-items: center;
     gap: var(--space-2);
     font-size: var(--font-size-sm);
     padding: var(--space-1) 0;
     border-bottom: 1px solid var(--color-border);
+  }
+  .value-row .field-value {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .value-bar-wrap {
