@@ -4,7 +4,7 @@
    * Mirrors embed/project-card/+page.svelte.
    */
   import { onMount } from 'svelte';
-  import { getAsset, resolveAssetId } from './widget-api';
+  import { getAsset, resolveAssetId, getOwnershipGraph } from './widget-api';
   import ProjectCard from '$lib/components/cards/ProjectCard.svelte';
   import { errorMessage } from './widget-data';
   import type { Asset } from '$lib/factsheet/types';
@@ -88,7 +88,7 @@
   {:else if error}
     <div class="embed-error"><p>{error}</p></div>
   {:else if asset}
-    <ProjectCard {asset} variant="full" open={true} showLink={true} />
+    <ProjectCard {asset} variant="full" open={true} showLink={true} ownershipLoader={getOwnershipGraph} />
   {:else}
     <div class="embed-error"><p>No data found</p></div>
   {/if}

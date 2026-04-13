@@ -15,6 +15,18 @@
     resolveFieldValue,
     type CardField,
   } from '$lib/factsheet/tracker-card-config';
+  import { AssetOwnershipTree } from '$lib/components/ownership';
+  import type { GraphNode, GraphEdge, OwnershipPathEntry } from '$lib/component-data/graph-types';
+
+  type OwnershipGraphLoader = (_params: {
+    root: string;
+    direction: 'up' | 'down';
+    max_depth?: number;
+  }) => Promise<{
+    nodes?: GraphNode[];
+    edges?: GraphEdge[];
+    paths?: Record<string, OwnershipPathEntry[]>;
+  }>;
 
   let {
     asset,
@@ -23,6 +35,7 @@
     variant = 'full' as 'compact' | 'full',
     showLink = true,
     ownership,
+    ownershipLoader,
     map,
   } = $props<{
     asset: Asset;
@@ -31,8 +44,12 @@
     variant?: 'compact' | 'full';
     showLink?: boolean;
     ownership?: Snippet;
+    ownershipLoader?: OwnershipGraphLoader;
     map?: Snippet;
   }>();
+
+  /** Use built-in ownership tree when no snippet provided but loader is available */
+  const useBuiltinOwnership = $derived(!ownership && !!ownershipLoader);
 
   const statusGroup = $derived(getStatusGroup(asset.status));
   const isMine = $derived(isMineAsset(asset));
@@ -178,6 +195,15 @@
         <div class="snippet-section">
           {@render ownership()}
         </div>
+      {:else if useBuiltinOwnership}
+        <div class="snippet-section">
+          <AssetOwnershipTree
+            assetId={asset.locationId || asset.id}
+            compact
+            showViewFull={false}
+            ownershipLoader={ownershipLoader}
+          />
+        </div>
       {/if}
       {#if map}
         <div class="snippet-section">
@@ -216,6 +242,18 @@
           {#if activeTab.name === 'Ownership' && ownership}
             <div class="snippet-section">
               {@render ownership()}
+            </div>
+          {:else if activeTab.name === 'Ownership' && useBuiltinOwnership}
+            <div class="snippet-section">
+              <AssetOwnershipTree
+                assetId={asset.locationId || asset.id}
+                compact={false}
+                fullWidth
+                showViewFull={false}
+                emptyMessage="No ownership data available"
+                errorMessage="Failed to load ownership data"
+                ownershipLoader={ownershipLoader}
+              />
             </div>
           {/if}
 
