@@ -116,7 +116,6 @@
   /** Tooltip viewport position */
   let tooltipPos = $state({ x: 0, y: 0 });
 
-
   /**
    * Multi-dimensional crossfilter:
    * - OR within a column (clicking multiple values in same column = union)
@@ -1391,6 +1390,7 @@
       {@const cumPct = cumulativePctMap.get(hoveredProject.projectID)}
       {@const ttLeft = typeof window !== 'undefined' ? Math.min(tooltipPos.x + 12, window.innerWidth - 320) : tooltipPos.x + 12}
       {@const ttTop = typeof window !== 'undefined' ? Math.min(tooltipPos.y - 10, window.innerHeight - 200) : tooltipPos.y - 10}
+      {@const hasOwnershipCol = hoveredProject.units.some(u => u.ownership_share)}
       <div class="portfolio-tooltip" style="left: {ttLeft}px; top: {ttTop}px;">
         <div class="tt-header">
           <div class="tt-name">{u0?.project_name || u0?.asset_name || hoveredProject.projectID}</div>
@@ -1407,7 +1407,7 @@
               <th>Unit</th>
               <th>Status</th>
               <th class="num">Capacity</th>
-              {#if hoveredProject.units.some(u => u.ownership_share)}<th class="num">Own%</th>{/if}
+              {#if hasOwnershipCol}<th class="num">Own%</th>{/if}
             </tr>
           </thead>
           <tbody>
@@ -1416,7 +1416,7 @@
                 <td class="unit-name">{unit.asset_name || unit.asset_id}</td>
                 <td><span class="status-dot" style="background:{COLOR_BY_STATUS.get(unit.operating_status?.toLowerCase()) || '#999'}"></span>{unit.operating_status || '—'}</td>
                 <td class="num">{unit.capacity_value ? `${unit.capacity_value.toLocaleString()} ${unit.capacity_unit || 'MW'}` : '—'}</td>
-                {#if hoveredProject.units.some(u => u.ownership_share)}<td class="num">{unit.ownership_share ? `${unit.ownership_share}%` : '—'}</td>{/if}
+                {#if hasOwnershipCol}<td class="num">{unit.ownership_share ? `${unit.ownership_share}%` : '—'}</td>{/if}
               </tr>
             {/each}
           </tbody>
@@ -1429,6 +1429,7 @@
 
     <!-- ASSET DETAIL MODAL -->
     {#if selectedProject}
+      {@const modalCumPct = cumulativePctMap.get(selectedProject.projectID)}
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div class="modal-backdrop" onclick={() => (selectedProject = null)} onkeydown={(e) => e.key === 'Escape' && (selectedProject = null)}>
         <div
@@ -1445,9 +1446,8 @@
             {#if selectedProject.units.length > 1}
               <span class="unit-badge">{selectedProject.units.length} units</span>
             {/if}
-            {#if cumulativePctMap.get(selectedProject.projectID) != null && cumulativePctMap.get(selectedProject.projectID) < 99.9}
-              {@const pct = cumulativePctMap.get(selectedProject.projectID)}
-              <span class="unit-badge eff-badge">{fmtPct(pct)}% effective ownership</span>
+            {#if modalCumPct != null && modalCumPct < 99.9}
+              <span class="unit-badge eff-badge">{fmtPct(modalCumPct)}% effective ownership</span>
             {/if}
           </div>
           <div class="modal-units">
