@@ -47,6 +47,11 @@
     initialFilters = {},
   } = $props();
 
+  /** Format cumulative ownership % for display */
+  function fmtPct(pct) {
+    return pct < 1 ? pct.toFixed(2) : pct < 10 ? pct.toFixed(1) : Math.round(pct);
+  }
+
   // ============================================================================
   // SAMPLE OWNERS (from notebook)
   // ============================================================================
@@ -104,6 +109,13 @@
   let projectGroups = $state([]);
   /** Intermediary entities with their connected asset counts */
   let intermediaries = $state([]);
+  /** Cumulative ownership %: projectID → effective ownership through all paths */
+  let cumulativePctMap = $state(new Map());
+  /** Hovered project group for tooltip */
+  let hoveredProject = $state(null);
+  /** Tooltip viewport position */
+  let tooltipPos = $state({ x: 0, y: 0 });
+
 
   /**
    * Multi-dimensional crossfilter:
@@ -416,6 +428,7 @@
       summary = sum;
       projectGroups = groups;
       intermediaries = interData;
+      cumulativePctMap = treePaths.cumulativePctMap;
     } catch (err) {
       if (err.name === 'AbortError') return; // superseded by newer fetch
       error = err.message || 'Failed to fetch data';
@@ -494,6 +507,12 @@
       childrenOf.get(e.source).push(e.target);
     }
 
+    // Build edge value lookup: source→target → ownership %
+    const edgeValue = new Map();
+    for (const e of edges) {
+      edgeValue.set(`${e.source}->${e.target}`, e.value);
+    }
+
     // Map asset_id → location_id (project) for leaf resolution
     const assetToProject = new Map();
     for (const n of nodes) {
@@ -505,47 +524,71 @@
       }
     }
 
-    // DFS to collect all paths from root to leaf projects.
-    // Dead-end entities (subsidiaries with no assets) are excluded.
+    // DFS to collect all paths from root to leaf projects,
+    // computing cumulative ownership % along each path.
 
     const paths = [];
     const pathStrings = [];
+    /** Cumulative ownership: projectID → sum of effective % across distinct ownership chains */
+    const cumulativePctMap = new Map();
     const visited = new Set();
-    function dfs(nodeId, path) {
+    /**
+     * Dedup key: "projId:rootChild" — prevents double-counting when the
+     * same ownership chain reaches the same project via units at different
+     * tree depths (e.g., National Grid → PJ GT2 directly AND National Grid
+     * → ... → NatGrid Gen → PJ 3.0 are the same 5.9% chain).
+     */
+    const countedProjChains = new Set();
+
+    function addCumulativePct(projId, pct, rootChild) {
+      const key = `${projId}:${rootChild}`;
+      if (countedProjChains.has(key)) return;
+      countedProjChains.add(key);
+      cumulativePctMap.set(projId, (cumulativePctMap.get(projId) || 0) + pct);
+    }
+
+    function dfs(nodeId, path, cumPct) {
       if (visited.has(nodeId)) return; // cycle detection
       visited.add(nodeId);
       const children = childrenOf.get(nodeId) || [];
+      // The first entity after root identifies the ownership chain
+      const rootChild = path.length >= 2 ? path[1] : nodeId;
       if (children.length === 0) {
-        // Leaf — resolve to project ID. Skip dead-end entities.
+        // Leaf — resolve to project ID.
         const projId = assetToProject.get(nodeId) || nodeId;
         if (projectIds.has(projId) || projectIds.has(nodeId)) {
           const fullPath = [...path, projId];
           paths.push({ path: fullPath });
           pathStrings.push(fullPath.join('/'));
+          addCumulativePct(projId, cumPct, rootChild);
         }
         // else: dead-end entity — intentionally dropped
         visited.delete(nodeId);
         return;
       }
       for (const child of children) {
+        const ev = edgeValue.get(`${nodeId}->${child}`);
+        const childPct = ev != null ? (cumPct * ev) / 100 : cumPct;
+
         // Deduplicate: if child is an asset, resolve to project
         const resolved = assetToProject.get(child);
         if (resolved && projectIds.has(resolved)) {
           const fullPath = [...path, resolved];
           paths.push({ path: fullPath });
           pathStrings.push(fullPath.join('/'));
+          addCumulativePct(resolved, childPct, rootChild);
         } else {
-          dfs(child, [...path, child]);
+          dfs(child, [...path, child], childPct);
         }
       }
       visited.delete(nodeId);
     }
-    dfs(rootEntityId, [rootEntityId]);
+    dfs(rootEntityId, [rootEntityId], 100);
 
     // Deduplicate path strings
     const uniquePathStrings = [...new Set(pathStrings)];
 
-    return { paths, pathStrings: uniquePathStrings };
+    return { paths, pathStrings: uniquePathStrings, cumulativePctMap };
   }
 
   // ============================================================================
@@ -950,8 +993,10 @@
         .style('fill', 'white')
         .style('cursor', 'pointer')
         .style('pointer-events', 'all')
-        .on('mouseover', function () {
+        .on('mouseover', function (event) {
           d3.select(this).style('fill', `${colors.bgSecondary}`);
+          hoveredProject = proj;
+          tooltipPos = { x: event.clientX, y: event.clientY };
 
           // Highlight only this asset, dim others
           g.selectAll('.asset-row')
@@ -988,6 +1033,7 @@
         })
         .on('mouseout', function () {
           d3.select(this).style('fill', 'white');
+          hoveredProject = null;
 
           // Restore all assets
           g.selectAll('.asset-row')
@@ -1008,6 +1054,7 @@
         })
         .on('click', function (event) {
           event.stopPropagation();
+          hoveredProject = null;
           modalPos = { x: event.clientX, y: event.clientY };
           selectedProject = proj;
         });
@@ -1079,18 +1126,33 @@
         .text(name.length > 40 ? name.slice(0, 38) + '…' : name);
 
       // Unit count badge
+      let afterNameX = nameX + Math.min(name.length * 6.5, 250) + 8;
       if (N > 1) {
-        const badgeX = nameX + Math.min(name.length * 6.5, 250) + 8;
         labelG
           .append('text')
           .attr('dy', '0.35em')
-          .attr('x', badgeX)
+          .attr('x', afterNameX)
           .style('font-size', '8px')
           .style('font-weight', 500)
           .style('text-transform', 'uppercase')
           .style('letter-spacing', '0.07em')
           .style('fill', colors.gray500)
           .text(`${N} units`);
+        afterNameX += `${N} units`.length * 5.5 + 8;
+      }
+
+      // Cumulative ownership badge (effective % through intermediary chains)
+      const cumPct = cumulativePctMap.get(proj.projectID);
+      if (cumPct != null && cumPct < 99.9) {
+        labelG
+          .append('text')
+          .attr('dy', '0.35em')
+          .attr('x', afterNameX)
+          .style('font-size', '8px')
+          .style('font-weight', 600)
+          .style('font-variant-numeric', 'tabular-nums')
+          .style('fill', colors.gray400)
+          .text(`${fmtPct(cumPct)}% eff.`);
       }
     });
   }
@@ -1323,6 +1385,48 @@
       {/if}
     </div>
 
+    <!-- HOVER TOOLTIP — compact header + unit table -->
+    {#if hoveredProject}
+      {@const u0 = hoveredProject.units[0]}
+      {@const cumPct = cumulativePctMap.get(hoveredProject.projectID)}
+      {@const ttLeft = typeof window !== 'undefined' ? Math.min(tooltipPos.x + 12, window.innerWidth - 320) : tooltipPos.x + 12}
+      {@const ttTop = typeof window !== 'undefined' ? Math.min(tooltipPos.y - 10, window.innerHeight - 200) : tooltipPos.y - 10}
+      <div class="portfolio-tooltip" style="left: {ttLeft}px; top: {ttTop}px;">
+        <div class="tt-header">
+          <div class="tt-name">{u0?.project_name || u0?.asset_name || hoveredProject.projectID}</div>
+          <div class="tt-meta">
+            {u0?.asset_type || ''}{#if u0?.country} · {u0.country}{/if}{#if hoveredProject.units.length > 1} · {hoveredProject.units.length} units{/if}
+          </div>
+          {#if cumPct != null && cumPct < 99.9}
+            <div class="tt-eff">{fmtPct(cumPct)}% effective ownership</div>
+          {/if}
+        </div>
+        <table class="tt-table">
+          <thead>
+            <tr>
+              <th>Unit</th>
+              <th>Status</th>
+              <th class="num">Capacity</th>
+              {#if hoveredProject.units.some(u => u.ownership_share)}<th class="num">Own%</th>{/if}
+            </tr>
+          </thead>
+          <tbody>
+            {#each hoveredProject.units.slice(0, 6) as unit}
+              <tr>
+                <td class="unit-name">{unit.asset_name || unit.asset_id}</td>
+                <td><span class="status-dot" style="background:{COLOR_BY_STATUS.get(unit.operating_status?.toLowerCase()) || '#999'}"></span>{unit.operating_status || '—'}</td>
+                <td class="num">{unit.capacity_value ? `${unit.capacity_value.toLocaleString()} ${unit.capacity_unit || 'MW'}` : '—'}</td>
+                {#if hoveredProject.units.some(u => u.ownership_share)}<td class="num">{unit.ownership_share ? `${unit.ownership_share}%` : '—'}</td>{/if}
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+        {#if hoveredProject.units.length > 6}
+          <div class="tt-more">+{hoveredProject.units.length - 6} more units</div>
+        {/if}
+      </div>
+    {/if}
+
     <!-- ASSET DETAIL MODAL -->
     {#if selectedProject}
       <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -1340,6 +1444,10 @@
             <h4>{selectedProject.units[0]?.asset_name || selectedProject.projectID}</h4>
             {#if selectedProject.units.length > 1}
               <span class="unit-badge">{selectedProject.units.length} units</span>
+            {/if}
+            {#if cumulativePctMap.get(selectedProject.projectID) != null && cumulativePctMap.get(selectedProject.projectID) < 99.9}
+              {@const pct = cumulativePctMap.get(selectedProject.projectID)}
+              <span class="unit-badge eff-badge">{fmtPct(pct)}% effective ownership</span>
             {/if}
           </div>
           <div class="modal-units">
@@ -2096,6 +2204,96 @@
     }
   }
 
+  /* ---- Hover Tooltip ---- */
+  .portfolio-tooltip {
+    position: fixed;
+    z-index: 1000;
+    pointer-events: none;
+    background: var(--gem-white, #fff);
+    border: 1px solid var(--color-border, #ddd);
+    border-radius: var(--radius-md, 6px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    padding: 8px 10px 6px;
+    max-width: 420px;
+    font-family: var(--font-family, 'Plus Jakarta Sans', sans-serif);
+    animation: tt-in 0.1s ease-out;
+  }
+  .tt-header { margin-bottom: 4px; }
+  .tt-name {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--color-text-primary, #222);
+    line-height: 1.2;
+  }
+  .tt-meta {
+    font-size: 9px;
+    color: var(--color-text-tertiary, #999);
+    margin-top: 1px;
+  }
+  .tt-eff {
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--gem-teal, #007b7f);
+    margin-top: 1px;
+  }
+  .tt-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9px;
+    line-height: 1.3;
+    font-variant-numeric: tabular-nums;
+    border-top: 1px solid var(--color-border, #eee);
+    margin-top: 4px;
+  }
+  .tt-table th {
+    text-align: left;
+    font-weight: 600;
+    font-size: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-tertiary, #aaa);
+    padding: 3px 6px 2px 0;
+  }
+  .tt-table th.num { text-align: right; }
+  .tt-table td {
+    padding: 2px 6px 2px 0;
+    color: var(--color-text-primary, #333);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 150px;
+  }
+  .tt-table td.num {
+    text-align: right;
+    font-family: var(--font-family-data, 'IBM Plex Mono', monospace);
+    font-size: 9px;
+  }
+  .tt-table td.unit-name {
+    max-width: 130px;
+    font-weight: 500;
+  }
+  .tt-table .status-dot {
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    margin-right: 3px;
+    vertical-align: middle;
+  }
+  .tt-more {
+    font-size: 8px;
+    color: var(--color-text-tertiary, #999);
+    font-style: italic;
+    padding-top: 2px;
+  }
+  @keyframes tt-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @media (max-width: 768px) {
+    .portfolio-tooltip { display: none; }
+  }
+
   /* ---- Asset Detail Modal ---- */
   .modal-backdrop { position: fixed; inset: 0; z-index: 10000; background: rgba(0,0,0,0.15); }
   .asset-modal { position: fixed; z-index: 10001; background: var(--color-bg-primary, #fff); border: 1px solid var(--color-border, #e0e0e0); border-radius: var(--radius-lg, 8px); box-shadow: 0 8px 30px rgba(0,0,0,0.18); padding: var(--space-4, 16px); min-width: 260px; max-width: var(--portfolio-modal-max-width, 360px); max-height: var(--portfolio-modal-max-height, 400px); overflow-y: auto; scrollbar-width: thin; }
@@ -2104,6 +2302,7 @@
   .modal-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding-right: 20px; }
   .modal-header h4 { margin: 0; font-size: 14px; font-weight: 700; color: var(--gem-navy); line-height: 1.3; }
   .unit-badge { flex-shrink: 0; font-size: 11px; background: var(--color-bg-tertiary, #eee); color: var(--color-text-secondary, #666); padding: 1px 6px; border-radius: 999px; font-weight: 500; }
+  .eff-badge { font-variant-numeric: tabular-nums; background: var(--color-accent-bg, #e8f4f8); color: var(--color-accent, #1d4961); }
   .modal-units { display: flex; flex-direction: column; gap: 4px; }
   .modal-unit { display: flex; flex-direction: column; gap: 3px; }
   .unit-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
