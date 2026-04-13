@@ -387,11 +387,6 @@
     gap: var(--space-2);
   }
 
-  .os-result-fullname {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-secondary);
-  }
-
   .os-result-country {
     font-size: var(--font-size-xs);
     color: var(--color-text-tertiary);
