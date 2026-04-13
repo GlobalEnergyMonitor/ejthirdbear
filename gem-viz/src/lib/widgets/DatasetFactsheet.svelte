@@ -143,6 +143,10 @@
               value: v.value,
               count: v.count,
             }));
+            // Inject null_count so the null display logic picks it up
+            if (catalogStats.null_count > 0) {
+              fieldStats.push({ value: null, count: catalogStats.null_count });
+            }
             rowCount = catalogStats.total_rows;
             catalogUniqueCount = catalogStats.unique_count;
           } else if (catalogStats.sample_values?.length) {
@@ -150,6 +154,10 @@
             sampleValues = catalogStats.sample_values;
             catalogUniqueCount = catalogStats.unique_count;
             rowCount = catalogStats.total_rows;
+            // Inject null_count for text fields too
+            if (catalogStats.null_count > 0) {
+              fieldStats = [{ value: null, count: catalogStats.null_count }];
+            }
           }
           // If catalog returned something, we're done
           if (numericStats || fieldStats.length || sampleValues.length) {
