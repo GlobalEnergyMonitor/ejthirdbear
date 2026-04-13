@@ -1,45 +1,23 @@
 <script>
   /**
    * Portfolio Explorer — Route wrapper
-   * Reads URL params and passes them to the reusable core component.
-   * Handles URL ↔ state sync (component is URL-agnostic for widget compatibility).
+   * Shows owner search by default; auto-opens modal if `entity` URL param is set.
+   * Syncs search query and selected entity back to URL via replaceState.
    */
   import { page } from '$app/stores';
-  import PortfolioExplorer from '$lib/components/portfolio/PortfolioExplorer.svelte';
-  import { LAYOUT } from '$lib/responsive';
+  import OwnerSearchApp from '$lib/components/portfolio/OwnerSearchApp.svelte';
 
-  const entityId = $page.url.searchParams.get('entity') || '';
-  const hidePicker = $page.url.searchParams.get('hidePicker') === 'true';
-  const isEmbed = $page.url.searchParams.get('embed') === 'true';
-  const initialColor = $page.url.searchParams.get('color') || '';
-  const initialFilters = {
-    country: $page.url.searchParams.get('country') || '',
-    asset_type: $page.url.searchParams.get('asset_type') || '',
-    operating_status: $page.url.searchParams.get('operating_status') || '',
-    intermediary: $page.url.searchParams.get('intermediary') || '',
-    ownership: $page.url.searchParams.get('ownership') || '',
-  };
-  /** In embed mode the navbar is hidden, so subtract less chrome height */
-  const heightOffset = isEmbed
-    ? LAYOUT.portfolio.embedHeightOffset
-    : LAYOUT.portfolio.defaultHeightOffset;
+  const initialQuery = $page.url.searchParams.get('q') || '';
+  const initialEntityId = $page.url.searchParams.get('entity') || '';
 
-  /** Sync component state → URL via replaceState */
-  function handleStateChange(state) {
+  /** @param {{ q?: string, entity?: string }} state */
+  function handleStateChange({ q, entity } = {}) {
     if (typeof window === 'undefined') return;
     const url = new URL(window.location.href);
-    // Entity
-    if (state.entity) url.searchParams.set('entity', state.entity);
+    if (q) url.searchParams.set('q', q);
+    else url.searchParams.delete('q');
+    if (entity) url.searchParams.set('entity', entity);
     else url.searchParams.delete('entity');
-    // Color override
-    if (state.color) url.searchParams.set('color', state.color);
-    else url.searchParams.delete('color');
-    // Filters
-    const filterKeys = ['country', 'asset_type', 'operating_status', 'intermediary', 'ownership'];
-    for (const key of filterKeys) {
-      if (state.filters?.[key]) url.searchParams.set(key, state.filters[key]);
-      else url.searchParams.delete(key);
-    }
     if (url.toString() !== window.location.href) {
       history.replaceState(null, '', url);
     }
@@ -48,7 +26,43 @@
 
 <svelte:head>
   <title>Portfolio Explorer — Global Energy Monitor</title>
-  <meta name="description" content="Explore an entity's downstream asset portfolio with interactive ownership tree and crossfilter breakdowns." />
+  <meta
+    name="description"
+    content="Search for an owner and explore their downstream asset portfolio with interactive ownership breakdowns."
+  />
 </svelte:head>
 
-<PortfolioExplorer {entityId} {hidePicker} {heightOffset} {initialColor} {initialFilters} onStateChange={handleStateChange} />
+<div class="page-wrap">
+  <div class="page-header">
+    <h1>Portfolio Explorer</h1>
+    <p class="page-desc">
+      Search for an owner to explore their full downstream asset portfolio.
+    </p>
+  </div>
+  <OwnerSearchApp {initialQuery} {initialEntityId} onStateChange={handleStateChange} />
+</div>
+
+<style>
+  .page-wrap {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: var(--space-8) var(--space-5);
+  }
+
+  .page-header {
+    margin-bottom: var(--space-6);
+  }
+
+  .page-header h1 {
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-text-primary);
+    margin: 0 0 var(--space-2);
+  }
+
+  .page-desc {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    margin: 0;
+  }
+</style>
