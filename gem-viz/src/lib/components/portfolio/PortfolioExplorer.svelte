@@ -506,10 +506,11 @@
       childrenOf.get(e.source).push(e.target);
     }
 
-    // Build edge value lookup: source→target → ownership %
+    // Build edge value lookup: source → target → ownership %
     const edgeValue = new Map();
     for (const e of edges) {
-      edgeValue.set(`${e.source}->${e.target}`, e.value);
+      if (!edgeValue.has(e.source)) edgeValue.set(e.source, new Map());
+      edgeValue.get(e.source).set(e.target, e.value);
     }
 
     // Map asset_id → location_id (project) for leaf resolution
@@ -566,7 +567,7 @@
         return;
       }
       for (const child of children) {
-        const ev = edgeValue.get(`${nodeId}->${child}`);
+        const ev = edgeValue.get(nodeId)?.get(child);
         const childPct = ev != null ? (cumPct * ev) / 100 : cumPct;
 
         // Deduplicate: if child is an asset, resolve to project

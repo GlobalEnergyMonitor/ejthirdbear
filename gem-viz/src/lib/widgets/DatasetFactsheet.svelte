@@ -139,14 +139,15 @@
             numericStats = catalogStats;
           } else if (catalogStats.value_counts?.length) {
             // Categorical: convert catalog value_counts to fieldStats format
-            fieldStats = catalogStats.value_counts.map((v) => ({
+            const stats = catalogStats.value_counts.map((v) => ({
               value: v.value,
               count: v.count,
             }));
             // Inject null_count so the null display logic picks it up
             if (catalogStats.null_count > 0) {
-              fieldStats.push({ value: null, count: catalogStats.null_count });
+              stats.push({ value: null, count: catalogStats.null_count });
             }
+            fieldStats = stats;
             rowCount = catalogStats.total_rows;
             catalogUniqueCount = catalogStats.unique_count;
           } else if (catalogStats.sample_values?.length) {
