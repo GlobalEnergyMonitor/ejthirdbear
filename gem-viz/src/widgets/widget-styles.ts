@@ -65,7 +65,6 @@ export const FALLBACK_CSS = `
 
   --tracking-caps: 0.04em;
   --tracking-wide: 0.02em;
-  --tracking-widest: 0.08em;
 
   --space-1: 4px;
   --space-2: 8px;
@@ -80,10 +79,7 @@ export const FALLBACK_CSS = `
   --gem-teal-50: #8ea4b0;
   --gem-teal-25: #c7d1d8;
   --gem-teal-10: #e9eef1;
-  --gem-navy: #1d4961;
-  --gem-navy-50: #8ea4b0;
-  --gem-navy-25: #c7d1d8;
-  --gem-navy-10: #e9eef1;
+  --gem-navy: #1a1a2e;
   --gem-mint: #00b388;
   --gem-orange: #e07c38;
 
@@ -110,9 +106,6 @@ export const FALLBACK_CSS = `
   --border-width: 1px;
   --radius-sm: 2px;
   --radius-md: 4px;
-  --radius-lg: 6px;
-  --radius-xl: 8px;
-  --radius-full: 9999px;
   --radius-card: 16px;
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
