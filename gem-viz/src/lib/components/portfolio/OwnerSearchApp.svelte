@@ -3,13 +3,20 @@
    * OwnerSearchApp — Owner search + Portfolio Explorer modal
    * Mirrors ControlChainApp: search for an entity → result list → open Portfolio Explorer in modal.
    *
+   * NOTE: This component intentionally uses an inline search input instead of importing
+   * the shared AssetSearchBar component. In the Shadow DOM widget build, AssetSearchBar
+   * lives in a shared Vite chunk (also used by GemAssetSearch, ControlChain, etc.).
+   * When multiple widgets load on the same page (e.g. Drupal embeds), the shared chunk's
+   * style injection can fire before this widget's shadow root is ready, causing styles
+   * to land in the wrong root. Keeping the search input inline ensures all styles travel
+   * with this component's own chunk and inject into the correct shadow root.
+   *
    * Props:
    *   initialQuery     - Restore search query from URL
    *   initialEntityId  - If set, auto-open this entity in the modal on mount
    *   onStateChange    - Called with { q, entity } when state changes (for URL sync)
    */
   import { onMount, untrack } from 'svelte';
-  import AssetSearchBar from '$lib/components/search/AssetSearchBar.svelte';
   import PortfolioExplorer from './PortfolioExplorer.svelte';
 
   const API_BASE =
@@ -29,8 +36,6 @@
   let selected = $state(/** @type {OwnerResult|null} */ (null));
   let modalOpen = $state(false);
 
-  let debounceTimer;
-
   const examples = /** @type {OwnerResult[]} */ ([
     { id: 'E100001000347', name: 'Bank of America Co', fullName: null, country: 'United States' },
     { id: 'E100000000869', name: 'LUKOIL PJSC', fullName: null, country: 'Russia' },
@@ -39,19 +44,19 @@
     { id: 'E100000000962', name: 'South Korea Gov', fullName: null, country: 'South Korea' },
   ]);
 
-  // Debounced search effect
+  // Debounced search effect — cleanup clears pending timer on teardown
   $effect(() => {
     const q = query;
-    clearTimeout(debounceTimer);
     if (!q || q.length < 2) {
       results = [];
       hasSearched = false;
       return;
     }
-    debounceTimer = setTimeout(() => {
+    const timer = setTimeout(() => {
       doSearch(q);
       onStateChange?.({ q });
     }, 300);
+    return () => clearTimeout(timer);
   });
 
   // Auto-open entity from URL on first mount
@@ -128,17 +133,41 @@
     selected = null;
     onStateChange?.({ q: query, entity: '' });
   }
+
+  // Global Escape key closes modal
+  $effect(() => {
+    if (!modalOpen) return;
+    /** @param {KeyboardEvent} e */
+    function onKey(e) {
+      if (e.key === 'Escape') closeModal();
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  });
 </script>
 
 <div class="os-app">
-  <!-- Search bar -->
+  <!-- Inline search input (see NOTE in script block for why we don't use AssetSearchBar) -->
   <div class="os-search">
-    <AssetSearchBar
-      bind:value={query}
-      label="Search owners"
-      placeholder="Search by owner name, GEM ID, LEI, or PERM ID…"
-      showButton={false}
-    />
+    <label class="os-sr-only" for="os-search-input">Search owners</label>
+    <div class="os-search-field">
+      <span class="os-search-icon" aria-hidden="true">
+        <svg viewBox="0 0 20 20" width="16" height="16" focusable="false">
+          <path d="M13.5 12.3l4.1 4.1-1.2 1.2-4.1-4.1a6.5 6.5 0 1 1 1.2-1.2ZM8.5 13a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9Z" fill="currentColor" />
+        </svg>
+      </span>
+      <input
+        id="os-search-input"
+        type="search"
+        bind:value={query}
+        placeholder="Search by owner name, GEM ID, LEI, or PERM ID…"
+        autocomplete="off"
+        spellcheck="false"
+      />
+      {#if query}
+        <button type="button" class="os-clear-btn" aria-label="Clear search" onclick={() => { query = ''; }}>Clear</button>
+      {/if}
+    </div>
   </div>
 
   <!-- Empty state with example chips -->
@@ -234,6 +263,9 @@
     >
       <div class="os-modal-header">
         <span class="os-modal-label">Portfolio Explorer</span>
+        {#if selected.name && selected.name !== selected.id}
+          <span class="os-modal-entity">{selected.name}</span>
+        {/if}
         <button class="os-modal-close" onclick={closeModal} aria-label="Close">✕</button>
       </div>
       <div class="os-modal-body">
@@ -251,6 +283,74 @@
 
   .os-search {
     margin-bottom: var(--space-4);
+  }
+
+  .os-search-field {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    border: 1px solid var(--color-border, #cbd5e0);
+    border-radius: 999px;
+    background: var(--color-bg-primary, #ffffff);
+    min-height: 42px;
+  }
+
+  .os-search-field:focus-within {
+    border-color: var(--gem-navy, #1d4961);
+    box-shadow: 0 0 0 3px rgba(29, 73, 97, 0.12);
+  }
+
+  .os-search-icon {
+    color: #718096;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding-left: 14px;
+  }
+
+  .os-search-field input {
+    width: 100%;
+    min-width: 0;
+    border: none;
+    outline: none;
+    background: transparent;
+    font-size: var(--font-size-sm);
+    padding: 0 var(--space-3);
+    color: var(--color-text-primary);
+    font-family: inherit;
+  }
+
+  .os-search-field input::placeholder {
+    color: #94a3b8;
+  }
+
+  .os-clear-btn {
+    border: none;
+    background: transparent;
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0 var(--space-3);
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  .os-clear-btn:hover {
+    color: var(--gem-navy, #1d4961);
+  }
+
+  .os-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
 
   /* ── Empty state ── */
@@ -429,7 +529,7 @@
   .os-modal-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: var(--space-3);
     padding: var(--space-3) var(--space-5);
     background: var(--gem-navy);
     color: white;
@@ -443,7 +543,18 @@
     opacity: 0.7;
   }
 
+  .os-modal-entity {
+    flex: 1;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+
   .os-modal-close {
+    margin-left: auto;
     background: rgba(255, 255, 255, 0.15);
     border: none;
     color: white;

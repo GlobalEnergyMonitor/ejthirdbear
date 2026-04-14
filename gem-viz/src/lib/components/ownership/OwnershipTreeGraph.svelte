@@ -279,11 +279,13 @@
     return faded;
   });
   const fadedEdgeIds = $derived.by(() => {
-    if (fadedNodeIds.size === 0) return new Set<string>();
-    const faded = new Set<string>();
+    if (fadedNodeIds.size === 0) return new Map<string, Set<string>>();
+    const faded = new Map<string, Set<string>>();
     for (const e of renderSubset.edges) {
       if (fadedNodeIds.has(e.source) || fadedNodeIds.has(e.target)) {
-        faded.add(`${e.source}->${e.target}`);
+        let s = faded.get(e.source);
+        if (!s) { s = new Set(); faded.set(e.source, s); }
+        s.add(e.target);
       }
     }
     return faded;
@@ -376,9 +378,13 @@
     const touchedMap = new Map<string, { nodesTouched: string[]; edgeIndices: number[] }>();
     if (!paths) return { pctMap, touchedMap };
 
-    // O(1) edge lookup instead of O(n) findIndex per path segment
-    const edgeIndex = new Map<string, number>();
-    renderEdges.forEach((e, i) => edgeIndex.set(`${e.source}->${e.target}`, i));
+    // O(1) edge lookup via nested Map (no string alloc per lookup)
+    const edgeIndex = new Map<string, Map<string, number>>();
+    renderEdges.forEach((e, i) => {
+      let m = edgeIndex.get(e.source);
+      if (!m) { m = new Map(); edgeIndex.set(e.source, m); }
+      m.set(e.target, i);
+    });
 
     for (const [id, arr] of Object.entries(paths)) {
       if (!Array.isArray(arr)) continue;
@@ -394,7 +400,7 @@
         for (let i = 0; i < p.route.length; i++) {
           nodesTouched.add(p.route[i]);
           if (i < p.route.length - 1) {
-            const idx = edgeIndex.get(`${p.route[i]}->${p.route[i + 1]}`);
+            const idx = edgeIndex.get(p.route[i])?.get(p.route[i + 1]);
             if (idx != null) edgeIndices.add(idx);
           }
         }
@@ -744,7 +750,12 @@
 
     // O(1) lookups instead of O(n) find per node/edge
     const nodeById = new Map(renderNodes.map((n) => [n.id, n]));
-    const edgeByKey = new Map(renderEdges.map((e) => [`${e.source}->${e.target}`, e]));
+    const edgeByKey = new Map<string, Map<string, (typeof renderEdges)[0]>>();
+    for (const e of renderEdges) {
+      let m = edgeByKey.get(e.source);
+      if (!m) { m = new Map(); edgeByKey.set(e.source, m); }
+      m.set(e.target, e);
+    }
 
     const rawLayoutNodes = g.nodes().map((id: string) => {
       const pos = g.node(id);
@@ -788,7 +799,7 @@
     const layoutNodeById = new Map(rawLayoutNodes.map((n) => [n.id, n]));
 
     layoutEdges = g.edges().map((e: DagreEdge) => {
-      const orig = edgeByKey.get(`${e.v}->${e.w}`);
+      const orig = edgeByKey.get(e.v)?.get(e.w);
       let pts: LayoutPoint[] = g.edge(e).points;
       // Trim edge endpoints to circle/rect boundary instead of dagre bounding box
       const srcNode = layoutNodeById.get(e.v);
@@ -971,7 +982,7 @@
   }
   function getEdgeOpacity(idx: number): number {
     const e = layoutEdges[idx];
-    if (e && fadedEdgeIds.has(`${e.source}->${e.target}`)) return OPACITY.fadedEdge;
+    if (e && fadedEdgeIds.get(e.source)?.has(e.target)) return OPACITY.fadedEdge;
     if (!activeNodeData) {
       if (!e) return 1;
       return 1;
@@ -1038,7 +1049,7 @@
 
   function endPan(ev?: PointerEvent) {
     if (ev) {
-      (ev.currentTarget as Element)?.releasePointerCapture?.(ev.pointerId);
+      try { (ev.currentTarget as Element)?.releasePointerCapture?.(ev.pointerId); } catch { /* no active capture */ }
       // If pointer barely moved, treat as a background click → clear selection
       const dx = Math.abs(ev.clientX - panStartX);
       const dy = Math.abs(ev.clientY - panStartY);
@@ -1397,20 +1408,19 @@
             {@const rootName = rootNode?.name || rootNode?.Name || rootId}
             {@const frozenNode = nodes.find((n) => n.id === frozenId)}
             {@const immediateOwners = (() => {
-                // In the downstream-direction graph, edges are parent-pointers:
-                // source=child → target=parent. So X's owners are e.target where e.source===X.
+                // Edges are always source=owner → target=owned.
+                // So X's owners are e.source where e.target===X.
                 const real = filteredEdges
-                  .filter((e) => e.source === frozenId)
+                  .filter((e) => e.target === frozenId)
                   .map((e) => {
-                    const ownerNode = nodes.find((n) => n.id === e.target);
+                    const ownerNode = nodes.find((n) => n.id === e.source);
                     return {
-                      name: ownerNode?.name || ownerNode?.Name || e.target,
+                      name: ownerNode?.name || ownerNode?.Name || e.source,
                       pct: e.value != null ? Number(e.value) : null,
                       isProxy: false as const,
                     };
                   });
-                // Proxy owners use the opposite convention (source=proxy → target=owned),
-                // so they're found by e.target===frozenId in raw edges.
+                // Proxy entities are filtered out of filteredEdges, so check raw edges.
                 const proxy = edges
                   .filter((e) => e.target === frozenId)
                   .flatMap((e) => {
@@ -1497,9 +1507,7 @@
             aria-label="Ownership tree graph"
             style={isLargeGraph
               ? `width: ${Math.round(graphBaseWidth)}px; min-height: ${Math.round(graphBaseHeight)}px;`
-              : !compact
-                ? `max-width: ${fullW + 40}px;`
-                : ''}
+              : ''}
             onclick={(ev) => {
               // Click on SVG background (not a node) unfreezes
               if (

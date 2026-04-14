@@ -112,8 +112,8 @@ export const EXCLUDED_ENTITY_IDS = new Set([
   'E100000132388', // unknown
 ]);
 
-/** Enable detailed console logging */
-const DEBUG = false;
+/** Enable detailed console logging (gated to dev mode) */
+const DEBUG = import.meta.env.DEV;
 
 /** Cache TTL in milliseconds (5 minutes) */
 const CACHE_TTL_MS = 5 * 60 * 1000;

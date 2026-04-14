@@ -1064,7 +1064,7 @@
       <div class="demo-block full-width">
         <FilterBreadcrumbs
           filters={sampleFilters}
-          onRemove={(filter) => console.log('Remove:', filter)}
+          onRemove={(filter) => { if (import.meta.env.DEV) console.log('Remove:', filter); }}
         />
       </div>
       <pre
