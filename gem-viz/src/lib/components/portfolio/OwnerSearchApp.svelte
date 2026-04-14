@@ -15,6 +15,7 @@
    *   initialQuery     - Restore search query from URL
    *   initialEntityId  - If set, auto-open this entity in the modal on mount
    *   onStateChange    - Called with { q, entity } when state changes (for URL sync)
+   *   embedded         - When true (widget context), modal uses position:absolute instead of fixed
    */
   import { onMount, untrack } from 'svelte';
   import PortfolioExplorer from './PortfolioExplorer.svelte';
@@ -22,8 +23,8 @@
   const API_BASE =
     import.meta.env?.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-api.thirdbear.net';
 
-  /** @type {{ initialQuery?: string, initialEntityId?: string, onStateChange?: (s: {q?: string, entity?: string}) => void }} */
-  let { initialQuery = '', initialEntityId = '', onStateChange = undefined } = $props();
+  /** @type {{ initialQuery?: string, initialEntityId?: string, onStateChange?: (s: {q?: string, entity?: string}) => void, embedded?: boolean }} */
+  let { initialQuery = '', initialEntityId = '', onStateChange = undefined, embedded = false } = $props();
 
   /** @typedef {{ id: string, name: string, fullName: string|null, country: string }} OwnerResult */
 
@@ -146,6 +147,7 @@
   });
 </script>
 
+<div class="os-root" class:os-embedded={embedded}>
 <div class="os-app">
   <!-- Inline search input (see NOTE in script block for why we don't use AssetSearchBar) -->
   <div class="os-search">
@@ -274,8 +276,22 @@
     </div>
   </div>
 {/if}
+</div>
 
 <style>
+  .os-root {
+    position: relative;
+  }
+
+  /* In widget/embed context, the root needs to be a positioning context
+     and stretch when the modal opens so the absolute modal has room. */
+  .os-embedded {
+    min-height: 200px;
+  }
+
+  .os-embedded:has(.os-modal-backdrop) {
+    min-height: max(600px, 100%);
+  }
   .os-app {
     width: 100%;
     font-family: var(--font-family-sans);
@@ -513,9 +529,17 @@
     overflow-y: auto;
   }
 
+  /* In widget/embed context, position:fixed is relative to the shadow host's
+     containing block (not the viewport), so the modal renders clipped or blank.
+     Switch to position:absolute anchored to .os-root instead. */
+  .os-embedded .os-modal-backdrop {
+    position: absolute;
+    padding: var(--space-3);
+  }
+
   .os-modal {
-    background: var(--color-bg-primary);
-    border-radius: var(--radius-xl);
+    background: var(--color-bg-primary, #ffffff);
+    border-radius: var(--radius-xl, 12px);
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
     width: 100%;
     max-width: 1100px;
@@ -524,6 +548,10 @@
     flex-direction: column;
     overflow: hidden;
     margin: auto;
+  }
+
+  .os-embedded .os-modal {
+    max-height: calc(100% - 24px);
   }
 
   .os-modal-header {
@@ -589,6 +617,10 @@
       max-width: 100%;
       max-height: 100vh;
       border-radius: 0;
+    }
+
+    .os-embedded .os-modal {
+      max-height: 100%;
     }
   }
 </style>

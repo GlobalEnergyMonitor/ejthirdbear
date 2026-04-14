@@ -34,5 +34,5 @@
 {#if resolvedEntityId}
   <PortfolioExplorer entityId={resolvedEntityId} hidePicker={true} {linkBase} {linkTarget} />
 {:else}
-  <OwnerSearchApp />
+  <OwnerSearchApp embedded={true} />
 {/if}
