@@ -37,7 +37,16 @@ import {
   type Tracker,
   type AggFn,
 } from './coal-field-schema';
-import { STATUS_GROUPS, displayStatusToApiKey, isCoarseStatus } from './tracker-schema';
+import {
+  STATUS_GROUPS,
+  STATUS_GROUP_ORDER,
+  STATUS_TO_GROUP,
+  normalizeSubStatus,
+  displayStatusToApiKey,
+  isCoarseStatus,
+} from './tracker-schema';
+import { fetchCatalogTaxonomy } from '$lib/api/catalog-api';
+import type { StatusTaxonomy } from '$lib/api/catalog-api';
 
 const API_BASE = import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-api.thirdbear.net';
 
@@ -52,6 +61,112 @@ export interface SummaryRow {
   [key: string]: string | number | null;
 }
 
+
+// ── Status group collapse ──────────────────────────────────────────────────
+
+/** Group label by group ID — used for the output status value */
+const GROUP_LABEL: Record<string, string> = Object.fromEntries(
+  STATUS_GROUPS.map((g) => [g.id, g.label])
+);
+
+/**
+ * Build a map from every known sub-status string → its coarse group id.
+ * Sources (in priority order):
+ *   1. Hardcoded STATUS_TO_GROUP
+ *   2. Taxonomy sub_statuses (catches new values added to the API)
+ *   3. Taxonomy raw_value_mappings (handles pipeline-specific raw strings)
+ */
+function buildSubToGroupMap(taxonomy: StatusTaxonomy | null): Map<string, string> {
+  const map = new Map<string, string>(Object.entries(STATUS_TO_GROUP));
+
+  if (taxonomy?.statuses) {
+    for (const [groupId, group] of Object.entries(taxonomy.statuses)) {
+      for (const subKey of Object.keys(group.sub_statuses)) {
+        const norm = normalizeSubStatus(subKey);
+        if (!map.has(norm)) map.set(norm, groupId);
+        if (!map.has(subKey)) map.set(subKey, groupId);
+      }
+    }
+  }
+
+  if (taxonomy?.raw_value_mappings) {
+    for (const [raw, canonical] of Object.entries(taxonomy.raw_value_mappings)) {
+      const norm = normalizeSubStatus(canonical);
+      const groupId = map.get(norm) ?? map.get(canonical);
+      if (groupId) {
+        const normRaw = normalizeSubStatus(raw);
+        if (!map.has(normRaw)) map.set(normRaw, groupId);
+        if (!map.has(raw.toLowerCase())) map.set(raw.toLowerCase(), groupId);
+      }
+    }
+  }
+
+  return map;
+}
+
+/**
+ * Re-aggregate sub-status rows into coarse status group rows.
+ *
+ * When the API groups by "status" it returns granular sub-status values
+ * (e.g. "mothballed", "construction") because the data pipeline stores
+ * sub-status values in that field. This function collapses those back to
+ * the four coarse groups (Operating / Planned / Cancelled / Retired).
+ *
+ * For sum and count: values are summed across sub-statuses in the group.
+ * For avg: simple average of sub-status averages (consistent with plant collapse).
+ */
+function collapseToStatusGroups(
+  rows: AggregateGroup[],
+  groupByKeys: string[],
+  fn: AggFn,
+  subToGroup: Map<string, string>,
+): AggregateGroup[] {
+  const otherKeys = groupByKeys.filter((k) => k !== 'status');
+  const buckets = new Map<
+    string,
+    { groupId: string; otherVals: Record<string, unknown>; values: number[] }
+  >();
+
+  for (const row of rows) {
+    const raw = String(row['status'] ?? '').toLowerCase();
+    const groupId = subToGroup.get(normalizeSubStatus(raw)) ?? subToGroup.get(raw) ?? raw;
+
+    const otherVals: Record<string, unknown> = {};
+    for (const k of otherKeys) otherVals[k] = row[k];
+
+    const bucketKey = [groupId, ...otherKeys.map((k) => String(row[k] ?? ''))].join('\x00');
+    if (!buckets.has(bucketKey)) {
+      buckets.set(bucketKey, { groupId, otherVals, values: [] });
+    }
+    if (typeof row.value === 'number') {
+      buckets.get(bucketKey)!.values.push(row.value);
+    }
+  }
+
+  const result: AggregateGroup[] = [];
+  for (const { groupId, otherVals, values } of buckets.values()) {
+    let value = 0;
+    if (values.length > 0) {
+      if (fn === 'avg') {
+        value = values.reduce((a, b) => a + b, 0) / values.length;
+      } else {
+        value = values.reduce((a, b) => a + b, 0); // sum and count both sum
+      }
+    }
+    result.push({ status: GROUP_LABEL[groupId] ?? groupId, ...otherVals, value });
+  }
+
+  // Sort by canonical group order
+  result.sort((a, b) => {
+    const aLabel = String(a['status'] ?? '');
+    const bLabel = String(b['status'] ?? '');
+    const ai = STATUS_GROUP_ORDER.findIndex((id) => GROUP_LABEL[id] === aLabel);
+    const bi = STATUS_GROUP_ORDER.findIndex((id) => GROUP_LABEL[id] === bLabel);
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+  });
+
+  return result;
+}
 
 // ── Single-tracker fetch ───────────────────────────────────────────────────
 
@@ -77,9 +192,15 @@ async function fetchOneTrackerAggregate(
     field.aggregatable != null &&
     !field.skipPlantCollapse;
 
+  // sub_status is stored as 'status' in the API — remap and deduplicate for the request
+  const hasSubStatus = query.groupBy.includes('sub_status');
+  const hasStatus = query.groupBy.includes('status');
+  const hasBoth = hasSubStatus && hasStatus;
+  const mappedGroupBy = [...new Set(query.groupBy.map((k) => (k === 'sub_status' ? 'status' : k)))];
+
   const apiGroupBy = needsPlantCollapse
-    ? ['location_id', ...query.groupBy]
-    : [...query.groupBy];
+    ? ['location_id', ...mappedGroupBy]
+    : [...mappedGroupBy];
 
   // Build filter params using the same group-aware status logic as appendCoalFilters
   const url = new URL(
@@ -116,6 +237,9 @@ async function fetchOneTrackerAggregate(
   if (f.country_area?.length) {
     for (const c of f.country_area) url.searchParams.append('country', c);
   }
+  if (f.captive?.length) {
+    for (const v of f.captive) url.searchParams.append('captive__has', v);
+  }
   for (const g of apiGroupBy) url.searchParams.append('group_by', g);
   const response = await fetch(url);
 
@@ -127,8 +251,32 @@ async function fetchOneTrackerAggregate(
   const data = await response.json();
   let groups: AggregateGroup[] = data.groups ?? [];
 
+  // collapseLocationId must use mappedGroupBy since API rows use 'status' not 'sub_status'
   if (needsPlantCollapse && groups.length > 0) {
-    groups = collapseLocationId(groups, query.groupBy, aggregate.fn);
+    groups = collapseLocationId(groups, mappedGroupBy, aggregate.fn);
+  }
+
+  if (groups.length > 0 && (hasStatus || hasSubStatus)) {
+    const taxonomy = await fetchCatalogTaxonomy();
+    const subToGroup = buildSubToGroupMap(taxonomy);
+
+    if (hasStatus && !hasBoth) {
+      // status only → collapse raw values into coarse groups
+      groups = collapseToStatusGroups(groups, mappedGroupBy, aggregate.fn, subToGroup);
+    } else if (hasBoth) {
+      // both → keep each row, add coarse group as 'status', raw value as 'sub_status'
+      groups = groups.map((row) => {
+        const raw = String(row['status'] ?? '').toLowerCase();
+        const groupId = subToGroup.get(normalizeSubStatus(raw)) ?? subToGroup.get(raw) ?? raw;
+        return { ...row, status: GROUP_LABEL[groupId] ?? groupId, sub_status: row['status'] } as AggregateGroup;
+      });
+    } else {
+      // sub_status only → rename 'status' → 'sub_status', no collapse
+      groups = groups.map((row) => {
+        const { status, ...rest } = row as AggregateGroup & { status?: string | number };
+        return { sub_status: status ?? null, ...rest } as AggregateGroup;
+      });
+    }
   }
 
   return groups;

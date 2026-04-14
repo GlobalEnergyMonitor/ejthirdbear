@@ -78,10 +78,15 @@ export function appendCoalFilters(p: URLSearchParams, filters: CoalQueryFilters)
   }
 
   // All other categorical filter arrays
+  // Fields that need a non-default API param name
+  const PARAM_NAME: Record<string, string> = {
+    captive: 'captive__has',
+  };
   const SKIP = new Set(['status', 'country_area']);
   for (const [key, vals] of Object.entries(filters)) {
     if (SKIP.has(key) || !Array.isArray(vals) || vals.length === 0) continue;
-    for (const v of vals) p.append(key, v as string);
+    const param = PARAM_NAME[key] ?? key;
+    for (const v of vals) p.append(param, v as string);
   }
 }
 
