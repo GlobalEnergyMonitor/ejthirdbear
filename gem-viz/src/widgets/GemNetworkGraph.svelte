@@ -25,7 +25,7 @@
 <style>
   .network-embed {
     width: 100%;
-    min-width: 400px;
+    min-width: 0;
     font-family: var(--font-family);
   }
 </style>
