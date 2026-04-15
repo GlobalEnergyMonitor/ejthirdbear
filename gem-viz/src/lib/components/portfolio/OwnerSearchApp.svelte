@@ -341,6 +341,7 @@
   .os-app {
     width: 100%;
     font-family: var(--font-family-sans);
+    padding: var(--space-5) var(--space-6);
   }
 
   .os-search {
