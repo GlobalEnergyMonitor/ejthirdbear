@@ -40,8 +40,8 @@ export function GET({ url }) {
   return new Response(getBootstrapJs(origin), {
     headers: {
       'Content-Type': 'text/javascript',
-      // Long cache — bootstrapper content only changes when embed-source.js hash changes
-      'Cache-Control': 'public, max-age=86400',
+      // Always revalidate — bootstrapper is tiny, and we need deploys to take effect fast
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, OPTIONS',
       'Cross-Origin-Resource-Policy': 'cross-origin',
