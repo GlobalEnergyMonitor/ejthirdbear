@@ -314,8 +314,10 @@
     loadWidgetModule()
       .then(function (mod) {
         return doMount(mod).then(function () {
+          var sr = container.shadowRoot;
+
           // Add version footer inside shadow DOM
-          if (versionInfo && versionInfo.commit) {
+          if (sr && versionInfo && versionInfo.commit) {
             var vEl = document.createElement('div');
             vEl.className = 'gem-version-stamp';
             vEl.textContent = 'GEM' +
@@ -330,14 +332,14 @@
             vs.padding = '4px 8px 2px';
             vs.fontFamily = 'system-ui, sans-serif';
             vs.opacity = '0.6';
-            shadow.appendChild(vEl);
+            sr.appendChild(vEl);
           }
 
           // Dispatch gem:loaded event
           container.dispatchEvent(new CustomEvent('gem:loaded', {
             composed: true,
             bubbles: true,
-            detail: { widgetType: parsed.type, embedId: embedId }
+            detail: { widgetType: dataSrc, embedId: embedId }
           }));
 
           // Watch for size changes and dispatch gem:resize
@@ -352,7 +354,7 @@
                 detail: { width: Math.round(rect.width), height: Math.round(rect.height), embedId: embedId }
               }));
             });
-            ro.observe(shadow.host || container);
+            ro.observe(container);
             container.__gemResizeObserver = ro;
           }
         });
