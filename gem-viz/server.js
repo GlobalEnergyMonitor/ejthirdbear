@@ -20,11 +20,16 @@ const server = createServer((req, res) => {
   }
 
   // CORS for widget assets and embed.js — allows dynamic import() from external sites
-  if (url.startsWith('/widgets') || url === '/embed.js') {
+  if (url.startsWith('/widgets') || url === '/embed.js' || url === '/embed-source.js') {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     res.setHeader('Timing-Allow-Origin', '*');
+  }
+
+  // embed.js — never cache so deploys take effect immediately on host pages
+  if (url === '/embed.js' || url === '/embed-source.js') {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   }
 
   // Content-hashed widget chunks/assets — immutable, cache forever
