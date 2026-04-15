@@ -36,7 +36,7 @@
     if (!script || !script.src) return '';
     try {
       var url = new URL(script.src);
-      var basePath = url.pathname.replace(/\/embed\.js$/, '');
+      var basePath = url.pathname.replace(/\/embed(-source)?\.js$/, '');
       return url.origin + basePath;
     } catch {
       return '';
