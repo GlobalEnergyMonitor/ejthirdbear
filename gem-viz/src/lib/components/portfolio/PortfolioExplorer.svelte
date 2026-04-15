@@ -298,9 +298,11 @@
     )
   );
 
-  /** Show tree only when all projects fit in a single column (notebook: projectGroups.length <= nRows) */
+  /** Show tree when ≤30 assets AND <7 ownership depth layers */
   let showTree = $derived(
-    displayProjectGroups.length <= nRowsFit && displayProjectGroups.length > 0
+    displayProjectGroups.length > 0 &&
+    displayProjectGroups.length <= 30 &&
+    treeMaxDepth < 7
   );
 
   /** DOM refs */
@@ -317,6 +319,8 @@
 
   /** Stored d3 tree root — needed for asset→tree cross-highlighting */
   let treeRoot = $state(null);
+  /** Max ownership depth from root to leaf asset */
+  let treeMaxDepth = $state(0);
 
   /** Selected project for detail modal — null when closed */
   let selectedProject = $state(null);
@@ -410,6 +414,7 @@
     hoveredProject = null;
     selectedProject = null;
     treeRoot = null;
+    treeMaxDepth = 0;
 
     try {
       const resp = await fetch(
@@ -451,6 +456,7 @@
       projectGroups = groups;
       intermediaries = interData;
       cumulativePctMap = treePaths.cumulativePctMap;
+      treeMaxDepth = treePaths.maxDepth;
     } catch (err) {
       if (err.name === 'AbortError') return; // superseded by newer fetch
       error = err.message || 'Failed to fetch data';
@@ -612,7 +618,8 @@
     // Deduplicate path strings
     const uniquePathStrings = [...new Set(pathStrings)];
 
-    return { paths, pathStrings: uniquePathStrings, cumulativePctMap };
+    const maxDepth = paths.reduce((max, p) => Math.max(max, p.path.length - 1), 0);
+    return { paths, pathStrings: uniquePathStrings, cumulativePctMap, maxDepth };
   }
 
   // ============================================================================
@@ -942,8 +949,11 @@
 
     const unitR = 10;
     const labelX = 36;
-    const assetMarkH = 40; // combined mark height — gives multi-unit flowers room
-    const assetMarkSingle = 24;
+    // Condense row height when showing tree with many assets so they fit
+    const assetMarkH = showTree && groups.length > 15
+      ? Math.max(24, Math.floor((containerHeight - 100) / groups.length))
+      : 40;
+    const assetMarkSingle = Math.min(24, assetMarkH);
 
     // --- Grid layout: fit 2 columns to container width, grow tall ---
     const isMobile = isViewportBelow('sm');
