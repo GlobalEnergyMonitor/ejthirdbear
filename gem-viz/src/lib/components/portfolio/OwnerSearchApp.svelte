@@ -326,9 +326,7 @@
   }
 
   .os-embedded:has(.os-modal-backdrop) {
-    /* Stretch to fill whatever container the widget is in */
-    min-height: 100%;
-    flex: 1;
+    min-height: 500px;
   }
   .os-app {
     width: 100%;
@@ -571,12 +569,14 @@
 
   /* In widget/embed context, position:fixed is relative to the shadow host's
      containing block (not the viewport), so the modal renders clipped or blank.
-     Switch to position:absolute anchored to .os-root instead. */
+     Use position:absolute filling the root, with a solid background so the
+     search UI behind is hidden. */
   .os-embedded .os-modal-backdrop {
     position: absolute;
     inset: 0;
     padding: 0;
     background: var(--color-bg-primary, #ffffff);
+    overflow-y: auto;
   }
 
   .os-modal {
@@ -594,11 +594,16 @@
 
   .os-embedded .os-modal {
     max-width: 100%;
-    max-height: 100%;
-    height: 100%;
+    max-height: none;
     border-radius: 0;
     box-shadow: none;
     margin: 0;
+  }
+
+  .os-embedded .os-modal-body {
+    /* Give the body a concrete height so PortfolioExplorer can scroll */
+    min-height: 450px;
+    overflow-y: auto;
   }
 
   .os-modal-header {
