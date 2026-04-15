@@ -26,7 +26,8 @@
   } from '$lib/design-tokens';
   import NestedIntermediaryPanel from './NestedIntermediaryPanel.svelte';
 
-  const API_BASE = import.meta.env?.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-api.thirdbear.net';
+  const API_BASE =
+    import.meta.env?.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-api.thirdbear.net';
 
   // ============================================================================
   // PROPS
@@ -136,7 +137,14 @@
 
   /** Parse comma-separated filter string into a Set, empty string → empty Set */
   function parseFilterParam(val) {
-    return val ? new Set(val.split(',').map((s) => s.trim()).filter(Boolean)) : new Set();
+    return val
+      ? new Set(
+          val
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean)
+        )
+      : new Set();
   }
 
   let filters = $state(createEmptyFilters());
@@ -157,10 +165,10 @@
   /** Whether any filter is active */
   let isFiltered = $derived(
     filters.country.size > 0 ||
-    filters.asset_type.size > 0 ||
-    filters.operating_status.size > 0 ||
-    filters.intermediary.size > 0 ||
-    filters.ownership.size > 0
+      filters.asset_type.size > 0 ||
+      filters.operating_status.size > 0 ||
+      filters.intermediary.size > 0 ||
+      filters.ownership.size > 0
   );
 
   /** Get ownership bucket label for an asset */
@@ -227,7 +235,8 @@
   });
   let colorField = $derived.by(() => {
     // If user override is still valid, use it
-    if (colorFieldOverride && availableColorFields.includes(colorFieldOverride)) return colorFieldOverride;
+    if (colorFieldOverride && availableColorFields.includes(colorFieldOverride))
+      return colorFieldOverride;
     // Auto-select first available, prefer type > status > country
     if (availableColorFields.length > 0) return availableColorFields[0];
     return 'type';
@@ -235,9 +244,7 @@
 
   /** Whether any non-intermediary filter is active (for computing intermediary counts) */
   let hasNonIntermediaryFilter = $derived(
-    filters.country.size > 0 ||
-    filters.asset_type.size > 0 ||
-    filters.operating_status.size > 0
+    filters.country.size > 0 || filters.asset_type.size > 0 || filters.operating_status.size > 0
   );
 
   /** Intermediaries with counts updated to reflect current non-intermediary filters */
@@ -332,6 +339,11 @@
     return `left: ${left}px; top: ${top}px;`;
   });
 
+  function interruptChartTransitions() {
+    if (treeSvgEl) d3.select(treeSvgEl).selectAll('*').interrupt();
+    if (assetsSvgEl) d3.select(assetsSvgEl).selectAll('*').interrupt();
+  }
+
   function updateScrollState() {
     if (!chartContainer) return;
     const { scrollLeft, scrollWidth, clientWidth } = chartContainer;
@@ -376,8 +388,9 @@
   async function fetchData(entityId) {
     // Cancel any in-flight fetch
     if (fetchController) fetchController.abort();
-    fetchController = new AbortController();
-    const signal = fetchController.signal;
+    const controller = new AbortController();
+    fetchController = controller;
+    const signal = controller.signal;
 
     loading = true;
     error = '';
@@ -385,8 +398,18 @@
     summary = null;
     projectGroups = [];
     intermediaries = [];
+    cumulativePctMap = new Map();
     intermediaryProjectIds = new Map();
-    filters = { country: new Set(), asset_type: new Set(), operating_status: new Set(), intermediary: new Set(), ownership: new Set() };
+    filters = {
+      country: new Set(),
+      asset_type: new Set(),
+      operating_status: new Set(),
+      intermediary: new Set(),
+      ownership: new Set(),
+    };
+    hoveredProject = null;
+    selectedProject = null;
+    treeRoot = null;
 
     try {
       const resp = await fetch(
@@ -432,6 +455,7 @@
       if (err.name === 'AbortError') return; // superseded by newer fetch
       error = err.message || 'Failed to fetch data';
     } finally {
+      if (fetchController === controller) fetchController = null;
       if (!signal.aborted) loading = false;
     }
   }
@@ -719,11 +743,8 @@
     const tree = d3Hierarchy
       .cluster()
       .size([height, width])
-      .separation(
-        (a, b) =>
-          a.parent === b.parent
-            ? treeParams.siblingSeparation
-            : treeParams.cousinSeparation
+      .separation((a, b) =>
+        a.parent === b.parent ? treeParams.siblingSeparation : treeParams.cousinSeparation
       );
 
     root.sort((a, b) => d3Array.ascending(a.data.name, b.data.name));
@@ -747,7 +768,8 @@
       d.entityName = entity ? entity.name || entity.full_name : d.data.name;
       // Real ownership percentage from API edge
       const edge = edgeLookup.get(d.data.name);
-      d.ownershipPct = edge && typeof edge.value === 'number' ? Math.max(0, Math.min(1, edge.value / 100)) : 1;
+      d.ownershipPct =
+        edge && typeof edge.value === 'number' ? Math.max(0, Math.min(1, edge.value / 100)) : 1;
     });
 
     // Links
@@ -923,43 +945,38 @@
     const assetMarkH = 40; // combined mark height — gives multi-unit flowers room
     const assetMarkSingle = 24;
 
-    // --- Grid layout (port of notebook's gridInfo + nRows) ---
-    // svgHeight drives how many rows fit in one column
-    const svgH = Math.max(300, containerHeight - 80);
-    const nRows = Math.max(4, Math.floor(svgH / assetMarkH));
-    const nProjects = groups.length;
-    const colsNeeded = Math.ceil(nProjects / nRows);
+    // --- Grid layout: fit 2 columns to container width, grow tall ---
     const isMobile = isViewportBelow('sm');
-    const minColWidth = isMobile ? 200 : 300;
-    const colWidth = Math.max(minColWidth, assetMarkH * (isMobile ? 8 : 12));
-    const svgWidthNeeded = colsNeeded * colWidth;
+    const nProjects = groups.length;
+    const containerEl = assetsSvgEl?.parentElement;
+    const availableWidth = containerEl ? containerEl.clientWidth - 20 : 600;
+    const maxCols = isMobile ? 1 : 2;
+    const nCols = Math.max(1, Math.min(maxCols, Math.floor(availableWidth / 200)));
+    const colWidth = Math.floor(availableWidth / nCols);
+    const nRows = Math.ceil(nProjects / nCols);
 
-    // Single column = show tree + align to leaf positions
-    const isSingleColumn = nProjects <= nRows;
+    // Single column with few items = show tree + align to leaf positions
+    const isSingleColumn =
+      nCols === 1 && nProjects <= Math.max(4, Math.floor((containerHeight - 80) / assetMarkH));
 
-    // Build a projectID → tree leaf y-position map (notebook pattern:
-    // "Add the x location of the D3 Tree to the data" — d.y = asset.x)
     const leafYMap = new Map();
     if (isSingleColumn && showTree && treeRoot) {
       for (const leaf of treeRoot.leaves()) {
-        leafYMap.set(leaf.data.name, leaf.x); // tree "x" is vertical position
+        leafYMap.set(leaf.data.name, leaf.x);
       }
     }
 
     const margin = { top: 20, left: 20 };
 
-    // Calculate total height
     let totalHeight;
     if (isSingleColumn && leafYMap.size > 0) {
       const maxY = Math.max(...leafYMap.values());
       totalHeight = maxY + margin.top + 30;
     } else {
-      // Multi-column: height = nRows * assetMarkH
-      const rowsInView = Math.min(nProjects, nRows);
-      totalHeight = rowsInView * assetMarkH + margin.top + 10;
+      totalHeight = nRows * assetMarkH + margin.top + 10;
     }
 
-    svg.attr('width', svgWidthNeeded + margin.left).attr('height', totalHeight);
+    svg.attr('width', availableWidth).attr('height', totalHeight);
 
     const g = svg.append('g').attr('transform', `translate(${margin.left}, ${margin.top})`);
 
@@ -1036,10 +1053,7 @@
           hoveredProject = null;
 
           // Restore all assets
-          g.selectAll('.asset-row')
-            .transition('fade')
-            .duration(200)
-            .style('opacity', 1);
+          g.selectAll('.asset-row').transition('fade').duration(200).style('opacity', 1);
 
           // Restore all tree elements
           if (treeSvgEl) {
@@ -1061,9 +1075,11 @@
 
       // Unit circles via shared molecule renderer
       const N = proj.units.length;
-      const maxClusterDiameter = assetMarkH - 4;
+      const maxClusterDiameter = Math.min(assetMarkH - 4, N > 1 ? 28 : assetMarkH - 4);
       const { ringRadius: molRingR, unitRadius: molUnitR } = computeMoleculeRadii(
-        maxClusterDiameter, N, { maxUnitRadius: unitR }
+        maxClusterDiameter,
+        N,
+        { maxUnitRadius: N > 4 ? 5 : unitR }
       );
 
       const moleculeUnits = proj.units.map((unit) => ({
@@ -1071,8 +1087,8 @@
           colorField === 'type'
             ? trackerColorMap.get(unit.asset_type) || colors.grey
             : colorField === 'status'
-            ? COLOR_BY_STATUS.get(unit.operating_status?.toLowerCase()) || colors.grey
-            : countryColorScale(unit.country || 'Unknown'),
+              ? COLOR_BY_STATUS.get(unit.operating_status?.toLowerCase()) || colors.grey
+              : countryColorScale(unit.country || 'Unknown'),
         ownershipPct: unit.ownership_share,
       }));
 
@@ -1085,7 +1101,10 @@
       // Asset name label — prefer project_name from API, fall back to asset_name
       let name = proj.units[0]?.project_name || proj.units[0]?.asset_name || proj.projectID;
 
-      const labelG = row.append('g').attr('transform', `translate(${labelX}, 0)`).style('pointer-events', 'none');
+      const labelG = row
+        .append('g')
+        .attr('transform', `translate(${labelX}, 0)`)
+        .style('pointer-events', 'none');
 
       // Type prefix for non-plants
       const assetType = (proj.units[0]?.asset_type || '').toLowerCase();
@@ -1216,7 +1235,10 @@
   $effect(() => {
     if (typeof window === 'undefined') return;
     const update = () => {
-      containerHeight = Math.max(LAYOUT.portfolio.chartMinHeight, window.innerHeight - heightOffset);
+      containerHeight = Math.max(
+        LAYOUT.portfolio.chartMinHeight,
+        window.innerHeight - heightOffset
+      );
     };
     update();
     window.addEventListener('resize', update);
@@ -1231,14 +1253,24 @@
     const _color = colorField;
     const _height = containerHeight;
     const _showTree = showTree;
+    let redrawRaf = 0;
+    let cancelled = false;
     if (_data && _groups.length > 0) {
       // Use microtask to ensure DOM is ready
       queueMicrotask(() => {
+        if (cancelled) return;
         drawTree();
         drawAssets();
-        requestAnimationFrame(() => updateScrollState());
+        redrawRaf = requestAnimationFrame(() => {
+          if (!cancelled) updateScrollState();
+        });
       });
     }
+    return () => {
+      cancelled = true;
+      if (redrawRaf) cancelAnimationFrame(redrawRaf);
+      interruptChartTransitions();
+    };
   });
 
   // Close modal on Escape key
@@ -1249,6 +1281,13 @@
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
+  });
+
+  $effect(() => {
+    return () => {
+      fetchController?.abort();
+      interruptChartTransitions();
+    };
   });
 
   /** Build asset URL respecting linkBase override */
@@ -1286,35 +1325,37 @@
 <div
   class="portfolio-explorer"
   class:embed-mode={heightOffset < 200}
-  style:--chart-max-height={heightOffset < 200 ? 'none' : `calc(100vh - ${LAYOUT.portfolio.chartMaxHeightOffset}px)`}
+  style:--chart-max-height={heightOffset < 200
+    ? 'none'
+    : `calc(100vh - ${LAYOUT.portfolio.chartMaxHeightOffset}px)`}
   style:--portfolio-modal-max-width={`${LAYOUT.portfolio.modal.maxWidth}px`}
   style:--portfolio-modal-max-height={`${LAYOUT.portfolio.modal.maxHeight}px`}
 >
   <!-- ENTITY SELECTOR -->
   {#if !hidePicker}
-  <div class="selector-bar">
-    <div class="selector-label">Select owner:</div>
-    <div class="selector-chips">
-      {#each SAMPLE_OWNERS as [name, id]}
-        <button
-          class="chip"
-          class:active={selectedEntityId === id}
-          onclick={() => handleSelectEntity(id)}
-        >
-          {name}
-        </button>
-      {/each}
+    <div class="selector-bar">
+      <div class="selector-label">Select owner:</div>
+      <div class="selector-chips">
+        {#each SAMPLE_OWNERS as [name, id]}
+          <button
+            class="chip"
+            class:active={selectedEntityId === id}
+            onclick={() => handleSelectEntity(id)}
+          >
+            {name}
+          </button>
+        {/each}
+      </div>
+      <div class="custom-input">
+        <input
+          type="text"
+          placeholder="Entity ID (e.g. E100001000347)"
+          bind:value={customEntityId}
+          onkeydown={(e) => e.key === 'Enter' && handleCustomEntity()}
+        />
+        <button class="go-btn" onclick={handleCustomEntity}>Go</button>
+      </div>
     </div>
-    <div class="custom-input">
-      <input
-        type="text"
-        placeholder="Entity ID (e.g. E100001000347)"
-        bind:value={customEntityId}
-        onkeydown={(e) => e.key === 'Enter' && handleCustomEntity()}
-      />
-      <button class="go-btn" onclick={handleCustomEntity}>Go</button>
-    </div>
-  </div>
   {/if}
 
   {#if loading}
@@ -1322,117 +1363,246 @@
   {:else if error}
     <div class="error">{error}</div>
   {:else if apiData && summary}
-    <!-- HEADER -->
-    <div class="chart-header">
-      <div class="name-wrapper">
-        <p class="subtitle">Owner</p>
-        <h3>{apiData.spotlightOwner.name || apiData.spotlightOwner.full_name}</h3>
-      </div>
-      <div class="header-facts">
-        <p>
-          Stakes in {summary.total.assetCount} asset{summary.total.assetCount !== 1 ? 's' : ''} in {summary.total.types.size}
-          GEM tracker{summary.total.types.size !== 1 ? 's' : ''}
-        </p>
-      </div>
-    </div>
-
-    <!-- MAIN CHART AREA -->
-    <div class="chart-shell">
-      <div
-        class="chart-row"
-        class:fade-left={canScrollLeft}
-        class:fade-right={canScrollRight}
-        bind:this={chartContainer}
-      >
+    <!-- MAIN LAYOUT: asset grid (scrolls) + filter sidebar (sticky) -->
+    <div class="chart-layout">
+      <!-- Asset grid — scrollable -->
+      <div class="chart-area" bind:this={chartContainer}>
         {#if isFiltered && displayProjectGroups.length === 0}
           <div class="empty-state">
             <p>No assets match current filters.</p>
             <button class="clear-btn" onclick={clearFilter}>Clear filters</button>
           </div>
         {:else}
-          {#if showTree}
-            <div class="tree-container">
-              <svg bind:this={treeSvgEl}></svg>
+          <div class="chart-row">
+            {#if showTree}
+              <div class="tree-container">
+                <svg bind:this={treeSvgEl}></svg>
+              </div>
+            {/if}
+            <div class="assets-container" class:full-width={!showTree}>
+              <svg bind:this={assetsSvgEl}></svg>
             </div>
-          {/if}
-          <div class="assets-container" class:full-width={!showTree}>
-            <svg bind:this={assetsSvgEl}></svg>
           </div>
         {/if}
       </div>
-      {#if hasHorizontalOverflow}
-        <div class="scroll-indicator" aria-hidden="true">
-          <span class="scroll-cue" class:visible={canScrollLeft}>← Back</span>
-          <div class="scroll-meter">
-            <span class="scroll-copy scroll-copy-desktop">
-              {canScrollRight ? 'Scroll to see more assets' : 'End of asset list'}
-            </span>
-            <span class="scroll-copy scroll-copy-mobile">
-              {canScrollRight ? 'Swipe for more' : 'End of list'}
-            </span>
-            <div class="scroll-rail">
-              <span
-                class="scroll-thumb"
-                style={`width: ${scrollThumbWidth}%; left: ${scrollThumbOffset}%;`}
-              ></span>
+
+      <!-- Filter sidebar — sticky -->
+      <div class="filter-sidebar">
+        <div class="sidebar-header">
+          <span class="sidebar-owner"
+            >{apiData.spotlightOwner.name || apiData.spotlightOwner.full_name}</span
+          >
+          <span class="sidebar-stats"
+            >{summary.total.assetCount} assets · {summary.total.types.size} tracker{summary.total
+              .types.size !== 1
+              ? 's'
+              : ''}</span
+          >
+        </div>
+
+        <div class="sidebar-toolbar">
+          {#if availableColorFields.length > 1}
+            <div class="color-toggle">
+              <span class="color-toggle-label">Color by</span>
+              {#each availableColorFields as opt}
+                <button
+                  class="color-toggle-btn"
+                  class:active={colorField === opt}
+                  onclick={() => {
+                    userHasInteracted = true;
+                    colorFieldOverride = opt;
+                  }}>{opt}</button
+                >
+              {/each}
+            </div>
+          {/if}
+          {#if isFiltered}
+            {@const activeLabels = Object.values(filters).flatMap((s) => [...s])}
+            <button class="clear-filter-inline" onclick={clearFilter}>
+              Clear {activeLabels.length} filter{activeLabels.length !== 1 ? 's' : ''}
+            </button>
+          {/if}
+        </div>
+
+        <div class="sidebar-filters">
+          <div class="summary-section">
+            <p class="subtitle">By Location</p>
+            <div class="summary-table">
+              {#each [...summary.byCountry] as [country, data]}
+                {@const isActive = filters.country.has(country)}
+                {@const filteredCount = displaySummary?.byCountry?.get(country)?.assetCount}
+                {@const hasResults = !isFiltered || filteredCount != null}
+                <div
+                  class="summary-row"
+                  class:active={isActive}
+                  class:dimmed={isFiltered && !isActive && hasResults}
+                  class:faded={isFiltered && !isActive && !hasResults}
+                  role="button"
+                  tabindex="0"
+                  onclick={() => applyFilter('country', country)}
+                  onkeydown={(e) => e.key === 'Enter' && applyFilter('country', country)}
+                >
+                  <span class="legend-dot" style="background: {countryColorScale(country)}"></span>
+                  {country} ({isFiltered ? (filteredCount ?? 0) : data.assetCount})
+                </div>
+              {/each}
             </div>
           </div>
-          <span class="scroll-cue scroll-cue-right" class:visible={canScrollRight}>
-            <span class="scroll-cue-desktop">More →</span>
-            <span class="scroll-cue-mobile">Swipe →</span>
-          </span>
+
+          <div class="summary-section">
+            <p class="subtitle">By Type</p>
+            <div class="summary-table">
+              {#each [...summary.byType] as [type, data]}
+                {@const isActive = filters.asset_type.has(type)}
+                {@const filteredCount = displaySummary?.byType?.get(type)?.assetCount}
+                {@const hasResults = !isFiltered || filteredCount != null}
+                {@const typeColor = trackerColorMap.get(type) || colors.grey}
+                <div
+                  class="summary-row"
+                  class:active={isActive}
+                  class:dimmed={isFiltered && !isActive && hasResults}
+                  class:faded={isFiltered && !isActive && !hasResults}
+                  role="button"
+                  tabindex="0"
+                  onclick={() => applyFilter('asset_type', type)}
+                  onkeydown={(e) => e.key === 'Enter' && applyFilter('asset_type', type)}
+                >
+                  <span class="legend-dot" style="background: {typeColor}"></span>
+                  {type} ({isFiltered ? (filteredCount ?? 0) : data.assetCount})
+                </div>
+              {/each}
+            </div>
+          </div>
+
+          <div class="summary-section">
+            <p class="subtitle">By Status</p>
+            <div class="summary-table">
+              {#each [...summary.byStatus] as [status, data]}
+                {@const isActive = filters.operating_status.has(status)}
+                {@const filteredCount = displaySummary?.byStatus?.get(status)?.assetCount}
+                {@const hasResults = !isFiltered || filteredCount != null}
+                {@const statusColor = COLOR_BY_STATUS.get(status.toLowerCase()) || colors.grey}
+                <div
+                  class="summary-row"
+                  class:active={isActive}
+                  class:dimmed={isFiltered && !isActive && hasResults}
+                  class:faded={isFiltered && !isActive && !hasResults}
+                  role="button"
+                  tabindex="0"
+                  onclick={() => applyFilter('operating_status', status)}
+                  onkeydown={(e) => e.key === 'Enter' && applyFilter('operating_status', status)}
+                >
+                  <span class="legend-dot" style="background: {statusColor}"></span>
+                  {status} ({isFiltered ? (filteredCount ?? 0) : data.assetCount})
+                </div>
+              {/each}
+            </div>
+          </div>
+
+          {#if summary.byOwnership && summary.byOwnership.size > 1}
+            <div class="summary-section">
+              <p class="subtitle">Ownership Share</p>
+              <div class="summary-table">
+                {#each OWNERSHIP_BUCKETS as bucket}
+                  {@const data = summary.byOwnership?.get(bucket.label)}
+                  {#if data}
+                    {@const isActive = filters.ownership.has(bucket.label)}
+                    {@const filteredCount = displaySummary?.byOwnership?.get(
+                      bucket.label
+                    )?.assetCount}
+                    {@const hasResults = !isFiltered || filteredCount != null}
+                    <div
+                      class="summary-row"
+                      class:active={isActive}
+                      class:dimmed={isFiltered && !isActive && hasResults}
+                      class:faded={isFiltered && !isActive && !hasResults}
+                      role="button"
+                      tabindex="0"
+                      onclick={() => applyFilter('ownership', bucket.label)}
+                      onkeydown={(e) => e.key === 'Enter' && applyFilter('ownership', bucket.label)}
+                    >
+                      {bucket.label} ({isFiltered ? (filteredCount ?? 0) : data.assetCount})
+                    </div>
+                  {/if}
+                {/each}
+              </div>
+            </div>
+          {/if}
+
+          {#if intermediaries.length > 0}
+            <div class="summary-section">
+              <p class="subtitle">Intermediaries</p>
+              <div class="summary-table">
+                {#each displayIntermediaries as inter}
+                  {@const isActive = filters.intermediary.has(inter.name)}
+                  {@const count = hasNonIntermediaryFilter ? inter.filteredCount : inter.assetCount}
+                  {@const hasResults = !hasNonIntermediaryFilter || inter.filteredCount > 0}
+                  {@const isExpanded = expandedIntermediaryIds.has(inter.entity_id)}
+                  <div class="summary-row-wrapper">
+                    <div
+                      class="summary-row"
+                      class:active={isActive}
+                      class:dimmed={isFiltered && !isActive && hasResults}
+                      class:faded={isFiltered && !isActive && !hasResults}
+                      role="button"
+                      tabindex="0"
+                      onclick={() => applyFilter('intermediary', inter.name, inter.projectIds)}
+                      onkeydown={(e) =>
+                        e.key === 'Enter' &&
+                        applyFilter('intermediary', inter.name, inter.projectIds)}
+                    >
+                      {inter.name} ({count})
+                    </div>
+                    <button
+                      class="foldout-btn"
+                      class:expanded={isExpanded}
+                      onclick={() => toggleIntermediaryFoldout(inter.entity_id)}
+                      title="{isExpanded ? 'Collapse' : 'Expand'} {inter.name} sub-portfolio"
+                    >
+                      {isExpanded ? '▼' : '▶'}
+                    </button>
+                  </div>
+                {/each}
+              </div>
+            </div>
+          {/if}
         </div>
-      {/if}
+      </div>
     </div>
 
-    <!-- HOVER TOOLTIP — compact header + unit table -->
+    <!-- Hover tooltip — name + ownership only -->
     {#if hoveredProject}
       {@const u0 = hoveredProject.units[0]}
       {@const cumPct = cumulativePctMap.get(hoveredProject.projectID)}
-      {@const ttLeft = typeof window !== 'undefined' ? Math.min(tooltipPos.x + 12, window.innerWidth - 320) : tooltipPos.x + 12}
-      {@const ttTop = typeof window !== 'undefined' ? Math.min(tooltipPos.y - 10, window.innerHeight - 200) : tooltipPos.y - 10}
-      {@const hasOwnershipCol = hoveredProject.units.some(u => u.ownership_share)}
+      {@const ttLeft =
+        typeof window !== 'undefined'
+          ? Math.min(tooltipPos.x + 12, window.innerWidth - 260)
+          : tooltipPos.x + 12}
+      {@const ttTop =
+        typeof window !== 'undefined'
+          ? Math.min(tooltipPos.y - 10, window.innerHeight - 80)
+          : tooltipPos.y - 10}
       <div class="portfolio-tooltip" style="left: {ttLeft}px; top: {ttTop}px;">
-        <div class="tt-header">
-          <div class="tt-name">{u0?.project_name || u0?.asset_name || hoveredProject.projectID}</div>
-          <div class="tt-meta">
-            {u0?.asset_type || ''}{#if u0?.country} · {u0.country}{/if}{#if hoveredProject.units.length > 1} · {hoveredProject.units.length} units{/if}
-          </div>
-          {#if cumPct != null && cumPct < 99.9}
-            <div class="tt-eff">{fmtPct(cumPct)}% effective ownership</div>
-          {/if}
-        </div>
-        <table class="tt-table">
-          <thead>
-            <tr>
-              <th>Unit</th>
-              <th>Status</th>
-              <th class="num">Capacity</th>
-              {#if hasOwnershipCol}<th class="num">Own%</th>{/if}
-            </tr>
-          </thead>
-          <tbody>
-            {#each hoveredProject.units.slice(0, 6) as unit}
-              <tr>
-                <td class="unit-name">{unit.asset_name || unit.asset_id}</td>
-                <td><span class="status-dot" style="background:{COLOR_BY_STATUS.get(unit.operating_status?.toLowerCase()) || '#999'}"></span>{unit.operating_status || '—'}</td>
-                <td class="num">{unit.capacity_value ? `${unit.capacity_value.toLocaleString()} ${unit.capacity_unit || 'MW'}` : '—'}</td>
-                {#if hasOwnershipCol}<td class="num">{unit.ownership_share ? `${unit.ownership_share}%` : '—'}</td>{/if}
-              </tr>
-            {/each}
-          </tbody>
-        </table>
-        {#if hoveredProject.units.length > 6}
-          <div class="tt-more">+{hoveredProject.units.length - 6} more units</div>
+        <div class="tt-name">{u0?.project_name || u0?.asset_name || hoveredProject.projectID}</div>
+        {#if cumPct != null && cumPct < 99.9}
+          <div class="tt-eff">{fmtPct(cumPct)}% eff. ownership</div>
+        {:else if u0?.ownership_share}
+          <div class="tt-eff">{u0.ownership_share}% ownership</div>
         {/if}
       </div>
     {/if}
 
-    <!-- ASSET DETAIL MODAL -->
+    <!-- Click popover — unit table -->
     {#if selectedProject}
       {@const modalCumPct = cumulativePctMap.get(selectedProject.projectID)}
+      {@const sp0 = selectedProject.units[0]}
+      {@const hasOwnershipCol = selectedProject.units.some((u) => u.ownership_share)}
       <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div class="modal-backdrop" onclick={() => (selectedProject = null)} onkeydown={(e) => e.key === 'Escape' && (selectedProject = null)}>
+      <div
+        class="modal-backdrop"
+        onclick={() => (selectedProject = null)}
+        onkeydown={(e) => e.key === 'Escape' && (selectedProject = null)}
+      >
         <div
           class="asset-modal"
           role="dialog"
@@ -1443,205 +1613,74 @@
         >
           <button class="modal-close" onclick={() => (selectedProject = null)}>&times;</button>
           <div class="modal-header">
-            <h4>{selectedProject.units[0]?.asset_name || selectedProject.projectID}</h4>
-            {#if selectedProject.units.length > 1}
-              <span class="unit-badge">{selectedProject.units.length} units</span>
-            {/if}
-            {#if modalCumPct != null && modalCumPct < 99.9}
-              <span class="unit-badge eff-badge">{fmtPct(modalCumPct)}% effective ownership</span>
-            {/if}
+            <h4>{sp0?.project_name || sp0?.asset_name || selectedProject.projectID}</h4>
+            {#if selectedProject.units.length > 1}<span class="unit-badge"
+                >{selectedProject.units.length} units</span
+              >{/if}
           </div>
-          <div class="modal-units">
-            {#each selectedProject.units as unit}
-              <div class="modal-unit">
-                <div class="unit-row"><span class="unit-label">Type</span><span class="unit-value">{unit.asset_type || '—'}</span></div>
-                <div class="unit-row"><span class="unit-label">Status</span><span class="unit-value"><span class="status-dot" style="background: {COLOR_BY_STATUS.get(unit.operating_status?.toLowerCase()) || colors.grey}"></span>{unit.operating_status || '—'}</span></div>
-                {#if unit.capacity_value}<div class="unit-row"><span class="unit-label">Capacity</span><span class="unit-value">{unit.capacity_value.toLocaleString()} {unit.capacity_unit || 'MW'}</span></div>{/if}
-                <div class="unit-row"><span class="unit-label">Country</span><span class="unit-value">{unit.country || '—'}</span></div>
-                {#if unit.ownership_share}<div class="unit-row"><span class="unit-label">Ownership</span><span class="unit-value">{unit.ownership_share}%</span></div>{/if}
-                {#if unit.latitude && unit.longitude}<div class="unit-row"><span class="unit-label">Coords</span><span class="unit-value coords">{unit.latitude.toFixed(3)}, {unit.longitude.toFixed(3)}</span></div>{/if}
-                {#if selectedProject.units.length > 1}<div class="unit-row"><span class="unit-label">Unit</span><span class="unit-value">{unit.asset_name || unit.asset_id}</span></div>{/if}
-                <a class="asset-link" href={buildAssetUrl(unit.asset_id)} target="_blank" rel="noopener" onclick={(e) => handleLinkClick(e, buildAssetUrl(unit.asset_id))}>View full asset page &rarr;</a>
-              </div>
-              {#if selectedProject.units.length > 1}<hr class="unit-divider" />{/if}
-            {/each}
+          <div class="tt-meta">
+            {sp0?.asset_type || ''}{#if sp0?.country}
+              · {sp0.country}{/if}
           </div>
+          {#if modalCumPct != null && modalCumPct < 99.9}
+            <div class="tt-eff" style="margin-bottom:6px">
+              {fmtPct(modalCumPct)}% effective ownership
+            </div>
+          {/if}
+          <table class="tt-table">
+            <thead
+              ><tr
+                ><th>Unit</th><th>Status</th><th class="num">Capacity</th>{#if hasOwnershipCol}<th
+                    class="num">Own%</th
+                  >{/if}</tr
+              ></thead
+            >
+            <tbody>
+              {#each selectedProject.units as unit}
+                <tr>
+                  <td class="unit-name">{unit.asset_name || unit.asset_id}</td>
+                  <td
+                    ><span
+                      class="status-dot"
+                      style="background:{COLOR_BY_STATUS.get(
+                        unit.operating_status?.toLowerCase()
+                      ) || '#999'}"
+                    ></span>{unit.operating_status || '—'}</td
+                  >
+                  <td class="num"
+                    >{unit.capacity_value
+                      ? `${unit.capacity_value.toLocaleString()} ${unit.capacity_unit || 'MW'}`
+                      : '—'}</td
+                  >
+                  {#if hasOwnershipCol}<td class="num"
+                      >{unit.ownership_share ? `${unit.ownership_share}%` : '—'}</td
+                    >{/if}
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+          <a
+            class="asset-link"
+            href={buildAssetUrl(sp0?.asset_id)}
+            target="_blank"
+            rel="noopener"
+            onclick={(e) => handleLinkClick(e, buildAssetUrl(sp0?.asset_id))}
+            >View full asset page &rarr;</a
+          >
         </div>
       </div>
     {/if}
 
-    <!-- FILTER FOOTER — cross-column additive (AND), same-column click toggles -->
-    <div class="chart-footer">
-      <div class="footer-toolbar">
-        {#if isFiltered}
-          {@const activeLabels = Object.values(filters).flatMap((s) => [...s])}
-          <button class="clear-filter-inline" class:many={activeLabels.length > 3} onclick={clearFilter}>
-            Clear: {activeLabels.join(' + ')}
-          </button>
+    <!-- EXPANDED INTERMEDIARY PANELS — appear below the main chart card, indented right -->
+    {#if intermediaries.length > 0}
+      {#each displayIntermediaries as inter}
+        {#if expandedIntermediaryIds.has(inter.entity_id)}
+          <div class="foldout-panel-wrapper">
+            <NestedIntermediaryPanel entityId={inter.entity_id} {API_BASE} />
+          </div>
         {/if}
-        {#if availableColorFields.length > 1}
-        <div class="color-toggle">
-          <span class="color-toggle-label">Color by:</span>
-          {#each availableColorFields as opt}
-            <button
-              class="color-toggle-btn"
-              class:active={colorField === opt}
-              onclick={() => { userHasInteracted = true; colorFieldOverride = opt; }}
-            >{opt}</button>
-          {/each}
-        </div>
-        {/if}
-      </div>
-      <div class="footer-columns">
-      <div class="summary-section">
-        <p class="subtitle">By Location</p>
-        <div class="summary-table">
-          {#each [...summary.byCountry] as [country, data]}
-            {@const isActive = filters.country.has(country)}
-            {@const filteredCount = displaySummary?.byCountry?.get(country)?.assetCount}
-            {@const hasResults = !isFiltered || filteredCount != null}
-            <div
-              class="summary-row"
-              class:active={isActive}
-              class:dimmed={isFiltered && !isActive && hasResults}
-              class:faded={isFiltered && !isActive && !hasResults}
-              role="button"
-              tabindex="0"
-              onclick={() => applyFilter('country', country)}
-              onkeydown={(e) => e.key === 'Enter' && applyFilter('country', country)}
-            >
-              <span class="legend-dot" style="background: {countryColorScale(country)}"></span>
-              {country} ({isFiltered ? (filteredCount ?? 0) : data.assetCount})
-            </div>
-          {/each}
-        </div>
-      </div>
-
-      <div class="summary-section">
-        <p class="subtitle">By Type</p>
-        <div class="summary-table">
-          {#each [...summary.byType] as [type, data]}
-            {@const isActive = filters.asset_type.has(type)}
-            {@const filteredCount = displaySummary?.byType?.get(type)?.assetCount}
-            {@const hasResults = !isFiltered || filteredCount != null}
-            {@const typeColor = trackerColorMap.get(type) || colors.grey}
-            <div
-              class="summary-row"
-              class:active={isActive}
-              class:dimmed={isFiltered && !isActive && hasResults}
-              class:faded={isFiltered && !isActive && !hasResults}
-              role="button"
-              tabindex="0"
-              onclick={() => applyFilter('asset_type', type)}
-              onkeydown={(e) => e.key === 'Enter' && applyFilter('asset_type', type)}
-            >
-              <span class="legend-dot" style="background: {typeColor}"></span>
-              {type} ({isFiltered ? (filteredCount ?? 0) : data.assetCount})
-            </div>
-          {/each}
-        </div>
-      </div>
-
-      <div class="summary-section">
-        <p class="subtitle">By Status</p>
-        <div class="summary-table">
-          {#each [...summary.byStatus] as [status, data]}
-            {@const isActive = filters.operating_status.has(status)}
-            {@const filteredCount = displaySummary?.byStatus?.get(status)?.assetCount}
-            {@const hasResults = !isFiltered || filteredCount != null}
-            {@const statusColor = COLOR_BY_STATUS.get(status.toLowerCase()) || colors.grey}
-            <div
-              class="summary-row"
-              class:active={isActive}
-              class:dimmed={isFiltered && !isActive && hasResults}
-              class:faded={isFiltered && !isActive && !hasResults}
-              role="button"
-              tabindex="0"
-              onclick={() => applyFilter('operating_status', status)}
-              onkeydown={(e) => e.key === 'Enter' && applyFilter('operating_status', status)}
-            >
-              <span class="legend-dot" style="background: {statusColor}"></span>
-              {status} ({isFiltered ? (filteredCount ?? 0) : data.assetCount})
-            </div>
-          {/each}
-        </div>
-      </div>
-
-      {#if summary.byOwnership && summary.byOwnership.size > 1}
-      <div class="summary-section">
-        <p class="subtitle">Ownership Share</p>
-        <div class="summary-table">
-          {#each OWNERSHIP_BUCKETS as bucket}
-            {@const data = summary.byOwnership?.get(bucket.label)}
-            {#if data}
-              {@const isActive = filters.ownership.has(bucket.label)}
-              {@const filteredCount = displaySummary?.byOwnership?.get(bucket.label)?.assetCount}
-              {@const hasResults = !isFiltered || filteredCount != null}
-              <div
-                class="summary-row"
-                class:active={isActive}
-                class:dimmed={isFiltered && !isActive && hasResults}
-                class:faded={isFiltered && !isActive && !hasResults}
-                role="button"
-                tabindex="0"
-                onclick={() => applyFilter('ownership', bucket.label)}
-                onkeydown={(e) => e.key === 'Enter' && applyFilter('ownership', bucket.label)}
-              >
-                {bucket.label} ({isFiltered ? (filteredCount ?? 0) : data.assetCount})
-              </div>
-            {/if}
-          {/each}
-        </div>
-      </div>
-      {/if}
-
-      {#if intermediaries.length > 0}
-      <div class="summary-section">
-        <p class="subtitle">Intermediaries</p>
-        <div class="summary-table">
-          {#each displayIntermediaries as inter}
-            {@const isActive = filters.intermediary.has(inter.name)}
-            {@const count = hasNonIntermediaryFilter ? inter.filteredCount : inter.assetCount}
-            {@const hasResults = !hasNonIntermediaryFilter || inter.filteredCount > 0}
-            {@const isExpanded = expandedIntermediaryIds.has(inter.entity_id)}
-            <div class="summary-row-wrapper">
-              <div
-                class="summary-row"
-                class:active={isActive}
-                class:dimmed={isFiltered && !isActive && hasResults}
-                class:faded={isFiltered && !isActive && !hasResults}
-                role="button"
-                tabindex="0"
-                onclick={() => applyFilter('intermediary', inter.name, inter.projectIds)}
-                onkeydown={(e) => e.key === 'Enter' && applyFilter('intermediary', inter.name, inter.projectIds)}
-              >
-                {inter.name} ({count})
-              </div>
-              <button
-                class="foldout-btn"
-                class:expanded={isExpanded}
-                onclick={() => toggleIntermediaryFoldout(inter.entity_id)}
-                title="{isExpanded ? 'Collapse' : 'Expand'} {inter.name} sub-portfolio"
-              >
-                {isExpanded ? '▼' : '▶'}
-              </button>
-            </div>
-          {/each}
-        </div>
-      </div>
-      {/if}
-      </div>
-    </div>
-  <!-- EXPANDED INTERMEDIARY PANELS — appear below the main chart card, indented right -->
-  {#if intermediaries.length > 0}
-    {#each displayIntermediaries as inter}
-      {#if expandedIntermediaryIds.has(inter.entity_id)}
-        <div class="foldout-panel-wrapper">
-          <NestedIntermediaryPanel entityId={inter.entity_id} {API_BASE} />
-        </div>
-      {/if}
-    {/each}
-  {/if}
+      {/each}
+    {/if}
   {/if}
 </div>
 
@@ -1731,210 +1770,142 @@
     opacity: 0.85;
   }
 
-  /* ---- Header ---- */
-  .chart-header {
+  /* ---- Layout: grid + sidebar ---- */
+  .chart-layout {
     display: flex;
-    align-items: start;
-    justify-content: space-between;
-    gap: var(--space-8);
-    padding: var(--space-3) var(--space-5);
-    background: var(--gem-navy);
-    color: white;
+    min-height: 300px;
   }
-  .chart-header .name-wrapper {
-    min-width: 80px;
-    max-width: 300px;
+  .chart-area {
+    flex: 1;
+    min-width: 0;
+    overflow-y: auto;
+    max-height: var(--chart-max-height, calc(100vh - 200px));
   }
-  .chart-header h3 {
-    font-weight: var(--font-weight-bold);
-    color: white;
-    margin: 0;
-    font-size: var(--font-size-lg);
-  }
-  .subtitle {
-    font-size: var(--font-size-xs);
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-widest);
-    font-weight: var(--font-weight-medium);
-    color: var(--gem-mint, #9df7e5);
-    margin-bottom: var(--space-1);
-    margin-top: 0;
-  }
-  .header-facts p {
-    font-size: var(--font-size-sm);
-    margin: 0;
-    color: rgba(255, 255, 255, 0.9);
-  }
-
-  /* ---- Chart Row ---- */
-  .chart-shell {
-    background: var(--color-bg-primary, #fff);
-    border-bottom: 1px solid rgba(29, 73, 97, 0.08);
-  }
-  /* Single scroll container for both tree + assets so SVG lines stay aligned */
   .chart-row {
     display: flex;
-    overflow: auto;
-    min-height: 200px;
-    max-height: var(--chart-max-height, calc(100vh - 260px));
   }
-  /* Horizontal scroll fade affordance */
-  .chart-row.fade-right {
-    mask-image: linear-gradient(to right, black calc(100% - 48px), transparent);
-    -webkit-mask-image: linear-gradient(to right, black calc(100% - 48px), transparent);
-  }
-  .chart-row.fade-left {
-    mask-image: linear-gradient(to left, black calc(100% - 48px), transparent);
-    -webkit-mask-image: linear-gradient(to left, black calc(100% - 48px), transparent);
-  }
-  .chart-row.fade-left.fade-right {
-    mask-image: linear-gradient(to right, transparent, black 48px, black calc(100% - 48px), transparent);
-    -webkit-mask-image: linear-gradient(to right, transparent, black 48px, black calc(100% - 48px), transparent);
-  }
-  /* In embed mode, let content flow naturally so the iframe auto-resizes */
-  .embed-mode .chart-row {
+  .embed-mode .chart-area {
     overflow: visible;
     max-height: none;
   }
   .tree-container {
     flex-shrink: 0;
-    position: sticky;
-    left: 0;
-    z-index: 1;
-    background: var(--color-bg-primary, #fff);
   }
-  .tree-container svg {
+  .tree-container svg,
+  .assets-container svg {
     overflow: visible;
     font-family: var(--font-family, 'Plus Jakarta Sans', sans-serif);
   }
   .assets-container {
     flex: 1;
-    padding-left: var(--space-2);
   }
   .assets-container.full-width {
     width: 100%;
   }
-  .assets-container svg {
-    overflow: visible;
-    font-family: var(--font-family, 'Plus Jakarta Sans', sans-serif);
-  }
-  .scroll-indicator {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3, 12px);
-    padding: 10px var(--space-5, 20px) 12px;
-    background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, rgba(244, 249, 250, 0.92) 36%, rgba(244, 249, 250, 1) 100%);
-    border-top: 1px solid rgba(29, 73, 97, 0.08);
-  }
-  .scroll-meter {
-    min-width: 0;
-    flex: 1;
-  }
-  .scroll-copy {
-    display: block;
-    margin-bottom: 6px;
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: rgba(29, 73, 97, 0.68);
-  }
-  .scroll-copy-mobile {
-    display: none;
-  }
-  .scroll-rail {
-    position: relative;
-    height: 7px;
-    border-radius: 999px;
-    background:
-      linear-gradient(90deg, rgba(29, 73, 97, 0.12), rgba(0, 123, 127, 0.16));
-    overflow: hidden;
-  }
-  .scroll-thumb {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    min-width: 18%;
-    border-radius: inherit;
-    background:
-      linear-gradient(90deg, rgba(0, 123, 127, 0.92), rgba(29, 73, 97, 0.92));
-    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.4);
-  }
-  .scroll-cue {
-    flex-shrink: 0;
-    min-width: 60px;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: rgba(29, 73, 97, 0.32);
-    opacity: 0;
-    transition: opacity var(--duration-fast, 120ms) ease, color var(--duration-fast, 120ms) ease;
-  }
-  .scroll-cue.visible {
-    opacity: 1;
-    color: rgba(29, 73, 97, 0.78);
-  }
-  .scroll-cue-right {
-    text-align: right;
-  }
-  .scroll-cue-mobile {
-    display: none;
-  }
 
-  /* ---- Footer / Summary Tables ---- */
-  .chart-footer {
-    display: flex;
-    flex-direction: column;
-    padding: var(--space-3) var(--space-5);
+  /* ---- Filter sidebar ---- */
+  .filter-sidebar {
+    flex: 0 0 clamp(220px, 28%, 320px);
     background: var(--gem-navy);
     color: white;
+    padding: 16px 14px;
+    overflow-y: auto;
+    max-height: var(--chart-max-height, calc(100vh - 200px));
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  .embed-mode .chart-layout {
+    flex-direction: column;
+  }
+  .embed-mode .filter-sidebar {
+    flex: none;
+    width: 100%;
+    max-height: none;
+  }
+  .sidebar-header {
+    padding-bottom: 10px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  .sidebar-owner {
+    display: block;
+    font-size: 14px;
+    font-weight: var(--font-weight-bold);
+    line-height: 1.25;
+  }
+  .sidebar-stats {
+    display: block;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.5);
+    margin-top: 3px;
+  }
+  .sidebar-toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-bottom: 10px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  .sidebar-filters {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
   }
   .summary-section {
-    min-width: 120px;
+    padding: 8px 0;
+  }
+  .summary-section + .summary-section {
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+  }
+  .subtitle {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: var(--font-weight-bold);
+    color: rgba(255, 255, 255, 0.4);
+    margin: 0 0 4px 0;
   }
   .summary-table {
-    max-height: 140px;
     overflow-y: auto;
     scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
   }
   .summary-row {
     display: flex;
     align-items: center;
-    gap: var(--space-2, 6px);
-    font-size: var(--font-size-sm);
-    padding: 2px var(--space-1);
+    gap: 6px;
+    font-size: 11px;
+    padding: 3px 4px;
     cursor: pointer;
-    border-radius: var(--radius-sm);
-    transition: all var(--duration-fast) ease;
+    border-radius: 3px;
+    transition: background 80ms ease;
+    color: rgba(255, 255, 255, 0.85);
   }
   .legend-dot {
     display: inline-block;
-    width: 12px;
-    height: 12px;
-    border-radius: var(--radius-full, 50%);
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
     flex-shrink: 0;
-    border: 1px solid rgba(255, 255, 255, 0.3);
   }
   .summary-row:hover {
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.08);
   }
   .summary-row:focus-visible {
-    outline: 2px solid var(--gem-mint, #9df7e5);
+    outline: 1px solid var(--gem-mint, #9df7e5);
     outline-offset: 1px;
-    border-radius: var(--radius-sm);
   }
   .summary-row.active {
-    background: rgba(157, 247, 229, 0.25);
+    background: rgba(157, 247, 229, 0.15);
+    color: white;
     font-weight: var(--font-weight-bold);
   }
   .summary-row.dimmed {
-    opacity: 0.5;
+    opacity: 0.45;
   }
   .summary-row.faded {
-    opacity: 0.2;
+    opacity: 0.15;
   }
 
   /* ---- Empty state ---- */
@@ -1949,7 +1920,9 @@
     font-size: var(--font-size-sm);
     gap: var(--space-3);
   }
-  .empty-state p { margin: 0; }
+  .empty-state p {
+    margin: 0;
+  }
   .clear-btn {
     padding: var(--space-1) var(--space-3);
     border: 1px solid var(--color-border);
@@ -1977,73 +1950,53 @@
     color: var(--color-error, #7f142a);
     font-size: var(--font-size-sm);
   }
-  .footer-columns {
-    display: flex;
-    align-items: start;
-    gap: var(--space-6, 24px);
-    width: 100%;
-    flex-wrap: wrap;
-  }
-  .footer-columns > .summary-section {
-    min-width: 120px;
-    flex: 1;
-  }
-  .footer-toolbar {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    margin-bottom: var(--space-2);
-    flex-wrap: wrap;
-  }
   .clear-filter-inline {
-    padding: var(--space-1) var(--space-3);
-    border: 1px solid rgba(157, 247, 229, 0.4);
-    border-radius: var(--radius-sm);
-    background: rgba(255, 255, 255, 0.08);
+    padding: 3px 8px;
+    border: 1px solid rgba(157, 247, 229, 0.25);
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.04);
     color: var(--gem-mint, #9df7e5);
-    font-size: var(--font-size-xs);
+    font-size: 10px;
     cursor: pointer;
     font-family: inherit;
     font-weight: var(--font-weight-medium);
-    text-align: left;
-    transition: background var(--duration-fast) ease;
-  }
-  .clear-filter-inline.many {
-    font-size: 10px;
+    transition: background 80ms ease;
   }
   .clear-filter-inline:hover {
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.1);
   }
   .color-toggle {
     display: flex;
     align-items: center;
-    gap: var(--space-1);
-    margin-left: auto;
+    gap: 3px;
+    flex-wrap: wrap;
   }
   .color-toggle-label {
-    font-size: var(--font-size-xs);
-    color: rgba(255, 255, 255, 0.6);
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.4);
     text-transform: uppercase;
     letter-spacing: 0.08em;
+    margin-right: 2px;
   }
   .color-toggle-btn {
-    padding: 2px 8px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: var(--radius-sm);
+    padding: 2px 7px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 3px;
     background: transparent;
-    color: rgba(255, 255, 255, 0.7);
-    font-size: var(--font-size-xs);
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 10px;
     font-family: inherit;
     cursor: pointer;
     text-transform: capitalize;
-    transition: all var(--duration-fast) ease;
+    transition: all 80ms ease;
   }
   .color-toggle-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.8);
   }
   .color-toggle-btn.active {
-    background: rgba(157, 247, 229, 0.2);
-    border-color: var(--gem-mint, #9df7e5);
+    background: rgba(157, 247, 229, 0.12);
+    border-color: rgba(157, 247, 229, 0.4);
     color: var(--gem-mint, #9df7e5);
     font-weight: var(--font-weight-bold);
   }
@@ -2056,18 +2009,18 @@
     .selector-bar {
       display: none;
     }
-    .chart-row {
+    .chart-layout {
+      flex-direction: column;
+    }
+    .chart-area {
       max-height: none;
       overflow: visible;
     }
-    .tree-container svg,
-    .assets-container svg {
-      overflow: visible;
-    }
-    .chart-header {
-      break-after: avoid;
-    }
-    .chart-footer {
+    .filter-sidebar {
+      flex: none;
+      width: 100%;
+      max-width: none;
+      max-height: none;
       break-inside: avoid;
       background: #1d4961;
       -webkit-print-color-adjust: exact;
@@ -2083,12 +2036,8 @@
     .summary-row:hover {
       background: none;
     }
-    .footer-toolbar .clear-filter-inline {
-      display: none;
-    }
-    .color-toggle {
-      display: none;
-    }
+    .clear-filter-inline,
+    .color-toggle,
     .empty-state .clear-btn {
       display: none;
     }
@@ -2104,77 +2053,13 @@
       gap: var(--space-2);
       align-items: stretch;
     }
-    .selector-chips {
-      flex-wrap: wrap;
-    }
     .custom-input {
       margin-left: 0;
     }
     .custom-input input {
       width: 100%;
       min-width: 0;
-    }
-    .chart-header {
-      flex-direction: column;
-      gap: var(--space-2);
-      padding: var(--space-2) var(--space-3);
-    }
-    .chart-header .name-wrapper {
-      max-width: none;
-    }
-    .chart-row {
-      max-height: 60vh;
-      min-height: 200px;
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-      scrollbar-width: none;
-    }
-    .chart-row::-webkit-scrollbar {
-      display: none;
-    }
-    .scroll-indicator {
-      gap: var(--space-2, 8px);
-      padding: 10px var(--space-3, 12px) 12px;
-    }
-    .scroll-cue {
-      min-width: auto;
-      font-size: 10px;
-      letter-spacing: 0.06em;
-    }
-    .scroll-copy-desktop,
-    .scroll-cue-desktop {
-      display: none;
-    }
-    .scroll-copy-mobile,
-    .scroll-cue-mobile {
-      display: inline;
-    }
-    .tree-container {
-      display: none;
-    }
-    .footer-columns {
-      flex-direction: column;
-      gap: var(--space-4);
-    }
-    .chart-footer {
-      padding: var(--space-2) var(--space-3);
-    }
-    .summary-section {
-      min-width: 0;
-      width: 100%;
-    }
-    .summary-table {
-      max-height: none;
-    }
-    .summary-row {
-      font-size: var(--font-size-xs);
-    }
-    .footer-toolbar {
-      flex-direction: column;
-      align-items: stretch;
-    }
-    .color-toggle {
-      margin-left: 0;
+      min-height: 44px;
     }
     .chip {
       min-height: 44px;
@@ -2184,16 +2069,44 @@
     .go-btn {
       min-height: 44px;
     }
-    .custom-input input {
-      min-height: 44px;
+    .chart-layout {
+      flex-direction: column;
     }
-    .color-toggle-btn {
-      min-height: 36px;
-      padding: 4px 12px;
+    .chart-area {
+      max-height: 60vh;
+    }
+    .filter-sidebar {
+      flex: none;
+      width: 100%;
+      max-height: none;
+      padding: 12px;
+    }
+    .sidebar-header {
+      padding-bottom: 8px;
+      margin-bottom: 8px;
+    }
+    .sidebar-toolbar {
+      padding-bottom: 8px;
+      margin-bottom: 8px;
+    }
+    .sidebar-filters {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0 12px;
+    }
+    .summary-section {
+      padding: 6px 0;
+    }
+    .tree-container {
+      display: none;
     }
     .summary-row {
-      padding: var(--space-1) var(--space-2);
-      min-height: 44px;
+      padding: 4px 6px;
+      min-height: 36px;
+    }
+    .color-toggle-btn {
+      min-height: 32px;
+      padding: 4px 10px;
     }
     .asset-modal {
       left: var(--space-3) !important;
@@ -2205,21 +2118,19 @@
     }
   }
 
-  /* ---- Hover Tooltip ---- */
+  /* ---- Hover Tooltip (lightweight) ---- */
   .portfolio-tooltip {
     position: fixed;
     z-index: 1000;
     pointer-events: none;
     background: var(--gem-white, #fff);
     border: 1px solid var(--color-border, #ddd);
-    border-radius: var(--radius-md, 6px);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-    padding: 8px 10px 6px;
-    max-width: 420px;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    padding: 6px 10px;
     font-family: var(--font-family, 'Plus Jakarta Sans', sans-serif);
-    animation: tt-in 0.1s ease-out;
+    animation: tt-in 80ms ease-out;
   }
-  .tt-header { margin-bottom: 4px; }
   .tt-name {
     font-size: 11px;
     font-weight: 700;
@@ -2227,50 +2138,124 @@
     line-height: 1.2;
   }
   .tt-meta {
-    font-size: 9px;
+    font-size: 10px;
     color: var(--color-text-tertiary, #999);
     margin-top: 1px;
   }
   .tt-eff {
-    font-size: 9px;
+    font-size: 10px;
     font-weight: 700;
     color: var(--gem-teal, #007b7f);
     margin-top: 1px;
   }
+  @keyframes tt-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @media (max-width: 768px) {
+    .portfolio-tooltip {
+      display: none;
+    }
+  }
+
+  /* ---- Click Popover (unit table) ---- */
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    background: rgba(0, 0, 0, 0.12);
+  }
+  .asset-modal {
+    position: fixed;
+    z-index: 10001;
+    background: var(--color-bg-primary, #fff);
+    border: 1px solid var(--color-border, #e0e0e0);
+    border-radius: var(--radius-lg, 8px);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.15);
+    padding: 14px 16px;
+    min-width: 280px;
+    max-width: 420px;
+    max-height: var(--portfolio-modal-max-height, 400px);
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+  .modal-close {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    background: none;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    color: var(--color-text-secondary, #999);
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  .modal-close:hover {
+    color: var(--color-text-primary, #333);
+  }
+  .modal-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 2px;
+    padding-right: 20px;
+  }
+  .modal-header h4 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--gem-navy);
+    line-height: 1.3;
+  }
+  .unit-badge {
+    font-size: 10px;
+    background: var(--color-bg-tertiary, #eee);
+    color: var(--color-text-secondary, #666);
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-weight: 500;
+  }
   .tt-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 9px;
-    line-height: 1.3;
+    font-size: 11px;
+    line-height: 1.4;
     font-variant-numeric: tabular-nums;
     border-top: 1px solid var(--color-border, #eee);
-    margin-top: 4px;
+    margin-top: 6px;
   }
   .tt-table th {
     text-align: left;
     font-weight: 600;
-    font-size: 8px;
+    font-size: 9px;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--color-text-tertiary, #aaa);
-    padding: 3px 6px 2px 0;
+    padding: 4px 6px 3px 0;
   }
-  .tt-table th.num { text-align: right; }
+  .tt-table th.num {
+    text-align: right;
+  }
   .tt-table td {
-    padding: 2px 6px 2px 0;
+    padding: 3px 6px 3px 0;
     color: var(--color-text-primary, #333);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 150px;
+    max-width: 160px;
   }
   .tt-table td.num {
     text-align: right;
     font-family: var(--font-family-data, 'IBM Plex Mono', monospace);
-    font-size: 9px;
+    font-size: 10px;
   }
   .tt-table td.unit-name {
-    max-width: 130px;
+    max-width: 140px;
     font-weight: 500;
   }
   .tt-table .status-dot {
@@ -2281,46 +2266,30 @@
     margin-right: 3px;
     vertical-align: middle;
   }
-  .tt-more {
-    font-size: 8px;
-    color: var(--color-text-tertiary, #999);
-    font-style: italic;
-    padding-top: 2px;
+  .status-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
   }
-  @keyframes tt-in {
-    from { opacity: 0; }
-    to { opacity: 1; }
+  .asset-link {
+    display: inline-block;
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--gem-teal, #007b7f);
+    text-decoration: none;
+    font-weight: 500;
   }
-  @media (max-width: 768px) {
-    .portfolio-tooltip { display: none; }
+  .asset-link:hover {
+    text-decoration: underline;
   }
-
-  /* ---- Asset Detail Modal ---- */
-  .modal-backdrop { position: fixed; inset: 0; z-index: 10000; background: rgba(0,0,0,0.15); }
-  .asset-modal { position: fixed; z-index: 10001; background: var(--color-bg-primary, #fff); border: 1px solid var(--color-border, #e0e0e0); border-radius: var(--radius-lg, 8px); box-shadow: 0 8px 30px rgba(0,0,0,0.18); padding: var(--space-4, 16px); min-width: 260px; max-width: var(--portfolio-modal-max-width, 360px); max-height: var(--portfolio-modal-max-height, 400px); overflow-y: auto; scrollbar-width: thin; }
-  .modal-close { position: absolute; top: 8px; right: 8px; background: none; border: none; font-size: 20px; cursor: pointer; color: var(--color-text-secondary, #666); line-height: 1; padding: 2px 6px; border-radius: 4px; }
-  .modal-close:hover { background: var(--color-bg-secondary, #f5f5f5); color: var(--color-text-primary, #333); }
-  .modal-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding-right: 20px; }
-  .modal-header h4 { margin: 0; font-size: 14px; font-weight: 700; color: var(--gem-navy); line-height: 1.3; }
-  .unit-badge { flex-shrink: 0; font-size: 11px; background: var(--color-bg-tertiary, #eee); color: var(--color-text-secondary, #666); padding: 1px 6px; border-radius: 999px; font-weight: 500; }
-  .eff-badge { font-variant-numeric: tabular-nums; background: var(--color-accent-bg, #e8f4f8); color: var(--color-accent, #1d4961); }
-  .modal-units { display: flex; flex-direction: column; gap: 4px; }
-  .modal-unit { display: flex; flex-direction: column; gap: 3px; }
-  .unit-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
-  .unit-label { color: var(--color-text-secondary, #888); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; font-size: 10px; flex-shrink: 0; }
-  .unit-value { color: var(--color-text-primary, #333); text-align: right; display: flex; align-items: center; gap: 4px; }
-  .unit-value.coords { font-family: var(--font-mono, monospace); font-size: 10px; }
-  .status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-  .asset-link { display: inline-block; margin-top: 4px; font-size: 11px; color: var(--gem-teal, #007b7f); text-decoration: none; font-weight: 500; }
-  .asset-link:hover { text-decoration: underline; }
-  .unit-divider { border: none; border-top: 1px solid var(--color-border, #e0e0e0); margin: 8px 0; }
-  .unit-divider:last-child { display: none; }
 
   /* ---- Intermediary fold-out ---- */
   .summary-row-wrapper {
     display: flex;
     align-items: center;
-    gap: var(--space-1);
+    gap: 2px;
   }
   .summary-row-wrapper .summary-row {
     flex: 1;
@@ -2329,13 +2298,13 @@
   .foldout-btn {
     background: none;
     border: none;
-    color: rgba(255, 255, 255, 0.5);
+    color: rgba(255, 255, 255, 0.35);
     cursor: pointer;
-    padding: 0 var(--space-1);
-    font-size: 9px;
+    padding: 0 3px;
+    font-size: 8px;
     line-height: 1;
     flex-shrink: 0;
-    transition: color var(--duration-fast) ease;
+    transition: color 80ms ease;
     font-family: inherit;
   }
   .foldout-btn:hover,
