@@ -253,62 +253,67 @@
       }
     }, LOAD_TIMEOUT_MS);
 
+    // Shared mount logic used by both primary path and retry
+    var doMount = function (mod) {
+      // Configure API endpoints
+      mod.configure({ appBase: baseUrl || undefined });
+
+      // Parse data-src to get widget type + props
+      var parsed = mod.parseSrc(dataSrc);
+      if (!parsed.type) {
+        throw new Error('Could not parse widget type from: ' + dataSrc);
+      }
+
+      // Check widget is available
+      var available = typeof mod.listWidgets === 'function' ? mod.listWidgets() : [];
+      if (available.length && available.indexOf(parsed.type) === -1) {
+        throw new Error('Unknown widget type: ' + parsed.type + '. Available: ' + available.join(', '));
+      }
+
+      // Merge extra params from data-params attribute
+      if (paramsAttr) {
+        var trimmed = paramsAttr.trim();
+        try {
+          var extra = trimmed.startsWith('{')
+            ? JSON.parse(trimmed)
+            : Object.fromEntries(new URLSearchParams(trimmed.startsWith('?') ? trimmed.slice(1) : trimmed));
+          Object.keys(extra).forEach(function (k) {
+            if (extra[k] != null && !(k in parsed.props)) {
+              parsed.props[k] = extra[k];
+            }
+          });
+        } catch { /* ignore invalid params */ }
+      }
+
+      // Add theme and link rewriting props
+      parsed.props.theme = theme;
+      if (linkBase) parsed.props.linkBase = linkBase;
+      if (linkTarget) parsed.props.linkTarget = linkTarget;
+
+      // Create Shadow DOM (guard against double-attach for Custom Element remount)
+      var shadow = container.shadowRoot || container.attachShadow({ mode: 'open' });
+
+      // Remove loading skeleton (it's in the light DOM)
+      var loadingEl = container.querySelector('.' + EMBED_CLASS + '-loading');
+      if (loadingEl) loadingEl.remove();
+
+      // Mark as loaded
+      loadedEmbeds[embedId] = true;
+
+      // Stamp version on container for inspection
+      if (versionInfo && versionInfo.commit) {
+        container.setAttribute('data-gem-version', versionInfo.commit);
+        container.setAttribute('data-gem-built', versionInfo.buildTime || versionInfo.timestamp || '');
+      }
+
+      // Mount widget into shadow root
+      return mod.mountWidget(shadow, parsed.type, parsed.props);
+    };
+
     // Load the widget module and mount
     loadWidgetModule()
       .then(function (mod) {
-        // Configure API endpoints
-        mod.configure({ appBase: baseUrl || undefined });
-
-        // Parse data-src to get widget type + props
-        var parsed = mod.parseSrc(dataSrc);
-        if (!parsed.type) {
-          throw new Error('Could not parse widget type from: ' + dataSrc);
-        }
-
-        // Check widget is available
-        var available = typeof mod.listWidgets === 'function' ? mod.listWidgets() : [];
-        if (available.length && available.indexOf(parsed.type) === -1) {
-          throw new Error('Unknown widget type: ' + parsed.type + '. Available: ' + available.join(', '));
-        }
-
-        // Merge extra params from data-params attribute
-        if (paramsAttr) {
-          var trimmed = paramsAttr.trim();
-          try {
-            var extra = trimmed.startsWith('{')
-              ? JSON.parse(trimmed)
-              : Object.fromEntries(new URLSearchParams(trimmed.startsWith('?') ? trimmed.slice(1) : trimmed));
-            Object.keys(extra).forEach(function (k) {
-              if (extra[k] != null && !(k in parsed.props)) {
-                parsed.props[k] = extra[k];
-              }
-            });
-          } catch { /* ignore invalid params */ }
-        }
-
-        // Add theme and link rewriting props
-        parsed.props.theme = theme;
-        if (linkBase) parsed.props.linkBase = linkBase;
-        if (linkTarget) parsed.props.linkTarget = linkTarget;
-
-        // Create Shadow DOM (guard against double-attach for Custom Element remount)
-        var shadow = container.shadowRoot || container.attachShadow({ mode: 'open' });
-
-        // Remove loading skeleton (it's in the light DOM)
-        var loadingEl = container.querySelector('.' + EMBED_CLASS + '-loading');
-        if (loadingEl) loadingEl.remove();
-
-        // Mark as loaded
-        loadedEmbeds[embedId] = true;
-
-        // Stamp version on container for inspection
-        if (versionInfo && versionInfo.commit) {
-          container.setAttribute('data-gem-version', versionInfo.commit);
-          container.setAttribute('data-gem-built', versionInfo.buildTime || versionInfo.timestamp || '');
-        }
-
-        // Mount widget into shadow root
-        return mod.mountWidget(shadow, parsed.type, parsed.props).then(function () {
+        return doMount(mod).then(function () {
           // Add version footer inside shadow DOM
           if (versionInfo && versionInfo.commit) {
             var vEl = document.createElement('div');
@@ -363,6 +368,25 @@
           detail: { message: (err && err.message) || 'Widget failed to load', embedId: embedId }
         }));
       });
+
+    // Watchdog: on some host pages (Drupal/Webflow), the cached module promise
+    // can stall when .then() is called during DOM transitions. If the shadow
+    // root hasn't been created after 500ms, retry with a fresh dynamic import.
+    setTimeout(function () {
+      if (container.shadowRoot || !container.isConnected) return;
+      var url = baseUrl + '/widgets/index.js?retry=' + Date.now();
+      import(/* webpackIgnore: true */ url)
+        .then(function (mod) { return doMount(mod); })
+        .then(function () {
+          container.dispatchEvent(new CustomEvent('gem:loaded', {
+            composed: true, bubbles: true,
+            detail: { widgetType: dataSrc, embedId: embedId, retried: true }
+          }));
+        })
+        .catch(function (retryErr) {
+          console.error('[GEM Embed] Retry also failed:', retryErr || '(unknown)');
+        });
+    }, 500);
   };
 
   // ==========================================================================
