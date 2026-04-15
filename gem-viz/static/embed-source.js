@@ -532,12 +532,15 @@
         });
       });
       if (pending.length) {
-        // Defer mount to next animation frame so host-page DOM operations finish
-        requestAnimationFrame(function () {
+        // Defer mount to a new macrotask so host-page JS (Webflow/Drupal
+        // animations, modal transitions) fully completes before we start
+        // async widget loading. requestAnimationFrame alone isn't enough —
+        // the promise microtask queue can stall during host-page transitions.
+        setTimeout(function () {
           pending.forEach(function (el) {
-            if (!el.getAttribute('data-gem-initialized')) mountEmbed(el);
+            if (!el.getAttribute('data-gem-initialized') && el.isConnected) mountEmbed(el);
           });
-        });
+        }, 0);
       }
     });
     mo.observe(document.body, { childList: true, subtree: true });
