@@ -353,15 +353,14 @@
         });
       })
       .catch(function (err) {
-        if (!err) return;
-        console.error('[GEM Embed] Failed to mount widget:', err.message || err);
-        showError(container, err.message || 'Widget failed to load');
+        console.error('[GEM Embed] Failed to mount widget:', err || '(unknown error)');
+        showError(container, (err && err.message) || 'Widget failed to load');
 
         // Dispatch gem:error event
         container.dispatchEvent(new CustomEvent('gem:error', {
           composed: true,
           bubbles: true,
-          detail: { message: err.message || 'Widget failed to load', embedId: embedId }
+          detail: { message: (err && err.message) || 'Widget failed to load', embedId: embedId }
         }));
       });
   };
@@ -509,6 +508,11 @@
   var setupMutationObserver = function () {
     if (!('MutationObserver' in window) || !document.body) return;
     var mo = new MutationObserver(function (mutations) {
+      // Collect new embed elements, then mount after the current DOM mutation
+      // batch completes. Mounting synchronously inside the MO callback can fail
+      // when the host page (e.g. Drupal/Webflow) is mid-transition — the async
+      // widget load promise may not resolve while the mutation batch is active.
+      var pending = [];
       mutations.forEach(function (m) {
         m.addedNodes.forEach(function (node) {
           if (node.nodeType !== 1) return;
@@ -516,17 +520,25 @@
           if (node.tagName === 'GEM-EMBED') return;
           // Check the added node itself
           if (node.classList && node.classList.contains(EMBED_CLASS) && node.getAttribute('data-src')) {
-            if (!node.getAttribute('data-gem-initialized')) mountEmbed(node);
+            if (!node.getAttribute('data-gem-initialized')) pending.push(node);
           }
           // Check descendants of the added node (skip <gem-embed> descendants)
           if (node.querySelectorAll) {
             node.querySelectorAll('.' + EMBED_CLASS + '[data-src]').forEach(function (el) {
               if (el.tagName === 'GEM-EMBED') return;
-              if (!el.getAttribute('data-gem-initialized')) mountEmbed(el);
+              if (!el.getAttribute('data-gem-initialized')) pending.push(el);
             });
           }
         });
       });
+      if (pending.length) {
+        // Defer mount to next animation frame so host-page DOM operations finish
+        requestAnimationFrame(function () {
+          pending.forEach(function (el) {
+            if (!el.getAttribute('data-gem-initialized')) mountEmbed(el);
+          });
+        });
+      }
     });
     mo.observe(document.body, { childList: true, subtree: true });
   };
