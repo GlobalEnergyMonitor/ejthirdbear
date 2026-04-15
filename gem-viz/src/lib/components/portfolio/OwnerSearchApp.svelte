@@ -24,7 +24,12 @@
     import.meta.env?.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-api.thirdbear.net';
 
   /** @type {{ initialQuery?: string, initialEntityId?: string, onStateChange?: (s: {q?: string, entity?: string}) => void, embedded?: boolean }} */
-  let { initialQuery = '', initialEntityId = '', onStateChange = undefined, embedded = false } = $props();
+  let {
+    initialQuery = '',
+    initialEntityId = '',
+    onStateChange = undefined,
+    embedded = false,
+  } = $props();
 
   /** @typedef {{ id: string, name: string, fullName: string|null, country: string }} OwnerResult */
 
@@ -36,6 +41,8 @@
 
   let selected = $state(/** @type {OwnerResult|null} */ (null));
   let modalOpen = $state(false);
+  let searchController = null;
+  let entityDetailsController = null;
 
   const examples = /** @type {OwnerResult[]} */ ([
     { id: 'E100001000347', name: 'Bank of America Co', fullName: null, country: 'United States' },
@@ -49,6 +56,10 @@
   $effect(() => {
     const q = query;
     if (!q || q.length < 2) {
+      searchController?.abort();
+      searchController = null;
+      searching = false;
+      searchError = '';
       results = [];
       hasSearched = false;
       return;
@@ -66,8 +77,10 @@
       selected = { id: initialEntityId, name: initialEntityId, fullName: null, country: '' };
       modalOpen = true;
       // Fetch the entity name in the background so the modal header can update
+      entityDetailsController = new AbortController();
       fetch(`${API_BASE}/entities/${encodeURIComponent(initialEntityId)}`, {
         headers: { Accept: 'application/json' },
+        signal: entityDetailsController.signal,
       })
         .then((r) => r.json())
         .then((e) => {
@@ -80,20 +93,31 @@
             };
           }
         })
-        .catch(() => {});
+        .catch((err) => {
+          if (err.name !== 'AbortError') return;
+        });
     }
+
+    return () => {
+      searchController?.abort();
+      entityDetailsController?.abort();
+    };
   });
 
   /** @param {string} q */
   async function doSearch(q) {
+    searchController?.abort();
+    const controller = new AbortController();
+    searchController = controller;
+
     searching = true;
     searchError = '';
     hasSearched = true;
     try {
-      const res = await fetch(
-        `${API_BASE}/entities?q=${encodeURIComponent(q)}&limit=20`,
-        { headers: { Accept: 'application/json' } }
-      );
+      const res = await fetch(`${API_BASE}/entities?q=${encodeURIComponent(q)}&limit=20`, {
+        headers: { Accept: 'application/json' },
+        signal: controller.signal,
+      });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       const items = /** @type {Record<string,unknown>[]} */ (
@@ -107,11 +131,13 @@
           country: String(e.headquarters_country || ''),
         }))
         .filter((e) => e.id);
-    } catch {
+    } catch (err) {
+      if (err.name === 'AbortError') return;
       searchError = 'Search failed. Please try again.';
       results = [];
     } finally {
-      searching = false;
+      if (searchController === controller) searchController = null;
+      if (!controller.signal.aborted) searching = false;
     }
   }
 
@@ -148,134 +174,144 @@
 </script>
 
 <div class="os-root" class:os-embedded={embedded}>
-<div class="os-app">
-  <!-- Inline search input (see NOTE in script block for why we don't use AssetSearchBar) -->
-  <div class="os-search">
-    <label class="os-sr-only" for="os-search-input">Search owners</label>
-    <div class="os-search-field">
-      <span class="os-search-icon" aria-hidden="true">
-        <svg viewBox="0 0 20 20" width="16" height="16" focusable="false">
-          <path d="M13.5 12.3l4.1 4.1-1.2 1.2-4.1-4.1a6.5 6.5 0 1 1 1.2-1.2ZM8.5 13a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9Z" fill="currentColor" />
-        </svg>
-      </span>
-      <input
-        id="os-search-input"
-        type="search"
-        bind:value={query}
-        placeholder="Search by owner name, GEM ID, LEI, or PERM ID…"
-        autocomplete="off"
-        spellcheck="false"
-      />
-      {#if query}
-        <button type="button" class="os-clear-btn" aria-label="Clear search" onclick={() => { query = ''; }}>Clear</button>
-      {/if}
+  <div class="os-app">
+    <!-- Inline search input (see NOTE in script block for why we don't use AssetSearchBar) -->
+    <div class="os-search">
+      <label class="os-sr-only" for="os-search-input">Search owners</label>
+      <div class="os-search-field">
+        <span class="os-search-icon" aria-hidden="true">
+          <svg viewBox="0 0 20 20" width="16" height="16" focusable="false">
+            <path
+              d="M13.5 12.3l4.1 4.1-1.2 1.2-4.1-4.1a6.5 6.5 0 1 1 1.2-1.2ZM8.5 13a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9Z"
+              fill="currentColor"
+            />
+          </svg>
+        </span>
+        <input
+          id="os-search-input"
+          type="search"
+          bind:value={query}
+          placeholder="Search by owner name, GEM ID, LEI, or PERM ID…"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        {#if query}
+          <button
+            type="button"
+            class="os-clear-btn"
+            aria-label="Clear search"
+            onclick={() => {
+              query = '';
+            }}>Clear</button
+          >
+        {/if}
+      </div>
     </div>
+
+    <!-- Empty state with example chips -->
+    {#if !hasSearched && !selected}
+      <div class="os-empty">
+        <p class="os-empty-prompt">Try searching for an owner, or explore an example:</p>
+        <div class="os-examples">
+          {#each examples as ex}
+            <button class="os-chip" onclick={() => openExample(ex)}>{ex.name}</button>
+          {/each}
+        </div>
+      </div>
+    {/if}
+
+    <!-- Searching spinner -->
+    {#if searching}
+      <div class="os-status">
+        <div class="os-spinner"></div>
+        <span>Searching…</span>
+      </div>
+    {/if}
+
+    <!-- Error -->
+    {#if searchError}
+      <p class="os-error">{searchError}</p>
+    {/if}
+
+    <!-- Results -->
+    {#if results.length > 0}
+      <div class="os-results-panel">
+        <div class="os-results-header">
+          <span class="os-results-count"
+            >{results.length} result{results.length !== 1 ? 's' : ''}</span
+          >
+        </div>
+        <ul class="os-results-list">
+          {#each results as item (item.id)}
+            <li>
+              <button class="os-result" onclick={() => selectResult(item)}>
+                <div class="os-result-info">
+                  <span class="os-result-name">{item.name}</span>
+                  <span class="os-result-meta">
+                    {#if item.country}
+                      <span class="os-result-country">{item.country}</span>
+                    {/if}
+                  </span>
+                </div>
+                <svg
+                  class="os-result-arrow"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M6 3l5 5-5 5"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </button>
+            </li>
+          {/each}
+        </ul>
+      </div>
+    {:else if !searching && hasSearched}
+      <p class="os-no-results">No owners found for "{query}"</p>
+    {/if}
   </div>
 
-  <!-- Empty state with example chips -->
-  {#if !hasSearched && !selected}
-    <div class="os-empty">
-      <p class="os-empty-prompt">Try searching for an owner, or explore an example:</p>
-      <div class="os-examples">
-        {#each examples as ex}
-          <button class="os-chip" onclick={() => openExample(ex)}>{ex.name}</button>
-        {/each}
-      </div>
-    </div>
-  {/if}
-
-  <!-- Searching spinner -->
-  {#if searching}
-    <div class="os-status">
-      <div class="os-spinner"></div>
-      <span>Searching…</span>
-    </div>
-  {/if}
-
-  <!-- Error -->
-  {#if searchError}
-    <p class="os-error">{searchError}</p>
-  {/if}
-
-  <!-- Results -->
-  {#if results.length > 0}
-    <div class="os-results-panel">
-      <div class="os-results-header">
-        <span class="os-results-count"
-          >{results.length} result{results.length !== 1 ? 's' : ''}</span
-        >
-      </div>
-      <ul class="os-results-list">
-        {#each results as item (item.id)}
-          <li>
-            <button class="os-result" onclick={() => selectResult(item)}>
-              <div class="os-result-info">
-                <span class="os-result-name">{item.name}</span>
-                <span class="os-result-meta">
-                  {#if item.country}
-                    <span class="os-result-country">{item.country}</span>
-                  {/if}
-                </span>
-              </div>
-              <svg
-                class="os-result-arrow"
-                width="16"
-                height="16"
-                viewBox="0 0 16 16"
-                fill="none"
-                aria-hidden="true"
-              >
-                <path
-                  d="M6 3l5 5-5 5"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
-            </button>
-          </li>
-        {/each}
-      </ul>
-    </div>
-  {:else if !searching && hasSearched}
-    <p class="os-no-results">No owners found for "{query}"</p>
-  {/if}
-</div>
-
-<!-- Modal -->
-{#if modalOpen && selected}
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <div
-    class="os-modal-backdrop"
-    onclick={closeModal}
-    role="button"
-    tabindex="-1"
-    onkeydown={(e) => e.key === 'Escape' && closeModal()}
-  >
+  <!-- Modal -->
+  {#if modalOpen && selected}
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <div
-      class="os-modal"
-      onclick={(e) => e.stopPropagation()}
-      onkeydown={(e) => e.key === 'Escape' && closeModal()}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Portfolio Explorer"
+      class="os-modal-backdrop"
+      onclick={closeModal}
+      role="button"
       tabindex="-1"
+      onkeydown={(e) => e.key === 'Escape' && closeModal()}
     >
-      <div class="os-modal-header">
-        <span class="os-modal-label">Portfolio Explorer</span>
-        {#if selected.name && selected.name !== selected.id}
-          <span class="os-modal-entity">{selected.name}</span>
-        {/if}
-        <button class="os-modal-close" onclick={closeModal} aria-label="Close">✕</button>
-      </div>
-      <div class="os-modal-body">
-        <PortfolioExplorer entityId={selected.id} hidePicker={true} heightOffset={260} />
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <div
+        class="os-modal"
+        onclick={(e) => e.stopPropagation()}
+        onkeydown={(e) => e.key === 'Escape' && closeModal()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Portfolio Explorer"
+        tabindex="-1"
+      >
+        <div class="os-modal-header">
+          <span class="os-modal-label">Portfolio Explorer</span>
+          {#if selected.name && selected.name !== selected.id}
+            <span class="os-modal-entity">{selected.name}</span>
+          {/if}
+          <button class="os-modal-close" onclick={closeModal} aria-label="Close">✕</button>
+        </div>
+        <div class="os-modal-body">
+          <PortfolioExplorer entityId={selected.id} hidePicker={true} heightOffset={260} />
+        </div>
       </div>
     </div>
-  </div>
-{/if}
+  {/if}
 </div>
 
 <style>
@@ -290,7 +326,9 @@
   }
 
   .os-embedded:has(.os-modal-backdrop) {
-    min-height: max(600px, 100%);
+    /* Stretch to fill whatever container the widget is in */
+    min-height: 100%;
+    flex: 1;
   }
   .os-app {
     width: 100%;
@@ -423,7 +461,9 @@
   }
 
   @keyframes os-spin {
-    to { transform: rotate(360deg); }
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   /* ── Errors ── */
@@ -534,7 +574,9 @@
      Switch to position:absolute anchored to .os-root instead. */
   .os-embedded .os-modal-backdrop {
     position: absolute;
-    padding: var(--space-3);
+    inset: 0;
+    padding: 0;
+    background: var(--color-bg-primary, #ffffff);
   }
 
   .os-modal {
@@ -551,7 +593,12 @@
   }
 
   .os-embedded .os-modal {
-    max-height: calc(100% - 24px);
+    max-width: 100%;
+    max-height: 100%;
+    height: 100%;
+    border-radius: 0;
+    box-shadow: none;
+    margin: 0;
   }
 
   .os-modal-header {
