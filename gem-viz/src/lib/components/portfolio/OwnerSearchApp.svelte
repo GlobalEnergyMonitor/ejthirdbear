@@ -19,6 +19,7 @@
    */
   import { onMount, untrack } from 'svelte';
   import PortfolioExplorer from './PortfolioExplorer.svelte';
+  import { readHashParam, writeHash } from '$lib/utils/hash-state';
 
   const API_BASE =
     import.meta.env?.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-api.thirdbear.net';
@@ -30,6 +31,12 @@
     onStateChange = undefined,
     embedded = false,
   } = $props();
+
+  // Read initial state from URL hash (e.g. #entity=E100001000397&q=india)
+  const hashEntity = readHashParam('entity');
+  const hashQuery = readHashParam('q');
+  if (hashEntity && !initialEntityId) initialEntityId = hashEntity;
+  if (hashQuery && !initialQuery) initialQuery = hashQuery;
 
   /** @typedef {{ id: string, name: string, fullName: string|null, country: string }} OwnerResult */
 
@@ -145,6 +152,7 @@
   function selectResult(entity) {
     selected = entity;
     modalOpen = true;
+    writeHash({ entity: entity.id, q: query || null });
     onStateChange?.({ q: query, entity: entity.id });
   }
 
@@ -152,12 +160,14 @@
   function openExample(ex) {
     selected = ex;
     modalOpen = true;
+    writeHash({ entity: ex.id, q: null });
     onStateChange?.({ q: query, entity: ex.id });
   }
 
   function closeModal() {
     modalOpen = false;
     selected = null;
+    writeHash({ entity: null, q: query || null });
     onStateChange?.({ q: query, entity: '' });
   }
 
