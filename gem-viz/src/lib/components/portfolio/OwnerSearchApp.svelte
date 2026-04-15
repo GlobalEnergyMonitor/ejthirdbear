@@ -336,7 +336,7 @@
   }
 
   .os-embedded:has(.os-modal-backdrop) {
-    min-height: 500px;
+    height: 100vh;
   }
   .os-app {
     width: 100%;
@@ -604,15 +604,16 @@
 
   .os-embedded .os-modal {
     max-width: 100%;
-    max-height: none;
+    max-height: 100%;
+    height: 100%;
     border-radius: 0;
     box-shadow: none;
     margin: 0;
   }
 
   .os-embedded .os-modal-body {
-    /* Give the body a concrete height so PortfolioExplorer can scroll */
-    min-height: 450px;
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
   }
 
