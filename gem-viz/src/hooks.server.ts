@@ -14,6 +14,7 @@ export const handle: Handle = async ({ event, resolve }) => {
   const isWidgetRoute =
     event.url.pathname.startsWith('/widgets') ||
     event.url.pathname === '/embed.js' ||
+    event.url.pathname === '/embed-source.js' ||
     event.url.pathname === '/version.json' ||
     event.url.searchParams.get('embed') === 'true';
 
@@ -38,6 +39,16 @@ export const handle: Handle = async ({ event, resolve }) => {
     // Widget entry point — always revalidate so deploys take effect immediately
     if (event.url.pathname === '/widgets/index.js') {
       response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    }
+  }
+
+  // embed-source.js — CORS + cache with content hash (bootstrapper adds ?v= param)
+  if (event.url.pathname === '/embed-source.js') {
+    response.headers.set('Access-Control-Allow-Origin', '*');
+    response.headers.set('Cross-Origin-Resource-Policy', 'cross-origin');
+    // Cache for 1 year — URL includes content hash via ?v= param from bootstrapper
+    if (event.url.searchParams.has('v')) {
+      response.headers.set('Cache-Control', 'public, max-age=31536000, immutable');
     }
   }
 

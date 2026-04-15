@@ -1,20 +1,50 @@
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
-function getEmbedJs(): string {
-  // Always read from disk — no in-memory cache.
-  // The file is small and this avoids stale content after deploys
-  // (especially with Fly.io machine suspend preserving process memory).
-  return readFileSync(resolve('static/embed-source.js'), 'utf-8');
+/**
+ * Serve embed.js as a tiny bootstrapper that loads the real embed code
+ * (embed-source.js) with a content-hash query param for cache busting.
+ *
+ * Why: host pages (Drupal) cache the <script src="embed.js"> response.
+ * Even with no-cache headers, browsers that cached an old version before
+ * those headers existed won't re-check until heuristic expiry. The
+ * bootstrapper is tiny and immutable — even if cached, it always loads
+ * the real code with a fresh hash, so deploys take effect immediately.
+ */
+
+let cachedHash: string | null = null;
+let cachedBootstrap: string | null = null;
+
+function getBootstrapJs(origin: string): string {
+  // Hash the real embed source for cache busting
+  const source = readFileSync(resolve('static/embed-source.js'), 'utf-8');
+  const hash = Buffer.from(source.slice(0, 2000)).toString('base64url').slice(0, 12);
+
+  if (cachedHash === hash && cachedBootstrap) return cachedBootstrap;
+  cachedHash = hash;
+
+  cachedBootstrap = `/* GEM Embed Bootstrapper — loads real code with cache busting */
+(function(){
+  var s=document.currentScript;
+  var base=s&&s.src?new URL(s.src).origin+new URL(s.src).pathname.replace(/\\/embed\\.js.*/,''):'${origin}';
+  var sc=document.createElement('script');
+  sc.src=base+'/embed-source.js?v=${hash}';
+  (document.head||document.documentElement).appendChild(sc);
+})();
+`;
+  return cachedBootstrap;
 }
 
-export function GET() {
-  return new Response(getEmbedJs(), {
+export function GET({ url }) {
+  const origin = url.origin;
+  return new Response(getBootstrapJs(origin), {
     headers: {
       'Content-Type': 'text/javascript',
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      // Long cache — bootstrapper content only changes when embed-source.js hash changes
+      'Cache-Control': 'public, max-age=86400',
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Cross-Origin-Resource-Policy': 'cross-origin',
     },
   });
 }
