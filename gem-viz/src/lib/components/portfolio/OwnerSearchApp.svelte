@@ -317,7 +317,7 @@
           <button class="os-modal-close" onclick={closeModal} aria-label="Close">✕</button>
         </div>
         <div class="os-modal-body">
-          <PortfolioExplorer entityId={selected.id} hidePicker={true} heightOffset={260} />
+          <PortfolioExplorer entityId={selected.id} hidePicker={true} heightOffset={embedded ? 100 : 260} />
         </div>
       </div>
     </div>
