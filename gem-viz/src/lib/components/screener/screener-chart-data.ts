@@ -74,6 +74,9 @@ export interface ScreenerChartData {
   multiplePathAssets: Map<string, string[]>;
   intermediaryData: Map<string, { total_descendants: number; max_generations: number }>;
   assetDetails: Map<string, AssetSummary>;
+  /** Cached ownership graph maps — used by expandSubsidiary to avoid re-fetching */
+  graphChildrenOf: Map<string, Array<{ id: string; value: number }>>;
+  graphNodeMap: Map<string, GraphNode>;
 }
 
 // ---------------------------------------------------------------------------
@@ -89,7 +92,7 @@ export interface ScreenerChartData {
 export const LAYOUT = {
   subsidX: 20,
   subsidiaryMarkHeight: 19,
-  subsidiaryMinHeight: 112,
+  subsidiaryMinHeight: 120,
   yPadding: 40,
   assetsX: 532,
   regionPadding: 32, // keeps region right edge fixed as assetsX shifts right
@@ -300,6 +303,8 @@ export async function fetchChartData(
     multiplePathAssets,
     intermediaryData,
     assetDetails,
+    graphChildrenOf: childrenOf,
+    graphNodeMap: nodeMap,
   };
 }
 
@@ -355,6 +360,58 @@ function computeSummaryData(allUnits: ChartUnit[]): { tracker: BarDatum[]; statu
 // Build subsidiary groups (layout computation)
 // ---------------------------------------------------------------------------
 
+/**
+ * Recursively compute layout for a sub-group at any depth.
+ * Assumes sg.top is already set. Sets sg.height, sg.bottom, sg.summary_data,
+ * and recursively lays out sg.expansion.subGroups if present.
+ */
+function layoutSubGroup(
+  sg: SubsidiaryGroupData,
+  expansions: Map<string, SubsidiaryExpansion>,
+  intermediaryBottom: number
+): void {
+  if (expansions.has(sg.id)) {
+    sg.expansion = expansions.get(sg.id)!;
+  } else {
+    sg.expansion = undefined; // clear stale expansion so collapsed state is reflected in layout
+  }
+
+  if (sg.expansion && sg.expansion.subGroups.length > 0) {
+    // Sub-sub-groups use tighter spacing than top-level groups
+    const subGap = LAYOUT.assetSpacing * 2; // 18px between sub-sub-groups
+    let ssy = sg.top + intermediaryBottom + subGap;
+    for (const ssg of sg.expansion.subGroups) {
+      ssg.top = ssy;
+      layoutSubGroup(ssg, expansions, intermediaryBottom);
+      ssg.bottom = ssg.top + ssg.height;
+      ssg.summary_data = computeSummaryData(ssg.locations.flatMap((l) => l.units));
+      ssy = ssg.bottom + subGap;
+    }
+    const lastSsg = sg.expansion.subGroups[sg.expansion.subGroups.length - 1];
+    sg.height = lastSsg.bottom - sg.top + subGap;
+  } else {
+    let ssy = sg.top;
+    const nLoc = sg.locations.length;
+    for (let j = 0; j < nLoc; j++) {
+      const loc = sg.locations[j];
+      const nU = loc.units.length;
+      const h = nU === 1
+        ? LAYOUT.assetMarkHeightSingle
+        : Math.max(LAYOUT.assetMarkHeightSingle, LAYOUT.assetMarkHeightCombined * scaleR(nU));
+      loc.y = ssy - sg.top + h / 2;
+      loc.r = nU === 1
+        ? LAYOUT.assetMarkHeightSingle / 2
+        : (LAYOUT.assetMarkHeightCombined / 2) * scaleR(nU);
+      ssy += h + (j === nLoc - 1 ? 0 : LAYOUT.assetSpacing);
+    }
+    // Height = actual asset content + small bottom padding, or minimum to fit intermediary path
+    const subGroupMinH = sg.intermediary_data
+      ? intermediaryBottom + 16   // room for path + expand icon
+      : LAYOUT.subsidiaryMarkHeight + LAYOUT.assetSpacing;
+    sg.height = Math.max(ssy - sg.top + LAYOUT.assetSpacing, subGroupMinH);
+  }
+}
+
 export function buildSubsidiaryGroups(
   chartData: ScreenerChartData,
   expansions: Map<string, SubsidiaryExpansion> = new Map()
@@ -409,65 +466,19 @@ export function buildSubsidiaryGroups(
     d.top = y;
 
     if (d.expansion && d.expansion.subGroups.length > 0) {
-      // Reserve space for the intermediary path + hint text + expand button before sub-groups.
+      // Reserve space for intermediary path + expand icon before sub-groups.
+      // curveR = 60% of yPadding (matches drawIntermediaryPathForItem); icon radius 8.
       const markR = (LAYOUT.subsidiaryMarkHeight / 2) * 0.7;
-      const intermediaryBottom = 26 + markR * 2 + 18 + LAYOUT.yPadding + 34 + 18;
+      const curveR = Math.round(LAYOUT.yPadding * 0.6);
+      const intermediaryBottom = 26 + markR * 2 + 18 + curveR + 16;
       let sy = y + intermediaryBottom + LAYOUT.yPadding;
       for (const sg of d.expansion.subGroups) {
-        // Attach nested expansion from flat expansions map
-        if (expansions.has(sg.id)) {
-          sg.expansion = expansions.get(sg.id)!;
-        }
-
         sg.top = sy;
-
-        if (sg.expansion && sg.expansion.subGroups.length > 0) {
-          // Sub-group is itself expanded — compute layout for its sub-sub-groups
-          let ssy = sy + intermediaryBottom + LAYOUT.yPadding;
-          for (const ssg of sg.expansion.subGroups) {
-            ssg.top = ssy;
-            const nLoc2 = ssg.locations.length;
-            for (let k = 0; k < nLoc2; k++) {
-              const loc = ssg.locations[k];
-              const nU = loc.units.length;
-              const h = nU === 1
-                ? LAYOUT.assetMarkHeightSingle
-                : Math.max(LAYOUT.assetMarkHeightSingle, LAYOUT.assetMarkHeightCombined * scaleR(nU));
-              loc.y = ssy - ssg.top + h / 2;
-              loc.r = nU === 1
-                ? LAYOUT.assetMarkHeightSingle / 2
-                : (LAYOUT.assetMarkHeightCombined / 2) * scaleR(nU);
-              ssy += h + (k === nLoc2 - 1 ? 0 : LAYOUT.assetSpacing);
-            }
-            ssg.height = Math.max(ssy - ssg.top, LAYOUT.subsidiaryMarkHeight, LAYOUT.subsidiaryMinHeight);
-            ssg.bottom = ssg.top + ssg.height;
-            ssy = ssg.bottom + LAYOUT.yPadding;
-            ssg.summary_data = computeSummaryData(ssg.locations.flatMap((l) => l.units));
-          }
-          const lastSsg = sg.expansion.subGroups[sg.expansion.subGroups.length - 1];
-          sg.height = Math.max(lastSsg.bottom - sg.top + LAYOUT.yPadding * 2, LAYOUT.subsidiaryMinHeight);
-        } else {
-          // Normal sub-group with direct assets
-          const nLoc = sg.locations.length;
-          for (let j = 0; j < nLoc; j++) {
-            const loc = sg.locations[j];
-            const nUnits = loc.units.length;
-            const height = nUnits === 1
-              ? LAYOUT.assetMarkHeightSingle
-              : Math.max(LAYOUT.assetMarkHeightSingle, LAYOUT.assetMarkHeightCombined * scaleR(nUnits));
-            loc.y = sy - sg.top + height / 2;
-            loc.r = nUnits === 1
-              ? LAYOUT.assetMarkHeightSingle / 2
-              : (LAYOUT.assetMarkHeightCombined / 2) * scaleR(nUnits);
-            sy += height + (j === nLoc - 1 ? 0 : LAYOUT.assetSpacing);
-          }
-          sg.height = Math.max(sy - sg.top, LAYOUT.subsidiaryMarkHeight, LAYOUT.subsidiaryMinHeight);
-        }
-
+        layoutSubGroup(sg, expansions, intermediaryBottom);
         sg.bottom = sg.top + sg.height;
+        sg.summary_data = computeSummaryData(sg.locations.flatMap((l) => l.units));
         sy = sg.bottom + LAYOUT.yPadding;
       }
-
       const lastSg = d.expansion.subGroups[d.expansion.subGroups.length - 1];
       d.height = Math.max(lastSg.bottom - d.top + LAYOUT.yPadding * 2, LAYOUT.subsidiaryMinHeight);
     } else {
@@ -519,26 +530,21 @@ export function buildSubsidiaryGroups(
 // ---------------------------------------------------------------------------
 
 /**
- * Fetch the ownership sub-graph for a subsidiary and build sub-group layout data.
+ * Build sub-group layout data for a subsidiary expansion using the cached graph.
+ * Avoids a second API call — all data was already fetched by fetchChartData.
  * Re-uses the parent's ChartUnit objects (same asset metadata, just reorganized).
  */
-export async function fetchSubExpansion(
+export function expandSubsidiary(
   subId: string,
-  parentUnits: ChartUnit[]
-): Promise<SubsidiaryExpansion> {
-  const graph = await getOwnershipGraph({ root: subId, direction: 'down' });
+  parentUnits: ChartUnit[],
+  graphChildrenOf: Map<string, Array<{ id: string; value: number }>>,
+  graphNodeMap: Map<string, GraphNode>,
+): SubsidiaryExpansion {
+  const rootId = subId;
+  const rootChildren = graphChildrenOf.get(rootId) || [];
 
-  const childrenOf = new Map<string, Array<{ id: string; value: number }>>();
-  for (const edge of graph.edges) {
-    if (!childrenOf.has(edge.source)) childrenOf.set(edge.source, []);
-    childrenOf.get(edge.source)!.push({ id: edge.target, value: edge.value ?? 0 });
-  }
-
-  const nodeMap = new Map<string, GraphNode>();
-  for (const node of graph.nodes) nodeMap.set(node.id, node);
-
-  const rootId = graph.root.id;
-  const rootChildren = childrenOf.get(rootId) || [];
+  const childrenOf = graphChildrenOf;
+  const nodeMap = graphNodeMap;
 
   // Build a lookup from parent ChartUnits by asset ID
   const parentUnitMap = new Map<string, ChartUnit>(parentUnits.map((u) => [u.id, u]));
@@ -638,7 +644,7 @@ export async function fetchSubExpansion(
 
   // Build entityMap and matchedEdges for sub-label rendering
   const entityMap = new Map<string, { id: string; Name: string; type: string }>();
-  for (const node of graph.nodes) {
+  for (const node of graphNodeMap.values()) {
     if (node.type === 'entity') entityMap.set(node.id, { id: node.id, Name: node.Name, type: 'entity' });
   }
   // The "directly owned" virtual group needs an entry too

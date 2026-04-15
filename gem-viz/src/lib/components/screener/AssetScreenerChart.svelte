@@ -16,7 +16,7 @@
   } from '$lib/design-tokens';
   import {
     fetchChartData,
-    fetchSubExpansion,
+    expandSubsidiary,
     buildSubsidiaryGroups,
   } from './screener-chart-data';
   import { renderChart } from './screener-chart-render';
@@ -43,6 +43,7 @@
 
   // State
   let container = $state(null);
+  let scrollEl = $state(null);
   let loading = $state(true);
   let error = $state(null);
   let progressMsg = $state('');
@@ -60,7 +61,6 @@
 
   // Subsidiary expansion state
   let expansions = $state(new Map()); // Map<subId, SubsidiaryExpansion>
-  let expansionLoading = $state(new Set()); // Set<subId> — which are currently loading
 
   // Stable reference to the filtered chart data for use in toggleExpansion
   let currentChartData = null;
@@ -88,6 +88,7 @@
 
   function rerenderWithExpansions(exp) {
     if (!container || !currentChartData) return;
+    const savedScroll = scrollEl?.scrollTop ?? 0;
     if (chartCleanup) {
       chartCleanup();
       chartCleanup = null;
@@ -102,50 +103,62 @@
       expandedSubIds: new Set(exp.keys()),
       onExpandSubsidiary: toggleExpansion,
     });
+    if (scrollEl) scrollEl.scrollTop = savedScroll;
   }
 
-  async function toggleExpansion(subId) {
-    if (expansions.has(subId)) {
-      // Collapse — also collapse any nested expansions of this entity
-      const next = new Map(expansions);
-      const collapsedExp = next.get(subId);
-      next.delete(subId);
-      // Remove any expansions for this entity's sub-groups too (clean up nested state)
-      if (collapsedExp) {
-        for (const sg of collapsedExp.subGroups) next.delete(sg.id);
+  // Recursively remove subId and all its descendants from the expansions map
+  function collapseDescendants(subId, map) {
+    const exp = map.get(subId);
+    if (!exp) return;
+    map.delete(subId);
+    for (const sg of exp.subGroups) {
+      collapseDescendants(sg.id, map);
+    }
+  }
+
+  // Recursively search a subGroups tree for a matching subId, returning its units
+  function findSubGroupUnits(subId, subGroups) {
+    for (const sg of subGroups) {
+      if (sg.id === subId) return sg.locations.flatMap((loc) => loc.units);
+      if (sg.expansion?.subGroups?.length) {
+        const found = findSubGroupUnits(subId, sg.expansion.subGroups);
+        if (found) return found;
       }
+    }
+    return null;
+  }
+
+  function toggleExpansion(subId) {
+    if (expansions.has(subId)) {
+      // Collapse — recursively remove this and all descendant expansions
+      const next = new Map(expansions);
+      collapseDescendants(subId, next);
       expansions = next;
       rerenderWithExpansions(next);
       return;
     }
 
-    // Find parent units: check top-level subsidiaries first, then existing expansion sub-groups
-    let parentUnits = currentChartData?.subsidiariesMatched?.get(subId) ?? null;
+    if (!currentChartData) return;
+
+    // Find parent units: check top-level subsidiaries first, then recursively search expansions
+    let parentUnits = currentChartData.subsidiariesMatched.get(subId) ?? null;
     if (!parentUnits?.length) {
       for (const [, exp] of expansions) {
-        const sg = exp.subGroups.find((sg) => sg.id === subId);
-        if (sg) {
-          parentUnits = sg.locations.flatMap((loc) => loc.units);
-          break;
-        }
+        const found = findSubGroupUnits(subId, exp.subGroups);
+        if (found) { parentUnits = found; break; }
       }
     }
     if (!parentUnits?.length) return;
 
-    expansionLoading = new Set([...expansionLoading, subId]);
-    try {
-      const expansion = await fetchSubExpansion(subId, parentUnits);
-      const next = new Map(expansions);
-      next.set(subId, expansion);
-      expansions = next;
-      rerenderWithExpansions(next);
-    } catch (err) {
-      if (import.meta.env.DEV) console.error('[AssetScreenerChart] fetchSubExpansion error:', err);
-    } finally {
-      const s = new Set(expansionLoading);
-      s.delete(subId);
-      expansionLoading = s;
-    }
+    const expansion = expandSubsidiary(
+      subId, parentUnits,
+      currentChartData.graphChildrenOf,
+      currentChartData.graphNodeMap,
+    );
+    const next = new Map(expansions);
+    next.set(subId, expansion);
+    expansions = next;
+    rerenderWithExpansions(next);
   }
 
   async function loadAndRender() {
@@ -158,7 +171,6 @@
 
       // Reset expansion state when entity changes
       expansions = new Map();
-      expansionLoading = new Set();
       currentChartData = null;
 
       // Clean up previous render
@@ -321,7 +333,7 @@
   });
 </script>
 
-<section class="sticky-section" class:fill-height={fillHeight}>
+<section class="sticky-section" class:fill-height={fillHeight} bind:this={scrollEl}>
   <div id="chart-header">
     <div class="name-wrapper">
       <p class="subtitle">Owner</p>
@@ -339,12 +351,6 @@
         {/if}
       </p>
     </div>
-    {#if expansionLoading.size > 0}
-      <div class="expansion-loading-hint">
-        <Spinner size={14} />
-        <span>Loading sub-graph…</span>
-      </div>
-    {/if}
   </div>
 
   {#if loading}
@@ -486,16 +492,6 @@
     opacity: 0.6;
     font-style: italic;
     font-size: 0.85em;
-  }
-
-  .expansion-loading-hint {
-    display: flex;
-    align-items: center;
-    gap: 0.4em;
-    margin-left: auto;
-    font-size: 0.8em;
-    opacity: 0.75;
-    font-style: italic;
   }
 
   .chart-wrapper {
