@@ -558,15 +558,43 @@
         });
       });
       if (pending.length) {
-        // Defer mount to a new macrotask so host-page JS (Webflow/Drupal
-        // animations, modal transitions) fully completes before we start
-        // async widget loading. requestAnimationFrame alone isn't enough —
-        // the promise microtask queue can stall during host-page transitions.
+        // Defer mount to a new macrotask. On some host pages (Drupal/Webflow),
+        // the closure-cached loadWidgetModule() promise stalls when .then() is
+        // called during DOM transitions. For dynamically-added embeds we bypass
+        // the cached promise entirely and use a fresh dynamic import().
         setTimeout(function () {
           pending.forEach(function (el) {
-            if (!el.getAttribute('data-gem-initialized') && el.isConnected) mountEmbed(el);
+            if (el.getAttribute('data-gem-initialized') || !el.isConnected) return;
+            el.setAttribute('data-gem-initialized', 'true');
+            var config = configFromClassEmbed(el);
+            if (!config.src) return;
+            showLoading(el, parseInt(config.height || '400', 10));
+
+            var url = baseUrl + '/widgets/index.js?t=' + Date.now();
+            import(/* webpackIgnore: true */ url)
+              .then(function (mod) {
+                mod.configure({ appBase: baseUrl || undefined });
+                var parsed = mod.parseSrc(config.src);
+                if (!parsed.type) throw new Error('Unknown widget: ' + config.src);
+                parsed.props.theme = config.theme || (prefersDark ? 'dark' : 'light');
+                if (config.linkBase) parsed.props.linkBase = config.linkBase;
+                if (config.linkTarget) parsed.props.linkTarget = config.linkTarget;
+                var shadow = el.shadowRoot || el.attachShadow({ mode: 'open' });
+                el.innerHTML = '';
+                return mod.mountWidget(shadow, parsed.type, parsed.props);
+              })
+              .then(function () {
+                el.dispatchEvent(new CustomEvent('gem:loaded', {
+                  composed: true, bubbles: true,
+                  detail: { embedId: el.getAttribute('data-embed-id') || '' }
+                }));
+              })
+              .catch(function (err) {
+                console.error('[GEM Embed] Dynamic mount failed:', err || '(unknown)');
+                showError(el, (err && err.message) || 'Widget failed to load');
+              });
           });
-        }, 0);
+        }, 16);
       }
     });
     mo.observe(document.body, { childList: true, subtree: true });
