@@ -28,6 +28,8 @@ export interface MoleculeUnit {
   color: string;
   /** Ownership percentage 0–100. Arc drawn only when 1 < pct < 100. */
   ownershipPct?: number;
+  /** Optional opacity override for the unit circle. Default: 1. */
+  opacity?: number;
 }
 
 export interface MoleculeOptions {
@@ -126,6 +128,7 @@ export function drawMolecule(
     .attr('class', `${classPrefix}-circle`)
     .attr('r', unitRadius)
     .style('fill', (d) => d.color)
+    .style('opacity', (d) => d.opacity ?? 1)
     .style('mix-blend-mode', 'multiply')
     .style('pointer-events', 'none');
 

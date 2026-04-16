@@ -183,35 +183,49 @@
     return 'Unknown';
   }
 
-  /** Apply all active filters (OR within column, AND across columns) */
+  /** Check whether a single asset passes all active filters */
+  function assetMatchesFilters(a, intermediaryPids) {
+    if (filters.country.size > 0 && !filters.country.has(a.country || 'Unknown')) return false;
+    if (filters.asset_type.size > 0 && !filters.asset_type.has(a.asset_type || 'Unknown')) return false;
+    if (filters.operating_status.size > 0 && !filters.operating_status.has(a.operating_status || 'Unknown')) return false;
+    if (intermediaryPids && !intermediaryPids.has(a.location_id || a.unit_id || a.asset_id)) return false;
+    if (filters.ownership.size > 0 && !filters.ownership.has(getOwnershipBucket(a))) return false;
+    return true;
+  }
+
+  /** Apply all active filters (OR within column, AND across columns).
+   *  Shows ALL units in a project group when ANY unit matches — unmatched
+   *  units are tagged with _matched=false so the renderer can dim them. */
   let filteredResult = $derived.by(() => {
     if (!isFiltered || !apiData) return null;
-    let assets = apiData.assets;
-    if (filters.country.size > 0) {
-      assets = assets.filter((a) => filters.country.has(a.country || 'Unknown'));
-    }
-    if (filters.asset_type.size > 0) {
-      assets = assets.filter((a) => filters.asset_type.has(a.asset_type || 'Unknown'));
-    }
-    if (filters.operating_status.size > 0) {
-      assets = assets.filter((a) => filters.operating_status.has(a.operating_status || 'Unknown'));
-    }
+
+    // Build intermediary project IDs set (if filtering by intermediary)
+    let intermediaryPids = null;
     if (filters.intermediary.size > 0) {
-      // Union all projectIds from selected intermediaries
-      const allPids = new Set();
+      intermediaryPids = new Set();
       for (const name of filters.intermediary) {
         const pids = intermediaryProjectIds.get(name);
-        if (pids) for (const p of pids) allPids.add(p);
+        if (pids) for (const p of pids) intermediaryPids.add(p);
       }
-      assets = assets.filter((a) => allPids.has(a.location_id || a.unit_id || a.asset_id));
     }
-    if (filters.ownership.size > 0) {
-      assets = assets.filter((a) => filters.ownership.has(getOwnershipBucket(a)));
-    }
+
+    // Tag every asset as matched or not
+    const allTagged = apiData.assets.map((a) => ({
+      ...a,
+      _matched: assetMatchesFilters(a, intermediaryPids),
+    }));
+
+    // The matched-only set drives summary counts
+    const matchedAssets = allTagged.filter((a) => a._matched);
+
+    // Group ALL assets by project — then keep only groups that have ≥1 match
+    const allGroups = makeProjectGroups(allTagged);
+    const groups = allGroups.filter((g) => g.units.some((u) => u._matched));
+
     return {
-      data: { ...apiData, assets },
-      summary: summarizeAssets(assets),
-      groups: makeProjectGroups(assets),
+      data: { ...apiData, assets: matchedAssets },
+      summary: summarizeAssets(matchedAssets),
+      groups,
     };
   });
 
@@ -464,6 +478,11 @@
       intermediaries = interData;
       cumulativePctMap = treePaths.cumulativePctMap;
       treeMaxDepth = treePaths.maxDepth;
+
+      // Auto-expand intermediary foldouts when path is straightforward (≤2 intermediaries)
+      if (interData.length <= 2) {
+        expandedIntermediaryIds = new Set(interData.map((i) => i.entity_id));
+      }
     } catch (err) {
       if (err.name === 'AbortError') return; // superseded by newer fetch
       error = err.message || 'Failed to fetch data';
@@ -1182,6 +1201,7 @@
               ? COLOR_BY_STATUS.get(unit.operating_status?.toLowerCase()) || colors.grey
               : countryColorScale(unit.country || 'Unknown'),
         ownershipPct: unit.ownership_share,
+        opacity: isFiltered && unit._matched === false ? 0.25 : 1,
       }));
 
       const moleculeG = row.append('g').attr('transform', `translate(${unitR},0)`);
@@ -1236,9 +1256,13 @@
         .style('fill', colors.navy)
         .text(name.length > 40 ? name.slice(0, 38) + '…' : name);
 
-      // Unit count badge
+      // Unit count badge — show "3 of 12 units" when filtered, "12 units" otherwise
       let afterNameX = nameX + Math.min(name.length * 6.5, 250) + 8;
+      const matchedCount = isFiltered ? proj.units.filter((u) => u._matched !== false).length : N;
       if (N > 1) {
+        const unitLabel = isFiltered && matchedCount < N
+          ? `${matchedCount} of ${N} units`
+          : `${N} units`;
         labelG
           .append('text')
           .attr('dy', '0.35em')
@@ -1248,8 +1272,8 @@
           .style('text-transform', 'uppercase')
           .style('letter-spacing', '0.07em')
           .style('fill', colors.gray500)
-          .text(`${N} units`);
-        afterNameX += `${N} units`.length * 5.5 + 8;
+          .text(unitLabel);
+        afterNameX += unitLabel.length * 5.5 + 8;
       }
 
       // Cumulative ownership badge (effective % through intermediary chains)
@@ -1731,9 +1755,13 @@
           <button class="modal-close" onclick={() => (selectedProject = null)}>&times;</button>
           <div class="modal-header">
             <h4>{sp0?.project_name || sp0?.asset_name || selectedProject.projectID}</h4>
-            {#if selectedProject.units.length > 1}<span class="unit-badge"
-                >{selectedProject.units.length} units</span
-              >{/if}
+            {#if selectedProject.units.length > 1}
+              {@const totalUnits = selectedProject.units.length}
+              {@const matchedUnits = selectedProject.units.filter(u => u._matched !== false).length}
+              <span class="unit-badge"
+                >{isFiltered && matchedUnits < totalUnits ? `${matchedUnits} of ${totalUnits} units` : `${totalUnits} units`}</span
+              >
+            {/if}
           </div>
           <div class="tt-meta">
             {sp0?.asset_type || ''}{#if sp0?.country}
@@ -1754,7 +1782,7 @@
             >
             <tbody>
               {#each selectedProject.units as unit}
-                <tr>
+                <tr style={isFiltered && unit._matched === false ? 'opacity:0.35' : ''}>
                   <td class="unit-name">{unit.asset_name || unit.asset_id}</td>
                   <td
                     ><span
