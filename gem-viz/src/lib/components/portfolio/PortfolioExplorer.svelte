@@ -1058,7 +1058,7 @@
             .transition('fade')
             .duration(100)
             .style('opacity', function () {
-              return this.getAttribute('data-project-id') === proj.projectID ? 1 : 0.1;
+              return this.getAttribute('data-project-id') === proj.projectID ? 1 : 0.3;
             });
 
           // Cross-highlight tree: find the leaf for this project, trace ancestors
@@ -1087,7 +1087,7 @@
           }
         })
         .on('mouseout', function () {
-          d3.select(this).style('fill', 'white');
+          d3.select(this).style('fill', 'transparent');
           hoveredProject = null;
 
           // Restore all assets
