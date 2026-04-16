@@ -1860,14 +1860,18 @@
     margin: 0;
     padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
   }
-  .embed-mode .chart-layout {
-    flex-direction: column;
-  }
   .embed-mode .filter-sidebar {
-    flex: none;
-    width: 100%;
     max-height: none;
     border-radius: 0;
+  }
+  @media (max-width: 700px) {
+    .embed-mode .chart-layout {
+      flex-direction: column;
+    }
+    .embed-mode .filter-sidebar {
+      flex: none;
+      width: 100%;
+    }
   }
   .sidebar-header {
     padding-bottom: 10px;
