@@ -25,6 +25,7 @@
     ownershipColors,
   } from '$lib/design-tokens';
   import NestedIntermediaryPanel from './NestedIntermediaryPanel.svelte';
+  import { computeTreeLayout, computeTreeHeight, computeGridLayout } from './portfolio-layout';
 
   const API_BASE =
     import.meta.env?.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-api.thirdbear.net';
@@ -278,13 +279,7 @@
     return scaleOrdinal(EXTENDED_PALETTE).domain([...summary.byCountry.keys()]);
   });
 
-  /** Tree SVG params */
-  const treeParams = {
-    rowHeight: 28,
-    siblingSeparation: 1.0,
-    cousinSeparation: 1.4,
-    nodeRadius: 8,
-  };
+  /** Tree SVG params now in portfolio-layout.ts */
 
   /** Available viewport height for chart area */
   let containerHeight = $state(500);
@@ -740,7 +735,7 @@
     const hierData = buildHierarchy(treePaths.pathStrings, validLeafIds);
     const root = d3Hierarchy.hierarchy(hierData);
 
-    // Calculate height: use available container space, but at least enough for leaves
+    // Calculate height: count gap types between consecutive leaves
     const leaves = root.leaves();
     const nLeaves = leaves.length;
     let sibGaps = 0;
@@ -749,28 +744,26 @@
       if (leaves[i].parent === leaves[i + 1].parent) sibGaps++;
       else cousinGaps++;
     }
-    const contentHeight =
-      nLeaves * treeParams.rowHeight +
-      sibGaps * treeParams.siblingSeparation +
-      cousinGaps * treeParams.cousinSeparation;
-    // Expand to fill available space (like the notebook does), but don't go below content needs
-    const availableHeight = Math.max(200, containerHeight - 80);
-    const calcHeight = Math.max(contentHeight, availableHeight);
 
-    // Dynamic tree width: scale with depth and available container space
-    const chartWidth = chartContainer?.clientWidth || 800;
-    const depth = root.height; // number of levels from root to deepest leaf
-    const depthPx = Math.max(60, Math.min(90, chartWidth / (depth + 1) / 3));
-    const treeTotalWidth = Math.min(depthPx * (depth + 1) + 60, chartWidth * 0.4);
-    const margin = { left: 50, top: 20, right: 4, bottom: 20 };
-    const width = Math.max(treeTotalWidth - margin.left - margin.right, 100);
-    const height = calcHeight;
+    // Use extracted layout algorithm (see portfolio-layout.ts)
+    const layoutInputs = {
+      containerWidth: chartContainer?.clientWidth || 800,
+      containerHeight,
+      depth: root.height,
+      leafCount: nLeaves,
+      isMobile: isViewportBelow('sm'),
+      showTree: true,
+      projectCount: displayProjectGroups.length,
+    };
+    const tl = computeTreeLayout(layoutInputs);
+    const height = computeTreeHeight(nLeaves, sibGaps, cousinGaps, containerHeight);
+    const { margin, width, nodeRadius, siblingSeparation, cousinSeparation } = tl;
 
     const tree = d3Hierarchy
       .cluster()
       .size([height, width])
       .separation((a, b) =>
-        a.parent === b.parent ? treeParams.siblingSeparation : treeParams.cousinSeparation
+        a.parent === b.parent ? siblingSeparation : cousinSeparation
       );
 
     root.sort((a, b) => d3Array.ascending(a.data.name, b.data.name));
@@ -801,7 +794,7 @@
     // Links
     const linkData = root.links();
     const PAD = 3;
-    const nr = treeParams.nodeRadius;
+    const nr = nodeRadius;
     const { edgeImputed } = treePaths;
 
     const linkGroup = g.append('g').attr('class', 'link-group');
@@ -992,24 +985,26 @@
 
     const unitR = 8;
     const labelX = 28;
-    // Condense row height when showing tree with many assets so they fit
-    const assetMarkH = showTree && groups.length > 15
-      ? Math.max(20, Math.floor((containerHeight - 100) / groups.length))
-      : 28;
-    const assetMarkSingle = Math.min(22, assetMarkH);
 
-    // --- Grid layout: fit 2 columns to container width, grow tall ---
-    const isMobile = isViewportBelow('sm');
-    const nProjects = groups.length;
+    // Use extracted grid layout algorithm (see portfolio-layout.ts)
     const containerEl = assetsSvgEl?.parentElement;
-    const availableWidth = containerEl ? containerEl.clientWidth - 8 : 600;
-    const maxCols = isMobile || showTree ? 1 : 2;
-    const nCols = Math.max(1, Math.min(maxCols, Math.floor(availableWidth / 200)));
-    const colWidth = Math.floor(availableWidth / nCols);
-    const nRows = Math.ceil(nProjects / nCols);
-
-    // Single column when tree is visible — assets align to tree leaf positions
-    const isSingleColumn = showTree && nCols === 1;
+    const gl = computeGridLayout({
+      containerWidth: containerEl ? containerEl.clientWidth : 600,
+      containerHeight,
+      depth: 0,
+      leafCount: 0,
+      isMobile: isViewportBelow('sm'),
+      showTree,
+      projectCount: groups.length,
+    });
+    const assetMarkH = gl.assetMarkHeight;
+    const assetMarkSingle = gl.assetMarkSingle;
+    const nProjects = groups.length;
+    const availableWidth = gl.availableWidth;
+    const nCols = gl.cols;
+    const colWidth = gl.colWidth;
+    const nRows = gl.rows;
+    const isSingleColumn = gl.isSingleColumn;
 
     const leafYMap = new Map();
     if (isSingleColumn && showTree && treeRoot) {
@@ -1425,6 +1420,24 @@
   {:else if error}
     <div class="error">{error}</div>
   {:else if apiData && summary}
+    <!-- Edge legend — above the chart when tree is visible -->
+    {#if showTree}
+      <div class="edge-legend-bar">
+        <span class="edge-legend-item">
+          <svg viewBox="0 0 24 8" width="24" height="8">
+            <line x1="0" y1="4" x2="24" y2="4" stroke={ownershipColors.treeEdge} stroke-width="2" stroke-linecap="round" />
+          </svg>
+          Known %
+        </span>
+        <span class="edge-legend-item">
+          <svg viewBox="0 0 24 8" width="24" height="8">
+            <line x1="0" y1="4" x2="24" y2="4" stroke={ownershipColors.treeEdgeImputed} stroke-width="1.5" stroke-linecap="round" stroke-dasharray="4 3" />
+          </svg>
+          Imputed %
+        </span>
+      </div>
+    {/if}
+
     <!-- MAIN LAYOUT: asset grid (scrolls) + filter sidebar (sticky) -->
     <div class="chart-layout">
       <!-- Asset grid — scrollable -->
@@ -1629,26 +1642,6 @@
             </div>
           {/if}
 
-          <!-- Edge legend -->
-          {#if showTree}
-            <div class="summary-section edge-legend">
-              <p class="subtitle">Connections</p>
-              <div class="edge-legend-items">
-                <span class="edge-legend-item">
-                  <svg viewBox="0 0 24 8" width="24" height="8">
-                    <line x1="0" y1="4" x2="24" y2="4" stroke={ownershipColors.treeEdge} stroke-width="2" stroke-linecap="round" />
-                  </svg>
-                  Known %
-                </span>
-                <span class="edge-legend-item">
-                  <svg viewBox="0 0 24 8" width="24" height="8">
-                    <line x1="0" y1="4" x2="24" y2="4" stroke={ownershipColors.treeEdgeImputed} stroke-width="1.5" stroke-linecap="round" stroke-dasharray="4 3" />
-                  </svg>
-                  Imputed %
-                </span>
-              </div>
-            </div>
-          {/if}
         </div>
       </div>
     </div>
@@ -1953,16 +1946,17 @@
   .summary-section + .summary-section {
     border-top: 1px solid rgba(255, 255, 255, 0.07);
   }
-  .edge-legend-items {
+  .edge-legend-bar {
     display: flex;
-    gap: 12px;
+    gap: 14px;
+    padding: 4px 8px;
+    font-size: 10px;
+    color: var(--color-text-tertiary);
   }
   .edge-legend-item {
     display: flex;
     align-items: center;
     gap: 4px;
-    font-size: 10px;
-    color: rgba(255, 255, 255, 0.6);
   }
   .subtitle {
     font-size: 9px;
