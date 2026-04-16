@@ -293,11 +293,23 @@
     )
   );
 
+  /** Recompute tree depth for filtered subset so tree view can appear after filtering */
+  let displayTreeMaxDepth = $derived.by(() => {
+    if (!apiData || displayProjectGroups.length === 0) return treeMaxDepth;
+    if (!isFiltered) return treeMaxDepth;
+    const treePaths = makeTreePaths(
+      { nodes: apiData.nodes, edges: apiData.edges },
+      apiData.spotlightOwner.entity_id,
+      displayProjectGroups
+    );
+    return treePaths.maxDepth;
+  });
+
   /** Show tree when ≤30 assets AND <7 ownership depth layers */
   let showTree = $derived(
     displayProjectGroups.length > 0 &&
     displayProjectGroups.length <= 30 &&
-    treeMaxDepth < 7
+    displayTreeMaxDepth < 7
   );
 
   /** DOM refs */
