@@ -773,11 +773,11 @@
             bind:value={searchQuery}
           />
         </div>
-        {#each classesByCategory as cat (cat.id)}
+        {#each classesByCategory as cat, ci}
           <div class="picker-category">
             <span class="picker-category-label">{cat.label}</span>
             <div class="picker-grid">
-              {#each cat.classes as ac (ac.id)}
+              {#each cat.classes as ac, ai}
                 <button
                   class="picker-tile"
                   class:selected={selectedClassId === ac.id}
