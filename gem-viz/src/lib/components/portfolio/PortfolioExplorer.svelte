@@ -290,7 +290,7 @@
   let containerHeight = $state(500);
 
   /** How many asset rows fit in one column (notebook: nRows = svgHeight / assetMarkHeightCombined) */
-  const ASSET_MARK_H = 40;
+  const ASSET_MARK_H = 34;
   let nRowsFit = $derived(
     Math.max(
       4,
@@ -974,19 +974,19 @@
     const groups = displayProjectGroups;
     if (groups.length === 0) return;
 
-    const unitR = 10;
-    const labelX = 36;
+    const unitR = 8;
+    const labelX = 28;
     // Condense row height when showing tree with many assets so they fit
     const assetMarkH = showTree && groups.length > 15
-      ? Math.max(24, Math.floor((containerHeight - 100) / groups.length))
-      : 40;
-    const assetMarkSingle = Math.min(24, assetMarkH);
+      ? Math.max(22, Math.floor((containerHeight - 100) / groups.length))
+      : 34;
+    const assetMarkSingle = Math.min(22, assetMarkH);
 
     // --- Grid layout: fit 2 columns to container width, grow tall ---
     const isMobile = isViewportBelow('sm');
     const nProjects = groups.length;
     const containerEl = assetsSvgEl?.parentElement;
-    const availableWidth = containerEl ? containerEl.clientWidth - 20 : 600;
+    const availableWidth = containerEl ? containerEl.clientWidth - 8 : 600;
     const maxCols = isMobile ? 1 : 2;
     const nCols = Math.max(1, Math.min(maxCols, Math.floor(availableWidth / 200)));
     const colWidth = Math.floor(availableWidth / nCols);
@@ -1003,7 +1003,7 @@
       }
     }
 
-    const margin = { top: 20, left: 20 };
+    const margin = { top: 12, left: 10 };
 
     let totalHeight;
     if (isSingleColumn && leafYMap.size > 0) {
