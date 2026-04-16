@@ -283,7 +283,7 @@
     rowHeight: 28,
     siblingSeparation: 1.0,
     cousinSeparation: 1.4,
-    nodeRadius: 6.5,
+    nodeRadius: 8,
   };
 
   /** Available viewport height for chart area */
