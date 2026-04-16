@@ -1825,8 +1825,8 @@
     display: flex;
   }
   .embed-mode .chart-area {
-    overflow: visible;
-    max-height: none;
+    overflow-y: auto;
+    max-height: calc(100vh - 180px);
   }
   .tree-container {
     flex-shrink: 0;
@@ -1861,7 +1861,8 @@
     padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
   }
   .embed-mode .filter-sidebar {
-    max-height: none;
+    max-height: calc(100vh - 180px);
+    overflow-y: auto;
     border-radius: 0;
   }
   @media (max-width: 700px) {
