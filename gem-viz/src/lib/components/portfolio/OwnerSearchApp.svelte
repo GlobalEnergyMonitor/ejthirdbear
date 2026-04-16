@@ -654,9 +654,9 @@
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    padding: var(--space-3) var(--space-5);
-    background: var(--gem-navy);
-    color: white;
+    padding: var(--space-4) var(--space-5);
+    background: var(--color-bg-primary, #ffffff);
+    border-bottom: 1px solid var(--color-border, #e5e7eb);
     flex-shrink: 0;
   }
 
@@ -664,13 +664,14 @@
     font-size: var(--font-size-xs);
     text-transform: uppercase;
     letter-spacing: var(--tracking-widest);
-    opacity: 0.7;
+    color: var(--color-text-tertiary, #9ca3af);
   }
 
   .os-modal-entity {
     flex: 1;
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-semibold);
+    font-size: var(--font-size-lg, 18px);
+    font-weight: 600;
+    color: var(--color-text-primary, #111827);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -679,23 +680,21 @@
 
   .os-modal-close {
     margin-left: auto;
-    background: rgba(255, 255, 255, 0.15);
-    border: none;
-    color: white;
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    font-size: 14px;
+    background: none;
+    border: 1px solid var(--color-border, #e5e7eb);
+    border-radius: var(--radius-md, 6px);
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary, #6b7280);
     cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    line-height: 1;
     flex-shrink: 0;
-    transition: background var(--duration-fast) ease;
+    transition: all 0.15s ease;
   }
 
   .os-modal-close:hover {
-    background: rgba(255, 255, 255, 0.25);
+    background: var(--color-bg-secondary, #f3f4f6);
+    color: var(--color-text-primary, #111827);
   }
 
   .os-modal-body {

@@ -1517,8 +1517,8 @@
                   onclick={() => applyFilter('country', country)}
                   onkeydown={(e) => e.key === 'Enter' && applyFilter('country', country)}
                 >
-                  <span class="legend-dot" style="background: {countryColorScale(country)}"></span>
-                  {country} ({isFiltered ? (filteredCount ?? 0) : data.assetCount})
+                  <span class="legend-dot" style="background: {colorField === 'country' ? countryColorScale(country) : 'rgba(255,255,255,0.3)'}"></span>
+                  {country} ({isFiltered ? `${filteredCount ?? 0} of ${data.assetCount}` : data.assetCount})
                 </div>
               {/each}
             </div>
@@ -1542,8 +1542,8 @@
                   onclick={() => applyFilter('asset_type', type)}
                   onkeydown={(e) => e.key === 'Enter' && applyFilter('asset_type', type)}
                 >
-                  <span class="legend-dot" style="background: {typeColor}"></span>
-                  {type} ({isFiltered ? (filteredCount ?? 0) : data.assetCount})
+                  <span class="legend-dot" style="background: {colorField === 'type' ? typeColor : 'rgba(255,255,255,0.3)'}"></span>
+                  {type} ({isFiltered ? `${filteredCount ?? 0} of ${data.assetCount}` : data.assetCount})
                 </div>
               {/each}
             </div>
@@ -1567,8 +1567,8 @@
                   onclick={() => applyFilter('operating_status', status)}
                   onkeydown={(e) => e.key === 'Enter' && applyFilter('operating_status', status)}
                 >
-                  <span class="legend-dot" style="background: {statusColor}"></span>
-                  {status} ({isFiltered ? (filteredCount ?? 0) : data.assetCount})
+                  <span class="legend-dot" style="background: {colorField === 'status' ? statusColor : 'rgba(255,255,255,0.3)'}"></span>
+                  {status} ({isFiltered ? `${filteredCount ?? 0} of ${data.assetCount}` : data.assetCount})
                 </div>
               {/each}
             </div>
@@ -1607,7 +1607,7 @@
           {#if intermediaries.length > 0}
             <div class="summary-section">
               <p class="subtitle">Intermediaries</p>
-              <div class="summary-table">
+              <div class="summary-table intermediaries-table">
                 {#each displayIntermediaries as inter}
                   {@const isActive = filters.intermediary.has(inter.name)}
                   {@const count = hasNonIntermediaryFilter ? inter.filteredCount : inter.assetCount}
@@ -1626,7 +1626,7 @@
                         e.key === 'Enter' &&
                         applyFilter('intermediary', inter.name, inter.projectIds)}
                     >
-                      {inter.name} ({count})
+                      {inter.name} ({hasNonIntermediaryFilter ? `${count} of ${inter.assetCount}` : count})
                     </div>
                     <button
                       class="foldout-btn"
@@ -1968,8 +1968,12 @@
   }
   .summary-table {
     overflow-y: auto;
+    max-height: 200px;
     scrollbar-width: thin;
     scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  }
+  .summary-table.intermediaries-table {
+    max-height: 300px;
   }
   .summary-row {
     display: flex;
