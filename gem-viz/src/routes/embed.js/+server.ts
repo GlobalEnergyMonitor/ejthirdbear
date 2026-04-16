@@ -15,10 +15,11 @@ import { resolve } from 'path';
 let cachedHash: string | null = null;
 let cachedBootstrap: string | null = null;
 
-function getBootstrapJs(origin: string): string {
+async function getBootstrapJs(origin: string): Promise<string> {
   // Hash the real embed source for cache busting
   const source = readFileSync(resolve('static/embed-source.js'), 'utf-8');
-  const hash = Buffer.from(source.slice(0, 2000)).toString('base64url').slice(0, 12);
+  const { createHash } = await import('crypto');
+  const hash = createHash('md5').update(source).digest('hex').slice(0, 12);
 
   if (cachedHash === hash && cachedBootstrap) return cachedBootstrap;
   cachedHash = hash;
@@ -35,9 +36,9 @@ function getBootstrapJs(origin: string): string {
   return cachedBootstrap;
 }
 
-export function GET({ url }) {
+export async function GET({ url }) {
   const origin = url.origin;
-  return new Response(getBootstrapJs(origin), {
+  return new Response(await getBootstrapJs(origin), {
     headers: {
       'Content-Type': 'text/javascript',
       // Always revalidate — bootstrapper is tiny, and we need deploys to take effect fast
