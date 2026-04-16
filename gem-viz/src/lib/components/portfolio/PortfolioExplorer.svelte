@@ -538,9 +538,12 @@
 
     // Build edge value lookup: source → target → ownership %
     const edgeValue = new Map();
+    // Build edge imputed lookup: "source→target" → boolean
+    const edgeImputed = new Map();
     for (const e of edges) {
       if (!edgeValue.has(e.source)) edgeValue.set(e.source, new Map());
       edgeValue.get(e.source).set(e.target, e.value);
+      edgeImputed.set(`${e.source}→${e.target}`, !!e.imputed_share);
     }
 
     // Map asset_id → location_id (project) for leaf resolution
@@ -630,7 +633,7 @@
     }
 
     const maxDepth = paths.reduce((max, p) => Math.max(max, p.path.length - 1), 0);
-    return { paths, pathStrings: uniquePathStrings, cumulativePctMap, maxDepth };
+    return { paths, pathStrings: uniquePathStrings, cumulativePctMap, maxDepth, edgeImputed };
   }
 
   // ============================================================================
@@ -754,8 +757,13 @@
     const availableHeight = Math.max(200, containerHeight - 80);
     const calcHeight = Math.max(contentHeight, availableHeight);
 
+    // Dynamic tree width: scale with depth and available container space
+    const chartWidth = chartContainer?.clientWidth || 800;
+    const depth = root.height; // number of levels from root to deepest leaf
+    const depthPx = Math.max(60, Math.min(90, chartWidth / (depth + 1) / 3));
+    const treeTotalWidth = Math.min(depthPx * (depth + 1) + 60, chartWidth * 0.4);
     const margin = { left: 50, top: 20, right: 4, bottom: 20 };
-    const width = 200 - margin.left - margin.right;
+    const width = Math.max(treeTotalWidth - margin.left - margin.right, 100);
     const height = calcHeight;
 
     const tree = d3Hierarchy
@@ -794,6 +802,7 @@
     const linkData = root.links();
     const PAD = 3;
     const nr = treeParams.nodeRadius;
+    const { edgeImputed } = treePaths;
 
     const linkGroup = g.append('g').attr('class', 'link-group');
     linkGroup
@@ -812,9 +821,16 @@
         return `M${xS},${yS} C${xS + distX},${yS} ${xT - distX},${yT} ${xT},${yT}`;
       })
       .style('fill', 'none')
-      .style('stroke', ownershipColors.treeEdge)
+      .style('stroke', (d) => {
+        const key = `${d.source.data.name}→${d.target.data.name}`;
+        return edgeImputed.get(key) ? ownershipColors.treeEdgeImputed : ownershipColors.treeEdge;
+      })
       .style('stroke-width', 1.5)
       .style('stroke-linecap', 'round')
+      .style('stroke-dasharray', (d) => {
+        const key = `${d.source.data.name}→${d.target.data.name}`;
+        return edgeImputed.get(key) ? '4 3' : 'none';
+      })
       .style('mix-blend-mode', 'multiply');
 
     // Entity nodes (non-leaf)
@@ -1612,6 +1628,27 @@
               </div>
             </div>
           {/if}
+
+          <!-- Edge legend -->
+          {#if showTree}
+            <div class="summary-section edge-legend">
+              <p class="subtitle">Connections</p>
+              <div class="edge-legend-items">
+                <span class="edge-legend-item">
+                  <svg viewBox="0 0 24 8" width="24" height="8">
+                    <line x1="0" y1="4" x2="24" y2="4" stroke={ownershipColors.treeEdge} stroke-width="2" stroke-linecap="round" />
+                  </svg>
+                  Known %
+                </span>
+                <span class="edge-legend-item">
+                  <svg viewBox="0 0 24 8" width="24" height="8">
+                    <line x1="0" y1="4" x2="24" y2="4" stroke={ownershipColors.treeEdgeImputed} stroke-width="1.5" stroke-linecap="round" stroke-dasharray="4 3" />
+                  </svg>
+                  Imputed %
+                </span>
+              </div>
+            </div>
+          {/if}
         </div>
       </div>
     </div>
@@ -1915,6 +1952,17 @@
   }
   .summary-section + .summary-section {
     border-top: 1px solid rgba(255, 255, 255, 0.07);
+  }
+  .edge-legend-items {
+    display: flex;
+    gap: 12px;
+  }
+  .edge-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.6);
   }
   .subtitle {
     font-size: 9px;
