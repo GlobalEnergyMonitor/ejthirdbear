@@ -615,8 +615,19 @@
     }
     dfs(rootEntityId, [rootEntityId], 100);
 
-    // Deduplicate path strings
-    const uniquePathStrings = [...new Set(pathStrings)];
+    // Deduplicate path strings — keep only ONE path per project leaf.
+    // Multiple ownership chains can reach the same project (e.g. via different
+    // subsidiaries). Without dedup, the tree has duplicate leaves that don't
+    // align with asset rows, creating dangling branches.
+    const seenLeafs = new Set();
+    const uniquePathStrings = [];
+    for (const ps of [...new Set(pathStrings)]) {
+      const leaf = ps.split('/').pop();
+      if (!seenLeafs.has(leaf)) {
+        seenLeafs.add(leaf);
+        uniquePathStrings.push(ps);
+      }
+    }
 
     const maxDepth = paths.reduce((max, p) => Math.max(max, p.path.length - 1), 0);
     return { paths, pathStrings: uniquePathStrings, cumulativePctMap, maxDepth };
