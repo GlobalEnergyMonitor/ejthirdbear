@@ -560,8 +560,8 @@
       if (pending.length) {
         // Defer mount to a new macrotask. On some host pages (Drupal/Webflow),
         // the closure-cached loadWidgetModule() promise stalls when .then() is
-        // called during DOM transitions. For dynamically-added embeds we bypass
-        // the cached promise entirely and use a fresh dynamic import().
+        // called during DOM transitions. Load the module via a <script type=module>
+        // shim since direct import() can fail from bootstrapper-loaded scripts.
         setTimeout(function () {
           pending.forEach(function (el) {
             if (el.getAttribute('data-gem-initialized') || !el.isConnected) return;
@@ -570,9 +570,22 @@
             if (!config.src) return;
             showLoading(el, parseInt(config.height || '400', 10));
 
-            var url = baseUrl + '/widgets/index.js?t=' + Date.now();
-            import(/* webpackIgnore: true */ url)
-              .then(function (mod) {
+            // Use an inline module script to perform the import — this works
+            // reliably cross-origin even when import() from a classic script fails.
+            var modScript = document.createElement('script');
+            modScript.type = 'module';
+            modScript.textContent =
+              'import * as mod from "' + baseUrl + '/widgets/index.js?t=' + Date.now() + '";\n' +
+              'window.__gemMountQueue = window.__gemMountQueue || [];\n' +
+              'window.__gemMountQueue.push(mod);\n' +
+              'window.dispatchEvent(new Event("gem:module-ready"));';
+            document.head.appendChild(modScript);
+
+            var onReady = function () {
+              window.removeEventListener('gem:module-ready', onReady);
+              var mod = (window.__gemMountQueue || []).pop();
+              if (!mod) return;
+              try {
                 mod.configure({ appBase: baseUrl || undefined });
                 var parsed = mod.parseSrc(config.src);
                 if (!parsed.type) throw new Error('Unknown widget: ' + config.src);
@@ -581,18 +594,18 @@
                 if (config.linkTarget) parsed.props.linkTarget = config.linkTarget;
                 var shadow = el.shadowRoot || el.attachShadow({ mode: 'open' });
                 el.innerHTML = '';
-                return mod.mountWidget(shadow, parsed.type, parsed.props);
-              })
-              .then(function () {
-                el.dispatchEvent(new CustomEvent('gem:loaded', {
-                  composed: true, bubbles: true,
-                  detail: { embedId: el.getAttribute('data-embed-id') || '' }
-                }));
-              })
-              .catch(function (err) {
+                mod.mountWidget(shadow, parsed.type, parsed.props).then(function () {
+                  el.dispatchEvent(new CustomEvent('gem:loaded', {
+                    composed: true, bubbles: true,
+                    detail: { embedId: el.getAttribute('data-embed-id') || '' }
+                  }));
+                });
+              } catch (err) {
                 console.error('[GEM Embed] Dynamic mount failed:', err || '(unknown)');
                 showError(el, (err && err.message) || 'Widget failed to load');
-              });
+              }
+            };
+            window.addEventListener('gem:module-ready', onReady);
           });
         }, 16);
       }
