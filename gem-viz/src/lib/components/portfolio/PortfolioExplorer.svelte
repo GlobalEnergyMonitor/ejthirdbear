@@ -754,8 +754,8 @@
     const availableHeight = Math.max(200, containerHeight - 80);
     const calcHeight = Math.max(contentHeight, availableHeight);
 
-    const margin = { left: 80, top: 20, right: 20, bottom: 20 };
-    const width = 280 - margin.left - margin.right;
+    const margin = { left: 60, top: 20, right: 8, bottom: 20 };
+    const width = 220 - margin.left - margin.right;
     const height = calcHeight;
 
     const tree = d3Hierarchy
@@ -1002,7 +1002,9 @@
       }
     }
 
-    const margin = { top: 12, left: 10 };
+    // Match tree's top margin so leaf Y positions align
+    const treeTopMargin = 20;
+    const margin = { top: isSingleColumn ? treeTopMargin : 12, left: 4 };
 
     let totalHeight;
     if (isSingleColumn && leafYMap.size > 0) {
@@ -1826,6 +1828,7 @@
   }
   .tree-container {
     flex-shrink: 0;
+    margin-right: -8px;
   }
   .tree-container svg,
   .assets-container svg {
