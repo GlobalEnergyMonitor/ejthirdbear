@@ -35,6 +35,7 @@
     assetClassName = '',
     trackerSlug = '',
     filteredAssetCount = null,
+    filteredProjectCount = null,
     /** Optional: only show assets whose raw status is in this list */
     statusFilter = undefined,
     /** Optional: only show assets whose tracker matches one of these names */
@@ -138,6 +139,7 @@
   }
 
   function handleAssetHover(loc: LocationGroup, event: MouseEvent) {
+    if (!loc?.units?.length) return; // guard: ignore if datum is not a valid LocationGroup
     hoveredAsset = loc;
     // Position relative to the component root (scrollEl), accounting for its scroll offset.
     // This avoids issues with position:fixed being broken by ancestor CSS transforms.
@@ -157,6 +159,7 @@
   }
 
   function handleAssetClick(loc: LocationGroup, event: MouseEvent) {
+    if (!loc?.units?.length) return; // guard: ignore if datum is not a valid LocationGroup
     hoveredAsset = null;
     selectedAsset = loc;
     modalPos = { x: event.clientX, y: event.clientY };
@@ -260,13 +263,14 @@
     if (scrollEl) scrollEl.scrollTop = savedScroll;
   }
 
-  // Recursively remove subId and all its descendants from the expansions map
-  function collapseDescendants(subId, map) {
-    const exp = map.get(subId);
+  // Recursively remove scopedKey and all its descendants from the expansions map.
+  // Children are stored under scopedKey::childEntityId.
+  function collapseDescendants(scopedKey, map) {
+    const exp = map.get(scopedKey);
     if (!exp) return;
-    map.delete(subId);
+    map.delete(scopedKey);
     for (const sg of exp.subGroups) {
-      collapseDescendants(sg.id, map);
+      collapseDescendants(`${scopedKey}::${sg.id}`, map);
     }
   }
 
@@ -282,11 +286,15 @@
     return null;
   }
 
-  function toggleExpansion(subId) {
-    if (expansions.has(subId)) {
+  function toggleExpansion(scopedKey) {
+    // scopedKey is path-scoped: "EntityId" for top-level, "ParentId::ChildId" for nested.
+    // Extract the actual entity ID (last segment) for graph lookups.
+    const entityId = scopedKey.split('::').pop();
+
+    if (expansions.has(scopedKey)) {
       // Collapse — recursively remove this and all descendant expansions
       const next = new Map(expansions);
-      collapseDescendants(subId, next);
+      collapseDescendants(scopedKey, next);
       expansions = next;
       rerenderWithExpansions(next);
       return;
@@ -295,22 +303,23 @@
     if (!currentChartData) return;
 
     // Find parent units: check top-level subsidiaries first, then recursively search expansions
-    let parentUnits = currentChartData.subsidiariesMatched.get(subId) ?? null;
+    let parentUnits = currentChartData.subsidiariesMatched.get(entityId) ?? null;
     if (!parentUnits?.length) {
       for (const [, exp] of expansions) {
-        const found = findSubGroupUnits(subId, exp.subGroups);
+        const found = findSubGroupUnits(entityId, exp.subGroups);
         if (found) { parentUnits = found; break; }
       }
     }
     if (!parentUnits?.length) return;
 
     const expansion = expandSubsidiary(
-      subId, parentUnits,
+      entityId, parentUnits,
       currentChartData.graphNodeMap,
       currentChartData.graphPaths,
+      currentChartData.graphEdgeMap,
     );
     const next = new Map(expansions);
-    next.set(subId, expansion);
+    next.set(scopedKey, expansion);
     expansions = next;
     rerenderWithExpansions(next);
   }
@@ -359,11 +368,14 @@
         }
       }
 
-      // Apply tracker filter if provided.
+      // Apply tracker filter if provided and no catalogUrl.
+      // When catalogUrl is set, the catalog already returns all units for matching projects
+      // (including units with different tracker types at the same location); re-filtering by
+      // tracker here would strip those out, which is not what we want.
       // Normalize both sides: strip all non-alphanumeric chars so slugs ('oil-gas-plant'),
       // display names ('Oil & Gas Plant'), and abbreviated names ('Gas Plant') all reduce
       // to the same canonical form for comparison.
-      if (trackerFilter && trackerFilter.length > 0) {
+      if (!catalogUrl && trackerFilter && trackerFilter.length > 0) {
         const normTracker = (t) => (t || '').toLowerCase().replace(/[^a-z0-9]/g, '');
         const allowed = new Set(trackerFilter.map(normTracker));
         const matchTracker = (u) => allowed.has(normTracker(u.tracker));
@@ -497,8 +509,14 @@
     <div>
       <p class="subtitle">Details</p>
       <p class="company-details">
-        {matchedAssets}
-        {assetClassName || 'assets'}
+        {#if filteredProjectCount != null}
+          {filteredProjectCount} matched {filteredProjectCount === 1 ? 'asset' : 'assets'} ({assetClassName}) 
+          {#if filteredProjectCount < matchedAssets}          
+            with {matchedAssets} {matchedAssets === 1 ? 'unit' : 'units'}
+          {/if}
+        {:else}
+          {matchedAssets} matched {matchedAssets === 1 ? 'unit' : 'units'} ({assetClassName})
+        {/if}
         {#if loading}
           <span class="loading-hint">loading…</span>
         {:else}
@@ -528,7 +546,7 @@
   </div>
 
   <!-- Hover tooltip — project name + ownership % -->
-  {#if hoveredAsset}
+  {#if hoveredAsset?.units?.length}
     {@const tt = clampPos(tooltipPos.x, tooltipPos.y, 260, 60)}
     {@const pct = maxOwnershipPct(hoveredAsset)}
     {@const u0 = hoveredAsset.units[0]}
@@ -541,7 +559,7 @@
   {/if}
 
   <!-- Click modal — unit-level table -->
-  {#if selectedAsset}
+  {#if selectedAsset?.units?.length}
     {@const u0 = selectedAsset.units[0]}
     {@const node0 = graphNodeFor(u0.id)}
     {@const pct = maxOwnershipPct(selectedAsset)}

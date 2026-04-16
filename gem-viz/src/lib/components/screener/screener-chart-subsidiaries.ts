@@ -95,11 +95,14 @@ function drawNestedSubRegions(
   stemX: number,
   r: number,
   xE: number,
-  markR: number
+  markR: number,
+  depth = 1
 ): void {
   const subGroups = parent.expansion!.subGroups;
   const lastSg = subGroups[subGroups.length - 1];
-  const stemStartY = parent.top + 26 + markR;
+  // First layer of nesting needs a longer stem to clear the intermediary path widget;
+  // deeper layers use a tighter offset since those widgets are compact.
+  const stemStartY = parent.top + (depth === 1 ? 40 : 4) + markR;
 
   group.append('line')
     .attr('class', 'expansion-stem')
@@ -118,7 +121,7 @@ function drawNestedSubRegions(
       .style('fill', 'none').style('stroke', COL_STROKE).style('stroke-width', '1.5px');
 
     if (sg.expansion && sg.expansion.subGroups.length > 0) {
-      drawNestedSubRegions(group, sg, stemX + r, r, xE, markR);
+      drawNestedSubRegions(group, sg, stemX + r, r, xE, markR, depth + 1);
     }
   }
 }
@@ -151,7 +154,7 @@ function drawSubGroupLabelsRecursive(
   ownerChain: Array<{ name: string; pct: string }>,
   markR: number,
   labelX: number,
-  options?: { expandedSubIds?: Set<string>; onExpandSubsidiary?: (id: string) => void }
+  options?: { expandedSubIds?: Set<string>; onExpandSubsidiary?: (id: string) => void; parentPath?: string }
 ): void {
   const entryR = LAYOUT.yPadding;
   // lineRelY: offset from the label group origin (sg.top + 26) to the entry line (sg.top)
@@ -177,15 +180,20 @@ function drawSubGroupLabelsRecursive(
 
       const edge = expansion.matchedEdges.get(sg.id);
       if (edge?.value != null) {
-        const pct = `${Math.round(edge.value)}%`;
+        // directValue = single-hop parent→child %; value = cumulative root→child % (for pie arc)
+        const directPct = edge.directValue != null ? `${Math.round(edge.directValue)}%` : `${Math.round(edge.value)}%`;
         const chainLines = [
           `${spotlightName} owns`,
           ...ownerChain.map((c) => `${c.pct} of ${c.name}, which owns`),
-          `${pct} of ${rawName}`,
+          `${directPct} of ${rawName}`,
         ];
+        // Append tooltip to the root group with absolute SVG coords so it renders
+        // above all sibling sub-labels (SVG paints in document order).
+        const tipX = originX + markR * 2 + 6;
+        const tipY = sg.top + 26 + lineRelY - markR * 2 - 10; // sg.top + 26 = subLabel origin
         pieCircle
-          .on('mouseover', () => showMultilineTooltip(subLabel, markR * 2 + 6, lineRelY - markR * 2 - 10, chainLines))
-          .on('mouseout', () => subLabel.select('.ownership-chain-tooltip').remove());
+          .on('mouseover', () => showMultilineTooltip(group, tipX, tipY, chainLines))
+          .on('mouseout', () => group.select('.ownership-chain-tooltip').remove());
 
         const arc = d3Arc<{ endAngle: number }>()
           .innerRadius(0).outerRadius(markR).startAngle(0).cornerRadius(markR * 0.1);
@@ -198,8 +206,7 @@ function drawSubGroupLabelsRecursive(
 
     // Label above the line
     subLabel.append('text')
-      .attr('x', isDirect ? 0 : labelX).attr('y', lineRelY - markR - 2)
-      .attr('dy', '-0.35em')
+      .attr('x', isDirect ? 0 : labelX).attr('y', lineRelY - markR)
       .style('fill', colors.navy).style('font-size', '14px')
       .style('font-weight', 500).style('letter-spacing', '0.03em')
       .text(name);
@@ -214,11 +221,14 @@ function drawSubGroupLabelsRecursive(
 
     if (sg.expansion && sg.expansion.subGroups.length > 0) {
       const edge = expansion.matchedEdges.get(sg.id);
-      const pct = edge?.value != null ? `${Math.round(edge.value)}%` : '?%';
+      // Use direct edge % for the chain label so each hop shows the per-edge ownership
+      const pct = edge?.directValue != null ? `${Math.round(edge.directValue)}%`
+        : edge?.value != null ? `${Math.round(edge.value)}%` : '?%';
       drawSubGroupLabelsRecursive(
         group, sg.expansion, originX + entryR,
         spotlightName, [...ownerChain, { name: rawName, pct }],
-        markR, labelX, options
+        markR, labelX,
+        { ...options, parentPath: options?.parentPath ? `${options.parentPath}::${sg.id}` : sg.id }
       );
     }
   }
@@ -346,7 +356,7 @@ export function drawSubsidiaryLabels(
     drawSubGroupLabelsRecursive(
       group, d.expansion, subLabelOriginX,
       spotlightName, [{ name: parentName, pct: parentPct }],
-      markR, labelX, options
+      markR, labelX, { ...options, parentPath: d.id }
     );
   }
 }
@@ -499,6 +509,7 @@ function drawIntermediaryPathForItem(
     onExpandSubsidiary?: (id: string) => void;
     xOffset?: number;
     compact?: boolean;
+    parentPath?: string;
   }
 ): void {
   if (d.id === 'Directly owned') return;
@@ -507,7 +518,10 @@ function drawIntermediaryPathForItem(
   if (!intermediary) return;
 
   const radius = LAYOUT.yPadding;
-  const isExpanded = options?.expandedSubIds?.has(d.id) ?? false;
+  // Scope the expansion key by parent path so the same entity at different tree positions
+  // can be independently expanded/collapsed.
+  const scopedKey = options?.parentPath ? `${options.parentPath}::${d.id}` : d.id;
+  const isExpanded = options?.expandedSubIds?.has(scopedKey) ?? false;
 
   const tooltipLines =
     intermediary.total_descendants === 1
@@ -520,7 +534,7 @@ function drawIntermediaryPathForItem(
     .attr('class', 'intermediary-path-group')
     .style('cursor', canExpand ? 'pointer' : 'default')
     .on('click', () => {
-      if (canExpand) options?.onExpandSubsidiary?.(d.id);
+      if (canExpand) options?.onExpandSubsidiary?.(scopedKey);
     });
 
   if (!isExpanded) {
@@ -668,6 +682,8 @@ function showMultilineTooltip(
     .attr('rx', 4)
     .attr('ry', 4)
     .style('fill', '#004a63');
+  // Raise to end of parent so it paints over all siblings regardless of append order.
+  tip.raise();
 }
 
 // ---------------------------------------------------------------------------

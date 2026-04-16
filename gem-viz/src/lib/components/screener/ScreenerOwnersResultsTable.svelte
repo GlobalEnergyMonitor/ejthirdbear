@@ -33,8 +33,14 @@
     <thead>
       <tr>
         <th class="th-company">Company</th>
-        <th class="th-count">Total Projects</th>
-        <th class="th-count" title="Projects matching {classDescription}">Matching</th>
+        <th class="th-count">Total Assets</th>
+        <th class="th-count">
+          <span class="th-label-tip">
+            Matching
+            <span class="th-tip-icon">ⓘ</span>
+            <span class="th-tip-body">Assets that are {classDescription}</span>
+          </span>
+        </th>
       </tr>
     </thead>
     <tbody>
@@ -67,12 +73,17 @@
             {/if}
           </td>
           <td class="td-count">
-            <span class="count-num">{owner.totalAssets?.toLocaleString() ?? '—'}</span>
+            <span class="count-num">{owner.totalProjects?.toLocaleString() ?? '-'} 
+              ({owner.totalAssets?.toLocaleString() ?? '—'} units)
+            </span>
           </td>
           <td class="td-count">
             <span class="count-num count-match"
-              >{owner.filteredAssets?.toLocaleString() ?? '—'}</span
-            >
+              >{owner?.filteredProjects.toLocaleString() ?? '-'} 
+              {#if owner.filteredAssets> owner.filteredProjects}
+              ({owner.filteredAssets?.toLocaleString() ?? '—'} units)
+              {/if}
+              </span>
           </td>
         </tr>
       {:else}
@@ -127,8 +138,9 @@
   }
 
   .th-count {
-    width: 80px;
+    width: 130px;
     text-align: right;
+    white-space: nowrap;
   }
 
   /* ── Body rows ──────────────────────────────── */
@@ -237,6 +249,7 @@
     font-weight: 500;
     color: var(--color-text-tertiary, #94a3b8);
     font-variant-numeric: tabular-nums;
+    white-space: nowrap;
   }
 
   .count-match {
@@ -274,6 +287,44 @@
     padding: 0;
   }
 
+  /* ── Header tooltip ─────────────────────────── */
+  .th-label-tip {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    cursor: default;
+  }
+
+  .th-tip-icon {
+    font-size: 10px;
+    opacity: 0.5;
+    line-height: 1;
+  }
+
+  .th-tip-body {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    background: var(--gem-navy, #003348);
+    color: var(--gem-white, #fff);
+    font-size: var(--font-size-xs, 11px);
+    font-family: var(--font-family-mono, monospace);
+    font-weight: var(--font-weight-regular, 400);
+    text-transform: none;
+    letter-spacing: 0;
+    padding: 4px 8px;
+    white-space: nowrap;
+    border-radius: var(--radius-sm, 4px);
+    pointer-events: none;
+    z-index: var(--z-tooltip, 20);
+  }
+
+  .th-label-tip:hover .th-tip-body {
+    display: block;
+  }
+
   /* ── Responsive ─────────────────────────────── */
   @media (max-width: 640px) {
     .owners-table {
@@ -281,7 +332,7 @@
     }
 
     .th-count {
-      width: 60px;
+      width: 100px;
     }
 
     td,

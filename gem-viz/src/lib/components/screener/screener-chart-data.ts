@@ -44,7 +44,8 @@ export interface BarDatum {
 export interface SubsidiaryExpansion {
   subGroups: SubsidiaryGroupData[];
   entityMap: Map<string, { id: string; Name: string; type: string }>;
-  matchedEdges: Map<string, { source: string; target: string; value: number }>;
+  /** value = cumulative root→target % (for pies); directValue = single-hop subId→target % (for tooltips) */
+  matchedEdges: Map<string, { source: string; target: string; value: number; directValue?: number }>;
 }
 
 export interface SubsidiaryGroupData {
@@ -78,6 +79,8 @@ export interface ScreenerChartData {
   graphNodeMap: Map<string, GraphNode>;
   /** Cumulative ownership paths from spotlight owner → each node, keyed by node ID */
   graphPaths: Record<string, Array<{ route: string[]; cumulative_pct: number }>> | undefined;
+  /** Direct edge ownership % keyed by "sourceId::targetId" — used by expandSubsidiary */
+  graphEdgeMap: Map<string, number>;
 }
 
 // ---------------------------------------------------------------------------
@@ -94,7 +97,7 @@ export const LAYOUT = {
   subsidX: 20,
   subsidiaryMarkHeight: 19,
   subsidiaryMinHeight: 120,
-  yPadding: 40,
+  yPadding: 28,
   assetsX: 532,
   regionPadding: 32, // keeps region right edge fixed as assetsX shifts right
   assetSpacing: 9,
@@ -129,10 +132,17 @@ export async function fetchChartData(
     direction: 'down',
   });
 
-  // If a catalogUrl is provided, fetch the set of asset IDs matching the selected asset class.
-  // The ownership graph returns the full graph for the entity; this set is used to restrict
-  // which graph nodes are included in the chart output.
+  // If a catalogUrl is provided, fetch the set of asset IDs (and location IDs) matching the
+  // selected asset class. The ownership graph returns the full graph for the entity; this set
+  // is used to restrict which graph nodes are included in the chart output.
+  //
+  // The catalog API returns ALL units of any project where any unit meets the criteria, so
+  // classAssetIds will contain units that may have different tracker types. We match by
+  // asset ID first; location ID is a secondary fallback for cases where the graph uses a
+  // different asset ID format than the catalog (common for gas pipelines and other types
+  // that use non-G-prefix IDs).
   let classAssetIds: Set<string> | null = null;
+  let classLocationIds: Set<string> | null = null;
   if (catalogUrl) {
     onProgress?.('Filtering to selected asset class...');
     const { listAssets } = await import('$lib/ownership-api');
@@ -146,15 +156,28 @@ export async function fetchChartData(
       else paramMap[key] = [cur, value];
     }
     classAssetIds = new Set<string>();
+    classLocationIds = new Set<string>();
     let offset = 0;
     const BATCH = 500;
     for (;;) {
       const page = await listAssets({ ...paramMap, limit: BATCH, offset } as Parameters<typeof listAssets>[0]);
       if (!page?.results?.length) break;
-      for (const asset of page.results) classAssetIds.add(asset.id);
+      for (const asset of page.results) {
+        classAssetIds.add(asset.id);
+        if (asset.locationId) classLocationIds.add(asset.locationId);
+      }
       if (page.results.length < BATCH) break;
       offset += BATCH;
     }
+  }
+
+  // Helper: check if a graph node is in the selected asset class.
+  // Matches by asset ID (primary) or location ID (fallback for ID format differences).
+  function inClass(nodeId: string, node: GraphNode): boolean {
+    if (!classAssetIds) return true; // no filter → include all
+    if (classAssetIds.has(nodeId)) return true;
+    if (classLocationIds && node.location_id && classLocationIds.has(node.location_id)) return true;
+    return false;
   }
 
   // Node lookup
@@ -182,7 +205,7 @@ export async function fetchChartData(
     if (!nodePaths.some((p) => p.route.length === 2)) continue;
     if (node.type === 'entity') {
       subsidiaryIds.push(nodeId);
-    } else if (!classAssetIds || classAssetIds.has(nodeId)) {
+    } else if (inClass(nodeId, node)) {
       directAssetIds.push(nodeId);
     }
   }
@@ -195,7 +218,7 @@ export async function fetchChartData(
     if (!node || nodeId === rootId) continue;
 
     if (node.type === 'asset') {
-      if (classAssetIds && !classAssetIds.has(nodeId)) continue;
+      if (!inClass(nodeId, node)) continue;
       const viaSubs = new Set<string>();
       for (const p of nodePaths) {
         const subId = p.route[1];
@@ -311,6 +334,14 @@ export async function fetchChartData(
     }
   }
 
+  // Build direct-edge map: "sourceId::targetId" → direct ownership %
+  const graphEdgeMap = new Map<string, number>();
+  for (const edge of graph.edges) {
+    if (edge.value != null) {
+      graphEdgeMap.set(`${edge.source}::${edge.target}`, edge.value);
+    }
+  }
+
   onProgress?.('Done');
 
   return {
@@ -325,6 +356,7 @@ export async function fetchChartData(
     assetDetails,
     graphNodeMap: nodeMap,
     graphPaths: graph.paths,
+    graphEdgeMap,
   };
 }
 
@@ -388,10 +420,13 @@ function computeSummaryData(allUnits: ChartUnit[]): { tracker: BarDatum[]; statu
 function layoutSubGroup(
   sg: SubsidiaryGroupData,
   expansions: Map<string, SubsidiaryExpansion>,
-  intermediaryBottom: number
+  intermediaryBottom: number,
+  parentPath: string,
+  //depth = 1
 ): void {
-  if (expansions.has(sg.id)) {
-    sg.expansion = expansions.get(sg.id)!;
+  const scopedKey = `${parentPath}::${sg.id}`;
+  if (expansions.has(scopedKey)) {
+    sg.expansion = expansions.get(scopedKey)!;
   } else {
     sg.expansion = undefined; // clear stale expansion so collapsed state is reflected in layout
   }
@@ -399,10 +434,12 @@ function layoutSubGroup(
   if (sg.expansion && sg.expansion.subGroups.length > 0) {
     // Sub-sub-groups use tighter spacing than top-level groups
     const subGap = LAYOUT.assetSpacing * 2; // 18px between sub-sub-groups
-    let ssy = sg.top + intermediaryBottom + subGap;
+    // Deeper nesting uses compact intermediary widgets so needs less vertical offset
+    const startOffset =  intermediaryBottom - 50;
+    let ssy = sg.top + startOffset + subGap;
     for (const ssg of sg.expansion.subGroups) {
       ssg.top = ssy;
-      layoutSubGroup(ssg, expansions, intermediaryBottom);
+      layoutSubGroup(ssg, expansions, intermediaryBottom, scopedKey, /*depth + 1*/);
       ssg.bottom = ssg.top + ssg.height;
       ssg.summary_data = computeSummaryData(ssg.locations.flatMap((l) => l.units));
       ssy = ssg.bottom + subGap;
@@ -424,9 +461,9 @@ function layoutSubGroup(
         : (LAYOUT.assetMarkHeightCombined / 2) * scaleR(nU);
       ssy += h + (j === nLoc - 1 ? 0 : LAYOUT.assetSpacing);
     }
-    // Height = actual asset content + small bottom padding, or minimum to fit intermediary path
+    // Minimum height to fit intermediary path widget — compact widget (depth>1) needs less room
     const subGroupMinH = sg.intermediary_data
-      ? intermediaryBottom + 16   // room for path + expand icon
+      ? ( intermediaryBottom )
       : LAYOUT.subsidiaryMarkHeight + LAYOUT.assetSpacing;
     sg.height = Math.max(ssy - sg.top + LAYOUT.assetSpacing, subGroupMinH);
   }
@@ -489,18 +526,18 @@ export function buildSubsidiaryGroups(
       // Reserve space for intermediary path + expand icon before sub-groups.
       // curveR = 60% of yPadding (matches drawIntermediaryPathForItem); icon radius 8.
       const markR = (LAYOUT.subsidiaryMarkHeight / 2) * 0.7;
-      const curveR = Math.round(LAYOUT.yPadding * 0.6);
+      const curveR = Math.round(LAYOUT.yPadding * 0.9);
       const intermediaryBottom = 26 + markR * 2 + 18 + curveR + 16;
       let sy = y + intermediaryBottom + LAYOUT.yPadding;
       for (const sg of d.expansion.subGroups) {
         sg.top = sy;
-        layoutSubGroup(sg, expansions, intermediaryBottom);
+        layoutSubGroup(sg, expansions, intermediaryBottom, d.id);
         sg.bottom = sg.top + sg.height;
         sg.summary_data = computeSummaryData(sg.locations.flatMap((l) => l.units));
         sy = sg.bottom + LAYOUT.yPadding;
       }
       const lastSg = d.expansion.subGroups[d.expansion.subGroups.length - 1];
-      d.height = Math.max(lastSg.bottom - d.top + LAYOUT.yPadding * 2, LAYOUT.subsidiaryMinHeight);
+      d.height = Math.max(lastSg.bottom - d.top + LAYOUT.yPadding, LAYOUT.subsidiaryMinHeight);
     } else {
       const nLocations = d.locations.length;
       for (let j = 0; j < d.locations.length; j++) {
@@ -559,6 +596,7 @@ export function expandSubsidiary(
   parentUnits: ChartUnit[],
   graphNodeMap: Map<string, GraphNode>,
   graphPaths: Record<string, Array<{ route: string[]; cumulative_pct: number }>>,
+  graphEdgeMap?: Map<string, number>,
 ): SubsidiaryExpansion {
   const parentUnitMap = new Map<string, ChartUnit>(parentUnits.map((u) => [u.id, u]));
 
@@ -660,12 +698,13 @@ export function expandSubsidiary(
     entityMap.set(`${subId}:direct`, { id: `${subId}:direct`, Name: 'Directly owned', type: 'entity' });
   }
 
-  // matchedEdges: cumulative ownership % spotlight owner holds in each sub-subsidiary
-  const matchedEdges = new Map<string, { source: string; target: string; value: number }>();
+  // matchedEdges: value = cumulative root→ssId % (for pies); directValue = single-hop subId→ssId % (for tooltips)
+  const matchedEdges = new Map<string, { source: string; target: string; value: number; directValue?: number }>();
   for (const ssId of subSubIdSet) {
     const ssPathEntries = graphPaths[ssId] ?? [];
     const value = ssPathEntries.reduce((sum, p) => sum + (p.cumulative_pct ?? 0), 0);
-    matchedEdges.set(ssId, { source: subId, target: ssId, value });
+    const directValue = graphEdgeMap?.get(`${subId}::${ssId}`);
+    matchedEdges.set(ssId, { source: subId, target: ssId, value, directValue });
   }
 
   return { subGroups, entityMap, matchedEdges };

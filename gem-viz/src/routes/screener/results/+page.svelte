@@ -190,7 +190,7 @@
   const PAGE_SIZE = 100;
   let currentPage = $state(0);
   // Modal state for ownership chart
-  let chartModalOwner: { entityId: string; name: string; filteredAssets?: number } | null =
+  let chartModalOwner: { entityId: string; name: string; filteredAssets?: number; filteredProjects?: number } | null =
     $state(null);
   let modalOriginRect: DOMRect | null = $state(null);
   let modalNameEl: HTMLElement | undefined = $state();
@@ -498,6 +498,8 @@
           entityId: o.entityId,
           totalAssets: o.totalAssets,
           filteredAssets: o.filteredAssets,
+          totalProjects: o.totalProjects,
+          filteredProjects: o.filteredProjects,
         }));
 
       loading = false;
@@ -946,6 +948,7 @@
           assetClassName={chartAssetClassName}
           trackerSlug={chartTrackerSlug}
           filteredAssetCount={chartModalOwner.filteredAssets}
+          filteredProjectCount={chartModalOwner.filteredProjects}
           statusFilter={selectedClasses[0]?.filters?.statuses}
           trackerFilter={selectedClasses[0]?.gemTrackers}
           catalogUrl={selectedClasses[0]?.catalogUrl}

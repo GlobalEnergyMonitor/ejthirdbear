@@ -59,6 +59,8 @@ export interface ScreenerOwner {
   name: string;
   totalAssets: number;
   filteredAssets: number;
+  totalProjects: number;
+  filteredProjects: number;
   /** Flattened values from the external_ids object — used for fast local ID search */
   externalIds?: string[];
   /** Alternative names: full_name, name_local, name_other, abbreviation (non-null) */
@@ -368,6 +370,8 @@ async function getOwnersByAssetTypeREST(
       name,
       totalAssets: totalAssetIds.size,
       filteredAssets: filteredAssetIds.size,
+      totalProjects: 0,
+      filteredProjects: 0,
     }))
     .sort((a, b) => b.filteredAssets - a.filteredAssets)
     .slice(0, limit);
@@ -782,6 +786,12 @@ export async function getOwnersByFilter(
           filteredAssets: Number(
             o.asset_count ?? o.filtered_asset_count ?? o.filtered_assets ??
             o.total_asset_count ?? o.total_assets ?? o.count ?? 0
+          ),
+          totalProjects: Number(
+            o.total_location_count ?? 0
+          ),
+          filteredProjects: Number(
+            o.location_count ?? 0
           ),
           ...(externalIds && { externalIds }),
           ...(altNames && { altNames }),
