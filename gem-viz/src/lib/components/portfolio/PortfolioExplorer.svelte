@@ -987,14 +987,13 @@
     const nProjects = groups.length;
     const containerEl = assetsSvgEl?.parentElement;
     const availableWidth = containerEl ? containerEl.clientWidth - 8 : 600;
-    const maxCols = isMobile ? 1 : 2;
+    const maxCols = isMobile || showTree ? 1 : 2;
     const nCols = Math.max(1, Math.min(maxCols, Math.floor(availableWidth / 200)));
     const colWidth = Math.floor(availableWidth / nCols);
     const nRows = Math.ceil(nProjects / nCols);
 
-    // Single column with few items = show tree + align to leaf positions
-    const isSingleColumn =
-      nCols === 1 && nProjects <= Math.max(4, Math.floor((containerHeight - 80) / assetMarkH));
+    // Single column when tree is visible — assets align to tree leaf positions
+    const isSingleColumn = showTree && nCols === 1;
 
     const leafYMap = new Map();
     if (isSingleColumn && showTree && treeRoot) {
