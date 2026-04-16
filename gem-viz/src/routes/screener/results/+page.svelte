@@ -460,9 +460,7 @@
       dataSource =
         result.source === 'rest-api' ? 'api' : result.source === 'cache' ? 'local' : 'api';
 
-      const slug = resolveApiSlug(cls?.tracker || '');
-      const restBase = getAPIBase();
-      executedQuery = `GET ${restBase}/owners?asset_type=${slug}\n\nsource=${result.source}`;
+      executedQuery = `GET ${cls?.catalogOwnersUrl || '(no catalogOwnersUrl)'}\n\nsource=${result.source}`;
 
       // If specific owners were requested, filter to just those
       const ownerIdSet = selectedOwnerIds.length > 0 ? new Set(selectedOwnerIds) : null;
@@ -923,6 +921,7 @@
           filteredAssetCount={chartModalOwner.filteredAssets}
           statusFilter={selectedClasses[0]?.filters?.statuses}
           trackerFilter={selectedClasses[0]?.gemTrackers}
+          catalogUrl={selectedClasses[0]?.catalogUrl}
           fillHeight={true}
         />
       </div>

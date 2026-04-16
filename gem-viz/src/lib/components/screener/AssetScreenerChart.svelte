@@ -36,6 +36,12 @@
     statusFilter = undefined,
     /** Optional: only show assets whose tracker matches one of these names */
     trackerFilter = undefined,
+    /**
+     * Optional fully-qualified assets URL (the screener's catalogUrl).
+     * When provided, assets are fetched from this URL and used to restrict
+     * the ownership graph to only assets in the selected asset class.
+     */
+    catalogUrl = undefined,
     onDataLoaded = undefined,
     onContainerReady = undefined,
     fillHeight = false,
@@ -152,8 +158,8 @@
 
     const expansion = expandSubsidiary(
       subId, parentUnits,
-      currentChartData.graphChildrenOf,
       currentChartData.graphNodeMap,
+      currentChartData.graphPaths,
     );
     const next = new Map(expansions);
     next.set(subId, expansion);
@@ -180,7 +186,7 @@
       }
 
       // Fetch and transform data
-      const chartData = await fetchChartData(entityId, (msg) => {
+      const chartData = await fetchChartData(entityId, catalogUrl || undefined, (msg) => {
         progressMsg = msg;
       });
 

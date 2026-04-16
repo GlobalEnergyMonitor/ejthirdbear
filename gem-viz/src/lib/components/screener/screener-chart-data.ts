@@ -74,9 +74,10 @@ export interface ScreenerChartData {
   multiplePathAssets: Map<string, string[]>;
   intermediaryData: Map<string, { total_descendants: number; max_generations: number }>;
   assetDetails: Map<string, AssetSummary>;
-  /** Cached ownership graph maps — used by expandSubsidiary to avoid re-fetching */
-  graphChildrenOf: Map<string, Array<{ id: string; value: number }>>;
+  /** Cached graph node map — used by expandSubsidiary */
   graphNodeMap: Map<string, GraphNode>;
+  /** Cumulative ownership paths from spotlight owner → each node, keyed by node ID */
+  graphPaths: Record<string, Array<{ route: string[]; cumulative_pct: number }>> | undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -110,9 +111,15 @@ export const LAYOUT = {
 /**
  * Fetch ownership graph and transform into chart-ready data.
  * Uses asset metadata from graph response directly (no individual getAsset() calls).
+ *
+ * @param catalogUrl  Optional fully-qualified assets URL (from the screener's catalogUrl).
+ *                    When provided, fetches all matching asset IDs from that URL and uses
+ *                    them to filter the graph — so only assets in the selected asset class
+ *                    are shown, not all assets owned by the entity.
  */
 export async function fetchChartData(
   entityId: string,
+  catalogUrl?: string,
   onProgress?: (_msg: string) => void
 ): Promise<ScreenerChartData> {
   onProgress?.('Loading ownership graph...');
@@ -122,15 +129,32 @@ export async function fetchChartData(
     direction: 'down',
   });
 
-  // Build adjacency maps
-  const childrenOf = new Map<string, Array<{ id: string; value: number }>>();
-  const parentOf = new Map<string, Array<{ id: string; value: number }>>();
-
-  for (const edge of graph.edges) {
-    if (!childrenOf.has(edge.source)) childrenOf.set(edge.source, []);
-    childrenOf.get(edge.source)!.push({ id: edge.target, value: edge.value ?? 0 });
-    if (!parentOf.has(edge.target)) parentOf.set(edge.target, []);
-    parentOf.get(edge.target)!.push({ id: edge.source, value: edge.value ?? 0 });
+  // If a catalogUrl is provided, fetch the set of asset IDs matching the selected asset class.
+  // The ownership graph returns the full graph for the entity; this set is used to restrict
+  // which graph nodes are included in the chart output.
+  let classAssetIds: Set<string> | null = null;
+  if (catalogUrl) {
+    onProgress?.('Filtering to selected asset class...');
+    const { listAssets } = await import('$lib/ownership-api');
+    const [, qs] = catalogUrl.split('?');
+    const rawParams = new URLSearchParams(qs ?? '');
+    const paramMap: Record<string, string | string[]> = {};
+    for (const [key, value] of rawParams.entries()) {
+      const cur = paramMap[key];
+      if (cur === undefined) paramMap[key] = value;
+      else if (Array.isArray(cur)) cur.push(value);
+      else paramMap[key] = [cur, value];
+    }
+    classAssetIds = new Set<string>();
+    let offset = 0;
+    const BATCH = 500;
+    for (;;) {
+      const page = await listAssets({ ...paramMap, limit: BATCH, offset } as Parameters<typeof listAssets>[0]);
+      if (!page?.results?.length) break;
+      for (const asset of page.results) classAssetIds.add(asset.id);
+      if (page.results.length < BATCH) break;
+      offset += BATCH;
+    }
   }
 
   // Node lookup
@@ -140,83 +164,81 @@ export async function fetchChartData(
   }
 
   const rootId = graph.root.id;
-  const rootChildren = childrenOf.get(rootId) || [];
+  const paths = graph.paths ?? {};
 
-  // Classify direct children: entities → subsidiaries, assets → directly owned
+  // Single pass over paths — classify nodes, build all subsidiary/asset/intermediary maps.
+  // route[0] = root, route[1] = top-level subsidiary, route.length === 2 → direct child of root.
   const subsidiaryIds: string[] = [];
   const directAssetIds: string[] = [];
-
-  for (const child of rootChildren) {
-    const node = nodeMap.get(child.id);
-    if (!node) continue;
-    if (node.type === 'entity') {
-      subsidiaryIds.push(child.id);
-    } else {
-      directAssetIds.push(child.id);
-    }
-  }
-
-  // BFS from each subsidiary to find all reachable asset nodes
   const subsidiaryToAssets = new Map<string, string[]>();
   const assetToSubsidiaries = new Map<string, string[]>();
-  const intermediaryData = new Map<
-    string,
-    { total_descendants: number; max_generations: number }
-  >();
+  const subDescendantEntityIds = new Map<string, Set<string>>();
+  const subMaxDepth = new Map<string, number>();
 
-  for (const subId of subsidiaryIds) {
-    const assets: string[] = [];
-    const visited = new Set<string>([rootId]);
-    const queue: Array<{ id: string; depth: number }> = [{ id: subId, depth: 0 }];
-    visited.add(subId);
-    let maxDepth = 0;
-    let totalDescendants = 0;
-
-    while (queue.length > 0) {
-      const { id: current, depth } = queue.shift()!;
-      const children = childrenOf.get(current) || [];
-
-      for (const child of children) {
-        if (visited.has(child.id)) continue;
-        visited.add(child.id);
-        const childNode = nodeMap.get(child.id);
-        if (!childNode) continue;
-
-        if (childNode.type === 'asset') {
-          assets.push(child.id);
-          if (!assetToSubsidiaries.has(child.id)) assetToSubsidiaries.set(child.id, []);
-          assetToSubsidiaries.get(child.id)!.push(subId);
-        } else {
-          totalDescendants++;
-          maxDepth = Math.max(maxDepth, depth + 1);
-          queue.push({ id: child.id, depth: depth + 1 });
-        }
-      }
-    }
-
-    subsidiaryToAssets.set(subId, assets);
-    if (totalDescendants > 0) {
-      intermediaryData.set(subId, {
-        total_descendants: totalDescendants,
-        max_generations: maxDepth,
-      });
+  // First sub-pass: classify direct children of root (route.length === 2)
+  for (const [nodeId, nodePaths] of Object.entries(paths)) {
+    const node = nodeMap.get(nodeId);
+    if (!node) continue;
+    if (!nodePaths.some((p) => p.route.length === 2)) continue;
+    if (node.type === 'entity') {
+      subsidiaryIds.push(nodeId);
+    } else if (!classAssetIds || classAssetIds.has(nodeId)) {
+      directAssetIds.push(nodeId);
     }
   }
 
-  // Collect all unique asset IDs
-  const allAssetIds = new Set<string>(directAssetIds);
-  for (const assets of subsidiaryToAssets.values()) {
-    for (const id of assets) allAssetIds.add(id);
+  const subsidiaryIdSet = new Set(subsidiaryIds);
+
+  // Second sub-pass: group assets and intermediary entities by top-level subsidiary
+  for (const [nodeId, nodePaths] of Object.entries(paths)) {
+    const node = nodeMap.get(nodeId);
+    if (!node || nodeId === rootId) continue;
+
+    if (node.type === 'asset') {
+      if (classAssetIds && !classAssetIds.has(nodeId)) continue;
+      const viaSubs = new Set<string>();
+      for (const p of nodePaths) {
+        const subId = p.route[1];
+        if (subId && subsidiaryIdSet.has(subId)) viaSubs.add(subId);
+      }
+      for (const subId of viaSubs) {
+        if (!subsidiaryToAssets.has(subId)) subsidiaryToAssets.set(subId, []);
+        subsidiaryToAssets.get(subId)!.push(nodeId);
+      }
+      if (viaSubs.size > 0) assetToSubsidiaries.set(nodeId, [...viaSubs]);
+    } else {
+      // Intermediary entity — track depth per subsidiary for the expand-icon indicator
+      for (const p of nodePaths) {
+        const subId = p.route[1];
+        if (!subId || !subsidiaryIdSet.has(subId)) continue;
+        if (!subDescendantEntityIds.has(subId)) subDescendantEntityIds.set(subId, new Set());
+        subDescendantEntityIds.get(subId)!.add(nodeId);
+        // depth from subId = route.length - 2 (subtract root entry)
+        subMaxDepth.set(subId, Math.max(subMaxDepth.get(subId) ?? 0, p.route.length - 2));
+      }
+    }
+  }
+
+  const intermediaryData = new Map<string, { total_descendants: number; max_generations: number }>();
+  for (const subId of subsidiaryIds) {
+    const descendants = subDescendantEntityIds.get(subId);
+    if (descendants && descendants.size > 0) {
+      intermediaryData.set(subId, {
+        total_descendants: descendants.size,
+        max_generations: subMaxDepth.get(subId) ?? 0,
+      });
+    }
   }
 
   // The graph API already returns full asset metadata (operating_status, asset_type,
   // location_id, capacity, etc.) on each node — no need for individual getAsset() calls.
   const assetDetails = new Map<string, AssetSummary>();
 
-  // Helper: get ownership % from edge to this asset
-  function getOwnershipPct(assetId: string): number {
-    const parents = parentOf.get(assetId) || [];
-    return parents.length > 0 ? parents[0].value || 100 : 100;
+  // Cumulative ownership % the spotlight owner holds in a node: sum of cumulative_pct across all paths.
+  function ownershipPctFor(nodeId: string): number {
+    const nodePaths = paths[nodeId];
+    if (!nodePaths?.length) return 100;
+    return nodePaths.reduce((sum, p) => sum + (p.cumulative_pct ?? 0), 0);
   }
 
   // Convert graph node → ChartUnit (all data from graph response, zero extra fetches)
@@ -226,7 +248,7 @@ export async function fetchChartData(
     const tracker = graphNode?.asset_type || 'Unknown';
     const status = graphNode?.operating_status || 'unknown';
     const subStatus = graphNode?.operating_sub_status || '';
-    const pct = getOwnershipPct(assetId);
+    const pct = ownershipPctFor(assetId);
     const locationID = graphNode?.location_id || (assetId.includes('_') ? assetId.split('_')[0] : assetId);
 
     return {
@@ -256,12 +278,10 @@ export async function fetchChartData(
   }
 
   // Build matchedEdges (root → subsidiary ownership %)
+  // Uses cumulative paths when available, so the pie reflects total spotlight-owner share.
   const matchedEdges = new Map<string, { source: string; target: string; value: number }>();
   for (const subId of subsidiaryIds) {
-    const rootEdge = rootChildren.find((c) => c.id === subId);
-    if (rootEdge) {
-      matchedEdges.set(subId, { source: rootId, target: subId, value: rootEdge.value });
-    }
+    matchedEdges.set(subId, { source: rootId, target: subId, value: ownershipPctFor(subId) });
   }
 
   // Sort subsidiaries by ownership percentage (desc), then asset count (desc).
@@ -303,8 +323,8 @@ export async function fetchChartData(
     multiplePathAssets,
     intermediaryData,
     assetDetails,
-    graphChildrenOf: childrenOf,
     graphNodeMap: nodeMap,
+    graphPaths: graph.paths,
   };
 }
 
@@ -537,85 +557,62 @@ export function buildSubsidiaryGroups(
 export function expandSubsidiary(
   subId: string,
   parentUnits: ChartUnit[],
-  graphChildrenOf: Map<string, Array<{ id: string; value: number }>>,
   graphNodeMap: Map<string, GraphNode>,
+  graphPaths: Record<string, Array<{ route: string[]; cumulative_pct: number }>>,
 ): SubsidiaryExpansion {
-  const rootId = subId;
-  const rootChildren = graphChildrenOf.get(rootId) || [];
-
-  const childrenOf = graphChildrenOf;
-  const nodeMap = graphNodeMap;
-
-  // Build a lookup from parent ChartUnits by asset ID
   const parentUnitMap = new Map<string, ChartUnit>(parentUnits.map((u) => [u.id, u]));
 
-  // Classify root children: entities → sub-subsidiaries, assets → directly owned
-  const subSubIds: string[] = [];
-  const directAssetIds: string[] = [];
-  for (const child of rootChildren) {
-    const node = nodeMap.get(child.id);
-    if (!node) continue;
-    if (node.type === 'entity') subSubIds.push(child.id);
-    else if (parentUnitMap.has(child.id)) directAssetIds.push(child.id);
-  }
+  // Single pass over paths to build all expansion data.
+  // route[0] = spotlight root, route[1] = subId, route[2] = direct child of subId.
+  // A node X is a direct child of subId when route[1] === subId && route[2] === X.
 
-  // BFS from each sub-subsidiary to find parent-matched assets
-  const subToUnits = new Map<string, ChartUnit[]>();
-  for (const ssId of subSubIds) {
-    const matched: ChartUnit[] = [];
-    const visited = new Set<string>([rootId, ssId]);
-    const queue: string[] = [ssId];
-    while (queue.length) {
-      const cur = queue.shift()!;
-      for (const child of childrenOf.get(cur) || []) {
-        if (visited.has(child.id)) continue;
-        visited.add(child.id);
-        const n = nodeMap.get(child.id);
-        if (!n) continue;
-        if (n.type === 'asset') {
-          const u = parentUnitMap.get(child.id);
-          if (u) matched.push(u);
-        } else {
-          queue.push(child.id);
-        }
+  const subSubIdSet = new Set<string>();
+  const directAssetIds: string[] = [];
+  const subToUnitSets = new Map<string, Set<string>>(); // ssId → asset IDs
+  const ssDescendantEntityIds = new Map<string, Set<string>>();
+  const ssMaxDepth = new Map<string, number>();
+
+  for (const [nodeId, nodePaths] of Object.entries(graphPaths)) {
+    const node = graphNodeMap.get(nodeId);
+    if (!node) continue;
+
+    // Classify direct children of subId (route[1] === subId && route[2] === nodeId)
+    const isDirectChild = nodePaths.some((p) => p.route[1] === subId && p.route[2] === nodeId);
+    if (isDirectChild) {
+      if (node.type === 'entity') subSubIdSet.add(nodeId);
+      else if (parentUnitMap.has(nodeId)) directAssetIds.push(nodeId);
+    }
+
+    if (node.type === 'asset' && parentUnitMap.has(nodeId)) {
+      // Assign asset to each sub-subsidiary it's reachable through
+      for (const p of nodePaths) {
+        if (p.route[1] !== subId) continue;
+        const ssId = p.route[2];
+        if (!ssId) continue; // direct child of subId itself (handled above)
+        if (!subToUnitSets.has(ssId)) subToUnitSets.set(ssId, new Set());
+        subToUnitSets.get(ssId)!.add(nodeId);
+      }
+    } else if (node.type === 'entity') {
+      // Track intermediary entity descendants per sub-subsidiary
+      for (const p of nodePaths) {
+        if (p.route[1] !== subId) continue;
+        const ssId = p.route[2];
+        if (!ssId || nodeId === ssId) continue; // skip the ss itself
+        if (!ssDescendantEntityIds.has(ssId)) ssDescendantEntityIds.set(ssId, new Set());
+        ssDescendantEntityIds.get(ssId)!.add(nodeId);
+        // depth from ssId = route.length - 3 (subtract root, subId, ssId)
+        ssMaxDepth.set(ssId, Math.max(ssMaxDepth.get(ssId) ?? 0, p.route.length - 3));
       }
     }
-    if (matched.length > 0) subToUnits.set(ssId, matched);
   }
 
-  // Any parent assets not matched to a sub-subsidiary go into a "directly owned" bucket
-  const matchedAssetIds = new Set<string>();
-  for (const units of subToUnits.values()) units.forEach((u) => matchedAssetIds.add(u.id));
-  for (const id of directAssetIds) matchedAssetIds.add(id);
+  // Assets in parentUnits not reached through any sub-subsidiary → directly owned by subId
+  const matchedAssetIds = new Set<string>(directAssetIds);
+  for (const ids of subToUnitSets.values()) ids.forEach((id) => matchedAssetIds.add(id));
   const directUnits = [
     ...directAssetIds.map((id) => parentUnitMap.get(id)!).filter(Boolean),
     ...parentUnits.filter((u) => !matchedAssetIds.has(u.id)),
   ];
-
-  // Detect entity descendants for each sub-subsidiary (populates intermediary_data on sub-groups)
-  const subIntermediary = new Map<string, { total_descendants: number; max_generations: number }>();
-  for (const ssId of subSubIds) {
-    let totalDescendants = 0;
-    let maxDepth = 0;
-    const vis = new Set<string>([rootId, ssId]);
-    const q: Array<{ id: string; depth: number }> = [{ id: ssId, depth: 0 }];
-    while (q.length) {
-      const { id: cur, depth } = q.shift()!;
-      for (const child of childrenOf.get(cur) || []) {
-        if (vis.has(child.id)) continue;
-        vis.add(child.id);
-        const n = nodeMap.get(child.id);
-        if (n?.type === 'entity') {
-          totalDescendants++;
-          maxDepth = Math.max(maxDepth, depth + 1);
-          q.push({ id: child.id, depth: depth + 1 });
-        }
-      }
-    }
-    if (totalDescendants > 0) {
-      subIntermediary.set(ssId, { total_descendants: totalDescendants, max_generations: maxDepth });
-    }
-  }
 
   // Build SubsidiaryGroupData (no layout yet — buildSubsidiaryGroups will add it)
   function makeGroup(id: string, units: ChartUnit[]): SubsidiaryGroupData {
@@ -630,32 +627,37 @@ export function expandSubsidiary(
     });
     locations.sort((a, b) => a.units[0].name.localeCompare(b.units[0].name));
     const group: SubsidiaryGroupData = { id, locations, top: 0, bottom: 0, height: 0, summary_data: { tracker: [], status: [] } };
-    if (subIntermediary.has(id)) group.intermediary_data = subIntermediary.get(id);
+    const descendants = ssDescendantEntityIds.get(id);
+    if (descendants && descendants.size > 0) {
+      group.intermediary_data = { total_descendants: descendants.size, max_generations: ssMaxDepth.get(id) ?? 0 };
+    }
     return group;
   }
 
   const subGroups: SubsidiaryGroupData[] = [];
-  for (const [ssId, units] of subToUnits) {
-    subGroups.push(makeGroup(ssId, units));
+  for (const ssId of subSubIdSet) {
+    const ids = subToUnitSets.get(ssId);
+    if (ids?.size) subGroups.push(makeGroup(ssId, [...ids].map((id) => parentUnitMap.get(id)!).filter(Boolean)));
   }
   if (directUnits.length > 0) {
     subGroups.push(makeGroup(`${subId}:direct`, directUnits));
   }
 
-  // Build entityMap and matchedEdges for sub-label rendering
+  // entityMap for sub-label rendering
   const entityMap = new Map<string, { id: string; Name: string; type: string }>();
   for (const node of graphNodeMap.values()) {
     if (node.type === 'entity') entityMap.set(node.id, { id: node.id, Name: node.Name, type: 'entity' });
   }
-  // The "directly owned" virtual group needs an entry too
   if (directUnits.length > 0) {
     entityMap.set(`${subId}:direct`, { id: `${subId}:direct`, Name: 'Directly owned', type: 'entity' });
   }
 
+  // matchedEdges: cumulative ownership % spotlight owner holds in each sub-subsidiary
   const matchedEdges = new Map<string, { source: string; target: string; value: number }>();
-  for (const ssId of subSubIds) {
-    const edge = rootChildren.find((c) => c.id === ssId);
-    if (edge) matchedEdges.set(ssId, { source: rootId, target: ssId, value: edge.value ?? 0 });
+  for (const ssId of subSubIdSet) {
+    const ssPathEntries = graphPaths[ssId] ?? [];
+    const value = ssPathEntries.reduce((sum, p) => sum + (p.cumulative_pct ?? 0), 0);
+    matchedEdges.set(ssId, { source: subId, target: ssId, value });
   }
 
   return { subGroups, entityMap, matchedEdges };

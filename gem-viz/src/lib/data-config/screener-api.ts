@@ -59,6 +59,10 @@ export interface ScreenerOwner {
   name: string;
   totalAssets: number;
   filteredAssets: number;
+  /** Flattened values from the external_ids object — used for fast local ID search */
+  externalIds?: string[];
+  /** Alternative names: full_name, name_local, name_other, abbreviation (non-null) */
+  altNames?: string[];
 }
 
 export interface ScreenerResultsResponse {
@@ -743,26 +747,46 @@ export async function getOwnersByFilter(
     }
 
     const owners: ScreenerOwner[] = rawOwners
-      .map((o) => ({
-        entityId: String(
-          o.entity_id ?? o.entityId ??
-          (o.entity && typeof o.entity === 'object' ? (o.entity as Record<string, unknown>).id : undefined) ??
-          o.id ?? ''
-        ),
-        name: String(
-          o.name ?? o.full_name ?? o.entity_name ?? o.owner_name ??
-          o.display_name ??
-          (o.entity && typeof o.entity === 'object' ? (o.entity as Record<string, unknown>).name : undefined) ??
-          ''
-        ),
-        totalAssets: Number(
-          o.total_asset_count ?? o.total_assets ?? o.totalAssets ?? o.asset_count ?? o.count ?? 0
-        ),
-        filteredAssets: Number(
-          o.asset_count ?? o.filtered_asset_count ?? o.filtered_assets ??
-          o.total_asset_count ?? o.total_assets ?? o.count ?? 0
-        ),
-      }))
+      .map((o) => {
+        // Flatten external_ids (object, array, or null) into a searchable string array
+        const rawExtIds = o.external_ids;
+        let externalIds: string[] | undefined;
+        if (rawExtIds && typeof rawExtIds === 'object') {
+          const vals = Array.isArray(rawExtIds)
+            ? rawExtIds
+            : Object.values(rawExtIds as Record<string, unknown>);
+          const ids = vals.filter((v): v is string => typeof v === 'string' && Boolean(v));
+          if (ids.length > 0) externalIds = ids;
+        }
+
+        // Collect non-null alternative name fields into a flat array
+        const altNameCandidates = [o.full_name, o.name_local, o.name_other, o.abbreviation]
+          .filter((v): v is string => typeof v === 'string' && Boolean(v));
+        const altNames = altNameCandidates.length > 0 ? altNameCandidates : undefined;
+
+        return {
+          entityId: String(
+            o.entity_id ?? o.entityId ??
+            (o.entity && typeof o.entity === 'object' ? (o.entity as Record<string, unknown>).id : undefined) ??
+            o.id ?? ''
+          ),
+          name: String(
+            o.entity_name ?? o.name ?? o.full_name ?? o.owner_name ??
+            o.display_name ??
+            (o.entity && typeof o.entity === 'object' ? (o.entity as Record<string, unknown>).name : undefined) ??
+            ''
+          ),
+          totalAssets: Number(
+            o.total_asset_count ?? o.total_assets ?? o.totalAssets ?? o.asset_count ?? o.count ?? 0
+          ),
+          filteredAssets: Number(
+            o.asset_count ?? o.filtered_asset_count ?? o.filtered_assets ??
+            o.total_asset_count ?? o.total_assets ?? o.count ?? 0
+          ),
+          ...(externalIds && { externalIds }),
+          ...(altNames && { altNames }),
+        };
+      })
       .filter((o) => o.entityId && o.name && !EXCLUDED_ENTITY_IDS.has(o.entityId));
 
     const result: ScreenerResultsResponse = {

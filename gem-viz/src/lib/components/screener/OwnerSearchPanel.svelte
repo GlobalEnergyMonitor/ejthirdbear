@@ -117,7 +117,7 @@
         <textarea
           id="bulk-search"
           class="bulk-input"
-          placeholder="Shell&#10;BP&#10;TotalEnergies&#10;E100001000348&#10;549300MLUDYVRQOOXS22"
+          placeholder="TotalEnergies; E100000000387; 529900S21EQ1BO4ESM68"
           bind:value={bulkSearchText}
           rows="6"
         ></textarea>

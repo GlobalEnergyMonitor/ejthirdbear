@@ -25,7 +25,7 @@
   } from '$lib/ownership-api';
   import {
     fetchAssetClasses,
-    buildCatalogUrl,
+    buildAssetClassUrl,
   } from '$lib/api/catalog-api';
   import {
     getHierarchyCategories,
@@ -235,24 +235,13 @@
       .filter(([, v]) => v)
       .map(([k]) => k);
 
-    // Build URLs from checked option IDs
+    // When subclasses are selected, pass each as a separate asset_class param (OR-combined).
+    // When none selected, use the parent class ID.
+    const assetClassIds = selectedSubClassIds.length > 0 ? selectedSubClassIds : [selectedClassId];
     const byId = new Map(catalogClasses.map((c) => [c.id, c]));
-    const selectedChildUrls = selectedSubClassIds
-      .map((id) => byId.get(id)?.url)
-      .filter(Boolean);
-    const selectedOwnerChildUrls = selectedSubClassIds
-      .map((id) => byId.get(id)?.owners_url)
-      .filter(Boolean);
 
-    const catalogUrl = buildCatalogUrl(
-      catalogEntry.url,
-      selectedChildUrls,
-      selectedStatusParams,
-      geoFilters
-    );
-    const catalogOwnersUrl = catalogEntry.owners_url
-      ? buildCatalogUrl(catalogEntry.owners_url, selectedOwnerChildUrls, selectedStatusParams, geoFilters)
-      : undefined;
+    const catalogUrl = buildAssetClassUrl('/assets', assetClassIds, selectedStatusParams, geoFilters);
+    const catalogOwnersUrl = buildAssetClassUrl('/owners', assetClassIds, selectedStatusParams, geoFilters);
 
     // Labels for selected sub-classes (for panel summary display)
     const selectedSubClassLabels = selectedSubClassIds

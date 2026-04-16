@@ -182,26 +182,31 @@
    * Fast local search against the pre-loaded owners list.
    * Returns matched ScreenerOwner[] without any API calls.
    *
-   * ID terms match against entityId (exact, case-insensitive).
-   * Name terms match against name as a case-insensitive substring.
-   *
-   * Expand this function as the API returns more fields:
-   *   - ID fields: o.lei, o.permId, o.isin, ...
-   *   - Name fields: o.fullName, o.aliases, o.formerNames, ...
+   * Priority:
+   *   1. Exact match (case-insensitive) against entity_id and any external_ids values.
+   *      Returns immediately — ID matches are unambiguous.
+   *   2. Case-insensitive substring match across all name fields
+   *      (name, full_name, name_local, name_other, abbreviation).
+   *      May return multiple results.
    */
   function findOwnersLocally(term: string): ScreenerOwner[] {
     if (!term || allOwners.length === 0) return [];
-    if (isIdSearch(term)) {
-      const upper = term.toUpperCase();
-      return allOwners.filter((o) =>
-        o.entityId.toUpperCase() === upper
-        // Future ID fields: || o.lei === upper || o.permId === upper
-      );
-    }
+    const upper = term.toUpperCase();
+
+    // 1. Exact ID match — entity_id or any external_ids value
+    const idMatches = allOwners.filter(
+      (o) =>
+        o.entityId.toUpperCase() === upper ||
+        o.externalIds?.some((id) => id.toUpperCase() === upper)
+    );
+    if (idMatches.length > 0) return idMatches;
+
+    // 2. Substring match across all name fields
     const lower = term.toLowerCase();
-    return allOwners.filter((o) =>
-      o.name.toLowerCase().includes(lower)
-      // Future name fields: || o.fullName?.toLowerCase().includes(lower)
+    return allOwners.filter(
+      (o) =>
+        o.name.toLowerCase().includes(lower) ||
+        o.altNames?.some((n) => n.toLowerCase().includes(lower))
     );
   }
 
@@ -291,13 +296,12 @@
     debugApiCalls = [];
 
     try {
-      // Parse: each line may be tab-delimited (from CSV preview); each cell is a candidate.
-      // Group by row so we can try ID cells first, then fall back to names within the same row.
+      // Parse: each line may be tab- or semicolon-delimited; each cell is a candidate.
       type Row = { idCells: string[]; nameCells: string[] };
       const rows: Row[] = bulkSearchText
         .split('\n')
         .map((line) => {
-          const cells = line.split('\t').map((c) => c.trim()).filter((c) => c.length > 0);
+          const cells = line.split(/[\t;]/).map((c) => c.trim()).filter((c) => c.length > 0);
           return {
             idCells: cells.filter((c) => isIdSearch(c)),
             nameCells: cells.filter((c) => !isIdSearch(c)),
@@ -307,16 +311,9 @@
 
       if (rows.length === 0) return;
 
-      // Cap unique terms (not rows) to avoid overwhelming the API
-      const allIdTerms = [...new Set(rows.flatMap((r) => r.idCells))].slice(0, 200);
-      const allNameTerms = [...new Set(rows.flatMap((r) => r.nameCells))].slice(0, 200);
-
       // Build deduped entity map: id → EntitySearchResult
       const resolvedById = new Map<string, EntitySearchResult>();
-      // Track which input terms matched each entity (for results-page tooltips)
       const matchedTerms = new Map<string, Set<string>>();
-      // Track which terms were resolved locally (to skip API calls for them)
-      const locallyMatchedTerms = new Set<string>();
 
       const addMatch = (e: EntitySearchResult, term: string) => {
         if (!e.id || EXCLUDED_ENTITY_IDS.has(e.id)) return;
@@ -325,60 +322,97 @@
         matchedTerms.get(e.id)!.add(term);
       };
 
-      // Fast path: check pre-loaded owners list before making API calls
+      // Per-row ID resolution flag — if a row's ID cell(s) match, its name cells are suppressed.
+      const rowIdResolved = new Array(rows.length).fill(false);
+      const locallyMatchedIdTerms = new Set<string>();
+      const locallyMatchedNameTerms = new Set<string>();
+
+      // ── Phase 1: Local ID cells only ──────────────────────────────────────
+      // Name cells are deferred until after API ID resolution so a row whose ID
+      // is found via API doesn't also return local name matches.
       if (!allOwnersLoading && allOwners.length > 0) {
-        for (const term of [...allIdTerms, ...allNameTerms]) {
-          const localMatches = findOwnersLocally(term);
-          if (localMatches.length > 0) {
-            locallyMatchedTerms.add(term);
-            for (const o of localMatches) {
-              addMatch({ id: o.entityId, name: o.name }, term);
+        for (let i = 0; i < rows.length; i++) {
+          for (const term of rows[i].idCells) {
+            const localMatches = findOwnersLocally(term);
+            if (localMatches.length > 0) {
+              locallyMatchedIdTerms.add(term);
+              rowIdResolved[i] = true;
+              for (const o of localMatches) addMatch({ id: o.entityId, name: o.name }, term);
             }
           }
         }
       }
 
-      // Only API-call terms not already resolved locally
-      const apiIdTerms = allIdTerms.filter((t) => !locallyMatchedTerms.has(t));
-      const apiNameTerms = allNameTerms.filter((t) => !locallyMatchedTerms.has(t));
-
-      debugApiCalls = [
-        {
-          type: 'searchEntitiesBulk',
-          params: { idTerms: apiIdTerms.length, nameTerms: apiNameTerms.length, localHits: locallyMatchedTerms.size },
-          time: Date.now(),
-        },
-      ];
-
+      // ── Phase 2: API ID terms for rows not yet locally resolved ───────────
       const emptyBulk = { results: {} as Record<string, EntitySearchResult[]>, queryTimeMs: 0, source: 'rest-api-sequential' as const, apiCallCount: 0 };
-      const [idBulkResult, nameBulkResult] = await Promise.all([
-        apiIdTerms.length > 0
-          ? searchEntitiesBulk(apiIdTerms, { limitPerQuery: 5, maxConcurrent: 10 })
-          : Promise.resolve(emptyBulk),
-        apiNameTerms.length > 0
-          ? searchEntitiesBulk(apiNameTerms, { limitPerQuery: 10, maxConcurrent: 10 })
-          : Promise.resolve(emptyBulk),
-      ]);
-      debugLastSearchTime = Math.max(idBulkResult.queryTimeMs, nameBulkResult.queryTimeMs);
 
-      // ID results — precise lookups
+      const apiIdTerms = [...new Set(
+        rows.flatMap((r, i) => rowIdResolved[i] ? [] : r.idCells)
+      )].filter((t) => !locallyMatchedIdTerms.has(t)).slice(0, 200);
+
+      const idBulkResult = apiIdTerms.length > 0
+        ? await searchEntitiesBulk(apiIdTerms, { limitPerQuery: 5, maxConcurrent: 10 })
+        : emptyBulk;
+
       for (const [term, entities] of Object.entries(idBulkResult.results)) {
         for (const e of entities) addMatch(e, term);
       }
 
-      // Name results — trust API results directly
+      // Update rowIdResolved based on API ID results
+      for (let i = 0; i < rows.length; i++) {
+        if (rowIdResolved[i]) continue;
+        if (rows[i].idCells.some(
+          (c) => (idBulkResult.results[c] ?? []).some((e) => resolvedById.has(e.id))
+        )) {
+          rowIdResolved[i] = true;
+        }
+      }
+
+      // ── Phase 3: Local name cells — only for rows still without any ID match ──
+      if (!allOwnersLoading && allOwners.length > 0) {
+        for (let i = 0; i < rows.length; i++) {
+          if (rowIdResolved[i]) continue;
+          for (const term of rows[i].nameCells) {
+            const localMatches = findOwnersLocally(term);
+            if (localMatches.length > 0) {
+              locallyMatchedNameTerms.add(term);
+              for (const o of localMatches) addMatch({ id: o.entityId, name: o.name }, term);
+            }
+          }
+        }
+      }
+
+      // ── Phase 4: API name terms for rows still unresolved ─────────────────
+      const apiNameTerms = [...new Set(
+        rows.flatMap((r, i) => rowIdResolved[i] ? [] : r.nameCells)
+      )].filter((t) => !locallyMatchedNameTerms.has(t)).slice(0, 200);
+
+      const nameBulkResult = apiNameTerms.length > 0
+        ? await searchEntitiesBulk(apiNameTerms, { limitPerQuery: 10, maxConcurrent: 10 })
+        : emptyBulk;
+
+      debugLastSearchTime = Math.max(idBulkResult.queryTimeMs, nameBulkResult.queryTimeMs);
+      debugApiCalls = [{
+        type: 'searchEntitiesBulk',
+        params: { idTerms: apiIdTerms.length, nameTerms: apiNameTerms.length, localHits: locallyMatchedIdTerms.size + locallyMatchedNameTerms.size },
+        time: Date.now(),
+      }];
+
       for (const [term, entities] of Object.entries(nameBulkResult.results)) {
         for (const e of entities) addMatch(e, term);
       }
 
-      // Per-row tier-3 counting: a row is unmatched only if neither its ID cells
-      // nor its name cells resolved to any entity
+      // Tier-3: a row is unmatched only if neither ID nor name cells resolved
       let tier3Count = 0;
       const unmatchedTerms: string[] = [];
-      for (const row of rows) {
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
         const rowResolved =
-          row.idCells.some((c) => resolvedById.has(c) || (idBulkResult.results[c] ?? []).some((e) => resolvedById.has(e.id))) ||
-          row.nameCells.some((c) => locallyMatchedTerms.has(c) || (nameBulkResult.results[c] ?? []).some((e) => resolvedById.has(e.id)));
+          rowIdResolved[i] ||
+          row.nameCells.some(
+            (c) => locallyMatchedNameTerms.has(c) ||
+                   (nameBulkResult.results[c] ?? []).some((e) => resolvedById.has(e.id))
+          );
         if (!rowResolved) {
           tier3Count++;
           unmatchedTerms.push([...row.idCells, ...row.nameCells].join('\t'));

@@ -10,7 +10,7 @@
    *                   (caller uses this to update URL params or hash)
    */
   import { onMount, untrack } from 'svelte';
-  import { listAssets, getAsset, getLocationOwnershipGraph } from '$lib/ownership-api';
+  import { listAssets, getAsset, getOwnershipGraphs } from '$lib/ownership-api';
   import { readHashParam, writeHash } from '$lib/utils/hash-state';
   import AssetSearchBar from '$lib/components/search/AssetSearchBar.svelte';
   import LocationOwnershipView from '$lib/components/ownership/LocationOwnershipView.svelte';
@@ -414,7 +414,7 @@
     treeError = '';
     locationResponse = null;
     try {
-      locationResponse = await getLocationOwnershipGraph({ root: item.id, direction: 'up' });
+      locationResponse = await getOwnershipGraphs({ root: item.id, direction: 'up' });
     } catch (err) {
       treeError = err.message || 'Failed to load ownership tree';
     } finally {

@@ -401,6 +401,35 @@ export function buildCatalogUrl(
   return `${apiBase}${path}?${params.toString()}`;
 }
 
+/**
+ * Build a fully resolved asset or owners URL using the new asset_class parameter.
+ *
+ * Instead of relying on pre-built filter params from catalog entry URLs, this passes
+ * `asset_class` IDs directly — one per selected class/subclass (OR-combined by the API).
+ * Status and country filters are appended the same way as before.
+ *
+ * @param endpoint       '/assets' or '/owners'
+ * @param assetClassIds  Selected class ID(s) — the parent ID when no subclasses selected,
+ *                       or the individual subclass IDs when subclasses are selected
+ * @param statusParams   User-selected statuses
+ * @param countries      User-selected countries
+ * @param apiBase        API host to prepend (defaults to CATALOG_API_BASE)
+ */
+export function buildAssetClassUrl(
+  endpoint: '/assets' | '/owners',
+  assetClassIds: string[],
+  statusParams: StatusParams,
+  countries: string[],
+  apiBase: string = CATALOG_API_BASE
+): string {
+  const params = new URLSearchParams();
+  for (const id of assetClassIds) params.append('asset_class', id);
+  for (const s of statusParams.statusValues) params.append('status', s);
+  for (const s of statusParams.substatusValues) params.append('sub_status', s);
+  for (const c of countries) params.append('country', c);
+  return `${apiBase}${endpoint}?${params.toString()}`;
+}
+
 /** Fetch country facets from asset endpoint. Returns country→count map. */
 export async function fetchCountryFacets(): Promise<Record<string, number> | null> {
   const cached = _cache.get('country-facets') as Record<string, number> | undefined;

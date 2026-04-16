@@ -30,7 +30,7 @@ import {
 } from '$lib/field-keys';
 
 // API base URL (env override or production default)
-const API_BASE = import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-api.thirdbear.net'; // Fallback to production API
+const API_BASE = import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-ownership-api-staging.fly.dev' ||'https://gem-api.thirdbear.net'; // Fallback to production API
 
 // Default timeout for API requests (30 seconds)
 const API_TIMEOUT_MS = 30_000;
@@ -672,18 +672,20 @@ export async function listAssets(params?: {
   status?: string;
   country?: string | string[];
   asset_type?: string;
+  asset_class?: string | string[];
   limit?: number;
   offset?: number;
   facets?: boolean;
 }): Promise<PaginatedResponse<AssetSummary> & { facets?: Record<string, Record<string, number>> }> {
   if (!_currentReason)
-    _currentReason = `listAssets${params?.asset_type ? ` type=${params.asset_type}` : ''}${params?.facets ? ' (facets)' : ''}`;
+    _currentReason = `listAssets${params?.asset_type ? ` type=${params.asset_type}` : ''}${params?.asset_class ? ` class=${Array.isArray(params.asset_class) ? params.asset_class.join(',') : params.asset_class}` : ''}${params?.facets ? ' (facets)' : ''}`;
   // Build query params — always request JSON format (coal-plant slug returns HTML without it)
   const queryParams: Record<string, string | number | string[] | undefined | null> = {
     q: params?.q,
     status: params?.status,
     country: params?.country,
     asset_type: params?.asset_type,
+    asset_class: params?.asset_class,
     limit: params?.limit,
     offset: params?.offset,
     format: 'json',
