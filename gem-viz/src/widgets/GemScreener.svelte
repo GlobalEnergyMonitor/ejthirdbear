@@ -14,7 +14,8 @@
 
   // Step 1 components & data
   import AssetClassExpansion from '$lib/components/tracker/AssetClassExpansion.svelte';
-  import { ALL_ASSET_CLASSES, getAssetClassById } from '$lib/data-config/asset-class-definitions';
+  // Asset classes come exclusively from the catalog API (fetchAssetClasses).
+  // DO NOT import ALL_ASSET_CLASSES — it's a stale static list that diverges from the API.
   import { gemTrackerToUiTracker } from '$lib/data-config/screener-api';
   import {
     isValidTracker,
@@ -119,24 +120,15 @@
 
   const classesByCategory = $derived.by(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (catalogClasses.length > 0) {
-      return CATEGORY_META.map((cat) => ({
-        ...cat,
-        classes: catalogClasses.filter((ac: any) => {
-          if (ac.category !== cat.key) return false;
-          if (!ac.url) return false;
-          if (ac.parent && catalogIdSet.has(ac.parent)) return false;
-          if (!q) return true;
-          return ac.label.toLowerCase().includes(q);
-        }),
-      })).filter((cat) => cat.classes.length > 0);
-    }
+    if (catalogClasses.length === 0) return [];
     return CATEGORY_META.map((cat) => ({
       ...cat,
-      classes: ALL_ASSET_CLASSES.filter((ac) => {
-        if (ac.category !== cat.key || !isEnabled(ac)) return false;
+      classes: catalogClasses.filter((ac: any) => {
+        if (ac.category !== cat.key) return false;
+        if (!ac.url) return false;
+        if (ac.parent && catalogIdSet.has(ac.parent)) return false;
         if (!q) return true;
-        return ac.label.toLowerCase().includes(q) || ac.description.toLowerCase().includes(q);
+        return ac.label.toLowerCase().includes(q);
       }),
     })).filter((cat) => cat.classes.length > 0);
   });
@@ -151,7 +143,7 @@
     selectedClassId ? findSubtree(catalogForest, selectedClassId) : undefined
   );
 
-  const selectedClass = $derived(selectedClassId ? getAssetClassById(selectedClassId) : null);
+  const selectedClass = $derived(selectedClassId ? catalogClasses.find((c: any) => c.id === selectedClassId) ?? null : null);
 
   function isEnabled(ac: any) {
     if (ac.trackers.length === 0) return false;
@@ -178,9 +170,7 @@
 
   function selectClass(classId: string) {
     const catalogEntry = catalogClasses.find((c: any) => c.id === classId);
-    const ac = getAssetClassById(classId);
-    if (!catalogEntry?.url && !ac) return;
-    if (!catalogEntry?.url && ac && !isEnabled(ac)) return;
+    if (!catalogEntry?.url) return;
 
     selectedClassId = classId;
     searchQuery = '';
@@ -286,9 +276,8 @@
   function buildClassData(): ScreenerSelectedClass[] {
     if (!selectedClassId) return [];
     const catalogEntry = catalogClasses.find((c: any) => c.id === selectedClassId);
-    const ac = getAssetClassById(selectedClassId);
-    const label = catalogEntry?.label ?? ac?.label ?? selectedClassId;
-    const trackers = ac?.trackers ?? [];
+    const label = catalogEntry?.label ?? selectedClassId;
+    const trackers = catalogEntry?.trackers ?? [];
     const tracker = trackers.length > 0 ? gemTrackerToUiTracker(trackers[0]) : '';
 
     const selectedSubClassIds = [
@@ -793,15 +782,14 @@
             <span class="picker-category-label">{cat.label}</span>
             <div class="picker-grid">
               {#each cat.classes as ac (ac.id)}
-                {@const staticAc = getAssetClassById(ac.id)}
                 <button
                   class="picker-tile"
                   class:selected={selectedClassId === ac.id}
                   onclick={() => selectClass(ac.id)}
                 >
                   <span class="tile-label">{ac.label}</span>
-                  {#if ac.description || staticAc?.description}
-                    <span class="tile-desc">{ac.description ?? staticAc?.description}</span>
+                  {#if ac.description}
+                    <span class="tile-desc">{ac.description}</span>
                   {/if}
                 </button>
               {/each}
@@ -811,12 +799,11 @@
       </div>
 
       {#if selectedClassId}
-        {@const staticAc = getAssetClassById(selectedClassId)}
         {@const catalogEntry = catalogClasses.find((c) => c.id === selectedClassId)}
-        {@const expansionClass = staticAc ?? {
+        {@const expansionClass = {
           id: selectedClassId,
           label: catalogEntry?.label ?? selectedClassId,
-          description: '',
+          description: catalogEntry?.description ?? '',
           category: catalogEntry?.category ?? '',
           trackers: [],
           availableFilters: { status: true, geography: true },
