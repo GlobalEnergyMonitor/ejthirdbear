@@ -773,7 +773,7 @@
             bind:value={searchQuery}
           />
         </div>
-        {#each classesByCategory as cat (cat.key)}
+        {#each classesByCategory as cat (cat.id)}
           <div class="picker-category">
             <span class="picker-category-label">{cat.label}</span>
             <div class="picker-grid">
