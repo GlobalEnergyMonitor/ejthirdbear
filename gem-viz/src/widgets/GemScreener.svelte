@@ -34,6 +34,12 @@
     findSubtree,
     getAllDescendantIds,
   } from '$lib/api/catalog-api';
+  import {
+    getHierarchyCategories,
+    getHierarchyOptionIds,
+    getHierarchyDefaultUnchecked,
+    getHierarchyTree,
+  } from '$lib/data-config/asset-class-hierarchy.svelte';
 
   // Step 2 components & data
   import OwnerSearchPanel from '$lib/components/screener/OwnerSearchPanel.svelte';
@@ -118,20 +124,10 @@
   const catalogIdSet = $derived(new Set(catalogClasses.map((c: any) => c.id)));
   const catalogForest = $derived(catalogClasses.length > 0 ? buildCatalogTree(catalogClasses) : []);
 
-  const classesByCategory = $derived.by(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (catalogClasses.length === 0) return [];
-    return CATEGORY_META.map((cat) => ({
-      ...cat,
-      classes: catalogClasses.filter((ac: any) => {
-        if (ac.category !== cat.key) return false;
-        if (!ac.url) return false;
-        if (ac.parent && catalogIdSet.has(ac.parent)) return false;
-        if (!q) return true;
-        return ac.label.toLowerCase().includes(q);
-      }),
-    })).filter((cat) => cat.classes.length > 0);
-  });
+  // Use the same hierarchy function as the /screener/ route page — single source of truth
+  const classesByCategory = $derived(
+    catalogClasses.length > 0 ? getHierarchyCategories(catalogClasses, searchQuery) : []
+  );
 
   const catalogChildren = $derived(
     selectedClassId
