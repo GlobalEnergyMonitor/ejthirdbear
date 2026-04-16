@@ -864,6 +864,22 @@
         return name.length > 20 ? name.slice(0, 18) + '…' : name;
       });
 
+    // Ownership percentage labels below each intermediary node (skip root)
+    marks
+      .filter((d) => d.depth > 0 && d.ownershipPct != null)
+      .append('text')
+      .attr('x', 0)
+      .attr('y', nr + 10)
+      .style('text-anchor', 'middle')
+      .style('font-size', '8px')
+      .style('font-family', "var(--font-family, 'Plus Jakarta Sans', sans-serif)")
+      .style('fill', '#64748b')
+      .style('pointer-events', 'none')
+      .text((d) => {
+        const pct = Math.round(d.ownershipPct * 100);
+        return pct + '%';
+      });
+
     // Hover interactions: highlight paths (matches Observable notebook exactly)
     marks
       .on('mouseover', function (event, d) {
