@@ -75,63 +75,55 @@ export function drawAssetGroups(
 
   renderAssetLocations(assets, getColor, callbacks);
 
-  // For expanded subsidiaries, render assets from each sub-group
+  // For expanded subsidiaries, render sub-groups recursively at any depth
   for (const d of data) {
     if (!d.expansion) continue;
-    for (const sg of d.expansion.subGroups) {
-      const sgShift = LAYOUT.assetsX + LAYOUT.expansionShift;
+    renderExpandedSubGroups(group, d.expansion.subGroups, 1, getColor, callbacks);
+  }
+}
 
-      if (sg.expansion && sg.expansion.subGroups.length > 0) {
-        for (const ssg of sg.expansion.subGroups) {
-          const ssgG = group
-            .append('g')
-            .attr('class', 'subsidiary-asset-group subsidiary-asset-subgroup subsidiary-asset-subgroup--depth2')
-            .attr('id', `subsidiary-asset-group-${CSS.escape(ssg.id)}`)
-            .attr('transform', `translate(${sgShift + LAYOUT.expansionShift}, ${ssg.top})`);
+/**
+ * Recursively render asset groups for expanded sub-groups at any depth.
+ * depth=1 → first level of expansion, depth=2 → second level, etc.
+ */
+function renderExpandedSubGroups(
+  group: Selection<SVGGElement, unknown, null, undefined>,
+  subGroups: SubsidiaryGroupData[],
+  depth: number,
+  getColor: (_unit: ChartUnit) => string,
+  callbacks: AssetRenderCallbacks
+): void {
+  const xShift = LAYOUT.assetsX + depth * LAYOUT.expansionShift;
 
-          const ssgAssets = ssgG
-            .selectAll<SVGGElement, LocationGroup>('.asset')
-            .data(ssg.locations)
-            .join('g')
-            .attr('class', 'asset')
-            .attr('id', (loc) => `asset-${loc.locationID}`)
-            .attr('transform', (loc) => `translate(0, ${loc.y})`)
-            .style('cursor', 'pointer')
-            .attr('role', 'button')
-            .attr('tabindex', 0)
-            .attr('aria-label', (loc) => `Open details for ${loc.units[0]?.name || loc.locationID}`)
-            .on('click', (event, locData) => { callbacks.onAssetClick?.(locData, event); })
-            .on('keydown', (event, locData) => {
-              if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); callbacks.onAssetClick?.(locData, event); }
-            });
+  for (const sg of subGroups) {
+    const sgG = group
+      .append('g')
+      .attr('class', `subsidiary-asset-group subsidiary-asset-subgroup subsidiary-asset-subgroup--depth${depth}`)
+      .attr('id', `subsidiary-asset-group-${CSS.escape(sg.id)}`)
+      .attr('transform', `translate(${xShift}, ${sg.top})`);
 
-          renderAssetLocations(ssgAssets, getColor, callbacks);
-        }
-      } else {
-        const subG = group
-          .append('g')
-          .attr('class', 'subsidiary-asset-group subsidiary-asset-subgroup')
-          .attr('id', `subsidiary-asset-group-${CSS.escape(sg.id)}`)
-          .attr('transform', `translate(${sgShift}, ${sg.top})`);
+    if (sg.expansion && sg.expansion.subGroups.length > 0) {
+      // Sub-group itself is expanded — recurse, don't render assets at this level
+      renderExpandedSubGroups(group, sg.expansion.subGroups, depth + 1, getColor, callbacks);
+    } else {
+      // Leaf sub-group — render its asset locations
+      const sgAssets = sgG
+        .selectAll<SVGGElement, LocationGroup>('.asset')
+        .data(sg.locations)
+        .join('g')
+        .attr('class', 'asset')
+        .attr('id', (loc) => `asset-${loc.locationID}`)
+        .attr('transform', (loc) => `translate(0, ${loc.y})`)
+        .style('cursor', 'pointer')
+        .attr('role', 'button')
+        .attr('tabindex', 0)
+        .attr('aria-label', (loc) => `Open details for ${loc.units[0]?.name || loc.locationID}`)
+        .on('click', (event, locData) => { callbacks.onAssetClick?.(locData, event); })
+        .on('keydown', (event, locData) => {
+          if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); callbacks.onAssetClick?.(locData, event); }
+        });
 
-        const subAssets = subG
-          .selectAll<SVGGElement, LocationGroup>('.asset')
-          .data(sg.locations)
-          .join('g')
-          .attr('class', 'asset')
-          .attr('id', (loc) => `asset-${loc.locationID}`)
-          .attr('transform', (loc) => `translate(0, ${loc.y})`)
-          .style('cursor', 'pointer')
-          .attr('role', 'button')
-          .attr('tabindex', 0)
-          .attr('aria-label', (loc) => `Open details for ${loc.units[0]?.name || loc.locationID}`)
-          .on('click', (event, locData) => { callbacks.onAssetClick?.(locData, event); })
-          .on('keydown', (event, locData) => {
-            if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); callbacks.onAssetClick?.(locData, event); }
-          });
-
-        renderAssetLocations(subAssets, getColor, callbacks);
-      }
+      renderAssetLocations(sgAssets, getColor, callbacks);
     }
   }
 }
@@ -329,16 +321,17 @@ export function drawCommonAssetLines(
   const lineData: LineDatum[][] = [];
 
   function findLocation(
-    subsidiary: SubsidiaryGroupData,
-    assetId: string
+    node: SubsidiaryGroupData,
+    assetId: string,
+    xShiftAcc = 0
   ): { location: LocationGroup; locationTop: number; xShift: number } | null {
-    const direct = subsidiary.locations.find((loc) => loc.units.some((u) => u.id === assetId));
-    if (direct) return { location: direct, locationTop: subsidiary.top, xShift: 0 };
+    const direct = node.locations.find((loc) => loc.units.some((u) => u.id === assetId));
+    if (direct) return { location: direct, locationTop: node.top, xShift: xShiftAcc };
 
-    if (subsidiary.expansion) {
-      for (const sg of subsidiary.expansion.subGroups) {
-        const inSub = sg.locations.find((loc) => loc.units.some((u) => u.id === assetId));
-        if (inSub) return { location: inSub, locationTop: sg.top, xShift: LAYOUT.expansionShift };
+    if (node.expansion) {
+      for (const sg of node.expansion.subGroups) {
+        const result = findLocation(sg, assetId, xShiftAcc + LAYOUT.expansionShift);
+        if (result) return result;
       }
     }
 

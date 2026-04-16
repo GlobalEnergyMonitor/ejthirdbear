@@ -95,15 +95,11 @@ function drawNestedSubRegions(
   stemX: number,
   r: number,
   xE: number,
-  markR: number,
-  depth = 0
+  markR: number
 ): void {
   const subGroups = parent.expansion!.subGroups;
   const lastSg = subGroups[subGroups.length - 1];
-  // Top-level subsidiary pies sit at top + 26 + markR; sub-subsidiary pies sit at top (lineRelY = -26)
-  const stemStartY = depth === 0
-    ? parent.top + 26 + markR
-    : parent.top + markR;
+  const stemStartY = parent.top + 26 + markR;
 
   group.append('line')
     .attr('class', 'expansion-stem')
@@ -122,7 +118,7 @@ function drawNestedSubRegions(
       .style('fill', 'none').style('stroke', COL_STROKE).style('stroke-width', '1.5px');
 
     if (sg.expansion && sg.expansion.subGroups.length > 0) {
-      drawNestedSubRegions(group, sg, stemX + r, r, xE, markR, depth + 1);
+      drawNestedSubRegions(group, sg, stemX + r, r, xE, markR);
     }
   }
 }
@@ -200,20 +196,19 @@ function drawSubGroupLabelsRecursive(
       }
     }
 
-    // Label just above the line
+    // Label above the line
     subLabel.append('text')
-      .attr('x', isDirect ? 0 : labelX).attr('y', lineRelY - markR)
-      .attr('dy', '-0.15em')
+      .attr('x', isDirect ? 0 : labelX).attr('y', lineRelY - markR - 2)
+      .attr('dy', '-0.35em')
       .style('fill', colors.navy).style('font-size', '14px')
       .style('font-weight', 500).style('letter-spacing', '0.03em')
       .text(name);
 
     if (sg.intermediary_data) {
-      // Start from just below the pie (pie center at lineRelY = -26, bottom at lineRelY + markR)
       drawIntermediaryPathForItem(
         subLabel as unknown as Selection<SVGGElement, SubsidiaryGroupData, null, undefined>,
-        sg, Math.round(lineRelY + markR * 2 + 6),
-        { ...options, xOffset: originX - LAYOUT.subsidX }
+        sg, Math.round(lineRelY + markR + 2),
+        { ...options, xOffset: originX - LAYOUT.subsidX, compact: true }
       );
     }
 
@@ -332,7 +327,7 @@ export function drawSubsidiaryLabels(
   const BAR_X = 200;
   items.each(function (d) {
     drawMiniBarChartsForItem(select(this), d, markR - 4, BAR_X);
-    drawIntermediaryPathForItem(select(this), d, markR * 2 + 18, options);
+    drawIntermediaryPathForItem(select(this), d, markR * 2 + 22, options);
   });
 
   // Draw sub-group labels for expanded subsidiaries.
@@ -503,6 +498,7 @@ function drawIntermediaryPathForItem(
     expandedSubIds?: Set<string>;
     onExpandSubsidiary?: (id: string) => void;
     xOffset?: number;
+    compact?: boolean;
   }
 ): void {
   if (d.id === 'Directly owned') return;
@@ -523,20 +519,22 @@ function drawIntermediaryPathForItem(
   const g = item.append('g')
     .attr('class', 'intermediary-path-group')
     .style('cursor', canExpand ? 'pointer' : 'default')
-    .on('mouseenter', function () {
-      if (!isExpanded) showMultilineTooltip(g as unknown as Selection<SVGGElement, unknown, null, undefined>, 14, startY - 6, tooltipLines);
-    })
-    .on('mouseleave', function () {
-      g.select('.ownership-chain-tooltip').remove();
-    })
     .on('click', () => {
       if (canExpand) options?.onExpandSubsidiary?.(d.id);
     });
 
+  if (!isExpanded) {
+    g.on('mouseenter', function (event: MouseEvent) {
+      const [mx, my] = d3Pointer(event, item.node()!);
+      showMultilineTooltip(g as unknown as Selection<SVGGElement, unknown, null, undefined>, mx + 10, my - 50, tooltipLines);
+    }).on('mouseleave', function () {
+      g.select('.ownership-chain-tooltip').remove();
+    });
+  }
+
   const iconR = 8;
   const btnW = 74;
-  // Use 60% of yPadding for the curve so it's tighter but keeps the same shape
-  const curveR = Math.round(radius * 0.6);
+  const curveR = options?.compact ? Math.round(radius * 0.25) : Math.round(radius * 0.8);
   const lineY = startY + curveR;
   // Icon: when collapsed, sits just after the circles; when expanded, aligns under "% ownership"
   const maxCircles = canExpand ? Math.min(intermediary.total_descendants, 8) : 0;
@@ -550,8 +548,12 @@ function drawIntermediaryPathForItem(
     const xS = 0;
     const yS = startY;
     const path = d3Path();
-    path.moveTo(xS, yS - 4);
-    path.lineTo(xS, yS);
+    if (options?.compact) {
+      path.moveTo(xS, yS);
+    } else {
+      path.moveTo(xS, yS - 16);
+      path.lineTo(xS, yS);
+    }
     path.bezierCurveTo(xS, yS + curveR * 0.8, xS + curveR * 0.2, lineY, xS + curveR, lineY);
     // Line ends just before the icon
     path.lineTo(iconCX - iconR - 2, lineY);

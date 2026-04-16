@@ -562,13 +562,14 @@ export function expandSubsidiary(
 ): SubsidiaryExpansion {
   const parentUnitMap = new Map<string, ChartUnit>(parentUnits.map((u) => [u.id, u]));
 
-  // Single pass over paths to build all expansion data.
-  // route[0] = spotlight root, route[1] = subId, route[2] = direct child of subId.
-  // A node X is a direct child of subId when route[1] === subId && route[2] === X.
+  // Single pass over ALL paths to build expansion data for subId at any depth.
+  // We find subId's position dynamically using lastIndexOf so this works whether subId
+  // is a top-level subsidiary (route[1]) or a deeper node (route[2], route[3], …).
+  // Using lastIndexOf guards against circular paths that repeat a node ID.
 
   const subSubIdSet = new Set<string>();
-  const directAssetIds: string[] = [];
-  const subToUnitSets = new Map<string, Set<string>>(); // ssId → asset IDs
+  const directAssetIdSet = new Set<string>(); // Set prevents duplicates across multi-path assets
+  const subToUnitSets = new Map<string, Set<string>>(); // direct-child entity ID → asset IDs
   const ssDescendantEntityIds = new Map<string, Set<string>>();
   const ssMaxDepth = new Map<string, number>();
 
@@ -576,35 +577,42 @@ export function expandSubsidiary(
     const node = graphNodeMap.get(nodeId);
     if (!node) continue;
 
-    // Classify direct children of subId (route[1] === subId && route[2] === nodeId)
-    const isDirectChild = nodePaths.some((p) => p.route[1] === subId && p.route[2] === nodeId);
-    if (isDirectChild) {
-      if (node.type === 'entity') subSubIdSet.add(nodeId);
-      else if (parentUnitMap.has(nodeId)) directAssetIds.push(nodeId);
-    }
+    for (const p of nodePaths) {
+      const subIdx = p.route.lastIndexOf(subId);
+      if (subIdx < 0) continue; // path doesn't pass through subId
 
-    if (node.type === 'asset' && parentUnitMap.has(nodeId)) {
-      // Assign asset to each sub-subsidiary it's reachable through
-      for (const p of nodePaths) {
-        if (p.route[1] !== subId) continue;
-        const ssId = p.route[2];
-        if (!ssId) continue; // direct child of subId itself (handled above)
-        if (!subToUnitSets.has(ssId)) subToUnitSets.set(ssId, new Set());
-        subToUnitSets.get(ssId)!.add(nodeId);
-      }
-    } else if (node.type === 'entity') {
-      // Track intermediary entity descendants per sub-subsidiary
-      for (const p of nodePaths) {
-        if (p.route[1] !== subId) continue;
-        const ssId = p.route[2];
-        if (!ssId || nodeId === ssId) continue; // skip the ss itself
-        if (!ssDescendantEntityIds.has(ssId)) ssDescendantEntityIds.set(ssId, new Set());
-        ssDescendantEntityIds.get(ssId)!.add(nodeId);
-        // depth from ssId = route.length - 3 (subtract root, subId, ssId)
-        ssMaxDepth.set(ssId, Math.max(ssMaxDepth.get(ssId) ?? 0, p.route.length - 3));
+      const childId = p.route[subIdx + 1]; // immediate child of subId in this path
+      if (!childId) continue; // subId is terminal in this path
+
+      if (childId === nodeId) {
+        // nodeId is a direct child of subId
+        if (node.type === 'entity') {
+          subSubIdSet.add(nodeId);
+        } else if (node.type === 'asset' && parentUnitMap.has(nodeId)) {
+          directAssetIdSet.add(nodeId);
+        }
+      } else if (node.type === 'asset' && parentUnitMap.has(nodeId)) {
+        // Asset deeper than a direct child — attribute it to childId (direct child entity)
+        const childNode = graphNodeMap.get(childId);
+        if (childNode?.type === 'entity') {
+          if (!subToUnitSets.has(childId)) subToUnitSets.set(childId, new Set());
+          subToUnitSets.get(childId)!.add(nodeId);
+        }
+      } else if (node.type === 'entity' && nodeId !== subId && childId !== nodeId) {
+        // Intermediary entity deeper than the direct child — track under childId
+        const childNode = graphNodeMap.get(childId);
+        if (childNode?.type === 'entity') {
+          if (!ssDescendantEntityIds.has(childId)) ssDescendantEntityIds.set(childId, new Set());
+          ssDescendantEntityIds.get(childId)!.add(nodeId);
+          const nodeIdx = p.route.lastIndexOf(nodeId);
+          const depth = nodeIdx >= 0 ? nodeIdx - subIdx - 1 : 1;
+          ssMaxDepth.set(childId, Math.max(ssMaxDepth.get(childId) ?? 0, depth));
+        }
       }
     }
   }
+
+  const directAssetIds = [...directAssetIdSet];
 
   // Assets in parentUnits not reached through any sub-subsidiary → directly owned by subId
   const matchedAssetIds = new Set<string>(directAssetIds);
