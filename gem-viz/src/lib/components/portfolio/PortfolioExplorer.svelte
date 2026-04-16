@@ -745,6 +745,32 @@
 
     const validLeafIds = new Set(currentGroups.map((g) => g.projectID));
     const hierData = buildHierarchy(treePaths.pathStrings, validLeafIds);
+
+    // Collapse linear chains of ~100% single-child intermediaries
+    // e.g. Drax Group → Drax Group Holdings → Drax Corporate → Drax Smart Gen Holdco
+    // becomes one node with collapsedEntities for tooltip
+    const edgeValueMap = new Map();
+    for (const e of apiData.edges) {
+      edgeValueMap.set(`${e.source}→${e.target}`, e.value);
+    }
+    function collapseLinearChains(node) {
+      for (const child of node.children) {
+        collapseLinearChains(child);
+      }
+      while (
+        node.children.length === 1 &&
+        node.children[0].children.length > 0
+      ) {
+        const only = node.children[0];
+        const edgeVal = edgeValueMap.get(`${node.name}→${only.name}`);
+        if (edgeVal != null && edgeVal < 95) break; // don't collapse partial ownership
+        if (!node.collapsedEntities) node.collapsedEntities = [];
+        node.collapsedEntities.push(only.name);
+        node.children = only.children;
+      }
+    }
+    if (hierData.children) collapseLinearChains(hierData);
+
     const root = d3Hierarchy.hierarchy(hierData);
 
     // Calculate height: count gap types between consecutive leaves
@@ -893,7 +919,10 @@
       .style('fill', colors.navy)
       .text((d) => {
         const name = d.entityName || '';
-        return name.length > 20 ? name.slice(0, 18) + '…' : name;
+        const collapsed = d.data.collapsedEntities;
+        const suffix = collapsed && collapsed.length > 0 ? ` (+${collapsed.length})` : '';
+        const label = name + suffix;
+        return label.length > 24 ? label.slice(0, 22) + '…' : label;
       });
 
     // Ownership percentage labels below each intermediary node (skip root)
