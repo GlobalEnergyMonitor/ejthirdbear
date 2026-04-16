@@ -1854,12 +1854,11 @@
     line-height: 1.4;
   }
   .embed-mode .chart-layout {
-    flex-direction: column;
+    flex-direction: row;
   }
   .embed-mode .filter-sidebar {
-    flex: none;
-    width: 100%;
-    max-height: none;
+    width: 220px;
+    flex-shrink: 0;
   }
   .sidebar-header {
     padding-bottom: 10px;
