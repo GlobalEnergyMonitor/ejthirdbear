@@ -754,8 +754,8 @@
     const availableHeight = Math.max(200, containerHeight - 80);
     const calcHeight = Math.max(contentHeight, availableHeight);
 
-    const margin = { left: 60, top: 20, right: 8, bottom: 20 };
-    const width = 220 - margin.left - margin.right;
+    const margin = { left: 50, top: 20, right: 4, bottom: 20 };
+    const width = 200 - margin.left - margin.right;
     const height = calcHeight;
 
     const tree = d3Hierarchy
@@ -978,8 +978,8 @@
     const labelX = 28;
     // Condense row height when showing tree with many assets so they fit
     const assetMarkH = showTree && groups.length > 15
-      ? Math.max(22, Math.floor((containerHeight - 100) / groups.length))
-      : 34;
+      ? Math.max(20, Math.floor((containerHeight - 100) / groups.length))
+      : 28;
     const assetMarkSingle = Math.min(22, assetMarkH);
 
     // --- Grid layout: fit 2 columns to container width, grow tall ---
@@ -1112,12 +1112,14 @@
         });
 
       // Unit circles via shared molecule renderer
+      // Dot radius scales down as unit count grows for readability
       const N = proj.units.length;
-      const maxClusterDiameter = Math.min(assetMarkH - 4, N > 1 ? 28 : assetMarkH - 4);
+      const dotR = N <= 1 ? unitR : N <= 4 ? 6 : N <= 8 ? 5 : N <= 15 ? 4 : 3;
+      const maxClusterDiameter = Math.min(assetMarkH - 4, N > 1 ? 24 : assetMarkH - 4);
       const { ringRadius: molRingR, unitRadius: molUnitR } = computeMoleculeRadii(
         maxClusterDiameter,
         N,
-        { maxUnitRadius: N > 4 ? 5 : unitR }
+        { maxUnitRadius: dotR }
       );
 
       const moleculeUnits = proj.units.map((unit) => ({
@@ -1852,6 +1854,11 @@
     max-height: var(--chart-max-height, calc(100vh - 200px));
     font-size: 12px;
     line-height: 1.4;
+  }
+  .embed-mode {
+    max-width: none;
+    margin: 0;
+    padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
   }
   .embed-mode .chart-layout {
     flex-direction: column;
