@@ -1037,12 +1037,12 @@
         .attr('data-project-id', proj.projectID)
         .attr('transform', `translate(${x}, ${y})`);
 
-      // Hover background
-      row
+      // Hover background — sized to content, not full column
+      const hoverRect = row
         .append('rect')
         .attr('x', -(assetMarkH / 2))
         .attr('y', -assetMarkSingle / 2)
-        .attr('width', colWidth - 10)
+        .attr('width', 10) // placeholder, resized after content is drawn
         .attr('height', assetMarkSingle)
         .attr('rx', assetMarkSingle * 0.25)
         .style('fill', 'transparent')
@@ -1213,6 +1213,12 @@
           .style('fill', colors.gray400)
           .text(`${fmtPct(cumPct)}% eff.`);
       }
+
+      // Resize hover rect to fit actual content width
+      try {
+        const bbox = row.node().getBBox();
+        hoverRect.attr('width', bbox.width + assetMarkH);
+      } catch (e) { /* getBBox can fail if not rendered yet */ }
     });
   }
 
