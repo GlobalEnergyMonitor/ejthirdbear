@@ -1112,9 +1112,9 @@
         });
 
       // Unit circles via shared molecule renderer
-      // Dot radius scales down as unit count grows for readability
+      // Dot radius smoothly scales down as unit count grows: 8px→3px over 1→20+ units
       const N = proj.units.length;
-      const dotR = N <= 1 ? unitR : N <= 4 ? 6 : N <= 8 ? 5 : N <= 15 ? 4 : 3;
+      const dotR = N <= 1 ? unitR : Math.max(3, unitR / Math.sqrt(N * 0.5));
       const maxClusterDiameter = Math.min(assetMarkH - 4, N > 1 ? 24 : assetMarkH - 4);
       const { ringRadius: molRingR, unitRadius: molUnitR } = computeMoleculeRadii(
         maxClusterDiameter,
