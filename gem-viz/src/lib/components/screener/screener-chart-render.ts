@@ -15,7 +15,7 @@ import {
   drawSubsidiaryLabels,
   drawSubsidiarySubRegions,
 } from './screener-chart-subsidiaries';
-import { drawAssetGroups, drawCommonAssetLines } from './screener-chart-assets';
+import { drawAssetGroups, drawCommonAssetLines, type AssetRenderCallbacks } from './screener-chart-assets';
 import { drawLegend, type ColorField } from './screener-chart-legend';
 
 // ---------------------------------------------------------------------------
@@ -37,6 +37,9 @@ export interface RenderOptions {
   assetHref?: (_assetId: string) => string;
   expandedSubIds?: Set<string>;
   onExpandSubsidiary?: (_subId: string) => void;
+  onAssetHover?: AssetRenderCallbacks['onAssetHover'];
+  onAssetHoverOut?: AssetRenderCallbacks['onAssetHoverOut'];
+  onAssetClick?: AssetRenderCallbacks['onAssetClick'];
 }
 
 // ---------------------------------------------------------------------------
@@ -119,7 +122,11 @@ export function renderChart(
   drawSubsidiaryRegions(regionGroup, subsidiaryGroups, contentHeight, MARGIN.top);
   drawSubsidiarySubRegions(regionGroup, subsidiaryGroups, MARGIN.top);
   drawSubsidiaryLabels(labelGroup, subsidiaryGroups, chartData, expandOptions);
-  drawAssetGroups(assetGroup, subsidiaryGroups, getUnitColor, assetHref);
+  drawAssetGroups(assetGroup, subsidiaryGroups, getUnitColor, assetHref, {
+    onAssetHover: options.onAssetHover,
+    onAssetHoverOut: options.onAssetHoverOut,
+    onAssetClick: options.onAssetClick,
+  });
   drawCommonAssetLines(assetGroup, lineGroup, subsidiaryGroups, chartData, contentHeight);
 
   // --- Vertical connection line (appended last so it renders above regions) ---

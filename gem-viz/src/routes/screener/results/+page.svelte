@@ -49,6 +49,8 @@
   import { getAssetClassById } from '$lib/data-config/asset-class-definitions';
   import type { AssetClass } from '$lib/data-config/asset-class-definitions';
   import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
+  import { fetchAssetClasses, extractClassFieldKeys } from '$lib/api/catalog-api';
+  import type { CatalogAssetClass } from '$lib/api/catalog-api';
 
   // Embed mode: ?embed=true hides page chrome; state mirrored to hash for shareability
   const isEmbed = $derived($page.url.searchParams.get('embed') === 'true');
@@ -90,6 +92,31 @@
     selectedClasses.length > 0 ? selectedClasses[0]?.name || selectedClasses[0]?.tracker || '' : ''
   );
   const chartTrackerSlug = $derived(selectedClasses.length > 0 ? selectedClasses[0]?.id || '' : '');
+
+  // Asset-class field keys for the chart modal — extracted from the class filter URL params.
+  // Fetched once (1-hour TTL) and derived from the selected class IDs.
+  let catalogClasses: CatalogAssetClass[] = $state([]);
+  $effect(() => {
+    fetchAssetClasses().then((c) => { catalogClasses = c; }).catch(() => {});
+  });
+
+  const classFieldKeys = $derived.by((): string[] => {
+    if (!catalogClasses.length || !selectedClasses.length) return [];
+    const cls = selectedClasses[0];
+    // Use selected subclass IDs when available, otherwise the parent class ID
+    const ids: string[] = cls.selectedSubClasses?.length
+      ? cls.selectedSubClasses
+      : [cls.id || cls.assetClassId || ''].filter(Boolean);
+    const seen = new Set<string>();
+    const keys: string[] = [];
+    for (const id of ids) {
+      const entry = catalogClasses.find((c) => c.id === id);
+      for (const key of extractClassFieldKeys(entry?.url)) {
+        if (!seen.has(key)) { seen.add(key); keys.push(key); }
+      }
+    }
+    return keys;
+  });
 
   // Show parse error when classesParam exists but selectedClasses is empty
   const parseError = $derived(
@@ -922,6 +949,7 @@
           statusFilter={selectedClasses[0]?.filters?.statuses}
           trackerFilter={selectedClasses[0]?.gemTrackers}
           catalogUrl={selectedClasses[0]?.catalogUrl}
+          classFieldKeys={classFieldKeys}
           fillHeight={true}
         />
       </div>

@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
   /**
    * AssetScreenerChart — Svelte wrapper for the D3 ownership screener chart.
    *
@@ -19,8 +19,11 @@
     expandSubsidiary,
     buildSubsidiaryGroups,
   } from './screener-chart-data';
+  import type { LocationGroup } from './screener-chart-data';
   import { renderChart } from './screener-chart-render';
-  import { matchesStatusFilter } from '$lib/data-config/tracker-schema';
+  import { cleanAssetName } from './screener-utils';
+  import type { GraphNode } from '$lib/ownership-api';
+  import { matchesStatusFilter, getStatusGroupId } from '$lib/data-config/tracker-schema';
   import Spinner from '$lib/components/feedback/Spinner.svelte';
 
   const API_BASE = import.meta.env?.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-api.thirdbear.net';
@@ -42,6 +45,8 @@
      * the ownership graph to only assets in the selected asset class.
      */
     catalogUrl = undefined,
+    /** Field keys from the selected asset class filter URL (e.g. ['asset_type', 'captive']). */
+    classFieldKeys = [] as string[],
     onDataLoaded = undefined,
     onContainerReady = undefined,
     fillHeight = false,
@@ -68,6 +73,14 @@
   // Subsidiary expansion state
   let expansions = $state(new Map()); // Map<subId, SubsidiaryExpansion>
 
+  // Hover tooltip state (D3 mouseover → Svelte)
+  let hoveredAsset: LocationGroup | null = $state(null);
+  let tooltipPos = $state({ x: 0, y: 0 });
+
+  // Click modal state
+  let selectedAsset: LocationGroup | null = $state(null);
+  let modalPos = $state({ x: 0, y: 0 });
+
   // Stable reference to the filtered chart data for use in toggleExpansion
   let currentChartData = null;
 
@@ -92,6 +105,140 @@
     return Number.isInteger(value) ? `${value}%` : `${value.toFixed(1)}%`;
   }
 
+  /** Max ownership % across all units in a location (used in tooltip/modal). */
+  function maxOwnershipPct(loc: LocationGroup): number {
+    return Math.max(...loc.units.map((u) => u.spotlightOwnershipSharePct ?? 0));
+  }
+
+  /** Look up GraphNode for a unit ID from the cached chart data. */
+  function graphNodeFor(unitId: string): GraphNode | undefined {
+    return currentChartData?.graphNodeMap?.get(unitId);
+  }
+
+  /** Get project_name from a ChartUnit (field exists at runtime but isn't in the TS type). */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function projectName(unit: any): string | undefined {
+    return unit?.project_name;
+  }
+
+  /** Build clamped modal style string. */
+  function modalStyle(x: number, y: number): string {
+    const p = clampPos(x, y, 760, 520);
+    return `left:${p.left}px; top:${p.top}px;`;
+  }
+
+  /** Clamp tooltip so it stays within the sticky-section container. */
+  function clampPos(x: number, y: number, w = 300, h = 200) {
+    const containerW = (scrollEl as HTMLElement | null)?.offsetWidth ?? 800;
+    const containerH = (scrollEl as HTMLElement | null)?.offsetHeight ?? 600;
+    return {
+      left: Math.min(x + 10, containerW - w - 8),
+      top: Math.min(y + 14, containerH - h - 8),
+    };
+  }
+
+  function handleAssetHover(loc: LocationGroup, event: MouseEvent) {
+    hoveredAsset = loc;
+    // Position relative to the component root (scrollEl), accounting for its scroll offset.
+    // This avoids issues with position:fixed being broken by ancestor CSS transforms.
+    if (scrollEl) {
+      const rect = (scrollEl as HTMLElement).getBoundingClientRect();
+      tooltipPos = {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top + (scrollEl as HTMLElement).scrollTop,
+      };
+    } else {
+      tooltipPos = { x: event.clientX, y: event.clientY };
+    }
+  }
+
+  function handleAssetHoverOut() {
+    hoveredAsset = null;
+  }
+
+  function handleAssetClick(loc: LocationGroup, event: MouseEvent) {
+    hoveredAsset = null;
+    selectedAsset = loc;
+    modalPos = { x: event.clientX, y: event.clientY };
+    classFieldData = null;
+  }
+
+  // Fetched full location data for the selected location (for class-specific fields).
+  // Map keyed by asset_id → full unit record from /locations/{id}.
+  let classFieldData: Map<string, Record<string, unknown>> | null = $state(null);
+  // All units at the location (not filtered by asset class) — used to populate the table.
+  let locationUnits: Record<string, unknown>[] | null = $state(null);
+
+  $effect(() => {
+    const locId = selectedAsset?.locationID;
+    if (!locId || !classFieldKeys.length) { classFieldData = null; locationUnits = null; return; }
+    console.log('[AssetScreenerChart] class field keys:', classFieldKeys);
+    fetch(`${API_BASE}/locations/${encodeURIComponent(locId)}?format=json`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((d: { units?: Record<string, unknown>[] } | null) => {
+        console.log('[AssetScreenerChart] /locations/ response:', d);
+        if (!d?.units) { classFieldData = null; locationUnits = null; return; }
+        const map = new Map<string, Record<string, unknown>>();
+        for (const u of d.units) {
+          if (typeof u.asset_id === 'string') map.set(u.asset_id, u);
+        }
+        classFieldData = map;
+        locationUnits = d.units;
+      })
+      .catch(() => { classFieldData = null; locationUnits = null; });
+  });
+
+  /** Find the tracker-specific nested fields object (key ends with _fields, e.g. iron_steel_plant_fields). */
+  function getTrackerFields(unitData: Record<string, unknown>): Record<string, unknown> | null {
+    for (const key of Object.keys(unitData)) {
+      if (key.endsWith('_fields') && unitData[key] !== null && typeof unitData[key] === 'object') {
+        return unitData[key] as Record<string, unknown>;
+      }
+    }
+    return null;
+  }
+
+  /** Format a snake_case field key as Title Case for display. */
+  function fieldLabel(key: string): string {
+    return key.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+  }
+
+  /** Get a class field value — checks tracker nested fields, then top-level unit data, then GraphNode. */
+  function classFieldValue(key: string, unitId: string): string {
+    const unitData = classFieldData?.get(unitId);
+    if (unitData) {
+      // Check tracker-specific nested object first (e.g. iron_steel_plant_fields)
+      const trackerFields = getTrackerFields(unitData);
+      if (trackerFields && key in trackerFields) {
+        const v = trackerFields[key];
+        if (v === null || v === undefined || v === '') return '—';
+        if (typeof v === 'boolean') return v ? 'Yes' : 'No';
+        return String(v);
+      }
+      // Check top-level unit data (asset_type, country, capacity, etc.)
+      if (key in unitData) {
+        const v = unitData[key];
+        if (v === null || v === undefined || v === '') return '—';
+        if (typeof v === 'boolean') return v ? 'Yes' : 'No';
+        return String(v);
+      }
+    }
+    // Fall back to GraphNode
+    const node = graphNodeFor(unitId);
+    if (node && key in node) {
+      const v = (node as unknown as Record<string, unknown>)[key];
+      if (v === null || v === undefined || v === '') return '—';
+      return String(v);
+    }
+    return '—';
+  }
+
+  const assetCallbacks = {
+    onAssetHover: handleAssetHover,
+    onAssetHoverOut: handleAssetHoverOut,
+    onAssetClick: handleAssetClick,
+  };
+
   function rerenderWithExpansions(exp) {
     if (!container || !currentChartData) return;
     const savedScroll = scrollEl?.scrollTop ?? 0;
@@ -108,6 +255,7 @@
       assetHref: (assetId) => `${base}/asset/${encodeURIComponent(assetId)}`,
       expandedSubIds: new Set(exp.keys()),
       onExpandSubsidiary: toggleExpansion,
+      ...assetCallbacks,
     });
     if (scrollEl) scrollEl.scrollTop = savedScroll;
   }
@@ -298,6 +446,7 @@
         assetHref: (assetId) => `${base}/asset/${encodeURIComponent(assetId)}`,
         expandedSubIds: new Set(expansions.keys()),
         onExpandSubsidiary: toggleExpansion,
+        ...assetCallbacks,
       });
 
       loading = false;
@@ -377,6 +526,121 @@
   <div class="chart-wrapper" class:hidden={loading || !!error || isEmpty}>
     <div bind:this={container} class="chart-render"></div>
   </div>
+
+  <!-- Hover tooltip — project name + ownership % -->
+  {#if hoveredAsset}
+    {@const tt = clampPos(tooltipPos.x, tooltipPos.y, 260, 60)}
+    {@const pct = maxOwnershipPct(hoveredAsset)}
+    {@const u0 = hoveredAsset.units[0]}
+    <div class="asset-tooltip" style="left:{tt.left}px; top:{tt.top}px;">
+      <div class="tt-name">{cleanAssetName(u0.name, projectName(u0))}</div>
+      {#if pct > 1 && pct < 100}
+        <div class="tt-eff">{pct % 1 === 0 ? pct : pct.toFixed(1)}% ownership</div>
+      {/if}
+    </div>
+  {/if}
+
+  <!-- Click modal — unit-level table -->
+  {#if selectedAsset}
+    {@const u0 = selectedAsset.units[0]}
+    {@const node0 = graphNodeFor(u0.id)}
+    {@const pct = maxOwnershipPct(selectedAsset)}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="modal-backdrop"
+      onclick={() => (selectedAsset = null)}
+      onkeydown={(e) => e.key === 'Escape' && (selectedAsset = null)}
+    >
+      <div
+        class="asset-modal"
+        role="dialog"
+        tabindex="-1"
+        style={modalStyle(modalPos.x, modalPos.y)}
+        onclick={(e) => e.stopPropagation()}
+        onkeydown={(e) => e.key === 'Escape' && (selectedAsset = null)}
+      >
+        <button class="modal-close" onclick={() => (selectedAsset = null)}>&times;</button>
+        <div class="modal-header">
+          <h4>{cleanAssetName(u0.name, projectName(u0))}</h4>
+          {#if selectedAsset.units.length > 1}
+            <span class="unit-badge">{selectedAsset.units.length} units</span>
+          {/if}
+        </div>
+        <div class="tt-meta">
+          {node0?.asset_type || u0.tracker || ''}{#if node0?.country} · {node0.country}{/if}
+        </div>
+        {#if pct > 1 && pct < 100}
+          <div class="tt-eff" style="margin-bottom:6px">
+            {pct % 1 === 0 ? pct : pct.toFixed(1)}% ownership
+          </div>
+        {/if}
+        <table class="tt-table">
+          <thead>
+            <tr>
+              <th>Unit</th>
+              <th>Status</th>
+              <th class="num">Capacity</th>
+              {#each classFieldKeys as key}
+                <th>{fieldLabel(key)}</th>
+              {/each}
+            </tr>
+          </thead>
+          <tbody>
+            {#if locationUnits}
+              {#each locationUnits as locUnit}
+                {@const assetId = String(locUnit.asset_id ?? '')}
+                {@const statusAgg = getStatusGroupId(String(locUnit.operating_status ?? ''))}
+                <tr>
+                  <td class="unit-name">{locUnit.asset_name ?? '—'}</td>
+                  <td>
+                    <span
+                      class="status-dot"
+                      style="background:{statusColors[statusAgg] || '#999'}"
+                    ></span>{locUnit.operating_status ?? '—'}
+                  </td>
+                  <td class="num">
+                    {locUnit.capacity_value != null
+                      ? `${Number(locUnit.capacity_value).toLocaleString()} ${locUnit.capacity_unit ?? 'MW'}`
+                      : '—'}
+                  </td>
+                  {#each classFieldKeys as key}
+                    <td>{classFieldValue(key, assetId)}</td>
+                  {/each}
+                </tr>
+              {/each}
+            {:else}
+              {#each selectedAsset.units as unit}
+                {@const node = graphNodeFor(unit.id)}
+                <tr>
+                  <td class="unit-name">{unit.name}</td>
+                  <td>
+                    <span
+                      class="status-dot"
+                      style="background:{statusColors[unit.status_agg] || '#999'}"
+                    ></span>{unit.status || '—'}
+                  </td>
+                  <td class="num">
+                    {node?.capacity_value
+                      ? `${node.capacity_value.toLocaleString()} ${node.capacity_unit || 'MW'}`
+                      : '—'}
+                  </td>
+                  {#each classFieldKeys as key}
+                    <td>{classFieldValue(key, unit.id)}</td>
+                  {/each}
+                </tr>
+              {/each}
+            {/if}
+          </tbody>
+        </table>
+        <a
+          class="asset-link"
+          href="{base}/asset/{encodeURIComponent(u0.id)}"
+          target="_blank"
+          rel="noopener"
+        >View full asset page &rarr;</a>
+      </div>
+    </div>
+  {/if}
 
   <div id="additional-info" class:hidden={loading || !!error || isEmpty}>
     <p>
@@ -677,4 +941,153 @@
   .tracker-colored .legend-mark.cross.cancelled {
     color: #9ca3af;
   }
+
+  /* ---- Hover tooltip ---- */
+  .asset-tooltip {
+    position: absolute;
+    z-index: 1000;
+    pointer-events: none;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    padding: 6px 10px;
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    animation: tt-in 80ms ease-out;
+  }
+  .tt-name {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--gem-navy, #002c40);
+    line-height: 1.2;
+  }
+  .tt-meta {
+    font-size: 10px;
+    color: #999;
+    margin-top: 1px;
+  }
+  .tt-eff {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--gem-teal, #007b7f);
+    margin-top: 1px;
+  }
+  @keyframes tt-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  /* ---- Click modal ---- */
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    background: rgba(0, 0, 0, 0.12);
+  }
+  .asset-modal {
+    position: fixed;
+    z-index: 10001;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.15);
+    padding: 14px 16px;
+    min-width: 320px;
+    max-width: min(760px, 90vw);
+    max-height: 520px;
+    overflow: auto;
+    scrollbar-width: thin;
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  }
+  .modal-close {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    background: none;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    color: #999;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  .modal-close:hover { color: #333; }
+  .modal-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 2px;
+    padding-right: 20px;
+  }
+  .modal-header h4 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--gem-navy, #002c40);
+    line-height: 1.3;
+  }
+  .unit-badge {
+    font-size: 10px;
+    background: #eee;
+    color: #666;
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+  .tt-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+    line-height: 1.4;
+    font-variant-numeric: tabular-nums;
+    border-top: 1px solid #eee;
+    margin-top: 6px;
+  }
+  .tt-table th {
+    text-align: left;
+    font-weight: 600;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #aaa;
+    padding: 4px 6px 3px 0;
+  }
+  .tt-table th.num { text-align: right; }
+  .tt-table td {
+    padding: 3px 12px 3px 0;
+    color: #333;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 180px;
+    border-bottom: 1px solid #f5f5f5;
+  }
+  .tt-table td.num {
+    text-align: right;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+  }
+  .tt-table td.unit-name {
+    max-width: 140px;
+    font-weight: 500;
+  }
+  .status-dot {
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    margin-right: 3px;
+    vertical-align: middle;
+    flex-shrink: 0;
+  }
+  .asset-link {
+    display: inline-block;
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--gem-teal, #007b7f);
+    text-decoration: none;
+    font-weight: 500;
+  }
+  .asset-link:hover { text-decoration: underline; }
 </style>

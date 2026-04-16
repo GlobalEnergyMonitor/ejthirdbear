@@ -304,6 +304,36 @@ export async function fetchAssetClasses(): Promise<CatalogAssetClass[]> {
   return _assetClassesCache;
 }
 
+/**
+ * Parse field names referenced in an asset-class filter URL.
+ *
+ * Strips Django-style lookup suffixes (__isnull, __exact, __icontains, etc.) and
+ * excludes universal screener params (format, limit, offset, status, country, etc.).
+ *
+ * Example: "/assets?asset_type=coal-plant&captive__isnull=false"
+ *   → ['asset_type', 'captive']
+ */
+export function extractClassFieldKeys(url: string | undefined): string[] {
+  if (!url) return [];
+  const qs = url.split('?')[1] ?? '';
+  const params = new URLSearchParams(qs);
+  const excluded = new Set([
+    'format', 'limit', 'offset',
+    'status', 'sub_status', 'country',
+    'asset_class',
+  ]);
+  const seen = new Set<string>();
+  const fields: string[] = [];
+  for (const key of params.keys()) {
+    const field = key.replace(/__[a-z_]+$/, ''); // strip Django lookup suffix
+    if (!excluded.has(field) && !seen.has(field)) {
+      seen.add(field);
+      fields.push(field);
+    }
+  }
+  return fields;
+}
+
 let _hierarchyCache: { categories: unknown[] } | null = null;
 let _hierarchyFetchedAt = 0;
 
