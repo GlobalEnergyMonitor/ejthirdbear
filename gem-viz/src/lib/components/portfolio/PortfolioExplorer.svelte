@@ -1045,7 +1045,7 @@
         .attr('width', colWidth - 10)
         .attr('height', assetMarkSingle)
         .attr('rx', assetMarkSingle * 0.25)
-        .style('fill', 'white')
+        .style('fill', 'transparent')
         .style('cursor', 'pointer')
         .style('pointer-events', 'all')
         .on('mouseover', function (event) {
