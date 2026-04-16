@@ -163,8 +163,21 @@
   };
 
   /**
+   * Detect cross-origin context — direct import() from a classic script
+   * loaded cross-origin fails in most browsers. Use inline module script instead.
+   */
+  var isCrossOrigin = (function () {
+    try {
+      return baseUrl && new URL(baseUrl).origin !== window.location.origin;
+    } catch (e) { return false; }
+  })();
+
+  /**
    * Load the widget module from the server (cached per deploy version).
    * Returns the { configure, mountWidget, parseSrc } exports.
+   *
+   * Cross-origin: uses an inline <script type="module"> to perform the import,
+   * since direct import() from a bootstrapper-loaded classic script fails.
    */
   var loadWidgetModule = function () {
     if (widgetModulePromise) return widgetModulePromise;
@@ -176,6 +189,43 @@
       });
       return widgetModulePromise;
     }
+    if (isCrossOrigin) {
+      // Use inline module script — reliable cross-origin
+      widgetModulePromise = new Promise(function (resolve, reject) {
+        getVersion().then(function (v) {
+          var url = baseUrl + '/widgets/index.js' + (v ? '?v=' + v : '?v=' + Date.now());
+          var eventName = 'gem:module-ready-' + Date.now();
+          var modScript = document.createElement('script');
+          modScript.type = 'module';
+          modScript.textContent =
+            'import * as mod from "' + url + '";\n' +
+            'window.__gemModuleResult = mod;\n' +
+            'window.dispatchEvent(new Event("' + eventName + '"));';
+          var onReady = function () {
+            window.removeEventListener(eventName, onReady);
+            var mod = window.__gemModuleResult;
+            delete window.__gemModuleResult;
+            if (mod) resolve(mod);
+            else reject(new Error('Module script did not load'));
+          };
+          window.addEventListener(eventName, onReady);
+          document.head.appendChild(modScript);
+          // Timeout after 15s
+          setTimeout(function () {
+            window.removeEventListener(eventName, onReady);
+            if (!window.__gemModuleResult) {
+              widgetModulePromise = null;
+              reject(new Error('Module load timed out'));
+            }
+          }, LOAD_TIMEOUT_MS);
+        }).catch(function (err) {
+          widgetModulePromise = null;
+          reject(err);
+        });
+      });
+      return widgetModulePromise;
+    }
+    // Same-origin: direct import() works fine
     widgetModulePromise = getVersion().then(function (v) {
       var url = baseUrl + '/widgets/index.js' + (v ? '?v=' + v : '?v=' + Date.now());
       return import(/* webpackIgnore: true */ url);
