@@ -38,7 +38,7 @@
   if (hashEntity && !initialEntityId) initialEntityId = hashEntity;
   if (hashQuery && !initialQuery) initialQuery = hashQuery;
 
-  /** @typedef {{ id: string, name: string, fullName: string|null, country: string }} OwnerResult */
+  /** @typedef {{ id: string, name: string, fullName: string|null, country: string, assetCount?: number }} OwnerResult */
 
   let query = $state(untrack(() => initialQuery));
   let results = $state(/** @type {OwnerResult[]} */ ([]));
@@ -136,8 +136,23 @@
           name: String(e.name || e.entity_name || ''),
           fullName: e.full_name ? String(e.full_name) : null,
           country: String(e.headquarters_country || ''),
+          assetCount: undefined,
         }))
         .filter((e) => e.id);
+
+      // Fetch asset counts in parallel (lightweight limit=0 requests)
+      results.forEach((r, i) => {
+        fetch(`${API_BASE}/assets?owner_entity_id=${encodeURIComponent(r.id)}&limit=0&format=json`, {
+          headers: { Accept: 'application/json' },
+        })
+          .then((res) => res.json())
+          .then((json) => {
+            const count = json.total ?? 0;
+            results[i] = { ...results[i], assetCount: count };
+            results = results; // trigger reactivity
+          })
+          .catch(() => {}); // silently skip on error
+      });
     } catch (err) {
       if (err.name === 'AbortError') return;
       searchError = 'Search failed. Please try again.';
@@ -254,10 +269,13 @@
         <ul class="os-results-list">
           {#each results as item (item.id)}
             <li>
-              <button class="os-result" onclick={() => selectResult(item)}>
+              <button class="os-result" class:has-assets={item.assetCount > 0} onclick={() => selectResult(item)}>
                 <div class="os-result-info">
                   <span class="os-result-name">{item.name}</span>
                   <span class="os-result-meta">
+                    {#if item.assetCount != null}
+                      <span class="os-result-assets">{item.assetCount} asset{item.assetCount !== 1 ? 's' : ''}</span>
+                    {/if}
                     {#if item.country}
                       <span class="os-result-country">{item.country}</span>
                     {/if}
@@ -553,6 +571,19 @@
     gap: var(--space-2);
   }
 
+  .os-result-assets {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+    padding: 1px var(--space-2);
+    background: var(--color-bg-tertiary);
+    border-radius: var(--radius-full);
+    font-variant-numeric: tabular-nums;
+  }
+  .os-result.has-assets .os-result-assets {
+    color: var(--gem-navy, #1D4961);
+    background: rgba(29, 73, 97, 0.1);
+    font-weight: 600;
+  }
   .os-result-country {
     font-size: var(--font-size-xs);
     color: var(--color-text-tertiary);
