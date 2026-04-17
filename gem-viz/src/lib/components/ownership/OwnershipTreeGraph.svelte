@@ -980,6 +980,7 @@
   // Path-aware opacity: nodes/edges not on the active (frozen or hovered) path fade
   function getNodeOpacity(n: LayoutNode): number {
     if (fadedNodeIds.has(n.id)) return OPACITY.fadedNode;
+    if (hoverSource === 'panel' && n.id === hoveredId) return 0.7;
     if (!activeNodeData) return isLargeGraph ? OPACITY.largeGraphBase : 1;
     return n.isAsset || n.id === activeId || activeNodeData.nodesTouched.includes(n.id)
       ? 1
@@ -1420,6 +1421,7 @@
                   .map((e) => {
                     const ownerNode = nodes.find((n) => n.id === e.source);
                     return {
+                      id: ownerNode?.id ?? null,
                       name: ownerNode?.name || ownerNode?.Name || e.source,
                       pct: e.value != null ? Number(e.value) : null,
                       isProxy: false as const,
@@ -1436,7 +1438,7 @@
                       eid === PROXY_NAT_PERSON ? 'natural persons' :
                       eid === PROXY_UNKNOWN ? 'unknown' : null;
                     if (!proxyName) return [];
-                    return [{ name: proxyName, pct: e.value != null ? Number(e.value) : null, isProxy: true as const }];
+                    return [{ id: null, name: proxyName, pct: e.value != null ? Number(e.value) : null, isProxy: true as const }];
                   });
                 return [...real, ...proxy]
                   .filter((o) => o.pct == null || o.pct > 0)
@@ -1458,7 +1460,13 @@
                     <p class="focus-sentence upstream">
                       Owned by:
                       {#each immediateOwners as owner}
-                        <span class="focus-fact" class:warn={owner.isProxy}>{owner.pct != null ? owner.pct.toFixed(1) + '% ' : ''}{owner.name}</span>
+                        <span
+                          class="focus-fact"
+                          class:warn={owner.isProxy}
+                          class:hoverable={!owner.isProxy && owner.id != null}
+                          onmouseenter={() => { if (!owner.isProxy && owner.id != null) { hoveredId = owner.id; hoverSource = 'panel'; } }}
+                          onmouseleave={() => { if (!owner.isProxy && owner.id != null) { hoveredId = null; hoverSource = null; } }}
+                        >{owner.pct != null ? owner.pct.toFixed(1) + '% ' : ''}{owner.name}</span>
                       {/each}
                     </p>
                   {/if}
@@ -2093,6 +2101,14 @@
     background: rgba(180, 100, 30, 0.1);
     border-color: rgba(180, 100, 30, 0.2);
     color: #8b5a1d;
+  }
+  .focus-fact.hoverable {
+    cursor: pointer;
+    transition: background 120ms ease, border-color 120ms ease;
+  }
+  .focus-fact.hoverable:hover {
+    background: rgba(0, 79, 97, 0.2);
+    border-color: rgba(0, 79, 97, 0.35);
   }
   .focus-sentence {
     margin: 0;

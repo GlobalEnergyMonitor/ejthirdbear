@@ -19,9 +19,9 @@
 </script>
 
 <svelte:head>
-  <title>GEM ControlChain — Global Energy Monitor</title>
+  <title>GEM Asset Ownership Explorer — Global Energy Monitor</title>
   <SeoMeta
-    title="GEM ControlChain — Global Energy Monitor"
+    title="GEM Asset Ownership Explorer — Global Energy Monitor"
     description="Explore ownership structures for energy assets worldwide. Search for any asset to see who controls it."
   />
 </svelte:head>
@@ -29,8 +29,8 @@
 <div class="controlchain-page">
   <PageHeader
     breadcrumbs={[{ label: 'Home', href: link('index') }, { label: 'ControlChain' }]}
-    title="GEM ControlChain"
-    lead="Explore ownership structures for energy assets worldwide. Search for any asset to trace who controls it."
+    title="Asset Ownership Explorer"
+    lead="Explore ownership structures for energy assets worldwide. Search for any asset to trace who owns it."
   />
 
   <ControlChainApp {initialQuery} {initialType} {onStateChange} />

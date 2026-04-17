@@ -28,10 +28,11 @@
   ];
 
   const examples = [
-    { name: 'Medupi', kind: 'asset', q: 'Medupi' },
-    { name: 'Bowline Point', kind: 'asset', q: 'Bowline Point' },
-    { name: 'Tavan Tolgoi', kind: 'asset', q: 'Tavan Tolgoi' },
-    { name: 'Nord Stream', kind: 'asset', q: 'Nord Stream' },
+    { name: 'Abuja', kind: 'Gas Plant', q: 'Abuja' },
+    { name: 'Amerisur Binational', kind: 'Oil Pipeline', q: 'Amerisur Binational' },
+    { name: 'Cebu', kind: 'Coal Plant', q: 'Cebu Energy' },
+    { name: 'ArcelorMittal', kind: 'Steel Plant', q: 'ArcelorMittal Bremen' },
+    { name: 'Yala', kind: 'Bio. Plant', q: 'Yala power station' },
   ];
 
   let searchType = $state('assets');
@@ -528,8 +529,7 @@
         {#each examples as ex}
           <button class="cc-chip" onclick={() => searchExample(ex)}>
             <span
-              class="cc-kind"
-              class:asset={ex.kind === 'asset'}
+              class="cc-kind asset"
             >{ex.kind}</span
             >
             {ex.name}
@@ -565,12 +565,6 @@
               class:selected={selected?.id === item.id}
               onclick={() => selectResult(item)}
             >
-              <span
-                class="cc-result-kind"
-                class:asset={item.kind === 'asset'}
-              >
-                Asset
-              </span>
               <div class="cc-result-info">
                 <span class="cc-result-name">{item.name}</span>
                 <span class="cc-result-meta">
@@ -619,7 +613,7 @@
         {#if loadingTree}
           <div class="cc-tree-loading">
             <div class="cc-spinner"></div>
-            <span>Loading control chain...</span>
+            <span>Loading Asset Ownership Explorer...</span>
           </div>
         {:else if treeError}
           <div class="cc-tree-error">{treeError}</div>
@@ -814,15 +808,15 @@
   }
   .cc-kind {
     font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-semibold);
+    font-weight: var(--font-weight-normal);
     text-transform: uppercase;
     letter-spacing: var(--tracking-wider);
     padding: var(--space-1) var(--space-2);
     border-radius: var(--radius-sm);
   }
   .cc-kind.asset {
-    background: var(--color-success-light);
-    color: var(--color-success);
+    background: var(--color-gray-300);
+    color: var(--color-text-primary);
   }
   /* Error / status */
   .cc-error {

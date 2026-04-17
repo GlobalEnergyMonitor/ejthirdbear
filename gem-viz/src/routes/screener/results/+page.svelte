@@ -948,6 +948,7 @@
           assetClassName={chartAssetClassName}
           trackerSlug={chartTrackerSlug}
           filteredAssetCount={chartModalOwner.filteredAssets}
+          totalPortfolioAssets={chartModalOwner.totalAssets}
           filteredProjectCount={chartModalOwner.filteredProjects}
           statusFilter={selectedClasses[0]?.filters?.statuses}
           trackerFilter={selectedClasses[0]?.gemTrackers}

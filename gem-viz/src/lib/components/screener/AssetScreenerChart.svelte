@@ -48,6 +48,11 @@
     catalogUrl = undefined,
     /** Field keys from the selected asset class filter URL (e.g. ['asset_type', 'captive']). */
     classFieldKeys = [] as string[],
+    /**
+     * Optional total asset count for this entity across ALL GEM trackers (from the screener
+     * owner table). When provided, used to compute "additional assets" beyond this class.
+     */
+    totalPortfolioAssets = null as number | null,
     onDataLoaded = undefined,
     onContainerReady = undefined,
     fillHeight = false,
@@ -98,7 +103,9 @@
       : totalAssets
   );
   const additionalAssets = $derived(
-    Math.max(0, (totalAssetsPreFilter || totalAssets) - matchedAssets)
+    totalPortfolioAssets != null
+      ? Math.max(0, totalPortfolioAssets - matchedAssets)
+      : Math.max(0, (totalAssetsPreFilter || totalAssets) - matchedAssets)
   );
 
   function formatOwnershipPct(value) {
@@ -331,6 +338,7 @@
       loading = true;
       error = null;
       isEmpty = false;
+      totalAssetsPreFilter = 0;
 
       // Reset expansion state when entity changes
       expansions = new Map();
@@ -660,7 +668,7 @@
     </div>
   {/if}
 
-  <div id="additional-info" class:hidden={loading || !!error || isEmpty}>
+  <div id="additional-info" class:hidden={loading || !!error || isEmpty || additionalAssets === 0}>
     <p>
       <span>
         {entityName || entityId} has stakes in

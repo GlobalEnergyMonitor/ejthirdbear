@@ -38,7 +38,7 @@
   if (hashEntity && !initialEntityId) initialEntityId = hashEntity;
   if (hashQuery && !initialQuery) initialQuery = hashQuery;
 
-  /** @typedef {{ id: string, name: string, fullName: string|null, country: string, assetCount?: number }} OwnerResult */
+  /** @typedef {{ id: string, name: string, fullName: string|null, country: string, assetCount?: number, unitCount?: number }} OwnerResult */
 
   let query = $state(untrack(() => initialQuery));
   let results = $state(/** @type {OwnerResult[]} */ ([]));
@@ -140,15 +140,16 @@
         }))
         .filter((e) => e.id);
 
-      // Fetch asset counts in parallel (lightweight limit=0 requests)
+      // Fetch asset counts in parallel (limit=1 so the API computes total)
       results.forEach((r, i) => {
-        fetch(`${API_BASE}/assets?owner_entity_id=${encodeURIComponent(r.id)}&limit=0&format=json`, {
+        fetch(`${API_BASE}/assets?owner_entity_id=${encodeURIComponent(r.id)}&limit=1&format=json`, {
           headers: { Accept: 'application/json' },
         })
           .then((res) => res.json())
           .then((json) => {
-            const count = json.total ?? 0;
-            results[i] = { ...results[i], assetCount: count };
+            const count = json.total ?? json.count ?? 0;
+            const units = typeof json.unit_count === 'number' ? json.unit_count : undefined;
+            results[i] = { ...results[i], assetCount: count, unitCount: units };
             results = results; // trigger reactivity
           })
           .catch(() => {}); // silently skip on error
@@ -274,7 +275,12 @@
                   <span class="os-result-name">{item.name}</span>
                   <span class="os-result-meta">
                     {#if item.assetCount != null}
-                      <span class="os-result-assets">{item.assetCount} asset{item.assetCount !== 1 ? 's' : ''}</span>
+                      <span class="os-result-assets">
+                        {item.assetCount} asset{item.assetCount !== 1 ? 's' : ''}
+                        {#if item.unitCount != null && item.unitCount > item.assetCount}
+                          ({item.unitCount} units)
+                        {/if}
+                      </span>
                     {/if}
                     {#if item.country}
                       <span class="os-result-country">{item.country}</span>

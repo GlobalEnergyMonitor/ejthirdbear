@@ -15,14 +15,14 @@
   import * as d3Hierarchy from 'd3-hierarchy';
   import * as d3Shape from 'd3-shape';
   import { drawMolecule, computeMoleculeRadii } from '$lib/components/ownership/molecule-renderer';
-  import { scaleOrdinal } from 'd3-scale';
-  import { schemeTableau10, schemePaired, schemeSet3 } from 'd3-scale-chromatic';
 
   import {
     colors,
     trackerColorMap,
     statusColorsGranular,
     ownershipColors,
+    countryPalette,
+    countryGray,
   } from '$lib/design-tokens';
   import NestedIntermediaryPanel from './NestedIntermediaryPanel.svelte';
   import { computeTreeLayout, computeTreeHeight, computeGridLayout } from './portfolio-layout';
@@ -284,14 +284,21 @@
       .sort((a, b) => b.filteredCount - a.filteredCount);
   });
 
-  /** Extended palette for country colors — combines Tableau10 + Paired12 + Set3 for 30+ unique colors */
-  const EXTENDED_PALETTE = [...new Set([...schemeTableau10, ...schemePaired, ...schemeSet3])];
-
-  /** Country color scale — ordinal, built from data */
-  let countryColorScale = $derived.by(() => {
-    if (!summary) return scaleOrdinal(EXTENDED_PALETTE);
-    return scaleOrdinal(EXTENDED_PALETTE).domain([...summary.byCountry.keys()]);
+  /** Top-5 countries by asset count → index into countryPalette; rest get countryGray */
+  const countryColorMap = $derived.by(() => {
+    const map = new Map();
+    if (!summary) return map;
+    let i = 0;
+    for (const [country] of summary.byCountry) {
+      map.set(country, i < countryPalette.length ? countryPalette[i].bg : countryGray.bg);
+      i++;
+    }
+    return map;
   });
+
+  function countryColor(country) {
+    return countryColorMap.get(country) ?? countryGray.bg;
+  }
 
   /** Tree SVG params now in portfolio-layout.ts */
 
@@ -659,7 +666,26 @@
     }
 
     const maxDepth = paths.reduce((max, p) => Math.max(max, p.path.length - 1), 0);
-    return { paths, pathStrings: uniquePathStrings, cumulativePctMap, maxDepth, edgeImputed };
+
+    // BFS to compute cumulative ownership from root to each entity node (not just leaf assets).
+    // Sums across all paths so nodes reachable via multiple chains accumulate correctly.
+    const cumulativeEntityPctMap = new Map();
+    const bfsQueue = [{ nodeId: rootEntityId, cumPct: 100 }];
+    const processedEdges = new Set();
+    while (bfsQueue.length > 0) {
+      const { nodeId, cumPct } = bfsQueue.shift();
+      for (const child of childrenOf.get(nodeId) || []) {
+        const edgeKey = `${nodeId}→${child}`;
+        if (processedEdges.has(edgeKey)) continue;
+        processedEdges.add(edgeKey);
+        const ev = edgeValue.get(nodeId)?.get(child);
+        const childPct = ev != null ? (cumPct * ev) / 100 : cumPct;
+        cumulativeEntityPctMap.set(child, (cumulativeEntityPctMap.get(child) || 0) + childPct);
+        bfsQueue.push({ nodeId: child, cumPct: childPct });
+      }
+    }
+
+    return { paths, pathStrings: uniquePathStrings, cumulativePctMap, cumulativeEntityPctMap, maxDepth, edgeImputed };
   }
 
   // ============================================================================
@@ -836,16 +862,13 @@
     const intermediaryNodes = root.descendants().filter((d) => d.children);
     // Map entity_id → node metadata
     const nodeMap = new Map((apiData.nodes || []).map((n) => [n.entity_id || n.asset_id, n]));
-    // Build edge lookup: target → edge (for ownership %)
-    const edgeLookup = new Map((apiData.edges || []).map((e) => [e.target, e]));
 
     intermediaryNodes.forEach((d) => {
       const entity = nodeMap.get(d.data.name);
       d.entityName = entity ? entity.name || entity.full_name : d.data.name;
-      // Real ownership percentage from API edge
-      const edge = edgeLookup.get(d.data.name);
-      d.ownershipPct =
-        edge && typeof edge.value === 'number' ? Math.max(0, Math.min(1, edge.value / 100)) : 1;
+      // Cumulative ownership % of the spotlight owner in this intermediary (summed across all paths)
+      const cumPct = treePaths.cumulativeEntityPctMap.get(d.data.name);
+      d.ownershipPct = cumPct != null ? Math.max(0, Math.min(1, cumPct / 100)) : 1;
     });
 
     // Links
@@ -1199,7 +1222,7 @@
             ? trackerColorMap.get(unit.asset_type) || colors.grey
             : colorField === 'status'
               ? COLOR_BY_STATUS.get(unit.operating_status?.toLowerCase()) || colors.grey
-              : countryColorScale(unit.country || 'Unknown'),
+              : countryColor(unit.country || 'Unknown'),
         ownershipPct: unit.ownership_share,
         opacity: isFiltered && unit._matched === false ? 0.25 : 1,
       }));
@@ -1533,7 +1556,7 @@
             >{apiData.spotlightOwner.name || apiData.spotlightOwner.full_name}</span
           >
           <span class="sidebar-stats"
-            >{summary.total.assetCount} assets · {summary.total.types.size} tracker{summary.total
+            >{summary.total.assetCount} asset{summary.total.assetCount !== 1 ? 's' : ''}{summary.total.unitCount > summary.total.assetCount ? ` (${summary.total.unitCount} units)` : ''} · {summary.total.types.size} tracker{summary.total
               .types.size !== 1
               ? 's'
               : ''}</span
@@ -1582,7 +1605,7 @@
                   onclick={() => applyFilter('country', country)}
                   onkeydown={(e) => e.key === 'Enter' && applyFilter('country', country)}
                 >
-                  <span class="legend-dot" style="background: {colorField === 'country' ? countryColorScale(country) : 'rgba(255,255,255,0.3)'}"></span>
+                  <span class="legend-dot" style="background: {colorField === 'country' ? countryColor(country) : 'rgba(255,255,255,0.3)'}"></span>
                   {country} ({isFiltered ? `${filteredCount ?? 0} of ${data.assetCount}` : data.assetCount})
                 </div>
               {/each}
@@ -2468,21 +2491,10 @@
     flex: 1;
     min-width: 0;
   }
+  /* TODO: foldout-btn is hidden for now — foldout expand/collapse functionality
+     will likely be removed or replaced with a different approach. */
   .foldout-btn {
-    background: none;
-    border: none;
-    color: rgba(255, 255, 255, 0.35);
-    cursor: pointer;
-    padding: 0 3px;
-    font-size: 8px;
-    line-height: 1;
-    flex-shrink: 0;
-    transition: color 80ms ease;
-    font-family: inherit;
-  }
-  .foldout-btn:hover,
-  .foldout-btn.expanded {
-    color: var(--gem-mint, #9df7e5);
+    display: none;
   }
 
   /* ---- Expanded nested portfolio panels ---- */
