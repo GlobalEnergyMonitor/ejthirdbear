@@ -18,6 +18,39 @@
   import { classifyOwnerType } from '$lib/components/ownership/ownership-tree-utils';
   import QuerySentenceBuilder from '$lib/components/filters/QuerySentenceBuilder.svelte';
 
+  /**
+   * Portal action: moves the node to a fresh shadow host under document.body
+   * so `position: fixed` escapes any transformed ancestor in the host page
+   * (common in Drupal/CMS themes, which break fixed positioning inside shadow DOM).
+   * Copies the widget's adopted stylesheets so scoped styles still apply.
+   * No-op when the component renders in a normal document (not shadow DOM).
+   */
+  function portalToBody(node) {
+    const root = node.getRootNode();
+    if (!(root instanceof ShadowRoot)) return { destroy: () => {} };
+
+    const host = document.createElement('div');
+    host.setAttribute('data-gem-portal', 'controlchain-modal');
+    document.body.appendChild(host);
+    const portalShadow = host.attachShadow({ mode: 'open' });
+
+    if (root.adoptedStyleSheets?.length) {
+      portalShadow.adoptedStyleSheets = [...root.adoptedStyleSheets];
+    } else {
+      root.querySelectorAll('style').forEach((s) => {
+        portalShadow.appendChild(s.cloneNode(true));
+      });
+    }
+
+    portalShadow.appendChild(node);
+
+    return {
+      destroy() {
+        host.remove();
+      },
+    };
+  }
+
   const PLACEHOLDER_ENTITY_IDS = new Set(['E100001015587', 'E100000123261', 'E100000132388']);
 
   /** @type {{ initialQuery?: string, initialType?: string, onStateChange?: (q: string, type: string) => void }} */
@@ -620,9 +653,12 @@
   {/if}
 </div>
 
-<!-- Modal — position:fixed covers the viewport (page or iframe) -->
+<!-- Modal — position:fixed covers the viewport.
+     Portaled to document.body so it escapes transformed ancestors in the host page
+     (Drupal wrappers break fixed positioning otherwise). -->
 {#if modalOpen && selected}
   <div
+    use:portalToBody
     class="cc-modal-backdrop"
     onclick={closeModal}
     onkeydown={(ev) => {

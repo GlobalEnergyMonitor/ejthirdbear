@@ -348,11 +348,7 @@
           <button class="os-modal-close" onclick={closeModal} aria-label="Close">✕</button>
         </div>
         <div class="os-modal-body">
-          <PortfolioExplorer
-            entityId={selected.id}
-            hidePicker={true}
-            heightOffset={embedded ? 100 : 260}
-          />
+          <PortfolioExplorer entityId={selected.id} hidePicker={true} heightOffset={120} />
         </div>
       </div>
     </div>
@@ -364,14 +360,8 @@
     position: relative;
   }
 
-  /* In widget/embed context, the root needs to be a positioning context
-     and stretch when the modal opens so the absolute modal has room. */
   .os-embedded {
     min-height: 200px;
-  }
-
-  .os-embedded:has(.os-modal-backdrop) {
-    height: 100vh;
   }
   .os-app {
     width: 100%;
@@ -614,54 +604,38 @@
     color: var(--color-text-tertiary);
   }
 
-  /* ── Modal ── */
+  /* ── Modal ──────────────────────────────────────────────────────────
+     Matches ControlChain's modal-over-modal pattern: fixed to the iframe's
+     viewport (not the widget's bounding box), translucent backdrop so the
+     search results stay dimly visible behind. Clicking the backdrop or the
+     Close button returns to search, so users don't accidentally close the
+     whole Drupal tool.
+  */
   .os-modal-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.45);
+    background: rgba(0, 0, 0, 0.5);
     z-index: 1000;
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    padding: var(--space-5);
-    overflow-y: auto;
-  }
-
-  /* In widget/embed context, position:fixed is relative to the shadow host's
-     containing block (not the viewport), so the modal renders clipped or blank.
-     Use position:absolute filling the root, with a solid background so the
-     search UI behind is hidden. */
-  .os-embedded .os-modal-backdrop {
-    position: absolute;
-    inset: 0;
-    padding: 0;
-    background: var(--color-bg-primary, #ffffff);
+    display: grid;
+    place-items: center;
+    padding: 2vh 2vw;
     overflow-y: auto;
   }
 
   .os-modal {
     background: var(--color-bg-primary, #ffffff);
-    border-radius: var(--radius-xl, 12px);
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
-    width: 100%;
-    max-width: 1100px;
-    max-height: calc(100vh - 80px);
+    border-radius: 12px;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.25);
+    width: 96vw;
+    max-width: 96vw;
+    height: 96vh;
+    max-height: 96vh;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    margin: auto;
   }
 
-  .os-embedded .os-modal {
-    max-width: 100%;
-    max-height: 100%;
-    height: 100%;
-    border-radius: 0;
-    box-shadow: none;
-    margin: 0;
-  }
-
-  .os-embedded .os-modal-body {
+  .os-modal-body {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
@@ -726,13 +700,11 @@
     }
 
     .os-modal {
-      max-width: 100%;
+      width: 100vw;
+      max-width: 100vw;
+      height: 100vh;
       max-height: 100vh;
       border-radius: 0;
-    }
-
-    .os-embedded .os-modal {
-      max-height: 100%;
     }
   }
 </style>
