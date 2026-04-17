@@ -15,6 +15,7 @@
   import * as d3Hierarchy from 'd3-hierarchy';
   import * as d3Shape from 'd3-shape';
   import { drawMolecule, computeMoleculeRadii } from '$lib/components/ownership/molecule-renderer';
+  import { OWNERSHIP_GRAPH_MAX_DEPTH } from '$lib/ownership-api';
 
   import {
     colors,
@@ -26,6 +27,7 @@
   } from '$lib/design-tokens';
   import NestedIntermediaryPanel from './NestedIntermediaryPanel.svelte';
   import { computeTreeLayout, computeTreeHeight, computeGridLayout } from './portfolio-layout';
+  import { makeTreePaths, buildRenderHierarchy } from './portfolio-paths';
 
   const API_BASE =
     import.meta.env?.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-api.thirdbear.net';
@@ -349,6 +351,9 @@
   let treeRoot = $state(null);
   /** Max ownership depth from root to leaf asset */
   let treeMaxDepth = $state(0);
+  /** Intermediary names that fell out of the rendered tree because another (longer) path
+   *  already reached the same leaf. Surfaced as the "duplicative intermediaries hidden" list. */
+  let hiddenIntermediaryNames = $state([]);
 
   /** Selected project for detail modal — null when closed */
   let selectedProject = $state(null);
@@ -446,7 +451,7 @@
 
     try {
       const resp = await fetch(
-        `${API_BASE}/ownership/graph?root=${encodeURIComponent(entityId)}&direction=down&format=json`,
+        `${API_BASE}/ownership/graph?root=${encodeURIComponent(entityId)}&direction=down&format=json&max_depth=${OWNERSHIP_GRAPH_MAX_DEPTH}`,
         { signal }
       );
       if (!resp.ok) throw new Error(`API error: ${resp.status}`);
@@ -556,137 +561,10 @@
   }
 
   // ============================================================================
-  // TREE PATHS (build path strings for d3.hierarchy)
+  // TREE PATHS — extracted to ./portfolio-paths.ts
+  // Each step (DFS / dedup / prune / collapse / root-promotion) is a named
+  // function in that module so we can toggle them while hunting bugs.
   // ============================================================================
-  function makeTreePaths(graph, rootEntityId, groups) {
-    const { nodes, edges } = graph;
-    const projectIds = new Set(groups.map((g) => g.projectID));
-
-    // Build adjacency: source → targets
-    const childrenOf = new Map();
-    for (const e of edges) {
-      if (!childrenOf.has(e.source)) childrenOf.set(e.source, []);
-      childrenOf.get(e.source).push(e.target);
-    }
-
-    // Build edge value lookup: source → target → ownership %
-    const edgeValue = new Map();
-    // Build edge imputed lookup: "source→target" → boolean
-    const edgeImputed = new Map();
-    for (const e of edges) {
-      if (!edgeValue.has(e.source)) edgeValue.set(e.source, new Map());
-      edgeValue.get(e.source).set(e.target, e.value);
-      edgeImputed.set(`${e.source}→${e.target}`, !!e.imputed_share);
-    }
-
-    // Map asset_id → location_id (project) for leaf resolution
-    const assetToProject = new Map();
-    for (const n of nodes) {
-      if (n.node_type === 'asset') {
-        const projId = n.location_id || n.unit_id || n.asset_id;
-        assetToProject.set(n.asset_id, projId);
-        // Also map the composite id
-        if (n.asset_id !== projId) assetToProject.set(n.asset_id, projId);
-      }
-    }
-
-    // DFS to collect all paths from root to leaf projects,
-    // computing cumulative ownership % along each path.
-
-    const paths = [];
-    const pathStrings = [];
-    /** Cumulative ownership: projectID → sum of effective % across distinct ownership chains */
-    const cumulativePctMap = new Map();
-    const visited = new Set();
-    /**
-     * Dedup key: "projId:rootChild" — prevents double-counting when the
-     * same ownership chain reaches the same project via units at different
-     * tree depths (e.g., National Grid → PJ GT2 directly AND National Grid
-     * → ... → NatGrid Gen → PJ 3.0 are the same 5.9% chain).
-     */
-    const countedProjChains = new Set();
-
-    function addCumulativePct(projId, pct, rootChild) {
-      const key = `${projId}:${rootChild}`;
-      if (countedProjChains.has(key)) return;
-      countedProjChains.add(key);
-      cumulativePctMap.set(projId, (cumulativePctMap.get(projId) || 0) + pct);
-    }
-
-    function dfs(nodeId, path, cumPct) {
-      if (visited.has(nodeId)) return; // cycle detection
-      visited.add(nodeId);
-      const children = childrenOf.get(nodeId) || [];
-      // The first entity after root identifies the ownership chain
-      const rootChild = path.length >= 2 ? path[1] : nodeId;
-      if (children.length === 0) {
-        // Leaf — resolve to project ID.
-        const projId = assetToProject.get(nodeId) || nodeId;
-        if (projectIds.has(projId) || projectIds.has(nodeId)) {
-          const fullPath = [...path, projId];
-          paths.push({ path: fullPath });
-          pathStrings.push(fullPath.join('/'));
-          addCumulativePct(projId, cumPct, rootChild);
-        }
-        // else: dead-end entity — intentionally dropped
-        visited.delete(nodeId);
-        return;
-      }
-      for (const child of children) {
-        const ev = edgeValue.get(nodeId)?.get(child);
-        const childPct = ev != null ? (cumPct * ev) / 100 : cumPct;
-
-        // Deduplicate: if child is an asset, resolve to project
-        const resolved = assetToProject.get(child);
-        if (resolved && projectIds.has(resolved)) {
-          const fullPath = [...path, resolved];
-          paths.push({ path: fullPath });
-          pathStrings.push(fullPath.join('/'));
-          addCumulativePct(resolved, childPct, rootChild);
-        } else {
-          dfs(child, [...path, child], childPct);
-        }
-      }
-      visited.delete(nodeId);
-    }
-    dfs(rootEntityId, [rootEntityId], 100);
-
-    // Deduplicate path strings — keep only ONE path per project leaf.
-    // Multiple ownership chains can reach the same project (e.g. via different
-    // subsidiaries). Without dedup, the tree has duplicate leaves that don't
-    // align with asset rows, creating dangling branches.
-    const seenLeafs = new Set();
-    const uniquePathStrings = [];
-    for (const ps of [...new Set(pathStrings)]) {
-      const leaf = ps.split('/').pop();
-      if (!seenLeafs.has(leaf)) {
-        seenLeafs.add(leaf);
-        uniquePathStrings.push(ps);
-      }
-    }
-
-    const maxDepth = paths.reduce((max, p) => Math.max(max, p.path.length - 1), 0);
-
-    // BFS to compute cumulative ownership from root to each entity node (not just leaf assets).
-    // Sums across all paths so nodes reachable via multiple chains accumulate correctly.
-    const cumulativeEntityPctMap = new Map();
-    const bfsQueue = [{ nodeId: rootEntityId, cumPct: 100 }];
-    const processedEdges = new Set();
-    while (bfsQueue.length > 0) {
-      const { nodeId, cumPct } = bfsQueue.shift();
-      for (const child of childrenOf.get(nodeId) || []) {
-        const edgeKey = `${nodeId}→${child}`;
-        if (processedEdges.has(edgeKey)) continue;
-        processedEdges.add(edgeKey);
-        const ev = edgeValue.get(nodeId)?.get(child);
-        const childPct = ev != null ? (cumPct * ev) / 100 : cumPct;
-        cumulativeEntityPctMap.set(child, (cumulativeEntityPctMap.get(child) || 0) + childPct);
-        bfsQueue.push({ nodeId: child, cumPct: childPct });
-      }
-    }
-
-    return { paths, pathStrings: uniquePathStrings, cumulativePctMap, cumulativeEntityPctMap, maxDepth, edgeImputed };
-  }
 
   // ============================================================================
   // INTERMEDIARIES
@@ -744,36 +622,14 @@
 
   // ============================================================================
   // D3 TREE VISUALIZATION (port of drawTreeChart)
+  // Hierarchy materialization + prune/collapse/root-promotion steps live in
+  // ./portfolio-paths.ts — see buildRenderHierarchy with toggles.
   // ============================================================================
-  function buildHierarchy(pathStrings, validLeafIds) {
-    const root = { name: 'root', children: [] };
-    for (const ps of pathStrings) {
-      const parts = ps.split('/');
-      let cur = root;
-      for (const part of parts) {
-        let child = cur.children.find((c) => c.name === part);
-        if (!child) {
-          child = { name: part, children: [] };
-          cur.children.push(child);
-        }
-        cur = child;
-      }
-    }
-    // Prune branches that don't reach a valid project leaf
-    function prune(node) {
-      node.children = node.children.filter((c) => {
-        prune(c);
-        // Keep if it's a valid leaf OR has children that survived pruning
-        return c.children.length > 0 || validLeafIds.has(c.name);
-      });
-    }
-    prune(root);
-    return root.children.length === 1 ? root.children[0] : root;
-  }
 
   function drawTree() {
     if (!treeSvgEl || !apiData || !showTree) {
       treeRoot = null;
+      hiddenIntermediaryNames = [];
       return;
     }
     const svg = d3.select(treeSvgEl);
@@ -786,35 +642,37 @@
       apiData.spotlightOwner.entity_id,
       currentGroups
     );
-    if (treePaths.pathStrings.length === 0) return;
+    if (treePaths.pathStrings.length === 0) {
+      hiddenIntermediaryNames = [];
+      return;
+    }
 
     const validLeafIds = new Set(currentGroups.map((g) => g.projectID));
-    const hierData = buildHierarchy(treePaths.pathStrings, validLeafIds);
+    // Show every selected-path node: skip the ≥95% collapse (which hides chained
+    // intermediaries behind a tooltip) and the root-promotion (which elides the
+    // spotlight owner when it has a single subsidiary). Prune stays on but is
+    // essentially a no-op since every selected path ends at a valid project.
+    const hierData = buildRenderHierarchy(
+      treePaths.pathStrings,
+      validLeafIds,
+      apiData.edges,
+      { applyCollapse: false, applyRootPromotion: false }
+    );
 
-    // Collapse linear chains of ~100% single-child intermediaries
-    // e.g. Drax Group → Drax Group Holdings → Drax Corporate → Drax Smart Gen Holdco
-    // becomes one node with collapsedEntities for tooltip
-    const edgeValueMap = new Map();
-    for (const e of apiData.edges) {
-      edgeValueMap.set(`${e.source}→${e.target}`, e.value);
-    }
-    function collapseLinearChains(node) {
-      for (const child of node.children) {
-        collapseLinearChains(child);
-      }
-      while (
-        node.children.length === 1 &&
-        node.children[0].children.length > 0
-      ) {
-        const only = node.children[0];
-        const edgeVal = edgeValueMap.get(`${node.name}→${only.name}`);
-        if (edgeVal != null && edgeVal < 95) break; // don't collapse partial ownership
-        if (!node.collapsedEntities) node.collapsedEntities = [];
-        node.collapsedEntities.push(only.name);
-        node.children = only.children;
+    // "Duplicative intermediaries hidden" — entities that exist in the DAG but didn't make it
+    // onto any selected (longest-per-leaf) path. Skip leaf projects and asset nodes.
+    const unusedEntityNames = [];
+    for (const n of apiData.nodes || []) {
+      const id = n.entity_id || n.asset_id;
+      if (!id || n.node_type === 'asset') continue;
+      if (validLeafIds.has(id)) continue;
+      if (id === apiData.spotlightOwner?.entity_id) continue;
+      if (treePaths.unused.unusedNodes.has(id)) {
+        unusedEntityNames.push(n.name || n.full_name || id);
       }
     }
-    if (hierData.children) collapseLinearChains(hierData);
+    unusedEntityNames.sort((a, b) => a.localeCompare(b));
+    hiddenIntermediaryNames = unusedEntityNames;
 
     const root = d3Hierarchy.hierarchy(hierData);
 
@@ -877,22 +735,66 @@
     const nr = nodeRadius;
     const { edgeImputed } = treePaths;
 
+    // Ghost links — unused edges (alternate ownership paths not on any selected chain).
+    // Match source/target by name to the first tree node bearing that id; skip edges whose
+    // endpoints don't live on the tree. Asset→project targets are resolved so they can render
+    // as secondary arrows landing on the same project leaf.
+    const nodeByName = new Map();
+    root.descendants().forEach((d) => {
+      if (!nodeByName.has(d.data.name)) nodeByName.set(d.data.name, d);
+    });
+    const assetToProject = new Map();
+    for (const n of apiData.nodes || []) {
+      if (n.node_type === 'asset' && n.asset_id) {
+        assetToProject.set(n.asset_id, n.location_id || n.unit_id || n.asset_id);
+      }
+    }
+    const ghostLinks = [];
+    for (const e of treePaths.unused.unusedEdges) {
+      const src = nodeByName.get(e.source);
+      if (!src) continue;
+      const tgtId = nodeByName.has(e.target) ? e.target : assetToProject.get(e.target);
+      const tgt = tgtId ? nodeByName.get(tgtId) : null;
+      if (!tgt) continue;
+      if (src === tgt) continue;
+      ghostLinks.push({ source: src, target: tgt, imputed: !!e.imputed_share });
+    }
+
+    const linkPath = (d) => {
+      const isLeaf = !d.target.children;
+      const xS = d.source.y + nr + PAD;
+      const yS = d.source.x;
+      const xT = isLeaf ? width + margin.right : d.target.y - nr - PAD;
+      const yT = d.target.x;
+      const dx = xT - xS;
+      const distX = Math.max(dx / 2, width * 0.075);
+      return `M${xS},${yS} C${xS + distX},${yS} ${xT - distX},${yT} ${xT},${yT}`;
+    };
+
+    // Draw ghosts first so primary links paint on top
+    const ghostGroup = g.append('g').attr('class', 'ghost-link-group');
+    ghostGroup
+      .selectAll('path')
+      .data(ghostLinks)
+      .join('path')
+      .attr('class', 'ghost-link')
+      .attr('d', linkPath)
+      .style('fill', 'none')
+      .style('stroke', (d) =>
+        d.imputed ? ownershipColors.treeEdgeImputed : ownershipColors.treeEdge
+      )
+      .style('stroke-width', 1)
+      .style('stroke-linecap', 'round')
+      .style('stroke-dasharray', '2 3')
+      .style('opacity', 0.45)
+      .style('mix-blend-mode', 'multiply');
+
     const linkGroup = g.append('g').attr('class', 'link-group');
     linkGroup
       .selectAll('path')
       .data(linkData)
       .join('path')
-      .attr('d', (d) => {
-        const isLeaf = !d.target.children;
-        const xS = d.source.y + nr + PAD;
-        const yS = d.source.x;
-        // Leaf links extend to the right edge of the tree so they point at the asset icons
-        const xT = isLeaf ? width + margin.right : d.target.y - nr - PAD;
-        const yT = d.target.x;
-        const dx = xT - xS;
-        const distX = Math.max(dx / 2, width * 0.075);
-        return `M${xS},${yS} C${xS + distX},${yS} ${xT - distX},${yT} ${xT},${yT}`;
-      })
+      .attr('d', linkPath)
       .style('fill', 'none')
       .style('stroke', (d) => {
         const key = `${d.source.data.name}→${d.target.data.name}`;
@@ -1539,6 +1441,21 @@
           <div class="chart-row">
             {#if showTree}
               <div class="tree-container">
+                {#if hiddenIntermediaryNames.length > 0}
+                  <aside class="hidden-intermediaries" title="Entities that appear only on secondary (shorter) ownership paths to assets already reached by a longer chain. Their paths render as dashed lines.">
+                    <div class="hidden-intermediaries-title">
+                      {hiddenIntermediaryNames.length} duplicative intermediar{hiddenIntermediaryNames.length === 1 ? 'y' : 'ies'} not placed in tree
+                    </div>
+                    <ul class="hidden-intermediaries-list">
+                      {#each hiddenIntermediaryNames as name (name)}
+                        <li>{name}</li>
+                      {/each}
+                    </ul>
+                    <div class="hidden-intermediaries-note">
+                      Each asset is placed under its longest ownership chain. Shorter chains through these entities are drawn as dashed secondary links.
+                    </div>
+                  </aside>
+                {/if}
                 <svg bind:this={treeSvgEl}></svg>
               </div>
             {/if}
@@ -1959,6 +1876,41 @@
   .tree-container {
     flex-shrink: 0;
     margin-right: -8px;
+    position: relative;
+  }
+  .hidden-intermediaries {
+    position: absolute;
+    top: 0;
+    left: 0;
+    max-width: 220px;
+    padding: 6px 8px;
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid var(--color-border, #e0e0e0);
+    border-radius: 3px;
+    font-size: 10px;
+    line-height: 1.35;
+    color: var(--color-text-muted, #444);
+    pointer-events: auto;
+    z-index: 2;
+  }
+  .hidden-intermediaries-title {
+    font-weight: 600;
+    color: var(--color-text, #222);
+    margin-bottom: 3px;
+  }
+  .hidden-intermediaries-list {
+    margin: 0 0 4px;
+    padding-left: 12px;
+    max-height: 120px;
+    overflow-y: auto;
+  }
+  .hidden-intermediaries-list li {
+    list-style: disc;
+  }
+  .hidden-intermediaries-note {
+    font-style: italic;
+    font-size: 9px;
+    color: var(--color-text-muted, #666);
   }
   .tree-container svg,
   .assets-container svg {
