@@ -850,15 +850,22 @@
     // routed — the Observable notebook's dagre-d3 included them via its
     // internal cycle-breaking; we match that by setting acyclicer: 'greedy'
     // on the graph and feeding cycle edges in with minimal weight.
-    renderEdges.forEach((e) => {
+    // Cycle-closing edges break dagre's layout algorithms even with
+    // `acyclicer: 'greedy'` when they form many overlapping cycles (Cebu: 26
+    // cycle edges). Skip them for layout and route them separately below.
+    const safeEdges: typeof renderEdges = [];
+    const cycleEdges: typeof renderEdges = [];
+    for (const e of renderEdges) {
+      if (e.closes_cycle) cycleEdges.push(e);
+      else safeEdges.push(e);
+    }
+    safeEdges.forEach((e) => {
       const srcIsAsset =
         e.source === rootId || renderNodes.find((n) => n.id === e.source)?.type === 'asset';
       const tgtIsAsset =
         e.target === rootId || renderNodes.find((n) => n.id === e.target)?.type === 'asset';
       let weight = 3;
-      if (e.closes_cycle) {
-        weight = 0;
-      } else if (!srcIsAsset && !tgtIsAsset) {
+      if (!srcIsAsset && !tgtIsAsset) {
         const srcSmall = smallOwnershipSet.has(e.source);
         const tgtSmall = smallOwnershipSet.has(e.target);
         if (srcSmall && tgtSmall) weight = 1;
@@ -866,28 +873,56 @@
       }
       g.setEdge(e.source, e.target, { weight });
     });
-    dagre.layout(g);
+    let layoutOk = true;
+    try {
+      dagre.layout(g);
+    } catch {
+      layoutOk = false;
+    }
 
-    // Fallback: dagre's BK x-coordinate assignment occasionally returns NaN on
-    // graphs with cycle-closing edges (even with acyclicer: 'greedy'). When
-    // that happens, every node stacks at x=NaN and the layout is unusable.
-    // Recover by distributing nodes evenly across each rank.
-    const anyNaN = g.nodes().some((id: string) => !Number.isFinite(g.node(id).x));
+    // Fallback: if dagre threw OR produced NaN positions (happens on graphs
+    // with complex cycle structure even after filtering closes_cycle edges),
+    // manually assign ranks via BFS from root and distribute nodes horizontally.
+    const anyNaN = !layoutOk || g.nodes().some((id: string) => !Number.isFinite(g.node(id).x));
     if (anyNaN) {
-      const byY = new Map<number, string[]>();
+      const rankById = new Map<string, number>();
+      rankById.set(rootId, 0);
+      const queue: string[] = [rootId];
+      while (queue.length) {
+        const cur = queue.shift()!;
+        const depth = rankById.get(cur)!;
+        for (const e of safeEdges) {
+          const next = e.target === cur ? e.source : e.source === cur ? e.target : null;
+          if (next && !rankById.has(next)) {
+            rankById.set(next, depth + 1);
+            queue.push(next);
+          }
+        }
+      }
+      // Any node not reached gets placed on the furthest rank.
+      const maxRank = Math.max(0, ...rankById.values());
       g.nodes().forEach((id: string) => {
-        const y = g.node(id).y;
-        const ids = byY.get(y) ?? [];
-        ids.push(id);
-        byY.set(y, ids);
+        if (!rankById.has(id)) rankById.set(id, maxRank + 1);
       });
-      for (const [, ids] of byY) {
+      const ranksep = compact ? 28 : 116;
+      const byRank = new Map<number, string[]>();
+      for (const [id, r] of rankById) {
+        const ids = byRank.get(r) ?? [];
+        ids.push(id);
+        byRank.set(r, ids);
+      }
+      const isBT = graphDirection === 'upstream';
+      for (const [r, ids] of byRank) {
         const widths = ids.map((id: string) => g.node(id).width || nodeR * 2);
         const gap = dynamicNodeSep;
         const total = widths.reduce((a, b) => a + b, 0) + gap * (ids.length - 1);
         let x = -total / 2;
+        // For BT (upstream), root at bottom: higher y = lower rank.
+        const y = isBT ? -r * ranksep : r * ranksep;
         ids.forEach((id: string, i: number) => {
-          g.node(id).x = x + widths[i] / 2;
+          const node = g.node(id);
+          node.x = x + widths[i] / 2;
+          node.y = y;
           x += widths[i] + gap;
         });
       }
@@ -1437,13 +1472,20 @@
     void (async () => {
       try {
         dagre = await import('dagre');
-        runLayout();
+        try {
+          runLayout();
+        } catch (e) {
+          if (import.meta.env.DEV) console.error('runLayout threw:', e);
+        }
+        // Show the tree even if layout threw — runLayout's internal fallback
+        // will have produced a usable (if imperfect) set of positions.
         ready = true;
-        // Run entrance animation after DOM updates
         await tick();
         runEntranceAnimation();
       } catch (e) {
         if (import.meta.env.DEV) console.error('Failed to load dagre:', e);
+        // Even if dagre import failed, don't leave the modal stuck on "Loading..."
+        ready = true;
       }
     })();
 
