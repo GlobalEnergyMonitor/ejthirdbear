@@ -17,39 +17,7 @@
   import StatusIcon from '$lib/components/tracker/StatusIcon.svelte';
   import { classifyOwnerType } from '$lib/components/ownership/ownership-tree-utils';
   import QuerySentenceBuilder from '$lib/components/filters/QuerySentenceBuilder.svelte';
-
-  /**
-   * Portal action: moves the node to a fresh shadow host under document.body
-   * so `position: fixed` escapes any transformed ancestor in the host page
-   * (common in Drupal/CMS themes, which break fixed positioning inside shadow DOM).
-   * Copies the widget's adopted stylesheets so scoped styles still apply.
-   * No-op when the component renders in a normal document (not shadow DOM).
-   */
-  function portalToBody(node) {
-    const root = node.getRootNode();
-    if (!(root instanceof ShadowRoot)) return { destroy: () => {} };
-
-    const host = document.createElement('div');
-    host.setAttribute('data-gem-portal', 'controlchain-modal');
-    document.body.appendChild(host);
-    const portalShadow = host.attachShadow({ mode: 'open' });
-
-    if (root.adoptedStyleSheets?.length) {
-      portalShadow.adoptedStyleSheets = [...root.adoptedStyleSheets];
-    } else {
-      root.querySelectorAll('style').forEach((s) => {
-        portalShadow.appendChild(s.cloneNode(true));
-      });
-    }
-
-    portalShadow.appendChild(node);
-
-    return {
-      destroy() {
-        host.remove();
-      },
-    };
-  }
+  import WidgetModal from '$lib/components/overlay/WidgetModal.svelte';
 
   const PLACEHOLDER_ENTITY_IDS = new Set(['E100001015587', 'E100000123261', 'E100000132388']);
 
@@ -88,6 +56,13 @@
   let loadingTree = $state(false);
   let treeError = $state('');
   let modalOpen = $state(false);
+
+  /**
+   * Monotonic request token for selectResult → getOwnershipGraphs.
+   * Prevents stale responses from clobbering the current tree when users click
+   * a second asset before the first fetch resolves ("Abuja stacks on itself").
+   */
+  let _treeRequestId = 0;
 
   // ── Filter state ──────────────────────────────────────────────────────────
   let filterAssetTypes = $state(/** @type {string[]} */ ([]));
@@ -465,6 +440,13 @@
   }
 
   async function selectResult(item) {
+    // Skip refetch when clicking the already-displayed asset
+    if (selected?.id === item.id && locationResponse) {
+      modalOpen = true;
+      return;
+    }
+
+    const reqId = ++_treeRequestId;
     selected = item;
     modalOpen = true;
     writeHash({ asset: item.id });
@@ -472,11 +454,14 @@
     treeError = '';
     locationResponse = null;
     try {
-      locationResponse = await getOwnershipGraphs({ root: item.id, direction: 'up' });
+      const res = await getOwnershipGraphs({ root: item.id, direction: 'up' });
+      if (reqId !== _treeRequestId) return; // stale response, ignore
+      locationResponse = res;
     } catch (err) {
-      treeError = err.message || 'Failed to load ownership tree';
+      if (reqId !== _treeRequestId) return;
+      treeError = err?.message || 'Failed to load ownership tree';
     } finally {
-      loadingTree = false;
+      if (reqId === _treeRequestId) loadingTree = false;
     }
   }
 
@@ -653,109 +638,86 @@
   {/if}
 </div>
 
-<!-- Modal — position:fixed covers the viewport.
-     Portaled to document.body so it escapes transformed ancestors in the host page
-     (Drupal wrappers break fixed positioning otherwise). -->
-{#if modalOpen && selected}
-  <div
-    use:portalToBody
-    class="cc-modal-backdrop"
-    onclick={closeModal}
-    onkeydown={(ev) => {
-      if (ev.key === 'Enter' || ev.key === ' ') closeModal();
-    }}
-    role="button"
-    tabindex="-1"
-  >
-    <div
-      class="cc-modal"
-      onclick={(e) => e.stopPropagation()}
-      onkeydown={(e) => e.stopPropagation()}
-      role="dialog"
-      tabindex="-1"
-    >
-      <div class="cc-modal-header">
-        <div>
-          <h2>Owners of {selected.name}</h2>
+<!-- Modal — shared WidgetModal (fixed, portaled, 96vw × 96vh, 12px radius) -->
+<WidgetModal
+  open={modalOpen && !!selected}
+  onClose={closeModal}
+  title={selected ? `Owners of ${selected.name}` : ''}
+  ariaLabel="Control Chain ownership modal"
+>
+  {#snippet body()}
+    <div class="cc-modal-inner">
+      {#if loadingTree}
+        <div class="cc-tree-loading">
+          <div class="cc-spinner"></div>
+          <span>Loading Asset Ownership Explorer...</span>
         </div>
-        <button class="cc-modal-close" onclick={closeModal} aria-label="Close">✕</button>
-      </div>
+      {:else if treeError}
+        <div class="cc-tree-error">{treeError}</div>
+      {:else if locationResponse}
+        <!-- Desktop: full interactive graph(s) -->
+        <div class="cc-tree-wrap cc-desktop-only">
+          <LocationOwnershipView
+            {locationResponse}
+            direction="up"
+            fullWidth={true}
+            forceLabelsBelow={true}
+          />
+        </div>
 
-      <div class="cc-modal-body">
-        {#if loadingTree}
-          <div class="cc-tree-loading">
-            <div class="cc-spinner"></div>
-            <span>Loading Asset Ownership Explorer...</span>
-          </div>
-        {:else if treeError}
-          <div class="cc-tree-error">{treeError}</div>
-        {:else if locationResponse}
-          <!-- Desktop: full interactive graph(s) -->
-          <div class="cc-tree-wrap cc-desktop-only">
-            <LocationOwnershipView
-              {locationResponse}
-              direction="up"
-              fullWidth={true}
-              forceLabelsBelow={true}
-            />
-          </div>
-
-          <!-- Mobile: vertical ownership chains -->
-          {#if mobileChains.length > 0}
-            <div class="cc-mobile-chains">
-              {#if mobileSummary}
-                <p class="cc-chains-intro">{mobileSummary.lines[0]}</p>
-              {/if}
-              {#each mobileChains as chain, ci}
-                <div class="cc-chain" class:cc-chain-border={ci > 0}>
-                  <div class="cc-chain-header">
-                    <span class="cc-chain-label">Path {ci + 1}</span>
-                    {#if chain.cumulativePct != null && chain.cumulativePct > 0}
-                      <span class="cc-chain-total">{chain.cumulativePct.toFixed(1)}% effective</span
-                      >
-                    {/if}
-                  </div>
-                  <ol class="cc-chain-steps">
-                    {#each chain.steps as step, si}
-                      <li class="cc-step" class:cc-step-asset={step.isAsset}>
-                        <div class="cc-step-connector">
-                          <div class="cc-step-dot" class:cc-step-dot-asset={step.isAsset}></div>
-                          {#if si < chain.steps.length - 1}
-                            <div class="cc-step-line"></div>
-                          {/if}
-                        </div>
-                        <div class="cc-step-content">
-                          <span class="cc-step-name">{step.name}</span>
-                          <span class="cc-step-meta">
-                            {#if step.ownerType}<span class="cc-step-type">{step.ownerType}</span
-                              >{/if}
-                            {#if step.country}<span class="cc-step-country">{step.country}</span
-                              >{/if}
-                          </span>
-                        </div>
-                        {#if step.edgePct != null && step.edgePct > 0}
-                          <span class="cc-step-pct">{step.edgePct.toFixed(1)}%</span>
-                        {/if}
-                      </li>
-                    {/each}
-                  </ol>
+        <!-- Mobile: vertical ownership chains -->
+        {#if mobileChains.length > 0}
+          <div class="cc-mobile-chains">
+            {#if mobileSummary}
+              <p class="cc-chains-intro">{mobileSummary.lines[0]}</p>
+            {/if}
+            {#each mobileChains as chain, ci}
+              <div class="cc-chain" class:cc-chain-border={ci > 0}>
+                <div class="cc-chain-header">
+                  <span class="cc-chain-label">Path {ci + 1}</span>
+                  {#if chain.cumulativePct != null && chain.cumulativePct > 0}
+                    <span class="cc-chain-total">{chain.cumulativePct.toFixed(1)}% effective</span>
+                  {/if}
                 </div>
-              {/each}
-            </div>
-          {:else if mobileSummary}
-            <div class="cc-mobile-summary">
-              {#each mobileSummary.lines as line}
-                <p class="cc-summary-line">{line}</p>
-              {/each}
-            </div>
-          {/if}
-        {:else}
-          <div class="cc-tree-empty">No ownership data available for this asset.</div>
+                <ol class="cc-chain-steps">
+                  {#each chain.steps as step, si}
+                    <li class="cc-step" class:cc-step-asset={step.isAsset}>
+                      <div class="cc-step-connector">
+                        <div class="cc-step-dot" class:cc-step-dot-asset={step.isAsset}></div>
+                        {#if si < chain.steps.length - 1}
+                          <div class="cc-step-line"></div>
+                        {/if}
+                      </div>
+                      <div class="cc-step-content">
+                        <span class="cc-step-name">{step.name}</span>
+                        <span class="cc-step-meta">
+                          {#if step.ownerType}<span class="cc-step-type">{step.ownerType}</span
+                            >{/if}
+                          {#if step.country}<span class="cc-step-country">{step.country}</span>{/if}
+                        </span>
+                      </div>
+                      {#if step.edgePct != null && step.edgePct > 0}
+                        <span class="cc-step-pct">{step.edgePct.toFixed(1)}%</span>
+                      {/if}
+                    </li>
+                  {/each}
+                </ol>
+              </div>
+            {/each}
+          </div>
+        {:else if mobileSummary}
+          <div class="cc-mobile-summary">
+            {#each mobileSummary.lines as line}
+              <p class="cc-summary-line">{line}</p>
+            {/each}
+          </div>
         {/if}
-      </div>
+      {:else}
+        <div class="cc-tree-empty">No ownership data available for this asset.</div>
+      {/if}
     </div>
-  </div>
-{/if}
+  {/snippet}
+</WidgetModal>
 
 <style>
   .cc-app {
@@ -1044,68 +1006,8 @@
     color: var(--gem-navy);
   }
 
-  /* Modal */
-  .cc-modal-backdrop {
-    position: fixed;
-    inset: 0;
-    width: 100vw;
-    max-width: none;
-    background: rgba(0, 0, 0, 0.5);
-    z-index: 1000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 5vh 5vw;
-  }
-  .cc-modal {
-    background: var(--color-bg-primary);
-    border-radius: var(--radius-lg, 8px);
-    width: 90vw;
-    max-width: 90vw;
-    max-height: 90vh;
-    min-height: 80vh;
-    overflow: auto;
-    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.2);
-  }
-  .cc-modal-header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: var(--space-4);
-    padding: var(--space-4) var(--space-5);
-    border-bottom: 1px solid var(--color-border);
-    position: sticky;
-    top: 0;
-    background: var(--color-bg-primary);
-    z-index: 1;
-  }
-  .cc-modal-header h2 {
-    font-size: var(--font-size-xl);
-    font-weight: 600;
-    margin: 0;
-    color: var(--color-text-primary);
-    text-transform: none;
-    letter-spacing: normal;
-  }
-  .cc-modal-close {
-    background: none;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    padding: var(--space-2) var(--space-3);
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
-    cursor: pointer;
-    line-height: 1;
-    flex-shrink: 0;
-    transition: all 0.15s ease;
-  }
-  .cc-modal-close:hover {
-    background: var(--color-bg-secondary);
-    color: var(--color-text-primary);
-  }
-
-  /* Modal body padding so nothing hits edges */
-  .cc-modal-body {
+  /* Modal chrome comes from WidgetModal. Inner wrapper just pads the body. */
+  .cc-modal-inner {
     padding: var(--space-4);
   }
 
@@ -1179,16 +1081,6 @@
     .cc-mobile-summary {
       display: block;
     }
-    .cc-modal {
-      width: 100vw;
-      max-width: 100vw;
-      max-height: 100vh;
-      min-height: auto;
-      border-radius: 0;
-    }
-    .cc-modal-backdrop {
-      padding: 0;
-    }
     .cc-filter-pill,
     .cc-chip {
       min-height: 44px;
@@ -1201,13 +1093,6 @@
     }
     .cc-result {
       min-height: 44px;
-    }
-    .cc-modal-close {
-      min-height: 44px;
-      min-width: 44px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
     }
   }
 

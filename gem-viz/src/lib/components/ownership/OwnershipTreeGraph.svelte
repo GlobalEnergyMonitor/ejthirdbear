@@ -1992,6 +1992,7 @@
         {tooltipY}
         {rootId}
         {edges}
+        hoveredPathEdgeIndices={activeNodeData?.edgeIndices ?? null}
       />
     </div>
 

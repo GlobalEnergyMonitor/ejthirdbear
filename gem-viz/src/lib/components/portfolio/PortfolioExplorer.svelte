@@ -1585,7 +1585,6 @@
               </div>
             </div>
           {/if}
-
         </div>
       </div>
     </div>
@@ -1698,7 +1697,6 @@
         </div>
       </div>
     {/if}
-
   {/if}
 </div>
 
@@ -2368,5 +2366,4 @@
   .asset-link:hover {
     text-decoration: underline;
   }
-
 </style>

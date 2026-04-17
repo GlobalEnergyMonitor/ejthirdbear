@@ -19,6 +19,7 @@
    */
   import { onMount, untrack } from 'svelte';
   import PortfolioExplorer from './PortfolioExplorer.svelte';
+  import WidgetModal from '$lib/components/overlay/WidgetModal.svelte';
   import { readHashParam, writeHash } from '$lib/utils/hash-state';
 
   const API_BASE =
@@ -190,16 +191,7 @@
     onStateChange?.({ q: query, entity: '' });
   }
 
-  // Global Escape key closes modal
-  $effect(() => {
-    if (!modalOpen) return;
-    /** @param {KeyboardEvent} e */
-    function onKey(e) {
-      if (e.key === 'Escape') closeModal();
-    }
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  });
+  // Escape handling lives inside WidgetModal
 </script>
 
 <div class="os-root" class:os-embedded={embedded}>
@@ -320,39 +312,20 @@
     {/if}
   </div>
 
-  <!-- Modal -->
-  {#if modalOpen && selected}
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <div
-      class="os-modal-backdrop"
-      onclick={closeModal}
-      role="button"
-      tabindex="-1"
-      onkeydown={(e) => e.key === 'Escape' && closeModal()}
-    >
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <div
-        class="os-modal"
-        onclick={(e) => e.stopPropagation()}
-        onkeydown={(e) => e.key === 'Escape' && closeModal()}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Portfolio Explorer"
-        tabindex="-1"
-      >
-        <div class="os-modal-header">
-          <span class="os-modal-label">Portfolio Explorer</span>
-          {#if selected.name && selected.name !== selected.id}
-            <span class="os-modal-entity">{selected.name}</span>
-          {/if}
-          <button class="os-modal-close" onclick={closeModal} aria-label="Close">✕</button>
-        </div>
-        <div class="os-modal-body">
-          <PortfolioExplorer entityId={selected.id} hidePicker={true} heightOffset={120} />
-        </div>
-      </div>
-    </div>
-  {/if}
+  <!-- Modal (shared WidgetModal — same shape as ControlChain + GemScreener) -->
+  <WidgetModal
+    open={modalOpen && !!selected}
+    onClose={closeModal}
+    label="Portfolio Explorer"
+    title={selected && selected.name !== selected.id ? selected.name : ''}
+    ariaLabel="Portfolio Explorer"
+  >
+    {#snippet body()}
+      {#if selected}
+        <PortfolioExplorer entityId={selected.id} hidePicker={true} heightOffset={120} />
+      {/if}
+    {/snippet}
+  </WidgetModal>
 </div>
 
 <style>
@@ -604,107 +577,5 @@
     color: var(--color-text-tertiary);
   }
 
-  /* ── Modal ──────────────────────────────────────────────────────────
-     Matches ControlChain's modal-over-modal pattern: fixed to the iframe's
-     viewport (not the widget's bounding box), translucent backdrop so the
-     search results stay dimly visible behind. Clicking the backdrop or the
-     Close button returns to search, so users don't accidentally close the
-     whole Drupal tool.
-  */
-  .os-modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.5);
-    z-index: 1000;
-    display: grid;
-    place-items: center;
-    padding: 2vh 2vw;
-    overflow-y: auto;
-  }
-
-  .os-modal {
-    background: var(--color-bg-primary, #ffffff);
-    border-radius: 12px;
-    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.25);
-    width: 96vw;
-    max-width: 96vw;
-    height: 96vh;
-    max-height: 96vh;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-
-  .os-modal-body {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-  }
-
-  .os-modal-header {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    padding: var(--space-4) var(--space-5);
-    background: var(--color-bg-primary, #ffffff);
-    border-bottom: 1px solid var(--color-border, #e5e7eb);
-    flex-shrink: 0;
-  }
-
-  .os-modal-label {
-    font-size: var(--font-size-xs);
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-widest);
-    color: var(--color-text-tertiary, #9ca3af);
-  }
-
-  .os-modal-entity {
-    flex: 1;
-    font-size: var(--font-size-lg, 18px);
-    font-weight: 600;
-    color: var(--color-text-primary, #111827);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    min-width: 0;
-  }
-
-  .os-modal-close {
-    margin-left: auto;
-    background: none;
-    border: 1px solid var(--color-border, #e5e7eb);
-    border-radius: var(--radius-md, 6px);
-    padding: var(--space-2) var(--space-3);
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary, #6b7280);
-    cursor: pointer;
-    line-height: 1;
-    flex-shrink: 0;
-    transition: all 0.15s ease;
-  }
-
-  .os-modal-close:hover {
-    background: var(--color-bg-secondary, #f3f4f6);
-    color: var(--color-text-primary, #111827);
-  }
-
-  .os-modal-body {
-    flex: 1;
-    overflow-y: auto;
-    min-height: 0;
-  }
-
-  @media (max-width: 600px) {
-    .os-modal-backdrop {
-      padding: 0;
-    }
-
-    .os-modal {
-      width: 100vw;
-      max-width: 100vw;
-      height: 100vh;
-      max-height: 100vh;
-      border-radius: 0;
-    }
-  }
+  /* Modal styles now live in $lib/components/overlay/WidgetModal.svelte */
 </style>

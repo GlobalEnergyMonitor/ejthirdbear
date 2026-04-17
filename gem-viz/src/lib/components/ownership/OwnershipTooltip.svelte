@@ -17,6 +17,7 @@
     tooltipY,
     rootId,
     edges,
+    hoveredPathEdgeIndices = null,
   }: {
     hoveredId: string | null;
     hoveredGraphNode: GraphNode | null;
@@ -27,7 +28,24 @@
     tooltipY: number;
     rootId: string;
     edges: GraphEdge[];
+    /** Indices into `edges` for every edge on any path to the hovered entity.
+     * Used to summarise whether the cumulative % is known/partially/fully imputed. */
+    hoveredPathEdgeIndices?: number[] | null;
   } = $props();
+
+  // Count imputed vs known edges across the whole ownership path to the
+  // hovered entity (mirrors Observable's formatImputed — lines 1597-1607).
+  // Returns "(imputed)" / "(3 of 5 relations est.)" / "" based on the ratio.
+  function formatImputedPath(indices: number[] | null): string {
+    if (!indices || indices.length === 0) return '';
+    let imputed = 0;
+    for (const i of indices) {
+      if (edges[i]?.imputed_share) imputed++;
+    }
+    if (imputed === 0) return '';
+    if (imputed === indices.length) return '(imputed)';
+    return `(${imputed} of ${indices.length} relations est.)`;
+  }
 
   const visible = $derived(hoverSource === 'graph' && hoveredId && hoveredGraphNode);
 </script>
@@ -37,10 +55,15 @@
   {@const isAsset = hn.type === 'asset' || hoveredId === rootId}
   {@const pct = hoveredLayoutNode?.pct ?? 0}
   {@const hqParts = [hn.headquarters_country, hn.headquarters_subdivision].filter(Boolean)}
+  {@const regParts = [hn.registration_country, hn.registration_subdivision].filter(Boolean)}
+  {@const hqString = hqParts.join(' · ')}
+  {@const regString = regParts.join(' · ')}
+  {@const regDiffers = regString && regString !== hqString}
   {@const ownerCategory = !isAsset ? classifyOwnerType(hn) : ''}
   {@const edgeToThis = edges.find((e) => e.target === hn.entity_id || e.target === hn.id)}
   {@const directPct = edgeToThis?.value ?? 0}
   {@const isImputed = edgeToThis?.imputed_share ?? false}
+  {@const pathImputedLabel = formatImputedPath(hoveredPathEdgeIndices)}
   <div
     class="tooltip"
     class:frozen={frozenId === hoveredId}
@@ -65,8 +88,11 @@
         <div class="tooltip-detail">{hn.country}</div>
       {/if}
     {:else}
-      {#if hqParts.length > 0}
-        <div class="tooltip-detail">{hqParts.join(' · ')}</div>
+      {#if hqString}
+        <div class="tooltip-detail">HQ: {hqString}</div>
+      {/if}
+      {#if regDiffers}
+        <div class="tooltip-detail tooltip-reg">Registered: {regString}</div>
       {/if}
       <div class="tooltip-detail">
         {ownerCategory}{#if hn.legal_entity_type}
@@ -75,9 +101,14 @@
       {#if pct > 0}
         <div class="tooltip-pct">
           <span class="tooltip-pct-value">{pct.toFixed(1)}%</span> ownership
+          {#if pathImputedLabel}
+            <span class="tooltip-imputed-note">{pathImputedLabel}</span>
+          {/if}
           {#if directPct > 0 && directPct !== pct}
-            · {directPct.toFixed(1)}% direct{#if isImputed}
-              (est.){/if}
+            <div class="tooltip-direct">
+              {directPct.toFixed(1)}% direct{#if isImputed && !pathImputedLabel}
+                (est.){/if}
+            </div>
           {/if}
         </div>
       {/if}
@@ -144,6 +175,23 @@
   .tooltip-pct-value {
     font-weight: 700;
     font-variant-numeric: tabular-nums;
+  }
+  /* Registration country on its own line — differs-from-HQ is the signal of
+     interest (shell / tax-haven indicator), so we always call it out when set. */
+  .tooltip-reg {
+    color: var(--tree-mint, #9df7e5);
+    opacity: 1;
+  }
+  .tooltip-imputed-note {
+    font-size: 9px;
+    opacity: 0.75;
+    margin-left: 4px;
+    font-style: italic;
+  }
+  .tooltip-direct {
+    font-size: 9px;
+    opacity: 0.65;
+    margin-top: 1px;
   }
   .tooltip-hint {
     font-size: 9px;

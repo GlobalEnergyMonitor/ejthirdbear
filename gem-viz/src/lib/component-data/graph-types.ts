@@ -54,6 +54,10 @@ export interface GraphNode {
   operating_status?: string;
   capacity_value?: number;
   capacity_unit?: string;
+  /** Country where the entity is legally registered (may differ from HQ country —
+   * a tax-haven / shell signal when divergent). Observable notebook surfaces both. */
+  registration_country?: string;
+  registration_subdivision?: string;
 }
 
 /**

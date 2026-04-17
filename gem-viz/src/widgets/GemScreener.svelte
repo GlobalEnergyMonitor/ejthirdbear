@@ -14,6 +14,7 @@
 
   // Step 1 — shared with /screener route (single source of truth)
   import ScreenerStep1 from '$lib/components/screener/ScreenerStep1.svelte';
+  import WidgetModal from '$lib/components/overlay/WidgetModal.svelte';
   import { fetchAssetFacets, fetchStatusTaxonomy } from './widget-api';
 
   // Step 2 components & data
@@ -698,15 +699,15 @@
         {/if}
       {/if}
 
-      <!-- Chart modal -->
-      {#if chartModalOwner}
-        <div class="chart-modal-backdrop" onclick={closeChartModal} role="presentation"></div>
-        <div class="chart-modal" role="dialog" aria-modal="true">
-          <header class="chart-modal-header">
-            <h3>{chartModalOwner.name}</h3>
-            <button class="chart-modal-close" onclick={closeChartModal}>✕</button>
-          </header>
-          <div class="chart-modal-body">
+      <!-- Chart modal — shared WidgetModal -->
+      <WidgetModal
+        open={!!chartModalOwner}
+        onClose={closeChartModal}
+        title={chartModalOwner?.name ?? ''}
+        ariaLabel="Owner chart"
+      >
+        {#snippet body()}
+          {#if chartModalOwner}
             <AssetScreenerChart
               entityId={chartModalOwner.entityId}
               entityName={chartModalOwner.name}
@@ -714,9 +715,9 @@
               trackerSlug={chartTrackerSlug}
               fillHeight={true}
             />
-          </div>
-        </div>
-      {/if}
+          {/if}
+        {/snippet}
+      </WidgetModal>
 
       <!-- ════════════════════════════════════════════════════════════════ -->
       <!-- STEP 4: Visualize -->
@@ -931,65 +932,7 @@
     color: var(--color-text-tertiary, #94a3b8);
   }
 
-  /* Chart modal */
-  .chart-modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.3);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    z-index: 100;
-  }
-
-  .chart-modal {
-    position: fixed;
-    inset: 3vh 3vw;
-    background: var(--color-bg-primary, #fff);
-    border-radius: 8px;
-    z-index: 101;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-  }
-
-  .chart-modal-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 8px 16px;
-    border-bottom: 1px solid var(--color-border, #e5e7eb);
-    flex-shrink: 0;
-  }
-
-  .chart-modal-header h3 {
-    margin: 0;
-    font-size: var(--font-size-md, 1rem);
-    font-weight: 500;
-    color: var(--color-text-secondary, #64748b);
-    font-family: Georgia, serif;
-  }
-
-  .chart-modal-close {
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: var(--color-text-tertiary, #94a3b8);
-    font-size: var(--font-size-lg, 1.125rem);
-    padding: 4px 8px;
-    line-height: 1;
-  }
-
-  .chart-modal-close:hover {
-    color: var(--color-text-primary);
-  }
-
-  .chart-modal-body {
-    flex: 1;
-    overflow-y: auto;
-    padding: 0;
-    min-height: 0;
-  }
+  /* Chart modal now uses shared WidgetModal from $lib/components/overlay */
 
   /* Viz grid */
   .viz-grid {
