@@ -868,6 +868,31 @@
     });
     dagre.layout(g);
 
+    // Fallback: dagre's BK x-coordinate assignment occasionally returns NaN on
+    // graphs with cycle-closing edges (even with acyclicer: 'greedy'). When
+    // that happens, every node stacks at x=NaN and the layout is unusable.
+    // Recover by distributing nodes evenly across each rank.
+    const anyNaN = g.nodes().some((id: string) => !Number.isFinite(g.node(id).x));
+    if (anyNaN) {
+      const byY = new Map<number, string[]>();
+      g.nodes().forEach((id: string) => {
+        const y = g.node(id).y;
+        const ids = byY.get(y) ?? [];
+        ids.push(id);
+        byY.set(y, ids);
+      });
+      for (const [, ids] of byY) {
+        const widths = ids.map((id: string) => g.node(id).width || nodeR * 2);
+        const gap = dynamicNodeSep;
+        const total = widths.reduce((a, b) => a + b, 0) + gap * (ids.length - 1);
+        let x = -total / 2;
+        ids.forEach((id: string, i: number) => {
+          g.node(id).x = x + widths[i] / 2;
+          x += widths[i] + gap;
+        });
+      }
+    }
+
     // Convert dagre y-positions to discrete rank indices.
     // Rank 0 = root node (appears first in entrance animation).
     // For BT (upstream): root is at bottom (high y) → sort ascending so high y = rank 0.

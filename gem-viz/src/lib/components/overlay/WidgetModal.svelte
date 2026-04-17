@@ -31,13 +31,16 @@
     document.body.appendChild(host);
     const portalShadow = host.attachShadow({ mode: 'open' });
 
+    // Copy BOTH adopted stylesheets AND inline <style> elements. Svelte may use
+    // either depending on how the component chunk was built — missing either
+    // one causes the modal to render without its scoped CSS (no radius, no
+    // sizing, stretches past viewport).
     if (root.adoptedStyleSheets?.length) {
       portalShadow.adoptedStyleSheets = [...root.adoptedStyleSheets];
-    } else {
-      root.querySelectorAll('style').forEach((s) => {
-        portalShadow.appendChild(s.cloneNode(true));
-      });
     }
+    root.querySelectorAll('style').forEach((s) => {
+      portalShadow.appendChild(s.cloneNode(true));
+    });
 
     portalShadow.appendChild(node);
 
