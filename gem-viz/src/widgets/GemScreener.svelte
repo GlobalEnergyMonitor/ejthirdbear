@@ -186,8 +186,8 @@
 
     // Init sub-class checks
     const initialSubClassChecks: Record<string, boolean> = {};
-    if (ac?.subClasses) {
-      for (const sc of ac.subClasses) {
+    if (catalogEntry?.subClasses) {
+      for (const sc of catalogEntry.subClasses) {
         initialSubClassChecks[sc.id] = sc.defaultChecked ?? true;
       }
     }
@@ -195,8 +195,8 @@
 
     // Init group option checks
     const initialGroupChecks: Record<string, boolean> = {};
-    if (ac?.subClassGroups) {
-      for (const group of ac.subClassGroups) {
+    if (catalogEntry?.subClassGroups) {
+      for (const group of catalogEntry.subClassGroups) {
         for (const opt of group.options) {
           initialGroupChecks[opt.id] = opt.defaultChecked ?? true;
         }
@@ -214,14 +214,14 @@
     }
     statusChecks = initialStatusChecks;
 
-    fetchStatusFacetsForClass(ac, catalogEntry, classId);
+    fetchStatusFacetsForClass(catalogEntry, classId);
   }
 
-  async function fetchStatusFacetsForClass(ac: any, catalogEntry: any, classId: string) {
+  async function fetchStatusFacetsForClass(catalogEntry: any, classId: string) {
     try {
       let slugs: string[] = [];
-      if (ac?.trackers?.length) {
-        slugs = ac.trackers.map((t: string) => resolveApiSlug(gemTrackerToUiTracker(t))).filter(Boolean);
+      if (catalogEntry?.trackers?.length) {
+        slugs = catalogEntry.trackers.map((t: string) => resolveApiSlug(gemTrackerToUiTracker(t))).filter(Boolean);
       } else if (catalogEntry?.url) {
         const params = new URLSearchParams(catalogEntry.url.split('?')[1] ?? '');
         const types = params.getAll('asset_type');
@@ -292,7 +292,7 @@
     return [{
       id: selectedClassId,
       name: label,
-      description: ac?.description ?? '',
+      description: catalogEntry?.description ?? '',
       tracker,
       filters: {
         geography: geoFilters.length > 0 ? geoFilters : undefined,
