@@ -252,7 +252,12 @@
   $effect(() => {
     const q = query;
     const type = searchType;
-    const hasFilters = filterAssetTypes.length > 0 || filterCountries.length > 0 || filterStatuses.length > 0;
+    // Spread all filter arrays unconditionally so every array is tracked as a
+    // reactive dependency regardless of short-circuit evaluation order.
+    const nTypes     = filterAssetTypes.length;
+    const nCountries = filterCountries.length;
+    const nStatuses  = filterStatuses.length;
+    const hasFilters = nTypes > 0 || nCountries > 0 || nStatuses > 0;
     clearTimeout(debounceTimer);
     if ((!q || q.length < 2) && !hasFilters) {
       results = [];

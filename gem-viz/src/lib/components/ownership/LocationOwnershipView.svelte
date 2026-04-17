@@ -106,15 +106,17 @@
   {/if}
 
   {#if activeGraph}
-    <OwnershipTreeGraph
-      nodes={activeGraph.nodes}
-      edges={activeGraph.edges}
-      paths={activeGraph.paths}
-      rootId={activeGraph.root.asset_id}
-      direction={treeDirection}
-      {fullWidth}
-      {expandHeight}
-    />
+    {#key activeIndex}
+      <OwnershipTreeGraph
+        nodes={activeGraph.nodes}
+        edges={activeGraph.edges}
+        paths={activeGraph.paths}
+        rootId={activeGraph.root.asset_id}
+        direction={treeDirection}
+        {fullWidth}
+        {expandHeight}
+      />
+    {/key}
   {:else}
     <div class="lov-empty">No ownership data available.</div>
   {/if}

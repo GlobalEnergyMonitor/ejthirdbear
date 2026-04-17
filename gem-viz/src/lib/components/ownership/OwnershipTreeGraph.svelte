@@ -649,10 +649,15 @@
         continue;
       }
 
-      // Two nodes — try offsetting left label to avoid collision
-      if (nodesAtRank.length === 2 && nodesAtRank[0].x > labelW) {
-        nodesAtRank[0].labelPos = { dx: -labelW - nodesAtRank[0].r, dy: 0, below: false };
-        nodesAtRank[1].labelPos = { dx: 0, dy: nodeR + labelGap, below: false };
+      // Two nodes — offset labels so they don't overlap each other.
+      // Clamp left node's dx so the label can't go off-screen left.
+      if (nodesAtRank.length === 2) {
+        const leftNode = nodesAtRank[0];
+        const rightNode = nodesAtRank[1];
+        const idealDx = -labelW - leftNode.r;
+        const clampedDx = Math.max(idealDx, -(leftNode.x - leftNode.r - 4));
+        leftNode.labelPos = { dx: clampedDx, dy: nodeR + labelGap, below: false };
+        rightNode.labelPos = { dx: 0, dy: nodeR + labelGap, below: false };
         continue;
       }
 
@@ -1698,7 +1703,7 @@
                         x={pos.dx}
                         y={pos.dy}
                       >
-                        <tspan x={pos.dx} dy={wrapped.line2 ? '-0.3em' : '0'}>{wrapped.line1}</tspan
+                        <tspan x={pos.dx} dy={wrapped.line2 ? '-0.7em' : '0'}>{wrapped.line1}</tspan
                         >
                         {#if wrapped.line2}
                           <tspan x={pos.dx} dy="1.1em">{wrapped.line2}</tspan>
