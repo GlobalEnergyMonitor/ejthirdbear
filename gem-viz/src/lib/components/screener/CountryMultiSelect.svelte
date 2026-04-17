@@ -11,16 +11,37 @@
    * filtering in contexts like the asset-class screener).
    */
 
-  const GEO_TAXONOMY_URL = 'https://gem-ownership-api.fly.dev/catalog/taxonomy/geography?format=json';
-  const WANTED_REGIONS = ['Africa', 'Asia', 'Europe', 'Latin America and the Caribbean', 'North America', 'Oceania'];
+  const GEO_TAXONOMY_URL =
+    'https://gem-ownership-api.fly.dev/catalog/taxonomy/geography?format=json';
+  const WANTED_REGIONS = [
+    'Africa',
+    'Asia',
+    'Europe',
+    'Latin America and the Caribbean',
+    'North America',
+    'Oceania',
+  ];
 
   interface Props {
     selected: string[];
     /** Optional filter: if non-empty, only show intersection with taxonomy. */
     countries?: readonly string[];
+    /** Per-country asset counts, used to render parenthetical counts next to items. */
+    countryCounts?: Record<string, number>;
   }
 
-  let { selected = $bindable(), countries = [] }: Props = $props();
+  let { selected = $bindable(), countries = [], countryCounts = {} }: Props = $props();
+
+  function formatCount(n: number): string {
+    return n.toLocaleString();
+  }
+
+  /** Sum asset counts for members of a country group. */
+  function groupAssetCount(members: string[]): number {
+    let sum = 0;
+    for (const m of members) sum += countryCounts[m] ?? 0;
+    return sum;
+  }
 
   // ── Taxonomy fetch ────────────────────────────────────────────────
   let taxonomyCountries = $state<string[]>([]);
@@ -29,17 +50,20 @@
   onMount(async () => {
     try {
       const resp = await fetch(GEO_TAXONOMY_URL);
-      const data = await resp.json() as { country: { values: string[] }; region: Record<string, string[]> };
+      const data = (await resp.json()) as {
+        country: { values: string[] };
+        region: Record<string, string[]>;
+      };
       taxonomyCountries = data.country.values;
-      apiRegionGroups = WANTED_REGIONS
-        .filter(r => data.region[r]?.length)
-        .map(r => ({
-          id: r.toLowerCase().replace(/[\s&]+/g, '-'),
-          label: r,
-          aliases: [r.toLowerCase()],
-          members: data.region[r],
-        }));
-    } catch { /* fail silently — countries prop used as fallback */ }
+      apiRegionGroups = WANTED_REGIONS.filter((r) => data.region[r]?.length).map((r) => ({
+        id: r.toLowerCase().replace(/[\s&]+/g, '-'),
+        label: r,
+        aliases: [r.toLowerCase()],
+        members: data.region[r],
+      }));
+    } catch {
+      /* fail silently — countries prop used as fallback */
+    }
   });
 
   /** Effective country list: taxonomy (filtered by prop if provided) or prop alone. */
@@ -47,7 +71,7 @@
     if (taxonomyCountries.length === 0) return [...countries];
     if (countries.length === 0) return taxonomyCountries;
     const propSet = new Set(countries);
-    return taxonomyCountries.filter(c => propSet.has(c));
+    return taxonomyCountries.filter((c) => propSet.has(c));
   });
 
   // ── Country group presets ─────────────────────────────────────────
@@ -214,21 +238,31 @@
   const matchedGroups = $derived.by(() => {
     const q = query.toLowerCase().trim();
     if (!q) return allGroups;
-    return allGroups.filter((g) => g.label.toLowerCase().includes(q) || g.aliases.some((a) => a.includes(q)));
+    return allGroups.filter(
+      (g) => g.label.toLowerCase().includes(q) || g.aliases.some((a) => a.includes(q))
+    );
   });
 
-  /** Groups that still have unselected members, with precomputed new-count */
+  /** Groups that still have unselected members, with precomputed new-count + asset-count */
   const activeGroups = $derived(
     matchedGroups
-      .map((g) => ({ ...g, newCount: g.members.filter((m) => !selected.includes(m)).length }))
+      .map((g) => ({
+        ...g,
+        newCount: g.members.filter((m) => !selected.includes(m)).length,
+        assetCount: groupAssetCount(g.members),
+      }))
       .filter((g) => g.newCount > 0)
   );
 
   const filtered = $derived.by(() => {
     const q = query.toLowerCase().trim();
     const available = effectiveCountries.filter((c) => !selected.includes(c));
-    if (!q) return available.slice(0, 50);
-    return available.filter((c) => c.toLowerCase().includes(q));
+    const hasCounts = Object.keys(countryCounts).length > 0;
+    const sorted = hasCounts
+      ? [...available].sort((a, b) => (countryCounts[b] ?? 0) - (countryCounts[a] ?? 0))
+      : available;
+    if (!q) return sorted.slice(0, 50);
+    return sorted.filter((c) => c.toLowerCase().includes(q));
   });
 
   /** Total selectable items: groups + individual countries */
@@ -384,21 +418,28 @@
           onmousedown={() => handleGroupMousedown(group)}
         >
           <span class="group-name">{group.label}</span>
-          <span class="group-count">+{group.newCount} countries</span>
+          <span class="group-count">
+            +{group.newCount} countries{#if group.assetCount > 0}
+              · {formatCount(group.assetCount)}{/if}
+          </span>
         </li>
       {/each}
       {#if activeGroups.length > 0 && filtered.length > 0}
         <li class="dropdown-divider" role="separator"></li>
       {/if}
       {#each filtered as country, i (country)}
+        {@const count = countryCounts[country] ?? 0}
         <li
-          class="dropdown-item"
+          class="dropdown-item country-item"
           class:highlighted={activeGroups.length + i === highlightIndex}
           role="option"
           aria-selected={activeGroups.length + i === highlightIndex}
           onmousedown={() => handleOptionMousedown(country)}
         >
-          {country}
+          <span class="country-name">{country}</span>
+          {#if count > 0}
+            <span class="country-count">{formatCount(count)}</span>
+          {/if}
         </li>
       {/each}
       {#if filtered.length > 50}
@@ -559,6 +600,29 @@
     font-size: 11px;
     color: var(--color-text-tertiary, #a0aec0);
     white-space: nowrap;
+  }
+
+  .country-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+  }
+
+  .country-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .country-count {
+    font-size: 11px;
+    color: var(--color-text-tertiary, #a0aec0);
+    background: var(--color-gray-100, #f1f5f9);
+    padding: 1px 6px;
+    border-radius: 9999px;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 
   .dropdown-divider {

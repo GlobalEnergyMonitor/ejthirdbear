@@ -69,7 +69,9 @@
 
   // Track whether any quick start has been used — hides the grid until clearAll
   let quickStartUsed = $state(false);
-  $effect(() => { if (!isDirty) quickStartUsed = false; });
+  $effect(() => {
+    if (!isDirty) quickStartUsed = false;
+  });
 
   function closePicker() {
     if (openPicker && openPicker !== '__fields') {
@@ -88,7 +90,13 @@
     <p class="qs-heading">What would you like to explore?</p>
     <div class="qs-grid">
       {#each quickStarts as qs}
-        <button class="qs-item" onclick={() => { quickStartUsed = true; qs.apply(); }}>
+        <button
+          class="qs-item"
+          onclick={() => {
+            quickStartUsed = true;
+            qs.apply();
+          }}
+        >
           {qs.sentence}
         </button>
       {/each}
@@ -115,8 +123,8 @@
         class="open-btn"
         class:open={openPicker === fieldKey}
         onclick={() => togglePicker(fieldKey)}
-        aria-label="Add {def.label}"
-      >{openPicker === fieldKey ? '−' : '+'}</button>
+        aria-label="Add {def.label}">{openPicker === fieldKey ? '−' : '+'}</button
+      >
     {/if}
   {/each}
 
@@ -124,7 +132,8 @@
     class="add-filter-btn"
     class:open={openPicker === '__fields'}
     onclick={() => togglePicker('__fields')}
-  >{openPicker === '__fields' ? '− hide filters' : '+ add filter'}</button>
+    >{openPicker === '__fields' ? '− hide filters' : '+ add filter'}</button
+  >
 
   <span class="sentence-end">.</span>
 
@@ -139,14 +148,17 @@
       <span class="panel-title">{panelTitle}</span>
       <button class="panel-close" onclick={closePicker}>Done</button>
     </div>
-    <div class="panel-body" class:panel-body--column={openPicker !== null && columnPickerKeys.includes(openPicker)}>
+    <div
+      class="panel-body"
+      class:panel-body--column={openPicker !== null && columnPickerKeys.includes(openPicker)}
+    >
       {#if openPicker === '__fields'}
         {#each fields as f}
           <button
             class="pill"
             class:active={shownFields.includes(f.key)}
-            onclick={() => toggleFilterField(f.key)}
-          >{f.label}</button>
+            onclick={() => toggleFilterField(f.key)}>{f.label}</button
+          >
         {/each}
         {@render fieldPickerSuffix?.()}
       {:else}
@@ -176,7 +188,9 @@
     border-radius: 4px;
     padding: 0.15em 0.5em;
     white-space: nowrap;
-    transition: background 0.12s, color 0.12s;
+    transition:
+      background 0.12s,
+      color 0.12s;
     flex-shrink: 0;
   }
 
@@ -215,7 +229,10 @@
     border: 1.5px solid var(--color-gray-200, #dce3e5);
     border-radius: 6px;
     background: #fff;
-    transition: color 0.12s, border-color 0.12s, background 0.12s;
+    transition:
+      color 0.12s,
+      border-color 0.12s,
+      background 0.12s;
     text-align: left;
   }
 
@@ -289,7 +306,10 @@
     font-size: var(--font-size-sm, 12px);
     line-height: 1;
     flex-shrink: 0;
-    transition: background 0.1s, color 0.1s, border-color 0.1s;
+    transition:
+      background 0.1s,
+      color 0.1s,
+      border-color 0.1s;
   }
 
   .open-btn:hover {
@@ -313,7 +333,9 @@
     border-radius: 4px;
     padding: 0.2em 0.6em;
     white-space: nowrap;
-    transition: color 0.1s, border-color 0.1s;
+    transition:
+      color 0.1s,
+      border-color 0.1s;
   }
 
   .add-filter-btn:hover,

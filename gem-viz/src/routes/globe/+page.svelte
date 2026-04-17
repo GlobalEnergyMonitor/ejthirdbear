@@ -491,7 +491,6 @@
     font-family: var(--font-family-sans);
   }
 
-
   .explorer-body {
     display: flex;
     flex: 1;
@@ -765,6 +764,5 @@
       border-right: none;
       border-bottom: var(--border-width) solid var(--color-border);
     }
-
   }
 </style>

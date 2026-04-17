@@ -5,6 +5,8 @@
  */
 
 const API_BASE = 'https://gem-api.thirdbear.net';
+// Effectively uncapped — full ownership graph, no truncation.
+const OWNERSHIP_GRAPH_MAX_DEPTH = Number.MAX_SAFE_INTEGER;
 
 /**
  * Resolve G-prefix ID to compound ID via /resolve/{id} API
@@ -135,7 +137,7 @@ export async function fetchAssetData(assetId) {
     const [rawAsset, rawGraph] = await Promise.all([
       fetchJSON(`/assets/${encodeURIComponent(resolvedId)}`),
       fetchJSON(
-        `/ownership/graph?root=${encodeURIComponent(resolvedId)}&direction=up`
+        `/ownership/graph?root=${encodeURIComponent(resolvedId)}&direction=up&max_depth=${OWNERSHIP_GRAPH_MAX_DEPTH}`
       ),
     ]);
     // Normalize to match client-side expected format

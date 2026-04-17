@@ -12,7 +12,10 @@
   } from '$lib/data-config/coal-field-schema';
   import { fetchSummaryTable, type SummaryRow } from '$lib/data-config/aggregate-api';
   import DataTable from '$lib/components/table/DataTable.svelte';
-  import QuerySentenceBuilder, { type FilterFieldDef, type QuickStart } from '$lib/components/filters/QuerySentenceBuilder.svelte';
+  import QuerySentenceBuilder, {
+    type FilterFieldDef,
+    type QuickStart,
+  } from '$lib/components/filters/QuerySentenceBuilder.svelte';
   import StatusFilter from '$lib/components/filters/StatusFilter.svelte';
   import CountryMultiSelect from '$lib/components/screener/CountryMultiSelect.svelte';
   import CoalPlantCard from '$lib/components/cards/CoalPlantCard.svelte';
@@ -23,10 +26,10 @@
   import type { DynamicStatusGroup } from '$lib/data-config/tracker-schema';
 
   function makeFullStatusGroups(): DynamicStatusGroup[] {
-    return STATUS_GROUPS.map(sg => ({
+    return STATUS_GROUPS.map((sg) => ({
       id: sg.id,
       label: sg.label,
-      statuses: (sg.statuses as string[]).map(s => ({ value: s, count: 0 })),
+      statuses: (sg.statuses as string[]).map((s) => ({ value: s, count: 0 })),
       totalCount: 0,
     }));
   }
@@ -39,10 +42,10 @@
 
   // ── API options (for pickers) ──────────────────────────────────────────────
 
-  let statusOptions  = $state<string[]>([]);
+  let statusOptions = $state<string[]>([]);
   let countryOptions = $state<string[]>([]);
-  let otherOptions   = $state<Record<string, string[]>>({});
-  let countrySearch  = $state('');
+  let otherOptions = $state<Record<string, string[]>>({});
+  let countrySearch = $state('');
 
   async function fetchStats(tracker: 'coal-plant' | 'coal-mine', key: string): Promise<string[]> {
     try {
@@ -52,7 +55,9 @@
       const data = await res.json();
       if (Array.isArray(data.value_counts))
         return data.value_counts.map((vc: { value: string }) => String(vc.value));
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     return [];
   }
 
@@ -62,8 +67,8 @@
 
   $effect(() => {
     const t = primaryTracker;
-    fetchStats(t, 'status').then(v => (statusOptions = v));
-    fetchStats(t, 'country_area').then(v => (countryOptions = v));
+    fetchStats(t, 'status').then((v) => (statusOptions = v));
+    fetchStats(t, 'country_area').then((v) => (countryOptions = v));
   });
 
   // Fetch options lazily when a picker opens for a non-standard field
@@ -74,7 +79,9 @@
     if (SKIP.has(key)) return;
     untrack(() => {
       if (key && !otherOptions[key]) {
-        fetchStats(t, key).then(v => { otherOptions = { ...otherOptions, [key]: v }; });
+        fetchStats(t, key).then((v) => {
+          otherOptions = { ...otherOptions, [key]: v };
+        });
       }
     });
   });
@@ -82,42 +89,40 @@
   // ── Filter field definitions ───────────────────────────────────────────────
 
   const PLANT_FIELDS: FilterFieldDef[] = [
-    { key: 'status',                          label: 'Operating status', phrase: 'with a status of'        },
-    { key: 'country_area',                    label: 'Country',          phrase: 'located in'              },
-    { key: 'combustion_technology',           label: 'Technology',       phrase: 'using'                   },
-    { key: 'coal_type',                       label: 'Coal type',        phrase: 'burning'                 },
-    { key: 'chp',                             label: 'CHP',              phrase: 'with CHP'                },
-    { key: 'captive',                         label: 'Captive',          phrase: 'as captive'              },
-    { key: 'subnational_unit_province_state', label: 'Subnational unit', phrase: 'in'                      },
+    { key: 'status', label: 'Operating status', phrase: 'with a status of' },
+    { key: 'country_area', label: 'Country', phrase: 'located in' },
+    { key: 'combustion_technology', label: 'Technology', phrase: 'using' },
+    { key: 'coal_type', label: 'Coal type', phrase: 'burning' },
+    { key: 'chp', label: 'CHP', phrase: 'with CHP' },
+    { key: 'captive', label: 'Captive', phrase: 'as captive' },
+    { key: 'subnational_unit_province_state', label: 'Subnational unit', phrase: 'in' },
   ];
   const MINE_FIELDS: FilterFieldDef[] = [
-    { key: 'status',        label: 'Operating status', phrase: 'with a status of' },
-    { key: 'country_area',  label: 'Country',          phrase: 'located in'       },
-    { key: 'mine_type',     label: 'Mine type',        phrase: 'of mine type'     },
-    { key: 'mining_method', label: 'Mining method',    phrase: 'using'            },
-    { key: 'coal_grade',    label: 'Coal grade',       phrase: 'of coal grade'    },
+    { key: 'status', label: 'Operating status', phrase: 'with a status of' },
+    { key: 'country_area', label: 'Country', phrase: 'located in' },
+    { key: 'mine_type', label: 'Mine type', phrase: 'of mine type' },
+    { key: 'mining_method', label: 'Mining method', phrase: 'using' },
+    { key: 'coal_grade', label: 'Coal grade', phrase: 'of coal grade' },
   ];
 
   const SHARED_FILTER_KEYS = new Set(
-    PLANT_FIELDS.filter(f => MINE_FIELDS.some(m => m.key === f.key)).map(f => f.key)
+    PLANT_FIELDS.filter((f) => MINE_FIELDS.some((m) => m.key === f.key)).map((f) => f.key)
   );
 
   const availableFilterFields = $derived<FilterFieldDef[]>(
     q.query.trackers.length === 2
-      ? PLANT_FIELDS.filter(f => SHARED_FILTER_KEYS.has(f.key))
-      : q.query.trackers.includes('coal-plant') ? PLANT_FIELDS : MINE_FIELDS
+      ? PLANT_FIELDS.filter((f) => SHARED_FILTER_KEYS.has(f.key))
+      : q.query.trackers.includes('coal-plant')
+        ? PLANT_FIELDS
+        : MINE_FIELDS
   );
 
   const plantOnlyFilterFields = $derived<FilterFieldDef[]>(
-    q.query.trackers.length === 2
-      ? PLANT_FIELDS.filter(f => !SHARED_FILTER_KEYS.has(f.key))
-      : []
+    q.query.trackers.length === 2 ? PLANT_FIELDS.filter((f) => !SHARED_FILTER_KEYS.has(f.key)) : []
   );
 
   const mineOnlyFilterFields = $derived<FilterFieldDef[]>(
-    q.query.trackers.length === 2
-      ? MINE_FIELDS.filter(f => !SHARED_FILTER_KEYS.has(f.key))
-      : []
+    q.query.trackers.length === 2 ? MINE_FIELDS.filter((f) => !SHARED_FILTER_KEYS.has(f.key)) : []
   );
 
   // ── Shown filter fields ────────────────────────────────────────────────────
@@ -126,7 +131,9 @@
 
   $effect(() => {
     const isDirty = q.isDirty;
-    untrack(() => { if (!isDirty) shownFields = []; });
+    untrack(() => {
+      if (!isDirty) shownFields = [];
+    });
   });
 
   $effect(() => {
@@ -154,17 +161,17 @@
 
   const TRACKER_LABELS: Record<Tracker, string> = {
     'coal-plant': 'Coal Plants',
-    'coal-mine':  'Coal Mines',
+    'coal-mine': 'Coal Mines',
   };
 
   function removeTracker(t: Tracker) {
-    const next = q.query.trackers.filter(x => x !== t);
+    const next = q.query.trackers.filter((x) => x !== t);
     if (next.length > 0) q.setTrackers(next as Tracker[]);
   }
 
   function toggleTracker(t: Tracker) {
     const cur = q.query.trackers;
-    const next = cur.includes(t) ? cur.filter(x => x !== t) : [...cur, t];
+    const next = cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t];
     if (next.length > 0) q.setTrackers(next as Tracker[]);
   }
 
@@ -172,13 +179,16 @@
 
   function toggleStatus(s: string) {
     const cur = q.query.filters.status ?? [];
-    const next = cur.includes(s) ? cur.filter(x => x !== s) : [...cur, s];
+    const next = cur.includes(s) ? cur.filter((x) => x !== s) : [...cur, s];
     q.setFilter('status', next.length ? next : undefined);
   }
 
   // ── Status bidirectional sync ──────────────────────────────────────────────
 
-  function buildStatusChecks(selected: string[] | undefined, groups?: DynamicStatusGroup[]): Record<string, boolean> {
+  function buildStatusChecks(
+    selected: string[] | undefined,
+    groups?: DynamicStatusGroup[]
+  ): Record<string, boolean> {
     const g = groups ?? coalStatusGroups;
     const selectedSet = new Set(selected ?? []);
     const checks: Record<string, boolean> = {};
@@ -212,31 +222,39 @@
       });
       // Fetch tracker-specific sub-statuses in background
       Promise.all([
-        import('$lib/ownership-api').then(m => m.fetchStatusTaxonomy().catch(() => null)),
-        import('$lib/ownership-api').then(m => m.fetchStatusFacets(trackerSlug)),
-      ]).then(([taxonomy, facets]) => {
-        untrack(() => {
-          // Only apply if tracker hasn't changed
-          if (JSON.stringify(q.query.trackers) !== JSON.stringify(trackers)) return;
-          const discovered = discoverStatusGroups(facets, taxonomy ?? undefined);
-          coalStatusGroups = discovered;
-          statusChecks = buildStatusChecks(q.query.filters.status, discovered);
+        import('$lib/ownership-api').then((m) => m.fetchStatusTaxonomy().catch(() => null)),
+        import('$lib/ownership-api').then((m) => m.fetchStatusFacets(trackerSlug)),
+      ])
+        .then(([taxonomy, facets]) => {
+          untrack(() => {
+            // Only apply if tracker hasn't changed
+            if (JSON.stringify(q.query.trackers) !== JSON.stringify(trackers)) return;
+            const discovered = discoverStatusGroups(facets, taxonomy ?? undefined);
+            coalStatusGroups = discovered;
+            statusChecks = buildStatusChecks(q.query.filters.status, discovered);
+          });
+        })
+        .catch(() => {
+          /* keep hardcoded groups */
         });
-      }).catch(() => { /* keep hardcoded groups */ });
     }
   });
 
   function extractStatusValues(checks: Record<string, boolean>): string[] {
-    return Object.entries(checks).filter(([, v]) => v).map(([key]) => key.split('-').slice(2).join('-'));
+    return Object.entries(checks)
+      .filter(([, v]) => v)
+      .map(([key]) => key.split('-').slice(2).join('-'));
   }
 
   function sameStringSet(a: string[], b: string[]): boolean {
     if (a.length !== b.length) return false;
     const s = new Set(a);
-    return b.every(v => s.has(v));
+    return b.every((v) => s.has(v));
   }
 
-  let statusChecks = $state<Record<string, boolean>>(buildStatusChecks(untrack(() => q.query.filters.status)));
+  let statusChecks = $state<Record<string, boolean>>(
+    buildStatusChecks(untrack(() => q.query.filters.status))
+  );
 
   // statusChecks → q.query.filters.status
   $effect(() => {
@@ -251,7 +269,9 @@
     const status = q.query.filters.status ?? [];
     const curVals = extractStatusValues(untrack(() => statusChecks));
     if (sameStringSet(status, curVals)) return;
-    untrack(() => { statusChecks = buildStatusChecks(status); });
+    untrack(() => {
+      statusChecks = buildStatusChecks(status);
+    });
   });
 
   // ── Country bidirectional sync ─────────────────────────────────────────────
@@ -269,7 +289,9 @@
     const external = q.query.filters.country_area ?? [];
     const cur = untrack(() => localSelectedCountries);
     if (sameStringSet(external, cur)) return;
-    untrack(() => { localSelectedCountries = [...external]; });
+    untrack(() => {
+      localSelectedCountries = [...external];
+    });
   });
 
   // ── Sentence builder wiring ────────────────────────────────────────────────
@@ -278,13 +300,16 @@
 
   function handleRemoveValue(key: string, val: string) {
     if (key === 'country_area') {
-      localSelectedCountries = localSelectedCountries.filter(c => c !== val);
-      if (localSelectedCountries.length === 0) shownFields = shownFields.filter(k => k !== key);
+      localSelectedCountries = localSelectedCountries.filter((c) => c !== val);
+      if (localSelectedCountries.length === 0) shownFields = shownFields.filter((k) => k !== key);
     } else {
-      const cur = (q.query.filters as Record<string, unknown>)[key] as string[] | undefined ?? [];
-      const next = cur.filter(v => v !== val);
-      q.setFilter(key as keyof CoalQueryFilters, next.length ? next as CoalQueryFilters[keyof CoalQueryFilters] : undefined);
-      if (next.length === 0) shownFields = shownFields.filter(k => k !== key);
+      const cur = ((q.query.filters as Record<string, unknown>)[key] as string[] | undefined) ?? [];
+      const next = cur.filter((v) => v !== val);
+      q.setFilter(
+        key as keyof CoalQueryFilters,
+        next.length ? (next as CoalQueryFilters[keyof CoalQueryFilters]) : undefined
+      );
+      if (next.length === 0) shownFields = shownFields.filter((k) => k !== key);
     }
   }
 
@@ -295,7 +320,9 @@
 
   const countryDropdown = $derived(
     countrySearch.trim()
-      ? countryOptions.filter(c => c.toLowerCase().includes(countrySearch.toLowerCase())).slice(0, 50)
+      ? countryOptions
+          .filter((c) => c.toLowerCase().includes(countrySearch.toLowerCase()))
+          .slice(0, 50)
       : countryOptions.slice(0, 50)
   );
 
@@ -305,13 +332,13 @@
   }
   function removeCountry(c: string) {
     const cur = q.query.filters.country_area ?? [];
-    const next = cur.filter(x => x !== c);
+    const next = cur.filter((x) => x !== c);
     q.setFilter('country_area', next.length ? next : undefined);
   }
 
   function toggleValue(key: keyof CoalQueryFilters, val: string) {
     const cur = (q.query.filters[key] as string[] | undefined) ?? [];
-    const next = cur.includes(val) ? cur.filter(v => v !== val) : [...cur, val];
+    const next = cur.includes(val) ? cur.filter((v) => v !== val) : [...cur, val];
     q.setFilter(key, next.length ? (next as CoalQueryFilters[typeof key]) : undefined);
   }
 
@@ -324,9 +351,10 @@
 
   $effect(() => {
     const hasSummary = q.query.groupBy.length > 0 || q.query.aggregates.length > 0;
-    untrack(() => { if (hasSummary) outputMode = 'summary'; });
+    untrack(() => {
+      if (hasSummary) outputMode = 'summary';
+    });
   });
-
 
   function setOutputMode(mode: 'data' | 'summary') {
     outputMode = mode;
@@ -357,41 +385,36 @@
     openPicker = null;
   }
 
-  const groupableFields    = $derived(getGroupableFields(q.query.trackers));
+  const groupableFields = $derived(getGroupableFields(q.query.trackers));
   const aggregatableFields = $derived(getAggregatableFields(q.query.trackers));
-
 
   /** Switch to a single tracker, pruning aggregates and groupBy to only valid fields. */
   function switchToSingleTracker(tracker: Tracker) {
     const newTrackers: Tracker[] = [tracker];
-    const validAggKeys = new Set(
-      getAggregatableFields(newTrackers).map(f => f.key)
-    );
-    const validGroupKeys = new Set(
-      getGroupableFields(newTrackers).map(f => f.key)
-    );
+    const validAggKeys = new Set(getAggregatableFields(newTrackers).map((f) => f.key));
+    const validGroupKeys = new Set(getGroupableFields(newTrackers).map((f) => f.key));
     q.setTrackers(newTrackers);
-    q.setAggregates(q.query.aggregates.filter(a => validAggKeys.has(a.field)));
-    q.setGroupBy(q.query.groupBy.filter(k => validGroupKeys.has(k)));
+    q.setAggregates(q.query.aggregates.filter((a) => validAggKeys.has(a.field)));
+    q.setGroupBy(q.query.groupBy.filter((k) => validGroupKeys.has(k)));
   }
 
   function toggleGroupBy(field: string) {
     const cur = q.query.groupBy;
-    q.setGroupBy(cur.includes(field) ? cur.filter(f => f !== field) : [...cur, field]);
+    q.setGroupBy(cur.includes(field) ? cur.filter((f) => f !== field) : [...cur, field]);
   }
 
   function toggleAggregate(fn: AggFn, field: string) {
     const cur = q.query.aggregates;
-    const exists = cur.some(a => a.fn === fn && a.field === field);
-    q.setAggregates(exists
-      ? cur.filter(a => !(a.fn === fn && a.field === field))
-      : [...cur, { fn, field }]);
+    const exists = cur.some((a) => a.fn === fn && a.field === field);
+    q.setAggregates(
+      exists ? cur.filter((a) => !(a.fn === fn && a.field === field)) : [...cur, { fn, field }]
+    );
   }
 
   // ── Results: count ──────────────────────────────────────────���──────────────
 
   type CountResult = { total: number; byType: Record<string, number> };
-  let countResult  = $state<CountResult | null>(null);
+  let countResult = $state<CountResult | null>(null);
   let countLoading = $state(false);
   let countAbort: AbortController | null = null;
 
@@ -412,12 +435,17 @@
     countLoading = true;
     countResult = null;
     fetch(url, { signal: countAbort.signal })
-      .then(r => r.json())
-      .then(data => {
+      .then((r) => r.json())
+      .then((data) => {
         const total = data.total ?? data.count ?? 0;
         // API facets.asset_type is global (all types) — filter to selected trackers only
-        const SLUG_TO_DISPLAY: Record<string, string> = { 'coal-plant': 'Coal Plant', 'coal-mine': 'Coal Mine' };
-        const allowedTypes = new Set(q.query.trackers.map(t => SLUG_TO_DISPLAY[t]).filter(Boolean));
+        const SLUG_TO_DISPLAY: Record<string, string> = {
+          'coal-plant': 'Coal Plant',
+          'coal-mine': 'Coal Mine',
+        };
+        const allowedTypes = new Set(
+          q.query.trackers.map((t) => SLUG_TO_DISPLAY[t]).filter(Boolean)
+        );
         const rawByType: Record<string, number> = data.facets?.asset_type ?? {};
         const byType: Record<string, number> = {};
         for (const [type, n] of Object.entries(rawByType)) {
@@ -426,10 +454,14 @@
         countResult = { total, byType };
         countLoading = false;
       })
-      .catch(err => { if (err.name !== 'AbortError') countLoading = false; });
+      .catch((err) => {
+        if (err.name !== 'AbortError') countLoading = false;
+      });
   });
 
-  function fmt(n: number) { return n.toLocaleString(); }
+  function fmt(n: number) {
+    return n.toLocaleString();
+  }
 
   let apiCopied = $state(false);
   function copyApiUrls() {
@@ -443,46 +475,53 @@
 
   type TableCol = { key: string; altKey?: string | string[]; label: string };
 
-  const tableCols = $derived<TableCol[]>((() => {
-    const isPlant = q.query.trackers.includes('coal-plant');
-    const isMine  = q.query.trackers.includes('coal-mine');
-    if (isPlant && !isMine) return [
-      { key: 'asset_name', altKey: 'name', label: 'Name' },
-      { key: 'country_area', altKey: 'country', label: 'Country' },
-      { key: 'status', altKey: ['Status', 'operating_status'], label: 'Status' },
-      { key: 'sub_status', altKey: 'operating_sub_status', label: 'Sub-status' },
-      { key: 'capacity_mw', altKey: 'capacity_megawatts', label: 'Cap. (MW)' },
-      { key: 'combustion_technology', label: 'Technology' },
-    ];
-    if (isMine && !isPlant) return [
-      { key: 'asset_name', altKey: 'name', label: 'Name' },
-      { key: 'country_area', altKey: 'country', label: 'Country' },
-      { key: 'status', altKey: ['Status', 'operating_status'], label: 'Status' },
-      { key: 'sub_status', altKey: 'operating_sub_status', label: 'Sub-status' },
-      { key: 'capacity_value', label: 'Capacity (Mtpa)' },
-      { key: 'capacity_unit', label: 'Unit' },
-    ];
-    return [
-      { key: 'asset_name', altKey: 'name', label: 'Name' },
-      { key: 'country_area', altKey: 'country', label: 'Country' },
-      { key: 'status', altKey: ['Status', 'operating_status'], label: 'Status' },
-      { key: 'sub_status', altKey: 'operating_sub_status', label: 'Sub-status' },
-      { key: 'asset_type', label: 'Type' },
-    ];
-  })());
+  const tableCols = $derived<TableCol[]>(
+    (() => {
+      const isPlant = q.query.trackers.includes('coal-plant');
+      const isMine = q.query.trackers.includes('coal-mine');
+      if (isPlant && !isMine)
+        return [
+          { key: 'asset_name', altKey: 'name', label: 'Name' },
+          { key: 'country_area', altKey: 'country', label: 'Country' },
+          { key: 'status', altKey: ['Status', 'operating_status'], label: 'Status' },
+          { key: 'sub_status', altKey: 'operating_sub_status', label: 'Sub-status' },
+          { key: 'capacity_mw', altKey: 'capacity_megawatts', label: 'Cap. (MW)' },
+          { key: 'combustion_technology', label: 'Technology' },
+        ];
+      if (isMine && !isPlant)
+        return [
+          { key: 'asset_name', altKey: 'name', label: 'Name' },
+          { key: 'country_area', altKey: 'country', label: 'Country' },
+          { key: 'status', altKey: ['Status', 'operating_status'], label: 'Status' },
+          { key: 'sub_status', altKey: 'operating_sub_status', label: 'Sub-status' },
+          { key: 'capacity_value', label: 'Capacity (Mtpa)' },
+          { key: 'capacity_unit', label: 'Unit' },
+        ];
+      return [
+        { key: 'asset_name', altKey: 'name', label: 'Name' },
+        { key: 'country_area', altKey: 'country', label: 'Country' },
+        { key: 'status', altKey: ['Status', 'operating_status'], label: 'Status' },
+        { key: 'sub_status', altKey: 'operating_sub_status', label: 'Sub-status' },
+        { key: 'asset_type', label: 'Type' },
+      ];
+    })()
+  );
 
   // DataTable-compatible column definitions
   const dataTableCols = $derived(
-    tableCols.map(c => ({
+    tableCols.map((c) => ({
       key: c.key,
       label: c.label,
       sortable: true,
-      type: (c.key === 'capacity_mw' || c.key === 'capacity_value') ? 'number' as const : 'string' as const,
+      type:
+        c.key === 'capacity_mw' || c.key === 'capacity_value'
+          ? ('number' as const)
+          : ('string' as const),
     }))
   );
 
-  let showTable   = $state(false);
-  let tableRows   = $state<Record<string, unknown>[]>([]);
+  let showTable = $state(false);
+  let tableRows = $state<Record<string, unknown>[]>([]);
   let tableOffset = $state(0);
   let tableHasMore = $state(false);
   let tableLoading = $state(false);
@@ -490,10 +529,10 @@
 
   // ── Coal plant card modal ──────────────────────────────────────────────────
 
-  let modalOpen    = $state(false);
-  let modalUnits   = $state<CoalPlantUnit[] | null>(null);
+  let modalOpen = $state(false);
+  let modalUnits = $state<CoalPlantUnit[] | null>(null);
   let modalLoading = $state(false);
-  let modalError   = $state<string | null>(null);
+  let modalError = $state<string | null>(null);
 
   function extractLocationId(row: Record<string, unknown>): string | null {
     const loc = row['location_id'] ?? row['GEM Location ID'] ?? row['gem_location_id'];
@@ -534,17 +573,19 @@
 
   $effect(() => {
     if (!modalOpen) return;
-    function onKeydown(e: KeyboardEvent) { if (e.key === 'Escape') closeModal(); }
+    function onKeydown(e: KeyboardEvent) {
+      if (e.key === 'Escape') closeModal();
+    }
     window.addEventListener('keydown', onKeydown);
     return () => window.removeEventListener('keydown', onKeydown);
   });
 
   // ── Coal mine card modal ───────────────────────────────────────────────────
 
-  let mineModalOpen    = $state(false);
-  let mineAsset        = $state<CoalMineAsset | null>(null);
+  let mineModalOpen = $state(false);
+  let mineAsset = $state<CoalMineAsset | null>(null);
   let mineModalLoading = $state(false);
-  let mineModalError   = $state<string | null>(null);
+  let mineModalError = $state<string | null>(null);
 
   async function openMineModal(row: Record<string, unknown>) {
     const assetId = row['asset_id'] ?? row['gem_mine_id'] ?? row['id'];
@@ -572,14 +613,16 @@
 
   $effect(() => {
     if (!mineModalOpen) return;
-    function onKeydown(e: KeyboardEvent) { if (e.key === 'Escape') closeMineModal(); }
+    function onKeydown(e: KeyboardEvent) {
+      if (e.key === 'Escape') closeMineModal();
+    }
     window.addEventListener('keydown', onKeydown);
     return () => window.removeEventListener('keydown', onKeydown);
   });
 
   // Normalize rows: flatten nested tracker fields and resolve altKeys
   function normalizeRows(rows: Record<string, unknown>[]): Record<string, unknown>[] {
-    return rows.map(row => {
+    return rows.map((row) => {
       // Flatten coal_plant_fields / coal_mine_fields so column keys are top-level
       const nested =
         (row['coal_plant_fields'] as Record<string, unknown> | null) ??
@@ -591,7 +634,10 @@
         if (out[col.key] != null || !col.altKey) continue;
         const alts = Array.isArray(col.altKey) ? col.altKey : [col.altKey];
         for (const alt of alts) {
-          if (out[alt] != null) { out[col.key] = out[alt]; break; }
+          if (out[alt] != null) {
+            out[col.key] = out[alt];
+            break;
+          }
         }
       }
       return out;
@@ -607,16 +653,21 @@
   });
 
   async function loadTable(reset = false) {
-    if (reset) { tableRows = []; tableOffset = 0; }
+    if (reset) {
+      tableRows = [];
+      tableOffset = 0;
+    }
     tableLoading = true;
     try {
       const url = `${assetsUrl}&limit=${PAGE}&offset=${tableOffset}`;
-      const data = await fetch(url).then(r => r.json());
+      const data = await fetch(url).then((r) => r.json());
       const rows = normalizeRows((data.results ?? []) as Record<string, unknown>[]);
       tableRows = reset ? rows : [...tableRows, ...rows];
       tableOffset = tableRows.length;
       tableHasMore = tableRows.length < (data.total ?? 0);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     tableLoading = false;
   }
 
@@ -631,7 +682,10 @@
     void assetsUrl; // track as dependency
     untrack(() => {
       if (showTable) loadTable(true);
-      else { tableRows = []; tableOffset = 0; }
+      else {
+        tableRows = [];
+        tableOffset = 0;
+      }
     });
   });
 
@@ -639,17 +693,21 @@
     const total = countResult?.total ?? 0;
     const limit = Math.min(total, 5000);
     const url = `${assetsUrl}&limit=${limit}`;
-    const data = await fetch(url).then(r => r.json());
+    const data = await fetch(url).then((r) => r.json());
     const rows = (data.results ?? []) as Record<string, unknown>[];
     if (!rows.length) return;
-    const cols = tableCols.map(c => c.key);
-    const header = tableCols.map(c => c.label);
+    const cols = tableCols.map((c) => c.key);
+    const header = tableCols.map((c) => c.label);
     const lines = [
       header.join(','),
-      ...rows.map(row => cols.map(k => {
-        const v = row[k] ?? '';
-        return `"${String(v).replace(/"/g, '""')}"`;
-      }).join(',')),
+      ...rows.map((row) =>
+        cols
+          .map((k) => {
+            const v = row[k] ?? '';
+            return `"${String(v).replace(/"/g, '""')}"`;
+          })
+          .join(',')
+      ),
     ];
     const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
     const a = document.createElement('a');
@@ -662,13 +720,17 @@
   async function downloadSummaryCsv() {
     const cols = summaryCols();
     if (!summaryRows.length || !cols.length) return;
-    const header = cols.map(c => c.label);
+    const header = cols.map((c) => c.label);
     const lines = [
       header.join(','),
-      ...summaryRows.map(row => cols.map(c => {
-        const v = row[c.key] ?? '';
-        return `"${String(v).replace(/"/g, '""')}"`;
-      }).join(',')),
+      ...summaryRows.map((row) =>
+        cols
+          .map((c) => {
+            const v = row[c.key] ?? '';
+            return `"${String(v).replace(/"/g, '""')}"`;
+          })
+          .join(',')
+      ),
     ];
     const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
     const a = document.createElement('a');
@@ -680,9 +742,9 @@
 
   // ── Results: summary table ──────────────────────────────────────────────────
 
-  let summaryRows   = $state<SummaryRow[]>([]);
+  let summaryRows = $state<SummaryRow[]>([]);
   let summaryLoading = $state(false);
-  let summaryError   = $state<string | null>(null);
+  let summaryError = $state<string | null>(null);
 
   let sortCol = $state<string | null>(null);
   let sortDir = $state<'asc' | 'desc'>('asc');
@@ -699,7 +761,10 @@
   // Reset sort when groupBy changes so default order applies
   $effect(() => {
     void q.query.groupBy;
-    untrack(() => { sortCol = null; sortDir = 'asc'; });
+    untrack(() => {
+      sortCol = null;
+      sortDir = 'asc';
+    });
   });
 
   const sortedSummaryRows = $derived.by(() => {
@@ -725,7 +790,9 @@
       const numA = Number(av);
       const numB = Number(bv);
       const isNum = !isNaN(numA) && !isNaN(numB);
-      const cmp = isNum ? numA - numB : String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: 'base' });
+      const cmp = isNum
+        ? numA - numB
+        : String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: 'base' });
       return sortDir === 'asc' ? cmp : -cmp;
     });
   });
@@ -742,7 +809,7 @@
     // Then aggregate value columns
     for (const agg of q.query.aggregates) {
       const f = getField(agg.field);
-      const spec = f?.aggregatable?.find(s => s.fn === agg.fn);
+      const spec = f?.aggregatable?.find((s) => s.fn === agg.fn);
       cols.push({
         key: `${agg.fn}:${agg.field}`,
         label: spec?.label ?? `${agg.fn}(${agg.field})`,
@@ -765,7 +832,10 @@
     const _aggregates = q.query.aggregates;
 
     if (!inSummary || !hasGroupBy || !hasAggs) {
-      untrack(() => { summaryRows = []; summaryError = null; });
+      untrack(() => {
+        summaryRows = [];
+        summaryError = null;
+      });
       return;
     }
 
@@ -773,11 +843,11 @@
       summaryLoading = true;
       summaryError = null;
       fetchSummaryTable(q.query)
-        .then(rows => {
+        .then((rows) => {
           summaryRows = rows;
           summaryLoading = false;
         })
-        .catch(err => {
+        .catch((err) => {
           summaryError = err?.message ?? 'Failed to fetch summary';
           summaryRows = [];
           summaryLoading = false;
@@ -801,7 +871,7 @@
     if (openPicker && openPicker !== 'tracker' && openPicker !== '__fields') {
       const val = (q.query.filters as Record<string, unknown>)[openPicker];
       const hasVal = val != null && (Array.isArray(val) ? val.length > 0 : !!val);
-      if (!hasVal) shownFields = shownFields.filter(k => k !== openPicker);
+      if (!hasVal) shownFields = shownFields.filter((k) => k !== openPicker);
     }
     openPicker = null;
   }
@@ -811,28 +881,40 @@
   const QUICK_STARTS: QuickStart[] = [
     {
       sentence: 'Planned captive coal plants for metals',
-      apply: () => q.applyQuery({
-        trackers: ['coal-plant'],
-        filters: { status: ['announced', 'pre-permit', 'permitted', 'construction'], captive: ['iron & steel', 'aluminum', 'nickel', 'other metals & mining'] },
-      }),
+      apply: () =>
+        q.applyQuery({
+          trackers: ['coal-plant'],
+          filters: {
+            status: ['announced', 'pre-permit', 'permitted', 'construction'],
+            captive: ['iron & steel', 'aluminum', 'nickel', 'other metals & mining'],
+          },
+        }),
     },
     {
       sentence: 'Total coal mine workforce by country',
-      apply: () => q.applyQuery({
-        trackers: ['coal-mine'],
-        filters: { status: ['operating'] },
-        groupBy: ['country_area'],
-        aggregates: [{ fn: 'count', field: '_count_mines' }, { fn: 'sum', field: 'workforce_size' }],
-      }),
+      apply: () =>
+        q.applyQuery({
+          trackers: ['coal-mine'],
+          filters: { status: ['operating'] },
+          groupBy: ['country_area'],
+          aggregates: [
+            { fn: 'count', field: '_count_mines' },
+            { fn: 'sum', field: 'workforce_size' },
+          ],
+        }),
     },
     {
       sentence: 'Coal plant capacity by state and status in India',
-      apply: () => q.applyQuery({
-        trackers: ['coal-plant'],
-        filters: { country_area: ['India'] },
-        groupBy: ['subnational_unit_province_state', 'status'],
-        aggregates: [{ fn: 'count', field: '_count_plants' }, { fn: 'sum', field: 'capacity_mw' }],
-      }),
+      apply: () =>
+        q.applyQuery({
+          trackers: ['coal-plant'],
+          filters: { country_area: ['India'] },
+          groupBy: ['subnational_unit_province_state', 'status'],
+          aggregates: [
+            { fn: 'count', field: '_count_plants' },
+            { fn: 'sum', field: 'capacity_mw' },
+          ],
+        }),
     },
     {
       sentence: 'Build your own selection…',
@@ -842,7 +924,6 @@
 </script>
 
 <div class="builder">
-
   <div class="sentence-wrapper" class:sentence-wrapper--sticky={q.isDirty}>
     {#if q.isDirty}
       <button
@@ -855,145 +936,197 @@
       </button>
     {/if}
     <div class="sentence-content" class:sentence-content--collapsed={sentenceCollapsed}>
-    <!-- Summary sentence line (only in summary mode with selections) -->
-    {#if outputMode === 'summary' && (q.query.aggregates.length > 0 || q.query.groupBy.length > 0)}
-      <div class="summary-sentence">
-        <span class="summary-word">Calculate</span>
-        {#each q.query.aggregates as agg (agg.fn + agg.field)}
-          {@const af = aggregatableFields.find(f => f.key === agg.field)}
-          {@const spec = af?.aggregatable?.find(s => s.fn === agg.fn)}
-          <span class="value-chip value-chip--summary">
-            {spec?.label ?? `${agg.fn}(${agg.field})`}
-            <button class="chip-x chip-x--summary" onclick={() => toggleAggregate(agg.fn, agg.field)}>×</button>
-          </span>
-        {/each}
-        <button
-          class="open-btn"
-          class:open={summaryPickerOpen}
-          onclick={() => (summaryPickerOpen = !summaryPickerOpen)}
-          aria-label="Edit calculate options"
-        >{summaryPickerOpen ? '−' : '+'}</button>
-        {#if q.query.groupBy.length > 0}
-          <span class="summary-word">by</span>
-          {#each q.query.groupBy as field (field)}
-            {@const gf = groupableFields.find(f => f.key === field)}
+      <!-- Summary sentence line (only in summary mode with selections) -->
+      {#if outputMode === 'summary' && (q.query.aggregates.length > 0 || q.query.groupBy.length > 0)}
+        <div class="summary-sentence">
+          <span class="summary-word">Calculate</span>
+          {#each q.query.aggregates as agg (agg.fn + agg.field)}
+            {@const af = aggregatableFields.find((f) => f.key === agg.field)}
+            {@const spec = af?.aggregatable?.find((s) => s.fn === agg.fn)}
             <span class="value-chip value-chip--summary">
-              {gf?.shortLabel ?? gf?.label ?? field}
-              <button class="chip-x chip-x--summary" onclick={() => toggleGroupBy(field)}>×</button>
+              {spec?.label ?? `${agg.fn}(${agg.field})`}
+              <button
+                class="chip-x chip-x--summary"
+                onclick={() => toggleAggregate(agg.fn, agg.field)}>×</button
+              >
             </span>
           {/each}
           <button
             class="open-btn"
             class:open={summaryPickerOpen}
             onclick={() => (summaryPickerOpen = !summaryPickerOpen)}
-            aria-label="Edit group by options"
-          >{summaryPickerOpen ? '−' : '+'}</button>
-        {/if}
-      </div>
-    {/if}
-    <QuerySentenceBuilder
-      fields={availableFilterFields}
-      filters={sentenceFilters}
-      isDirty={q.isDirty}
-      quickStarts={QUICK_STARTS}
-      bind:openPicker
-      bind:shownFields
-      panelTitles={{ tracker: 'Project type' }}
-      columnPickerKeys={['country_area', 'captive']}
-      startWord={outputMode === 'summary' && (q.query.aggregates.length > 0 || q.query.groupBy.length > 0) ? 'for' : 'See'}
-      onRemoveValue={handleRemoveValue}
-      onRemoveField={handleRemoveField}
-      onClearAll={clearAll}
-    >
-      {#snippet subject()}
-        <!-- Tracker chips -->
-        {#each q.query.trackers as t (t)}
-          <span class="value-chip">
-            {TRACKER_LABELS[t]}
-            {#if q.query.trackers.length > 1}
-              <button class="chip-x" onclick={() => removeTracker(t)} aria-label="Remove {TRACKER_LABELS[t]}">×</button>
-            {/if}
-          </span>
-        {/each}
-        <button
-          class="open-btn"
-          class:open={openPicker === 'tracker'}
-          onclick={() => togglePicker('tracker')}
-          aria-label="Edit project type"
-        >{openPicker === 'tracker' ? '−' : '+'}</button>
-      {/snippet}
-
-      {#snippet picker(fieldKey)}
-        {#if fieldKey === 'tracker'}
-          {#each (['coal-plant', 'coal-mine'] as Tracker[]) as t}
-            <button class="pill" class:active={q.query.trackers.includes(t)} onclick={() => toggleTracker(t)}>{TRACKER_LABELS[t]}</button>
-          {/each}
-        {:else if fieldKey === 'status'}
-          <StatusFilter bind:statusChecks statusGroups={coalStatusGroups} showRefine={showStatusRefine} />
-        {:else if fieldKey === 'country_area'}
-          <CountryMultiSelect bind:selected={localSelectedCountries} />
-        {:else if fieldKey === 'captive'}
-          {@const captiveGroups = [
-            { label: 'Metals', values: ['iron & steel', 'aluminum', 'nickel', 'other metals & mining'] },
-            { label: 'Coal mining', values: ['coal mining & coal products'] },
-            { label: 'Chemicals', values: ['chemicals'] },
-            { label: 'Pulp & paper', values: ['pulp & paper'] },
-            { label: 'Other industries', values: ['cement & building', 'oil & refining', 'industrial park', 'machinery', 'agriculture', 'textiles', 'automobiles', 'sugar', 'rubber', 'data center'] },
-          ]}
-          {@const captiveSelected = (q.query.filters.captive ?? []) as string[]}
-          <div class="captive-groups">
-            {#each captiveGroups as grp}
-              {@const allChecked = grp.values.every(v => captiveSelected.includes(v))}
-              {@const someChecked = grp.values.some(v => captiveSelected.includes(v))}
-              <div class="captive-group">
-                <button
-                  class="captive-group-header"
-                  class:all-checked={allChecked}
-                  class:some-checked={someChecked && !allChecked}
-                  onclick={() => {
-                    const cur = q.query.filters.captive ?? [];
-                    if (allChecked) {
-                      q.setFilter('captive', cur.filter(v => !grp.values.includes(v)) as string[] || undefined);
-                    } else {
-                      const next = [...new Set([...cur, ...grp.values])];
-                      q.setFilter('captive', next.length ? next : undefined);
-                    }
-                  }}
-                >{grp.label}</button>
-                <div class="captive-group-pills">
-                  {#each grp.values as val}
-                    <button
-                      class="pill"
-                      class:active={captiveSelected.includes(val)}
-                      onclick={() => toggleValue('captive', val)}
-                    >{val}</button>
-                  {/each}
-                </div>
-              </div>
+            aria-label="Edit calculate options">{summaryPickerOpen ? '−' : '+'}</button
+          >
+          {#if q.query.groupBy.length > 0}
+            <span class="summary-word">by</span>
+            {#each q.query.groupBy as field (field)}
+              {@const gf = groupableFields.find((f) => f.key === field)}
+              <span class="value-chip value-chip--summary">
+                {gf?.shortLabel ?? gf?.label ?? field}
+                <button class="chip-x chip-x--summary" onclick={() => toggleGroupBy(field)}
+                  >×</button
+                >
+              </span>
             {/each}
-          </div>
-        {:else}
-          {#if otherOptions[fieldKey]}
+            <button
+              class="open-btn"
+              class:open={summaryPickerOpen}
+              onclick={() => (summaryPickerOpen = !summaryPickerOpen)}
+              aria-label="Edit group by options">{summaryPickerOpen ? '−' : '+'}</button
+            >
+          {/if}
+        </div>
+      {/if}
+      <QuerySentenceBuilder
+        fields={availableFilterFields}
+        filters={sentenceFilters}
+        isDirty={q.isDirty}
+        quickStarts={QUICK_STARTS}
+        bind:openPicker
+        bind:shownFields
+        panelTitles={{ tracker: 'Project type' }}
+        columnPickerKeys={['country_area', 'captive']}
+        startWord={outputMode === 'summary' &&
+        (q.query.aggregates.length > 0 || q.query.groupBy.length > 0)
+          ? 'for'
+          : 'See'}
+        onRemoveValue={handleRemoveValue}
+        onRemoveField={handleRemoveField}
+        onClearAll={clearAll}
+      >
+        {#snippet subject()}
+          <!-- Tracker chips -->
+          {#each q.query.trackers as t (t)}
+            <span class="value-chip">
+              {TRACKER_LABELS[t]}
+              {#if q.query.trackers.length > 1}
+                <button
+                  class="chip-x"
+                  onclick={() => removeTracker(t)}
+                  aria-label="Remove {TRACKER_LABELS[t]}">×</button
+                >
+              {/if}
+            </span>
+          {/each}
+          <button
+            class="open-btn"
+            class:open={openPicker === 'tracker'}
+            onclick={() => togglePicker('tracker')}
+            aria-label="Edit project type">{openPicker === 'tracker' ? '−' : '+'}</button
+          >
+        {/snippet}
+
+        {#snippet picker(fieldKey)}
+          {#if fieldKey === 'tracker'}
+            {#each ['coal-plant', 'coal-mine'] as Tracker[] as t}
+              <button
+                class="pill"
+                class:active={q.query.trackers.includes(t)}
+                onclick={() => toggleTracker(t)}>{TRACKER_LABELS[t]}</button
+              >
+            {/each}
+          {:else if fieldKey === 'status'}
+            <StatusFilter
+              bind:statusChecks
+              statusGroups={coalStatusGroups}
+              showRefine={showStatusRefine}
+            />
+          {:else if fieldKey === 'country_area'}
+            <CountryMultiSelect bind:selected={localSelectedCountries} />
+          {:else if fieldKey === 'captive'}
+            {@const captiveGroups = [
+              {
+                label: 'Metals',
+                values: ['iron & steel', 'aluminum', 'nickel', 'other metals & mining'],
+              },
+              { label: 'Coal mining', values: ['coal mining & coal products'] },
+              { label: 'Chemicals', values: ['chemicals'] },
+              { label: 'Pulp & paper', values: ['pulp & paper'] },
+              {
+                label: 'Other industries',
+                values: [
+                  'cement & building',
+                  'oil & refining',
+                  'industrial park',
+                  'machinery',
+                  'agriculture',
+                  'textiles',
+                  'automobiles',
+                  'sugar',
+                  'rubber',
+                  'data center',
+                ],
+              },
+            ]}
+            {@const captiveSelected = (q.query.filters.captive ?? []) as string[]}
+            <div class="captive-groups">
+              {#each captiveGroups as grp}
+                {@const allChecked = grp.values.every((v) => captiveSelected.includes(v))}
+                {@const someChecked = grp.values.some((v) => captiveSelected.includes(v))}
+                <div class="captive-group">
+                  <button
+                    class="captive-group-header"
+                    class:all-checked={allChecked}
+                    class:some-checked={someChecked && !allChecked}
+                    onclick={() => {
+                      const cur = q.query.filters.captive ?? [];
+                      if (allChecked) {
+                        q.setFilter(
+                          'captive',
+                          (cur.filter((v) => !grp.values.includes(v)) as string[]) || undefined
+                        );
+                      } else {
+                        const next = [...new Set([...cur, ...grp.values])];
+                        q.setFilter('captive', next.length ? next : undefined);
+                      }
+                    }}>{grp.label}</button
+                  >
+                  <div class="captive-group-pills">
+                    {#each grp.values as val}
+                      <button
+                        class="pill"
+                        class:active={captiveSelected.includes(val)}
+                        onclick={() => toggleValue('captive', val)}>{val}</button
+                      >
+                    {/each}
+                  </div>
+                </div>
+              {/each}
+            </div>
+          {:else if otherOptions[fieldKey]}
             {#each otherOptions[fieldKey] as val}
-              {@const isActive = ((q.query.filters as Record<string, unknown>)[fieldKey] as string[] | undefined)?.includes(val)}
-              <button class="pill" class:active={isActive} onclick={() => toggleValue(fieldKey as keyof CoalQueryFilters, val)}>{val}</button>
+              {@const isActive = (
+                (q.query.filters as Record<string, unknown>)[fieldKey] as string[] | undefined
+              )?.includes(val)}
+              <button
+                class="pill"
+                class:active={isActive}
+                onclick={() => toggleValue(fieldKey as keyof CoalQueryFilters, val)}>{val}</button
+              >
             {/each}
           {:else}
             <span class="loading-hint">Loading…</span>
           {/if}
-        {/if}
-      {/snippet}
+        {/snippet}
 
-      {#snippet fieldPickerSuffix()}
-        {#if plantOnlyFilterFields.length > 0 || mineOnlyFilterFields.length > 0}
-          <div class="tracker-only-hint">
-            <span class="groupby-hint-text">Additional filter fields available when filtering just plants or just mines.</span>
-            <button class="groupby-tracker-pill" onclick={() => switchToSingleTracker('coal-plant')}>use only plants</button>
-            <button class="groupby-tracker-pill" onclick={() => switchToSingleTracker('coal-mine')}>use only mines</button>
-          </div>
-        {/if}
-      {/snippet}
-    </QuerySentenceBuilder>
+        {#snippet fieldPickerSuffix()}
+          {#if plantOnlyFilterFields.length > 0 || mineOnlyFilterFields.length > 0}
+            <div class="tracker-only-hint">
+              <span class="groupby-hint-text"
+                >Additional filter fields available when filtering just plants or just mines.</span
+              >
+              <button
+                class="groupby-tracker-pill"
+                onclick={() => switchToSingleTracker('coal-plant')}>use only plants</button
+              >
+              <button
+                class="groupby-tracker-pill"
+                onclick={() => switchToSingleTracker('coal-mine')}>use only mines</button
+              >
+            </div>
+          {/if}
+        {/snippet}
+      </QuerySentenceBuilder>
     </div>
   </div>
 
@@ -1003,13 +1136,13 @@
     <button
       class="mode-btn"
       class:active={outputMode === 'data'}
-      onclick={() => setOutputMode('data')}
-    >individual records</button>
+      onclick={() => setOutputMode('data')}>individual records</button
+    >
     <button
       class="mode-btn"
       class:active={outputMode === 'summary'}
-      onclick={() => setOutputMode('summary')}
-    >summary statistics</button>
+      onclick={() => setOutputMode('summary')}>summary statistics</button
+    >
   </div>
 
   <!-- ── Summary config (collapsible, auto-hides once configured) ──────────── -->
@@ -1026,12 +1159,16 @@
                   {@const trackerScope = isBoth && f.trackers.length === 1 ? f.trackers[0] : null}
                   <button
                     class="value-pill"
-                    class:active={q.query.aggregates.some(a => a.fn === spec.fn && a.field === f.key)}
+                    class:active={q.query.aggregates.some(
+                      (a) => a.fn === spec.fn && a.field === f.key
+                    )}
                     onclick={() => toggleAggregate(spec.fn, f.key)}
                   >
                     {spec.label}
                     {#if trackerScope}
-                      <span class="tracker-scope-badge">{trackerScope === 'coal-plant' ? 'Plants' : 'Mines'}</span>
+                      <span class="tracker-scope-badge"
+                        >{trackerScope === 'coal-plant' ? 'Plants' : 'Mines'}</span
+                      >
                     {/if}
                   </button>
                 {/each}
@@ -1043,27 +1180,43 @@
               <span class="output-label">group by</span>
               <div class="value-pills">
                 {#each groupableFields as f}
-                  <button class="value-pill" class:active={q.query.groupBy.includes(f.key)} onclick={() => toggleGroupBy(f.key)}>{f.shortLabel ?? f.label}</button>
+                  <button
+                    class="value-pill"
+                    class:active={q.query.groupBy.includes(f.key)}
+                    onclick={() => toggleGroupBy(f.key)}>{f.shortLabel ?? f.label}</button
+                  >
                 {/each}
               </div>
             </div>
             {#if q.query.trackers.length === 2}
               <div class="groupby-tracker-hint">
-                <span class="groupby-hint-text">Additional group-by options available when summarizing just plants or just mines.</span>
-                <button class="groupby-tracker-pill" onclick={() => switchToSingleTracker('coal-plant')}>use only plants</button>
-                <button class="groupby-tracker-pill" onclick={() => switchToSingleTracker('coal-mine')}>use only mines</button>
+                <span class="groupby-hint-text"
+                  >Additional group-by options available when summarizing just plants or just mines.</span
+                >
+                <button
+                  class="groupby-tracker-pill"
+                  onclick={() => switchToSingleTracker('coal-plant')}>use only plants</button
+                >
+                <button
+                  class="groupby-tracker-pill"
+                  onclick={() => switchToSingleTracker('coal-mine')}>use only mines</button
+                >
               </div>
             {/if}
           {/if}
           {#if q.query.aggregates.length > 0 && q.query.groupBy.length > 0}
             <div class="summary-done-row">
-              <button class="summary-done-btn" onclick={() => (summaryPickerOpen = false)}>Done</button>
+              <button class="summary-done-btn" onclick={() => (summaryPickerOpen = false)}
+                >Done</button
+              >
             </div>
           {/if}
         </div>
       </div>
     {:else}
-      <button class="summary-edit-btn" onclick={() => (summaryPickerOpen = true)}>+ Choose group by & calculate</button>
+      <button class="summary-edit-btn" onclick={() => (summaryPickerOpen = true)}
+        >+ Choose group by & calculate</button
+      >
     {/if}
   {/if}
 
@@ -1082,7 +1235,9 @@
           {/each}
           <span class="count-total">({fmt(countResult.total)} total)</span>
         {:else}
-          <span class="count-item"><strong>{fmt(countResult.total)}</strong> {q.entityLabel} match</span>
+          <span class="count-item"
+            ><strong>{fmt(countResult.total)}</strong> {q.entityLabel} match</span
+          >
         {/if}
       {:else}
         <span class="count-empty">—</span>
@@ -1092,7 +1247,11 @@
     <div class="results-actions">
       {#if outputMode === 'data' && countResult && countResult.total > 0}
         <button class="result-btn" class:active={showTable} onclick={toggleTable}>
-          {showTable ? 'Hide table' : countResult && countResult.total > PAGE ? 'Preview table' : 'View table'}
+          {showTable
+            ? 'Hide table'
+            : countResult && countResult.total > PAGE
+              ? 'Preview table'
+              : 'View table'}
         </button>
         <button class="result-btn" onclick={downloadCsv}>Download CSV</button>
       {/if}
@@ -1127,7 +1286,9 @@
         {#if tableHasMore}
           <div class="load-more-wrap">
             <button class="load-more-btn" onclick={() => loadTable()} disabled={tableLoading}>
-              {tableLoading ? 'Loading…' : `Load more from API (${fmt((countResult?.total ?? 0) - tableRows.length)} remaining)`}
+              {tableLoading
+                ? 'Loading…'
+                : `Load more from API (${fmt((countResult?.total ?? 0) - tableRows.length)} remaining)`}
             </button>
           </div>
         {/if}
@@ -1151,7 +1312,9 @@
                   <button class="sort-btn" onclick={() => setSort(col.key)}>
                     {col.label}
                     {#if col.tracker}
-                      <span class="col-tracker-badge">{col.tracker === 'coal-plant' ? 'Plants' : 'Mines'}</span>
+                      <span class="col-tracker-badge"
+                        >{col.tracker === 'coal-plant' ? 'Plants' : 'Mines'}</span
+                      >
                     {/if}
                     <span class="sort-indicator">
                       {sortCol === col.key ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}
@@ -1187,11 +1350,14 @@
         </div>
       {/each}
       <button class="api-copy-btn" onclick={copyApiUrls}>
-        {apiCopied ? '✓ Copied' : q.apiUrls.length > 1 ? `Copy ${q.apiUrls.length} API URLs` : 'Copy API URL'}
+        {apiCopied
+          ? '✓ Copied'
+          : q.apiUrls.length > 1
+            ? `Copy ${q.apiUrls.length} API URLs`
+            : 'Copy API URL'}
       </button>
     </div>
   </div>
-
 </div>
 
 {#if modalOpen}
@@ -1201,9 +1367,14 @@
     role="button"
     tabindex="0"
     aria-label="Close coal plant details"
-    onclick={(e) => { if (e.target === e.currentTarget) closeModal(); }}
+    onclick={(e) => {
+      if (e.target === e.currentTarget) closeModal();
+    }}
     onkeydown={(e) => {
-      if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape')) {
+      if (
+        e.target === e.currentTarget &&
+        (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape')
+      ) {
         e.preventDefault();
         closeModal();
       }
@@ -1229,9 +1400,14 @@
     role="button"
     tabindex="0"
     aria-label="Close coal mine details"
-    onclick={(e) => { if (e.target === e.currentTarget) closeMineModal(); }}
+    onclick={(e) => {
+      if (e.target === e.currentTarget) closeMineModal();
+    }}
     onkeydown={(e) => {
-      if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape')) {
+      if (
+        e.target === e.currentTarget &&
+        (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape')
+      ) {
         e.preventDefault();
         closeMineModal();
       }
@@ -1347,7 +1523,9 @@
     padding: 0 2px;
     transition: color 0.1s;
   }
-  .chip-x:hover { color: var(--gem-primary-blue, #1d4961); }
+  .chip-x:hover {
+    color: var(--gem-primary-blue, #1d4961);
+  }
 
   /* ── +/− toggle buttons ──────────────────────────────────────────────────── */
   .open-btn {
@@ -1365,7 +1543,10 @@
     font-size: var(--font-size-sm, 12px);
     line-height: 1;
     flex-shrink: 0;
-    transition: background 0.1s, color 0.1s, border-color 0.1s;
+    transition:
+      background 0.1s,
+      color 0.1s,
+      border-color 0.1s;
   }
   .open-btn:hover {
     background: var(--gem-navy-10, #e9eef1);
@@ -1402,7 +1583,11 @@
     border-color: var(--gem-primary-blue, #1d4961);
   }
 
-  .loading-hint { font-size: var(--font-size-sm, 12px); color: var(--color-gray-400, #9eaaad); font-style: italic; }
+  .loading-hint {
+    font-size: var(--font-size-sm, 12px);
+    color: var(--color-gray-400, #9eaaad);
+    font-style: italic;
+  }
 
   .tracker-only-hint {
     width: 100%;
@@ -1482,7 +1667,7 @@
     font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.03em;
-    background: rgba(255,255,255,0.25);
+    background: rgba(255, 255, 255, 0.25);
     color: inherit;
     vertical-align: middle;
     opacity: 0.8;
@@ -1522,7 +1707,8 @@
     font-size: var(--font-size-sm, 12px);
     color: var(--color-gray-400, #9eaaad);
   }
-  .count-loading, .count-empty {
+  .count-loading,
+  .count-empty {
     font-size: var(--font-size-sm, 12px);
     color: var(--color-gray-400, #9eaaad);
     font-style: italic;
@@ -1543,7 +1729,9 @@
     border: 1px solid var(--color-gray-300, #becccf);
     background: #fff;
     color: var(--gem-primary-blue, #1d4961);
-    transition: background 0.1s, border-color 0.1s;
+    transition:
+      background 0.1s,
+      border-color 0.1s;
   }
   .result-btn:hover {
     background: var(--gem-navy-10, #e9eef1);
@@ -1603,8 +1791,12 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .data-table tr:last-child td { border-bottom: none; }
-  .data-table tbody tr:hover td { background: var(--gem-navy-10, #e9eef1); }
+  .data-table tr:last-child td {
+    border-bottom: none;
+  }
+  .data-table tbody tr:hover td {
+    background: var(--gem-navy-10, #e9eef1);
+  }
 
   .sort-btn {
     all: unset;
@@ -1679,8 +1871,13 @@
     transition: background 0.1s;
     box-sizing: border-box;
   }
-  .load-more-btn:hover:not(:disabled) { background: var(--gem-navy-10, #e9eef1); }
-  .load-more-btn:disabled { opacity: 0.5; cursor: default; }
+  .load-more-btn:hover:not(:disabled) {
+    background: var(--gem-navy-10, #e9eef1);
+  }
+  .load-more-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
 
   /* ── Output mode (standalone row) ────────────────────────────────────────── */
   .output-mode-row {
@@ -1873,7 +2070,9 @@
     margin-top: var(--space-2, 8px);
     transition: background 0.1s;
   }
-  .api-copy-btn:hover { background: var(--gem-navy-10, #e9eef1); }
+  .api-copy-btn:hover {
+    background: var(--gem-navy-10, #e9eef1);
+  }
 
   /* ── Captive grouped picker ───────────────────────────────────────────────── */
   .captive-groups {
@@ -1966,7 +2165,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background 0.1s, color 0.1s;
+    transition:
+      background 0.1s,
+      color 0.1s;
   }
 
   .plant-modal-close:hover {

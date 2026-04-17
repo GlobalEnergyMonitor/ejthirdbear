@@ -28,9 +28,7 @@
   let loadingTree = $state(false);
   let treeError = $state('');
 
-  const modes = [
-    { id: 'assets', label: 'Assets', placeholder: 'Search assets...' },
-  ];
+  const modes = [{ id: 'assets', label: 'Assets', placeholder: 'Search assets...' }];
 
   // Debounce timer
   let debounceTimer;
@@ -152,10 +150,7 @@
 
 <svelte:head>
   <title>Search — Global Energy Monitor</title>
-  <meta
-    name="description"
-    content="Search for assets and view their ownership trees."
-  />
+  <meta name="description" content="Search for assets and view their ownership trees." />
   <SeoMeta
     title="Search — Global Energy Monitor"
     description="Search for assets and view their ownership trees."
@@ -205,12 +200,7 @@
               class:selected={selected?.id === item.id}
               onclick={() => selectResult(item)}
             >
-              <span
-                class="result-kind"
-                class:asset={item.kind === 'asset'}
-              >
-                Asset
-              </span>
+              <span class="result-kind" class:asset={item.kind === 'asset'}> Asset </span>
               <span class="result-name">{item.name}</span>
               {#if item.status}
                 <span class="result-status">
@@ -235,9 +225,7 @@
     <section class="tree-section">
       <div class="tree-header">
         <h2>{selected.name}</h2>
-        <a href={assetLink(selected.id)} class="detail-link">
-          View full details →
-        </a>
+        <a href={assetLink(selected.id)} class="detail-link"> View full details → </a>
       </div>
 
       {#if loadingTree}

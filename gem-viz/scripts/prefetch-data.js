@@ -13,6 +13,8 @@ const API_BASE = process.env.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-owner
 // Tuned for API rate limits - 100 seems to work well
 const BATCH_SIZE = parseInt(process.env.PREFETCH_BATCH_SIZE || '100', 10);
 const TIMEOUT_MS = parseInt(process.env.PREFETCH_TIMEOUT || '30000', 10);
+// Effectively uncapped — full ownership graph, no truncation.
+const OWNERSHIP_GRAPH_MAX_DEPTH = Number.MAX_SAFE_INTEGER;
 
 const ASSET_CACHE_DIR = '.svelte-kit/asset-cache';
 const ENTITY_CACHE_DIR = '.svelte-kit/entity-cache';
@@ -82,7 +84,9 @@ async function fetchAssetData(id) {
   try {
     const [asset, graph] = await Promise.all([
       fetchJSON(`/assets/${encodeURIComponent(id)}`),
-      fetchJSON(`/ownership/graph?root=${encodeURIComponent(id)}&direction=up&max_depth=12`),
+      fetchJSON(
+        `/ownership/graph?root=${encodeURIComponent(id)}&direction=up&max_depth=${OWNERSHIP_GRAPH_MAX_DEPTH}`
+      ),
     ]);
     return { id, asset, graph, success: true };
   } catch (err) {

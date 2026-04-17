@@ -18,7 +18,14 @@
     theme?: 'light' | 'dark';
   }
 
-  let { entityId, direction = 'down', compact = false, linkBase = '', linkTarget = '', theme = 'light' }: Props = $props();
+  let {
+    entityId,
+    direction = 'down',
+    compact = false,
+    linkBase = '',
+    linkTarget = '',
+    theme = 'light',
+  }: Props = $props();
 
   let loading = $state(true);
   let error = $state<string | null>(null);

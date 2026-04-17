@@ -15,7 +15,11 @@ import {
   drawSubsidiaryLabels,
   drawSubsidiarySubRegions,
 } from './screener-chart-subsidiaries';
-import { drawAssetGroups, drawCommonAssetLines, type AssetRenderCallbacks } from './screener-chart-assets';
+import {
+  drawAssetGroups,
+  drawCommonAssetLines,
+  type AssetRenderCallbacks,
+} from './screener-chart-assets';
 import { drawLegend, type ColorField } from './screener-chart-legend';
 
 // ---------------------------------------------------------------------------

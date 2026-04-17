@@ -34,7 +34,8 @@
   <div class="page-header">
     <h1>Coal Data</h1>
     <p class="page-desc">
-      Access individual records or calculate summary statistics across GEM's coal plant and mine trackers.
+      Access individual records or calculate summary statistics across GEM's coal plant and mine
+      trackers.
       <button class="qs-trigger" onclick={() => (showQuickstart = true)}>
         Quick-start examples →
       </button>
@@ -64,7 +65,9 @@
           <h2 class="qs-modal-title">Quick-start examples</h2>
           <p class="qs-modal-desc">Select an example to pre-fill the form.</p>
         </div>
-        <button class="qs-close" onclick={() => (showQuickstart = false)} aria-label="Close">✕</button>
+        <button class="qs-close" onclick={() => (showQuickstart = false)} aria-label="Close"
+          >✕</button
+        >
       </div>
       <div class="qs-grid">
         {#each WIZARD_PRESETS as preset (preset.id)}
@@ -196,7 +199,9 @@
   }
 
   @media (max-width: 520px) {
-    .qs-grid { grid-template-columns: 1fr; }
+    .qs-grid {
+      grid-template-columns: 1fr;
+    }
   }
 
   .qs-card {
@@ -211,7 +216,9 @@
     cursor: pointer;
     font-family: inherit;
     text-align: left;
-    transition: border-color var(--transition-fast), background var(--transition-fast);
+    transition:
+      border-color var(--transition-fast),
+      background var(--transition-fast);
   }
 
   .qs-card:hover {

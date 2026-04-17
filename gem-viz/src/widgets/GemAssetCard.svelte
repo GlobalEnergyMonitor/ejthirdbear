@@ -21,7 +21,14 @@
     theme?: 'light' | 'dark';
   }
 
-  let { assetId, showOwners = true, showMap = false, linkBase = '', linkTarget = '', theme = 'light' }: Props = $props();
+  let {
+    assetId,
+    showOwners = true,
+    showMap = false,
+    linkBase = '',
+    linkTarget = '',
+    theme = 'light',
+  }: Props = $props();
 
   let loading = $state(true);
   let error = $state<string | null>(null);
@@ -107,7 +114,18 @@
         <h2>Owners ({ownerRows.length})</h2>
         <div class="owners-list">
           {#each ownerRows as row}
-            <a href={entityLink(row.edge.source, linkBase)} class="owner-row" target="_blank" rel="noopener" onclick={(e) => { if (linkTarget) { e.preventDefault(); navTo(entityLink(row.edge.source, linkBase), linkTarget); } }}>
+            <a
+              href={entityLink(row.edge.source, linkBase)}
+              class="owner-row"
+              target="_blank"
+              rel="noopener"
+              onclick={(e) => {
+                if (linkTarget) {
+                  e.preventDefault();
+                  navTo(entityLink(row.edge.source, linkBase), linkTarget);
+                }
+              }}
+            >
               <span class="owner-name">{row.owner?.Name || row.edge.source}</span>
               {#if row.edge.value != null}
                 <span class="owner-share">
@@ -215,9 +233,18 @@
     font-variant-numeric: tabular-nums;
   }
   @media (max-width: 640px) {
-    .asset-embed { max-width: 100%; padding: 8px; }
-    h1 { font-size: var(--font-size-lg); }
-    .meta-row { flex-wrap: wrap; }
-    .owner-row { flex-wrap: wrap; }
+    .asset-embed {
+      max-width: 100%;
+      padding: 8px;
+    }
+    h1 {
+      font-size: var(--font-size-lg);
+    }
+    .meta-row {
+      flex-wrap: wrap;
+    }
+    .owner-row {
+      flex-wrap: wrap;
+    }
   }
 </style>

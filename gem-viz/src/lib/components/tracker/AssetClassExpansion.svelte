@@ -4,11 +4,7 @@
    * Each filter category (subclass, status, geography) gets its own step.
    * Replaces the previous inline scroll-based expansion panel.
    */
-  import {
-    COUNTRIES,
-    STATUS_GROUPS,
-    fetchLiveCountries,
-  } from '$lib/data-config/tracker-schema';
+  import { COUNTRIES, STATUS_GROUPS, fetchLiveCountries } from '$lib/data-config/tracker-schema';
   import type { DynamicStatusGroup } from '$lib/data-config/tracker-schema';
   import type { AssetClass, SubClassGroup } from '$lib/data-config/asset-class-definitions';
   import type { CatalogAssetClass, CatalogClassTree } from '$lib/api/catalog-api';
@@ -49,6 +45,10 @@
     catalogTree?: CatalogClassTree[];
     /** Checked state for catalog children/descendants: id -> boolean */
     catalogChildChecks?: Record<string, boolean>;
+    /** Per-subclass asset counts keyed by catalog entry id (leaf ids); parents sum their leaves. */
+    catalogChildCounts?: Record<string, number>;
+    /** Per-country asset counts for the currently selected class. */
+    countryCounts?: Record<string, number>;
   }
 
   let {
@@ -65,7 +65,19 @@
     catalogChildren = [],
     catalogTree = [],
     catalogChildChecks = $bindable({}),
+    catalogChildCounts = {},
+    countryCounts = {},
   }: Props = $props();
+
+  /** Sum leaf counts for a tree node (or direct count for leaves). */
+  function getTreeNodeCount(node: CatalogClassTree): number {
+    if (node.children.length === 0) return catalogChildCounts[node.entry.id] ?? 0;
+    return node.children.reduce((sum, c) => sum + getTreeNodeCount(c), 0);
+  }
+
+  function formatCount(n: number): string {
+    return n.toLocaleString();
+  }
 
   const hasCatalogTree = $derived(catalogTree.length > 0);
   const hasCatalogChildren = $derived(!hasCatalogTree && catalogChildren.length > 0);
@@ -278,6 +290,7 @@
           {#if step.id === 'subclass'}
             <!-- NARROW BY SUBCLASS: catalog tree (feature-flagged, hierarchical) -->
             {#if hasCatalogTree}
+              {@const allTotal = catalogTree.reduce((s, n) => s + getTreeNodeCount(n), 0)}
               <div class="filter-section">
                 <span class="section-heading">Narrow by subclass</span>
                 <div class="catalog-select-all">
@@ -285,15 +298,18 @@
                     <input
                       type="checkbox"
                       checked={catalogTreeAllChecked}
-                      onchange={(e) =>
-                        toggleAllTree((e.target as HTMLInputElement).checked)}
+                      onchange={(e) => toggleAllTree((e.target as HTMLInputElement).checked)}
                     />
                     <span class="group-label">All subclasses</span>
+                    {#if allTotal > 0}
+                      <span class="count-badge">{formatCount(allTotal)}</span>
+                    {/if}
                   </label>
                 </div>
                 <div class="group-row">
                   {#each catalogTree as treeNode (treeNode.entry.id)}
                     {@const hasKids = treeNode.children.length > 0}
+                    {@const nodeCount = getTreeNodeCount(treeNode)}
                     <div class="group-item">
                       <label class="group-checkbox">
                         <input
@@ -304,6 +320,9 @@
                             toggleTreeNode(treeNode, (e.target as HTMLInputElement).checked)}
                         />
                         <span class="group-label">{treeNode.entry.label}</span>
+                        {#if nodeCount > 0}
+                          <span class="count-badge">{formatCount(nodeCount)}</span>
+                        {/if}
                       </label>
                       {#if hasKids}
                         <button
@@ -317,6 +336,7 @@
                         <div class="refine-panel" transition:slide={{ duration: 150 }}>
                           {#each treeNode.children as child (child.entry.id)}
                             {@const childHasKids = child.children.length > 0}
+                            {@const childCount = getTreeNodeCount(child)}
                             <label class="refine-option">
                               <input
                                 type="checkbox"
@@ -326,6 +346,9 @@
                                   toggleTreeNode(child, (e.target as HTMLInputElement).checked)}
                               />
                               <span class="refine-label">{child.entry.label}</span>
+                              {#if childCount > 0}
+                                <span class="count-badge small">{formatCount(childCount)}</span>
+                              {/if}
                             </label>
                             {#if childHasKids}
                               <button
@@ -335,8 +358,12 @@
                                 {expandedRefine[child.entry.id] ? '\u25BC' : '\u25B6'} Refine
                               </button>
                               {#if expandedRefine[child.entry.id]}
-                                <div class="refine-panel nested" transition:slide={{ duration: 150 }}>
+                                <div
+                                  class="refine-panel nested"
+                                  transition:slide={{ duration: 150 }}
+                                >
                                   {#each child.children as leaf (leaf.entry.id)}
+                                    {@const leafCount = catalogChildCounts[leaf.entry.id] ?? 0}
                                     <label class="refine-option">
                                       <input
                                         type="checkbox"
@@ -349,6 +376,11 @@
                                         }}
                                       />
                                       <span class="refine-label">{leaf.entry.label}</span>
+                                      {#if leafCount > 0}
+                                        <span class="count-badge small"
+                                          >{formatCount(leafCount)}</span
+                                        >
+                                      {/if}
                                     </label>
                                   {/each}
                                 </div>
@@ -468,7 +500,7 @@
               <p class="step-hint">
                 Leave empty to include all countries. You can proceed without filtering.
               </p>
-              <CountryMultiSelect bind:selected={geoFilters} {countries} />
+              <CountryMultiSelect bind:selected={geoFilters} {countries} {countryCounts} />
               <GeoFenceInput bind:geofence />
             </div>
           {/if}
@@ -508,7 +540,11 @@
                   or narrow by country
                 </button>
               {/if}
-              <button class="footer-btn secondary" onclick={onShowAllOwners} disabled={actionsDisabled}>
+              <button
+                class="footer-btn secondary"
+                onclick={onShowAllOwners}
+                disabled={actionsDisabled}
+              >
                 <ArrowRight size={14} />
                 All owners of this asset type
               </button>
@@ -908,6 +944,21 @@
   .group-desc {
     font-size: var(--font-size-sm, 13px);
     color: var(--color-text-tertiary);
+  }
+
+  .count-badge {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--color-text-tertiary);
+    background: var(--color-gray-100, #f1f5f9);
+    padding: 1px 6px;
+    border-radius: 9999px;
+    margin-left: auto;
+  }
+
+  .count-badge.small {
+    font-size: 10px;
+    padding: 0 4px;
   }
 
   .refine-toggle {

@@ -55,7 +55,8 @@
 
     {#if isAsset}
       <div class="tooltip-detail">
-        {hn.asset_type || 'Asset'}{#if hn.operating_status} · {hn.operating_status}{/if}
+        {hn.asset_type || 'Asset'}{#if hn.operating_status}
+          · {hn.operating_status}{/if}
       </div>
       {#if hn.capacity_value}
         <div class="tooltip-detail">{hn.capacity_value} {hn.capacity_unit || 'MW'}</div>
@@ -68,13 +69,15 @@
         <div class="tooltip-detail">{hqParts.join(' · ')}</div>
       {/if}
       <div class="tooltip-detail">
-        {ownerCategory}{#if hn.legal_entity_type} · {hn.legal_entity_type}{/if}
+        {ownerCategory}{#if hn.legal_entity_type}
+          · {hn.legal_entity_type}{/if}
       </div>
       {#if pct > 0}
         <div class="tooltip-pct">
           <span class="tooltip-pct-value">{pct.toFixed(1)}%</span> ownership
           {#if directPct > 0 && directPct !== pct}
-            · {directPct.toFixed(1)}% direct{#if isImputed} (est.){/if}
+            · {directPct.toFixed(1)}% direct{#if isImputed}
+              (est.){/if}
           {/if}
         </div>
       {/if}
@@ -108,8 +111,14 @@
     border: 1.5px solid var(--tree-mint, #9df7e5);
   }
   @keyframes tooltip-in {
-    from { opacity: 0; transform: translate(-50%, -90%); }
-    to { opacity: 1; transform: translate(-50%, -100%); }
+    from {
+      opacity: 0;
+      transform: translate(-50%, -90%);
+    }
+    to {
+      opacity: 1;
+      transform: translate(-50%, -100%);
+    }
   }
   .tooltip-pinned {
     font-size: 9px;

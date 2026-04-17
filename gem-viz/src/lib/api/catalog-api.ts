@@ -274,10 +274,7 @@ export function getAllDescendantIds(node: CatalogClassTree): string[] {
 }
 
 /** Find a subtree by root ID within a forest. */
-export function findSubtree(
-  forest: CatalogClassTree[],
-  id: string
-): CatalogClassTree | undefined {
+export function findSubtree(forest: CatalogClassTree[], id: string): CatalogClassTree | undefined {
   for (const tree of forest) {
     if (tree.entry.id === id) return tree;
     const found = findSubtree(tree.children, id);
@@ -318,8 +315,12 @@ export function extractClassFieldKeys(url: string | undefined): string[] {
   const qs = url.split('?')[1] ?? '';
   const params = new URLSearchParams(qs);
   const excluded = new Set([
-    'format', 'limit', 'offset',
-    'status', 'sub_status', 'country',
+    'format',
+    'limit',
+    'offset',
+    'status',
+    'sub_status',
+    'country',
     'asset_class',
   ]);
   const seen = new Set<string>();

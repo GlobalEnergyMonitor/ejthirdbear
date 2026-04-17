@@ -30,10 +30,16 @@ import {
 } from '$lib/field-keys';
 
 // API base URL (env override or production default)
-const API_BASE = import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-ownership-api-staging.fly.dev' ||'https://gem-api.thirdbear.net'; // Fallback to production API
+const API_BASE =
+  import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-ownership-api-staging.fly.dev';
 
 // Default timeout for API requests (30 seconds)
 const API_TIMEOUT_MS = 30_000;
+
+// Effectively uncapped — the viz must show the FULL ownership graph, not a
+// truncated subtree. Real graphs don't come anywhere near this depth; this
+// value just guarantees the API isn't handed a ceiling that clips results.
+export const OWNERSHIP_GRAPH_MAX_DEPTH = Number.MAX_SAFE_INTEGER;
 
 // Thread-local-style reason tracker for API call logging.
 // Set before each fetchAPI call so _doFetch can include it in the log.
@@ -400,7 +406,10 @@ export function toNumber(value: unknown): number | null {
   return null;
 }
 
-export function pickKey<T extends Record<string, unknown>>(obj: T, keys: readonly string[]): unknown {
+export function pickKey<T extends Record<string, unknown>>(
+  obj: T,
+  keys: readonly string[]
+): unknown {
   for (const key of keys) {
     if (obj[key] !== undefined && obj[key] !== null && obj[key] !== '') return obj[key];
   }
@@ -655,10 +664,7 @@ export function resolveApiSlug(tracker: string): string | null {
   if (direct) return direct;
 
   // Normalize encoded ampersands and retry
-  const normalized = tracker
-    .split('&amp;').join('&')
-    .split('%26').join('&')
-    .trim();
+  const normalized = tracker.split('&amp;').join('&').split('%26').join('&').trim();
   return _SCHEMA_ID_TO_SLUG[normalized] ?? null;
 }
 
@@ -830,8 +836,10 @@ export async function getAsset(assetId: string): Promise<AssetSummary> {
 export async function getOwnershipGraph(params: {
   root: string;
   direction?: 'up' | 'down';
+  max_depth?: number;
 }): Promise<OwnershipGraphResponse> {
-  _currentReason = `getOwnershipGraph ${params.direction || 'up'} ${params.root}`;
+  const maxDepth = params.max_depth ?? OWNERSHIP_GRAPH_MAX_DEPTH;
+  _currentReason = `getOwnershipGraph ${params.direction || 'up'} ${params.root} depth=${maxDepth}`;
   const resolvedRoot = await resolveAssetId(params.root);
   const raw = await fetchAPI<{
     root: Record<string, unknown>;
@@ -839,7 +847,11 @@ export async function getOwnershipGraph(params: {
     edges: OwnershipGraphResponse['edges'];
     paths?: OwnershipGraphResponse['paths'];
   }>(
-    `/ownership/graph${buildQuery({ root: resolvedRoot, direction: params.direction })}`
+    `/ownership/graph${buildQuery({
+      root: resolvedRoot,
+      direction: params.direction,
+      max_depth: maxDepth,
+    })}`
   );
 
   // Normalize root node
@@ -894,8 +906,10 @@ function normalizeGraphNodes(nodes: Array<Record<string, unknown>>): GraphNode[]
 export async function getLocationOwnershipGraph(params: {
   root: string;
   direction?: 'up' | 'down';
+  max_depth?: number;
 }): Promise<LocationOwnershipGraphResponse> {
-  _currentReason = `getLocationOwnershipGraph ${params.direction || 'up'} ${params.root}`;
+  const maxDepth = params.max_depth ?? OWNERSHIP_GRAPH_MAX_DEPTH;
+  _currentReason = `getLocationOwnershipGraph ${params.direction || 'up'} ${params.root} depth=${maxDepth}`;
   const raw = await fetchAPI<{
     location_id: string;
     project_name: string;
@@ -909,7 +923,11 @@ export async function getLocationOwnershipGraph(params: {
       asset_ids?: string[];
     }>;
   }>(
-    `/ownership/graph${buildQuery({ root: params.root, direction: params.direction })}`
+    `/ownership/graph${buildQuery({
+      root: params.root,
+      direction: params.direction,
+      max_depth: maxDepth,
+    })}`
   );
 
   const graphs = (raw.graphs || [])
@@ -945,22 +963,30 @@ export async function getLocationOwnershipGraph(params: {
 export async function getOwnershipGraphs(params: {
   root: string;
   direction?: 'up' | 'down';
+  max_depth?: number;
 }): Promise<LocationOwnershipGraphResponse> {
-  _currentReason = `getOwnershipGraphs ${params.direction || 'up'} ${params.root}`;
+  const maxDepth = params.max_depth ?? OWNERSHIP_GRAPH_MAX_DEPTH;
+  _currentReason = `getOwnershipGraphs ${params.direction || 'up'} ${params.root} depth=${maxDepth}`;
   const resolvedRoot = await resolveAssetId(params.root);
   const raw = await fetchAPI<Record<string, unknown>>(
-    `/ownership/graph${buildQuery({ root: resolvedRoot, direction: params.direction })}`
+    `/ownership/graph${buildQuery({
+      root: resolvedRoot,
+      direction: params.direction,
+      max_depth: maxDepth,
+    })}`
   );
 
   // Location-level response: { location_id, graphs: [...] }
   if (Array.isArray(raw.graphs)) {
-    const graphs = (raw.graphs as Array<{
-      root: Record<string, unknown>;
-      nodes: Array<Record<string, unknown>>;
-      edges: LocationGraph['edges'];
-      paths?: LocationGraph['paths'];
-      asset_ids?: string[];
-    }>)
+    const graphs = (
+      raw.graphs as Array<{
+        root: Record<string, unknown>;
+        nodes: Array<Record<string, unknown>>;
+        edges: LocationGraph['edges'];
+        paths?: LocationGraph['paths'];
+        asset_ids?: string[];
+      }>
+    )
       .map((g) => ({
         root: g.root as unknown as LocationGraphRoot,
         nodes: normalizeGraphNodes(g.nodes || []),
@@ -1016,7 +1042,9 @@ export async function getOwnershipGraphs(params: {
  */
 export async function fetchLocationUnits(locationId: string): Promise<LocationUnit[]> {
   _currentReason = `fetchLocationUnits ${locationId}`;
-  const raw = await fetchAPI<{ units?: LocationUnit[] }>(`/locations/${encodeURIComponent(locationId)}`);
+  const raw = await fetchAPI<{ units?: LocationUnit[] }>(
+    `/locations/${encodeURIComponent(locationId)}`
+  );
   return raw.units || [];
 }
 
@@ -1066,27 +1094,39 @@ export function graphToExplorerData(
   };
 }
 
+export interface AssetFacets {
+  /** Normalized sub_status → count (what old fetchStatusFacets returned) */
+  subStatus: Map<string, number>;
+  /** Raw country → count */
+  country: Record<string, number>;
+}
+
 /**
- * Fetch status facets for a given asset type.
+ * Fetch status + country facets for a given asset type in one request.
  * Uses limit=1 since we only need the facet metadata, not the assets themselves.
  */
-export async function fetchStatusFacets(assetTypeSlug?: string): Promise<Map<string, number>> {
-  _currentReason = `fetchStatusFacets${assetTypeSlug ? ` type=${assetTypeSlug}` : ''}`;
+export async function fetchAssetFacets(assetTypeSlug?: string): Promise<AssetFacets> {
+  _currentReason = `fetchAssetFacets${assetTypeSlug ? ` type=${assetTypeSlug}` : ''}`;
   const res = await listAssets({
     asset_type: assetTypeSlug,
     facets: true,
     limit: 1,
   });
-  // Prefer sub_status facets (granular) over status facets (aggregate)
-  const rawFacets = res.facets?.sub_status ?? res.facets?.status ?? {};
-  // Normalize snake_case keys to our display convention via normalizeSubStatus
-  const normalized = new Map<string, number>();
-  for (const [k, v] of Object.entries(rawFacets)) {
+  const rawStatus = res.facets?.sub_status ?? res.facets?.status ?? {};
+  const subStatus = new Map<string, number>();
+  for (const [k, v] of Object.entries(rawStatus)) {
     const mapped = normalizeSubStatus(k);
     if (!mapped) continue;
-    normalized.set(mapped, (normalized.get(mapped) ?? 0) + v);
+    subStatus.set(mapped, (subStatus.get(mapped) ?? 0) + v);
   }
-  return normalized;
+  const country = (res.facets?.country as Record<string, number>) ?? {};
+  return { subStatus, country };
+}
+
+/** Back-compat shim: returns only the sub_status map (existing callers unchanged). */
+export async function fetchStatusFacets(assetTypeSlug?: string): Promise<Map<string, number>> {
+  const { subStatus } = await fetchAssetFacets(assetTypeSlug);
+  return subStatus;
 }
 
 // =============================================================================

@@ -12,34 +12,9 @@
    */
   import { onMount } from 'svelte';
 
-  // Step 1 components & data
-  import AssetClassExpansion from '$lib/components/tracker/AssetClassExpansion.svelte';
-  // Asset classes come exclusively from the catalog API (fetchAssetClasses).
-  // DO NOT import ALL_ASSET_CLASSES — it's a stale static list that diverges from the API.
-  import { gemTrackerToUiTracker } from '$lib/data-config/screener-api';
-  import {
-    isValidTracker,
-    STATUS_GROUPS,
-    discoverStatusGroups,
-  } from '$lib/data-config/tracker-schema';
-  import {
-    resolveApiSlug,
-    fetchStatusFacets,
-    fetchStatusTaxonomy,
-  } from './widget-api';
-  import {
-    fetchAssetClasses,
-    buildCatalogUrl,
-    buildCatalogTree,
-    findSubtree,
-    getAllDescendantIds,
-  } from '$lib/api/catalog-api';
-  import {
-    getHierarchyCategories,
-    getHierarchyOptionIds,
-    getHierarchyDefaultUnchecked,
-    getHierarchyTree,
-  } from '$lib/data-config/asset-class-hierarchy.svelte';
+  // Step 1 — shared with /screener route (single source of truth)
+  import ScreenerStep1 from '$lib/components/screener/ScreenerStep1.svelte';
+  import { fetchAssetFacets, fetchStatusTaxonomy } from './widget-api';
 
   // Step 2 components & data
   import OwnerSearchPanel from '$lib/components/screener/OwnerSearchPanel.svelte';
@@ -64,7 +39,6 @@
   import AssetClassesPanel from '$lib/components/tracker/AssetClassesPanel.svelte';
   import ScreenerStepNav from '$lib/components/nav/ScreenerStepNav.svelte';
   import type { ScreenerSelectedClass } from '$lib/data-config/screener-types';
-  import type { DynamicStatusGroup } from '$lib/data-config/tracker-schema';
   import { getEntity } from './widget-api';
 
   // ============================================================================
@@ -92,218 +66,6 @@
   // STEP STATE
   // ============================================================================
   let currentStep = $state(1);
-
-  // ============================================================================
-  // CATEGORY CONFIG (Step 1)
-  // ============================================================================
-  const CATEGORY_META = [
-    { key: 'multi-tracker', label: 'Multi-Tracker Classes' },
-    { key: 'coal-plant', label: 'Coal Plant' },
-    { key: 'coal-mine', label: 'Coal Mine' },
-    { key: 'oil-gas', label: 'Oil & Gas' },
-    { key: 'steel-iron', label: 'Steel & Iron' },
-    { key: 'bioenergy', label: 'Bioenergy' },
-    { key: 'chemical', label: 'Chemical' },
-    { key: 'cement', label: 'Cement' },
-  ];
-
-  // ============================================================================
-  // STEP 1 STATE — Asset Class Selection
-  // ============================================================================
-  let catalogClasses = $state<any[]>([]);
-  let searchQuery = $state('');
-  let selectedClassId = $state<string | null>(null);
-  let catalogChildChecks = $state<Record<string, boolean>>({});
-  let subClassChecks = $state<Record<string, boolean>>({});
-  let groupOptionChecks = $state<Record<string, boolean>>({});
-  let statusChecks = $state<Record<string, boolean>>({});
-  let geoFilters = $state<string[]>([]);
-  let geofence = $state<number[][] | null>(null);
-  let dynamicStatusGroups = $state<DynamicStatusGroup[] | null>(null);
-
-  const catalogIdSet = $derived(new Set(catalogClasses.map((c: any) => c.id)));
-  const catalogForest = $derived(catalogClasses.length > 0 ? buildCatalogTree(catalogClasses) : []);
-
-  // Use the same hierarchy function as the /screener/ route page — single source of truth
-  const classesByCategory = $derived(
-    catalogClasses.length > 0 ? getHierarchyCategories(catalogClasses, searchQuery) : []
-  );
-
-  const catalogChildren = $derived(
-    selectedClassId
-      ? catalogClasses.filter((c: any) => c.parent === selectedClassId)
-      : []
-  );
-
-  const selectedSubtree = $derived(
-    selectedClassId ? findSubtree(catalogForest, selectedClassId) : undefined
-  );
-
-  const selectedClass = $derived(selectedClassId ? catalogClasses.find((c: any) => c.id === selectedClassId) ?? null : null);
-
-  function isEnabled(ac: any) {
-    if (ac.trackers.length === 0) return false;
-    return ac.trackers.some((t: string) => isValidTracker(gemTrackerToUiTracker(t)));
-  }
-
-  const selectedStatuses = $derived.by(() => {
-    const statuses: string[] = [];
-    const groups =
-      dynamicStatusGroups ??
-      STATUS_GROUPS.map((sg) => ({
-        id: sg.id,
-        statuses: sg.statuses.map((s) => ({ value: s })),
-      }));
-    for (const sg of groups) {
-      for (const s of sg.statuses) {
-        if (statusChecks[`status-${sg.id}-${(s as any).value ?? s}`]) {
-          statuses.push((s as any).value ?? s);
-        }
-      }
-    }
-    return statuses;
-  });
-
-  function selectClass(classId: string) {
-    const catalogEntry = catalogClasses.find((c: any) => c.id === classId);
-    if (!catalogEntry?.url) return;
-
-    selectedClassId = classId;
-    searchQuery = '';
-    geoFilters = [];
-    geofence = null;
-    dynamicStatusGroups = null;
-
-    // Init catalog child checks
-    const initialCatalogChecks: Record<string, boolean> = {};
-    const subtree = findSubtree(catalogForest, classId);
-    if (subtree) {
-      for (const id of getAllDescendantIds(subtree)) {
-        if (id !== classId) initialCatalogChecks[id] = true;
-      }
-    }
-    catalogChildChecks = initialCatalogChecks;
-
-    // Init sub-class checks
-    const initialSubClassChecks: Record<string, boolean> = {};
-    if (catalogEntry?.subClasses) {
-      for (const sc of catalogEntry.subClasses) {
-        initialSubClassChecks[sc.id] = sc.defaultChecked ?? true;
-      }
-    }
-    subClassChecks = initialSubClassChecks;
-
-    // Init group option checks
-    const initialGroupChecks: Record<string, boolean> = {};
-    if (catalogEntry?.subClassGroups) {
-      for (const group of catalogEntry.subClassGroups) {
-        for (const opt of group.options) {
-          initialGroupChecks[opt.id] = opt.defaultChecked ?? true;
-        }
-      }
-    }
-    groupOptionChecks = initialGroupChecks;
-
-    // Init status checks
-    const initialStatusChecks: Record<string, boolean> = {};
-    for (const sg of STATUS_GROUPS) {
-      for (const s of sg.statuses) {
-        const key = `status-${sg.id}-${s}`;
-        initialStatusChecks[key] = sg.id === 'operating' || sg.id === 'planned';
-      }
-    }
-    statusChecks = initialStatusChecks;
-
-    fetchStatusFacetsForClass(catalogEntry, classId);
-  }
-
-  async function fetchStatusFacetsForClass(catalogEntry: any, classId: string) {
-    try {
-      let slugs: string[] = [];
-      if (catalogEntry?.trackers?.length) {
-        slugs = catalogEntry.trackers.map((t: string) => resolveApiSlug(gemTrackerToUiTracker(t))).filter(Boolean);
-      } else if (catalogEntry?.url) {
-        const params = new URLSearchParams(catalogEntry.url.split('?')[1] ?? '');
-        const types = params.getAll('asset_type');
-        slugs = types.map((t: string) => resolveApiSlug(t) ?? t).filter(Boolean);
-      }
-      if (slugs.length === 0) return;
-
-      const [taxonomyResult, ...facetResults] = await Promise.all([
-        fetchStatusTaxonomy().catch(() => null),
-        ...slugs.map((slug: string) => fetchStatusFacets(slug)),
-      ]);
-
-      const mergedFacets = new Map();
-      for (const facetMap of facetResults) {
-        for (const [status, count] of facetMap) {
-          mergedFacets.set(status, (mergedFacets.get(status) ?? 0) + count);
-        }
-      }
-
-      if (selectedClassId !== classId) return;
-
-      const groups = discoverStatusGroups(mergedFacets, taxonomyResult);
-      dynamicStatusGroups = groups;
-
-      const discoveredStatusChecks: Record<string, boolean> = {};
-      for (const sg of groups) {
-        for (const s of sg.statuses) {
-          discoveredStatusChecks[`status-${sg.id}-${s.value}`] = sg.id === 'operating' || sg.id === 'planned';
-        }
-      }
-      statusChecks = discoveredStatusChecks;
-    } catch {
-      // Fall back to hardcoded groups
-    }
-  }
-
-  function clearSelection() {
-    selectedClassId = null;
-    subClassChecks = {};
-    groupOptionChecks = {};
-    catalogChildChecks = {};
-    statusChecks = {};
-    geoFilters = [];
-    geofence = null;
-    dynamicStatusGroups = null;
-  }
-
-  function buildClassData(): ScreenerSelectedClass[] {
-    if (!selectedClassId) return [];
-    const catalogEntry = catalogClasses.find((c: any) => c.id === selectedClassId);
-    const label = catalogEntry?.label ?? selectedClassId;
-    const trackers = catalogEntry?.trackers ?? [];
-    const tracker = trackers.length > 0 ? gemTrackerToUiTracker(trackers[0]) : '';
-
-    const selectedSubClassIds = [
-      ...Object.entries(subClassChecks).filter(([, v]) => v).map(([k]) => k),
-      ...Object.entries(groupOptionChecks).filter(([, v]) => v).map(([k]) => k),
-    ];
-
-    let catalogUrl: string | undefined;
-    if (catalogEntry?.url) {
-      const selectedChildUrls = catalogChildren
-        .filter((c: any) => catalogChildChecks[c.id] !== false && c.url)
-        .map((c: any) => c.url);
-      catalogUrl = buildCatalogUrl(catalogEntry.url, selectedChildUrls, { statusValues: selectedStatuses, substatusValues: [] }, geoFilters);
-    }
-
-    return [{
-      id: selectedClassId,
-      name: label,
-      description: catalogEntry?.description ?? '',
-      tracker,
-      filters: {
-        geography: geoFilters.length > 0 ? geoFilters : undefined,
-        statuses: selectedStatuses.length > 0 ? selectedStatuses : undefined,
-      },
-      assetClassId: selectedClassId,
-      selectedSubClasses: selectedSubClassIds,
-      gemTrackers: trackers,
-      catalogUrl,
-    }] as any;
-  }
 
   // ============================================================================
   // STEP 2 STATE — Owner Search
@@ -337,11 +99,7 @@
   let selectedOwnerIds = $state<string[]>([]);
 
   function isIdSearch(term: string): boolean {
-    return (
-      /^E\d+$/i.test(term) ||
-      /^[A-Z0-9]{20}$/.test(term) ||
-      /^\d{10}$/.test(term)
-    );
+    return /^E\d+$/i.test(term) || /^[A-Z0-9]{20}$/.test(term) || /^\d{10}$/.test(term);
   }
 
   function filterByName(results: EntitySearchResult[], term: string): EntitySearchResult[] {
@@ -377,15 +135,20 @@
       const statuses: string[] =
         cls.filters?.statuses || (cls.filters?.status ? [cls.filters.status] : []);
       const countries = cls.filters?.geography
-        ? Array.isArray(cls.filters.geography) ? cls.filters.geography : [cls.filters.geography]
+        ? Array.isArray(cls.filters.geography)
+          ? cls.filters.geography
+          : [cls.filters.geography]
         : undefined;
 
-      const result = await getOwnersByFilter({
-        tracker: cls.tracker,
-        assetClassId: cls.assetClassId || cls.id,
-        status: statuses.length > 0 ? statuses : undefined,
-        country: countries,
-      }, { limit: 500 });
+      const result = await getOwnersByFilter(
+        {
+          tracker: cls.tracker,
+          assetClassId: cls.assetClassId || cls.id,
+          status: statuses.length > 0 ? statuses : undefined,
+          country: countries,
+        },
+        { limit: 500 }
+      );
       allOwners = result.owners;
     } catch (err) {
       allOwnersError = err instanceof Error ? err.message : 'Failed to load owners';
@@ -403,9 +166,10 @@
       const rawResults = await searchEntities(term, { limit: 20 });
       const results = filterByName(rawResults, term);
       if (results.length === 0) {
-        searchError = rawResults.length > 0
-          ? `No companies with "${term}" in their name found in GEM.`
-          : `No companies named "${term}" found in GEM.`;
+        searchError =
+          rawResults.length > 0
+            ? `No companies with "${term}" in their name found in GEM.`
+            : `No companies named "${term}" found in GEM.`;
         return;
       }
       if (allOwnersLoading || allOwners.length === 0) {
@@ -416,11 +180,15 @@
       const { withAssets, noAssets } = crossRef(results);
       if (withAssets.length === 0) {
         const classLabel = selectedClasses[0]?.name || 'this asset class';
-        searchError = `No ${classLabel} assets found for: ${noAssets.map(e => e.name).join(', ')}`;
+        searchError = `No ${classLabel} assets found for: ${noAssets.map((e) => e.name).join(', ')}`;
         return;
       }
       selectedOwnerIds = withAssets.map((e) => e.id);
-      noAssetEntities = noAssets.map(e => ({ id: e.id, name: e.name, country: e.headquartersCountry || null }));
+      noAssetEntities = noAssets.map((e) => ({
+        id: e.id,
+        name: e.name,
+        country: e.headquartersCountry || null,
+      }));
       goToStep(3);
     } catch (err) {
       searchError = err instanceof Error ? err.message : 'Search failed';
@@ -438,7 +206,10 @@
       const rows: Row[] = bulkSearchText
         .split('\n')
         .map((line) => {
-          const cells = line.split('\t').map((c) => c.trim()).filter((c) => c.length > 0);
+          const cells = line
+            .split('\t')
+            .map((c) => c.trim())
+            .filter((c) => c.length > 0);
           return {
             idCells: cells.filter((c) => isIdSearch(c)),
             nameCells: cells.filter((c) => !isIdSearch(c)),
@@ -451,10 +222,19 @@
       const allIdTerms = [...new Set(rows.flatMap((r) => r.idCells))].slice(0, 200);
       const allNameTerms = [...new Set(rows.flatMap((r) => r.nameCells))].slice(0, 200);
 
-      const emptyResult = { results: {} as Record<string, EntitySearchResult[]>, queryTimeMs: 0, source: 'rest-api-sequential' as const, apiCallCount: 0 };
+      const emptyResult = {
+        results: {} as Record<string, EntitySearchResult[]>,
+        queryTimeMs: 0,
+        source: 'rest-api-sequential' as const,
+        apiCallCount: 0,
+      };
       const [idBulkResult, nameBulkResult] = await Promise.all([
-        allIdTerms.length > 0 ? searchEntitiesBulk(allIdTerms, { limitPerQuery: 5, maxConcurrent: 10 }) : Promise.resolve(emptyResult),
-        allNameTerms.length > 0 ? searchEntitiesBulk(allNameTerms, { limitPerQuery: 10, maxConcurrent: 10 }) : Promise.resolve(emptyResult),
+        allIdTerms.length > 0
+          ? searchEntitiesBulk(allIdTerms, { limitPerQuery: 5, maxConcurrent: 10 })
+          : Promise.resolve(emptyResult),
+        allNameTerms.length > 0
+          ? searchEntitiesBulk(allNameTerms, { limitPerQuery: 10, maxConcurrent: 10 })
+          : Promise.resolve(emptyResult),
       ]);
 
       const resolvedById = new Map<string, EntitySearchResult>();
@@ -548,7 +328,8 @@
     const cls = selectedClasses[0];
     const trackerName = cls.tracker || cls.name || 'assets';
     const parts: string[] = [];
-    const statuses: string[] = cls.filters?.statuses || (cls.filters?.status ? [cls.filters.status] : []);
+    const statuses: string[] =
+      cls.filters?.statuses || (cls.filters?.status ? [cls.filters.status] : []);
     if (statuses.length === 1) parts.push(statuses[0]);
     else if (statuses.length > 1 && statuses.length <= 3) parts.push(statuses.join('/'));
     parts.push(trackerName);
@@ -578,7 +359,9 @@
   });
 
   const totalPages = $derived(Math.ceil(filteredOwners.length / PAGE_SIZE));
-  const pagedOwners = $derived(filteredOwners.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE));
+  const pagedOwners = $derived(
+    filteredOwners.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE)
+  );
 
   async function loadResults() {
     if (selectedClasses.length === 0) return;
@@ -586,17 +369,23 @@
     resultsError = null;
     try {
       const cls = selectedClasses[0];
-      const statuses: string[] = cls.filters?.statuses || (cls.filters?.status ? [cls.filters.status] : []);
+      const statuses: string[] =
+        cls.filters?.statuses || (cls.filters?.status ? [cls.filters.status] : []);
       const countries = cls.filters?.geography
-        ? Array.isArray(cls.filters.geography) ? cls.filters.geography : [cls.filters.geography]
+        ? Array.isArray(cls.filters.geography)
+          ? cls.filters.geography
+          : [cls.filters.geography]
         : undefined;
 
-      const result = await getOwnersByFilter({
-        tracker: cls.tracker,
-        assetClassId: cls.assetClassId || cls.id,
-        status: statuses.length > 0 ? statuses : undefined,
-        country: countries,
-      }, { limit: 500 });
+      const result = await getOwnersByFilter(
+        {
+          tracker: cls.tracker,
+          assetClassId: cls.assetClassId || cls.id,
+          status: statuses.length > 0 ? statuses : undefined,
+          country: countries,
+        },
+        { limit: 500 }
+      );
       owners = result.owners;
     } catch (err) {
       resultsError = err instanceof Error ? err.message : 'Failed to load results';
@@ -622,7 +411,9 @@
   let vizLoading = $state(true);
   let assetsByOwner = $state(new Map());
 
-  const chartAssetClassName = $derived(selectedClasses.length > 0 ? selectedClasses[0]?.tracker || selectedClasses[0]?.name || '' : '');
+  const chartAssetClassName = $derived(
+    selectedClasses.length > 0 ? selectedClasses[0]?.tracker || selectedClasses[0]?.name || '' : ''
+  );
   const chartTrackerSlug = $derived(selectedClasses.length > 0 ? selectedClasses[0]?.id || '' : '');
 
   async function loadVisualization() {
@@ -667,8 +458,7 @@
   }
 
   /** Step 1 → Step 2/3: finalize class selection and advance */
-  function onShowAllOwners() {
-    const classData = buildClassData();
+  function onShowAllOwners(classData: ScreenerSelectedClass[]) {
     if (classData.length === 0) return;
     classesParam = JSON.stringify(classData);
     selectedClasses = classData;
@@ -676,8 +466,7 @@
     goToStep(3);
   }
 
-  function onSearchSpecificOwners() {
-    const classData = buildClassData();
+  function onSearchSpecificOwners(classData: ScreenerSelectedClass[]) {
     if (classData.length === 0) return;
     classesParam = JSON.stringify(classData);
     selectedClasses = classData;
@@ -703,11 +492,6 @@
   // INIT
   // ============================================================================
   onMount(() => {
-    // Fetch catalog classes
-    fetchAssetClasses().then((classes) => {
-      if (classes.length > 0) catalogClasses = classes;
-    });
-
     // Parse initial props
     if (classesProp) {
       try {
@@ -726,7 +510,10 @@
                   chartModalOwner = match;
                 } else {
                   // Entity not in filtered results — open modal with just the ID/name
-                  chartModalOwner = { entityId: modalEntityProp, name: modalNameProp || modalEntityProp };
+                  chartModalOwner = {
+                    entityId: modalEntityProp,
+                    name: modalNameProp || modalEntityProp,
+                  };
                 }
               }
             });
@@ -736,7 +523,9 @@
           }
           return;
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
 
     // No classes param — but if modalEntity is provided, open it directly on step 3
@@ -752,7 +541,13 @@
 
 <div class="gem-screener">
   <!-- Step Nav — reuses ScreenerStepNav from $lib -->
-  <ScreenerStepNav currentStep={currentStep} isEmbed={true} onStepClick={(n) => { currentStep = n; }} />
+  <ScreenerStepNav
+    {currentStep}
+    isEmbed={true}
+    onStepClick={(n) => {
+      currentStep = n;
+    }}
+  />
 
   <div class="step-content">
     <!-- ════════════════════════════════════════════════════════════════ -->
@@ -761,69 +556,22 @@
     {#if currentStep === 1}
       <div class="step-header">
         <h2>Select an Asset Class</h2>
-        <p class="step-subtitle">Evaluate companies' ownership stakes in classes of fossil fuel assets.</p>
+        <p class="step-subtitle">
+          Evaluate companies' ownership stakes in classes of fossil fuel assets.
+        </p>
       </div>
 
-      <div class="picker-section">
-        <div class="picker-search">
-          <input
-            type="text"
-            class="picker-search-input"
-            placeholder="Search asset classes..."
-            bind:value={searchQuery}
-          />
-        </div>
-        {#each classesByCategory as cat, ci}
-          <div class="picker-category">
-            <span class="picker-category-label">{cat.label}</span>
-            <div class="picker-grid">
-              {#each cat.classes as ac, ai}
-                <button
-                  class="picker-tile"
-                  class:selected={selectedClassId === ac.id}
-                  onclick={() => selectClass(ac.id)}
-                >
-                  <span class="tile-label">{ac.label}</span>
-                  {#if ac.description}
-                    <span class="tile-desc">{ac.description}</span>
-                  {/if}
-                </button>
-              {/each}
-            </div>
-          </div>
-        {/each}
-      </div>
+      <ScreenerStep1
+        {onShowAllOwners}
+        {onSearchSpecificOwners}
+        {fetchAssetFacets}
+        {fetchStatusTaxonomy}
+        showDebug={false}
+      />
 
-      {#if selectedClassId}
-        {@const catalogEntry = catalogClasses.find((c) => c.id === selectedClassId)}
-        {@const expansionClass = {
-          id: selectedClassId,
-          label: catalogEntry?.label ?? selectedClassId,
-          description: catalogEntry?.description ?? '',
-          category: catalogEntry?.category ?? '',
-          trackers: [],
-          availableFilters: { status: true, geography: true },
-        }}
-        <AssetClassExpansion
-          assetClass={expansionClass}
-          bind:subClassChecks
-          bind:groupOptionChecks
-          bind:statusChecks
-          bind:geoFilters
-          bind:geofence
-          {dynamicStatusGroups}
-          catalogChildren={catalogChildren}
-          catalogTree={selectedSubtree ? selectedSubtree.children : []}
-          bind:catalogChildChecks
-          onShowAllOwners={onShowAllOwners}
-          onSearchSpecificOwners={onSearchSpecificOwners}
-          onClose={clearSelection}
-        />
-      {/if}
-
-    <!-- ════════════════════════════════════════════════════════════════ -->
-    <!-- STEP 2: Owner Search -->
-    <!-- ════════════════════════════════════════════════════════════════ -->
+      <!-- ════════════════════════════════════════════════════════════════ -->
+      <!-- STEP 2: Owner Search -->
+      <!-- ════════════════════════════════════════════════════════════════ -->
     {:else if currentStep === 2}
       <div class="step-header">
         <div class="step-header-row">
@@ -853,14 +601,20 @@
       />
 
       <section class="show-all-section">
-        <button class="show-all-btn" onclick={() => { selectedOwnerIds = []; goToStep(3); }}>
+        <button
+          class="show-all-btn"
+          onclick={() => {
+            selectedOwnerIds = [];
+            goToStep(3);
+          }}
+        >
           View all {allOwners.length > 0 ? allOwners.length.toLocaleString() : ''} owners
         </button>
       </section>
 
-    <!-- ════════════════════════════════════════════════════════════════ -->
-    <!-- STEP 3: Results -->
-    <!-- ════════════════════════════════════════════════════════════════ -->
+      <!-- ════════════════════════════════════════════════════════════════ -->
+      <!-- STEP 3: Results -->
+      <!-- ════════════════════════════════════════════════════════════════ -->
     {:else if currentStep === 3}
       <div class="step-header">
         <div class="step-header-row">
@@ -877,9 +631,7 @@
                 Visualize {selectedOwnerIds.length} owners →
               </button>
             {:else}
-              <button class="action-btn" onclick={goToVisualize}>
-                Visualize top owners →
-              </button>
+              <button class="action-btn" onclick={goToVisualize}> Visualize top owners → </button>
             {/if}
           </div>
         </div>
@@ -909,23 +661,37 @@
           {linkBase}
           {linkTarget}
           onToggleExpanded={openChartModal}
-          onClearSearch={() => { resultsSearchQuery = ''; }}
+          onClearSearch={() => {
+            resultsSearchQuery = '';
+          }}
         />
 
         {#if totalPages > 1}
           <div class="pagination">
-            <button class="page-btn" onclick={() => (currentPage -= 1)} disabled={currentPage === 0}>← Prev</button>
+            <button class="page-btn" onclick={() => (currentPage -= 1)} disabled={currentPage === 0}
+              >← Prev</button
+            >
             <span class="page-info">{currentPage + 1} / {totalPages}</span>
-            <button class="page-btn" onclick={() => (currentPage += 1)} disabled={currentPage >= totalPages - 1}>Next →</button>
+            <button
+              class="page-btn"
+              onclick={() => (currentPage += 1)}
+              disabled={currentPage >= totalPages - 1}>Next →</button
+            >
           </div>
         {/if}
 
         {#if noAssetEntities.length > 0}
           <section class="tier2-section">
-            <h3>Matched {noAssetEntities.length} companies with no {selectedClasses[0]?.name || 'assets'} in GEM</h3>
+            <h3>
+              Matched {noAssetEntities.length} companies with no {selectedClasses[0]?.name ||
+                'assets'} in GEM
+            </h3>
             <ul class="tier2-list">
               {#each noAssetEntities as entity}
-                <li>{entity.name} {#if entity.country}<span class="tier2-country">({entity.country})</span>{/if}</li>
+                <li>
+                  {entity.name}
+                  {#if entity.country}<span class="tier2-country">({entity.country})</span>{/if}
+                </li>
               {/each}
             </ul>
           </section>
@@ -952,13 +718,15 @@
         </div>
       {/if}
 
-    <!-- ════════════════════════════════════════════════════════════════ -->
-    <!-- STEP 4: Visualize -->
-    <!-- ════════════════════════════════════════════════════════════════ -->
+      <!-- ════════════════════════════════════════════════════════════════ -->
+      <!-- STEP 4: Visualize -->
+      <!-- ════════════════════════════════════════════════════════════════ -->
     {:else if currentStep === 4}
       <div class="step-header">
         <h2>Ownership Visualization</h2>
-        <p class="step-subtitle">{vizOwners.length} owners in {chartAssetClassName || 'selected class'}</p>
+        <p class="step-subtitle">
+          {vizOwners.length} owners in {chartAssetClassName || 'selected class'}
+        </p>
       </div>
 
       {#if vizLoading}
@@ -1045,14 +813,7 @@
     filter: brightness(0.95);
   }
 
-  /* Picker */
-  .picker-section {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-6, 1.5rem);
-    margin-bottom: var(--space-6, 1.5rem);
-  }
-
+  /* Results filter input (step 3) */
   .picker-search-input {
     width: 100%;
     padding: var(--space-3, 0.75rem) var(--space-4, 1rem);
@@ -1068,60 +829,6 @@
   .picker-search-input:focus {
     border-color: var(--gem-teal, #1d4961);
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--gem-teal, #1d4961) 15%, transparent);
-  }
-
-  .picker-category-label {
-    font-size: var(--font-size-sm, 0.875rem);
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--color-text-tertiary, #94a3b8);
-  }
-
-  .picker-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: var(--space-3, 0.75rem);
-  }
-
-  .picker-tile {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-1, 0.25rem);
-    padding: var(--space-4, 1rem) var(--space-5, 1.25rem);
-    background: var(--color-bg-primary, #fff);
-    border: 2px solid var(--color-gray-200, #e5e7eb);
-    border-radius: var(--radius-sm, 4px);
-    cursor: pointer;
-    text-align: left;
-    transition: border-color 150ms ease, box-shadow 150ms ease;
-  }
-
-  .picker-tile:hover {
-    border-color: var(--color-gray-400, #9ca3af);
-    box-shadow: var(--shadow-md, 0 2px 8px rgba(0, 0, 0, 0.08));
-  }
-
-  .picker-tile.selected {
-    border-color: var(--gem-teal, #1d4961);
-    background: var(--gem-teal-10, #e9eef1);
-  }
-
-  .tile-label {
-    font-size: var(--font-size-body, 1rem);
-    font-weight: 600;
-    color: var(--color-text-primary);
-  }
-
-  .tile-desc {
-    font-size: var(--font-size-sm, 0.875rem);
-    color: var(--color-text-tertiary, #94a3b8);
-    line-height: 1.4;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
   }
 
   /* Show all */
@@ -1284,7 +991,6 @@
     min-height: 0;
   }
 
-
   /* Viz grid */
   .viz-grid {
     display: grid;
@@ -1310,9 +1016,6 @@
 
   @media (max-width: 640px) {
     .viz-grid {
-      grid-template-columns: 1fr;
-    }
-    .picker-grid {
       grid-template-columns: 1fr;
     }
   }

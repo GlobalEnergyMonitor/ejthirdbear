@@ -135,19 +135,30 @@
     {/if}
 
     {#if showChart && entityId}
-      <AssetScreenerChart {entityId} entityName={entityName} />
+      <AssetScreenerChart {entityId} {entityName} />
     {/if}
 
     {#if showMap && assets.length > 0}
       <div class="map-section">
-        <EntityMap assets={assets} height={250} />
+        <EntityMap {assets} height={250} />
       </div>
     {/if}
 
     {#if showAssets && displayAssets.length > 0}
       <div class="asset-list">
         {#each displayAssets as asset}
-          <a href={assetLink(asset.id, linkBase)} class="asset-row" target="_blank" rel="noopener" onclick={(e) => { if (linkTarget) { e.preventDefault(); handleNavigate(assetLink(asset.id, linkBase)); } }}>
+          <a
+            href={assetLink(asset.id, linkBase)}
+            class="asset-row"
+            target="_blank"
+            rel="noopener"
+            onclick={(e) => {
+              if (linkTarget) {
+                e.preventDefault();
+                handleNavigate(assetLink(asset.id, linkBase));
+              }
+            }}
+          >
             <TrackerIcon tracker={asset.tracker} size={12} />
             <span class="asset-name">{asset.name || asset.id}</span>
             {#if asset.status}
@@ -166,7 +177,18 @@
       <div class="asset-list">
         <h2>Subsidiaries ({subsidiaries.length})</h2>
         {#each subsidiaries.slice(0, maxAssets) as sub}
-          <a href={entityLink(sub.id, linkBase)} class="asset-row" target="_blank" rel="noopener" onclick={(e) => { if (linkTarget) { e.preventDefault(); handleNavigate(entityLink(sub.id, linkBase)); } }}>
+          <a
+            href={entityLink(sub.id, linkBase)}
+            class="asset-row"
+            target="_blank"
+            rel="noopener"
+            onclick={(e) => {
+              if (linkTarget) {
+                e.preventDefault();
+                handleNavigate(entityLink(sub.id, linkBase));
+              }
+            }}
+          >
             <span class="asset-name">{sub.name}</span>
             {#if sub.ownershipPct != null}
               <span class="capacity">{sub.ownershipPct.toFixed(1)}%</span>
@@ -278,9 +300,18 @@
     margin-top: var(--space-4);
   }
   @media (max-width: 640px) {
-    .entity-embed { max-width: 100%; padding: 8px; }
-    h1 { font-size: var(--font-size-lg); }
-    .entity-header { flex-wrap: wrap; }
-    .asset-row { flex-wrap: wrap; }
+    .entity-embed {
+      max-width: 100%;
+      padding: 8px;
+    }
+    h1 {
+      font-size: var(--font-size-lg);
+    }
+    .entity-header {
+      flex-wrap: wrap;
+    }
+    .asset-row {
+      flex-wrap: wrap;
+    }
   }
 </style>

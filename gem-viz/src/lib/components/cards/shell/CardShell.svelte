@@ -68,9 +68,7 @@
   // Initialise activeTab from initialTab prop (or first tab)
   $effect.pre(() => {
     if (!activeTab) {
-      activeTab = (initialTab && (tabs as string[]).includes(initialTab))
-        ? initialTab
-        : tabs[0];
+      activeTab = initialTab && (tabs as string[]).includes(initialTab) ? initialTab : tabs[0];
     }
   });
 
@@ -111,8 +109,8 @@
           class:active={activeTab === tab}
           role="tab"
           aria-selected={activeTab === tab}
-          onclick={() => (activeTab = tab)}
-        >{tab}</button>
+          onclick={() => (activeTab = tab)}>{tab}</button
+        >
       {/each}
     </div>
 
@@ -216,10 +214,22 @@
     font-weight: 600;
     white-space: nowrap;
   }
-  .badge-operating { background: #7f142a; color: #fff; }
-  .badge-planned   { background: #ca4a50; color: #fff; }
-  .badge-retired   { background: #e0e0e0; color: #444; }
-  .badge-cancelled { background: #e0e0e0; color: #444; }
+  .badge-operating {
+    background: #7f142a;
+    color: #fff;
+  }
+  .badge-planned {
+    background: #ca4a50;
+    color: #fff;
+  }
+  .badge-retired {
+    background: #e0e0e0;
+    color: #444;
+  }
+  .badge-cancelled {
+    background: #e0e0e0;
+    color: #444;
+  }
 
   /* ── Full card ────────────────────────────────────────────────── */
   .card-full {
@@ -244,10 +254,14 @@
     color: #666;
     border-bottom: 2px solid transparent;
     white-space: nowrap;
-    transition: color 0.15s, border-color 0.15s;
+    transition:
+      color 0.15s,
+      border-color 0.15s;
     margin-bottom: -1px;
   }
-  .tab-btn:hover { color: #111; }
+  .tab-btn:hover {
+    color: #111;
+  }
   .tab-btn.active {
     color: #111;
     border-bottom-color: #111;

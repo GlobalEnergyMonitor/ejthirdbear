@@ -20,6 +20,22 @@
 
   const selectedCount = $derived(Object.values(statusChecks).filter(Boolean).length);
 
+  /** Preset asset counts derived from statusGroups totals (no extra API calls). */
+  const presetCounts = $derived.by(() => {
+    let all = 0;
+    let defaults = 0;
+    for (const sg of statusGroups) {
+      const t = sg.totalCount ?? 0;
+      if (t > 0) all += t;
+      if ((sg.id === 'operating' || sg.id === 'planned') && t > 0) defaults += t;
+    }
+    return { all, defaults };
+  });
+
+  function formatCount(n: number): string {
+    return n.toLocaleString();
+  }
+
   function getStatusIds(groupId: string): string[] {
     const g = statusGroups.find((sg) => sg.id === groupId);
     return g ? g.statuses.map((s) => `status-${groupId}-${s.value}`) : [];
@@ -72,9 +88,15 @@
     <div class="status-presets" role="group" aria-label="Status presets">
       <button type="button" class="preset-btn" onclick={() => setPreset('default')}>
         Operating + planned
+        {#if presetCounts.defaults > 0}
+          <span class="preset-count">{formatCount(presetCounts.defaults)}</span>
+        {/if}
       </button>
       <button type="button" class="preset-btn" onclick={() => setPreset('all')}>
         All statuses
+        {#if presetCounts.all > 0}
+          <span class="preset-count">{formatCount(presetCounts.all)}</span>
+        {/if}
       </button>
       <button type="button" class="preset-btn" onclick={() => setPreset('none')}>Clear</button>
     </div>
@@ -95,8 +117,8 @@
           <span
             class="group-label"
             class:tooltip-hint={!!STATUS_GROUP_DESCRIPTIONS[sg.id]}
-            data-tooltip={STATUS_GROUP_DESCRIPTIONS[sg.id] ?? null}
-          >{sg.label}</span>
+            data-tooltip={STATUS_GROUP_DESCRIPTIONS[sg.id] ?? null}>{sg.label}</span
+          >
           {#if sg.totalCount > 0}
             <span class="count-badge">{sg.totalCount.toLocaleString()}</span>
           {/if}
@@ -118,7 +140,8 @@
                   class="refine-label"
                   class:tooltip-hint={!!STATUS_VALUE_DESCRIPTIONS[statusItem.value]}
                   data-tooltip={STATUS_VALUE_DESCRIPTIONS[statusItem.value] ?? null}
-                >{statusItem.value}</span>
+                  >{statusItem.value}</span
+                >
                 {#if statusItem.count > 0}
                   <span class="count-badge small">{statusItem.count.toLocaleString()}</span>
                 {/if}
@@ -167,6 +190,9 @@
   }
 
   .preset-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     font-size: var(--font-size-sm, 13px);
     border: 1px solid var(--color-border, #e5e7eb);
     background: var(--color-bg-primary, #fff);
@@ -175,6 +201,14 @@
     padding: 2px var(--space-2, 8px);
     cursor: pointer;
     font-family: inherit;
+  }
+
+  .preset-count {
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+    background: var(--color-gray-100, #f1f5f9);
+    padding: 0 6px;
+    border-radius: 9999px;
   }
 
   .preset-btn:hover {
@@ -228,7 +262,6 @@
     font-weight: 500;
     color: var(--color-text-primary);
   }
-
 
   .count-badge {
     font-size: 11px;

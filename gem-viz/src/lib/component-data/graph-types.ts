@@ -137,4 +137,6 @@ export interface LayoutEdge {
   value: number;
   /** Whether this edge's ownership share was imputed (tree graph only) */
   imputed_share?: boolean;
+  /** True if this edge closes a cycle in the ownership graph (back-edge) */
+  closes_cycle?: boolean;
 }

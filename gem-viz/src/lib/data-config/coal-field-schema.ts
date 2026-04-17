@@ -25,30 +25,30 @@
 export type Tracker = 'coal-plant' | 'coal-mine';
 
 export type FilterType =
-  | 'categorical'   // multi-select from a known value set
-  | 'range'         // numeric min/max or year min/max
-  | 'text';         // free-text search (not suitable for group-by)
+  | 'categorical' // multi-select from a known value set
+  | 'range' // numeric min/max or year min/max
+  | 'text'; // free-text search (not suitable for group-by)
 
 export type AggFn = 'sum' | 'avg' | 'count';
 
 export interface AggregateSpec {
   fn: AggFn;
-  label: string;   // e.g. "Total capacity (MW)"
-  unit?: string;   // e.g. "MW", "Mtpa", "Mt CO₂"
+  label: string; // e.g. "Total capacity (MW)"
+  unit?: string; // e.g. "MW", "Mtpa", "Mt CO₂"
 }
 
 export interface CoalField {
-  key: string;                   // API code_friendly_name
-  label: string;                 // Full display label
-  shortLabel?: string;           // For column headers / chips where space is tight
-  trackers: Tracker[];           // Which tracker(s) this field belongs to
-  category: string;              // Mirrors API fieldCategoriesOrdered
+  key: string; // API code_friendly_name
+  label: string; // Full display label
+  shortLabel?: string; // For column headers / chips where space is tight
+  trackers: Tracker[]; // Which tracker(s) this field belongs to
+  category: string; // Mirrors API fieldCategoriesOrdered
   filterable?: FilterType;
   groupable?: boolean;
   groupableSingleTrackerOnly?: boolean; // If true, only show in group-by when a single tracker is selected
   aggregatable?: AggregateSpec[];
-  apiFieldKey?: string;          // Override API field key in URL (defaults to key)
-  skipPlantCollapse?: boolean;   // Skip location_id collapse even in project granularity mode
+  apiFieldKey?: string; // Override API field key in URL (defaults to key)
+  skipPlantCollapse?: boolean; // Skip location_id collapse even in project granularity mode
 }
 
 // ── Shared fields (present in both trackers with the same API key) ─────────
@@ -88,7 +88,7 @@ const SHARED: CoalField[] = [
     groupable: true,
   },
   {
-    key: 'owner',                 // 'owner' for plants, 'owners' for mines — resolved per-tracker
+    key: 'owner', // 'owner' for plants, 'owners' for mines — resolved per-tracker
     label: 'Owner',
     trackers: ['coal-plant', 'coal-mine'],
     category: 'Ownership',
@@ -204,9 +204,7 @@ const PLANT_FIELDS: CoalField[] = [
     shortLabel: 'Capacity',
     trackers: ['coal-plant'],
     category: 'Size',
-    aggregatable: [
-      { fn: 'sum', label: 'Total capacity (MW)', unit: 'MW' },
-    ],
+    aggregatable: [{ fn: 'sum', label: 'Total capacity (MW)', unit: 'MW' }],
   },
   {
     key: 'annual_co2_million_tonnes___annum',
@@ -214,9 +212,7 @@ const PLANT_FIELDS: CoalField[] = [
     shortLabel: 'Annual CO₂',
     trackers: ['coal-plant'],
     category: 'CO2 estimates',
-    aggregatable: [
-      { fn: 'sum', label: 'Total annual CO₂ (Mt / yr)', unit: 'Mt CO₂/yr' },
-    ],
+    aggregatable: [{ fn: 'sum', label: 'Total annual CO₂ (Mt / yr)', unit: 'Mt CO₂/yr' }],
   },
   {
     key: 'lifetime_co2_million_tonnes',
@@ -224,9 +220,7 @@ const PLANT_FIELDS: CoalField[] = [
     shortLabel: 'Lifetime CO₂',
     trackers: ['coal-plant'],
     category: 'CO2 estimates',
-    aggregatable: [
-      { fn: 'sum', label: 'Total lifetime CO₂ (Mt)', unit: 'Mt CO₂' },
-    ],
+    aggregatable: [{ fn: 'sum', label: 'Total lifetime CO₂ (Mt)', unit: 'Mt CO₂' }],
   },
   {
     key: 'plant_age_years',
@@ -313,9 +307,7 @@ const MINE_FIELDS: CoalField[] = [
     shortLabel: 'Capacity',
     trackers: ['coal-mine'],
     category: 'Size',
-    aggregatable: [
-      { fn: 'sum', label: 'Total capacity (Mtpa)', unit: 'Mtpa' },
-    ],
+    aggregatable: [{ fn: 'sum', label: 'Total capacity (Mtpa)', unit: 'Mtpa' }],
   },
   {
     key: 'production_mtpa',
@@ -323,9 +315,7 @@ const MINE_FIELDS: CoalField[] = [
     shortLabel: 'Production',
     trackers: ['coal-mine'],
     category: 'Size',
-    aggregatable: [
-      { fn: 'sum', label: 'Total production (Mtpa)', unit: 'Mtpa' },
-    ],
+    aggregatable: [{ fn: 'sum', label: 'Total production (Mtpa)', unit: 'Mtpa' }],
   },
   {
     key: 'workforce_size',
@@ -333,9 +323,7 @@ const MINE_FIELDS: CoalField[] = [
     shortLabel: 'Workforce',
     trackers: ['coal-mine'],
     category: 'Size',
-    aggregatable: [
-      { fn: 'sum', label: 'Total workforce', unit: 'workers' },
-    ],
+    aggregatable: [{ fn: 'sum', label: 'Total workforce', unit: 'workers' }],
   },
   {
     key: 'gem_coal_mine_methane_emissions_estimate_m_tonnes_yr',
@@ -343,9 +331,7 @@ const MINE_FIELDS: CoalField[] = [
     shortLabel: 'Methane (Mt/yr)',
     trackers: ['coal-mine'],
     category: 'Methane',
-    aggregatable: [
-      { fn: 'sum', label: 'Total methane emissions (Mt / yr)', unit: 'Mt/yr' },
-    ],
+    aggregatable: [{ fn: 'sum', label: 'Total methane emissions (Mt / yr)', unit: 'Mt/yr' }],
   },
   {
     key: 'opening_year',
@@ -373,7 +359,12 @@ const MINE_FIELDS: CoalField[] = [
 
 // ── Master list ────────────────────────────────────────────────────────────
 
-export const COAL_FIELDS: CoalField[] = [...SHARED, ...PLANT_FIELDS, ...MINE_FIELDS, ...COUNT_FIELDS];
+export const COAL_FIELDS: CoalField[] = [
+  ...SHARED,
+  ...PLANT_FIELDS,
+  ...MINE_FIELDS,
+  ...COUNT_FIELDS,
+];
 
 // ── Lookup helpers ─────────────────────────────────────────────────────────
 
@@ -404,9 +395,7 @@ export function getGroupableFields(trackers: Tracker[]): CoalField[] {
 }
 
 export function getAggregatableFields(trackers: Tracker[]): CoalField[] {
-  return getFieldsForTrackers(trackers).filter(
-    (f) => f.aggregatable && f.aggregatable.length > 0
-  );
+  return getFieldsForTrackers(trackers).filter((f) => f.aggregatable && f.aggregatable.length > 0);
 }
 
 // ── CoalQuery type & URL serialization ────────────────────────────────────
@@ -457,7 +446,7 @@ export interface CoalQueryFilters {
 
 export interface CoalQueryAggregate {
   fn: AggFn;
-  field: string;  // CoalField.key
+  field: string; // CoalField.key
 }
 
 export type CoalView = 'table' | 'cards' | 'summary';
@@ -478,7 +467,7 @@ export type Granularity = 'project' | 'unit';
 export interface CoalQuery {
   trackers: Tracker[];
   filters: CoalQueryFilters;
-  groupBy: string[];            // CoalField.key[]
+  groupBy: string[]; // CoalField.key[]
   aggregates: CoalQueryAggregate[];
   granularity: Granularity;
   view: CoalView;

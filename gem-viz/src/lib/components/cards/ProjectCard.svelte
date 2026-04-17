@@ -201,7 +201,7 @@
             assetId={asset.locationId || asset.id}
             compact
             showViewFull={false}
-            ownershipLoader={ownershipLoader}
+            {ownershipLoader}
           />
         </div>
       {/if}
@@ -252,7 +252,7 @@
                 showViewFull={false}
                 emptyMessage="No ownership data available"
                 errorMessage="Failed to load ownership data"
-                ownershipLoader={ownershipLoader}
+                {ownershipLoader}
               />
             </div>
           {/if}

@@ -57,11 +57,7 @@
 
   // ── URL helpers ─────────────────────────────────────────────────────────
 
-  function buildResultsUrl(params: {
-    owners?: string;
-    noassets?: string;
-    nomatch?: string;
-  }) {
+  function buildResultsUrl(params: { owners?: string; noassets?: string; nomatch?: string }) {
     return buildScreenerUrl('screener/results', {
       classes: classesParam || undefined,
       owners: params.owners || undefined,
@@ -140,8 +136,7 @@
 
     try {
       const statuses: string[] =
-        cls.filters?.statuses ||
-        (cls.filters?.status ? [cls.filters.status] : []);
+        cls.filters?.statuses || (cls.filters?.status ? [cls.filters.status] : []);
 
       const countries = cls.filters?.geography
         ? Array.isArray(cls.filters.geography)
@@ -172,9 +167,9 @@
   /** True if the term looks like a structured ID rather than a company name. */
   function isIdSearch(term: string): boolean {
     return (
-      /^E\d+$/i.test(term) ||           // GEM Entity ID: E123456
-      /^[A-Z0-9]{20}$/.test(term) ||    // LEI: 20 uppercase alphanumeric chars
-      /^\d{10}$/.test(term)              // PermID: 10 digits
+      /^E\d+$/i.test(term) || // GEM Entity ID: E123456
+      /^[A-Z0-9]{20}$/.test(term) || // LEI: 20 uppercase alphanumeric chars
+      /^\d{10}$/.test(term) // PermID: 10 digits
     );
   }
 
@@ -209,7 +204,6 @@
         o.altNames?.some((n) => n.toLowerCase().includes(lower))
     );
   }
-
 
   /**
    * Cross-reference a list of entity search results against the owners map.
@@ -276,8 +270,7 @@
       }
 
       const ownerIds = withAssets.map((e) => e.id).join(',');
-      const noAssetsParam =
-        noAssets.length > 0 ? noAssets.map((e) => e.id).join(',') : undefined;
+      const noAssetsParam = noAssets.length > 0 ? noAssets.map((e) => e.id).join(',') : undefined;
       storeMatchedOwners(withAssets.map((e) => e.id));
       goto(buildResultsUrl({ owners: ownerIds, noassets: noAssetsParam }));
     } catch (err) {
@@ -301,7 +294,10 @@
       const rows: Row[] = bulkSearchText
         .split('\n')
         .map((line) => {
-          const cells = line.split(/[\t;]/).map((c) => c.trim()).filter((c) => c.length > 0);
+          const cells = line
+            .split(/[\t;]/)
+            .map((c) => c.trim())
+            .filter((c) => c.length > 0);
           return {
             idCells: cells.filter((c) => isIdSearch(c)),
             nameCells: cells.filter((c) => !isIdSearch(c)),
@@ -344,15 +340,21 @@
       }
 
       // ── Phase 2: API ID terms for rows not yet locally resolved ───────────
-      const emptyBulk = { results: {} as Record<string, EntitySearchResult[]>, queryTimeMs: 0, source: 'rest-api-sequential' as const, apiCallCount: 0 };
+      const emptyBulk = {
+        results: {} as Record<string, EntitySearchResult[]>,
+        queryTimeMs: 0,
+        source: 'rest-api-sequential' as const,
+        apiCallCount: 0,
+      };
 
-      const apiIdTerms = [...new Set(
-        rows.flatMap((r, i) => rowIdResolved[i] ? [] : r.idCells)
-      )].filter((t) => !locallyMatchedIdTerms.has(t)).slice(0, 200);
+      const apiIdTerms = [...new Set(rows.flatMap((r, i) => (rowIdResolved[i] ? [] : r.idCells)))]
+        .filter((t) => !locallyMatchedIdTerms.has(t))
+        .slice(0, 200);
 
-      const idBulkResult = apiIdTerms.length > 0
-        ? await searchEntitiesBulk(apiIdTerms, { limitPerQuery: 5, maxConcurrent: 10 })
-        : emptyBulk;
+      const idBulkResult =
+        apiIdTerms.length > 0
+          ? await searchEntitiesBulk(apiIdTerms, { limitPerQuery: 5, maxConcurrent: 10 })
+          : emptyBulk;
 
       for (const [term, entities] of Object.entries(idBulkResult.results)) {
         for (const e of entities) addMatch(e, term);
@@ -361,9 +363,11 @@
       // Update rowIdResolved based on API ID results
       for (let i = 0; i < rows.length; i++) {
         if (rowIdResolved[i]) continue;
-        if (rows[i].idCells.some(
-          (c) => (idBulkResult.results[c] ?? []).some((e) => resolvedById.has(e.id))
-        )) {
+        if (
+          rows[i].idCells.some((c) =>
+            (idBulkResult.results[c] ?? []).some((e) => resolvedById.has(e.id))
+          )
+        ) {
           rowIdResolved[i] = true;
         }
       }
@@ -383,20 +387,29 @@
       }
 
       // ── Phase 4: API name terms for rows still unresolved ─────────────────
-      const apiNameTerms = [...new Set(
-        rows.flatMap((r, i) => rowIdResolved[i] ? [] : r.nameCells)
-      )].filter((t) => !locallyMatchedNameTerms.has(t)).slice(0, 200);
+      const apiNameTerms = [
+        ...new Set(rows.flatMap((r, i) => (rowIdResolved[i] ? [] : r.nameCells))),
+      ]
+        .filter((t) => !locallyMatchedNameTerms.has(t))
+        .slice(0, 200);
 
-      const nameBulkResult = apiNameTerms.length > 0
-        ? await searchEntitiesBulk(apiNameTerms, { limitPerQuery: 10, maxConcurrent: 10 })
-        : emptyBulk;
+      const nameBulkResult =
+        apiNameTerms.length > 0
+          ? await searchEntitiesBulk(apiNameTerms, { limitPerQuery: 10, maxConcurrent: 10 })
+          : emptyBulk;
 
       debugLastSearchTime = Math.max(idBulkResult.queryTimeMs, nameBulkResult.queryTimeMs);
-      debugApiCalls = [{
-        type: 'searchEntitiesBulk',
-        params: { idTerms: apiIdTerms.length, nameTerms: apiNameTerms.length, localHits: locallyMatchedIdTerms.size + locallyMatchedNameTerms.size },
-        time: Date.now(),
-      }];
+      debugApiCalls = [
+        {
+          type: 'searchEntitiesBulk',
+          params: {
+            idTerms: apiIdTerms.length,
+            nameTerms: apiNameTerms.length,
+            localHits: locallyMatchedIdTerms.size + locallyMatchedNameTerms.size,
+          },
+          time: Date.now(),
+        },
+      ];
 
       for (const [term, entities] of Object.entries(nameBulkResult.results)) {
         for (const e of entities) addMatch(e, term);
@@ -410,8 +423,9 @@
         const rowResolved =
           rowIdResolved[i] ||
           row.nameCells.some(
-            (c) => locallyMatchedNameTerms.has(c) ||
-                   (nameBulkResult.results[c] ?? []).some((e) => resolvedById.has(e.id))
+            (c) =>
+              locallyMatchedNameTerms.has(c) ||
+              (nameBulkResult.results[c] ?? []).some((e) => resolvedById.has(e.id))
           );
         if (!rowResolved) {
           tier3Count++;
@@ -583,12 +597,25 @@
       {:else}
         {@const cls = selectedClasses[0]}
         {@const subLabels = cls?.selectedSubClassLabels ?? []}
-        {@const statuses = cls?.filters?.statuses ?? (cls?.filters?.status ? [cls.filters.status] : [])}
+        {@const statuses =
+          cls?.filters?.statuses ?? (cls?.filters?.status ? [cls.filters.status] : [])}
         {@const geo = cls?.filters?.geography}
         {@const detailParts = [
-          subLabels.length > 0 && subLabels.length <= 3 ? `(${subLabels.join(', ')})` : subLabels.length > 3 ? `(${subLabels.slice(0, 3).join(', ')}…)` : '',
-          statuses.length > 0 ? statuses.map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(', ') : '',
-          Array.isArray(geo) && geo.length === 1 ? geo[0] : Array.isArray(geo) && geo.length > 1 ? `${geo.length} countries` : typeof geo === 'string' && geo ? geo : '',
+          subLabels.length > 0 && subLabels.length <= 3
+            ? `(${subLabels.join(', ')})`
+            : subLabels.length > 3
+              ? `(${subLabels.slice(0, 3).join(', ')}…)`
+              : '',
+          statuses.length > 0
+            ? statuses.map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(', ')
+            : '',
+          Array.isArray(geo) && geo.length === 1
+            ? geo[0]
+            : Array.isArray(geo) && geo.length > 1
+              ? `${geo.length} countries`
+              : typeof geo === 'string' && geo
+                ? geo
+                : '',
         ].filter(Boolean)}
         {@const detail = cls ? [cls.name, ...detailParts].join(' · ') : ''}
         <div class="show-all-btn-wrap">

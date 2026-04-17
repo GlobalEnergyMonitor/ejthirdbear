@@ -3,12 +3,7 @@
  * Draws asset circle clusters, status icons, and common asset connection lines.
  */
 
-import {
-  select,
-  path as d3Path,
-  scaleLinear,
-  type Selection,
-} from 'd3';
+import { select, path as d3Path, scaleLinear, type Selection } from 'd3';
 import { colors, statusColors } from '$lib/design-tokens';
 import { PLANNED_STATUSES } from '$lib/data-config/tracker-schema';
 import { drawMolecule, type MoleculeUnit } from '$lib/components/ownership/molecule-renderer';
@@ -98,7 +93,10 @@ function renderExpandedSubGroups(
   for (const sg of subGroups) {
     const sgG = group
       .append('g')
-      .attr('class', `subsidiary-asset-group subsidiary-asset-subgroup subsidiary-asset-subgroup--depth${depth}`)
+      .attr(
+        'class',
+        `subsidiary-asset-group subsidiary-asset-subgroup subsidiary-asset-subgroup--depth${depth}`
+      )
       .attr('id', `subsidiary-asset-group-${CSS.escape(sg.id)}`)
       .attr('transform', `translate(${xShift}, ${sg.top})`);
 
@@ -118,9 +116,14 @@ function renderExpandedSubGroups(
         .attr('role', 'button')
         .attr('tabindex', 0)
         .attr('aria-label', (loc) => `Open details for ${loc.units[0]?.name || loc.locationID}`)
-        .on('click', (event, locData) => { callbacks.onAssetClick?.(locData, event); })
+        .on('click', (event, locData) => {
+          callbacks.onAssetClick?.(locData, event);
+        })
         .on('keydown', (event, locData) => {
-          if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); callbacks.onAssetClick?.(locData, event); }
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            callbacks.onAssetClick?.(locData, event);
+          }
         });
 
       renderAssetLocations(sgAssets, getColor, callbacks);

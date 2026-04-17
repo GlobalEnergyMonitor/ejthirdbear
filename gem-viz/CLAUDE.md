@@ -73,7 +73,7 @@ src/lib/
 - `GET /assets?asset_type=coal-plant&format=json` — asset list (max 500/page)
 - `GET /assets/{id}` — single asset with `owners[]` array
 - `GET /entities/{id}` — entity details
-- `GET /ownership/graph?root=ENTITY_ID&direction=down&max_depth=5` — full tree (entities + assets)
+- `GET /ownership/graph?root=ENTITY_ID&direction=down&max_depth=<uncapped>` — full tree (entities + assets). We pass `Number.MAX_SAFE_INTEGER` so the API never truncates the graph.
 - `GET /assets?facets=true` — counts by type/status/country
 
 ### Asset Type Slugs

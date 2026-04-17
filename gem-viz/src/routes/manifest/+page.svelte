@@ -410,7 +410,6 @@
     font-size: var(--font-size-md);
   }
 
-
   .config-card {
     background: var(--color-white);
     border: var(--border-width) solid var(--color-border);

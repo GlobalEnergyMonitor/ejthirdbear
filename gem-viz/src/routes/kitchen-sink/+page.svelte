@@ -258,8 +258,8 @@
       name: 'MiniNetworkGraph',
       path: 'src/lib/components/network/MiniNetworkGraph.svelte',
       what: 'Interactive 3-D force-directed network (deck.gl + d3-force-3d) showing the ownership neighborhood around a single entity — nodes are entities/assets, edges are ownership links.',
-      api: 'Calls getOwnershipGraph({ root: entityId, direction: "both", max_depth: maxHops }) from ownership-api.ts.',
-      usage: `<MiniNetworkGraph entityId="E100001000348" maxHops={2} height={300} />`,
+      api: 'Calls getOwnershipGraph() twice via ownership-api.ts (direction="down" and direction="up"). Ownership graph requests now default to explicit full depth.',
+      usage: `<MiniNetworkGraph entityId="E100001000348" height={300} />`,
     },
     {
       name: 'UltimateOwners',
@@ -1064,7 +1064,9 @@
       <div class="demo-block full-width">
         <FilterBreadcrumbs
           filters={sampleFilters}
-          onRemove={(filter) => { if (import.meta.env.DEV) console.log('Remove:', filter); }}
+          onRemove={(filter) => {
+            if (import.meta.env.DEV) console.log('Remove:', filter);
+          }}
         />
       </div>
       <pre
@@ -1772,7 +1774,6 @@
     font-weight: 500;
     color: var(--color-text-primary);
   }
-
 
   /* Typography Reference */
   .type-samples {

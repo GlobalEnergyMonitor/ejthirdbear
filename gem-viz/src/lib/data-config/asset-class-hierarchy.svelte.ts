@@ -145,8 +145,8 @@ export function getHierarchyCategories(
   const byId = new Map(flatClasses.map((c) => [c.id, c]));
   const q = searchQuery.trim().toLowerCase();
 
-  return getHierarchy().categories
-    .map((cat: HierarchyCategory) => ({
+  return getHierarchy()
+    .categories.map((cat: HierarchyCategory) => ({
       id: cat.id,
       label: cat.label,
       classes: cat.assetClasses
@@ -157,12 +157,17 @@ export function getHierarchyCategories(
             // Grouping tile: derive URL from combined leaf option URLs, excluding defaultUnchecked
             const defaultUnchecked = new Set(ac.defaultUnchecked ?? []);
             const defaultIds = leafIds.filter((id: string) => !defaultUnchecked.has(id));
-            const childUrls = defaultIds.map((id: string) => byId.get(id)?.url).filter((u): u is string => !!u);
-            const childOwnerUrls = defaultIds.map((id: string) => byId.get(id)?.owners_url).filter((u): u is string => !!u);
+            const childUrls = defaultIds
+              .map((id: string) => byId.get(id)?.url)
+              .filter((u): u is string => !!u);
+            const childOwnerUrls = defaultIds
+              .map((id: string) => byId.get(id)?.owners_url)
+              .filter((u): u is string => !!u);
             if (childUrls.length === 0) return null;
             // Use API label, or synthesize from ID (e.g. "coal-related" → "Coal Related")
-            const label = (ac as HierarchyAssetClass & { label?: string }).label
-              || ac.id.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+            const label =
+              (ac as HierarchyAssetClass & { label?: string }).label ||
+              ac.id.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
             return {
               id: ac.id,
               label,
@@ -190,8 +195,8 @@ export function getHierarchyCategories(
  * Returns option IDs that should be unchecked by default for a given tile.
  */
 export function getHierarchyDefaultUnchecked(classId: string): string[] {
-  const hClass = getHierarchy().categories
-    .flatMap((cat: HierarchyCategory) => cat.assetClasses)
+  const hClass = getHierarchy()
+    .categories.flatMap((cat: HierarchyCategory) => cat.assetClasses)
     .find((ac: HierarchyAssetClass) => ac.id === classId);
   return hClass?.defaultUnchecked ?? [];
 }
@@ -201,8 +206,8 @@ export function getHierarchyDefaultUnchecked(classId: string): string[] {
  * Returns an empty array for tiles with no subclass options.
  */
 export function getHierarchyOptionIds(classId: string): string[] {
-  const hClass = getHierarchy().categories
-    .flatMap((cat: HierarchyCategory) => cat.assetClasses)
+  const hClass = getHierarchy()
+    .categories.flatMap((cat: HierarchyCategory) => cat.assetClasses)
     .find((ac: HierarchyAssetClass) => ac.id === classId);
   if (!hClass) return [];
   if (hClass.optionIds) return hClass.optionIds;
@@ -222,8 +227,8 @@ export function getHierarchyTree(
   flatClasses: CatalogAssetClass[]
 ): CatalogClassTree[] {
   const byId = new Map(flatClasses.map((c) => [c.id, c]));
-  const hClass = getHierarchy().categories
-    .flatMap((cat: HierarchyCategory) => cat.assetClasses)
+  const hClass = getHierarchy()
+    .categories.flatMap((cat: HierarchyCategory) => cat.assetClasses)
     .find((ac: HierarchyAssetClass) => ac.id === classId);
   if (!hClass) return [];
 
@@ -245,15 +250,17 @@ export function getHierarchyTree(
       // Single-option group: promote the option directly (no parent wrapper, no refine button)
       if (leaves.length === 1) return leaves;
       // Multi-option group: wrap in a non-selectable parent with children
-      return [{
-        entry: {
-          id: group.id,
-          label: group.label,
-          category: '',
-          description: group.description,
-        } as CatalogAssetClass,
-        children: leaves,
-      }];
+      return [
+        {
+          entry: {
+            id: group.id,
+            label: group.label,
+            category: '',
+            description: group.description,
+          } as CatalogAssetClass,
+          children: leaves,
+        },
+      ];
     });
   }
 

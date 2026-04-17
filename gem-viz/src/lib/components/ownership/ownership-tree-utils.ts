@@ -162,11 +162,12 @@ export function trimEdgeToNode(
   if (i === 0) return pts;
 
   const p0 = pts[i - 1]; // last inside point
-  const p1 = pts[i];     // first outside point
+  const p1 = pts[i]; // first outside point
 
   let t = 0.5;
   if (isRect) {
-    let lo = 0, hi = 1;
+    let lo = 0,
+      hi = 1;
     for (let k = 0; k < 10; k++) {
       t = (lo + hi) / 2;
       const x = p0.x + t * (p1.x - p0.x);
@@ -175,8 +176,10 @@ export function trimEdgeToNode(
       else lo = t;
     }
   } else {
-    const dx = p1.x - p0.x, dy = p1.y - p0.y;
-    const fx = p0.x - cx, fy = p0.y - cy;
+    const dx = p1.x - p0.x,
+      dy = p1.y - p0.y;
+    const fx = p0.x - cx,
+      fy = p0.y - cy;
     const a = dx * dx + dy * dy;
     const b = 2 * (fx * dx + fy * dy);
     const c = fx * fx + fy * fy - r * r;

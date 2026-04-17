@@ -38,9 +38,11 @@ export const GET: RequestHandler = async ({ url, request }) => {
 
   // Batch mode
   const results: Record<string, string> = {};
-  await Promise.all(ids.map(async (id) => {
-    results[id] = await resolveViaApi(id);
-  }));
+  await Promise.all(
+    ids.map(async (id) => {
+      results[id] = await resolveViaApi(id);
+    })
+  );
   return json({ results }, { headers });
 };
 

@@ -18,7 +18,13 @@
     theme?: 'light' | 'dark';
   }
 
-  let { tracker = '', title: titleProp, field = '', height = 500, theme = 'light' }: Props = $props();
+  let {
+    tracker = '',
+    title: titleProp,
+    field = '',
+    height = 500,
+    theme = 'light',
+  }: Props = $props();
 
   const trackerName = $derived(slugToTrackerName[tracker] || tracker);
   const displayTitle = $derived(titleProp || `${trackerName} Fields`);
@@ -65,7 +71,9 @@
       {catalogSlug}
       title={displayTitle}
       initialField={selectedField}
-      onFieldSelect={(f) => { selectedField = f; }}
+      onFieldSelect={(f) => {
+        selectedField = f;
+      }}
     />
   {/if}
 </div>

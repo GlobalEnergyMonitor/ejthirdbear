@@ -2,7 +2,7 @@
   /**
    * PORTFOLIO EXPLORER — Reusable core component
    * Pick an entity → see all downstream assets grouped by project/location,
-   * with summary breakdowns by country, type, status, and intermediaries.
+   * with summary breakdowns by country, type, and status.
    * When filtered to a small set, shows a d3.cluster tree linking ownership paths.
    *
    * Accepts entityId/hidePicker as props (used by both route page and widget).
@@ -25,7 +25,6 @@
     countryPalette,
     countryGray,
   } from '$lib/design-tokens';
-  import NestedIntermediaryPanel from './NestedIntermediaryPanel.svelte';
   import { computeTreeLayout, computeTreeHeight, computeGridLayout } from './portfolio-layout';
   import { makeTreePaths, buildRenderHierarchy } from './portfolio-paths';
 
@@ -83,7 +82,6 @@
       country: new Set(),
       asset_type: new Set(),
       operating_status: new Set(),
-      intermediary: new Set(),
       ownership: new Set(),
     };
   }
@@ -93,7 +91,6 @@
       country: filterParams.country || '',
       asset_type: filterParams.asset_type || '',
       operating_status: filterParams.operating_status || '',
-      intermediary: filterParams.intermediary || '',
       ownership: filterParams.ownership || '',
     });
   }
@@ -111,7 +108,8 @@
   let summary = $state(null);
   /** Project groups (assets grouped by location) */
   let projectGroups = $state([]);
-  /** Intermediary entities with their connected asset counts */
+  /** Intermediary entities — read-only list shown when tree is hidden (large portfolios).
+   *  Small portfolios surface them visually inside the tree instead. */
   let intermediaries = $state([]);
   /** Cumulative ownership %: projectID → effective ownership through all paths */
   let cumulativePctMap = $state(new Map());
@@ -123,11 +121,10 @@
   /**
    * Multi-dimensional crossfilter:
    * - OR within a column (clicking multiple values in same column = union)
-   * - AND across columns (country OR-set ∩ type OR-set ∩ status OR-set ∩ intermediary)
+   * - AND across columns (country OR-set ∩ type OR-set ∩ status OR-set ∩ ownership OR-set)
    * - Click toggles individual values on/off
    *
    * Each column stores a Set of selected values. Empty set = no filter for that column.
-   * Intermediary stores { values: Set<name>, projectIds: Map<name, Set<projectId>> }
    */
   /** Ownership share filter thresholds */
   const OWNERSHIP_BUCKETS = [
@@ -152,25 +149,12 @@
 
   let filters = $state(createEmptyFilters());
   let lastSyncedFilterSignature = $state('');
-  /** Intermediary name → projectIds lookup (populated when intermediaries are clicked) */
-  let intermediaryProjectIds = $state(new Map());
-
-  /** Set of intermediary entity_ids that are expanded (fold-out) */
-  let expandedIntermediaryIds = $state(new Set());
-
-  function toggleIntermediaryFoldout(entityId) {
-    const next = new Set(expandedIntermediaryIds);
-    if (next.has(entityId)) next.delete(entityId);
-    else next.add(entityId);
-    expandedIntermediaryIds = next;
-  }
 
   /** Whether any filter is active */
   let isFiltered = $derived(
     filters.country.size > 0 ||
       filters.asset_type.size > 0 ||
       filters.operating_status.size > 0 ||
-      filters.intermediary.size > 0 ||
       filters.ownership.size > 0
   );
 
@@ -186,11 +170,15 @@
   }
 
   /** Check whether a single asset passes all active filters */
-  function assetMatchesFilters(a, intermediaryPids) {
+  function assetMatchesFilters(a) {
     if (filters.country.size > 0 && !filters.country.has(a.country || 'Unknown')) return false;
-    if (filters.asset_type.size > 0 && !filters.asset_type.has(a.asset_type || 'Unknown')) return false;
-    if (filters.operating_status.size > 0 && !filters.operating_status.has(a.operating_status || 'Unknown')) return false;
-    if (intermediaryPids && !intermediaryPids.has(a.location_id || a.unit_id || a.asset_id)) return false;
+    if (filters.asset_type.size > 0 && !filters.asset_type.has(a.asset_type || 'Unknown'))
+      return false;
+    if (
+      filters.operating_status.size > 0 &&
+      !filters.operating_status.has(a.operating_status || 'Unknown')
+    )
+      return false;
     if (filters.ownership.size > 0 && !filters.ownership.has(getOwnershipBucket(a))) return false;
     return true;
   }
@@ -201,20 +189,10 @@
   let filteredResult = $derived.by(() => {
     if (!isFiltered || !apiData) return null;
 
-    // Build intermediary project IDs set (if filtering by intermediary)
-    let intermediaryPids = null;
-    if (filters.intermediary.size > 0) {
-      intermediaryPids = new Set();
-      for (const name of filters.intermediary) {
-        const pids = intermediaryProjectIds.get(name);
-        if (pids) for (const p of pids) intermediaryPids.add(p);
-      }
-    }
-
     // Tag every asset as matched or not
     const allTagged = apiData.assets.map((a) => ({
       ...a,
-      _matched: assetMatchesFilters(a, intermediaryPids),
+      _matched: assetMatchesFilters(a),
     }));
 
     // The matched-only set drives summary counts
@@ -257,33 +235,6 @@
     // Auto-select first available, prefer type > status > country
     if (availableColorFields.length > 0) return availableColorFields[0];
     return 'type';
-  });
-
-  /** Whether any non-intermediary filter is active (for computing intermediary counts) */
-  let hasNonIntermediaryFilter = $derived(
-    filters.country.size > 0 || filters.asset_type.size > 0 || filters.operating_status.size > 0
-  );
-
-  /** Intermediaries with counts updated to reflect current non-intermediary filters */
-  let displayIntermediaries = $derived.by(() => {
-    if (!hasNonIntermediaryFilter || !apiData) return intermediaries;
-    let assets = apiData.assets;
-    if (filters.country.size > 0) {
-      assets = assets.filter((a) => filters.country.has(a.country));
-    }
-    if (filters.asset_type.size > 0) {
-      assets = assets.filter((a) => filters.asset_type.has(a.asset_type));
-    }
-    if (filters.operating_status.size > 0) {
-      assets = assets.filter((a) => filters.operating_status.has(a.operating_status));
-    }
-    const filteredProjectIds = new Set(assets.map((a) => a.location_id || a.unit_id || a.asset_id));
-    return intermediaries
-      .map((inter) => {
-        const count = [...inter.projectIds].filter((pid) => filteredProjectIds.has(pid)).length;
-        return { ...inter, filteredCount: count };
-      })
-      .sort((a, b) => b.filteredCount - a.filteredCount);
   });
 
   /** Top-5 countries by asset count → index into countryPalette; rest get countryGray */
@@ -330,9 +281,7 @@
 
   /** Show tree when ≤30 assets AND <7 ownership depth layers */
   let showTree = $derived(
-    displayProjectGroups.length > 0 &&
-    displayProjectGroups.length <= 30 &&
-    displayTreeMaxDepth < 7
+    displayProjectGroups.length > 0 && displayProjectGroups.length <= 30 && displayTreeMaxDepth < 7
   );
 
   /** DOM refs */
@@ -436,14 +385,7 @@
     projectGroups = [];
     intermediaries = [];
     cumulativePctMap = new Map();
-    intermediaryProjectIds = new Map();
-    filters = {
-      country: new Set(),
-      asset_type: new Set(),
-      operating_status: new Set(),
-      intermediary: new Set(),
-      ownership: new Set(),
-    };
+    filters = createEmptyFilters();
     hoveredProject = null;
     selectedProject = null;
     treeRoot = null;
@@ -459,9 +401,6 @@
 
       const spotlightOwner = data.root;
       const assets = (data.nodes || []).filter((n) => n.node_type === 'asset');
-      const entities = (data.nodes || []).filter(
-        (n) => n.node_type === 'entity' && n.entity_id !== spotlightOwner.entity_id
-      );
       const edges = data.edges || [];
 
       const sum = summarizeAssets(assets);
@@ -469,32 +408,45 @@
       // Group assets into projects by location_id
       const groups = makeProjectGroups(assets);
 
-      // Build intermediary data
       const treePaths = makeTreePaths(
         { nodes: data.nodes, edges },
         spotlightOwner.entity_id,
         groups
       );
-      const interData = computeIntermediaries(entities, treePaths, spotlightOwner.entity_id);
+
+      // Read-only intermediary list: each non-root entity → # of leaf projects it sits on
+      // a path to. Shown in sidebar only when the tree is hidden (see `showTree`).
+      const entityNodes = (data.nodes || []).filter(
+        (n) => n.node_type === 'entity' && n.entity_id !== spotlightOwner.entity_id
+      );
+      const intermediaryList = entityNodes
+        .map((e) => {
+          const leafs = new Set(
+            treePaths.paths
+              .filter((p) => p.path.includes(e.entity_id))
+              .map((p) => p.path[p.path.length - 1])
+          );
+          return {
+            entity_id: e.entity_id,
+            name: e.name || e.full_name || e.entity_id,
+            assetCount: leafs.size,
+          };
+        })
+        .filter((e) => e.assetCount > 0)
+        .sort((a, b) => b.assetCount - a.assetCount);
 
       apiData = {
         spotlightOwner,
         assets,
-        entities,
         edges,
         nodes: data.nodes,
         summary: sum,
       };
       summary = sum;
       projectGroups = groups;
-      intermediaries = interData;
+      intermediaries = intermediaryList;
       cumulativePctMap = treePaths.cumulativePctMap;
       treeMaxDepth = treePaths.maxDepth;
-
-      // Auto-expand intermediary foldouts when path is straightforward (≤2 intermediaries)
-      if (interData.length <= 2) {
-        expandedIntermediaryIds = new Set(interData.map((i) => i.entity_id));
-      }
     } catch (err) {
       if (err.name === 'AbortError') return; // superseded by newer fetch
       error = err.message || 'Failed to fetch data';
@@ -567,31 +519,9 @@
   // ============================================================================
 
   // ============================================================================
-  // INTERMEDIARIES
-  // ============================================================================
-  function computeIntermediaries(entities, treePaths, _rootEntityId) {
-    return entities
-      .map((e) => {
-        const connectedLeafs = new Set(
-          treePaths.paths
-            .filter((p) => p.path.includes(e.entity_id))
-            .map((p) => p.path[p.path.length - 1])
-        );
-        return {
-          entity_id: e.entity_id,
-          name: e.name || e.full_name || e.entity_id,
-          assetCount: connectedLeafs.size,
-          projectIds: connectedLeafs, // keep for filtering
-        };
-      })
-      .filter((e) => e.assetCount > 0)
-      .sort((a, b) => b.assetCount - a.assetCount);
-  }
-
-  // ============================================================================
   // FILTERING — OR within column (click toggles), AND across columns
   // ============================================================================
-  function applyFilter(field, value, projectIdSet) {
+  function applyFilter(field, value) {
     if (!apiData) return;
     userHasInteracted = true;
     const next = new Set(filters[field]);
@@ -602,22 +532,10 @@
     }
     filters = { ...filters, [field]: next };
     selectedProject = null;
-    // Store intermediary projectIds when needed
-    if (field === 'intermediary' && projectIdSet) {
-      const nextMap = new Map(intermediaryProjectIds);
-      nextMap.set(value, projectIdSet);
-      intermediaryProjectIds = nextMap;
-    }
   }
 
   function clearFilter() {
-    filters = {
-      country: new Set(),
-      asset_type: new Set(),
-      operating_status: new Set(),
-      intermediary: new Set(),
-      ownership: new Set(),
-    };
+    filters = createEmptyFilters();
   }
 
   // ============================================================================
@@ -652,12 +570,10 @@
     // intermediaries behind a tooltip) and the root-promotion (which elides the
     // spotlight owner when it has a single subsidiary). Prune stays on but is
     // essentially a no-op since every selected path ends at a valid project.
-    const hierData = buildRenderHierarchy(
-      treePaths.pathStrings,
-      validLeafIds,
-      apiData.edges,
-      { applyCollapse: false, applyRootPromotion: false }
-    );
+    const hierData = buildRenderHierarchy(treePaths.pathStrings, validLeafIds, apiData.edges, {
+      applyCollapse: false,
+      applyRootPromotion: false,
+    });
 
     // "Duplicative intermediaries hidden" — entities that exist in the DAG but didn't make it
     // onto any selected (longest-per-leaf) path. Skip leaf projects and asset nodes.
@@ -703,9 +619,7 @@
     const tree = d3Hierarchy
       .cluster()
       .size([height, width])
-      .separation((a, b) =>
-        a.parent === b.parent ? siblingSeparation : cousinSeparation
-      );
+      .separation((a, b) => (a.parent === b.parent ? siblingSeparation : cousinSeparation));
 
     root.sort((a, b) => d3Array.ascending(a.data.name, b.data.name));
     tree(root);
@@ -1185,9 +1099,8 @@
       let afterNameX = nameX + Math.min(name.length * 6.5, 250) + 8;
       const matchedCount = isFiltered ? proj.units.filter((u) => u._matched !== false).length : N;
       if (N > 1) {
-        const unitLabel = isFiltered && matchedCount < N
-          ? `${matchedCount} of ${N} units`
-          : `${N} units`;
+        const unitLabel =
+          isFiltered && matchedCount < N ? `${matchedCount} of ${N} units` : `${N} units`;
         labelG
           .append('text')
           .attr('dy', '0.35em')
@@ -1219,7 +1132,9 @@
       try {
         const bbox = row.node().getBBox();
         hoverRect.attr('width', bbox.width + assetMarkH);
-      } catch (e) { /* getBBox can fail if not rendered yet */ }
+      } catch (e) {
+        /* getBBox can fail if not rendered yet */
+      }
     });
   }
 
@@ -1243,7 +1158,6 @@
       country: parseFilterParam(initialFilters.country),
       asset_type: parseFilterParam(initialFilters.asset_type),
       operating_status: parseFilterParam(initialFilters.operating_status),
-      intermediary: parseFilterParam(initialFilters.intermediary),
       ownership: parseFilterParam(initialFilters.ownership),
     };
     lastSyncedFilterSignature = nextSignature;
@@ -1415,13 +1329,30 @@
       <div class="edge-legend-bar">
         <span class="edge-legend-item">
           <svg viewBox="0 0 24 8" width="24" height="8">
-            <line x1="0" y1="4" x2="24" y2="4" stroke={ownershipColors.treeEdge} stroke-width="2" stroke-linecap="round" />
+            <line
+              x1="0"
+              y1="4"
+              x2="24"
+              y2="4"
+              stroke={ownershipColors.treeEdge}
+              stroke-width="2"
+              stroke-linecap="round"
+            />
           </svg>
           Known %
         </span>
         <span class="edge-legend-item">
           <svg viewBox="0 0 24 8" width="24" height="8">
-            <line x1="0" y1="4" x2="24" y2="4" stroke={ownershipColors.treeEdgeImputed} stroke-width="1.5" stroke-linecap="round" stroke-dasharray="4 3" />
+            <line
+              x1="0"
+              y1="4"
+              x2="24"
+              y2="4"
+              stroke={ownershipColors.treeEdgeImputed}
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-dasharray="4 3"
+            />
           </svg>
           Imputed %
         </span>
@@ -1442,9 +1373,15 @@
             {#if showTree}
               <div class="tree-container">
                 {#if hiddenIntermediaryNames.length > 0}
-                  <aside class="hidden-intermediaries" title="Entities that appear only on secondary (shorter) ownership paths to assets already reached by a longer chain. Their paths render as dashed lines.">
+                  <aside
+                    class="hidden-intermediaries"
+                    title="Entities that appear only on secondary (shorter) ownership paths to assets already reached by a longer chain. Their paths render as dashed lines."
+                  >
                     <div class="hidden-intermediaries-title">
-                      {hiddenIntermediaryNames.length} duplicative intermediar{hiddenIntermediaryNames.length === 1 ? 'y' : 'ies'} not placed in tree
+                      {hiddenIntermediaryNames.length} duplicative intermediar{hiddenIntermediaryNames.length ===
+                      1
+                        ? 'y'
+                        : 'ies'} not placed in tree
                     </div>
                     <ul class="hidden-intermediaries-list">
                       {#each hiddenIntermediaryNames as name (name)}
@@ -1452,7 +1389,8 @@
                       {/each}
                     </ul>
                     <div class="hidden-intermediaries-note">
-                      Each asset is placed under its longest ownership chain. Shorter chains through these entities are drawn as dashed secondary links.
+                      Each asset is placed under its longest ownership chain. Shorter chains through
+                      these entities are drawn as dashed secondary links.
                     </div>
                   </aside>
                 {/if}
@@ -1473,8 +1411,10 @@
             >{apiData.spotlightOwner.name || apiData.spotlightOwner.full_name}</span
           >
           <span class="sidebar-stats"
-            >{summary.total.assetCount} asset{summary.total.assetCount !== 1 ? 's' : ''}{summary.total.unitCount > summary.total.assetCount ? ` (${summary.total.unitCount} units)` : ''} · {summary.total.types.size} tracker{summary.total
-              .types.size !== 1
+            >{summary.total.assetCount} asset{summary.total.assetCount !== 1 ? 's' : ''}{summary
+              .total.unitCount > summary.total.assetCount
+              ? ` (${summary.total.unitCount} units)`
+              : ''} · {summary.total.types.size} tracker{summary.total.types.size !== 1
               ? 's'
               : ''}</span
           >
@@ -1522,8 +1462,15 @@
                   onclick={() => applyFilter('country', country)}
                   onkeydown={(e) => e.key === 'Enter' && applyFilter('country', country)}
                 >
-                  <span class="legend-dot" style="background: {colorField === 'country' ? countryColor(country) : 'rgba(255,255,255,0.3)'}"></span>
-                  {country} ({isFiltered ? `${filteredCount ?? 0} of ${data.assetCount}` : data.assetCount})
+                  <span
+                    class="legend-dot"
+                    style="background: {colorField === 'country'
+                      ? countryColor(country)
+                      : 'rgba(255,255,255,0.3)'}"
+                  ></span>
+                  {country} ({isFiltered
+                    ? `${filteredCount ?? 0} of ${data.assetCount}`
+                    : data.assetCount})
                 </div>
               {/each}
             </div>
@@ -1547,8 +1494,15 @@
                   onclick={() => applyFilter('asset_type', type)}
                   onkeydown={(e) => e.key === 'Enter' && applyFilter('asset_type', type)}
                 >
-                  <span class="legend-dot" style="background: {colorField === 'type' ? typeColor : 'rgba(255,255,255,0.3)'}"></span>
-                  {type} ({isFiltered ? `${filteredCount ?? 0} of ${data.assetCount}` : data.assetCount})
+                  <span
+                    class="legend-dot"
+                    style="background: {colorField === 'type'
+                      ? typeColor
+                      : 'rgba(255,255,255,0.3)'}"
+                  ></span>
+                  {type} ({isFiltered
+                    ? `${filteredCount ?? 0} of ${data.assetCount}`
+                    : data.assetCount})
                 </div>
               {/each}
             </div>
@@ -1572,8 +1526,15 @@
                   onclick={() => applyFilter('operating_status', status)}
                   onkeydown={(e) => e.key === 'Enter' && applyFilter('operating_status', status)}
                 >
-                  <span class="legend-dot" style="background: {colorField === 'status' ? statusColor : 'rgba(255,255,255,0.3)'}"></span>
-                  {status} ({isFiltered ? `${filteredCount ?? 0} of ${data.assetCount}` : data.assetCount})
+                  <span
+                    class="legend-dot"
+                    style="background: {colorField === 'status'
+                      ? statusColor
+                      : 'rgba(255,255,255,0.3)'}"
+                  ></span>
+                  {status} ({isFiltered
+                    ? `${filteredCount ?? 0} of ${data.assetCount}`
+                    : data.assetCount})
                 </div>
               {/each}
             </div>
@@ -1609,38 +1570,16 @@
             </div>
           {/if}
 
-          {#if intermediaries.length > 0}
+          <!-- Intermediaries: read-only fallback when the tree is hidden. Tree already
+               surfaces names visibly for small portfolios, so we only list them here
+               when the tree doesn't render. -->
+          {#if !showTree && intermediaries.length > 0}
             <div class="summary-section">
               <p class="subtitle">Intermediaries</p>
-              <div class="summary-table intermediaries-table">
-                {#each displayIntermediaries as inter}
-                  {@const isActive = filters.intermediary.has(inter.name)}
-                  {@const count = hasNonIntermediaryFilter ? inter.filteredCount : inter.assetCount}
-                  {@const hasResults = !hasNonIntermediaryFilter || inter.filteredCount > 0}
-                  {@const isExpanded = expandedIntermediaryIds.has(inter.entity_id)}
-                  <div class="summary-row-wrapper">
-                    <div
-                      class="summary-row"
-                      class:active={isActive}
-                      class:dimmed={isFiltered && !isActive && hasResults}
-                      class:faded={isFiltered && !isActive && !hasResults}
-                      role="button"
-                      tabindex="0"
-                      onclick={() => applyFilter('intermediary', inter.name, inter.projectIds)}
-                      onkeydown={(e) =>
-                        e.key === 'Enter' &&
-                        applyFilter('intermediary', inter.name, inter.projectIds)}
-                    >
-                      {inter.name} ({hasNonIntermediaryFilter ? `${count} of ${inter.assetCount}` : count})
-                    </div>
-                    <button
-                      class="foldout-btn"
-                      class:expanded={isExpanded}
-                      onclick={() => toggleIntermediaryFoldout(inter.entity_id)}
-                      title="{isExpanded ? 'Collapse' : 'Expand'} {inter.name} sub-portfolio"
-                    >
-                      {isExpanded ? '▼' : '▶'}
-                    </button>
+              <div class="summary-table">
+                {#each intermediaries as inter}
+                  <div class="summary-row readonly">
+                    {inter.name} ({inter.assetCount})
                   </div>
                 {/each}
               </div>
@@ -1697,9 +1636,13 @@
             <h4>{sp0?.project_name || sp0?.asset_name || selectedProject.projectID}</h4>
             {#if selectedProject.units.length > 1}
               {@const totalUnits = selectedProject.units.length}
-              {@const matchedUnits = selectedProject.units.filter(u => u._matched !== false).length}
+              {@const matchedUnits = selectedProject.units.filter(
+                (u) => u._matched !== false
+              ).length}
               <span class="unit-badge"
-                >{isFiltered && matchedUnits < totalUnits ? `${matchedUnits} of ${totalUnits} units` : `${totalUnits} units`}</span
+                >{isFiltered && matchedUnits < totalUnits
+                  ? `${matchedUnits} of ${totalUnits} units`
+                  : `${totalUnits} units`}</span
               >
             {/if}
           </div>
@@ -1756,16 +1699,6 @@
       </div>
     {/if}
 
-    <!-- EXPANDED INTERMEDIARY PANELS — appear below the main chart card, indented right -->
-    {#if intermediaries.length > 0}
-      {#each displayIntermediaries as inter}
-        {#if expandedIntermediaryIds.has(inter.entity_id)}
-          <div class="foldout-panel-wrapper">
-            <NestedIntermediaryPanel entityId={inter.entity_id} {API_BASE} />
-          </div>
-        {/if}
-      {/each}
-    {/if}
   {/if}
 </div>
 
@@ -2016,9 +1949,6 @@
     scrollbar-width: thin;
     scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
   }
-  .summary-table.intermediaries-table {
-    max-height: 300px;
-  }
   .summary-row {
     display: flex;
     align-items: center;
@@ -2054,6 +1984,12 @@
   }
   .summary-row.faded {
     opacity: 0.15;
+  }
+  .summary-row.readonly {
+    cursor: default;
+  }
+  .summary-row.readonly:hover {
+    background: transparent;
   }
 
   /* ---- Empty state ---- */
@@ -2433,28 +2369,4 @@
     text-decoration: underline;
   }
 
-  /* ---- Intermediary fold-out ---- */
-  .summary-row-wrapper {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-  }
-  .summary-row-wrapper .summary-row {
-    flex: 1;
-    min-width: 0;
-  }
-  /* TODO: foldout-btn is hidden for now — foldout expand/collapse functionality
-     will likely be removed or replaced with a different approach. */
-  .foldout-btn {
-    display: none;
-  }
-
-  /* ---- Expanded nested portfolio panels ---- */
-  .foldout-panel-wrapper {
-    margin-left: var(--space-6, 24px);
-    margin-top: var(--space-2);
-    border-radius: var(--radius-md);
-    overflow: hidden;
-    box-shadow: -3px 0 0 var(--gem-teal, #007b7f);
-  }
 </style>

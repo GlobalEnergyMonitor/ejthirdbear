@@ -6,11 +6,7 @@
   import { onMount } from 'svelte';
   import CoalPlantCard from '$lib/components/cards/CoalPlantCard.svelte';
   import type { CoalPlantUnit } from '$lib/components/cards/coal-plant-types';
-  import {
-    fetchCoalPlantLocation,
-    getOwnershipGraph,
-    resolveAssetId,
-  } from './widget-api';
+  import { fetchCoalPlantLocation, getOwnershipGraph, resolveAssetId } from './widget-api';
   import { errorMessage } from './widget-data';
 
   interface Props {
@@ -73,7 +69,7 @@
       <p>{error}</p>
     </div>
   {:else if units.length > 0}
-    <CoalPlantCard units={units} open={true} initialTab={tab} ownershipLoader={getOwnershipGraph} />
+    <CoalPlantCard {units} open={true} initialTab={tab} ownershipLoader={getOwnershipGraph} />
   {:else}
     <div class="embed-error">
       <p>No coal plant data available.</p>

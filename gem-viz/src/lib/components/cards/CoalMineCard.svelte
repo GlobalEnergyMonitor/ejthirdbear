@@ -57,15 +57,14 @@
 
   /** Human-readable label: prefer mine_site_status, fall back to operating_sub_status, then operating_status */
   const statusLabel = $derived(
-    f.mine_site_status ??
-    capitalize(asset.operating_sub_status ?? asset.operating_status)
+    f.mine_site_status ?? capitalize(asset.operating_sub_status ?? asset.operating_status)
   );
 
   // ── Location ───────────────────────────────────────────────────────────────
 
   const locationStr = $derived.by(() => {
     const parts: string[] = [];
-    if (f.state_province && !parts.some(p => p.includes(f.state_province!)))
+    if (f.state_province && !parts.some((p) => p.includes(f.state_province!)))
       parts.push(f.state_province);
     if (f.country_area) parts.push(f.country_area);
     return parts.join(', ') || asset.country || '';
@@ -74,7 +73,7 @@
   const locationStrLong = $derived.by(() => {
     const parts: string[] = [];
     if (f.location) parts.push(f.location);
-    if (f.prefecture_district && !parts.some(p => p.includes(f.prefecture_district!)))
+    if (f.prefecture_district && !parts.some((p) => p.includes(f.prefecture_district!)))
       parts.push(f.prefecture_district);
     parts.push(locationStr);
     return parts.join(', ') || asset.country || '';
@@ -101,7 +100,12 @@
   // ── Owners ─────────────────────────────────────────────────────────────────
 
   const ownersList = $derived(
-    f.owners ? f.owners.split(',').map(s => s.trim()).filter(Boolean) : []
+    f.owners
+      ? f.owners
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : []
   );
 
   // ── Numeric helpers ────────────────────────────────────────────────────────
@@ -143,9 +147,11 @@
     const coalfield = f.coalfield || '';
     const country = f.country_area || asset.country || '';
     const typeDesc = [f.mine_type?.toLowerCase(), f.mining_method?.toLowerCase()]
-      .filter(Boolean).join(' ');
+      .filter(Boolean)
+      .join(' ');
     const coalDesc = [f.coal_grade?.toLowerCase(), f.coal_type?.toLowerCase()]
-      .filter(Boolean).join(' ');
+      .filter(Boolean)
+      .join(' ');
 
     if (asset.operating_status === 'operating') {
       let s = `${name} is an operating${typeDesc ? ` ${typeDesc}` : ''} mine`;
@@ -162,7 +168,8 @@
       const verb = asset.operating_sub_status === 'abandoned' ? 'abandoned' : 'closed';
       let s = `${name} is a ${verb}${typeDesc ? ` ${typeDesc}` : ''} mine`;
       if (coalfield) s += ` in the ${coalfield} coalfield`;
-      if (f.opening_year && f.closing_year) s += `, active from ${f.opening_year} to ${f.closing_year}`;
+      if (f.opening_year && f.closing_year)
+        s += `, active from ${f.opening_year} to ${f.closing_year}`;
       else if (f.closing_year) s += `, ${verb} in ${f.closing_year}`;
       s += '.';
       if (coalDesc) s += ` It extracted ${coalDesc} coal.`;
@@ -181,53 +188,92 @@
   // ── Tab: Resources sections ────────────────────────────────────────────────
 
   const resourcesPhysicalSection = $derived<FieldDef[]>([
-    { label: 'Workforce',  value: fmtNum(f.workforce_size, 0),
-      valueTooltip: f.workforce_accuracy ? `Accuracy: ${f.workforce_accuracy}` : undefined },
-    { label: 'Mine size',  value: fmtNum(f.mine_size_km2),   unit: 'km²' },
-    { label: 'Mine depth', value: fmtNum(f.mine_depth_m, 0), unit: 'm',
-      valueTooltip: f.depth_accuracy ? `Accuracy: ${f.depth_accuracy}` : undefined },
+    {
+      label: 'Workforce',
+      value: fmtNum(f.workforce_size, 0),
+      valueTooltip: f.workforce_accuracy ? `Accuracy: ${f.workforce_accuracy}` : undefined,
+    },
+    { label: 'Mine size', value: fmtNum(f.mine_size_km2), unit: 'km²' },
+    {
+      label: 'Mine depth',
+      value: fmtNum(f.mine_depth_m, 0),
+      unit: 'm',
+      valueTooltip: f.depth_accuracy ? `Accuracy: ${f.depth_accuracy}` : undefined,
+    },
   ]);
 
   const resourcesReservesSection = $derived<FieldDef[]>([
-    { label: 'Proven & probable reserves', value: fmtNum(f.total_reserves_proven_and_probable_mt), unit: 'Mt' },
-    { label: 'Total resources (inferred+)', value: fmtNum(f.total_resource_inferred_indicated_measured), unit: 'Mt' },
-    { label: 'Reserve/production ratio',   value: fmtNum(f.reserve_to_production_ratio_r_p) },
-    { label: 'Reported mine life',         value: f.reported_life_of_mine,
-      tooltip: f.reported_year_of_mine_life ? `As reported in ${f.reported_year_of_mine_life}` : undefined },
+    {
+      label: 'Proven & probable reserves',
+      value: fmtNum(f.total_reserves_proven_and_probable_mt),
+      unit: 'Mt',
+    },
+    {
+      label: 'Total resources (inferred+)',
+      value: fmtNum(f.total_resource_inferred_indicated_measured),
+      unit: 'Mt',
+    },
+    { label: 'Reserve/production ratio', value: fmtNum(f.reserve_to_production_ratio_r_p) },
+    {
+      label: 'Reported mine life',
+      value: f.reported_life_of_mine,
+      tooltip: f.reported_year_of_mine_life
+        ? `As reported in ${f.reported_year_of_mine_life}`
+        : undefined,
+    },
   ]);
 
   const resourcesCoalSplitSection = $derived<FieldDef[]>([
-    { label: 'Thermal coal share',     value: fmtNum(f.percentage_of_thermal_coal), unit: '%' },
-    { label: 'Metallurgical coal share', value: fmtNum(f.percentage_of_met_coal),   unit: '%' },
+    { label: 'Thermal coal share', value: fmtNum(f.percentage_of_thermal_coal), unit: '%' },
+    { label: 'Metallurgical coal share', value: fmtNum(f.percentage_of_met_coal), unit: '%' },
   ]);
 
   // ── Tab: Methane sections ──────────────────────────────────────────────────
 
   const methaneGasRatingSection = $derived<FieldDef[]>([
-    { label: 'Gas-level rating',       value: f['gas-level_rating'],
+    {
+      label: 'Gas-level rating',
+      value: f['gas-level_rating'],
       tooltip: f['gas-level_rating_appraisal_year']
         ? `Appraisal year: ${f['gas-level_rating_appraisal_year']}`
-        : undefined },
-    { label: 'Methane gas content',    value: fmtNum(f.methane_gas_content_m3tonne), unit: 'm³/tonne' },
+        : undefined,
+    },
+    {
+      label: 'Methane gas content',
+      value: fmtNum(f.methane_gas_content_m3tonne),
+      unit: 'm³/tonne',
+    },
   ]);
 
   const methaneEmissionsSection = $derived<FieldDef[]>([
-    { label: 'GEM estimate',           value: fmtNum(f.gem_coal_mine_methane_emissions_estimate_mcm_yr),   unit: 'MCM/yr' },
-    { label: 'GEM estimate (mass)',    value: fmtNum(f.gem_coal_mine_methane_emissions_estimate_m_tonnes_yr), unit: 'Mt/yr' },
-    { label: 'Reported emissions',     value: fmtNum(f.reported_coal_mine_methane_emissions_thousand_tonnes_per_year), unit: 'kt/yr',
+    {
+      label: 'GEM estimate',
+      value: fmtNum(f.gem_coal_mine_methane_emissions_estimate_mcm_yr),
+      unit: 'MCM/yr',
+    },
+    {
+      label: 'GEM estimate (mass)',
+      value: fmtNum(f.gem_coal_mine_methane_emissions_estimate_m_tonnes_yr),
+      unit: 'Mt/yr',
+    },
+    {
+      label: 'Reported emissions',
+      value: fmtNum(f.reported_coal_mine_methane_emissions_thousand_tonnes_per_year),
+      unit: 'kt/yr',
       tooltip: f.year_of_reported_coal_mine_methane_emissions
         ? `Reported in ${f.year_of_reported_coal_mine_methane_emissions}`
-        : undefined },
+        : undefined,
+    },
   ]);
 
   const methaneCo2eSection = $derived<FieldDef[]>([
-    { label: 'CO₂e (20-yr GWP)',       value: fmtNum(f.cmm_emissions_co2e_20_years),  unit: 'Mt' },
-    { label: 'CO₂e (100-yr GWP)',      value: fmtNum(f.cmm_emissions_co2e_100_years), unit: 'Mt' },
+    { label: 'CO₂e (20-yr GWP)', value: fmtNum(f.cmm_emissions_co2e_20_years), unit: 'Mt' },
+    { label: 'CO₂e (100-yr GWP)', value: fmtNum(f.cmm_emissions_co2e_100_years), unit: 'Mt' },
   ]);
 
   const methaneMitigationSection = $derived<FieldDef[]>([
-    { label: 'CMM mitigation data',    value: f.has_associated_cmm_mitigation_data },
-    { label: 'Plume data',             value: f.has_associated_plume_data },
+    { label: 'CMM mitigation data', value: f.has_associated_cmm_mitigation_data },
+    { label: 'Plume data', value: f.has_associated_plume_data },
     { label: 'Emissions factor updated', value: f.methane_emissions_factor_updated },
   ]);
 
@@ -235,24 +281,63 @@
 
   /** Fields already shown in other tabs — excluded from Additional Details */
   const SHOWN_FIELDS = new Set([
-    'mine_name', 'mine_name_non_eng', 'mine_name_akas', 'complex_name',
-    'status', 'mine_site_status', 'project_phase', 'project_type', 'reason_for_closure',
-    'country_area', 'state_province', 'prefecture_district', 'location',
-    'region', 'subregion', 'latitude', 'longitude', 'location_accuracy', 'coalfield',
-    'mine_type', 'mining_method', 'opening_year', 'closing_year',
-    'capacity_mtpa', 'production_mtpa', 'year_of_production',
-    'coal_type', 'coal_grade',
-    'mine_size_km2', 'mine_depth_m', 'depth_accuracy', 'workforce_size', 'workforce_accuracy',
-    'total_reserves_proven_and_probable_mt', 'total_resource_inferred_indicated_measured',
-    'reserve_to_production_ratio_r_p', 'reported_life_of_mine', 'reported_year_of_mine_life',
-    'percentage_of_thermal_coal', 'percentage_of_met_coal',
-    'gas-level_rating', 'gas-level_rating_appraisal_year',
-    'gem_coal_mine_methane_emissions_estimate_mcm_yr', 'gem_coal_mine_methane_emissions_estimate_m_tonnes_yr',
-    'cmm_emissions_co2e_20_years', 'cmm_emissions_co2e_100_years',
+    'mine_name',
+    'mine_name_non_eng',
+    'mine_name_akas',
+    'complex_name',
+    'status',
+    'mine_site_status',
+    'project_phase',
+    'project_type',
+    'reason_for_closure',
+    'country_area',
+    'state_province',
+    'prefecture_district',
+    'location',
+    'region',
+    'subregion',
+    'latitude',
+    'longitude',
+    'location_accuracy',
+    'coalfield',
+    'mine_type',
+    'mining_method',
+    'opening_year',
+    'closing_year',
+    'capacity_mtpa',
+    'production_mtpa',
+    'year_of_production',
+    'coal_type',
+    'coal_grade',
+    'mine_size_km2',
+    'mine_depth_m',
+    'depth_accuracy',
+    'workforce_size',
+    'workforce_accuracy',
+    'total_reserves_proven_and_probable_mt',
+    'total_resource_inferred_indicated_measured',
+    'reserve_to_production_ratio_r_p',
+    'reported_life_of_mine',
+    'reported_year_of_mine_life',
+    'percentage_of_thermal_coal',
+    'percentage_of_met_coal',
+    'gas-level_rating',
+    'gas-level_rating_appraisal_year',
+    'gem_coal_mine_methane_emissions_estimate_mcm_yr',
+    'gem_coal_mine_methane_emissions_estimate_m_tonnes_yr',
+    'cmm_emissions_co2e_20_years',
+    'cmm_emissions_co2e_100_years',
     'reported_coal_mine_methane_emissions_thousand_tonnes_per_year',
-    'year_of_reported_coal_mine_methane_emissions', 'methane_gas_content_m3tonne',
-    'has_associated_cmm_mitigation_data', 'has_associated_plume_data', 'methane_emissions_factor_updated',
-    'owners', 'owner_gem_entity_id', 'parent_company', 'company_hqs', 'owners_non_eng',
+    'year_of_reported_coal_mine_methane_emissions',
+    'methane_gas_content_m3tonne',
+    'has_associated_cmm_mitigation_data',
+    'has_associated_plume_data',
+    'methane_emissions_factor_updated',
+    'owners',
+    'owner_gem_entity_id',
+    'parent_company',
+    'company_hqs',
+    'owners_non_eng',
     'gem_mine_id',
   ]);
 
@@ -278,9 +363,10 @@
       .map(([key, val]) => ({
         label: ADDITIONAL_LABELS[key] ?? key.replace(/_/g, ' '),
         value: String(val),
-        link: (key === 'gem_wiki_page_eng' || key === 'gem_wiki_page_non_eng') && val
-          ? String(val)
-          : undefined,
+        link:
+          (key === 'gem_wiki_page_eng' || key === 'gem_wiki_page_non_eng') && val
+            ? String(val)
+            : undefined,
       }))
   );
 </script>
@@ -315,7 +401,9 @@
           <div class="ov-label">Location</div>
           <div class="ov-value">{locationStrLong}</div>
           {#if coords}
-            <div class="ov-coords">{coords}{#if f.location_accuracy == "Approximate"}&nbsp;({f.location_accuracy}){/if}</div>
+            <div class="ov-coords">
+              {coords}{#if f.location_accuracy == 'Approximate'}&nbsp;({f.location_accuracy}){/if}
+            </div>
           {/if}
         </div>
 
@@ -359,14 +447,14 @@
 
       <!-- Key metrics row -->
       {@const metrics = [
-        { label: 'Mine type',   value: f.mine_type },
-        { label: 'Method',      value: f.mining_method },
-        { label: 'Coal type',   value: f.coal_type },
-        { label: 'Coal grade',  value: f.coal_grade },
-        { label: 'Capacity',    value: fmtNum(f.capacity_mtpa),   unit: 'Mtpa' },
-        { label: 'Production',  value: fmtNum(f.production_mtpa), unit: 'Mtpa' },
-        { label: 'Coalfield',   value: f.coalfield },
-      ].filter(m => m.value != null)}
+        { label: 'Mine type', value: f.mine_type },
+        { label: 'Method', value: f.mining_method },
+        { label: 'Coal type', value: f.coal_type },
+        { label: 'Coal grade', value: f.coal_grade },
+        { label: 'Capacity', value: fmtNum(f.capacity_mtpa), unit: 'Mtpa' },
+        { label: 'Production', value: fmtNum(f.production_mtpa), unit: 'Mtpa' },
+        { label: 'Coalfield', value: f.coalfield },
+      ].filter((m) => m.value != null)}
       {#if metrics.length > 0}
         <div class="mine-metrics">
           {#each metrics as m}
@@ -378,9 +466,9 @@
         </div>
       {/if}
 
-    <!-- ── Resources ─────────────────────────────────────────────────── -->
+      <!-- ── Resources ─────────────────────────────────────────────────── -->
     {:else if tab === 'Resources'}
-      {@const hasPhysical = resourcesPhysicalSection.some(f => f.value != null && f.value !== '')}
+      {@const hasPhysical = resourcesPhysicalSection.some((f) => f.value != null && f.value !== '')}
       <div class="two-col-grid">
         <div>
           {#if hasPhysical}
@@ -399,7 +487,7 @@
         </div>
       </div>
 
-    <!-- ── Methane ────────────────────────────────────────────────────── -->
+      <!-- ── Methane ────────────────────────────────────────────────────── -->
     {:else if tab === 'Methane'}
       <div class="two-col-grid">
         <div>
@@ -411,11 +499,11 @@
           <CardSection title="Additional" fields={methaneMitigationSection} />
         </div>
       </div>
-      {#if !methaneGasRatingSection.some(f => f.value) && !methaneEmissionsSection.some(f => f.value)}
+      {#if !methaneGasRatingSection.some((f) => f.value) && !methaneEmissionsSection.some((f) => f.value)}
         <p class="empty-tab">No methane data recorded for this mine.</p>
       {/if}
 
-    <!-- ── Ownership ──────────────────────────────────────────────────── -->
+      <!-- ── Ownership ──────────────────────────────────────────────────── -->
     {:else if tab === 'Ownership'}
       {#if ownershipActivated}
         <div class="ownership-tree-wrap">
@@ -431,7 +519,7 @@
         </div>
       {/if}
 
-    <!-- ── Additional Details ─────────────────────────────────────────── -->
+      <!-- ── Additional Details ─────────────────────────────────────────── -->
     {:else if tab === 'Additional Details'}
       {#if additionalFields.length > 0}
         <CardSection fields={additionalFields} />
@@ -452,10 +540,22 @@
     font-weight: 600;
     white-space: nowrap;
   }
-  .chip-operating { background: #7f142a; color: #fff; }
-  .chip-planned   { background: #ca4a50; color: #fff; }
-  .chip-retired   { background: #e0e0e0; color: #444; }
-  .chip-cancelled { background: #e0e0e0; color: #444; }
+  .chip-operating {
+    background: #7f142a;
+    color: #fff;
+  }
+  .chip-planned {
+    background: #ca4a50;
+    color: #fff;
+  }
+  .chip-retired {
+    background: #e0e0e0;
+    color: #444;
+  }
+  .chip-cancelled {
+    background: #e0e0e0;
+    color: #444;
+  }
 
   /* ── Narrative ────────────────────────────────────────────────── */
   .narrative {

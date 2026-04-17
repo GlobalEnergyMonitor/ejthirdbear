@@ -226,4 +226,3 @@ export function parseSrc(dataSrc: string): { type: string; props: Record<string,
 
   return { type, props };
 }
-

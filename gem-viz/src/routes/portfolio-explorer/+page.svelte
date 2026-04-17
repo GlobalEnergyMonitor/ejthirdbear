@@ -35,9 +35,7 @@
 <div class="page-wrap">
   <div class="page-header">
     <h1>Portfolio Explorer</h1>
-    <p class="page-desc">
-      Search for an owner to explore their full downstream asset portfolio.
-    </p>
+    <p class="page-desc">Search for an owner to explore their full downstream asset portfolio.</p>
   </div>
   <OwnerSearchApp {initialQuery} {initialEntityId} onStateChange={handleStateChange} />
 </div>

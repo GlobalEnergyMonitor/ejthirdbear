@@ -32,9 +32,24 @@
 
   type SearchMode = { id: string; label: string; placeholder: string; buttonLabel: string };
   const modeDefaults: Record<string, SearchMode> = {
-    asset: { id: 'asset', label: 'Assets', placeholder: 'Search assets by name, ID, owner, country, or status', buttonLabel: 'Find asset' },
-    owner: { id: 'owner', label: 'Owners', placeholder: 'Search by company name or GEM entity ID', buttonLabel: 'Find owner' },
-    universal: { id: 'universal', label: 'Universal', placeholder: 'Search assets and owners', buttonLabel: 'Search' },
+    asset: {
+      id: 'asset',
+      label: 'Assets',
+      placeholder: 'Search assets by name, ID, owner, country, or status',
+      buttonLabel: 'Find asset',
+    },
+    owner: {
+      id: 'owner',
+      label: 'Owners',
+      placeholder: 'Search by company name or GEM entity ID',
+      buttonLabel: 'Find owner',
+    },
+    universal: {
+      id: 'universal',
+      label: 'Universal',
+      placeholder: 'Search assets and owners',
+      buttonLabel: 'Search',
+    },
   };
 
   const searchModes = $derived.by(() => {

@@ -37,7 +37,7 @@ Reference notes on what data we fetch, where it comes from, and the column shape
 
 ## Data Fetching Flows
 
-- **Entity pages**: `streamOwnerPortfolio` uses `/ownership/graph?root=ENTITY_ID&direction=down&max_depth=5` which returns both entities and assets in one call. Asset nodes include `asset_type`, `operating_status`, `capacity_value`, `country`, `latitude`, `longitude`.
+- **Entity pages**: `streamOwnerPortfolio` uses `/ownership/graph?root=ENTITY_ID&direction=down&max_depth=<uncapped>` (we pass `Number.MAX_SAFE_INTEGER`) which returns both entities and assets in one call. Asset nodes include `asset_type`, `operating_status`, `capacity_value`, `country`, `latitude`, `longitude`.
 - **Asset pages**: `getAsset(id)` fetches from `/assets/{id}`, returns asset details with `owners[]` array (entity_id, name, ownership_share, hq_country).
 - **Globe page**: Uses `points.geojson` (~9MB static) + REST API facets.
 - **NetworkGraph**: Builds edges from paginated REST API asset data.

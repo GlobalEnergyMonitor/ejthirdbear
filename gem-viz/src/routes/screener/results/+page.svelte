@@ -97,7 +97,11 @@
   // Fetched once (1-hour TTL) and derived from the selected class IDs.
   let catalogClasses: CatalogAssetClass[] = $state([]);
   $effect(() => {
-    fetchAssetClasses().then((c) => { catalogClasses = c; }).catch(() => {});
+    fetchAssetClasses()
+      .then((c) => {
+        catalogClasses = c;
+      })
+      .catch(() => {});
   });
 
   const classFieldKeys = $derived.by((): string[] => {
@@ -112,7 +116,10 @@
     for (const id of ids) {
       const entry = catalogClasses.find((c) => c.id === id);
       for (const key of extractClassFieldKeys(entry?.url)) {
-        if (!seen.has(key)) { seen.add(key); keys.push(key); }
+        if (!seen.has(key)) {
+          seen.add(key);
+          keys.push(key);
+        }
       }
     }
     return keys;
@@ -190,8 +197,12 @@
   const PAGE_SIZE = 100;
   let currentPage = $state(0);
   // Modal state for ownership chart
-  let chartModalOwner: { entityId: string; name: string; filteredAssets?: number; filteredProjects?: number } | null =
-    $state(null);
+  let chartModalOwner: {
+    entityId: string;
+    name: string;
+    filteredAssets?: number;
+    filteredProjects?: number;
+  } | null = $state(null);
   let modalOriginRect: DOMRect | null = $state(null);
   let modalNameEl: HTMLElement | undefined = $state();
   let modalEl: HTMLElement | undefined = $state();
@@ -368,7 +379,9 @@
   });
 
   const totalPages = $derived(Math.ceil(filteredOwners.length / PAGE_SIZE));
-  const pagedOwners = $derived(filteredOwners.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE));
+  const pagedOwners = $derived(
+    filteredOwners.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE)
+  );
 
   function handleOwnerSearch(query: string) {
     searchQuery = query;
@@ -469,7 +482,9 @@
 
       const geoRaw = cls?.filters?.geography;
       const countryFilter: string | string[] | undefined = Array.isArray(geoRaw)
-        ? geoRaw.length > 0 ? geoRaw : undefined
+        ? geoRaw.length > 0
+          ? geoRaw
+          : undefined
         : geoRaw || undefined;
 
       const result = await getOwnersByFilter(
@@ -784,11 +799,9 @@
 
       {#if totalPages > 1}
         <div class="pagination">
-          <button
-            class="page-btn"
-            onclick={() => (currentPage -= 1)}
-            disabled={currentPage === 0}
-          >← Prev</button>
+          <button class="page-btn" onclick={() => (currentPage -= 1)} disabled={currentPage === 0}
+            >← Prev</button
+          >
           <span class="page-info">
             {currentPage + 1} / {totalPages}
             <span class="page-count">({filteredOwners.length.toLocaleString()} owners)</span>
@@ -796,8 +809,8 @@
           <button
             class="page-btn"
             onclick={() => (currentPage += 1)}
-            disabled={currentPage >= totalPages - 1}
-          >Next →</button>
+            disabled={currentPage >= totalPages - 1}>Next →</button
+          >
         </div>
       {/if}
     </section>
@@ -808,11 +821,12 @@
     <section class="tier2-section">
       <h3 class="tier2-title">
         Matched {noAssetEntities.length + (noAssetLoading ? '…' : '')}
-        {noAssetEntities.length === 1 ? 'company' : 'companies'} with no {selectedClasses[0]?.name || 'assets'} in GEM
+        {noAssetEntities.length === 1 ? 'company' : 'companies'} with no {selectedClasses[0]
+          ?.name || 'assets'} in GEM
       </h3>
       <p class="tier2-desc">
-        These companies were found in GEM's entity database but have no recorded ownership
-        of {selectedClasses[0]?.name || 'assets in this class'}.
+        These companies were found in GEM's entity database but have no recorded ownership of {selectedClasses[0]
+          ?.name || 'assets in this class'}.
       </p>
       <ul class="tier2-list">
         {#each noAssetEntities as entity}
@@ -835,7 +849,8 @@
     <section class="tier3-section">
       <div class="tier3-header">
         <p class="tier3-text">
-          <strong>{nomatchCount} {nomatchCount === 1 ? 'term' : 'terms'}</strong> from your search didn't match any company in GEM's database.
+          <strong>{nomatchCount} {nomatchCount === 1 ? 'term' : 'terms'}</strong> from your search didn't
+          match any company in GEM's database.
         </p>
         {#if unmatchedTerms.length > 0}
           <button class="tier3-toggle" onclick={() => (showUnmatched = !showUnmatched)}>
@@ -953,7 +968,7 @@
           statusFilter={selectedClasses[0]?.filters?.statuses}
           trackerFilter={selectedClasses[0]?.gemTrackers}
           catalogUrl={selectedClasses[0]?.catalogUrl}
-          classFieldKeys={classFieldKeys}
+          {classFieldKeys}
           fillHeight={true}
         />
       </div>
@@ -1269,7 +1284,6 @@
     padding: 0;
     min-height: 0;
   }
-
 
   /* ── Tier 2: matched entities with no assets ───────────────────────────── */
   .tier2-section {

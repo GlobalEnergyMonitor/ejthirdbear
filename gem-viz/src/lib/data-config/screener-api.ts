@@ -364,7 +364,10 @@ async function getOwnersByAssetTypeREST(
 
   // Sort by filtered asset count descending, take top N
   const sorted = [...ownerMap.entries()]
-    .filter(([entityId, { filteredAssetIds }]) => filteredAssetIds.size > 0 && !EXCLUDED_ENTITY_IDS.has(entityId))
+    .filter(
+      ([entityId, { filteredAssetIds }]) =>
+        filteredAssetIds.size > 0 && !EXCLUDED_ENTITY_IDS.has(entityId)
+    )
     .map(([entityId, { name, totalAssetIds, filteredAssetIds }]) => ({
       entityId,
       name,
@@ -642,10 +645,7 @@ export interface OwnersFilterParams {
 }
 
 /** In-memory cache for /owners endpoint responses */
-const ownersByFilterCache = new Map<
-  string,
-  { data: ScreenerResultsResponse; timestamp: number }
->();
+const ownersByFilterCache = new Map<string, { data: ScreenerResultsResponse; timestamp: number }>();
 
 /**
  * Fetch the pre-aggregated owner list from the `/owners` REST endpoint.
@@ -764,35 +764,46 @@ export async function getOwnersByFilter(
         }
 
         // Collect non-null alternative name fields into a flat array
-        const altNameCandidates = [o.full_name, o.name_local, o.name_other, o.abbreviation]
-          .filter((v): v is string => typeof v === 'string' && Boolean(v));
+        const altNameCandidates = [o.full_name, o.name_local, o.name_other, o.abbreviation].filter(
+          (v): v is string => typeof v === 'string' && Boolean(v)
+        );
         const altNames = altNameCandidates.length > 0 ? altNameCandidates : undefined;
 
         return {
           entityId: String(
-            o.entity_id ?? o.entityId ??
-            (o.entity && typeof o.entity === 'object' ? (o.entity as Record<string, unknown>).id : undefined) ??
-            o.id ?? ''
+            o.entity_id ??
+              o.entityId ??
+              (o.entity && typeof o.entity === 'object'
+                ? (o.entity as Record<string, unknown>).id
+                : undefined) ??
+              o.id ??
+              ''
           ),
           name: String(
-            o.entity_name ?? o.name ?? o.full_name ?? o.owner_name ??
-            o.display_name ??
-            (o.entity && typeof o.entity === 'object' ? (o.entity as Record<string, unknown>).name : undefined) ??
-            ''
+            o.entity_name ??
+              o.name ??
+              o.full_name ??
+              o.owner_name ??
+              o.display_name ??
+              (o.entity && typeof o.entity === 'object'
+                ? (o.entity as Record<string, unknown>).name
+                : undefined) ??
+              ''
           ),
           totalAssets: Number(
             o.total_asset_count ?? o.total_assets ?? o.totalAssets ?? o.asset_count ?? o.count ?? 0
           ),
           filteredAssets: Number(
-            o.asset_count ?? o.filtered_asset_count ?? o.filtered_assets ??
-            o.total_asset_count ?? o.total_assets ?? o.count ?? 0
+            o.asset_count ??
+              o.filtered_asset_count ??
+              o.filtered_assets ??
+              o.total_asset_count ??
+              o.total_assets ??
+              o.count ??
+              0
           ),
-          totalProjects: Number(
-            o.total_location_count ?? 0
-          ),
-          filteredProjects: Number(
-            o.location_count ?? 0
-          ),
+          totalProjects: Number(o.total_location_count ?? 0),
+          filteredProjects: Number(o.location_count ?? 0),
           ...(externalIds && { externalIds }),
           ...(altNames && { altNames }),
         };
@@ -807,7 +818,9 @@ export async function getOwnersByFilter(
     };
 
     if (import.meta.env.DEV) {
-      console.log(`[screener-api] /owners OK — ${owners.length} owners via rest-api in ${result.queryTimeMs.toFixed(0)}ms`);
+      console.log(
+        `[screener-api] /owners OK — ${owners.length} owners via rest-api in ${result.queryTimeMs.toFixed(0)}ms`
+      );
     }
 
     ownersByFilterCache.set(cacheKey, { data: result, timestamp: Date.now() });
@@ -831,7 +844,11 @@ export async function getOwnersByFilter(
       tracker: params.tracker,
       assetClassId: params.assetClassId,
       status: Array.isArray(params.status) ? params.status[0] : params.status,
-      statuses: Array.isArray(params.status) ? params.status : params.status ? [params.status] : undefined,
+      statuses: Array.isArray(params.status)
+        ? params.status
+        : params.status
+          ? [params.status]
+          : undefined,
       country: params.country,
     };
     return getOwnersByAssetType(filters, { skipCache });

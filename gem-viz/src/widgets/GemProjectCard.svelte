@@ -88,7 +88,13 @@
   {:else if error}
     <div class="embed-error"><p>{error}</p></div>
   {:else if asset}
-    <ProjectCard {asset} variant="full" open={true} showLink={true} ownershipLoader={getOwnershipGraph} />
+    <ProjectCard
+      {asset}
+      variant="full"
+      open={true}
+      showLink={true}
+      ownershipLoader={getOwnershipGraph}
+    />
   {:else}
     <div class="embed-error"><p>No data found</p></div>
   {/if}

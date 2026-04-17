@@ -75,26 +75,30 @@
           project_name: '',
           unit_count: 1,
           distinct_graphs: 1,
-          graphs: nodes.length > 1
-            ? [{
-                root: {
-                  node_type: 'asset' as const,
-                  asset_id: loadAssetId,
-                  location_id: '',
-                  unit_id: null,
-                  asset_name: '',
-                  project_name: '',
-                  asset_type: '',
-                  country: '',
-                  latitude: 0,
-                  longitude: 0,
-                },
-                nodes: nodes as LocationOwnershipGraphResponse['graphs'][0]['nodes'],
-                edges: (raw.edges || []) as LocationOwnershipGraphResponse['graphs'][0]['edges'],
-                paths: raw.paths as LocationOwnershipGraphResponse['graphs'][0]['paths'],
-                asset_ids: [loadAssetId],
-              }]
-            : [],
+          graphs:
+            nodes.length > 1
+              ? [
+                  {
+                    root: {
+                      node_type: 'asset' as const,
+                      asset_id: loadAssetId,
+                      location_id: '',
+                      unit_id: null,
+                      asset_name: '',
+                      project_name: '',
+                      asset_type: '',
+                      country: '',
+                      latitude: 0,
+                      longitude: 0,
+                    },
+                    nodes: nodes as LocationOwnershipGraphResponse['graphs'][0]['nodes'],
+                    edges: (raw.edges ||
+                      []) as LocationOwnershipGraphResponse['graphs'][0]['edges'],
+                    paths: raw.paths as LocationOwnershipGraphResponse['graphs'][0]['paths'],
+                    asset_ids: [loadAssetId],
+                  },
+                ]
+              : [],
         };
       } else {
         const { getOwnershipGraphs } = await import('$lib/ownership-api');

@@ -338,7 +338,6 @@
           {/if}
         </div>
       {/if}
-
     </div>
 
     <div class="toolbar-right">
@@ -588,7 +587,6 @@
     font-size: 16px;
     color: var(--color-text-secondary);
   }
-
 
   /* Column toggle menu */
   .column-toggle {

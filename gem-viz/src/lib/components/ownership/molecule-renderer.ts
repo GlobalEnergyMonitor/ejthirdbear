@@ -82,7 +82,7 @@ const DEFAULT_RING_STROKE_WIDTH = 2;
 export function drawMolecule(
   g: Selection<SVGGElement, unknown, any, any>,
   units: MoleculeUnit[],
-  options: MoleculeOptions,
+  options: MoleculeOptions
 ): MoleculeRenderResult {
   const {
     ringRadius,
@@ -141,7 +141,7 @@ export function drawMolecule(
       .attr('d', (d) =>
         ownershipArc({
           endAngle: START_ANGLE + TAU * ((d.ownershipPct ?? 0) / 100),
-        }),
+        })
       )
       .style('fill', OWNERSHIP_FILL)
       .style('fill-opacity', OWNERSHIP_FILL_OPACITY)
@@ -161,7 +161,7 @@ export function drawMolecule(
 /** Compute unit positions for N units evenly spaced on a ring. */
 export function computePositions(
   count: number,
-  ringRadius: number,
+  ringRadius: number
 ): Array<{ x: number; y: number }> {
   if (count === 0) return [];
   if (count === 1) return [{ x: 0, y: 0 }];
@@ -182,10 +182,10 @@ export function computePositions(
 export function scaleR(n: number): number {
   // Piecewise linear: [2→0.5, 10→1.0, 20→1.5, 40→2.0]
   if (n <= 2) return 0.5;
-  if (n <= 10) return 0.5 + ((n - 2) / 8) * 0.5;       // 2→10: 0.5→1.0
-  if (n <= 20) return 1.0 + ((n - 10) / 10) * 0.5;      // 10→20: 1.0→1.5
-  if (n <= 40) return 1.5 + ((n - 20) / 20) * 0.5;      // 20→40: 1.5→2.0
-  return 2.0;                                             // 40+: clamp at 2.0
+  if (n <= 10) return 0.5 + ((n - 2) / 8) * 0.5; // 2→10: 0.5→1.0
+  if (n <= 20) return 1.0 + ((n - 10) / 10) * 0.5; // 10→20: 1.0→1.5
+  if (n <= 40) return 1.5 + ((n - 20) / 20) * 0.5; // 20→40: 1.5→2.0
+  return 2.0; // 40+: clamp at 2.0
 }
 
 /**
@@ -201,7 +201,7 @@ export function scaleR(n: number): number {
 export function computeMoleculeRadii(
   maxDiameter: number,
   unitCount: number,
-  opts?: { singleUnitDiameter?: number; minUnitRadius?: number; maxUnitRadius?: number },
+  opts?: { singleUnitDiameter?: number; minUnitRadius?: number; maxUnitRadius?: number }
 ): { ringRadius: number; unitRadius: number } {
   const { singleUnitDiameter, minUnitRadius = 2, maxUnitRadius = 10 } = opts ?? {};
   const singleD = singleUnitDiameter ?? maxDiameter * 0.6;

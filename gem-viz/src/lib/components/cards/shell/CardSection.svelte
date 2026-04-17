@@ -14,9 +14,7 @@
     return f.value !== null && f.value !== undefined && f.value !== '';
   }
 
-  const visibleFields = $derived(
-    fields.filter((f) => hasValue(f) || f.emptyBehavior === 'dash')
-  );
+  const visibleFields = $derived(fields.filter((f) => hasValue(f) || f.emptyBehavior === 'dash'));
 </script>
 
 {#if visibleFields.length > 0}
@@ -31,7 +29,9 @@
             class="field-label"
             class:has-tooltip={!!field.tooltip}
             data-tip={field.tooltip ?? null}
-          >{field.label}</dt>
+          >
+            {field.label}
+          </dt>
           <dd
             class="field-value"
             class:has-tooltip={!!field.valueTooltip}

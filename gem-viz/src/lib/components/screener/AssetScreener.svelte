@@ -448,7 +448,9 @@
         {@const edge = matchedEdges.get(group.id)}
         <details class="mobile-group" open={subsidiaryGroups.length <= 5}>
           <summary class="mobile-group-header">
-            <span class="mobile-group-name">{group.isDirect ? 'Directly owned' : (entity?.Name || group.id)}</span>
+            <span class="mobile-group-name"
+              >{group.isDirect ? 'Directly owned' : entity?.Name || group.id}</span
+            >
             {#if edge?.value}
               <span class="mobile-group-pct">{edge.value.toFixed(1)}%</span>
             {/if}
@@ -458,19 +460,23 @@
             {#each group.locations as loc}
               {@const unit = loc.units[0]}
               {@const status = regroupStatus(unit.status || unit.Status)}
-              <a
-                href={assetLink(unit)}
-                class="mobile-asset-row"
-              >
+              <a href={assetLink(unit)} class="mobile-asset-row">
                 <span
                   class="mobile-asset-dot"
                   style:background-color={colorByTracker.get(unit.tracker) || colors.grey}
                 ></span>
-                <span class="mobile-asset-name">{cleanAssetName(unit.name, unit.project_name)}</span>
+                <span class="mobile-asset-name">{cleanAssetName(unit.name, unit.project_name)}</span
+                >
                 {#if loc.units.length > 1}
                   <span class="mobile-unit-count">{loc.units.length} units</span>
                 {/if}
-                <span class="mobile-asset-status" class:operating={status === 'operating'} class:planned={status === 'planned'} class:retired={status === 'retired'} class:cancelled={status === 'cancelled'}>{status}</span>
+                <span
+                  class="mobile-asset-status"
+                  class:operating={status === 'operating'}
+                  class:planned={status === 'planned'}
+                  class:retired={status === 'retired'}
+                  class:cancelled={status === 'cancelled'}>{status}</span
+                >
               </a>
             {/each}
           </div>
@@ -651,7 +657,11 @@
                     {@const unit = loc.units[0]}
                     {@const unitStatus = regroupStatus(unit.status || unit.Status)}
                     <g style="isolation: isolate;">
-                      <circle r={loc.r} fill={getAssetColor(unit)} style="mix-blend-mode: multiply;" />
+                      <circle
+                        r={loc.r}
+                        fill={getAssetColor(unit)}
+                        style="mix-blend-mode: multiply;"
+                      />
                     </g>
                     {@render statusIconSvg(unitStatus, 0, 0, loc.r)}
                   {:else}
@@ -682,7 +692,9 @@
 
                   <!-- Asset label -->
                   <text x={params.assetMarkHeightCombined + 5} y="5" class="asset-name">
-                    {includeUnitNames ? loc.units[0].name : cleanAssetName(loc.units[0].name, loc.units[0].project_name)}
+                    {includeUnitNames
+                      ? loc.units[0].name
+                      : cleanAssetName(loc.units[0].name, loc.units[0].project_name)}
                   </text>
                 </g>
               {/each}
@@ -1282,8 +1294,20 @@
     border-radius: var(--radius-sm, 3px);
     white-space: nowrap;
   }
-  .mobile-asset-status.operating { color: var(--gem-teal, #0d7377); background: rgba(13, 115, 119, 0.1); }
-  .mobile-asset-status.planned { color: var(--gem-orange, #f59e0b); background: rgba(245, 158, 11, 0.1); }
-  .mobile-asset-status.retired { color: var(--color-text-tertiary, #a0aec0); background: rgba(160, 174, 192, 0.1); }
-  .mobile-asset-status.cancelled { color: var(--color-text-tertiary, #a0aec0); background: rgba(160, 174, 192, 0.1); }
+  .mobile-asset-status.operating {
+    color: var(--gem-teal, #0d7377);
+    background: rgba(13, 115, 119, 0.1);
+  }
+  .mobile-asset-status.planned {
+    color: var(--gem-orange, #f59e0b);
+    background: rgba(245, 158, 11, 0.1);
+  }
+  .mobile-asset-status.retired {
+    color: var(--color-text-tertiary, #a0aec0);
+    background: rgba(160, 174, 192, 0.1);
+  }
+  .mobile-asset-status.cancelled {
+    color: var(--color-text-tertiary, #a0aec0);
+    background: rgba(160, 174, 192, 0.1);
+  }
 </style>

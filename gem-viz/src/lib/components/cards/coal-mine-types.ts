@@ -26,15 +26,15 @@ export interface CoalMineFields {
   mine_name_non_eng: string | null;
   mine_name_akas: string | null;
   complex_name: string | null;
-  msha_id: string | null;               // Mine Safety & Health Administration ID (US)
+  msha_id: string | null; // Mine Safety & Health Administration ID (US)
 
   // ── Status ──────────────────────────────────────────────────────────────
   /** Human-readable status from the dataset ("Active", "Abandoned", …).
    *  Often null — prefer top-level operating_status / operating_sub_status. */
   status: string | null;
   status_detail: string | null;
-  mine_site_status: string | null;      // Dataset status label ("Abandoned", "Active", …)
-  project_phase: string | null;         // Future: "Existing", "Expansion", "Proposed"
+  mine_site_status: string | null; // Dataset status label ("Abandoned", "Active", …)
+  project_phase: string | null; // Future: "Existing", "Expansion", "Proposed"
   project_type: string | null;
   reason_for_closure: string | null;
 
@@ -52,8 +52,8 @@ export interface CoalMineFields {
   iso_code: string | null;
 
   // ── Operations ──────────────────────────────────────────────────────────
-  mine_type: string | null;             // Surface / Underground / Combined
-  mining_method: string | null;         // Strip, Longwall, Open pit, etc.
+  mine_type: string | null; // Surface / Underground / Combined
+  mining_method: string | null; // Strip, Longwall, Open pit, etc.
   opening_year: string | null;
   closing_year: string | null;
 
@@ -66,16 +66,16 @@ export interface CoalMineFields {
   coal_output_annual_mst: string | null;
   year_of_production: string | null;
   mine_size_km2: string | null;
-  mine_size_km2_2: string | null;       // Secondary size estimate
+  mine_size_km2_2: string | null; // Secondary size estimate
   mine_depth_m: string | null;
-  mine_depth_m_2: string | null;        // Secondary depth estimate
-  depth_accuracy: string | null;        // "Estimate", "Exact", etc.
+  mine_depth_m_2: string | null; // Secondary depth estimate
+  depth_accuracy: string | null; // "Estimate", "Exact", etc.
   workforce_size: string | null;
   workforce_accuracy: string | null;
 
   // ── Coal properties ─────────────────────────────────────────────────────
-  coal_type: string | null;             // Bituminous, Sub-bituminous, Lignite, Anthracite
-  coal_grade: string | null;            // Thermal, Metallurgical, Mixed
+  coal_type: string | null; // Bituminous, Sub-bituminous, Lignite, Anthracite
+  coal_grade: string | null; // Thermal, Metallurgical, Mixed
   percentage_of_thermal_coal: string | null;
   percentage_of_met_coal: string | null;
 

@@ -62,12 +62,8 @@
 
       // Fetch ownership graph in both directions via REST API
       const [graphDown, graphUp] = await Promise.all([
-        getOwnershipGraph({ root: entityId, direction: 'down' }).catch(
-          () => null
-        ),
-        getOwnershipGraph({ root: entityId, direction: 'up' }).catch(
-          () => null
-        ),
+        getOwnershipGraph({ root: entityId, direction: 'down' }).catch(() => null),
+        getOwnershipGraph({ root: entityId, direction: 'up' }).catch(() => null),
       ]);
 
       if (destroyed) return;

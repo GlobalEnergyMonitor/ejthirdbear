@@ -66,24 +66,28 @@
                 target="_blank"
                 rel="noopener"
                 title="Explore {owner.name}'s full portfolio"
-                onclick={(e) => { e.stopPropagation(); handlePortfolioClick(e, portfolioUrl(owner.entityId)); }}
+                onclick={(e) => {
+                  e.stopPropagation();
+                  handlePortfolioClick(e, portfolioUrl(owner.entityId));
+                }}
               >
                 Portfolio &rarr;
               </a>
             {/if}
           </td>
           <td class="td-count">
-            <span class="count-num">{owner.totalProjects?.toLocaleString() ?? '-'} 
+            <span class="count-num"
+              >{owner.totalProjects?.toLocaleString() ?? '-'}
               ({owner.totalAssets?.toLocaleString() ?? '—'} units)
             </span>
           </td>
           <td class="td-count">
             <span class="count-num count-match"
-              >{owner?.filteredProjects.toLocaleString() ?? '-'} 
-              {#if owner.filteredAssets> owner.filteredProjects}
-              ({owner.filteredAssets?.toLocaleString() ?? '—'} units)
+              >{owner?.filteredProjects.toLocaleString() ?? '-'}
+              {#if owner.filteredAssets > owner.filteredProjects}
+                ({owner.filteredAssets?.toLocaleString() ?? '—'} units)
               {/if}
-              </span>
+            </span>
           </td>
         </tr>
       {:else}

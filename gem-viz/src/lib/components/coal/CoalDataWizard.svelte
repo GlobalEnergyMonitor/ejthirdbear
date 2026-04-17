@@ -58,9 +58,11 @@
 
   function setTrackerMode(mode: 'plants' | 'mines' | 'both') {
     const newTrackers: Tracker[] =
-      mode === 'both' ? ['coal-plant', 'coal-mine']
-      : mode === 'plants' ? ['coal-plant']
-      : ['coal-mine'];
+      mode === 'both'
+        ? ['coal-plant', 'coal-mine']
+        : mode === 'plants'
+          ? ['coal-plant']
+          : ['coal-mine'];
     if (JSON.stringify(newTrackers) === JSON.stringify(trackers)) return;
     // Prune summary selections to only valid fields for new trackers
     const validAggKeys = new Set(getAggregatableFields(newTrackers).map((f) => f.key));
@@ -203,7 +205,6 @@
   let fieldOptions = $state<Record<string, string[]>>({});
   let captiveRefineExpanded = $state<Record<string, boolean>>({});
 
-
   const extraFilterableFields = $derived(
     getFilterableFields(trackers).filter((f) => !ALWAYS_SHOWN.has(f.key))
   );
@@ -253,7 +254,10 @@
   function toggleExtraValue(key: keyof CoalQueryFilters, val: string) {
     const cur = (filters[key] as string[] | undefined) ?? [];
     const next = cur.includes(val) ? cur.filter((v) => v !== val) : [...cur, val];
-    filters = { ...filters, [key]: next.length ? (next as CoalQueryFilters[typeof key]) : undefined };
+    filters = {
+      ...filters,
+      [key]: next.length ? (next as CoalQueryFilters[typeof key]) : undefined,
+    };
   }
 
   // ── Summary: aggregate + groupBy toggles ──────────────────────────────────
@@ -326,9 +330,7 @@
           'coal-plant': 'Coal Plant',
           'coal-mine': 'Coal Mine',
         };
-        const allowedTypes = new Set(
-          trackers.map((t) => SLUG_TO_DISPLAY[t]).filter(Boolean)
-        );
+        const allowedTypes = new Set(trackers.map((t) => SLUG_TO_DISPLAY[t]).filter(Boolean));
         const rawByType: Record<string, number> = data.facets?.asset_type ?? {};
         const byType: Record<string, number> = {};
         for (const [type, n] of Object.entries(rawByType)) {
@@ -592,8 +594,7 @@
 
   function fmtVal(v: unknown): string {
     if (v == null) return '—';
-    if (typeof v === 'number')
-      return v.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    if (typeof v === 'number') return v.toLocaleString(undefined, { maximumFractionDigits: 2 });
     return String(v);
   }
 
@@ -712,7 +713,10 @@
   });
 
   function handleRowClick(row: Record<string, unknown>) {
-    if (row['asset_type'] === 'Coal Mine' || (!trackers.includes('coal-plant') && trackers.includes('coal-mine'))) {
+    if (
+      row['asset_type'] === 'Coal Mine' ||
+      (!trackers.includes('coal-plant') && trackers.includes('coal-mine'))
+    ) {
       openMineModal(row);
     } else {
       openPlantModal(row);
@@ -721,10 +725,10 @@
 
   // ── Collapsible section state ──────────────────────────────────────────────
 
-  let statsExpanded    = $state(true);
+  let statsExpanded = $state(true);
   let groupingExpanded = $state(true);
   /** Which filter chip panel is open: 'status' | 'country' | fieldKey | 'add' | null */
-  let openFilterPanel  = $state<string | null>(null);
+  let openFilterPanel = $state<string | null>(null);
 
   function toggleFilterPanel(key: string) {
     openFilterPanel = openFilterPanel === key ? null : key;
@@ -791,9 +795,7 @@
 
   function getGroupBySummary(): string {
     if (groupBy.length === 0) return 'None selected';
-    return groupBy
-      .map((k) => getField(k)?.shortLabel ?? getField(k)?.label ?? k)
-      .join(' · ');
+    return groupBy.map((k) => getField(k)?.shortLabel ?? getField(k)?.label ?? k).join(' · ');
   }
 
   // ── Quick-start preset loader (exposed via bind:this) ─────────────────────
@@ -846,7 +848,6 @@
 </script>
 
 <div class="wizard">
-
   <!-- ── Compact query bar (steps 1 + 2 combined) ───────────────────────────── -->
   <div class="query-bar">
     <div class="query-group">
@@ -876,11 +877,7 @@
     <div class="query-group">
       <span class="query-label">FOR</span>
       <div class="seg-control" role="radiogroup" aria-label="Dataset">
-        {#each ([
-          { value: 'plants', label: 'Coal Plants' },
-          { value: 'mines',  label: 'Coal Mines'  },
-          { value: 'both',   label: 'Both'         },
-        ] as const) as opt (opt.value)}
+        {#each [{ value: 'plants', label: 'Coal Plants' }, { value: 'mines', label: 'Coal Mines' }, { value: 'both', label: 'Both' }] as const as opt (opt.value)}
           <label class="seg-btn" class:seg-btn--active={trackerMode === opt.value}>
             <input
               type="radio"
@@ -902,7 +899,10 @@
       {#if !statsExpanded}
         <div class="section-summary">
           <span class="section-summary-label">Statistics</span>
-          <span class="section-summary-text" class:section-summary-text--empty={aggregates.length === 0}>
+          <span
+            class="section-summary-text"
+            class:section-summary-text--empty={aggregates.length === 0}
+          >
             {getAggSummary()}
           </span>
           <button class="section-edit-btn" onclick={() => (statsExpanded = true)}>Edit ▾</button>
@@ -968,7 +968,10 @@
       {#if !groupingExpanded}
         <div class="section-summary">
           <span class="section-summary-label">Group by</span>
-          <span class="section-summary-text" class:section-summary-text--empty={groupBy.length === 0}>
+          <span
+            class="section-summary-text"
+            class:section-summary-text--empty={groupBy.length === 0}
+          >
             {getGroupBySummary()}
           </span>
           <button class="section-edit-btn" onclick={() => (groupingExpanded = true)}>Edit ▾</button>
@@ -976,7 +979,8 @@
       {:else}
         <div class="section-header">
           <span class="section-title">Choose your grouping fields:</span>
-          <button class="section-done-btn" onclick={() => (groupingExpanded = false)}>Done ▴</button>
+          <button class="section-done-btn" onclick={() => (groupingExpanded = false)}>Done ▴</button
+          >
         </div>
 
         <div class="group-grid">
@@ -1010,7 +1014,6 @@
   <!-- ── Filters (chip row) ────────────────────────────────────────────────── -->
   <div class="wiz-section">
     <div class="filter-chips">
-
       <!-- Status chip — always shown -->
       <!-- svelte-ignore a11y_interactive_supports_focus -->
       <div
@@ -1043,9 +1046,12 @@
             class="chip-clear"
             role="button"
             tabindex="-1"
-            onclick={(e) => { e.stopPropagation(); selectedCountries = []; }}
-            aria-label="Clear countries"
-          >×</span>
+            onclick={(e) => {
+              e.stopPropagation();
+              selectedCountries = [];
+            }}
+            aria-label="Clear countries">×</span
+          >
         {/if}
       </div>
 
@@ -1069,9 +1075,13 @@
               class="chip-clear"
               role="button"
               tabindex="-1"
-              onclick={(e) => { e.stopPropagation(); removeExtraField(fieldKey); if (openFilterPanel === fieldKey) openFilterPanel = null; }}
-              aria-label="Remove {field.label} filter"
-            >×</span>
+              onclick={(e) => {
+                e.stopPropagation();
+                removeExtraField(fieldKey);
+                if (openFilterPanel === fieldKey) openFilterPanel = null;
+              }}
+              aria-label="Remove {field.label} filter">×</span
+            >
           </div>
         {/if}
       {/each}
@@ -1093,12 +1103,15 @@
     <!-- Inline expansion panel (one at a time) -->
     {#if openFilterPanel === 'status'}
       <div class="filter-panel">
-        <StatusFilter bind:statusChecks statusGroups={coalStatusGroups} showRefine={showStatusRefine} />
+        <StatusFilter
+          bind:statusChecks
+          statusGroups={coalStatusGroups}
+          showRefine={showStatusRefine}
+        />
         <div class="panel-footer">
           <button class="panel-done-btn" onclick={() => (openFilterPanel = null)}>Done</button>
         </div>
       </div>
-
     {:else if openFilterPanel === 'country'}
       <div class="filter-panel">
         <CountryMultiSelect bind:selected={selectedCountries} />
@@ -1106,7 +1119,6 @@
           <button class="panel-done-btn" onclick={() => (openFilterPanel = null)}>Done</button>
         </div>
       </div>
-
     {:else if openFilterPanel === 'add'}
       <div class="filter-panel">
         <div class="field-picker-list">
@@ -1133,7 +1145,6 @@
           <button class="panel-done-btn" onclick={() => (openFilterPanel = null)}>Done</button>
         </div>
       </div>
-
     {:else if openFilterPanel && shownExtraFields.includes(openFilterPanel)}
       {@const fpKey = openFilterPanel}
       {@const fpField = getField(fpKey)}
@@ -1171,8 +1182,13 @@
                     {#if canRefine}
                       <button
                         class="captive-refine-toggle"
-                        onclick={() => { captiveRefineExpanded = { ...captiveRefineExpanded, [groupKey]: !captiveRefineExpanded[groupKey] }; }}
-                      >{captiveRefineExpanded[groupKey] ? '▼' : '▶'} Refine</button>
+                        onclick={() => {
+                          captiveRefineExpanded = {
+                            ...captiveRefineExpanded,
+                            [groupKey]: !captiveRefineExpanded[groupKey],
+                          };
+                        }}>{captiveRefineExpanded[groupKey] ? '▼' : '▶'} Refine</button
+                      >
                     {/if}
                   </div>
                   {#if canRefine && captiveRefineExpanded[groupKey]}
@@ -1192,7 +1208,6 @@
                 </div>
               {/each}
             </div>
-
           {:else if fpField.filterable === 'categorical'}
             {#if !fieldOptions[fpKey]}
               <p class="loading-text">Loading options…</p>
@@ -1202,7 +1217,9 @@
                   <label class="check-row">
                     <input
                       type="checkbox"
-                      checked={((filters[fpKey as keyof CoalQueryFilters] as string[] | undefined) ?? []).includes(opt)}
+                      checked={(
+                        (filters[fpKey as keyof CoalQueryFilters] as string[] | undefined) ?? []
+                      ).includes(opt)}
                       onchange={() => toggleExtraValue(fpKey as keyof CoalQueryFilters, opt)}
                     />
                     <span class="check-label">{opt}</span>
@@ -1210,9 +1227,10 @@
                 {/each}
               </div>
             {/if}
-
           {:else if fpField.filterable === 'range'}
-            {@const rangeVal = filters[fpKey as keyof CoalQueryFilters] as { min?: number; max?: number } | undefined}
+            {@const rangeVal = filters[fpKey as keyof CoalQueryFilters] as
+              | { min?: number; max?: number }
+              | undefined}
             <div class="range-inputs">
               <label class="range-label">
                 <span>Min</span>
@@ -1222,8 +1240,15 @@
                   value={rangeVal?.min ?? ''}
                   oninput={(e) => {
                     const val = (e.currentTarget as HTMLInputElement).value;
-                    const cur = (filters[fpKey as keyof CoalQueryFilters] as { min?: number; max?: number }) ?? {};
-                    filters = { ...filters, [fpKey]: val ? { ...cur, min: Number(val) } : { ...cur, min: undefined } };
+                    const cur =
+                      (filters[fpKey as keyof CoalQueryFilters] as {
+                        min?: number;
+                        max?: number;
+                      }) ?? {};
+                    filters = {
+                      ...filters,
+                      [fpKey]: val ? { ...cur, min: Number(val) } : { ...cur, min: undefined },
+                    };
                   }}
                 />
               </label>
@@ -1235,13 +1260,19 @@
                   value={rangeVal?.max ?? ''}
                   oninput={(e) => {
                     const val = (e.currentTarget as HTMLInputElement).value;
-                    const cur = (filters[fpKey as keyof CoalQueryFilters] as { min?: number; max?: number }) ?? {};
-                    filters = { ...filters, [fpKey]: val ? { ...cur, max: Number(val) } : { ...cur, max: undefined } };
+                    const cur =
+                      (filters[fpKey as keyof CoalQueryFilters] as {
+                        min?: number;
+                        max?: number;
+                      }) ?? {};
+                    filters = {
+                      ...filters,
+                      [fpKey]: val ? { ...cur, max: Number(val) } : { ...cur, max: undefined },
+                    };
                   }}
                 />
               </label>
             </div>
-
           {:else if fpField.filterable === 'text'}
             <input
               type="text"
@@ -1264,7 +1295,6 @@
 
   <!-- ── Results ────────────────────────────────────────────────────────────── -->
   <div class="wizard-results">
-
     <div class="count-bar">
       <div class="count-info">
         {#if countLoading}
@@ -1280,7 +1310,9 @@
           </span>
           {#if trackers.length === 2 && Object.keys(countResult.byType).length > 0}
             <span class="count-breakdown">
-              ({Object.entries(countResult.byType).map(([k, v]) => `${fmt(v)} ${k}s`).join(', ')})
+              ({Object.entries(countResult.byType)
+                .map(([k, v]) => `${fmt(v)} ${k}s`)
+                .join(', ')})
             </span>
           {/if}
         {/if}
@@ -1521,7 +1553,9 @@
     cursor: pointer;
     border-right: 1px solid var(--color-border);
     white-space: nowrap;
-    transition: background var(--transition-fast), color var(--transition-fast);
+    transition:
+      background var(--transition-fast),
+      color var(--transition-fast);
     line-height: 1.6;
   }
 
@@ -1628,7 +1662,9 @@
     cursor: pointer;
     font-family: inherit;
     white-space: nowrap;
-    transition: background var(--transition-fast), color var(--transition-fast);
+    transition:
+      background var(--transition-fast),
+      color var(--transition-fast);
   }
 
   .section-edit-btn:hover {
@@ -1778,7 +1814,10 @@
     font-size: var(--font-size-sm);
     color: var(--color-text-secondary);
     white-space: nowrap;
-    transition: border-color var(--transition-fast), background var(--transition-fast), color var(--transition-fast);
+    transition:
+      border-color var(--transition-fast),
+      background var(--transition-fast),
+      color var(--transition-fast);
     user-select: none;
   }
 
@@ -1870,7 +1909,9 @@
     padding: 3px var(--space-3);
     cursor: pointer;
     font-family: inherit;
-    transition: background var(--transition-fast), color var(--transition-fast);
+    transition:
+      background var(--transition-fast),
+      color var(--transition-fast);
   }
 
   .panel-done-btn:hover {

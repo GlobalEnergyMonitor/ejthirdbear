@@ -18,6 +18,7 @@
     direction?: 'up' | 'down';
     fullWidth?: boolean;
     expandHeight?: boolean;
+    forceLabelsBelow?: boolean;
     class?: string;
   }
 
@@ -26,6 +27,7 @@
     direction = 'up',
     fullWidth = true,
     expandHeight = false,
+    forceLabelsBelow = false,
     class: className = '',
   }: Props = $props();
 
@@ -74,7 +76,8 @@
   {#if isMultiGraph}
     <div class="lov-multi-header">
       <span class="lov-multi-label">
-        {locationResponse.distinct_graphs} distinct ownership structures across {locationResponse.unit_count} unit{locationResponse.unit_count !== 1 ? 's' : ''}
+        {locationResponse.distinct_graphs} distinct ownership structures across {locationResponse.unit_count}
+        unit{locationResponse.unit_count !== 1 ? 's' : ''}
       </span>
       <div class="lov-tabs" role="tablist" aria-label="Ownership structures">
         {#each locationResponse.graphs as graph, i}
@@ -87,7 +90,8 @@
             tabindex={activeIndex === i ? 0 : -1}
             onclick={() => (activeIndex = i)}
           >
-            {count} {count === 1 ? 'unit' : 'units'}
+            {count}
+            {count === 1 ? 'unit' : 'units'}
           </button>
         {/each}
       </div>
@@ -115,6 +119,7 @@
         direction={treeDirection}
         {fullWidth}
         {expandHeight}
+        {forceLabelsBelow}
       />
     {/key}
   {:else}

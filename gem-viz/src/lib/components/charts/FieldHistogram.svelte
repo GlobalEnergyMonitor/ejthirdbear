@@ -13,12 +13,7 @@
    * - Adaptive K/M/B number formatting
    */
 
-  let {
-    values = [] as number[],
-    unit = '',
-    nullCount = 0,
-    totalRows = 0,
-  } = $props();
+  let { values = [] as number[], unit = '', nullCount = 0, totalRows = 0 } = $props();
 
   let numBins = $state(4);
   let weight = $state(0.5);

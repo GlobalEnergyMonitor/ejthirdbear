@@ -126,9 +126,16 @@
     onFieldSelect?.(field.columnName);
     writeHash({ field: field.columnName });
 
-    const codeFriendlyName = (field as unknown as Record<string, unknown>).codeFriendlyName as string | undefined;
+    const codeFriendlyName = (field as unknown as Record<string, unknown>).codeFriendlyName as
+      | string
+      | undefined;
     const dataType = (field as unknown as Record<string, unknown>).dataType as string | undefined;
-    if (import.meta.env.DEV) console.log('[DatasetFactsheet] loadStats', field.columnName, { codeFriendlyName, dataType, catalogSlug });
+    if (import.meta.env.DEV)
+      console.log('[DatasetFactsheet] loadStats', field.columnName, {
+        codeFriendlyName,
+        dataType,
+        catalogSlug,
+      });
 
     try {
       // Try catalog API first (works for all field types when available)
@@ -219,7 +226,9 @@
   <div
     class="mobile-modal-backdrop"
     onclick={closeModal}
-    onkeydown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') closeModal(); }}
+    onkeydown={(ev) => {
+      if (ev.key === 'Enter' || ev.key === ' ') closeModal();
+    }}
     role="button"
     tabindex="-1"
     aria-label="Close field detail"
@@ -242,7 +251,6 @@
       {:else if isNumericField && numericStats}
         <FieldHistogram
           values={numericStats.values}
-
           unit={(selectedField as any).unit ?? ''}
           nullCount={numericStats.null_count}
           totalRows={numericStats.total_rows}
@@ -353,7 +361,6 @@
         <!-- Numeric field: interactive histogram -->
         <FieldHistogram
           values={numericStats.values}
-
           unit={(selectedField as any).unit ?? ''}
           nullCount={numericStats.null_count}
           totalRows={numericStats.total_rows}
@@ -544,7 +551,6 @@
     border-color: var(--gem-teal);
   }
 
-
   .field-name > span.definition {
     display: none;
   }
@@ -663,7 +669,6 @@
     font-style: italic;
     padding: var(--space-5);
   }
-
 
   /* Mobile: hide right panel, show modal instead */
   @media (max-width: 768px) {

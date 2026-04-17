@@ -14,7 +14,12 @@ import {
   type Selection,
 } from 'd3';
 import { colors, statusColors, getTrackerColor } from '$lib/design-tokens';
-import type { ScreenerChartData, SubsidiaryGroupData, SubsidiaryExpansion, BarDatum } from './screener-chart-data';
+import type {
+  ScreenerChartData,
+  SubsidiaryGroupData,
+  SubsidiaryExpansion,
+  BarDatum,
+} from './screener-chart-data';
 import { LAYOUT } from './screener-chart-data';
 
 const COL_STROKE = '#d8d8ce';
@@ -32,7 +37,8 @@ export function subsidiaryPath(
   const p = d3Path();
   const xS = 0;
   const yS = d.top;
-  const xE = LAYOUT.subsidX + LAYOUT.assetsX - LAYOUT.regionPadding - LAYOUT.assetSpacing * 2 + extraWidth;
+  const xE =
+    LAYOUT.subsidX + LAYOUT.assetsX - LAYOUT.regionPadding - LAYOUT.assetSpacing * 2 + extraWidth;
   const yE = d.bottom;
   const radius = LAYOUT.yPadding;
   const xSU = xS;
@@ -73,12 +79,16 @@ export function drawSubsidiaryRegions(
 
   regions
     .append('path')
-    .attr('d', (d) => subsidiaryPath(d, -marginTop - 5, false, d.expansion ? LAYOUT.expansionShift : 0))
+    .attr('d', (d) =>
+      subsidiaryPath(d, -marginTop - 5, false, d.expansion ? LAYOUT.expansionShift : 0)
+    )
     .style('fill', 'url(#gradient-fade)');
 
   regions
     .append('path')
-    .attr('d', (d) => subsidiaryPath(d, -marginTop - 5, true, d.expansion ? LAYOUT.expansionShift : 0))
+    .attr('d', (d) =>
+      subsidiaryPath(d, -marginTop - 5, true, d.expansion ? LAYOUT.expansionShift : 0)
+    )
     .style('fill', 'none')
     .style('stroke', COL_STROKE)
     .style('stroke-width', '3px')
@@ -104,11 +114,15 @@ function drawNestedSubRegions(
   // deeper layers use a tighter offset since those widgets are compact.
   const stemStartY = parent.top + (depth === 1 ? 40 : 4) + markR;
 
-  group.append('line')
+  group
+    .append('line')
     .attr('class', 'expansion-stem')
-    .attr('x1', stemX).attr('y1', stemStartY)
-    .attr('x2', stemX).attr('y2', lastSg.top - r)
-    .style('stroke', COL_STROKE).style('stroke-width', '1.5px');
+    .attr('x1', stemX)
+    .attr('y1', stemStartY)
+    .attr('x2', stemX)
+    .attr('y2', lastSg.top - r)
+    .style('stroke', COL_STROKE)
+    .style('stroke-width', '1.5px');
 
   for (const sg of subGroups) {
     const sgG = group.append('g').attr('class', 'sub-subsidiary-region');
@@ -117,8 +131,12 @@ function drawNestedSubRegions(
     p.moveTo(stemX, yS - r);
     p.bezierCurveTo(stemX, yS - r * 0.2, stemX + r * 0.2, yS, stemX + r, yS);
     p.lineTo(xE, yS);
-    sgG.append('path').attr('d', p.toString())
-      .style('fill', 'none').style('stroke', COL_STROKE).style('stroke-width', '1.5px');
+    sgG
+      .append('path')
+      .attr('d', p.toString())
+      .style('fill', 'none')
+      .style('stroke', COL_STROKE)
+      .style('stroke-width', '1.5px');
 
     if (sg.expansion && sg.expansion.subGroups.length > 0) {
       drawNestedSubRegions(group, sg, stemX + r, r, xE, markR, depth + 1);
@@ -154,7 +172,11 @@ function drawSubGroupLabelsRecursive(
   ownerChain: Array<{ name: string; pct: string }>,
   markR: number,
   labelX: number,
-  options?: { expandedSubIds?: Set<string>; onExpandSubsidiary?: (id: string) => void; parentPath?: string }
+  options?: {
+    expandedSubIds?: Set<string>;
+    onExpandSubsidiary?: (id: string) => void;
+    parentPath?: string;
+  }
 ): void {
   const entryR = LAYOUT.yPadding;
   // lineRelY: offset from the label group origin (sg.top + 26) to the entry line (sg.top)
@@ -172,16 +194,23 @@ function drawSubGroupLabelsRecursive(
 
     if (!isDirect) {
       // Pie centered ON the entry line (lineRelY = -26 relative to sg.top + 26 = sg.top)
-      const pieCircle = subLabel.append('circle')
-        .attr('cx', 0).attr('cy', lineRelY)
+      const pieCircle = subLabel
+        .append('circle')
+        .attr('cx', 0)
+        .attr('cy', lineRelY)
         .attr('r', markR + 0.625)
-        .style('fill', '#cce1e6').style('stroke', '#ffffff').style('stroke-width', '1.25px')
+        .style('fill', '#cce1e6')
+        .style('stroke', '#ffffff')
+        .style('stroke-width', '1.25px')
         .style('cursor', 'default');
 
       const edge = expansion.matchedEdges.get(sg.id);
       if (edge?.value != null) {
         // directValue = single-hop parent→child %; value = cumulative root→child % (for pie arc)
-        const directPct = edge.directValue != null ? `${Math.round(edge.directValue)}%` : `${Math.round(edge.value)}%`;
+        const directPct =
+          edge.directValue != null
+            ? `${Math.round(edge.directValue)}%`
+            : `${Math.round(edge.value)}%`;
         const chainLines = [
           `${spotlightName} owns`,
           ...ownerChain.map((c) => `${c.pct} of ${c.name}, which owns`),
@@ -196,25 +225,35 @@ function drawSubGroupLabelsRecursive(
           .on('mouseout', () => group.select('.ownership-chain-tooltip').remove());
 
         const arc = d3Arc<{ endAngle: number }>()
-          .innerRadius(0).outerRadius(markR).startAngle(0).cornerRadius(markR * 0.1);
-        subLabel.append('path')
+          .innerRadius(0)
+          .outerRadius(markR)
+          .startAngle(0)
+          .cornerRadius(markR * 0.1);
+        subLabel
+          .append('path')
           .attr('transform', `translate(0, ${lineRelY})`)
           .attr('d', arc({ endAngle: 2 * Math.PI * (edge.value / 100) }))
-          .style('fill', colors.teal).style('pointer-events', 'none');
+          .style('fill', colors.teal)
+          .style('pointer-events', 'none');
       }
     }
 
     // Label above the line
-    subLabel.append('text')
-      .attr('x', isDirect ? 0 : labelX).attr('y', lineRelY - markR)
-      .style('fill', colors.navy).style('font-size', '14px')
-      .style('font-weight', 500).style('letter-spacing', '0.03em')
+    subLabel
+      .append('text')
+      .attr('x', isDirect ? 0 : labelX)
+      .attr('y', lineRelY - markR)
+      .style('fill', colors.navy)
+      .style('font-size', '14px')
+      .style('font-weight', 500)
+      .style('letter-spacing', '0.03em')
       .text(name);
 
     if (sg.intermediary_data) {
       drawIntermediaryPathForItem(
         subLabel as unknown as Selection<SVGGElement, SubsidiaryGroupData, null, undefined>,
-        sg, Math.round(lineRelY + markR + 2),
+        sg,
+        Math.round(lineRelY + markR + 2),
         { ...options, xOffset: originX - LAYOUT.subsidX, compact: true }
       );
     }
@@ -222,12 +261,20 @@ function drawSubGroupLabelsRecursive(
     if (sg.expansion && sg.expansion.subGroups.length > 0) {
       const edge = expansion.matchedEdges.get(sg.id);
       // Use direct edge % for the chain label so each hop shows the per-edge ownership
-      const pct = edge?.directValue != null ? `${Math.round(edge.directValue)}%`
-        : edge?.value != null ? `${Math.round(edge.value)}%` : '?%';
+      const pct =
+        edge?.directValue != null
+          ? `${Math.round(edge.directValue)}%`
+          : edge?.value != null
+            ? `${Math.round(edge.value)}%`
+            : '?%';
       drawSubGroupLabelsRecursive(
-        group, sg.expansion, originX + entryR,
-        spotlightName, [...ownerChain, { name: rawName, pct }],
-        markR, labelX,
+        group,
+        sg.expansion,
+        originX + entryR,
+        spotlightName,
+        [...ownerChain, { name: rawName, pct }],
+        markR,
+        labelX,
         { ...options, parentPath: options?.parentPath ? `${options.parentPath}::${sg.id}` : sg.id }
       );
     }
@@ -354,9 +401,14 @@ export function drawSubsidiaryLabels(
     const parentName = chartData.entityMap.get(d.id)?.Name ?? d.id;
 
     drawSubGroupLabelsRecursive(
-      group, d.expansion, subLabelOriginX,
-      spotlightName, [{ name: parentName, pct: parentPct }],
-      markR, labelX, { ...options, parentPath: d.id }
+      group,
+      d.expansion,
+      subLabelOriginX,
+      spotlightName,
+      [{ name: parentName, pct: parentPct }],
+      markR,
+      labelX,
+      { ...options, parentPath: d.id }
     );
   }
 }
@@ -530,7 +582,8 @@ function drawIntermediaryPathForItem(
 
   const canExpand = intermediary.total_descendants > 1;
 
-  const g = item.append('g')
+  const g = item
+    .append('g')
     .attr('class', 'intermediary-path-group')
     .style('cursor', canExpand ? 'pointer' : 'default')
     .on('click', () => {
@@ -540,7 +593,12 @@ function drawIntermediaryPathForItem(
   if (!isExpanded) {
     g.on('mouseenter', function (event: MouseEvent) {
       const [mx, my] = d3Pointer(event, item.node()!);
-      showMultilineTooltip(g as unknown as Selection<SVGGElement, unknown, null, undefined>, mx + 10, my - 50, tooltipLines);
+      showMultilineTooltip(
+        g as unknown as Selection<SVGGElement, unknown, null, undefined>,
+        mx + 10,
+        my - 50,
+        tooltipLines
+      );
     }).on('mouseleave', function () {
       g.select('.ownership-chain-tooltip').remove();
     });
@@ -555,7 +613,7 @@ function drawIntermediaryPathForItem(
   const circlesEndX = curveR + 6 + maxCircles * 8;
   const markRLocal = (LAYOUT.subsidiaryMarkHeight / 2) * 0.7;
   const iconCX = isExpanded
-    ? markRLocal + 8 + btnW / 2   // left-aligned under ownership % text
+    ? markRLocal + 8 + btnW / 2 // left-aligned under ownership % text
     : circlesEndX + 20;
 
   if (!isExpanded) {
@@ -599,20 +657,22 @@ function drawIntermediaryPathForItem(
   }
 
   if (canExpand) {
-    const btnGroup = g
-      .append('g')
-      .attr('transform', `translate(${iconCX}, ${lineY})`);
+    const btnGroup = g.append('g').attr('transform', `translate(${iconCX}, ${lineY})`);
 
     if (isExpanded) {
       // Pill button: "− Collapse"
       const btnW = 74;
       const btnH = 18;
-      btnGroup.append('rect')
-        .attr('x', -btnW / 2).attr('y', -btnH / 2)
-        .attr('width', btnW).attr('height', btnH)
+      btnGroup
+        .append('rect')
+        .attr('x', -btnW / 2)
+        .attr('y', -btnH / 2)
+        .attr('width', btnW)
+        .attr('height', btnH)
         .attr('rx', btnH / 2)
         .style('fill', colors.teal);
-      btnGroup.append('text')
+      btnGroup
+        .append('text')
         .attr('text-anchor', 'middle')
         .attr('dy', '0.35em')
         .style('font-size', '11px')
@@ -623,17 +683,30 @@ function drawIntermediaryPathForItem(
     } else {
       // "+" circle icon
       const arm = 4;
-      btnGroup.append('circle')
+      btnGroup
+        .append('circle')
         .attr('r', iconR)
         .style('fill', '#dee4e7')
         .style('stroke', '#aab4b8')
         .style('stroke-width', '1px');
-      btnGroup.append('line')
-        .attr('x1', -arm).attr('y1', 0).attr('x2', arm).attr('y2', 0)
-        .style('stroke', colors.teal).style('stroke-width', '1.5px').style('stroke-linecap', 'round');
-      btnGroup.append('line')
-        .attr('x1', 0).attr('y1', -arm).attr('x2', 0).attr('y2', arm)
-        .style('stroke', colors.teal).style('stroke-width', '1.5px').style('stroke-linecap', 'round');
+      btnGroup
+        .append('line')
+        .attr('x1', -arm)
+        .attr('y1', 0)
+        .attr('x2', arm)
+        .attr('y2', 0)
+        .style('stroke', colors.teal)
+        .style('stroke-width', '1.5px')
+        .style('stroke-linecap', 'round');
+      btnGroup
+        .append('line')
+        .attr('x1', 0)
+        .attr('y1', -arm)
+        .attr('x2', 0)
+        .attr('y2', arm)
+        .style('stroke', colors.teal)
+        .style('stroke-width', '1.5px')
+        .style('stroke-linecap', 'round');
     }
   }
 }

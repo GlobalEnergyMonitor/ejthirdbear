@@ -61,7 +61,6 @@ export interface SummaryRow {
   [key: string]: string | number | null;
 }
 
-
 // ── Status group collapse ──────────────────────────────────────────────────
 
 /** Group label by group ID — used for the output status value */
@@ -119,7 +118,7 @@ function collapseToStatusGroups(
   rows: AggregateGroup[],
   groupByKeys: string[],
   fn: AggFn,
-  subToGroup: Map<string, string>,
+  subToGroup: Map<string, string>
 ): AggregateGroup[] {
   const otherKeys = groupByKeys.filter((k) => k !== 'status');
   const buckets = new Map<
@@ -181,7 +180,7 @@ function collapseToStatusGroups(
 async function fetchOneTrackerAggregate(
   query: CoalQuery,
   aggregate: CoalQueryAggregate,
-  tracker: Tracker,
+  tracker: Tracker
 ): Promise<AggregateGroup[]> {
   const field = getField(aggregate.field);
   if (!field) throw new Error(`Unknown field: ${aggregate.field}`);
@@ -198,9 +197,7 @@ async function fetchOneTrackerAggregate(
   const hasBoth = hasSubStatus && hasStatus;
   const mappedGroupBy = [...new Set(query.groupBy.map((k) => (k === 'sub_status' ? 'status' : k)))];
 
-  const apiGroupBy = needsPlantCollapse
-    ? ['location_id', ...mappedGroupBy]
-    : [...mappedGroupBy];
+  const apiGroupBy = needsPlantCollapse ? ['location_id', ...mappedGroupBy] : [...mappedGroupBy];
 
   // Build filter params using the same group-aware status logic as appendCoalFilters
   const url = new URL(
@@ -268,7 +265,11 @@ async function fetchOneTrackerAggregate(
       groups = groups.map((row) => {
         const raw = String(row['status'] ?? '').toLowerCase();
         const groupId = subToGroup.get(normalizeSubStatus(raw)) ?? subToGroup.get(raw) ?? raw;
-        return { ...row, status: GROUP_LABEL[groupId] ?? groupId, sub_status: row['status'] } as AggregateGroup;
+        return {
+          ...row,
+          status: GROUP_LABEL[groupId] ?? groupId,
+          sub_status: row['status'],
+        } as AggregateGroup;
       });
     } else {
       // sub_status only → rename 'status' → 'sub_status', no collapse
@@ -293,12 +294,12 @@ async function fetchOneTrackerAggregate(
  */
 export async function fetchAggregate(
   query: CoalQuery,
-  aggregate: CoalQueryAggregate,
+  aggregate: CoalQueryAggregate
 ): Promise<AggregateGroup[]> {
   const field = getField(aggregate.field);
   if (!field) throw new Error(`Unknown field: ${aggregate.field}`);
 
-  const relevantTrackers = query.trackers.filter(t => field.trackers.includes(t));
+  const relevantTrackers = query.trackers.filter((t) => field.trackers.includes(t));
 
   if (relevantTrackers.length === 0) {
     return [];
@@ -307,8 +308,8 @@ export async function fetchAggregate(
   if (relevantTrackers.length > 1) {
     throw new Error(
       `Field '${aggregate.field}' exists in multiple selected trackers ` +
-      `(${relevantTrackers.join(', ')}). Cross-tracker numeric aggregation ` +
-      `is not implemented.`
+        `(${relevantTrackers.join(', ')}). Cross-tracker numeric aggregation ` +
+        `is not implemented.`
     );
   }
 
@@ -335,15 +336,17 @@ export async function fetchSummaryTable(query: CoalQuery): Promise<SummaryRow[]>
   );
 
   const merged = new Map<string, SummaryRow>();
-  const allColKeys = results.map(r => `${r.agg.fn}:${r.agg.field}`);
+  const allColKeys = results.map((r) => `${r.agg.fn}:${r.agg.field}`);
 
   for (const { agg, groups } of results) {
     const colKey = `${agg.fn}:${agg.field}`;
     for (const group of groups) {
-      const rowKey = query.groupBy.map(k => String(group[k] ?? '')).join('|||');
+      const rowKey = query.groupBy.map((k) => String(group[k] ?? '')).join('|||');
       if (!merged.has(rowKey)) {
         const row: SummaryRow = {};
-        query.groupBy.forEach(k => { row[k] = group[k]; });
+        query.groupBy.forEach((k) => {
+          row[k] = group[k];
+        });
         merged.set(rowKey, row);
       }
       merged.get(rowKey)![colKey] = group.value;
@@ -373,12 +376,12 @@ export async function fetchSummaryTable(query: CoalQuery): Promise<SummaryRow[]>
 function collapseLocationId(
   plantRows: AggregateGroup[],
   visibleGroupKeys: string[],
-  displayFn: AggFn,
+  displayFn: AggFn
 ): AggregateGroup[] {
   const buckets = new Map<string, number[]>();
 
   for (const row of plantRows) {
-    const bucketKey = visibleGroupKeys.map(k => String(row[k] ?? '')).join('|||');
+    const bucketKey = visibleGroupKeys.map((k) => String(row[k] ?? '')).join('|||');
     if (!buckets.has(bucketKey)) buckets.set(bucketKey, []);
     if (typeof row.value === 'number') buckets.get(bucketKey)!.push(row.value);
   }
@@ -387,7 +390,9 @@ function collapseLocationId(
   for (const [bucketKey, values] of buckets) {
     const keyParts = bucketKey.split('|||');
     const row: AggregateGroup = { value: 0 };
-    visibleGroupKeys.forEach((k, i) => { row[k] = keyParts[i]; });
+    visibleGroupKeys.forEach((k, i) => {
+      row[k] = keyParts[i];
+    });
 
     switch (displayFn) {
       case 'sum':

@@ -77,51 +77,51 @@
     lead="Global Energy Monitor maintains comprehensive databases tracking energy infrastructure worldwide. Each tracker documents assets from announcement through operation and retirement."
   />
 
-    <div class="tracker-grid">
-      {#each allTrackerSlugs as slug}
-        {@const metadata = trackerMetadata[slug]}
-        {@const assetCount = trackerCounts.get(metadata.name)}
-        <a href={`/tracker/${slug}`} class="tracker-card" style="--tracker-color: {metadata.color}">
-          <div class="card-header">
-            <h2>{metadata.name}</h2>
-          </div>
-          <div class="card-body">
-            <p class="description">{metadata.description}</p>
-            {#if assetCount && assetCount > 0}
-              <div class="stats">
-                <div class="stat">
-                  <span class="stat-value">{formatNumber(assetCount)}</span>
-                  <span class="stat-label">Assets</span>
-                </div>
-              </div>
-            {/if}
-          </div>
-          <div class="card-footer">
-            <span class="view-link">View tracker details</span>
-          </div>
-        </a>
-      {/each}
-    </div>
-
-    <!-- Asset Classes Section -->
-    {#if segments.length > 0}
-      <section class="segments-section">
-        <h2>Asset Classes</h2>
-        <p class="section-intro">Pre-defined segments for focused analysis across trackers</p>
-        <div class="segments-grid">
-          {#each segments as segment}
-            <a href={getSegmentApiUrl(segment)} target="_blank" rel="noopener" class="segment-card">
-              <div class="segment-header">
-                <span class="segment-name">{segment.name}</span>
-                <span class="segment-count">{formatNumber(segment.count)}</span>
-              </div>
-              <p class="segment-desc">{segment.description}</p>
-              <span class="segment-type">{segment.asset_type}</span>
-            </a>
-          {/each}
+  <div class="tracker-grid">
+    {#each allTrackerSlugs as slug}
+      {@const metadata = trackerMetadata[slug]}
+      {@const assetCount = trackerCounts.get(metadata.name)}
+      <a href={`/tracker/${slug}`} class="tracker-card" style="--tracker-color: {metadata.color}">
+        <div class="card-header">
+          <h2>{metadata.name}</h2>
         </div>
-      </section>
-    {/if}
+        <div class="card-body">
+          <p class="description">{metadata.description}</p>
+          {#if assetCount && assetCount > 0}
+            <div class="stats">
+              <div class="stat">
+                <span class="stat-value">{formatNumber(assetCount)}</span>
+                <span class="stat-label">Assets</span>
+              </div>
+            </div>
+          {/if}
+        </div>
+        <div class="card-footer">
+          <span class="view-link">View tracker details</span>
+        </div>
+      </a>
+    {/each}
+  </div>
+
+  <!-- Asset Classes Section -->
+  {#if segments.length > 0}
+    <section class="segments-section">
+      <h2>Asset Classes</h2>
+      <p class="section-intro">Pre-defined segments for focused analysis across trackers</p>
+      <div class="segments-grid">
+        {#each segments as segment}
+          <a href={getSegmentApiUrl(segment)} target="_blank" rel="noopener" class="segment-card">
+            <div class="segment-header">
+              <span class="segment-name">{segment.name}</span>
+              <span class="segment-count">{formatNumber(segment.count)}</span>
+            </div>
+            <p class="segment-desc">{segment.description}</p>
+            <span class="segment-type">{segment.asset_type}</span>
+          </a>
+        {/each}
+      </div>
+    </section>
+  {/if}
 </div>
 
 <style>

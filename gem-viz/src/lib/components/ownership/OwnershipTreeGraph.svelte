@@ -35,7 +35,6 @@
     getNodeColors,
     COUNTRY_COLORS,
     COUNTRY_GRAY,
-    SMALL_OWNERSHIP_PCT,
     MAX_COUNTRY_COLORS,
     NODE_RADIUS,
     LARGE_GRAPH_THRESHOLD,
@@ -60,7 +59,10 @@
     const c = p.get(HASH_KEYS.color);
     if (c === 'entity-type' || c === 'country') result.color = c;
     const m = p.get(HASH_KEYS.min);
-    if (m != null) { const n = parseInt(m, 10); if (!Number.isNaN(n)) result.min = n; }
+    if (m != null) {
+      const n = parseInt(m, 10);
+      if (!Number.isNaN(n)) result.min = n;
+    }
     const f = p.get(HASH_KEYS.focus);
     if (f) result.focus = f;
     return result;
@@ -91,6 +93,8 @@
     fullWidth?: boolean;
     /** removes max-height cap on .graph-wrap — used by embed context */
     expandHeight?: boolean;
+    /** Force all entity labels to stay centered below nodes instead of lateral auto-placement. */
+    forceLabelsBelow?: boolean;
     /** Optional label for the root asset (passed by some callers, reserved for future use) */
     assetName?: string;
     /** Optional navigation callback — used by dynamic embeds instead of goto() */
@@ -117,6 +121,7 @@
     direction = 'auto',
     fullWidth = false,
     expandHeight = false,
+    forceLabelsBelow = false,
     onNavigate,
   }: Props = $props();
 
@@ -147,6 +152,13 @@
   let gWidth = $state(400);
   let gHeight = $state(300);
   let nodeRanks = $state<Map<string, number>>(new Map());
+
+  // Hidden SVG used to measure real label text widths (Observable notebook's
+  // `measureSvg` pattern). Feeds accurate node widths into the dagre layout
+  // so edges don't cram together when labels are long.
+  let measurerSvg: SVGSVGElement | null = null;
+  let measurerText: SVGTextElement | null = null;
+  const labelWidthCache = new Map<string, number>();
 
   // Placeholder entity IDs to exclude from the graph entirely.
   // These are aggregate/synthetic entries ("small shareholder(s)", "natural person(s)")
@@ -195,7 +207,9 @@
 
     const nodeById = new Map(filteredNodes.map((n) => [n.id, n]));
     const rootNodeId =
-      (nodeById.has(rootId) ? rootId : filteredNodes.find((n) => n.is_root)?.id) || filteredNodes[0]?.id || rootId;
+      (nodeById.has(rootId) ? rootId : filteredNodes.find((n) => n.is_root)?.id) ||
+      filteredNodes[0]?.id ||
+      rootId;
 
     if (!rootNodeId) {
       return {
@@ -224,6 +238,38 @@
 
     const keep = new Set<string>([rootNodeId]);
     const q: string[] = [rootNodeId];
+    const queued = new Set<string>(q);
+    const hasPaths = paths && Object.keys(paths).length > 0;
+
+    if (hasPaths) {
+      const rankedRoutes = Object.values(paths)
+        .flat()
+        .filter((p) => Array.isArray(p?.route) && p.route.length > 1)
+        .sort(
+          (a, b) =>
+            (b.cumulative_pct ?? 0) - (a.cumulative_pct ?? 0) || b.route.length - a.route.length
+        );
+
+      // Prefer keeping complete API-provided routes before breadth-first trimming.
+      // This is less lossy than slicing a wide parent down to its top-N children,
+      // because a lower-share branch may still be the only route to a distinct owner.
+      for (const entry of rankedRoutes) {
+        const routeNodeIds = entry.route.filter((id) => keep.has(id) || nodeById.has(id));
+        if (!routeNodeIds.includes(rootNodeId)) continue;
+
+        const novelIds = routeNodeIds.filter((id) => !keep.has(id));
+        if (novelIds.length === 0) continue;
+        if (keep.size + novelIds.length > MAX_RENDER_NODES) continue;
+
+        for (const id of routeNodeIds) {
+          keep.add(id);
+          if (!queued.has(id)) {
+            q.push(id);
+            queued.add(id);
+          }
+        }
+      }
+    }
 
     while (q.length > 0 && keep.size < MAX_RENDER_NODES) {
       const cur = q.shift()!;
@@ -236,7 +282,10 @@
         const child = edge.target;
         if (!keep.has(child)) {
           keep.add(child);
-          q.push(child);
+          if (!queued.has(child)) {
+            q.push(child);
+            queued.add(child);
+          }
           if (keep.size >= MAX_RENDER_NODES) break;
         }
       }
@@ -284,7 +333,10 @@
     for (const e of renderSubset.edges) {
       if (fadedNodeIds.has(e.source) || fadedNodeIds.has(e.target)) {
         let s = faded.get(e.source);
-        if (!s) { s = new Set(); faded.set(e.source, s); }
+        if (!s) {
+          s = new Set();
+          faded.set(e.source, s);
+        }
         s.add(e.target);
       }
     }
@@ -297,7 +349,10 @@
     fullWidthMode
       ? Math.max(
           LAYOUT.ownershipGraph.minWidth,
-          Math.min(LAYOUT.ownershipGraph.maxWidth, viewportWidth - LAYOUT.ownershipGraph.viewportGutter)
+          Math.min(
+            LAYOUT.ownershipGraph.maxWidth,
+            viewportWidth - LAYOUT.ownershipGraph.viewportGutter
+          )
         )
       : LAYOUT.ownershipGraph.inlineWidth
   );
@@ -382,7 +437,10 @@
     const edgeIndex = new Map<string, Map<string, number>>();
     renderEdges.forEach((e, i) => {
       let m = edgeIndex.get(e.source);
-      if (!m) { m = new Map(); edgeIndex.set(e.source, m); }
+      if (!m) {
+        m = new Map();
+        edgeIndex.set(e.source, m);
+      }
       m.set(e.target, i);
     });
 
@@ -577,7 +635,9 @@
   });
 
   // Lookup original GraphNode for tooltip (by hovered layout node id)
-  const hoveredGraphNode = $derived(hoveredId ? filteredNodes.find((n) => n.id === hoveredId) : null);
+  const hoveredGraphNode = $derived(
+    hoveredId ? filteredNodes.find((n) => n.id === hoveredId) : null
+  );
   const hoveredLayoutNode = $derived(
     hoveredId ? layoutNodes.find((n) => n.id === hoveredId) : null
   );
@@ -609,6 +669,14 @@
     // Label gap and estimated width scale with node radius (tight: just outside visual circle)
     const labelGap = Math.round(nodeR * 0.12);
     const labelW = Math.round(labelMaxChars * 6); // ~6px per char at current font size
+
+    if (forceLabelsBelow) {
+      for (const n of lnodes) {
+        if (n.isAsset) continue;
+        n.labelPos = { dx: 0, dy: nodeR + labelGap, below: true, small: false };
+      }
+      return;
+    }
 
     // Deep-narrow mode: all labels to the right of the node
     if (labelMode === 'deep-narrow') {
@@ -668,6 +736,46 @@
     }
   }
 
+  // Measure label text width by writing wrapped tspans into the hidden
+  // measurer <text> and reading the real SVG bbox. Returns the max tspan
+  // width (since labels may wrap across two lines). Mirrors the Observable
+  // notebook's `dummyText.call(wrapTextTwoLines, ...).node().getBBox().width`.
+  function measureLabelWidth(text: string, max: number): number {
+    if (!text) return 0;
+    const key = `${max}|${text}`;
+    const cached = labelWidthCache.get(key);
+    if (cached !== undefined) return cached;
+    if (!measurerText) {
+      // Fallback heuristic if measurer not mounted yet (SSR or pre-mount).
+      const w = Math.min(text.length * 6, max * 6);
+      return w;
+    }
+    const wrapped = wrapText(text, max);
+    // Rebuild tspans
+    while (measurerText.firstChild) measurerText.removeChild(measurerText.firstChild);
+    const ns = 'http://www.w3.org/2000/svg';
+    const t1 = document.createElementNS(ns, 'tspan');
+    t1.setAttribute('x', '0');
+    t1.textContent = wrapped.line1;
+    measurerText.appendChild(t1);
+    if (wrapped.line2) {
+      const t2 = document.createElementNS(ns, 'tspan');
+      t2.setAttribute('x', '0');
+      t2.setAttribute('dy', '1.1em');
+      t2.textContent = wrapped.line2;
+      measurerText.appendChild(t2);
+    }
+    let w = 0;
+    try {
+      // getBBox on the <text> returns the bounding box covering both tspans
+      w = measurerText.getBBox().width;
+    } catch {
+      w = text.length * 6;
+    }
+    labelWidthCache.set(key, w);
+    return w;
+  }
+
   // Run layout
   function runLayout() {
     if (!dagre || renderNodes.length === 0) return;
@@ -684,9 +792,15 @@
       nodesep: dynamicNodeSep, // Observable: sizeDependantNodeSeparation
       ranksep: compact ? 28 : DAGRE.ranksep,
       edgesep: DAGRE.edgesep,
-      // Reduced from nodeR — GRAPH_MARGIN already adds outer SVG whitespace
-      marginx: compact ? 15 : Math.ceil(nodeR * 0.5),
-      marginy: compact ? 12 : Math.ceil(nodeR * 0.55),
+      // Observable notebook sets marginx/y = nodeRadius. GRAPH_MARGIN adds
+      // additional outer whitespace around the SVG, but dagre's internal
+      // margins are what let edges route around boundary nodes without
+      // clipping arrowheads.
+      marginx: compact ? 15 : nodeR,
+      marginy: compact ? 12 : nodeR,
+      // dagre-d3 (Observable) had internal cycle-breaking; plain dagre needs
+      // this flag or it will throw when cycle-closing edges are included.
+      acyclicer: 'greedy',
     });
     g.setDefaultEdgeLabel(() => ({}));
 
@@ -701,38 +815,50 @@
       }
     });
 
+    // Asset rect is a dagre layout hint; overflow handled by CSS ellipsis.
+    const ASSET_W_MIN = 180;
+    const ASSET_W_MAX = 360;
+    const ASSET_CHAR_W = 9;
+    const ASSET_PAD = 28;
+
+    // Observable notebook's labelPadding (px added between node edge and text)
+    const LABEL_PADDING = 3;
     renderNodes.forEach((n) => {
       const isAsset = n.type === 'asset' || n.id === rootId;
-      // Estimate asset node width from name length (~7.5px per char + padding)
-      // Observable dynamically measures via getBBox; we approximate
       const assetLabel = n.name || n.Name || n.id || '';
-      const estimatedTextW = Math.min(assetLabel.length * 7.5, 300);
-      const assetW = compact ? 120 : Math.max(180, estimatedTextW + 48);
+      const desiredW = assetLabel.length * ASSET_CHAR_W + ASSET_PAD;
+      const assetW = compact ? 120 : Math.max(ASSET_W_MIN, Math.min(ASSET_W_MAX, desiredW));
       const assetH = compact ? 24 : n.asset_type ? 48 : 36;
-      // Observable: include label text width in entity node width for dagre layout
-      // This prevents labels from overlapping adjacent nodes
+      // Observable: use real SVG text measurement so dagre reserves enough
+      // horizontal space for the label — prevents edges from crowding and
+      // labels from overlapping adjacent nodes.
       const entityLabel = n.name || n.Name || n.id || '';
-      const labelTextW = Math.min(entityLabel.length * 6, labelMaxChars * 6) + 5;
-      const entityW = compact ? nodeR * 2 : Math.max(nodeR * 2, labelTextW);
+      const labelTextW = compact
+        ? Math.min(entityLabel.length * 6, labelMaxChars * 6)
+        : measureLabelWidth(entityLabel, labelMaxChars);
+      // Observable: `Math.max(2 * r, labelPadding + textWidth + 5)`
+      const entityW = compact ? nodeR * 2 : Math.max(nodeR * 2, LABEL_PADDING + labelTextW + 5);
       g.setNode(n.id, {
         width: isAsset ? assetW : entityW,
         height: isAsset ? assetH : nodeR * 2,
       });
     });
     // Observable: edge weights influence dagre layout priority
-    // asset edges = 3, both small = 1, one small = 2, normal = 3
-    // Note: cycle-closing edges are excluded from dagre layout to prevent
-    // rank inversions (e.g. Blackrock Advisors appearing below BlackRock).
-    // The Observable notebook's dagre-d3 has internal cycle-breaking that
-    // plain dagre lacks. Paths still include cycle edges (fixed above).
+    // asset edges = 3, both small = 1, one small = 2, normal = 3.
+    // Cycle-closing edges get weight 0 so they don't force rank inversions
+    // (e.g. Blackrock Advisors ending up below BlackRock) but still get
+    // routed — the Observable notebook's dagre-d3 included them via its
+    // internal cycle-breaking; we match that by setting acyclicer: 'greedy'
+    // on the graph and feeding cycle edges in with minimal weight.
     renderEdges.forEach((e) => {
-      if (e.closes_cycle) return;
       const srcIsAsset =
         e.source === rootId || renderNodes.find((n) => n.id === e.source)?.type === 'asset';
       const tgtIsAsset =
         e.target === rootId || renderNodes.find((n) => n.id === e.target)?.type === 'asset';
       let weight = 3;
-      if (!srcIsAsset && !tgtIsAsset) {
+      if (e.closes_cycle) {
+        weight = 0;
+      } else if (!srcIsAsset && !tgtIsAsset) {
         const srcSmall = smallOwnershipSet.has(e.source);
         const tgtSmall = smallOwnershipSet.has(e.target);
         if (srcSmall && tgtSmall) weight = 1;
@@ -758,7 +884,10 @@
     const edgeByKey = new Map<string, Map<string, (typeof renderEdges)[0]>>();
     for (const e of renderEdges) {
       let m = edgeByKey.get(e.source);
-      if (!m) { m = new Map(); edgeByKey.set(e.source, m); }
+      if (!m) {
+        m = new Map();
+        edgeByKey.set(e.source, m);
+      }
       m.set(e.target, e);
     }
 
@@ -803,29 +932,31 @@
     // Build a lookup from layout nodes for edge trimming
     const layoutNodeById = new Map(rawLayoutNodes.map((n) => [n.id, n]));
 
+    // Node stroke is 1.5 for small-ownership, 4 for normal; half = arrow-tip inset.
+    const strokeHalfFor = (n: LayoutNode) => (n.isSmallOwnership ? 0.75 : 2);
+    const trimRadiusFor = (n: LayoutNode) => (n.isAsset ? 0 : n.visualR + strokeHalfFor(n));
+
+    const trimFromStart = (pts: LayoutPoint[], n: LayoutNode) =>
+      trimEdgeToNode(pts, n.x, n.y, trimRadiusFor(n), n.isAsset, n.w, n.h);
+
+    const trimFromEnd = (pts: LayoutPoint[], n: LayoutNode) =>
+      trimFromStart([...pts].reverse(), n).reverse();
+
     layoutEdges = g.edges().map((e: DagreEdge) => {
       const orig = edgeByKey.get(e.v)?.get(e.w);
       let pts: LayoutPoint[] = g.edge(e).points;
-      // Trim edge endpoints to circle/rect boundary instead of dagre bounding box
+      // dagre points go source→target; trim each end to its own node boundary.
       const srcNode = layoutNodeById.get(e.v);
       const tgtNode = layoutNodeById.get(e.w);
-      if (tgtNode) {
-        // Use visualR (actual drawn circle radius) so arrows touch the visible circle
-        const trimR = tgtNode.isAsset ? 0 : (tgtNode.visualR + 2); // +2 for stroke
-        pts = trimEdgeToNode(pts, tgtNode.x, tgtNode.y, trimR, tgtNode.isAsset, tgtNode.w, tgtNode.h);
-      }
-      if (srcNode) {
-        const trimR = srcNode.isAsset ? 0 : (srcNode.visualR + 2);
-        const rev = [...pts].reverse();
-        const trimmed = trimEdgeToNode(rev, srcNode.x, srcNode.y, trimR, srcNode.isAsset, srcNode.w, srcNode.h);
-        pts = trimmed.reverse();
-      }
+      if (srcNode) pts = trimFromStart(pts, srcNode);
+      if (tgtNode) pts = trimFromEnd(pts, tgtNode);
       return {
         source: e.v,
         target: e.w,
         points: pts,
         value: orig?.value || 0,
         imputed_share: orig?.imputed_share || false,
+        closes_cycle: orig?.closes_cycle || false,
       };
     });
 
@@ -940,7 +1071,10 @@
     if (ev) updateTooltipPos(ev);
   }
   // Bridge functions for OwnershipPanel callbacks
-  function handlePanelHover(id: string, data: { nodesTouched: string[]; edgeIndices: number[] } | null) {
+  function handlePanelHover(
+    id: string,
+    data: { nodesTouched: string[]; edgeIndices: number[] } | null
+  ) {
     hoverSource = 'panel';
     hoveredId = id;
     hoveredNodeData = data;
@@ -1055,7 +1189,11 @@
 
   function endPan(ev?: PointerEvent) {
     if (ev) {
-      try { (ev.currentTarget as Element)?.releasePointerCapture?.(ev.pointerId); } catch { /* no active capture */ }
+      try {
+        (ev.currentTarget as Element)?.releasePointerCapture?.(ev.pointerId);
+      } catch {
+        /* no active capture */
+      }
       // If pointer barely moved, treat as a background click → clear selection
       const dx = Math.abs(ev.clientX - panStartX);
       const dy = Math.abs(ev.clientY - panStartY);
@@ -1263,7 +1401,10 @@
     // Restore state from URL hash (only when not in compact mode)
     if (!compact) {
       const h = readTreeHash();
-      if (h.color) { colorMode = h.color; hashInitializedColor = true; }
+      if (h.color) {
+        colorMode = h.color;
+        hashInitializedColor = true;
+      }
       if (h.min != null) minOwnershipPct = h.min;
       if (h.focus) frozenId = h.focus;
     }
@@ -1320,6 +1461,13 @@
   });
 </script>
 
+<!-- Hidden SVG used to measure real label text widths for dagre layout.
+     Rendered outside the main chart so getBBox() returns the true pixel
+     width of the label under the active font/letter-spacing. -->
+<svg bind:this={measurerSvg} class="label-measurer" aria-hidden="true" width="0" height="0">
+  <text bind:this={measurerText} class="node-lbl" x="0" y="0"></text>
+</svg>
+
 <div class="ownership-tree" class:compact class:full-width={fullWidthMode}>
   {#if !ready}
     <div class="msg">Loading...</div>
@@ -1332,9 +1480,9 @@
           <div class="graph-controls">
             {#if isTrimmedGraph}
               <div class="density-note">
-                Showing {renderNodes.length.toLocaleString()} of {filteredNodes.length.toLocaleString()} entities
-                ({hiddenNodeCount.toLocaleString()} hidden, {hiddenEdgeCount.toLocaleString()} edges
-                hidden) for responsive rendering.
+                Showing {renderNodes.length.toLocaleString()} of {filteredNodes.length.toLocaleString()}
+                entities ({hiddenNodeCount.toLocaleString()} hidden, {hiddenEdgeCount.toLocaleString()}
+                edges hidden) for responsive rendering.
               </div>
             {/if}
             {#if uniqueEntityTypes > 1 && uniqueCountries > 1}
@@ -1412,48 +1560,62 @@
           {#if frozenMeta}
             {@const rootNode = filteredNodes.find((n) => n.id === rootId)}
             {@const rootName = rootNode?.name || rootNode?.Name || rootId}
-            {@const frozenNode = nodes.find((n) => n.id === frozenId)}
             {@const immediateOwners = (() => {
-                // Edges are always source=owner → target=owned.
-                // So X's owners are e.source where e.target===X.
-                const real = filteredEdges
-                  .filter((e) => e.target === frozenId)
-                  .map((e) => {
-                    const ownerNode = nodes.find((n) => n.id === e.source);
-                    return {
-                      id: ownerNode?.id ?? null,
-                      name: ownerNode?.name || ownerNode?.Name || e.source,
+              // Edges are always source=owner → target=owned.
+              // So X's owners are e.source where e.target===X.
+              const real = filteredEdges
+                .filter((e) => e.target === frozenId)
+                .map((e) => {
+                  const ownerNode = nodes.find((n) => n.id === e.source);
+                  return {
+                    id: ownerNode?.id ?? null,
+                    name: ownerNode?.name || ownerNode?.Name || e.source,
+                    pct: e.value != null ? Number(e.value) : null,
+                    isProxy: false as const,
+                  };
+                });
+              // Proxy entities are filtered out of filteredEdges, so check raw edges.
+              const proxy = edges
+                .filter((e) => e.target === frozenId)
+                .flatMap((e) => {
+                  const ownerNode = nodes.find((n) => n.id === e.source);
+                  const eid = ownerNode?.entity_id || e.source;
+                  const proxyName =
+                    eid === PROXY_SMALL_SH
+                      ? 'small shareholders'
+                      : eid === PROXY_NAT_PERSON
+                        ? 'natural persons'
+                        : eid === PROXY_UNKNOWN
+                          ? 'unknown'
+                          : null;
+                  if (!proxyName) return [];
+                  return [
+                    {
+                      id: null,
+                      name: proxyName,
                       pct: e.value != null ? Number(e.value) : null,
-                      isProxy: false as const,
-                    };
-                  });
-                // Proxy entities are filtered out of filteredEdges, so check raw edges.
-                const proxy = edges
-                  .filter((e) => e.target === frozenId)
-                  .flatMap((e) => {
-                    const ownerNode = nodes.find((n) => n.id === e.source);
-                    const eid = ownerNode?.entity_id || e.source;
-                    const proxyName =
-                      eid === PROXY_SMALL_SH ? 'small shareholders' :
-                      eid === PROXY_NAT_PERSON ? 'natural persons' :
-                      eid === PROXY_UNKNOWN ? 'unknown' : null;
-                    if (!proxyName) return [];
-                    return [{ id: null, name: proxyName, pct: e.value != null ? Number(e.value) : null, isProxy: true as const }];
-                  });
-                return [...real, ...proxy]
-                  .filter((o) => o.pct == null || o.pct > 0)
-                  .sort((a, b) => (b.pct ?? 0) - (a.pct ?? 0));
-              })()}
+                      isProxy: true as const,
+                    },
+                  ];
+                });
+              return [...real, ...proxy]
+                .filter((o) => o.pct == null || o.pct > 0)
+                .sort((a, b) => (b.pct ?? 0) - (a.pct ?? 0));
+            })()}
             <div class="focus-indicator">
               <div class="focus-copy">
                 {#if frozenMeta.kind === 'entity' && frozenMeta.entityId}
                   <p class="focus-sentence">
                     <strong>{frozenMeta.label}</strong>
                     is a <span class="focus-fact">{frozenMeta.entityType || 'entity'}</span>
-                    {#if frozenMeta.country}based in <span class="focus-fact">{frozenMeta.country}</span>{/if}
+                    {#if frozenMeta.country}based in <span class="focus-fact"
+                        >{frozenMeta.country}</span
+                      >{/if}
                     <span class="focus-fact id">{frozenMeta.entityId}</span>
                     {#if frozenMeta.cumulativePct}
-                      with <span class="focus-fact pct">{frozenMeta.cumulativePct.toFixed(1)}%</span> cumulative ownership of {rootName}.
+                      with <span class="focus-fact pct">{frozenMeta.cumulativePct.toFixed(1)}%</span
+                      >
+                      cumulative ownership of {rootName}.
                     {/if}
                   </p>
                   {#if immediateOwners.length > 0}
@@ -1464,9 +1626,20 @@
                           class="focus-fact"
                           class:warn={owner.isProxy}
                           class:hoverable={!owner.isProxy && owner.id != null}
-                          onmouseenter={() => { if (!owner.isProxy && owner.id != null) { hoveredId = owner.id; hoverSource = 'panel'; } }}
-                          onmouseleave={() => { if (!owner.isProxy && owner.id != null) { hoveredId = null; hoverSource = null; } }}
-                        >{owner.pct != null ? owner.pct.toFixed(1) + '% ' : ''}{owner.name}</span>
+                          onmouseenter={() => {
+                            if (!owner.isProxy && owner.id != null) {
+                              hoveredId = owner.id;
+                              hoverSource = 'panel';
+                            }
+                          }}
+                          onmouseleave={() => {
+                            if (!owner.isProxy && owner.id != null) {
+                              hoveredId = null;
+                              hoverSource = null;
+                            }
+                          }}
+                          >{owner.pct != null ? owner.pct.toFixed(1) + '% ' : ''}{owner.name}</span
+                        >
                       {/each}
                     </p>
                   {/if}
@@ -1474,8 +1647,13 @@
                     <a
                       class="focus-profile-link"
                       href={entityLink(frozenMeta.entityId)}
-                      onclick={(e) => { if (onNavigate) { e.preventDefault(); onNavigate(entityLink(frozenMeta.entityId!)); } }}
-                    >View full profile &rarr;</a>
+                      onclick={(e) => {
+                        if (onNavigate) {
+                          e.preventDefault();
+                          onNavigate(entityLink(frozenMeta.entityId!));
+                        }
+                      }}>View full profile &rarr;</a
+                    >
                   {/if}
                 {:else}
                   <span class="focus-label">
@@ -1495,8 +1673,13 @@
                     <a
                       class="focus-profile-link"
                       href={assetLink(frozenId)}
-                      onclick={(e) => { if (onNavigate) { e.preventDefault(); onNavigate(assetLink(frozenId!)); } }}
-                    >View asset profile &rarr;</a>
+                      onclick={(e) => {
+                        if (onNavigate) {
+                          e.preventDefault();
+                          onNavigate(assetLink(frozenId!));
+                        }
+                      }}>View asset profile &rarr;</a
+                    >
                   {/if}
                 {/if}
               </div>
@@ -1622,7 +1805,10 @@
               {#each layoutNodes as n (n.id)}
                 {@const showLabel = shouldShowLabel(n)}
                 {@const pos = n.labelPos || { dx: 0, dy: nodeR + 8, below: false, small: false }}
-                {@const wrapped = wrapText(n.label, pos.small ? Math.min(labelMaxChars, 10) : labelMaxChars)}
+                {@const wrapped = wrapText(
+                  n.label,
+                  pos.small ? Math.min(labelMaxChars, 10) : labelMaxChars
+                )}
                 {@const isFaded = fadedNodeIds.has(n.id)}
                 {@const opacity = getNodeOpacity(n)}
                 <g
@@ -1657,23 +1843,20 @@
                       fill={C.teal}
                       stroke="none"
                     />
-                    {@const maxChars = Math.max(18, Math.floor(n.w / 7.5))}
-                    {@const displayLabel =
-                      n.label.length > maxChars
-                        ? n.label.slice(0, maxChars - 1).trim() + '…'
-                        : n.label}
-                    {#if assetType && !compact}
-                      <text class="asset-sub-lbl" fill={C.mint} dy="-0.6em">{assetType}</text>
-                      <text class="asset-main-lbl" fill="white" dy="0.7em">{displayLabel}</text>
-                    {:else}
-                      <text class="asset-main-lbl" fill="white" dy="0"
-                        >{compact
-                          ? n.label.length > Math.floor(n.w / 6)
-                            ? n.label.slice(0, Math.floor(n.w / 6) - 1).trim() + '…'
-                            : n.label
-                          : displayLabel}</text
-                      >
-                    {/if}
+                    <foreignObject
+                      x={-n.w / 2}
+                      y={-n.h / 2}
+                      width={n.w}
+                      height={n.h}
+                      style="pointer-events: none;"
+                    >
+                      <div class="asset-card" class:compact class:has-sub={assetType && !compact}>
+                        {#if assetType && !compact}
+                          <div class="asset-sub" style="color: {C.mint}">{assetType}</div>
+                        {/if}
+                        <div class="asset-main">{n.label}</div>
+                      </div>
+                    </foreignObject>
                   {:else}
                     {@const nodeColors = getNodeColors(
                       n.id,
@@ -1789,7 +1972,10 @@
           onLeave={handleNodeLeave}
           onFreeze={handlePanelFreeze}
           onTogglePanel={() => (panelOpen = !panelOpen)}
-          onChangeColorMode={(mode) => { colorMode = mode; hashInitializedColor = true; }}
+          onChangeColorMode={(mode) => {
+            colorMode = mode;
+            hashInitializedColor = true;
+          }}
           {isNodeInFrozenPath}
           bind:minOwnershipPct
           showSlider={renderSubset.nodes.length > 5}
@@ -1821,6 +2007,20 @@
 </div>
 
 <style>
+  /* Off-screen SVG that hosts the hidden measurement <text>. It must still
+     lay out (for getBBox()) — width/height 0 + overflow visible is enough,
+     but we position it absolute so it never participates in flow. */
+  .label-measurer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 0;
+    height: 0;
+    overflow: visible;
+    pointer-events: none;
+    visibility: hidden;
+  }
+
   .ownership-tree {
     container-type: inline-size;
     /* Tree graph color tokens — sourced from design-tokens.ts ownershipColors */
@@ -1910,7 +2110,6 @@
   .compact .container {
     gap: 0;
   }
-  .compact .asset-main-lbl,
   .compact .node-lbl {
     font-size: 10px;
   }
@@ -1989,23 +2188,52 @@
   .node.in-chain circle {
     stroke-width: 2;
   }
-  .asset-sub-lbl,
-  .asset-main-lbl,
   .node-lbl {
     text-anchor: middle;
     dominant-baseline: middle;
     pointer-events: none;
   }
-  .asset-sub-lbl {
-    font-size: 0.6em;
+  .asset-card {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 14px;
+    gap: 2px;
+    box-sizing: border-box;
+    color: #fff;
+    font-family: inherit;
+    text-align: center;
+    pointer-events: none;
+  }
+  .asset-card.compact {
+    padding: 2px 8px;
+  }
+  .asset-sub {
+    font-size: 10px;
     text-transform: uppercase;
     font-weight: 700;
     letter-spacing: 0.075em;
+    line-height: 1;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
-  .asset-main-lbl {
-    font-size: 1em;
+  .asset-main {
+    font-size: 16px;
     font-weight: 500;
     letter-spacing: 0.02em;
+    line-height: 1.2;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .asset-card.compact .asset-main {
+    font-size: 11px;
   }
   .node-lbl {
     font-size: 0.82rem;
@@ -2104,7 +2332,9 @@
   }
   .focus-fact.hoverable {
     cursor: pointer;
-    transition: background 120ms ease, border-color 120ms ease;
+    transition:
+      background 120ms ease,
+      border-color 120ms ease;
   }
   .focus-fact.hoverable:hover {
     background: rgba(0, 79, 97, 0.2);

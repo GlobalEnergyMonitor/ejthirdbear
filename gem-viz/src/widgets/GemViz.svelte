@@ -21,7 +21,7 @@
     'ownership-flower': GemOwnershipFlower,
     'ownership-graph': GemOwnershipGraph,
     'asset-ring': GemAssetRing,
-    'factsheet': GemTrackerFactsheet,
+    factsheet: GemTrackerFactsheet,
     'tracker-factsheet': GemTrackerFactsheet,
     'asset-search': GemAssetSearch,
   };

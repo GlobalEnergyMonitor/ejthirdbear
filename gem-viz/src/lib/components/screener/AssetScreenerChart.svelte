@@ -14,11 +14,7 @@
     statusColorsProspective,
     prospectiveStatuses,
   } from '$lib/design-tokens';
-  import {
-    fetchChartData,
-    expandSubsidiary,
-    buildSubsidiaryGroups,
-  } from './screener-chart-data';
+  import { fetchChartData, expandSubsidiary, buildSubsidiaryGroups } from './screener-chart-data';
   import type { LocationGroup } from './screener-chart-data';
   import { renderChart } from './screener-chart-render';
   import { cleanAssetName } from './screener-utils';
@@ -26,7 +22,8 @@
   import { matchesStatusFilter, getStatusGroupId } from '$lib/data-config/tracker-schema';
   import Spinner from '$lib/components/feedback/Spinner.svelte';
 
-  const API_BASE = import.meta.env?.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-api.thirdbear.net';
+  const API_BASE =
+    import.meta.env?.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-api.thirdbear.net';
 
   // Props
   let {
@@ -181,13 +178,21 @@
 
   $effect(() => {
     const locId = selectedAsset?.locationID;
-    if (!locId || !classFieldKeys.length) { classFieldData = null; locationUnits = null; return; }
+    if (!locId || !classFieldKeys.length) {
+      classFieldData = null;
+      locationUnits = null;
+      return;
+    }
     console.log('[AssetScreenerChart] class field keys:', classFieldKeys);
     fetch(`${API_BASE}/locations/${encodeURIComponent(locId)}?format=json`)
-      .then((r) => r.ok ? r.json() : null)
+      .then((r) => (r.ok ? r.json() : null))
       .then((d: { units?: Record<string, unknown>[] } | null) => {
         console.log('[AssetScreenerChart] /locations/ response:', d);
-        if (!d?.units) { classFieldData = null; locationUnits = null; return; }
+        if (!d?.units) {
+          classFieldData = null;
+          locationUnits = null;
+          return;
+        }
         const map = new Map<string, Record<string, unknown>>();
         for (const u of d.units) {
           if (typeof u.asset_id === 'string') map.set(u.asset_id, u);
@@ -195,7 +200,10 @@
         classFieldData = map;
         locationUnits = d.units;
       })
-      .catch(() => { classFieldData = null; locationUnits = null; });
+      .catch(() => {
+        classFieldData = null;
+        locationUnits = null;
+      });
   });
 
   /** Find the tracker-specific nested fields object (key ends with _fields, e.g. iron_steel_plant_fields). */
@@ -314,16 +322,20 @@
     if (!parentUnits?.length) {
       for (const [, exp] of expansions) {
         const found = findSubGroupUnits(entityId, exp.subGroups);
-        if (found) { parentUnits = found; break; }
+        if (found) {
+          parentUnits = found;
+          break;
+        }
       }
     }
     if (!parentUnits?.length) return;
 
     const expansion = expandSubsidiary(
-      entityId, parentUnits,
+      entityId,
+      parentUnits,
       currentChartData.graphNodeMap,
       currentChartData.graphPaths,
-      currentChartData.graphEdgeMap,
+      currentChartData.graphEdgeMap
     );
     const next = new Map(expansions);
     next.set(scopedKey, expansion);
@@ -518,8 +530,8 @@
       <p class="subtitle">Details</p>
       <p class="company-details">
         {#if filteredProjectCount != null}
-          {filteredProjectCount} matched {filteredProjectCount === 1 ? 'asset' : 'assets'} ({assetClassName}) 
-          {#if filteredProjectCount < matchedAssets}          
+          {filteredProjectCount} matched {filteredProjectCount === 1 ? 'asset' : 'assets'} ({assetClassName})
+          {#if filteredProjectCount < matchedAssets}
             with {matchedAssets} {matchedAssets === 1 ? 'unit' : 'units'}
           {/if}
         {:else}
@@ -593,7 +605,8 @@
           {/if}
         </div>
         <div class="tt-meta">
-          {node0?.asset_type || u0.tracker || ''}{#if node0?.country} · {node0.country}{/if}
+          {node0?.asset_type || u0.tracker || ''}{#if node0?.country}
+            · {node0.country}{/if}
         </div>
         {#if pct > 1 && pct < 100}
           <div class="tt-eff" style="margin-bottom:6px">
@@ -619,9 +632,7 @@
                 <tr>
                   <td class="unit-name">{locUnit.asset_name ?? '—'}</td>
                   <td>
-                    <span
-                      class="status-dot"
-                      style="background:{statusColors[statusAgg] || '#999'}"
+                    <span class="status-dot" style="background:{statusColors[statusAgg] || '#999'}"
                     ></span>{locUnit.operating_status ?? '—'}
                   </td>
                   <td class="num">
@@ -662,8 +673,8 @@
           class="asset-link"
           href="{base}/asset/{encodeURIComponent(u0.id)}"
           target="_blank"
-          rel="noopener"
-        >View full asset page &rarr;</a>
+          rel="noopener">View full asset page &rarr;</a
+        >
       </div>
     </div>
   {/if}
@@ -999,8 +1010,12 @@
     margin-top: 1px;
   }
   @keyframes tt-in {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
 
   /* ---- Click modal ---- */
@@ -1037,7 +1052,9 @@
     padding: 2px 6px;
     border-radius: 4px;
   }
-  .modal-close:hover { color: #333; }
+  .modal-close:hover {
+    color: #333;
+  }
   .modal-header {
     display: flex;
     align-items: center;
@@ -1079,7 +1096,9 @@
     color: #aaa;
     padding: 4px 6px 3px 0;
   }
-  .tt-table th.num { text-align: right; }
+  .tt-table th.num {
+    text-align: right;
+  }
   .tt-table td {
     padding: 3px 12px 3px 0;
     color: #333;
@@ -1115,5 +1134,7 @@
     text-decoration: none;
     font-weight: 500;
   }
-  .asset-link:hover { text-decoration: underline; }
+  .asset-link:hover {
+    text-decoration: underline;
+  }
 </style>

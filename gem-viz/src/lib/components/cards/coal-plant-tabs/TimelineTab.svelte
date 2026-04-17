@@ -170,11 +170,7 @@
           {@const fadeW = Math.min(20, rightEdgeX - solidEndX)}
           {@const fadeStart = rightEdgeX - fadeW}
           {@const barColor =
-            row.status === 'mothballed'
-              ? '#bbb'
-              : row.status === 'operating'
-                ? '#111'
-                : '#CA4A50'}
+            row.status === 'mothballed' ? '#bbb' : row.status === 'operating' ? '#111' : '#CA4A50'}
           <linearGradient
             id="grad-open-{i}"
             x1={fadeStart}
@@ -192,11 +188,8 @@
 
     <!-- Grid lines and axis labels -->
     {#each timeline.ticks as tick}
-      <text
-        x={TL.labelW + tick.x}
-        y={TL.axisH - 8}
-        class="tl-axis-label"
-        text-anchor="middle">{tick.year}</text
+      <text x={TL.labelW + tick.x} y={TL.axisH - 8} class="tl-axis-label" text-anchor="middle"
+        >{tick.year}</text
       >
       <line
         x1={TL.labelW + tick.x}
@@ -222,22 +215,13 @@
       {@const barY = rowY + (TL.rowH - TL.barH) / 2}
       {@const dimmed = hoveredRowIndex !== null && hoveredRowIndex !== i}
 
-      <g
-        pointer-events="none"
-        style="opacity: {dimmed ? 0.15 : 1}; transition: opacity 0.15s;"
-      >
+      <g pointer-events="none" style="opacity: {dimmed ? 0.15 : 1}; transition: opacity 0.15s;">
         <!-- Label: unit name + capacity -->
-        <text
-          x={TL.labelW - 8}
-          y={rowY + TL.rowH * 0.38}
-          class="tl-unit-name"
-          text-anchor="end">{row.unitName}</text
+        <text x={TL.labelW - 8} y={rowY + TL.rowH * 0.38} class="tl-unit-name" text-anchor="end"
+          >{row.unitName}</text
         >
-        <text
-          x={TL.labelW - 8}
-          y={rowY + TL.rowH * 0.65}
-          class="tl-unit-cap"
-          text-anchor="end">{row.capacity} MW</text
+        <text x={TL.labelW - 8} y={rowY + TL.rowH * 0.65} class="tl-unit-cap" text-anchor="end"
+          >{row.capacity} MW</text
         >
 
         <!-- Bar or dot -->
@@ -303,8 +287,7 @@
               >{capitalize(row.status)}</span
             >
             {#if row.plannedRetirement}
-              <span class="tl-planned-note"
-                >Planned retirement<br />in {row.plannedRetirement}</span
+              <span class="tl-planned-note">Planned retirement<br />in {row.plannedRetirement}</span
               >
             {/if}
           </div>

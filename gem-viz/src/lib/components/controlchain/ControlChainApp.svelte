@@ -24,7 +24,11 @@
   let { initialQuery = '', initialType: _initialType = 'all', onStateChange } = $props();
 
   const modes = [
-    { id: 'assets', label: 'Assets', placeholder: 'Search assets by name, ID, owner, or country...' },
+    {
+      id: 'assets',
+      label: 'Assets',
+      placeholder: 'Search assets by name, ID, owner, or country...',
+    },
   ];
 
   const examples = [
@@ -45,30 +49,32 @@
 
   let selected = $state(null);
   /** Location-level graph response; null while loading or before any selection. */
-  let locationResponse = $state(/** @type {import('$lib/ownership-api').LocationOwnershipGraphResponse | null} */ (null));
+  let locationResponse = $state(
+    /** @type {import('$lib/ownership-api').LocationOwnershipGraphResponse | null} */ (null)
+  );
   let loadingTree = $state(false);
   let treeError = $state('');
   let modalOpen = $state(false);
 
   // ── Filter state ──────────────────────────────────────────────────────────
   let filterAssetTypes = $state(/** @type {string[]} */ ([]));
-  let filterCountries  = $state(/** @type {string[]} */ ([]));
-  let filterStatuses   = $state(/** @type {string[]} */ ([]));
-  let openPicker   = $state(/** @type {string|null} */ (null));
-  let shownFields  = $state(/** @type {string[]} */ (['asset_type']));
-  let countryOptions  = $state(/** @type {string[]} */ ([]));
+  let filterCountries = $state(/** @type {string[]} */ ([]));
+  let filterStatuses = $state(/** @type {string[]} */ ([]));
+  let openPicker = $state(/** @type {string|null} */ (null));
+  let shownFields = $state(/** @type {string[]} */ (['asset_type']));
+  let countryOptions = $state(/** @type {string[]} */ ([]));
   let countrySearch = $state('');
 
   /** Maps display labels → API slugs for asset_type */
   const ASSET_TYPE_SLUG = {
-    'Coal Plant':        'coal-plant',
-    'Oil & Gas Plant':   'oil-gas-plant',
-    'Bioenergy Plant':   'bioenergy-plant',
-    'Gas Pipeline':      'gas-pipeline',
-    'Cement Plant':      'cement-plant',
-    'Oil Pipeline':      'oil-pipeline',
-    'Iron & Steel Plant':'iron-steel-plant',
-    'Iron Ore Mine':     'iron-ore-mine',
+    'Coal Plant': 'coal-plant',
+    'Oil & Gas Plant': 'oil-gas-plant',
+    'Bioenergy Plant': 'bioenergy-plant',
+    'Gas Pipeline': 'gas-pipeline',
+    'Cement Plant': 'cement-plant',
+    'Oil Pipeline': 'oil-pipeline',
+    'Iron & Steel Plant': 'iron-steel-plant',
+    'Iron Ore Mine': 'iron-ore-mine',
   };
   const ASSET_TYPE_LABELS = Object.keys(ASSET_TYPE_SLUG);
 
@@ -76,26 +82,28 @@
 
   const FILTER_FIELDS = [
     { key: 'asset_type', label: 'Asset type', phrase: 'of type' },
-    { key: 'country',    label: 'Country',    phrase: 'in' },
-    { key: 'status',     label: 'Status',     phrase: 'that are' },
+    { key: 'country', label: 'Country', phrase: 'in' },
+    { key: 'status', label: 'Status', phrase: 'that are' },
   ];
 
   const sentenceFilters = $derived({
     asset_type: filterAssetTypes,
-    country:    filterCountries,
-    status:     filterStatuses,
+    country: filterCountries,
+    status: filterStatuses,
   });
   const filtersDirty = $derived(
     filterAssetTypes.length > 0 || filterCountries.length > 0 || filterStatuses.length > 0
   );
   const filteredCountryOptions = $derived(
     countrySearch
-      ? countryOptions.filter(c => c.toLowerCase().includes(countrySearch.toLowerCase()))
+      ? countryOptions.filter((c) => c.toLowerCase().includes(countrySearch.toLowerCase()))
       : countryOptions
   );
 
   // Reset country search when picker closes
-  $effect(() => { if (openPicker !== 'country') countrySearch = ''; });
+  $effect(() => {
+    if (openPicker !== 'country') countrySearch = '';
+  });
 
   // Mobile summary: data-driven sentences derived from the first graph's data
   const mobileSummary = $derived.by(() => {
@@ -152,7 +160,9 @@
     );
 
     if (locationResponse.distinct_graphs > 1) {
-      lines.push(`This location has ${locationResponse.distinct_graphs} distinct ownership structures across ${locationResponse.unit_count} units.`);
+      lines.push(
+        `This location has ${locationResponse.distinct_graphs} distinct ownership structures across ${locationResponse.unit_count} units.`
+      );
     } else if (locationResponse.unit_count > 1) {
       lines.push(`All ${locationResponse.unit_count} units share identical ownership.`);
     }
@@ -171,9 +181,7 @@
     if (typeStr) lines.push(`By type: ${typeStr}.`);
 
     if (topCountries.length > 0) {
-      const countryStr = topCountries
-        .map(([c, n]) => `${c} (${n})`)
-        .join(', ');
+      const countryStr = topCountries.map(([c, n]) => `${c} (${n})`).join(', ');
       lines.push(`By headquarters: ${countryStr}.`);
     }
 
@@ -229,7 +237,14 @@
         const locationId = getLocationId(hashId);
         const asset = await getAsset(locationId);
         if (asset) {
-          selectResult({ id: locationId, name: asset.name, status: asset.status, country: asset.country, facilityType: asset.facilityType, capacity: asset.capacity });
+          selectResult({
+            id: locationId,
+            name: asset.name,
+            status: asset.status,
+            country: asset.country,
+            facilityType: asset.facilityType,
+            capacity: asset.capacity,
+          });
         }
       } catch {
         // invalid deep-link, ignore
@@ -242,11 +257,15 @@
     // Re-open modal when hash changes (e.g. browser back/forward or programmatic nav)
     window.addEventListener('hashchange', openFromHash);
     // Fetch country options for the country picker
-    listAssets({ limit: 1, facets: true }).then((res) => {
-      if (res.facets?.country) {
-        countryOptions = Object.keys(res.facets.country).sort();
-      }
-    }).catch(() => { /* non-fatal */ });
+    listAssets({ limit: 1, facets: true })
+      .then((res) => {
+        if (res.facets?.country) {
+          countryOptions = Object.keys(res.facets.country).sort();
+        }
+      })
+      .catch(() => {
+        /* non-fatal */
+      });
     return () => window.removeEventListener('hashchange', openFromHash);
   });
 
@@ -255,9 +274,9 @@
     const type = searchType;
     // Spread all filter arrays unconditionally so every array is tracked as a
     // reactive dependency regardless of short-circuit evaluation order.
-    const nTypes     = filterAssetTypes.length;
+    const nTypes = filterAssetTypes.length;
     const nCountries = filterCountries.length;
-    const nStatuses  = filterStatuses.length;
+    const nStatuses = filterStatuses.length;
     const hasFilters = nTypes > 0 || nCountries > 0 || nStatuses > 0;
     clearTimeout(debounceTimer);
     if ((!q || q.length < 2) && !hasFilters) {
@@ -284,9 +303,9 @@
 
   async function doSearch(q, _type) {
     // Snapshot reactive arrays into plain arrays to avoid proxy issues in buildQuery
-    const countries  = Array.from(filterCountries);
-    const types      = Array.from(filterAssetTypes);
-    const statuses   = Array.from(filterStatuses);
+    const countries = Array.from(filterCountries);
+    const types = Array.from(filterAssetTypes);
+    const statuses = Array.from(filterStatuses);
 
     const hasFilters = types.length > 0 || countries.length > 0 || statuses.length > 0;
     if ((!q || q.length < 2) && !hasFilters) {
@@ -303,7 +322,7 @@
       const merged = [];
       const seenLocationIds = new Set();
       const unitCounts = new Map(); // locationId → unit count seen in this search batch
-      const typesToSearch    = types.length   > 0 ? types.map(l => ASSET_TYPE_SLUG[l]) : [undefined];
+      const typesToSearch = types.length > 0 ? types.map((l) => ASSET_TYPE_SLUG[l]) : [undefined];
       const statusesToSearch = statuses.length > 0 ? statuses : [undefined];
       const countryParam = countries.length > 0 ? countries : undefined;
 
@@ -351,40 +370,40 @@
   function toggleAssetType(label) {
     query = '';
     filterAssetTypes = filterAssetTypes.includes(label)
-      ? filterAssetTypes.filter(v => v !== label)
+      ? filterAssetTypes.filter((v) => v !== label)
       : [...filterAssetTypes, label];
   }
 
   function toggleCountry(country) {
     query = '';
     filterCountries = filterCountries.includes(country)
-      ? filterCountries.filter(v => v !== country)
+      ? filterCountries.filter((v) => v !== country)
       : [...filterCountries, country];
   }
 
   function toggleStatus(s) {
     query = '';
     filterStatuses = filterStatuses.includes(s)
-      ? filterStatuses.filter(v => v !== s)
+      ? filterStatuses.filter((v) => v !== s)
       : [...filterStatuses, s];
   }
 
   function handleRemoveFilterValue(key, val) {
-    if (key === 'asset_type') filterAssetTypes = filterAssetTypes.filter(v => v !== val);
-    else if (key === 'country')    filterCountries = filterCountries.filter(v => v !== val);
-    else if (key === 'status')     filterStatuses  = filterStatuses.filter(v => v !== val);
+    if (key === 'asset_type') filterAssetTypes = filterAssetTypes.filter((v) => v !== val);
+    else if (key === 'country') filterCountries = filterCountries.filter((v) => v !== val);
+    else if (key === 'status') filterStatuses = filterStatuses.filter((v) => v !== val);
   }
 
   function handleRemoveFilterField(key) {
     if (key === 'asset_type') filterAssetTypes = [];
-    else if (key === 'country')    filterCountries = [];
-    else if (key === 'status')     filterStatuses  = [];
+    else if (key === 'country') filterCountries = [];
+    else if (key === 'status') filterStatuses = [];
   }
 
   function handleClearFilters() {
     filterAssetTypes = [];
-    filterCountries  = [];
-    filterStatuses   = [];
+    filterCountries = [];
+    filterStatuses = [];
   }
 
   function handleSearch(q, mode) {
@@ -466,7 +485,11 @@
       isDirty={filtersDirty}
       bind:openPicker
       bind:shownFields
-      panelTitles={{ country: 'Select countries', asset_type: 'Select asset types', status: 'Select statuses' }}
+      panelTitles={{
+        country: 'Select countries',
+        asset_type: 'Select asset types',
+        status: 'Select statuses',
+      }}
       columnPickerKeys={['country']}
       onRemoveValue={handleRemoveFilterValue}
       onRemoveField={handleRemoveFilterField}
@@ -481,16 +504,16 @@
             <button
               class="cc-filter-pill"
               class:active={filterAssetTypes.includes(label)}
-              onclick={() => toggleAssetType(label)}
-            >{label}</button>
+              onclick={() => toggleAssetType(label)}>{label}</button
+            >
           {/each}
         {:else if fieldKey === 'status'}
           {#each STATUS_OPTIONS as s}
             <button
               class="cc-filter-pill"
               class:active={filterStatuses.includes(s)}
-              onclick={() => toggleStatus(s)}
-            >{s}</button>
+              onclick={() => toggleStatus(s)}>{s}</button
+            >
           {/each}
         {:else if fieldKey === 'country'}
           <input
@@ -528,10 +551,7 @@
       <div class="cc-examples">
         {#each examples as ex}
           <button class="cc-chip" onclick={() => searchExample(ex)}>
-            <span
-              class="cc-kind asset"
-            >{ex.kind}</span
-            >
+            <span class="cc-kind asset">{ex.kind}</span>
             {ex.name}
           </button>
         {/each}
@@ -576,7 +596,9 @@
                   {/if}
                   {#if item.asset_type}<span class="cc-result-type">{item.asset_type}</span>{/if}
                   {#if item.country}<span class="cc-result-country">{item.country}</span>{/if}
-                  {#if item.unit_count > 1}<span class="cc-result-units">{item.unit_count} units</span>{/if}
+                  {#if item.unit_count > 1}<span class="cc-result-units"
+                      >{item.unit_count} units</span
+                    >{/if}
                 </span>
               </div>
               <svg class="cc-result-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -600,8 +622,22 @@
 
 <!-- Modal — position:fixed covers the viewport (page or iframe) -->
 {#if modalOpen && selected}
-  <div class="cc-modal-backdrop" onclick={closeModal} onkeydown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') closeModal(); }} role="button" tabindex="-1">
-    <div class="cc-modal" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()} role="dialog" tabindex="-1">
+  <div
+    class="cc-modal-backdrop"
+    onclick={closeModal}
+    onkeydown={(ev) => {
+      if (ev.key === 'Enter' || ev.key === ' ') closeModal();
+    }}
+    role="button"
+    tabindex="-1"
+  >
+    <div
+      class="cc-modal"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.stopPropagation()}
+      role="dialog"
+      tabindex="-1"
+    >
       <div class="cc-modal-header">
         <div>
           <h2>Owners of {selected.name}</h2>
@@ -620,7 +656,12 @@
         {:else if locationResponse}
           <!-- Desktop: full interactive graph(s) -->
           <div class="cc-tree-wrap cc-desktop-only">
-            <LocationOwnershipView {locationResponse} direction="up" fullWidth={true} />
+            <LocationOwnershipView
+              {locationResponse}
+              direction="up"
+              fullWidth={true}
+              forceLabelsBelow={true}
+            />
           </div>
 
           <!-- Mobile: vertical ownership chains -->
@@ -634,7 +675,8 @@
                   <div class="cc-chain-header">
                     <span class="cc-chain-label">Path {ci + 1}</span>
                     {#if chain.cumulativePct != null && chain.cumulativePct > 0}
-                      <span class="cc-chain-total">{chain.cumulativePct.toFixed(1)}% effective</span>
+                      <span class="cc-chain-total">{chain.cumulativePct.toFixed(1)}% effective</span
+                      >
                     {/if}
                   </div>
                   <ol class="cc-chain-steps">
@@ -649,8 +691,10 @@
                         <div class="cc-step-content">
                           <span class="cc-step-name">{step.name}</span>
                           <span class="cc-step-meta">
-                            {#if step.ownerType}<span class="cc-step-type">{step.ownerType}</span>{/if}
-                            {#if step.country}<span class="cc-step-country">{step.country}</span>{/if}
+                            {#if step.ownerType}<span class="cc-step-type">{step.ownerType}</span
+                              >{/if}
+                            {#if step.country}<span class="cc-step-country">{step.country}</span
+                              >{/if}
                           </span>
                         </div>
                         {#if step.edgePct != null && step.edgePct > 0}

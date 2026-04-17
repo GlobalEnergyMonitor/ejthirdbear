@@ -7,6 +7,7 @@
 
 import {
   getOwnershipGraph,
+  OWNERSHIP_GRAPH_MAX_DEPTH,
   listEntities,
   type GraphNode,
   type GraphEdge,
@@ -122,7 +123,7 @@ async function fetchOwnershipGraphDown(entityId: string): Promise<{
   rootName: string;
 }> {
   try {
-    const fetchUrl = `${API_BASE}/ownership/graph?root=${encodeURIComponent(entityId)}&direction=down`;
+    const fetchUrl = `${API_BASE}/ownership/graph?root=${encodeURIComponent(entityId)}&direction=down&max_depth=${OWNERSHIP_GRAPH_MAX_DEPTH}`;
     const t0 = performance.now();
     const resp = await fetch(fetchUrl, { signal: AbortSignal.timeout(30_000) });
     logApiCall({

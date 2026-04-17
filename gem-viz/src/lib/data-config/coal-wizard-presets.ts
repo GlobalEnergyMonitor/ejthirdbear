@@ -72,7 +72,8 @@ export const WIZARD_PRESETS: WizardPreset[] = [
   {
     id: 'capacity-by-state-and-status-india',
     label: 'Capacity by state & status in India',
-    description: 'Coal plant count and MW capacity grouped by province and status, filtered to India.',
+    description:
+      'Coal plant count and MW capacity grouped by province and status, filtered to India.',
     outputMode: 'summary',
     trackerMode: 'plants',
     statusGroupIds: [],
@@ -96,5 +97,4 @@ export const WIZARD_PRESETS: WizardPreset[] = [
       { fn: 'sum', field: 'workforce_size' },
     ],
   },
-  
 ];

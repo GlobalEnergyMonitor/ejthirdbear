@@ -1246,7 +1246,6 @@
     margin-bottom: var(--space-4);
   }
 
-
   /* welcome-text uses global .lead utility */
 
   /* suggestions-section and capabilities-section use mb-6, section-header utilities */
@@ -2113,7 +2112,6 @@
     border-color: var(--color-border);
   }
 
-
   /* workflow-chips uses sidebar-panel__list from utilities */
 
   .workflow-chip {
@@ -2160,7 +2158,6 @@
     display: flex;
     flex-direction: column;
   }
-
 
   .mentioned-scroll {
     flex: 1;

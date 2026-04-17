@@ -45,7 +45,10 @@ export interface SubsidiaryExpansion {
   subGroups: SubsidiaryGroupData[];
   entityMap: Map<string, { id: string; Name: string; type: string }>;
   /** value = cumulative root→target % (for pies); directValue = single-hop subId→target % (for tooltips) */
-  matchedEdges: Map<string, { source: string; target: string; value: number; directValue?: number }>;
+  matchedEdges: Map<
+    string,
+    { source: string; target: string; value: number; directValue?: number }
+  >;
 }
 
 export interface SubsidiaryGroupData {
@@ -160,7 +163,9 @@ export async function fetchChartData(
     let offset = 0;
     const BATCH = 500;
     for (;;) {
-      const page = await listAssets({ ...paramMap, limit: BATCH, offset } as Parameters<typeof listAssets>[0]);
+      const page = await listAssets({ ...paramMap, limit: BATCH, offset } as Parameters<
+        typeof listAssets
+      >[0]);
       if (!page?.results?.length) break;
       for (const asset of page.results) {
         classAssetIds.add(asset.id);
@@ -242,7 +247,10 @@ export async function fetchChartData(
     }
   }
 
-  const intermediaryData = new Map<string, { total_descendants: number; max_generations: number }>();
+  const intermediaryData = new Map<
+    string,
+    { total_descendants: number; max_generations: number }
+  >();
   for (const subId of subsidiaryIds) {
     const descendants = subDescendantEntityIds.get(subId);
     if (descendants && descendants.size > 0) {
@@ -272,7 +280,8 @@ export async function fetchChartData(
     const status = graphNode?.operating_status || 'unknown';
     const subStatus = graphNode?.operating_sub_status || '';
     const pct = ownershipPctFor(assetId);
-    const locationID = graphNode?.location_id || (assetId.includes('_') ? assetId.split('_')[0] : assetId);
+    const locationID =
+      graphNode?.location_id || (assetId.includes('_') ? assetId.split('_')[0] : assetId);
 
     return {
       id: assetId,
@@ -421,7 +430,7 @@ function layoutSubGroup(
   sg: SubsidiaryGroupData,
   expansions: Map<string, SubsidiaryExpansion>,
   intermediaryBottom: number,
-  parentPath: string,
+  parentPath: string
   //depth = 1
 ): void {
   const scopedKey = `${parentPath}::${sg.id}`;
@@ -435,11 +444,11 @@ function layoutSubGroup(
     // Sub-sub-groups use tighter spacing than top-level groups
     const subGap = LAYOUT.assetSpacing * 2; // 18px between sub-sub-groups
     // Deeper nesting uses compact intermediary widgets so needs less vertical offset
-    const startOffset =  intermediaryBottom - 50;
+    const startOffset = intermediaryBottom - 50;
     let ssy = sg.top + startOffset + subGap;
     for (const ssg of sg.expansion.subGroups) {
       ssg.top = ssy;
-      layoutSubGroup(ssg, expansions, intermediaryBottom, scopedKey, /*depth + 1*/);
+      layoutSubGroup(ssg, expansions, intermediaryBottom, scopedKey /*depth + 1*/);
       ssg.bottom = ssg.top + ssg.height;
       ssg.summary_data = computeSummaryData(ssg.locations.flatMap((l) => l.units));
       ssy = ssg.bottom + subGap;
@@ -452,18 +461,20 @@ function layoutSubGroup(
     for (let j = 0; j < nLoc; j++) {
       const loc = sg.locations[j];
       const nU = loc.units.length;
-      const h = nU === 1
-        ? LAYOUT.assetMarkHeightSingle
-        : Math.max(LAYOUT.assetMarkHeightSingle, LAYOUT.assetMarkHeightCombined * scaleR(nU));
+      const h =
+        nU === 1
+          ? LAYOUT.assetMarkHeightSingle
+          : Math.max(LAYOUT.assetMarkHeightSingle, LAYOUT.assetMarkHeightCombined * scaleR(nU));
       loc.y = ssy - sg.top + h / 2;
-      loc.r = nU === 1
-        ? LAYOUT.assetMarkHeightSingle / 2
-        : (LAYOUT.assetMarkHeightCombined / 2) * scaleR(nU);
+      loc.r =
+        nU === 1
+          ? LAYOUT.assetMarkHeightSingle / 2
+          : (LAYOUT.assetMarkHeightCombined / 2) * scaleR(nU);
       ssy += h + (j === nLoc - 1 ? 0 : LAYOUT.assetSpacing);
     }
     // Minimum height to fit intermediary path widget — compact widget (depth>1) needs less room
     const subGroupMinH = sg.intermediary_data
-      ? ( intermediaryBottom )
+      ? intermediaryBottom
       : LAYOUT.subsidiaryMarkHeight + LAYOUT.assetSpacing;
     sg.height = Math.max(ssy - sg.top + LAYOUT.assetSpacing, subGroupMinH);
   }
@@ -546,7 +557,10 @@ export function buildSubsidiaryGroups(
         const height =
           nUnits === 1
             ? LAYOUT.assetMarkHeightSingle
-            : Math.max(LAYOUT.assetMarkHeightSingle, LAYOUT.assetMarkHeightCombined * scaleR(nUnits));
+            : Math.max(
+                LAYOUT.assetMarkHeightSingle,
+                LAYOUT.assetMarkHeightCombined * scaleR(nUnits)
+              );
         loc.y = y - d.top + height / 2;
         loc.r =
           nUnits === 1
@@ -596,7 +610,7 @@ export function expandSubsidiary(
   parentUnits: ChartUnit[],
   graphNodeMap: Map<string, GraphNode>,
   graphPaths: Record<string, Array<{ route: string[]; cumulative_pct: number }>>,
-  graphEdgeMap?: Map<string, number>,
+  graphEdgeMap?: Map<string, number>
 ): SubsidiaryExpansion {
   const parentUnitMap = new Map<string, ChartUnit>(parentUnits.map((u) => [u.id, u]));
 
@@ -672,10 +686,20 @@ export function expandSubsidiary(
       return { locationID: locId, units: locUnits, y: 0, r: 0 };
     });
     locations.sort((a, b) => a.units[0].name.localeCompare(b.units[0].name));
-    const group: SubsidiaryGroupData = { id, locations, top: 0, bottom: 0, height: 0, summary_data: { tracker: [], status: [] } };
+    const group: SubsidiaryGroupData = {
+      id,
+      locations,
+      top: 0,
+      bottom: 0,
+      height: 0,
+      summary_data: { tracker: [], status: [] },
+    };
     const descendants = ssDescendantEntityIds.get(id);
     if (descendants && descendants.size > 0) {
-      group.intermediary_data = { total_descendants: descendants.size, max_generations: ssMaxDepth.get(id) ?? 0 };
+      group.intermediary_data = {
+        total_descendants: descendants.size,
+        max_generations: ssMaxDepth.get(id) ?? 0,
+      };
     }
     return group;
   }
@@ -683,7 +707,8 @@ export function expandSubsidiary(
   const subGroups: SubsidiaryGroupData[] = [];
   for (const ssId of subSubIdSet) {
     const ids = subToUnitSets.get(ssId);
-    if (ids?.size) subGroups.push(makeGroup(ssId, [...ids].map((id) => parentUnitMap.get(id)!).filter(Boolean)));
+    if (ids?.size)
+      subGroups.push(makeGroup(ssId, [...ids].map((id) => parentUnitMap.get(id)!).filter(Boolean)));
   }
   if (directUnits.length > 0) {
     subGroups.push(makeGroup(`${subId}:direct`, directUnits));
@@ -692,14 +717,22 @@ export function expandSubsidiary(
   // entityMap for sub-label rendering
   const entityMap = new Map<string, { id: string; Name: string; type: string }>();
   for (const node of graphNodeMap.values()) {
-    if (node.type === 'entity') entityMap.set(node.id, { id: node.id, Name: node.Name, type: 'entity' });
+    if (node.type === 'entity')
+      entityMap.set(node.id, { id: node.id, Name: node.Name, type: 'entity' });
   }
   if (directUnits.length > 0) {
-    entityMap.set(`${subId}:direct`, { id: `${subId}:direct`, Name: 'Directly owned', type: 'entity' });
+    entityMap.set(`${subId}:direct`, {
+      id: `${subId}:direct`,
+      Name: 'Directly owned',
+      type: 'entity',
+    });
   }
 
   // matchedEdges: value = cumulative root→ssId % (for pies); directValue = single-hop subId→ssId % (for tooltips)
-  const matchedEdges = new Map<string, { source: string; target: string; value: number; directValue?: number }>();
+  const matchedEdges = new Map<
+    string,
+    { source: string; target: string; value: number; directValue?: number }
+  >();
   for (const ssId of subSubIdSet) {
     const ssPathEntries = graphPaths[ssId] ?? [];
     const value = ssPathEntries.reduce((sum, p) => sum + (p.cumulative_pct ?? 0), 0);

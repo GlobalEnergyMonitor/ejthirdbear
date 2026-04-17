@@ -142,9 +142,12 @@
 
       // Fetch asset counts in parallel (limit=1 so the API computes total)
       results.forEach((r, i) => {
-        fetch(`${API_BASE}/assets?owner_entity_id=${encodeURIComponent(r.id)}&limit=1&format=json`, {
-          headers: { Accept: 'application/json' },
-        })
+        fetch(
+          `${API_BASE}/assets?owner_entity_id=${encodeURIComponent(r.id)}&limit=1&format=json`,
+          {
+            headers: { Accept: 'application/json' },
+          }
+        )
           .then((res) => res.json())
           .then((json) => {
             const count = json.total ?? json.count ?? 0;
@@ -270,7 +273,11 @@
         <ul class="os-results-list">
           {#each results as item (item.id)}
             <li>
-              <button class="os-result" class:has-assets={item.assetCount > 0} onclick={() => selectResult(item)}>
+              <button
+                class="os-result"
+                class:has-assets={item.assetCount > 0}
+                onclick={() => selectResult(item)}
+              >
                 <div class="os-result-info">
                   <span class="os-result-name">{item.name}</span>
                   <span class="os-result-meta">
@@ -341,7 +348,11 @@
           <button class="os-modal-close" onclick={closeModal} aria-label="Close">✕</button>
         </div>
         <div class="os-modal-body">
-          <PortfolioExplorer entityId={selected.id} hidePicker={true} heightOffset={embedded ? 100 : 260} />
+          <PortfolioExplorer
+            entityId={selected.id}
+            hidePicker={true}
+            heightOffset={embedded ? 100 : 260}
+          />
         </div>
       </div>
     </div>
@@ -586,7 +597,7 @@
     font-variant-numeric: tabular-nums;
   }
   .os-result.has-assets .os-result-assets {
-    color: var(--gem-navy, #1D4961);
+    color: var(--gem-navy, #1d4961);
     background: rgba(29, 73, 97, 0.1);
     font-weight: 600;
   }

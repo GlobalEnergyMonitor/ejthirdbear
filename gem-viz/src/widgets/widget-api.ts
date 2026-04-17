@@ -12,9 +12,8 @@ import {
   IDENTIFIER_TO_API_SLUG as _SCHEMA_ID_TO_SLUG,
 } from '$lib/data-config/tracker-schema';
 import {
+  OWNERSHIP_GRAPH_MAX_DEPTH,
   buildQuery,
-  toNumber,
-  pickKey,
   extractEntityId,
   pct,
   normalizeEntity,
@@ -27,7 +26,6 @@ import {
 export type {
   EntitySummary,
   AssetSummary,
-  AssetOwner,
   EntityGraphResponse,
   OwnershipGraphResponse,
   GraphNode,
@@ -40,7 +38,6 @@ export type {
 import type {
   EntitySummary,
   AssetSummary,
-  AssetOwner,
   PaginatedResponse,
   EntityGraphResponse,
   OwnershipGraphResponse,
@@ -256,7 +253,9 @@ export async function getAsset(assetId: string): Promise<AssetSummary> {
 export async function getOwnershipGraph(params: {
   root: string;
   direction?: 'up' | 'down';
+  max_depth?: number;
 }): Promise<OwnershipGraphResponse> {
+  const maxDepth = params.max_depth ?? OWNERSHIP_GRAPH_MAX_DEPTH;
   const resolvedRoot = await resolveAssetId(params.root);
   const raw = await fetchAPI<{
     root: Record<string, unknown>;
@@ -264,7 +263,11 @@ export async function getOwnershipGraph(params: {
     edges: OwnershipGraphResponse['edges'];
     paths?: OwnershipGraphResponse['paths'];
   }>(
-    `/ownership/graph${buildQuery({ root: resolvedRoot, direction: params.direction })}`
+    `/ownership/graph${buildQuery({
+      root: resolvedRoot,
+      direction: params.direction,
+      max_depth: maxDepth,
+    })}`
   );
 
   const root = {
@@ -314,16 +317,27 @@ import { fetchCatalogTaxonomy } from '$lib/api/catalog-api';
 export { fetchCatalogTaxonomy as fetchStatusTaxonomy };
 export type { StatusTaxonomy } from '$lib/api/catalog-api';
 
-export async function fetchStatusFacets(assetTypeSlug?: string): Promise<Map<string, number>> {
+export interface AssetFacets {
+  subStatus: Map<string, number>;
+  country: Record<string, number>;
+}
+
+export async function fetchAssetFacets(assetTypeSlug?: string): Promise<AssetFacets> {
   const res = await listAssets({ asset_type: assetTypeSlug, facets: true, limit: 1 });
-  const rawFacets = res.facets?.sub_status ?? res.facets?.status ?? {};
-  const normalized = new Map<string, number>();
-  for (const [k, v] of Object.entries(rawFacets)) {
+  const rawStatus = res.facets?.sub_status ?? res.facets?.status ?? {};
+  const subStatus = new Map<string, number>();
+  for (const [k, v] of Object.entries(rawStatus)) {
     const mapped = normalizeSubStatus(k);
     if (!mapped) continue;
-    normalized.set(mapped, (normalized.get(mapped) ?? 0) + v);
+    subStatus.set(mapped, (subStatus.get(mapped) ?? 0) + v);
   }
-  return normalized;
+  const country = (res.facets?.country as Record<string, number>) ?? {};
+  return { subStatus, country };
+}
+
+export async function fetchStatusFacets(assetTypeSlug?: string): Promise<Map<string, number>> {
+  const { subStatus } = await fetchAssetFacets(assetTypeSlug);
+  return subStatus;
 }
 
 // ============================================================================

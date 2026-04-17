@@ -108,11 +108,17 @@ export function buildGraphLookups(nodes: GraphNode[], edges: GraphEdge[]): Graph
 
   for (const e of edges) {
     let kids = childrenOf.get(e.source);
-    if (!kids) { kids = []; childrenOf.set(e.source, kids); }
+    if (!kids) {
+      kids = [];
+      childrenOf.set(e.source, kids);
+    }
     kids.push(e.target);
 
     let vmap = edgeValue.get(e.source);
-    if (!vmap) { vmap = new Map(); edgeValue.set(e.source, vmap); }
+    if (!vmap) {
+      vmap = new Map();
+      edgeValue.set(e.source, vmap);
+    }
     vmap.set(e.target, e.value ?? null);
 
     edgeImputed.set(`${e.source}→${e.target}`, !!e.imputed_share);
@@ -152,12 +158,7 @@ export function collectAllPathsDFS(
   const { childrenOf, edgeValue, assetToProject } = lookups;
   const paths: RawPath[] = [];
 
-  function dfs(
-    nodeId: string,
-    path: string[],
-    cumPct: number,
-    visitedInPath: Set<string>
-  ): void {
+  function dfs(nodeId: string, path: string[], cumPct: number, visitedInPath: Set<string>): void {
     if (visitedInPath.has(nodeId)) return;
     visitedInPath.add(nodeId);
     path.push(nodeId);
@@ -214,13 +215,16 @@ export function selectBestPathPerLeaf(paths: RawPath[]): RawPath[] {
   for (const p of paths) {
     const leaf = p.path[p.path.length - 1];
     let bucket = grouped.get(leaf);
-    if (!bucket) { bucket = []; grouped.set(leaf, bucket); }
+    if (!bucket) {
+      bucket = [];
+      grouped.set(leaf, bucket);
+    }
     bucket.push(p);
   }
 
   const selected: RawPath[] = [];
   for (const bucket of grouped.values()) {
-    bucket.sort((a, b) => (b.depth - a.depth) || (b.pct - a.pct));
+    bucket.sort((a, b) => b.depth - a.depth || b.pct - a.pct);
     selected.push(bucket[0]);
   }
   return selected;
@@ -372,7 +376,10 @@ export function buildHierarchyFromPaths(pathStrings: string[]): HierNode {
     let cur = root;
     for (const part of ps.split('/')) {
       let child = cur.children.find((c) => c.name === part);
-      if (!child) { child = { name: part, children: [] }; cur.children.push(child); }
+      if (!child) {
+        child = { name: part, children: [] };
+        cur.children.push(child);
+      }
       cur = child;
     }
   }

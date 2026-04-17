@@ -6,7 +6,12 @@
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
   import { link } from '$lib/links';
-  import { listAssets, listAssetsByType, resolveApiSlug, type AssetSummary } from '$lib/ownership-api';
+  import {
+    listAssets,
+    listAssetsByType,
+    resolveApiSlug,
+    type AssetSummary,
+  } from '$lib/ownership-api';
   import {
     slugToTrackerName,
     trackerMetadata,
@@ -91,9 +96,16 @@
   };
 
   // Fetch field stats from the API — returns full metadata + distribution
-  async function fetchFieldDistribution(fieldName: string, codeFriendlyName?: string): Promise<FieldStatsResult> {
+  async function fetchFieldDistribution(
+    fieldName: string,
+    codeFriendlyName?: string
+  ): Promise<FieldStatsResult> {
     const empty: FieldStatsResult = {
-      distribution: [], totalRows: 0, nullCount: 0, nonNullCount: 0, uniqueCount: 0,
+      distribution: [],
+      totalRows: 0,
+      nullCount: 0,
+      nonNullCount: 0,
+      uniqueCount: 0,
     };
 
     try {
@@ -102,7 +114,7 @@
         // Prefer code_friendly_name from field metadata, then fall back to hardcoded map
         const apiKeys = codeFriendlyName
           ? [codeFriendlyName, ...(FIELD_TO_API_KEY[fieldName] || []), fieldName.toLowerCase()]
-          : (FIELD_TO_API_KEY[fieldName] || [fieldName, fieldName.toLowerCase()]);
+          : FIELD_TO_API_KEY[fieldName] || [fieldName, fieldName.toLowerCase()];
         for (const apiKey of apiKeys) {
           const stats = await fetchFieldStats(catalogSlug, apiKey);
           if (!stats) continue;
@@ -126,7 +138,9 @@
               .sort((a, b) => b[1] - a[1])
               .slice(0, 50)
               .map(([value, count]) => ({
-                value, count, percentage: denom > 0 ? count / denom : 0,
+                value,
+                count,
+                percentage: denom > 0 ? count / denom : 0,
               }));
           }
 
@@ -179,13 +193,16 @@
       const counts = new Map<string, number>();
       const apiKeys = codeFriendlyName
         ? [codeFriendlyName, ...(FIELD_TO_API_KEY[fieldName] || []), fieldName.toLowerCase()]
-        : (FIELD_TO_API_KEY[fieldName] || [fieldName, fieldName.toLowerCase()]);
+        : FIELD_TO_API_KEY[fieldName] || [fieldName, fieldName.toLowerCase()];
       for (const asset of assets) {
         const raw = asset.raw || {};
         let value: unknown = null;
         for (const k of apiKeys) {
           const v = raw[k] ?? (asset as unknown as Record<string, unknown>)[k];
-          if (v != null && v !== '') { value = v; break; }
+          if (v != null && v !== '') {
+            value = v;
+            break;
+          }
         }
         if (value != null && value !== '') {
           const sv = String(value);

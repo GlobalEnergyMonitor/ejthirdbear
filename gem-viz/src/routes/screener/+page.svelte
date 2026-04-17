@@ -2,322 +2,81 @@
   /**
    * ASSET CLASS SCREENER - Step 1: Select Asset Class
    *
-   * Card-based picker for asset classes grouped by category.
-   * Once selected, shows the full filter panel (AssetClassExpansion)
-   * with sub-class groups, status buckets, and geography filter.
+   * Thin wrapper: layout + step-nav + shared ScreenerStep1 component.
+   * All picker state, selection logic, and URL building lives in ScreenerStep1.
    */
 
   import { goto } from '$app/navigation';
   import ScreenerLayout from '$lib/components/nav/ScreenerLayout.svelte';
   import ScreenerStepNav from '$lib/components/nav/ScreenerStepNav.svelte';
-  import AssetClassExpansion from '$lib/components/tracker/AssetClassExpansion.svelte';
-  import DebugPanel from '$lib/components/feedback/DebugPanel.svelte';
+  import ScreenerStep1 from '$lib/components/screener/ScreenerStep1.svelte';
   import { buildScreenerUrl, readScreenerHash, writeScreenerHash } from '$lib/screener-url';
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
-  import {
-    STATUS_GROUPS,
-    discoverStatusGroups,
-  } from '$lib/data-config/tracker-schema';
-  import {
-    fetchStatusFacets,
-    fetchStatusTaxonomy,
-  } from '$lib/ownership-api';
-  import {
-    fetchAssetClasses,
-    buildAssetClassUrl,
-  } from '$lib/api/catalog-api';
-  import {
-    getHierarchyCategories,
-    getHierarchyOptionIds,
-    getHierarchyDefaultUnchecked,
-    getHierarchyTree,
-    getUiTrackerFromCatalogEntry,
-    getAssetTypesFromUrl,
-    loadHierarchy,
-  } from '$lib/data-config/asset-class-hierarchy.svelte';
   import { GEM_DATA_EMAIL } from '$lib/external-links';
   import SeoMeta from '$lib/components/nav/SeoMeta.svelte';
 
-  // ─── Catalog state ──────────────────────────────────────────────────
-  /** @type {import('$lib/api/catalog-api').CatalogAssetClass[]} */
-  let catalogClasses = $state([]);
+  /** @type {ScreenerStep1 | null} */
+  let step1 = $state(null);
 
-  // ─── State ──────────────────────────────────────────────────────────
-  let searchQuery = $state('');
+  // Mirror of ScreenerStep1's selection for the header badge + nav param
   let selectedClassId = $state(null);
+  let selectionSummary = $state('');
+  /** @type {import('$lib/data-config/screener-types').ScreenerSelectedClass[]} */
+  let currentClassData = $state([]);
 
-  // Categories and tiles driven entirely by hierarchy JSON + flat API list
-  const classesByCategory = $derived(getHierarchyCategories(catalogClasses, searchQuery));
-
-  // Unfiltered flat list of all tiles (including synthesized grouping tiles) for lookups.
-  // Use this instead of catalogClasses.find() so grouping tiles resolve correctly.
-  const allClasses = $derived(getHierarchyCategories(catalogClasses, '').flatMap((cat) => cat.classes));
-
-  /** Hierarchy-driven subclass tree for the selected tile (passed to AssetClassExpansion). */
-  const hierarchyTree = $derived(
-    selectedClassId ? getHierarchyTree(selectedClassId, catalogClasses) : []
-  );
-
-  /** Dummy state for AssetClassExpansion's bindable props (unused in tree mode) */
-  let subClassChecks = $state({});
-  let groupOptionChecks = $state({});
-  /** Catalog child IDs that the user has checked (keyed by child.id) */
-  let catalogChildChecks = $state({});
-  /** Status checkbox state: `status-{groupId}-{statusValue}` -> boolean */
-  let statusChecks = $state({});
-  let geoFilters = $state([]);
-  let geofence = $state(null);
-  /** @type {import('$lib/data-config/tracker-schema').DynamicStatusGroup[] | null} */
-  let dynamicStatusGroups = $state(null);
-
-  // ─── Selection logic ───────────────────────────────────────────────
-  function selectClass(classId) {
-    const catalogEntry = allClasses.find((c) => c.id === classId);
-    if (!catalogEntry?.url) return;
-
-    selectedClassId = classId;
-    searchQuery = '';
-    geoFilters = [];
-    geofence = null;
-    dynamicStatusGroups = null;
-
-    // Initialize subclass checks from hierarchy option IDs; defaultUnchecked options start false
-    const optionIds = getHierarchyOptionIds(classId);
-    const unchecked = new Set(getHierarchyDefaultUnchecked(classId));
-    catalogChildChecks = Object.fromEntries(optionIds.map((id) => [id, !unchecked.has(id)]));
-
-    // Multi-tracker classes: use top-level status groups only (no substatuses).
-    // Each tracker uses different sub-status values so merging them is misleading.
-    const slugs = getAssetTypesFromUrl(catalogEntry.url ?? '');
-    const isMultiTracker = slugs.length > 1;
-
-    if (isMultiTracker) {
-      // One entry per group (value = group ID) — prevents refine dropdown from rendering
-      dynamicStatusGroups = STATUS_GROUPS.map((sg) => ({
-        id: sg.id,
-        label: sg.label,
-        statuses: [{ value: sg.id, count: -1 }],
-        totalCount: -1,
-      }));
-      const initialStatusChecks = {};
-      for (const sg of STATUS_GROUPS) {
-        initialStatusChecks[`status-${sg.id}-${sg.id}`] = sg.id === 'operating' || sg.id === 'planned';
-      }
-      statusChecks = initialStatusChecks;
-    } else {
-      // Initialize status checkboxes — Operating/Planned checked by default
-      const initialStatusChecks = {};
-      for (const sg of STATUS_GROUPS) {
-        for (const s of sg.statuses) {
-          initialStatusChecks[`status-${sg.id}-${s}`] = sg.id === 'operating' || sg.id === 'planned';
-        }
-      }
-      statusChecks = initialStatusChecks;
-
-      // Fetch dynamic status facets (non-blocking)
-      fetchStatusFacetsForClass(catalogEntry, classId);
-    }
-  }
-
-  async function fetchStatusFacetsForClass(catalogEntry, classId) {
-    try {
-      // Parse asset_type slugs directly from the catalog URL
-      const slugs = getAssetTypesFromUrl(catalogEntry?.url ?? '');
-      if (slugs.length === 0) return;
-
-      // Fetch facets and taxonomy in parallel
-      const [taxonomyResult, ...facetResults] = await Promise.all([
-        fetchStatusTaxonomy().catch(() => null),
-        ...slugs.map((slug) => fetchStatusFacets(slug)),
-      ]);
-
-      // Merge facet counts across trackers
-      const mergedFacets = new Map();
-      for (const facetMap of facetResults) {
-        for (const [status, count] of facetMap) {
-          mergedFacets.set(status, (mergedFacets.get(status) ?? 0) + count);
-        }
-      }
-
-      // Only update if this class is still selected
-      if (selectedClassId !== classId) return;
-
-      const groups = discoverStatusGroups(mergedFacets, taxonomyResult);
-      dynamicStatusGroups = groups;
-
-      // Re-initialize status checkboxes with discovered statuses
-      const discoveredStatusChecks = {};
-      for (const sg of groups) {
-        for (const s of sg.statuses) {
-          const key = `status-${sg.id}-${s.value}`;
-          discoveredStatusChecks[key] = sg.id === 'operating' || sg.id === 'planned';
-        }
-      }
-      statusChecks = discoveredStatusChecks;
-    } catch {
-      // Silently fall back to hardcoded groups
-    }
-  }
-
-  function clearSelection() {
-    selectedClassId = null;
-    subClassChecks = {};
-    groupOptionChecks = {};
-    catalogChildChecks = {};
-    statusChecks = {};
-    geoFilters = [];
-    geofence = null;
-    dynamicStatusGroups = null;
-  }
-
-  // ─── Derive selected statuses ─────────────────────────────────────
-
-  /** Flat list of selected substatus values — used for chart-side client filtering. */
-  const selectedStatuses = $derived.by(() => {
-    const statuses = [];
-    const groups =
-      dynamicStatusGroups ??
-      STATUS_GROUPS.map((sg) => ({
-        id: sg.id,
-        statuses: sg.statuses.map((s) => ({ value: s })),
-      }));
-    for (const sg of groups) {
-      for (const s of sg.statuses) {
-        if (statusChecks[`status-${sg.id}-${s.value}`]) {
-          statuses.push(s.value);
-        }
-      }
-    }
-    return statuses;
-  });
-
-  /**
-   * Structured status params for the API URL.
-   * - Full group selected → status=groupId (e.g. status=planned)
-   * - Partial group selected → substatus=val1&substatus=val2
-   */
-  const selectedStatusParams = $derived.by(() => {
-    const statusValues = [];
-    const substatusValues = [];
-    const groups =
-      dynamicStatusGroups ??
-      STATUS_GROUPS.map((sg) => ({
-        id: sg.id,
-        statuses: sg.statuses.map((s) => ({ value: s })),
-      }));
-    for (const sg of groups) {
-      const allValues = sg.statuses.map((s) => s.value);
-      const checkedValues = allValues.filter((v) => statusChecks[`status-${sg.id}-${v}`]);
-      if (checkedValues.length === 0) continue;
-      if (checkedValues.length === allValues.length) {
-        statusValues.push(sg.id);
-      } else {
-        substatusValues.push(...checkedValues);
-      }
-    }
-    return { statusValues, substatusValues };
-  });
-
-  // ─── Serialization ─────────────────────────────────────────────────
-  function buildClassData() {
-    if (!selectedClassId) return [];
-
-    const catalogEntry = allClasses.find((c) => c.id === selectedClassId);
-    if (!catalogEntry) return [];
-
-    const label = catalogEntry.label ?? selectedClassId;
-    const tracker = getUiTrackerFromCatalogEntry(catalogEntry);
-    const assetTypes = getAssetTypesFromUrl(catalogEntry.url ?? '');
-
-    // Collect selected sub-class IDs from catalogChildChecks
-    const selectedSubClassIds = Object.entries(catalogChildChecks)
-      .filter(([, v]) => v)
-      .map(([k]) => k);
-
-    // When subclasses are selected, pass each as a separate asset_class param (OR-combined).
-    // When none selected, use the parent class ID.
-    const assetClassIds = selectedSubClassIds.length > 0 ? selectedSubClassIds : [selectedClassId];
-    const byId = new Map(catalogClasses.map((c) => [c.id, c]));
-
-    const catalogUrl = buildAssetClassUrl('/assets', assetClassIds, selectedStatusParams, geoFilters);
-    const catalogOwnersUrl = buildAssetClassUrl('/owners', assetClassIds, selectedStatusParams, geoFilters);
-
-    // Labels for selected sub-classes (for panel summary display)
-    const selectedSubClassLabels = selectedSubClassIds
-      .map((id) => byId.get(id)?.label)
-      .filter(Boolean);
-
-    return [
-      {
-        id: selectedClassId,
-        name: label,
-        description: '',
-        tracker,
-        selectedSubClassLabels,
-        filters: {
-          geography: geoFilters.length > 0 ? geoFilters : undefined,
-          status: selectedStatuses.length === 1 ? selectedStatuses[0] : undefined,
-          statuses: selectedStatuses.length > 0 ? selectedStatuses : undefined,
-          geofence: geofence || undefined,
-        },
-        assetClassId: selectedClassId,
-        selectedSubClasses: selectedSubClassIds,
-        gemTrackers: assetTypes,
-        catalogUrl,
-        catalogOwnersUrl,
-      },
-    ];
-  }
+  // Hash restore (embed mode)
+  let initialClassId = $state(null);
+  let initialGeoFilters = $state([]);
 
   const isEmbed = $derived($page.url.searchParams.get('embed') === 'true');
+  const classesParamForNav = $derived(
+    currentClassData.length > 0 ? JSON.stringify(currentClassData) : ''
+  );
 
-  // Serialized classes param for the step nav (needs selected class to navigate forward)
-  const classesParamForNav = $derived(selectedClassId ? JSON.stringify(buildClassData()) : '');
+  function onSelectionChange(classData) {
+    if (!classData || classData.length === 0) {
+      selectedClassId = null;
+      selectionSummary = '';
+      currentClassData = [];
+      if (isEmbed) writeScreenerHash({});
+      return;
+    }
+    currentClassData = classData;
+    selectedClassId = step1?.getSelectedClassId() ?? classData[0].id ?? null;
+    selectionSummary = step1?.getSelectionSummary() ?? '';
+    if (isEmbed) writeScreenerHash({ classes: JSON.stringify(classData) });
+  }
 
-  function navigateTo(path) {
-    const classData = buildClassData();
+  function navigateTo(path, classData) {
     if (classData.length === 0) return;
     const classesJson = JSON.stringify(classData);
-    // In embed mode, stay on screener routes but pass embed=true through
     const targetPath = path.startsWith('/') ? path.slice(1) : path;
     const url = buildScreenerUrl(targetPath, { classes: classesJson });
     goto(isEmbed ? url + (url.includes('?') ? '&' : '?') + 'embed=true' : url);
   }
 
-  // Sync state → hash when embedded (for shareable links)
-  $effect(() => {
-    if (!isEmbed) return;
-    if (!selectedClassId) {
-      writeScreenerHash({});
-      return;
-    }
-    const classData = buildClassData();
-    writeScreenerHash({ classes: JSON.stringify(classData) });
-  });
+  function handleShowAllOwners(classData) {
+    navigateTo('/screener/results', classData);
+  }
+  function handleSearchSpecificOwners(classData) {
+    navigateTo('/screener/owners', classData);
+  }
+  function clearSelection() {
+    step1?.clearSelection();
+  }
 
-  onMount(async () => {
-    // Fetch hierarchy and asset class filters in parallel (non-blocking)
-    loadHierarchy();
-    fetchAssetClasses().then((classes) => {
-      if (classes.length > 0) catalogClasses = classes;
-    });
-
+  onMount(() => {
     if (!isEmbed) return;
-    // Restore from hash when embedded
     const h = readScreenerHash();
     if (h.classes) {
       try {
         const parsed = JSON.parse(h.classes);
         const first = parsed?.[0];
         if (first?.id || first?.assetClassId) {
-          const classId = first.id || first.assetClassId;
-          // selectClass will init defaults; then we patch from parsed state
-          selectClass(classId);
-          // Status restore happens via fetchStatusFacetsForClass, but we patch
-          // geoFilters immediately
+          initialClassId = first.id || first.assetClassId;
           if (first.filters?.geography) {
-            geoFilters = Array.isArray(first.filters.geography)
+            initialGeoFilters = Array.isArray(first.filters.geography)
               ? first.filters.geography
               : [first.filters.geography];
           }
@@ -326,25 +85,6 @@
         /* ignore */
       }
     }
-  });
-
-  const selectionSummary = $derived.by(() => {
-    if (!selectedClassId) return '';
-    const catalogEntry = allClasses.find((c) => c.id === selectedClassId);
-    const label = catalogEntry?.label ?? selectedClassId;
-    const parts = [label].filter(Boolean).join(' ');
-    const geo =
-      geoFilters.length === 1
-        ? ` in ${geoFilters[0]}`
-        : geoFilters.length > 1
-          ? ` in ${geoFilters.length} countries`
-          : '';
-    const statusCount = selectedStatuses.length;
-    const totalStatuses = dynamicStatusGroups
-      ? dynamicStatusGroups.reduce((n, sg) => n + sg.statuses.length, 0)
-      : STATUS_GROUPS.reduce((n, sg) => n + sg.statuses.length, 0);
-    const sc = statusCount > 0 && statusCount < totalStatuses ? ` (${statusCount} statuses)` : '';
-    return parts + geo + sc;
   });
 
   function buildMailto(subject, bodyLines) {
@@ -397,39 +137,7 @@
   />
 </svelte:head>
 
-{#snippet pickerBody()}
-  <!-- Asset class tile picker -->
-  <div class="picker-section">
-    <div class="picker-search">
-      <input
-        type="text"
-        class="picker-search-input"
-        placeholder="Search asset classes..."
-        bind:value={searchQuery}
-      />
-    </div>
-    {#each classesByCategory as cat (cat.id)}
-      <div class="picker-category">
-        <span class="picker-category-label">{cat.label}</span>
-        <div class="picker-grid">
-          {#each cat.classes as ac (ac.id)}
-            <button
-              class="picker-tile"
-              class:selected={selectedClassId === ac.id}
-              aria-pressed={selectedClassId === ac.id}
-              onclick={() => selectClass(ac.id)}
-            >
-              <span class="tile-label">{ac.label}</span>
-              {#if ac.description}
-                <span class="tile-desc">{ac.description}</span>
-              {/if}
-            </button>
-          {/each}
-        </div>
-      </div>
-    {/each}
-  </div>
-
+{#snippet supportCta()}
   <section class="support-cta" aria-label="Screener feedback and requests">
     <div class="support-text">
       <h2>Not seeing what you need?</h2>
@@ -443,67 +151,21 @@
       <a class="support-btn" href={contactUsHref}>Contact us</a>
     </div>
   </section>
+{/snippet}
 
-  <!-- Filter panel when class is selected -->
-  {#if selectedClassId}
-    {@const catalogEntry = allClasses.find((c) => c.id === selectedClassId)}
-    {@const expansionClass = /** @type {any} */ ({
-      id: selectedClassId,
-      label: catalogEntry?.label ?? selectedClassId,
-      description: '',
-      category: catalogEntry?.category ?? '',
-      trackers: [],
-      availableFilters: { status: true, geography: true },
-    })}
-    <AssetClassExpansion
-      assetClass={expansionClass}
-      bind:subClassChecks
-      bind:groupOptionChecks
-      bind:statusChecks
-      bind:geoFilters
-      bind:geofence
-      {dynamicStatusGroups}
-      catalogTree={hierarchyTree}
-      bind:catalogChildChecks
-      onShowAllOwners={() => navigateTo('/screener/results')}
-      onSearchSpecificOwners={() => navigateTo('/screener/owners')}
-      onClose={clearSelection}
-    />
-  {/if}
-
-  <!-- Debug panel -->
-  {#if selectedClassId}
-    <DebugPanel title="Query Config">
-      <div class="debug-meta">
-        <span class="debug-label">Asset Class:</span>
-        <span class="debug-value">{selectionSummary} ({selectedClassId})</span>
-      </div>
-      <div class="debug-meta">
-        <span class="debug-label">Statuses:</span>
-        <span class="debug-value">{selectedStatuses.join(', ') || 'none'}</span>
-      </div>
-      {#if geoFilters.length > 0}
-        <div class="debug-meta">
-          <span class="debug-label">Geography:</span>
-          <span class="debug-value">{geoFilters.join(', ')}</span>
-        </div>
-      {/if}
-      <div class="debug-json">
-        <span class="debug-label">Class Data JSON:</span>
-        <button
-          class="copy-btn"
-          onclick={() => navigator.clipboard.writeText(JSON.stringify(buildClassData(), null, 2))}
-        >
-          Copy
-        </button>
-        <pre class="debug-code">{JSON.stringify(buildClassData(), null, 2)}</pre>
-      </div>
-    </DebugPanel>
-  {/if}
+{#snippet pickerBody()}
+  <ScreenerStep1
+    bind:this={step1}
+    onShowAllOwners={handleShowAllOwners}
+    onSearchSpecificOwners={handleSearchSpecificOwners}
+    {onSelectionChange}
+    {initialClassId}
+    {initialGeoFilters}
+    {supportCta}
+  />
 {/snippet}
 
 {#if isEmbed}
-  <!-- Embed mode: no chrome, hash-synced state -->
   <div class="screener-embed-shell">
     <ScreenerStepNav currentStep={1} classesParam={classesParamForNav} isEmbed={true} />
     {@render pickerBody()}
@@ -528,16 +190,14 @@
 {/if}
 
 <style>
-  /* Embed shell */
   .screener-embed-shell {
     width: 100%;
     font-family: var(--font-family);
   }
-  .screener-embed-shell .picker-section {
+  .screener-embed-shell :global(.picker-section) {
     padding: var(--space-4) var(--space-5) 0;
   }
 
-  /* Selection badge */
   .selection-badge {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
@@ -579,106 +239,6 @@
 
   .clear-btn:hover {
     color: white;
-  }
-
-  /* Search input */
-  .picker-search {
-    margin-bottom: var(--space-2);
-  }
-
-  .picker-search-input {
-    width: 100%;
-    padding: var(--space-3) var(--space-4);
-    font-size: var(--font-size-body);
-    border: 1px solid var(--color-gray-200, #e5e7eb);
-    border-radius: var(--radius-sm);
-    background: var(--color-bg-primary, #fff);
-    color: var(--color-text-primary);
-    outline: none;
-  }
-
-  .picker-search-input:focus {
-    border-color: var(--gem-teal);
-    box-shadow: 0 0 0 2px var(--gem-teal-25);
-  }
-
-  .picker-search-input::placeholder {
-    color: var(--color-text-tertiary);
-  }
-
-  /* Tile picker */
-  .picker-section {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-6);
-    margin-bottom: var(--space-6);
-  }
-
-  .picker-category {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-  }
-
-  .picker-category-label {
-    font-size: var(--font-size-sm);
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-caps, 0.05em);
-    color: var(--color-text-tertiary);
-  }
-
-  .picker-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: var(--space-3);
-  }
-
-  .picker-tile {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-1);
-    padding: var(--space-4) var(--space-5);
-    background: var(--color-bg-primary, #fff);
-    border: 2px solid var(--color-gray-200, #e5e7eb);
-    border-left: 4px solid var(--color-gray-200, #e5e7eb);
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    text-align: left;
-    transition:
-      border-color 150ms ease,
-      box-shadow 150ms ease,
-      transform 150ms ease;
-  }
-
-  .picker-tile:hover {
-    border-color: var(--color-gray-400, #9ca3af);
-    transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  }
-
-  .picker-tile.selected {
-    border-color: var(--gem-teal);
-    background: var(--gem-teal-10);
-    box-shadow: 0 2px 8px var(--gem-teal-25);
-  }
-
-  .tile-label {
-    font-size: var(--font-size-body);
-    font-weight: 600;
-    color: var(--color-text-primary);
-    line-height: 1.3;
-  }
-
-  .tile-desc {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-tertiary);
-    line-height: 1.4;
-    display: -webkit-box;
-    line-clamp: 2;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
   }
 
   .support-cta {
@@ -743,31 +303,9 @@
     filter: brightness(0.95);
   }
 
-  /* Debug panel */
-  .debug-json {
-    margin-top: var(--space-4);
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-  }
-
-  /* Responsive */
   @media (max-width: 768px) {
     .selection-badge {
       max-width: 100%;
-    }
-
-    .picker-section {
-      gap: var(--space-4);
-    }
-
-    .picker-grid {
-      grid-template-columns: 1fr;
-    }
-
-    .picker-tile {
-      padding: var(--space-3) var(--space-4);
-      min-height: 44px;
     }
 
     .support-btn {
@@ -783,5 +321,4 @@
       justify-content: flex-start;
     }
   }
-
 </style>

@@ -24,7 +24,11 @@ import {
   type Tracker,
   type Granularity,
 } from '$lib/data-config/coal-field-schema';
-import { STATUS_GROUPS, displayStatusToApiKey, isCoarseStatus } from '$lib/data-config/tracker-schema';
+import {
+  STATUS_GROUPS,
+  displayStatusToApiKey,
+  isCoarseStatus,
+} from '$lib/data-config/tracker-schema';
 
 const API_BASE = import.meta.env.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-api.thirdbear.net';
 
@@ -116,7 +120,7 @@ export class CoalQueryState {
       return [`${API_BASE}/assets?${p.toString()}`];
     }
 
-    return this.query.aggregates.map(agg => {
+    return this.query.aggregates.map((agg) => {
       const field = getField(agg.field);
       const tracker = field?.trackers[0] ?? this.query.trackers[0];
       const trackerSlug = tracker.endsWith('s') ? tracker : tracker + 's';
@@ -215,8 +219,7 @@ export class CoalQueryState {
    * Mines have no sub-units so the toggle would be meaningless.
    */
   showGranularityToggle = $derived(
-    this.query.trackers.includes('coal-plant') &&
-    this.query.aggregates.length > 0
+    this.query.trackers.includes('coal-plant') && this.query.aggregates.length > 0
   );
 
   /**
@@ -298,7 +301,10 @@ export class CoalQueryState {
 
   #sync() {
     const params = queryToParams(this.query);
-    goto(`${base}/coal-data-explorer?${params.toString()}`, { replaceState: true, keepFocus: true });
+    goto(`${base}/coal-data-explorer?${params.toString()}`, {
+      replaceState: true,
+      keepFocus: true,
+    });
   }
 }
 

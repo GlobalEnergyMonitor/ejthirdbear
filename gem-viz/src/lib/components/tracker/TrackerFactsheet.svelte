@@ -166,7 +166,9 @@
   );
 
   // Derived: stats straight from API
-  const totalRows = $derived(fieldStats?.totalRows ?? fieldDistribution.reduce((s, d) => s + d.count, 0));
+  const totalRows = $derived(
+    fieldStats?.totalRows ?? fieldDistribution.reduce((s, d) => s + d.count, 0)
+  );
   const nullCount = $derived(fieldStats?.nullCount ?? 0);
   const distinctCount = $derived(fieldStats?.uniqueCount ?? fieldDistribution.length);
   const nullPct = $derived(totalRows > 0 ? nullCount / totalRows : 0);
@@ -296,7 +298,9 @@
         <!-- Null / coverage row (matches Observable notebook) -->
         {#if nullCount > 0}
           <div class="coverage-row">
-            <span class="field-value">Null</span> in {formatCompact(nullCount)} rows ({formatRatioAsPct(nullPct)})
+            <span class="field-value">Null</span> in {formatCompact(nullCount)} rows ({formatRatioAsPct(
+              nullPct
+            )})
           </div>
         {:else if totalRows > 0}
           <div class="coverage-row full">
@@ -320,12 +324,7 @@
 
         <!-- Numeric: histogram from pre-sorted API values -->
         {#if detectedType === 'numeric' && histogramData.length > 0}
-          <FieldHistogram
-            values={histogramData}
-            unit={fieldUnit}
-            {nullCount}
-            {totalRows}
-          />
+          <FieldHistogram values={histogramData} unit={fieldUnit} {nullCount} {totalRows} />
         {/if}
 
         <!-- Categorical / enum: distribution bars with counts -->

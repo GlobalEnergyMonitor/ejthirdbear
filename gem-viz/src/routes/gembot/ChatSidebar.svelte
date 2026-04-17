@@ -90,8 +90,7 @@
                     <span class="mentioned-meta">{asset.country}</span>
                   {/if}
                   {#if asset.capacity}
-                    <span class="mentioned-meta"
-                      >{asset.capacity} {asset.capacityUnit || 'MW'}</span
+                    <span class="mentioned-meta">{asset.capacity} {asset.capacityUnit || 'MW'}</span
                     >
                   {/if}
                   {#if asset.owner}
@@ -112,11 +111,7 @@
     <h4 class="sidebar-panel__title">Quick Searches</h4>
     <div class="sidebar-panel__list">
       {#each SUGGESTIONS.slice(0, 3) as suggestion}
-        <button
-          class="chip"
-          onclick={() => onSendMessage(suggestion.label)}
-          disabled={isLoading}
-        >
+        <button class="chip" onclick={() => onSendMessage(suggestion.label)} disabled={isLoading}>
           {suggestion.icon}
           {suggestion.label.split(' ').slice(0, 4).join(' ')}...
         </button>
