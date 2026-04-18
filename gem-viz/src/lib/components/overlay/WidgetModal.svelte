@@ -127,7 +127,9 @@
     position: fixed;
     inset: 0;
     background: rgba(0, 0, 0, 0.5);
-    z-index: 1000;
+    /* Max 32-bit int — outranks any host-page modal (Drupal dialogs, cookie banners, etc.)
+       We portal to document.body so this z-index competes in the host's stacking context. */
+    z-index: 2147483647;
     display: grid;
     place-items: center;
     padding: 2vh 2vw;
