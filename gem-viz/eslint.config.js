@@ -51,7 +51,7 @@ export default [
     },
   },
   {
-    files: ['static/embed.js'],
+    files: ['static/embed.js', 'static/embed-source.js'],
     plugins: {
       '@typescript-eslint': tsPlugin,
     },

@@ -243,8 +243,7 @@
   let displaySummary = $derived(filteredResult ? filteredResult.summary : summary);
   let displayProjectGroups = $derived(filteredResult ? filteredResult.groups : projectGroups);
 
-
-/** Color field: user-toggleable, defaults to 'type' when multi-type */
+  /** Color field: user-toggleable, defaults to 'type' when multi-type */
   const ALL_COLOR_FIELDS = ['type', 'status', 'country'];
   let colorFieldOverride = $state('');
   let lastSyncedColor = $state('');
@@ -604,9 +603,7 @@
       .selectAll('path')
       .transition('fade')
       .duration(100)
-      .style('opacity', (l) =>
-        activeNodes.has(l.source) && activeNodes.has(l.target) ? 1 : 0.05
-      );
+      .style('opacity', (l) => (activeNodes.has(l.source) && activeNodes.has(l.target) ? 1 : 0.05));
     treeLabels
       .selectAll('text')
       .filter((n) => n.depth > 0)
@@ -637,7 +634,12 @@
   function clearTreeHover() {
     if (!treeMarks || !treeLinkGroup || !treeLabels) return;
     treeMarks.transition('fade').duration(200).style('opacity', 1);
-    treeMarks.select('circle').transition('fade').duration(200).style('stroke', null).style('stroke-width', null);
+    treeMarks
+      .select('circle')
+      .transition('fade')
+      .duration(200)
+      .style('stroke', null)
+      .style('stroke-width', null);
     treeLinkGroup.selectAll('path').transition('fade').duration(200).style('opacity', 1);
     treeLabels
       .selectAll('text')
@@ -672,12 +674,18 @@
       let prev = null;
       for (let i = idx - 1; i >= 0; i--) {
         const n = treeNodeByName.get(rawPath.path[i]);
-        if (n) { prev = n; break; }
+        if (n) {
+          prev = n;
+          break;
+        }
       }
       let next = null;
       for (let i = idx + 1; i < rawPath.path.length; i++) {
         const n = treeNodeByName.get(rawPath.path[i]);
-        if (n) { next = n; break; }
+        if (n) {
+          next = n;
+          break;
+        }
       }
       if (prev || next) connections.push({ prev, next });
     }
@@ -685,7 +693,8 @@
 
     // Interpolate position: average of per-path midpoints between neighbours
     const stepSize = treeWidth / Math.max(treeRoot.height, 1);
-    let sumX = 0, sumY = 0;
+    let sumX = 0,
+      sumY = 0;
     for (const { prev, next } of connections) {
       if (prev && next) {
         sumX += (prev.x + next.x) / 2;
@@ -766,7 +775,10 @@
     // Fade non-path tree elements
     const pathNodeIds = new Set(hidden.rawPaths.flatMap((p) => p.path));
     const activeNodes = new Set(treeRoot.descendants().filter((d) => pathNodeIds.has(d.data.name)));
-    treeMarks.transition('fade').duration(100).style('opacity', (n) => (activeNodes.has(n) ? 1 : 0.15));
+    treeMarks
+      .transition('fade')
+      .duration(100)
+      .style('opacity', (n) => (activeNodes.has(n) ? 1 : 0.15));
     treeLinkGroup
       .selectAll('path')
       .transition('fade')
@@ -1681,73 +1693,70 @@
               <div class="tree-container">
                 {#if hiddenIntermediaries.length > 0}
                   <div class="hidden-intermediaries-sticky">
-                  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-                  <aside class="hidden-intermediaries" onclick={(e) => e.stopPropagation()}>
-                    <!-- svelte-ignore a11y_no_noninteractive_element_interactions a11y_no_noninteractive_tabindex a11y_no_static_element_interactions -->
-                    <div
-                      class="hidden-intermediaries-title"
-                      class:open={hiddenIntermediariesExpanded}
-                      tabindex="0"
-                      onclick={() => (hiddenIntermediariesExpanded = !hiddenIntermediariesExpanded)}
-                      onkeydown={(e) =>
-                        e.key === 'Enter' &&
-                        (hiddenIntermediariesExpanded = !hiddenIntermediariesExpanded)}
-                    >
-                      <span class="hidden-intermediaries-chevron"
-                        >{hiddenIntermediariesExpanded ? '−' : '+'}</span
+                    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                    <aside class="hidden-intermediaries" onclick={(e) => e.stopPropagation()}>
+                      <!-- svelte-ignore a11y_no_noninteractive_element_interactions a11y_no_noninteractive_tabindex a11y_no_static_element_interactions -->
+                      <div
+                        class="hidden-intermediaries-title"
+                        class:open={hiddenIntermediariesExpanded}
+                        tabindex="0"
+                        onclick={() =>
+                          (hiddenIntermediariesExpanded = !hiddenIntermediariesExpanded)}
+                        onkeydown={(e) =>
+                          e.key === 'Enter' &&
+                          (hiddenIntermediariesExpanded = !hiddenIntermediariesExpanded)}
                       >
-                      {hiddenIntermediaries.length}
-                      {hiddenIntermediaries.length === 1
-                        ? 'intermediary'
-                        : 'intermediaries'} from duplicate paths hidden
-                    </div>
-                    {#if hiddenIntermediariesExpanded}
-                      <div class="hidden-intermediaries-body">
-                      <ul class="hidden-intermediaries-list">
-                        {#each hiddenIntermediaries as h (h.entity_id)}
-                          {@const isFrozen = frozenHiddenEntityId === h.entity_id}
-                          {@const pieR = 7}
-                          {@const piePct = h.ownershipPct ?? 1}
-                          <!-- svelte-ignore a11y_no_noninteractive_element_interactions a11y_no_noninteractive_tabindex -->
-                          <li
-                            class="hidden-intermediary-item"
-                            class:frozen={isFrozen}
-                            tabindex="0"
-                            onmouseenter={() => highlightHiddenPath(h.entity_id)}
-                            onmouseleave={clearHiddenPathOverlay}
-                            onclick={() => toggleFrozenHiddenPath(h.entity_id)}
-                            onkeydown={(e) =>
-                              e.key === 'Enter' && toggleFrozenHiddenPath(h.entity_id)}
-                          >
-                            <svg
-                              class="hidden-intermediary-pie"
-                              width={pieR * 2}
-                              height={pieR * 2}
-                              viewBox="{-pieR} {-pieR} {pieR * 2} {pieR * 2}"
-                            >
-                              <circle r={pieR} fill={ownershipColors.treeNodeFill} />
-                              <path
-                                d={d3Shape
-                                  .arc()
-                                  .innerRadius(0)
-                                  .startAngle(0)({
-                                    outerRadius: pieR - 1,
-                                    endAngle: 2 * Math.PI * piePct,
-                                  })}
-                                fill={ownershipColors.treeTeal}
-                              />
-                            </svg>
-                            <span class="hidden-intermediary-name">{h.name}</span>
-                          </li>
-                        {/each}
-                      </ul>
-                      <div class="hidden-intermediaries-note">
-                        Each asset is placed under its longest ownership chain. Hover to preview
-                        shorter paths; click to freeze.
+                        <span class="hidden-intermediaries-chevron"
+                          >{hiddenIntermediariesExpanded ? '−' : '+'}</span
+                        >
+                        {hiddenIntermediaries.length}
+                        {hiddenIntermediaries.length === 1 ? 'intermediary' : 'intermediaries'} from
+                        duplicate paths hidden
                       </div>
-                      </div>
-                    {/if}
-                  </aside>
+                      {#if hiddenIntermediariesExpanded}
+                        <div class="hidden-intermediaries-body">
+                          <ul class="hidden-intermediaries-list">
+                            {#each hiddenIntermediaries as h (h.entity_id)}
+                              {@const isFrozen = frozenHiddenEntityId === h.entity_id}
+                              {@const pieR = 7}
+                              {@const piePct = h.ownershipPct ?? 1}
+                              <!-- svelte-ignore a11y_no_noninteractive_element_interactions a11y_no_noninteractive_tabindex -->
+                              <li
+                                class="hidden-intermediary-item"
+                                class:frozen={isFrozen}
+                                tabindex="0"
+                                onmouseenter={() => highlightHiddenPath(h.entity_id)}
+                                onmouseleave={clearHiddenPathOverlay}
+                                onclick={() => toggleFrozenHiddenPath(h.entity_id)}
+                                onkeydown={(e) =>
+                                  e.key === 'Enter' && toggleFrozenHiddenPath(h.entity_id)}
+                              >
+                                <svg
+                                  class="hidden-intermediary-pie"
+                                  width={pieR * 2}
+                                  height={pieR * 2}
+                                  viewBox="{-pieR} {-pieR} {pieR * 2} {pieR * 2}"
+                                >
+                                  <circle r={pieR} fill={ownershipColors.treeNodeFill} />
+                                  <path
+                                    d={d3Shape.arc().innerRadius(0).startAngle(0)({
+                                      outerRadius: pieR - 1,
+                                      endAngle: 2 * Math.PI * piePct,
+                                    })}
+                                    fill={ownershipColors.treeTeal}
+                                  />
+                                </svg>
+                                <span class="hidden-intermediary-name">{h.name}</span>
+                              </li>
+                            {/each}
+                          </ul>
+                          <div class="hidden-intermediaries-note">
+                            Each asset is placed under its longest ownership chain. Hover to preview
+                            shorter paths; click to freeze.
+                          </div>
+                        </div>
+                      {/if}
+                    </aside>
                   </div>
                 {/if}
                 <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions a11y_no_static_element_interactions -->

@@ -170,7 +170,12 @@
   const PROXY_NAT_PERSON = 'E100000123261';
   const PROXY_UNKNOWN = 'E100000132388';
   const PROXY_MEMBER_OWNED = 'E100002001974';
-  const PLACEHOLDER_ENTITY_IDS = new Set([PROXY_SMALL_SH, PROXY_NAT_PERSON, PROXY_UNKNOWN, PROXY_MEMBER_OWNED]);
+  const PLACEHOLDER_ENTITY_IDS = new Set([
+    PROXY_SMALL_SH,
+    PROXY_NAT_PERSON,
+    PROXY_UNKNOWN,
+    PROXY_MEMBER_OWNED,
+  ]);
 
   const filteredNodes = $derived(
     nodes.filter((n) => !PLACEHOLDER_ENTITY_IDS.has(n.entity_id || n.id))
@@ -876,7 +881,7 @@
 
     // Mirror Observable notebook's circleCustom shape: uses node.width/height
     // directly so dagre-d3's default padding doesn't inflate node sizes.
-    // eslint-disable-next-line
+
     (renderer.shapes() as any).circleCustom = function (parent: any, _bbox: any, node: any) {
       const w = node.width;
       const h = node.height;
@@ -890,7 +895,7 @@
         .attr('fill', 'transparent')
         .attr('stroke', 'transparent');
       parent.insert('circle', ':first-child').attr('cx', 0).attr('cy', 0).attr('r', r);
-      // eslint-disable-next-line
+
       node.intersect = (p: any) => (_dagreD3.intersect as any).circle(node, r, p);
       return parent;
     };
@@ -902,7 +907,7 @@
     let layoutOk = true;
     try {
       const inner = select(hiddenSvg).append('g');
-      // eslint-disable-next-line
+
       renderer(inner as any, g);
     } catch {
       layoutOk = false;
