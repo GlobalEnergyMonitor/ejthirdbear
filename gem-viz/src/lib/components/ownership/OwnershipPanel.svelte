@@ -246,7 +246,7 @@
               onmouseenter={() => {
                 if (frozenId) return;
                 onHover(
-                  data.ids[0] || '',
+                  '',
                   data.ids.length > 0 ? { nodesTouched: data.ids, edgeIndices: [] } : null
                 );
               }}
@@ -366,7 +366,7 @@
               onmouseenter={() => {
                 if (frozenId) return;
                 onHover(
-                  data.ids[0] || '',
+                  '',
                   data.ids.length > 0 ? { nodesTouched: data.ids, edgeIndices: [] } : null
                 );
               }}

@@ -12,6 +12,7 @@
   import { track } from '$lib/analytics';
   import { BREAKPOINTS, LAYOUT, getViewportWidth } from '$lib/responsive';
   import { sum } from 'd3-array';
+  import { select } from 'd3-selection';
   // d3-shape line/curveBasis now imported via ownership-tree-utils
   import type {
     GraphNode,
@@ -126,6 +127,7 @@
   }: Props = $props();
 
   let dagre: typeof import('dagre') | null = null;
+  let dagreD3: typeof import('dagre-d3') | null = null;
   let ready = $state(false);
   let entranceAnimDone = $state(false);
   let hoveredId = $state<string | null>(null);
@@ -167,7 +169,8 @@
   const PROXY_SMALL_SH = 'E100001015587';
   const PROXY_NAT_PERSON = 'E100000123261';
   const PROXY_UNKNOWN = 'E100000132388';
-  const PLACEHOLDER_ENTITY_IDS = new Set([PROXY_SMALL_SH, PROXY_NAT_PERSON, PROXY_UNKNOWN]);
+  const PROXY_MEMBER_OWNED = 'E100002001974';
+  const PLACEHOLDER_ENTITY_IDS = new Set([PROXY_SMALL_SH, PROXY_NAT_PERSON, PROXY_UNKNOWN, PROXY_MEMBER_OWNED]);
 
   const filteredNodes = $derived(
     nodes.filter((n) => !PLACEHOLDER_ENTITY_IDS.has(n.entity_id || n.id))
@@ -778,7 +781,7 @@
 
   // Run layout
   function runLayout() {
-    if (!dagre || renderNodes.length === 0) return;
+    if (!dagre || !dagreD3 || renderNodes.length === 0) return;
 
     const g = new dagre.graphlib.Graph();
     // Observable's sizeDependantNodeSeparation:
@@ -798,9 +801,9 @@
       // clipping arrowheads.
       marginx: compact ? 15 : nodeR,
       marginy: compact ? 12 : nodeR,
-      // dagre-d3 (Observable) had internal cycle-breaking; plain dagre needs
-      // this flag or it will throw when cycle-closing edges are included.
-      acyclicer: 'greedy',
+      // No acyclicer setting — dagre-d3 uses the default DFS-based cycle
+      // detection, which correctly handles closes_cycle edges (they form
+      // diamond shapes, not true directed cycles, so nothing gets reversed).
     });
     g.setDefaultEdgeLabel(() => ({}));
 
@@ -838,28 +841,20 @@
         : measureLabelWidth(entityLabel, labelMaxChars);
       // Observable: `Math.max(2 * r, labelPadding + textWidth + 5)`
       const entityW = compact ? nodeR * 2 : Math.max(nodeR * 2, LABEL_PADDING + labelTextW + 5);
+      // Entity nodes use a custom 'circleCustom' shape (mirrors Observable notebook)
+      // so dagre-d3 uses node.width/height directly without padding inflation.
       g.setNode(n.id, {
         width: isAsset ? assetW : entityW,
         height: isAsset ? assetH : nodeR * 2,
+        shape: isAsset ? 'rect' : 'circleCustom',
+        r: isAsset ? undefined : nodeR,
       });
     });
     // Observable: edge weights influence dagre layout priority
     // asset edges = 3, both small = 1, one small = 2, normal = 3.
-    // Cycle-closing edges get weight 0 so they don't force rank inversions
-    // (e.g. Blackrock Advisors ending up below BlackRock) but still get
-    // routed — the Observable notebook's dagre-d3 included them via its
-    // internal cycle-breaking; we match that by setting acyclicer: 'greedy'
-    // on the graph and feeding cycle edges in with minimal weight.
-    // Cycle-closing edges break dagre's layout algorithms even with
-    // `acyclicer: 'greedy'` when they form many overlapping cycles (Cebu: 26
-    // cycle edges). Skip them for layout and route them separately below.
-    const safeEdges: typeof renderEdges = [];
-    const cycleEdges: typeof renderEdges = [];
-    for (const e of renderEdges) {
-      if (e.closes_cycle) cycleEdges.push(e);
-      else safeEdges.push(e);
-    }
-    safeEdges.forEach((e) => {
+    // All edges including closes_cycle ones use normal weights — the
+    // Observable notebook included them all without special treatment.
+    renderEdges.forEach((e) => {
       const srcIsAsset =
         e.source === rootId || renderNodes.find((n) => n.id === e.source)?.type === 'asset';
       const tgtIsAsset =
@@ -873,16 +868,51 @@
       }
       g.setEdge(e.source, e.target, { weight });
     });
+
+    // Use dagre-d3 for layout: it handles closes_cycle edges correctly.
+    // A hidden SVG must be attached to DOM so getBBox() works for node measurement.
+    const _dagreD3 = dagreD3;
+    const renderer = new _dagreD3.render();
+
+    // Mirror Observable notebook's circleCustom shape: uses node.width/height
+    // directly so dagre-d3's default padding doesn't inflate node sizes.
+    // eslint-disable-next-line
+    (renderer.shapes() as any).circleCustom = function (parent: any, _bbox: any, node: any) {
+      const w = node.width;
+      const h = node.height;
+      const r = node.r;
+      parent
+        .insert('rect', ':first-child')
+        .attr('x', -w / 2)
+        .attr('y', -h / 2)
+        .attr('width', w)
+        .attr('height', h)
+        .attr('fill', 'transparent')
+        .attr('stroke', 'transparent');
+      parent.insert('circle', ':first-child').attr('cx', 0).attr('cy', 0).attr('r', r);
+      // eslint-disable-next-line
+      node.intersect = (p: any) => (_dagreD3.intersect as any).circle(node, r, p);
+      return parent;
+    };
+
+    const hiddenSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    hiddenSvg.style.cssText =
+      'position:fixed;left:-9999px;top:-9999px;opacity:0;pointer-events:none;width:1px;height:1px';
+    document.body.appendChild(hiddenSvg);
     let layoutOk = true;
     try {
-      dagre.layout(g);
+      const inner = select(hiddenSvg).append('g');
+      // eslint-disable-next-line
+      renderer(inner as any, g);
     } catch {
       layoutOk = false;
+    } finally {
+      document.body.removeChild(hiddenSvg);
     }
 
-    // Fallback: if dagre threw OR produced NaN positions (happens on graphs
-    // with complex cycle structure even after filtering closes_cycle edges),
-    // manually assign ranks via BFS from root and distribute nodes horizontally.
+    // Fallback: if dagre threw OR produced NaN positions (known dagre BK
+    // x-assignment bug on certain graph topologies), assign ranks via BFS
+    // from root and distribute nodes horizontally within each rank.
     const anyNaN = !layoutOk || g.nodes().some((id: string) => !Number.isFinite(g.node(id).x));
     if (anyNaN) {
       const rankById = new Map<string, number>();
@@ -891,7 +921,7 @@
       while (queue.length) {
         const cur = queue.shift()!;
         const depth = rankById.get(cur)!;
-        for (const e of safeEdges) {
+        for (const e of renderEdges) {
           const next = e.target === cur ? e.source : e.source === cur ? e.target : null;
           if (next && !rankById.has(next)) {
             rankById.set(next, depth + 1);
@@ -1471,7 +1501,7 @@
 
     void (async () => {
       try {
-        dagre = await import('dagre');
+        [dagre, dagreD3] = await Promise.all([import('dagre'), import('dagre-d3')]);
         try {
           runLayout();
         } catch (e) {
@@ -1654,7 +1684,9 @@
                         ? 'natural persons'
                         : eid === PROXY_UNKNOWN
                           ? 'unknown'
-                          : null;
+                          : eid === PROXY_MEMBER_OWNED
+                            ? 'member/employee owned'
+                            : null;
                   if (!proxyName) return [];
                   return [
                     {

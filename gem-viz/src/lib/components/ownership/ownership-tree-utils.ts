@@ -159,10 +159,12 @@ export function trimEdgeToNode(
   // Walk from pts[0] (node end) until we exit the boundary
   let i = 0;
   while (i < pts.length - 1 && !outside(pts[i])) i++;
-  if (i === 0) return pts;
 
-  const p0 = pts[i - 1]; // last inside point
-  const p1 = pts[i]; // first outside point
+  // i === 0 means pts[0] is already outside (dagre's assignNodeIntersects placed it at the
+  // bounding-box rect boundary, outside the visual circle radius for small nodes).
+  // Project from node center through pts[0] to find the actual circle intersection.
+  const p0 = i === 0 ? { x: cx, y: cy } : pts[i - 1];
+  const p1 = i === 0 ? pts[0] : pts[i];
 
   let t = 0.5;
   if (isRect) {
@@ -197,7 +199,11 @@ export function trimEdgeToNode(
     x: p0.x + t * (p1.x - p0.x),
     y: p0.y + t * (p1.y - p0.y),
   };
-  return [intersect, ...pts.slice(i)];
+  // When i === 0, pts[0] was the bounding-box edge (already outside circle).
+  // Skip it in the output — the intersect point replaces it, and we continue
+  // from pts[1] (the first true interior control point), matching dagre-d3's
+  // calcPoints which slices off edge.points[0] before adding the intersection.
+  return [intersect, ...pts.slice(i === 0 ? 1 : i)];
 }
 
 /** Get paired colors for a node based on active color mode. */

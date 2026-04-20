@@ -19,7 +19,7 @@
   import QuerySentenceBuilder from '$lib/components/filters/QuerySentenceBuilder.svelte';
   import WidgetModal from '$lib/components/overlay/WidgetModal.svelte';
 
-  const PLACEHOLDER_ENTITY_IDS = new Set(['E100001015587', 'E100000123261', 'E100000132388']);
+  const PLACEHOLDER_ENTITY_IDS = new Set(['E100001015587', 'E100000123261', 'E100000132388', 'E100002001974']);
 
   /** @type {{ initialQuery?: string, initialType?: string, onStateChange?: (q: string, type: string) => void }} */
   let { initialQuery = '', initialType: _initialType = 'all', onStateChange } = $props();
