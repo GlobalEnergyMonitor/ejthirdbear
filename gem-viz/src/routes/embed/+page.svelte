@@ -129,6 +129,7 @@
   let copiedSlug = $state<string | null>(null);
 
   function embedCode(w: WidgetSpec): string {
+    // eslint-disable-next-line no-useless-escape -- `<\/script>` escape prevents an enclosing <script> tag from closing if this string is ever inlined as script source
     return `<!-- Custom Element (recommended) -->\n<gem-embed src="${w.dataSrc}" height="${w.height || 500}"></gem-embed>\n\n<!-- Class-based (CMS fallback) -->\n<div class="gem-embed" data-src="${w.dataSrc}" data-height="${w.height || 500}"></div>\n\n<script src="${ORIGIN}/embed.js"><\/script>`;
   }
 

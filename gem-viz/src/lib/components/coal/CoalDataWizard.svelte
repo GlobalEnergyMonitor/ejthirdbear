@@ -842,8 +842,10 @@
     }
   }
 
-  // Expose presets list so the page can render the quickstart modal
+  // Expose presets list so the page can render the quickstart modal.
+  // eslint-disable-next-line no-import-assign -- idiomatic TS re-export of imported symbols; rule misfires
   export { WIZARD_PRESETS };
+  // eslint-disable-next-line no-import-assign -- same as above
   export type { WizardPreset };
 </script>
 

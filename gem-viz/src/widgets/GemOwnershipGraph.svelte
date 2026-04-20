@@ -29,7 +29,12 @@
 
   let loading = $state(true);
   let error = $state<string | null>(null);
-  let graphData = $state<{ nodes: any[]; edges: any[]; rootEntityName?: string } | null>(null);
+  let graphData = $state<{
+    nodes: any[];
+    edges: any[];
+    rootEntityName?: string;
+    paths?: Record<string, Array<{ route: string[]; cumulative_pct: number }>>;
+  } | null>(null);
 
   function handleNavigate(url: string) {
     navTo(url, linkTarget);

@@ -196,6 +196,9 @@ export default [
     files: ['**/*.svelte'],
     plugins: {
       svelte: sveltePlugin,
+      // Loaded so inline `eslint-disable @typescript-eslint/*` comments in
+      // Svelte files don't error with "rule not found".
+      '@typescript-eslint': tsPlugin,
     },
     languageOptions: {
       parser: svelteParser,

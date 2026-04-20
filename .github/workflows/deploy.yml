@@ -37,6 +37,12 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
+      - name: Verify deploy (cache-bust chain + commit match)
+        run: |
+          SEMVER=$(node -p "require('./package.json').version")
+          EXPECT_SEMVER="$SEMVER" EXPECT_COMMIT="${{ github.sha }}" \
+            bash scripts/verify-deploy.sh https://gem-viz-staging.fly.dev
+
       - name: Deployment summary
         run: |
           echo "## Staging Deployment Complete" >> $GITHUB_STEP_SUMMARY
@@ -60,6 +66,12 @@ jobs:
         run: flyctl deploy --config fly.toml --remote-only --build-arg GIT_COMMIT=${{ github.sha }} --build-arg GIT_MESSAGE="${{ github.event.head_commit.message }}" --build-arg GIT_AUTHOR="${{ github.event.head_commit.author.name }}"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Verify deploy (cache-bust chain + commit match)
+        run: |
+          SEMVER=$(node -p "require('./package.json').version")
+          EXPECT_SEMVER="$SEMVER" EXPECT_COMMIT="${{ github.sha }}" \
+            bash scripts/verify-deploy.sh https://gem-viz.fly.dev
 
       - name: Deployment summary
         run: |

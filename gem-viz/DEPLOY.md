@@ -305,6 +305,36 @@ Key files:
 
 ### Verifying the chain after a deploy
 
+Automated: `scripts/verify-deploy.sh` walks the entire chain and exits
+non-zero on any mismatch. Runs in CI as a post-deploy step in
+`.github/workflows/deploy.yml` (fails the workflow if the just-deployed
+commit doesn't actually serve).
+
+```bash
+# Local usage — just check the chain is internally consistent
+scripts/verify-deploy.sh https://gem-viz-staging.fly.dev
+
+# Strict: assert deployed semver + commit match what you expect
+EXPECT_SEMVER=0.9.5 EXPECT_COMMIT=$(git rev-parse HEAD) \
+  scripts/verify-deploy.sh https://gem-viz-staging.fly.dev
+```
+
+Short-SHA prefix matches work (`EXPECT_COMMIT=c592e21` is fine against a
+full SHA in `version.json`), so CI can pass `${{ github.sha }}` safely.
+
+Output is 5 numbered sections with ✓/✗ per check:
+1. `/embed.js` — 200 OK, `no-cache` header, contains `?v=<hash>`
+2. `/embed-source.js` — 200 OK, MD5 matches the bootstrap hash from step 1
+3. `/version.json` — 200 OK, has `semver` + `commit` fields
+4. `/widgets/index.js` — 200 OK, imports a hashed chunk
+5. `/widgets/chunks/<hash>.js` — 200 OK, `cache-control: immutable`
+
+If a deploy half-rolls (one Fly machine updated, one not), or S3 upload
+fails partway, or a CDN fronting the app caches stale, step 2 or step 3
+will surface the mismatch.
+
+Manual one-liner if the script isn't available:
+
 ```bash
 # MD5 in bootstrapper should match the deployed embed-source.js
 LOCAL_HASH=$(curl -s https://<app>.fly.dev/embed.js | grep -oE 'v=[a-f0-9]+' | cut -d= -f2)
@@ -568,4 +598,5 @@ smoke test, and load a known-good embed on a real host page.
 | `scripts/prefetch-data.js` | `npm run prefetch:api` | (Optional) pre-fetches API data for faster cold starts |
 | `scripts/deploy.js` | `npm run deploy` | Uploads `build/` to Digital Ocean Spaces (optional mirror) |
 | `scripts/release.js` | `npm run release` | Version bump helper |
-| `scripts/spot-check.js` | `npm run spot-check` | Post-deploy smoke test (partial) |
+| `scripts/spot-check.js` | `npm run spot-check` | Data validation (spot-check subset of assets against API) |
+| `scripts/verify-deploy.sh` | Manual or CI post-deploy step | Full cache-bust chain verification; fails loudly on hash/commit mismatch |

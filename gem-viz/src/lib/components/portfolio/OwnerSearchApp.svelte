@@ -154,7 +154,6 @@
             const count = json.total ?? json.count ?? 0;
             const units = typeof json.unit_count === 'number' ? json.unit_count : undefined;
             results[i] = { ...results[i], assetCount: count, unitCount: units };
-            results = results; // trigger reactivity
           })
           .catch(() => {}); // silently skip on error
       });

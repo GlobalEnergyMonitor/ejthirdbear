@@ -202,6 +202,7 @@
     name: string;
     filteredAssets?: number;
     filteredProjects?: number;
+    totalAssets?: number;
   } | null = $state(null);
   let modalOriginRect: DOMRect | null = $state(null);
   let modalNameEl: HTMLElement | undefined = $state();
