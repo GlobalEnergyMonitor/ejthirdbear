@@ -240,6 +240,24 @@
   // CONFIG EXTRACTION — read embed attributes from either element type
   // ==========================================================================
 
+  /**
+   * True if a `<div class="gem-embed" data-src="X">` has a sibling
+   * `<gem-embed src="X">` in the same parent. The embed page used to emit
+   * BOTH variants separated by HTML comments (which don't suppress
+   * rendering) — Drupal authors who pasted the whole block got the widget
+   * mounted twice. This flags the class-based variant for skipping;
+   * <gem-embed> mounts itself via connectedCallback.
+   */
+  var isDuplicateOfAdjacentCustomElement = function (el) {
+    var src = el.getAttribute('data-src');
+    if (!src || !el.parentElement) return false;
+    var siblings = el.parentElement.querySelectorAll('gem-embed[src]');
+    for (var i = 0; i < siblings.length; i++) {
+      if (siblings[i].getAttribute('src') === src) return true;
+    }
+    return false;
+  };
+
   /** Read config from class-based <div class="gem-embed" data-src="..."> */
   var configFromClassEmbed = function (el) {
     return {
@@ -463,6 +481,12 @@
       embeds.forEach(function (container) {
         if (container.tagName === 'GEM-EMBED') return; // handled by custom element
         if (container.getAttribute('data-gem-initialized')) return;
+        if (isDuplicateOfAdjacentCustomElement(container)) {
+          // Hide so the duplicate paste doesn't reserve layout space
+          container.style.display = 'none';
+          container.setAttribute('data-gem-skipped', 'duplicate');
+          return;
+        }
         observer.observe(container);
       });
       window.__gemEmbedObserver = observer;
@@ -471,6 +495,11 @@
       });
     } else {
       embeds.forEach(function (container) {
+        if (isDuplicateOfAdjacentCustomElement(container)) {
+          container.style.display = 'none';
+          container.setAttribute('data-gem-skipped', 'duplicate');
+          return;
+        }
         mountEmbed(container);
       });
     }
@@ -615,6 +644,14 @@
         setTimeout(function () {
           pending.forEach(function (el) {
             if (el.getAttribute('data-gem-initialized') || !el.isConnected) return;
+            // Dedup check runs here (not in the MO callback) so any
+            // <gem-embed> added in the same mutation batch is already in
+            // the DOM and visible to the sibling query.
+            if (isDuplicateOfAdjacentCustomElement(el)) {
+              el.style.display = 'none';
+              el.setAttribute('data-gem-skipped', 'duplicate');
+              return;
+            }
             el.setAttribute('data-gem-initialized', 'true');
             var config = configFromClassEmbed(el);
             if (!config.src) return;
