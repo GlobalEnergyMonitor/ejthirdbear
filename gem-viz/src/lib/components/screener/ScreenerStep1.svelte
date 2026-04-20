@@ -35,6 +35,7 @@
     getHierarchyTree,
     getUiTrackerFromCatalogEntry,
     getAssetTypesFromUrl,
+    hierarchyState,
     loadHierarchy,
   } from '$lib/data-config/asset-class-hierarchy.svelte';
   import type { ScreenerSelectedClass } from '$lib/data-config/screener-types';
@@ -73,6 +74,15 @@
 
   // ─── Catalog state ──────────────────────────────────────────────────
   let catalogClasses = $state<CatalogAssetClass[]>([]);
+  let catalogFailed = $state(false);
+
+  /** Picker is only usable once BOTH the hierarchy and the flat catalog load.
+   *  Reading helpers earlier returns empty arrays (null hierarchy guard), which
+   *  was the class of race bug that let stale sub-class IDs leak into the URL. */
+  const picker = $derived({
+    ready: hierarchyState.ready && catalogClasses.length > 0,
+    failed: hierarchyState.failed || catalogFailed,
+  });
 
   // ─── Selection state ────────────────────────────────────────────────
   let searchQuery = $state('');
@@ -347,27 +357,32 @@
   });
 
   // ─── Init ─────────────────────────────────────────────────────────
-  onMount(async () => {
-    loadHierarchy();
-    fetchAssetClasses().then((classes) => {
-      if (classes.length > 0) catalogClasses = classes;
-    });
-
-    if (initialClassId) {
-      // Defer until catalogClasses populates so allClasses.find() works
-      const restore = () => {
-        if (allClasses.length === 0) {
-          setTimeout(restore, 50);
-          return;
-        }
-        selectClass(initialClassId);
-        if (initialGeoFilters.length > 0) {
-          geoFilters = [...initialGeoFilters];
-        }
-      };
-      restore();
+  // Both loads run in parallel; the picker UI is gated on `picker.ready` so
+  // neither selectClass() nor the initialClassId restore can fire against a
+  // partially-loaded state. This replaces the old static-JSON fallback, which
+  // allowed clicks to land against a stale hierarchy and leak orphan sub-class
+  // IDs into catalogChildChecks.
+  async function onMountLoad() {
+    const [, classes] = await Promise.all([
+      loadHierarchy(),
+      fetchAssetClasses().catch(() => [] as CatalogAssetClass[]),
+    ]);
+    if (classes.length > 0) {
+      catalogClasses = classes;
+      catalogFailed = false;
+    } else {
+      catalogFailed = true;
     }
-  });
+
+    if (initialClassId && picker.ready) {
+      selectClass(initialClassId);
+      if (initialGeoFilters.length > 0) {
+        geoFilters = [...initialGeoFilters];
+      }
+    }
+  }
+
+  onMount(onMountLoad);
 
   function handleShowAllOwners() {
     const data = buildClassData();
@@ -391,36 +406,48 @@
   });
 </script>
 
-<div class="picker-section">
-  <div class="picker-search">
-    <input
-      type="text"
-      class="picker-search-input"
-      placeholder="Search asset classes..."
-      bind:value={searchQuery}
-    />
+{#if !picker.ready && !picker.failed}
+  <div class="picker-loading" role="status" aria-live="polite">
+    <span class="spinner" aria-hidden="true"></span>
+    <span>Loading asset classes…</span>
   </div>
-  {#each classesByCategory as cat (cat.id)}
-    <div class="picker-category">
-      <span class="picker-category-label">{cat.label}</span>
-      <div class="picker-grid">
-        {#each cat.classes as ac (ac.id)}
-          <button
-            class="picker-tile"
-            class:selected={selectedClassId === ac.id}
-            aria-pressed={selectedClassId === ac.id}
-            onclick={() => selectClass(ac.id)}
-          >
-            <span class="tile-label">{ac.label}</span>
-            {#if ac.description}
-              <span class="tile-desc">{ac.description}</span>
-            {/if}
-          </button>
-        {/each}
-      </div>
+{:else if picker.failed}
+  <div class="picker-error" role="alert">
+    <p>Failed to load asset classes.</p>
+    <button class="picker-retry" onclick={onMountLoad}>Retry</button>
+  </div>
+{:else}
+  <div class="picker-section">
+    <div class="picker-search">
+      <input
+        type="text"
+        class="picker-search-input"
+        placeholder="Search asset classes..."
+        bind:value={searchQuery}
+      />
     </div>
-  {/each}
-</div>
+    {#each classesByCategory as cat (cat.id)}
+      <div class="picker-category">
+        <span class="picker-category-label">{cat.label}</span>
+        <div class="picker-grid">
+          {#each cat.classes as ac (ac.id)}
+            <button
+              class="picker-tile"
+              class:selected={selectedClassId === ac.id}
+              aria-pressed={selectedClassId === ac.id}
+              onclick={() => selectClass(ac.id)}
+            >
+              <span class="tile-label">{ac.label}</span>
+              {#if ac.description}
+                <span class="tile-desc">{ac.description}</span>
+              {/if}
+            </button>
+          {/each}
+        </div>
+      </div>
+    {/each}
+  </div>
+{/if}
 
 {#if supportCta}
   {@render supportCta()}
@@ -541,6 +568,55 @@
     flex-direction: column;
     gap: var(--space-6);
     margin-bottom: var(--space-6);
+  }
+
+  .picker-loading,
+  .picker-error {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-3);
+    padding: var(--space-8) var(--space-5);
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-body);
+  }
+
+  .picker-error {
+    flex-direction: column;
+    color: var(--color-text-secondary);
+  }
+
+  .picker-error p {
+    margin: 0;
+  }
+
+  .picker-retry {
+    background: none;
+    border: 1px solid var(--color-border, #e5e7eb);
+    border-radius: var(--radius-sm);
+    padding: var(--space-2) var(--space-4);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-primary);
+    cursor: pointer;
+  }
+
+  .picker-retry:hover {
+    background: var(--color-bg-secondary, #f3f4f6);
+  }
+
+  .spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--color-gray-200, #e5e7eb);
+    border-top-color: var(--gem-teal);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .picker-category {
