@@ -47,6 +47,12 @@
     type ColorMode,
   } from './ownership-tree-utils';
   import { buildNarrativeText } from './ownership-tree-narrative';
+  import {
+    backgroundClickSuppressionDeadline,
+    shouldIgnoreBackgroundClick,
+    shouldTreatPointerReleaseAsNodeClick,
+    shouldUseFallbackNodeClick,
+  } from './node-pointer-fallback';
 
   // --- URL hash state helpers (merge-friendly, namespaced with tree_ prefix) ---
   const HASH_KEYS = { color: 'tree_color', min: 'tree_min', focus: 'tree_focus' } as const;
@@ -113,6 +119,13 @@
     cumulativePct?: number;
   };
 
+  type PendingNodePress = {
+    nodeId: string;
+    pointerId: number;
+    startX: number;
+    startY: number;
+  };
+
   let {
     nodes = [],
     edges = [],
@@ -149,6 +162,10 @@
   let panStartY = 0;
   let panStartPanX = 0;
   let panStartPanY = 0;
+  let pendingNodePress = $state<PendingNodePress | null>(null);
+  let nodeClickFallbackTimer: ReturnType<typeof setTimeout> | null = null;
+  let lastNativeNodeClick: { id: string; at: number } | null = null;
+  let suppressBackgroundClickUntil = 0;
   let layoutNodes = $state<LayoutNode[]>([]);
   let layoutEdges = $state<LayoutEdge[]>([]);
   let gWidth = $state(400);
@@ -1156,6 +1173,77 @@
     onNavigate ? onNavigate(url) : goto(url);
   }
 
+  function clearNodeClickFallback(): void {
+    if (nodeClickFallbackTimer !== null) {
+      clearTimeout(nodeClickFallbackTimer);
+      nodeClickFallbackTimer = null;
+    }
+  }
+
+  function queueNodeClickFallback(n: LayoutNode): void {
+    clearNodeClickFallback();
+    nodeClickFallbackTimer = window.setTimeout(() => {
+      nodeClickFallbackTimer = null;
+      if (!shouldUseFallbackNodeClick(n.id, performance.now(), lastNativeNodeClick)) return;
+      clickNode(n);
+    }, 0);
+  }
+
+  function handleNativeNodeClick(n: LayoutNode): void {
+    lastNativeNodeClick = { id: n.id, at: performance.now() };
+    clickNode(n);
+  }
+
+  function startNodePress(n: LayoutNode, ev: PointerEvent): void {
+    pendingNodePress = {
+      nodeId: n.id,
+      pointerId: ev.pointerId,
+      startX: ev.clientX,
+      startY: ev.clientY,
+    };
+    (ev.currentTarget as Element)?.setPointerCapture?.(ev.pointerId);
+  }
+
+  function endNodePress(n: LayoutNode, ev: PointerEvent): void {
+    const press = pendingNodePress;
+    if (!press || press.nodeId !== n.id || press.pointerId !== ev.pointerId) return;
+    try {
+      (ev.currentTarget as Element)?.releasePointerCapture?.(ev.pointerId);
+    } catch {
+      /* no active capture */
+    }
+    pendingNodePress = null;
+
+    if (
+      !shouldTreatPointerReleaseAsNodeClick(
+        press.startX,
+        press.startY,
+        ev.clientX,
+        ev.clientY,
+        PAN_CLICK_THRESHOLD
+      )
+    ) {
+      return;
+    }
+
+    // Some embedded Drupal/Webflow layouts retarget mouseup/click from the SVG
+    // node to the background. Keep the intended node activation and ignore the
+    // immediate synthetic background click that follows.
+    suppressBackgroundClickUntil = backgroundClickSuppressionDeadline(performance.now());
+    queueNodeClickFallback(n);
+  }
+
+  function cancelNodePress(ev?: PointerEvent): void {
+    const press = pendingNodePress;
+    pendingNodePress = null;
+    if (!press || !ev || press.pointerId !== ev.pointerId) return;
+    try {
+      (ev.currentTarget as Element)?.releasePointerCapture?.(ev.pointerId);
+    } catch {
+      /* no active capture */
+    }
+  }
+
   // Hover only allowed when unfrozen OR when hovering a node in the frozen path
   function handleNodeHover(n: LayoutNode, ev?: MouseEvent) {
     if (frozenId && !isNodeInFrozenPath(n.id)) return;
@@ -1261,8 +1349,19 @@
 
   function startPan(ev: PointerEvent) {
     if (compact) return;
-    const target = ev.target as Element | null;
-    if (target?.closest('.node') || target?.closest('.zoom-stack')) return;
+    // composedPath() walks the real DOM path, including inside shadow DOM.
+    // ev.target alone is unreliable here because Svelte 5 delegates events to
+    // document level and the browser retargets .target to the shadow host
+    // when the dispatch crosses the boundary — so target.closest('.node')
+    // silently fails in widget embeds and startPan steals the pointer capture
+    // from startNodePress, breaking node clicks.
+    const path = ev.composedPath();
+    for (const n of path) {
+      const el = n as Element | null;
+      const classes = el?.classList;
+      if (!classes) continue;
+      if (classes.contains('node') || classes.contains('zoom-stack')) return;
+    }
     isPanning = true;
     panStartX = ev.clientX;
     panStartY = ev.clientY;
@@ -1525,6 +1624,7 @@
     })();
 
     return () => {
+      clearNodeClickFallback();
       window.removeEventListener('resize', onResize);
     };
   });
@@ -1809,6 +1909,8 @@
               ? `width: ${Math.round(graphBaseWidth)}px; min-height: ${Math.round(graphBaseHeight)}px;`
               : ''}
             onclick={(ev) => {
+              if (shouldIgnoreBackgroundClick(performance.now(), suppressBackgroundClickUntil))
+                return;
               // Click on SVG background (not a node) unfreezes
               if (
                 ev.target === ev.currentTarget ||
@@ -1928,9 +2030,12 @@
                     : 'auto'}"
                   role="button"
                   tabindex={isFaded ? -1 : 0}
-                  onclick={() => clickNode(n)}
+                  onclick={() => handleNativeNodeClick(n)}
                   ondblclick={() => dblClickNode(n)}
                   onkeydown={(ev) => ev.key === 'Enter' && dblClickNode(n)}
+                  onpointerdown={(ev) => startNodePress(n, ev)}
+                  onpointerup={(ev) => endNodePress(n, ev)}
+                  onpointercancel={cancelNodePress}
                   onmouseenter={(ev) => handleNodeHover(n, ev)}
                   onmousemove={updateTooltipPos}
                   onmouseleave={handleNodeLeave}
