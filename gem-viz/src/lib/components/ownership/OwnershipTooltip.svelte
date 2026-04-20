@@ -131,6 +131,11 @@
     padding: 6px 10px;
     border-radius: 6px;
     font-size: 11px;
+    /* Pin line-height so host-page themes (Drupal, Webflow, etc.) that set
+       body { line-height: 1.6 } don't inherit through the Shadow DOM and
+       stretch tooltip rows — the inter-row margins are calibrated for 1.3. */
+    line-height: 1.3;
+    font-family: var(--gem-sans, system-ui, -apple-system, sans-serif);
     white-space: nowrap;
     z-index: 20;
     transform: translate(-50%, -100%);
