@@ -45,3 +45,6 @@ scripts/.env
 static/widgets/index.js
 static/widgets/index.js.map
 static/widgets/chunks/
+
+# Claude Code local state (task lock, etc.)
+.claude/
