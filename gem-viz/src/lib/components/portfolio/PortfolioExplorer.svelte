@@ -29,7 +29,7 @@
   import { makeTreePaths, buildRenderHierarchy } from './portfolio-paths';
 
   const API_BASE =
-    import.meta.env?.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-api.thirdbear.net';
+    import.meta.env?.PUBLIC_OWNERSHIP_API_BASE_URL || 'https://gem-ownership-api-staging.fly.dev';
 
   // ============================================================================
   // PROPS
@@ -83,6 +83,7 @@
       asset_type: new Set(),
       operating_status: new Set(),
       ownership: new Set(),
+      intermediary: new Set(),
     };
   }
 
@@ -92,6 +93,7 @@
       asset_type: filterParams.asset_type || '',
       operating_status: filterParams.operating_status || '',
       ownership: filterParams.ownership || '',
+      intermediary: filterParams.intermediary || '',
     });
   }
 
@@ -155,7 +157,8 @@
     filters.country.size > 0 ||
       filters.asset_type.size > 0 ||
       filters.operating_status.size > 0 ||
-      filters.ownership.size > 0
+      filters.ownership.size > 0 ||
+      filters.intermediary.size > 0
   );
 
   /** Get ownership bucket label for an asset */
@@ -169,6 +172,30 @@
     return 'Unknown';
   }
 
+  /** Intermediaries with per-row filtered counts, sorted by filtered count when a filter is active */
+  let sortedIntermediaries = $derived.by(() => {
+    if (!isFiltered) return intermediaries;
+    const visible = new Set(displayProjectGroups.map((g) => g.projectID));
+    return [...intermediaries]
+      .map((inter) => ({
+        ...inter,
+        filteredCount: [...inter.projectIds].filter((pid) => visible.has(pid)).length,
+      }))
+      .sort((a, b) => b.filteredCount - a.filteredCount);
+  });
+
+  /** Union of projectIds for all selected intermediaries — null when no intermediary filter active */
+  let intermediaryProjectIds = $derived.by(() => {
+    if (filters.intermediary.size === 0) return null;
+    const ids = new Set();
+    for (const inter of intermediaries) {
+      if (filters.intermediary.has(inter.entity_id)) {
+        for (const pid of inter.projectIds) ids.add(pid);
+      }
+    }
+    return ids;
+  });
+
   /** Check whether a single asset passes all active filters */
   function assetMatchesFilters(a) {
     if (filters.country.size > 0 && !filters.country.has(a.country || 'Unknown')) return false;
@@ -180,6 +207,8 @@
     )
       return false;
     if (filters.ownership.size > 0 && !filters.ownership.has(getOwnershipBucket(a))) return false;
+    if (intermediaryProjectIds && !intermediaryProjectIds.has(a.location_id || a.asset_id))
+      return false;
     return true;
   }
 
@@ -214,7 +243,8 @@
   let displaySummary = $derived(filteredResult ? filteredResult.summary : summary);
   let displayProjectGroups = $derived(filteredResult ? filteredResult.groups : projectGroups);
 
-  /** Color field: user-toggleable, defaults to 'type' when multi-type */
+
+/** Color field: user-toggleable, defaults to 'type' when multi-type */
   const ALL_COLOR_FIELDS = ['type', 'status', 'country'];
   let colorFieldOverride = $state('');
   let lastSyncedColor = $state('');
@@ -274,14 +304,15 @@
     const treePaths = makeTreePaths(
       { nodes: apiData.nodes, edges: apiData.edges },
       apiData.spotlightOwner.entity_id,
-      displayProjectGroups
+      displayProjectGroups,
+      apiData.paths
     );
     return treePaths.maxDepth;
   });
 
-  /** Show tree when ≤30 assets AND <7 ownership depth layers */
+  /** Show tree when ≤30 assets AND <15 ownership depth layers */
   let showTree = $derived(
-    displayProjectGroups.length > 0 && displayProjectGroups.length <= 30 && displayTreeMaxDepth < 7
+    displayProjectGroups.length > 0 && displayProjectGroups.length <= 30 && displayTreeMaxDepth < 15
   );
 
   /** DOM refs */
@@ -298,11 +329,28 @@
 
   /** Stored d3 tree root — needed for asset→tree cross-highlighting */
   let treeRoot = $state(null);
+  /** D3 selections stored so sidebar hover can drive the same highlight as tree node hover */
+  let treeMarks = null;
+  let treeLinkGroup = null;
+  let treeLabels = null;
+  /** Additional refs for hidden-path ghost rendering */
+  let treeNodeByName = null;
+  let treeG = null;
+  let treeNr = 0;
+  let treePad = 3;
+  let treeWidth = 0;
+  let treeMargin = null;
+  let hiddenPathOverlay = null;
   /** Max ownership depth from root to leaf asset */
   let treeMaxDepth = $state(0);
   /** Intermediary names that fell out of the rendered tree because another (longer) path
    *  already reached the same leaf. Surfaced as the "duplicative intermediaries hidden" list. */
-  let hiddenIntermediaryNames = $state([]);
+  /** Entities dropped from the rendered tree (shorter paths) — full data for interaction */
+  let hiddenIntermediaries = $state([]);
+  /** entity_id of the frozen hidden-path overlay (null = nothing frozen) */
+  let frozenHiddenEntityId = $state(null);
+  /** Whether the hidden-intermediaries aside is expanded */
+  let hiddenIntermediariesExpanded = $state(false);
 
   /** Selected project for detail modal — null when closed */
   let selectedProject = $state(null);
@@ -411,7 +459,8 @@
       const treePaths = makeTreePaths(
         { nodes: data.nodes, edges },
         spotlightOwner.entity_id,
-        groups
+        groups,
+        data.paths
       );
 
       // Read-only intermediary list: each non-root entity → # of leaf projects it sits on
@@ -430,6 +479,7 @@
             entity_id: e.entity_id,
             name: e.name || e.full_name || e.entity_id,
             assetCount: leafs.size,
+            projectIds: leafs,
           };
         })
         .filter((e) => e.assetCount > 0)
@@ -441,6 +491,7 @@
         edges,
         nodes: data.nodes,
         summary: sum,
+        paths: data.paths || null,
       };
       summary = sum;
       projectGroups = groups;
@@ -538,6 +589,224 @@
     filters = createEmptyFilters();
   }
 
+  /** Highlight a tree node (and its ancestor/descendant paths) by entity_id.
+   *  Called from sidebar intermediary row hover — mirrors the tree node mouseover. */
+  function highlightIntermediaryInTree(entityId) {
+    if (!treeRoot || !treeMarks || !treeLinkGroup || !treeLabels) return;
+    const d = treeRoot.descendants().find((n) => n.data.name === entityId);
+    if (!d) return;
+    const activeNodes = new Set([...d.ancestors(), ...d.descendants()]);
+    treeMarks
+      .transition('fade')
+      .duration(100)
+      .style('opacity', (n) => (activeNodes.has(n) ? 1 : 0.15));
+    treeLinkGroup
+      .selectAll('path')
+      .transition('fade')
+      .duration(100)
+      .style('opacity', (l) =>
+        activeNodes.has(l.source) && activeNodes.has(l.target) ? 1 : 0.05
+      );
+    treeLabels
+      .selectAll('text')
+      .filter((n) => n.depth > 0)
+      .transition('fade')
+      .duration(100)
+      .style('opacity', (n) => (d.entityName === n.entityName ? 1 : 0));
+    // Mint stroke on the highlighted node's circle
+    treeMarks
+      .filter((n) => n === d)
+      .select('circle')
+      .transition('fade')
+      .duration(100)
+      .style('stroke', colors.mint)
+      .style('stroke-width', '2.5px');
+    if (assetsSvgEl) {
+      const leafNames = new Set(d.leaves().map((l) => l.data.name));
+      d3.select(assetsSvgEl)
+        .selectAll('.asset-row')
+        .transition('fade')
+        .duration(100)
+        .style('opacity', function () {
+          const pid = this.getAttribute('data-project-id');
+          return leafNames.has(pid) ? 1 : 0.15;
+        });
+    }
+  }
+
+  function clearTreeHover() {
+    if (!treeMarks || !treeLinkGroup || !treeLabels) return;
+    treeMarks.transition('fade').duration(200).style('opacity', 1);
+    treeMarks.select('circle').transition('fade').duration(200).style('stroke', null).style('stroke-width', null);
+    treeLinkGroup.selectAll('path').transition('fade').duration(200).style('opacity', 1);
+    treeLabels
+      .selectAll('text')
+      .filter((n) => n.depth > 0)
+      .transition('fade')
+      .duration(200)
+      .style('opacity', 0);
+    if (assetsSvgEl) {
+      d3.select(assetsSvgEl)
+        .selectAll('.asset-row')
+        .transition('fade')
+        .duration(200)
+        .style('opacity', 1);
+    }
+  }
+
+  /** Render a ghost overlay in the tree showing where a hidden intermediary sits.
+   *  Finds its nearest in-tree neighbours on each raw path, interpolates a position,
+   *  draws connecting dashed curves, and fades non-path elements. */
+  function highlightHiddenPath(entityId) {
+    if (!treeRoot || !treeNodeByName || !treeMarks || !treeLinkGroup || !hiddenPathOverlay) return;
+    hiddenPathOverlay.selectAll('*').remove();
+
+    const hidden = hiddenIntermediaries.find((h) => h.entity_id === entityId);
+    if (!hidden) return;
+
+    // For each raw path through this entity find nearest in-tree predecessor + successor
+    const connections = [];
+    for (const rawPath of hidden.rawPaths) {
+      const idx = rawPath.path.indexOf(entityId);
+      if (idx < 0) continue;
+      let prev = null;
+      for (let i = idx - 1; i >= 0; i--) {
+        const n = treeNodeByName.get(rawPath.path[i]);
+        if (n) { prev = n; break; }
+      }
+      let next = null;
+      for (let i = idx + 1; i < rawPath.path.length; i++) {
+        const n = treeNodeByName.get(rawPath.path[i]);
+        if (n) { next = n; break; }
+      }
+      if (prev || next) connections.push({ prev, next });
+    }
+    if (connections.length === 0) return;
+
+    // Interpolate position: average of per-path midpoints between neighbours
+    const stepSize = treeWidth / Math.max(treeRoot.height, 1);
+    let sumX = 0, sumY = 0;
+    for (const { prev, next } of connections) {
+      if (prev && next) {
+        sumX += (prev.x + next.x) / 2;
+        sumY += (prev.y + next.y) / 2;
+      } else if (prev) {
+        sumX += prev.x;
+        sumY += prev.y + stepSize;
+      } else {
+        sumX += next.x;
+        sumY += next.y - stepSize;
+      }
+    }
+    const hiddenX = sumX / connections.length;
+    const hiddenY = sumY / connections.length;
+
+    const nr = treeNr;
+    const PAD = treePad;
+    const drawCurve = (x1, y1, x2, y2) => {
+      const dx = x2 - x1;
+      const distX = Math.max(dx / 2, treeWidth * 0.075);
+      hiddenPathOverlay
+        .append('path')
+        .attr('d', `M${x1},${y1} C${x1 + distX},${y1} ${x2 - distX},${y2} ${x2},${y2}`)
+        .style('fill', 'none')
+        .style('stroke', ownershipColors.treeEdge)
+        .style('stroke-width', 1.5)
+        .style('stroke-dasharray', '4 3')
+        .style('stroke-linecap', 'round')
+        .style('mix-blend-mode', 'multiply');
+    };
+
+    for (const { prev, next } of connections) {
+      if (prev) drawCurve(prev.y + nr + PAD, prev.x, hiddenY - nr - PAD, hiddenX);
+      if (next) {
+        const x2 = next.children ? next.y - nr - PAD : treeWidth + treeMargin.right;
+        drawCurve(hiddenY + nr + PAD, hiddenX, x2, next.x);
+      }
+    }
+
+    // Circle for the hidden node
+    hiddenPathOverlay
+      .append('circle')
+      .attr('cx', hiddenY)
+      .attr('cy', hiddenX)
+      .attr('r', nr)
+      .style('fill', ownershipColors.treeNodeFill)
+      .style('stroke', colors.mint)
+      .style('stroke-width', '2px');
+
+    // Ownership pie arc
+    if (hidden.ownershipPct != null) {
+      const arc = d3Shape.arc().innerRadius(0).startAngle(0);
+      hiddenPathOverlay
+        .append('path')
+        .attr('transform', `translate(${hiddenY},${hiddenX})`)
+        .attr('d', arc({ outerRadius: nr - 1.5, endAngle: 2 * Math.PI * hidden.ownershipPct }))
+        .style('fill', ownershipColors.treeTeal)
+        .style('pointer-events', 'none');
+    }
+
+    // Name label
+    const label = hidden.name.length > 24 ? hidden.name.slice(0, 22) + '…' : hidden.name;
+    hiddenPathOverlay
+      .append('text')
+      .attr('x', hiddenY)
+      .attr('y', hiddenX - nr - 11)
+      .style('text-anchor', 'middle')
+      .style('stroke', 'white')
+      .style('stroke-width', 3)
+      .style('stroke-linejoin', 'round')
+      .attr('paint-order', 'stroke')
+      .style('font-size', '10px')
+      .style('font-family', "var(--font-family, 'Plus Jakarta Sans', sans-serif)")
+      .style('fill', colors.navy)
+      .style('pointer-events', 'none')
+      .text(label);
+
+    // Fade non-path tree elements
+    const pathNodeIds = new Set(hidden.rawPaths.flatMap((p) => p.path));
+    const activeNodes = new Set(treeRoot.descendants().filter((d) => pathNodeIds.has(d.data.name)));
+    treeMarks.transition('fade').duration(100).style('opacity', (n) => (activeNodes.has(n) ? 1 : 0.15));
+    treeLinkGroup
+      .selectAll('path')
+      .transition('fade')
+      .duration(100)
+      .style('opacity', (l) =>
+        pathNodeIds.has(l.source.data.name) && pathNodeIds.has(l.target.data.name) ? 1 : 0.05
+      );
+    if (assetsSvgEl) {
+      const leafIds = new Set(hidden.rawPaths.map((p) => p.path[p.path.length - 1]));
+      d3.select(assetsSvgEl)
+        .selectAll('.asset-row')
+        .transition('fade')
+        .duration(100)
+        .style('opacity', function () {
+          return leafIds.has(this.getAttribute('data-project-id')) ? 1 : 0.15;
+        });
+    }
+  }
+
+  function clearHiddenPathOverlay() {
+    if (frozenHiddenEntityId) {
+      // Restore the frozen path rather than clearing
+      highlightHiddenPath(frozenHiddenEntityId);
+      return;
+    }
+    hiddenPathOverlay?.selectAll('*').remove();
+    clearTreeHover();
+  }
+
+  function toggleFrozenHiddenPath(entityId) {
+    if (frozenHiddenEntityId === entityId) {
+      frozenHiddenEntityId = null;
+      hiddenPathOverlay?.selectAll('*').remove();
+      clearTreeHover();
+    } else {
+      frozenHiddenEntityId = entityId;
+      highlightHiddenPath(entityId);
+    }
+  }
+
   // ============================================================================
   // D3 TREE VISUALIZATION (port of drawTreeChart)
   // Hierarchy materialization + prune/collapse/root-promotion steps live in
@@ -547,7 +816,15 @@
   function drawTree() {
     if (!treeSvgEl || !apiData || !showTree) {
       treeRoot = null;
-      hiddenIntermediaryNames = [];
+      treeMarks = null;
+      treeLinkGroup = null;
+      treeLabels = null;
+      treeNodeByName = null;
+      treeG = null;
+      hiddenPathOverlay = null;
+      hiddenIntermediaries = [];
+      frozenHiddenEntityId = null;
+      hiddenIntermediariesExpanded = false;
       return;
     }
     const svg = d3.select(treeSvgEl);
@@ -558,10 +835,13 @@
     const treePaths = makeTreePaths(
       { nodes: apiData.nodes, edges: apiData.edges },
       apiData.spotlightOwner.entity_id,
-      currentGroups
+      currentGroups,
+      apiData.paths
     );
     if (treePaths.pathStrings.length === 0) {
-      hiddenIntermediaryNames = [];
+      hiddenIntermediaries = [];
+      frozenHiddenEntityId = null;
+      hiddenIntermediariesExpanded = false;
       return;
     }
 
@@ -577,18 +857,28 @@
 
     // "Duplicative intermediaries hidden" — entities that exist in the DAG but didn't make it
     // onto any selected (longest-per-leaf) path. Skip leaf projects and asset nodes.
-    const unusedEntityNames = [];
+    // Only list entities that appear on at least one raw path in the current filter —
+    // entities that connect only to filtered-out projects would otherwise show up here
+    // even though they're irrelevant to the current view.
+    const rawPathNodes = new Set(treePaths.paths.flatMap((p) => p.path));
+    const hiddenList = [];
     for (const n of apiData.nodes || []) {
       const id = n.entity_id || n.asset_id;
       if (!id || n.node_type === 'asset') continue;
       if (validLeafIds.has(id)) continue;
       if (id === apiData.spotlightOwner?.entity_id) continue;
-      if (treePaths.unused.unusedNodes.has(id)) {
-        unusedEntityNames.push(n.name || n.full_name || id);
+      if (treePaths.unused.unusedNodes.has(id) && rawPathNodes.has(id)) {
+        const cumPct = treePaths.cumulativeEntityPctMap.get(id);
+        hiddenList.push({
+          entity_id: id,
+          name: n.name || n.full_name || id,
+          ownershipPct: cumPct != null ? Math.max(0, Math.min(1, cumPct / 100)) : null,
+          rawPaths: treePaths.paths.filter((p) => p.path.includes(id)),
+        });
       }
     }
-    unusedEntityNames.sort((a, b) => a.localeCompare(b));
-    hiddenIntermediaryNames = unusedEntityNames;
+    hiddenList.sort((a, b) => a.name.localeCompare(b.name));
+    hiddenIntermediaries = hiddenList;
 
     const root = d3Hierarchy.hierarchy(hierData);
 
@@ -799,9 +1089,21 @@
         return pct + '%';
       });
 
+    // Store selections for sidebar→tree cross-highlighting
+    treeMarks = marks;
+    treeLinkGroup = linkGroup;
+    treeLabels = labels;
+    treeNodeByName = nodeByName;
+    treeG = g;
+    treeNr = nr;
+    treePad = PAD;
+    treeWidth = width;
+    treeMargin = margin;
+
     // Hover interactions: highlight paths (matches Observable notebook exactly)
     marks
       .on('mouseover', function (event, d) {
+        if (frozenHiddenEntityId) return; // frozen hidden-path overlay takes precedence
         // Find all upstream and downstream nodes of the hovered node
         const activeNodes = new Set([...d.ancestors(), ...d.descendants()]);
 
@@ -842,6 +1144,7 @@
         }
       })
       .on('mouseout', function () {
+        if (frozenHiddenEntityId) return; // frozen hidden-path overlay takes precedence
         // Restore all node marks
         marks.transition('fade').duration(200).style('opacity', 1);
 
@@ -865,6 +1168,9 @@
             .style('opacity', 1);
         }
       });
+
+    // Overlay group for hidden-path ghost rendering (appended last so it paints on top)
+    hiddenPathOverlay = g.append('g').attr('class', 'hidden-path-overlay');
 
     // Store root for asset→tree cross-highlighting
     treeRoot = root;
@@ -1159,6 +1465,7 @@
       asset_type: parseFilterParam(initialFilters.asset_type),
       operating_status: parseFilterParam(initialFilters.operating_status),
       ownership: parseFilterParam(initialFilters.ownership),
+      intermediary: parseFilterParam(initialFilters.intermediary),
     };
     lastSyncedFilterSignature = nextSignature;
   });
@@ -1372,29 +1679,88 @@
           <div class="chart-row">
             {#if showTree}
               <div class="tree-container">
-                {#if hiddenIntermediaryNames.length > 0}
-                  <aside
-                    class="hidden-intermediaries"
-                    title="Entities that appear only on secondary (shorter) ownership paths to assets already reached by a longer chain. Their paths render as dashed lines."
-                  >
-                    <div class="hidden-intermediaries-title">
-                      {hiddenIntermediaryNames.length} duplicative intermediar{hiddenIntermediaryNames.length ===
-                      1
-                        ? 'y'
-                        : 'ies'} not placed in tree
+                {#if hiddenIntermediaries.length > 0}
+                  <div class="hidden-intermediaries-sticky">
+                  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                  <aside class="hidden-intermediaries" onclick={(e) => e.stopPropagation()}>
+                    <!-- svelte-ignore a11y_no_noninteractive_element_interactions a11y_no_noninteractive_tabindex a11y_no_static_element_interactions -->
+                    <div
+                      class="hidden-intermediaries-title"
+                      class:open={hiddenIntermediariesExpanded}
+                      tabindex="0"
+                      onclick={() => (hiddenIntermediariesExpanded = !hiddenIntermediariesExpanded)}
+                      onkeydown={(e) =>
+                        e.key === 'Enter' &&
+                        (hiddenIntermediariesExpanded = !hiddenIntermediariesExpanded)}
+                    >
+                      <span class="hidden-intermediaries-chevron"
+                        >{hiddenIntermediariesExpanded ? '−' : '+'}</span
+                      >
+                      {hiddenIntermediaries.length}
+                      {hiddenIntermediaries.length === 1
+                        ? 'intermediary'
+                        : 'intermediaries'} from duplicate paths hidden
                     </div>
-                    <ul class="hidden-intermediaries-list">
-                      {#each hiddenIntermediaryNames as name (name)}
-                        <li>{name}</li>
-                      {/each}
-                    </ul>
-                    <div class="hidden-intermediaries-note">
-                      Each asset is placed under its longest ownership chain. Shorter chains through
-                      these entities are drawn as dashed secondary links.
-                    </div>
+                    {#if hiddenIntermediariesExpanded}
+                      <div class="hidden-intermediaries-body">
+                      <ul class="hidden-intermediaries-list">
+                        {#each hiddenIntermediaries as h (h.entity_id)}
+                          {@const isFrozen = frozenHiddenEntityId === h.entity_id}
+                          {@const pieR = 7}
+                          {@const piePct = h.ownershipPct ?? 1}
+                          <!-- svelte-ignore a11y_no_noninteractive_element_interactions a11y_no_noninteractive_tabindex -->
+                          <li
+                            class="hidden-intermediary-item"
+                            class:frozen={isFrozen}
+                            tabindex="0"
+                            onmouseenter={() => highlightHiddenPath(h.entity_id)}
+                            onmouseleave={clearHiddenPathOverlay}
+                            onclick={() => toggleFrozenHiddenPath(h.entity_id)}
+                            onkeydown={(e) =>
+                              e.key === 'Enter' && toggleFrozenHiddenPath(h.entity_id)}
+                          >
+                            <svg
+                              class="hidden-intermediary-pie"
+                              width={pieR * 2}
+                              height={pieR * 2}
+                              viewBox="{-pieR} {-pieR} {pieR * 2} {pieR * 2}"
+                            >
+                              <circle r={pieR} fill={ownershipColors.treeNodeFill} />
+                              <path
+                                d={d3Shape
+                                  .arc()
+                                  .innerRadius(0)
+                                  .startAngle(0)({
+                                    outerRadius: pieR - 1,
+                                    endAngle: 2 * Math.PI * piePct,
+                                  })}
+                                fill={ownershipColors.treeTeal}
+                              />
+                            </svg>
+                            <span class="hidden-intermediary-name">{h.name}</span>
+                          </li>
+                        {/each}
+                      </ul>
+                      <div class="hidden-intermediaries-note">
+                        Each asset is placed under its longest ownership chain. Hover to preview
+                        shorter paths; click to freeze.
+                      </div>
+                      </div>
+                    {/if}
                   </aside>
+                  </div>
                 {/if}
-                <svg bind:this={treeSvgEl}></svg>
+                <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions a11y_no_static_element_interactions -->
+                <svg
+                  bind:this={treeSvgEl}
+                  onclick={() => {
+                    if (frozenHiddenEntityId) {
+                      frozenHiddenEntityId = null;
+                      hiddenPathOverlay?.selectAll('*').remove();
+                      clearTreeHover();
+                    }
+                  }}
+                ></svg>
               </div>
             {/if}
             <div class="assets-container" class:full-width={!showTree}>
@@ -1570,16 +1936,31 @@
             </div>
           {/if}
 
-          <!-- Intermediaries: read-only fallback when the tree is hidden. Tree already
-               surfaces names visibly for small portfolios, so we only list them here
-               when the tree doesn't render. -->
-          {#if !showTree && intermediaries.length > 0}
+          <!-- Intermediaries: always shown so filtering is visible regardless of tree state -->
+          {#if intermediaries.length > 0}
             <div class="summary-section">
               <p class="subtitle">Intermediaries</p>
               <div class="summary-table">
-                {#each intermediaries as inter}
-                  <div class="summary-row readonly">
-                    {inter.name} ({inter.assetCount})
+                {#each sortedIntermediaries as inter}
+                  {@const isActive = filters.intermediary.has(inter.entity_id)}
+                  {@const filteredCount = inter.filteredCount ?? null}
+                  {@const hasResults = !isFiltered || (filteredCount ?? 0) > 0}
+                  <div
+                    class="summary-row"
+                    class:active={isActive}
+                    class:dimmed={isFiltered && !isActive && hasResults}
+                    class:faded={isFiltered && !isActive && !hasResults}
+                    role="button"
+                    tabindex="0"
+                    onclick={() => applyFilter('intermediary', inter.entity_id)}
+                    onkeydown={(e) =>
+                      e.key === 'Enter' && applyFilter('intermediary', inter.entity_id)}
+                    onmouseenter={() => highlightIntermediaryInTree(inter.entity_id)}
+                    onmouseleave={clearTreeHover}
+                  >
+                    {inter.name} ({isFiltered
+                      ? `${filteredCount ?? 0} of ${inter.assetCount}`
+                      : inter.assetCount})
                   </div>
                 {/each}
               </div>
@@ -1809,34 +2190,85 @@
     margin-right: -8px;
     position: relative;
   }
+  .hidden-intermediaries-sticky {
+    position: sticky;
+    top: 8px;
+    height: 0;
+    overflow: visible;
+    z-index: 2;
+  }
   .hidden-intermediaries {
-    position: absolute;
-    top: 0;
-    left: 0;
+    position: relative;
+    display: inline-block;
     max-width: 220px;
-    padding: 6px 8px;
     background: rgba(255, 255, 255, 0.92);
     border: 1px solid var(--color-border, #e0e0e0);
-    border-radius: 3px;
+    border-radius: 4px;
     font-size: 10px;
     line-height: 1.35;
     color: var(--color-text-muted, #444);
     pointer-events: auto;
-    z-index: 2;
+    overflow: hidden;
   }
   .hidden-intermediaries-title {
     font-weight: 600;
     color: var(--color-text, #222);
-    margin-bottom: 3px;
+    margin: 0;
+    padding: 5px 8px;
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(0, 0, 0, 0.03);
+    border-bottom: 1px solid transparent;
+    transition: background 0.1s;
+  }
+  .hidden-intermediaries-title:hover {
+    background: rgba(157, 247, 229, 0.2);
+  }
+  .hidden-intermediaries-title.open {
+    border-bottom-color: var(--color-border, #e0e0e0);
+  }
+  .hidden-intermediaries-body {
+    padding: 5px 8px 6px;
+  }
+  .hidden-intermediaries-chevron {
+    font-size: 16px;
+    line-height: 1;
+    flex-shrink: 0;
+    color: var(--color-text-muted, #666);
   }
   .hidden-intermediaries-list {
-    margin: 0 0 4px;
-    padding-left: 12px;
-    max-height: 120px;
+    margin: 0 0 5px;
+    padding: 0;
+    max-height: 140px;
     overflow-y: auto;
+    list-style: none;
   }
-  .hidden-intermediaries-list li {
-    list-style: disc;
+  .hidden-intermediary-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 3px;
+    border-radius: 3px;
+    cursor: pointer;
+    line-height: 1.3;
+  }
+  .hidden-intermediary-item:hover {
+    background: rgba(157, 247, 229, 0.15);
+  }
+  .hidden-intermediary-item.frozen {
+    background: rgba(157, 247, 229, 0.25);
+    outline: 1px solid var(--gem-mint, #9df7e5);
+  }
+  .hidden-intermediary-pie {
+    flex-shrink: 0;
+  }
+  .hidden-intermediary-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .hidden-intermediaries-note {
     font-style: italic;
@@ -1982,12 +2414,6 @@
   }
   .summary-row.faded {
     opacity: 0.15;
-  }
-  .summary-row.readonly {
-    cursor: default;
-  }
-  .summary-row.readonly:hover {
-    background: transparent;
   }
 
   /* ---- Empty state ---- */

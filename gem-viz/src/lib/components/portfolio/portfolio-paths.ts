@@ -137,6 +137,10 @@ export function buildGraphLookups(nodes: GraphNode[], edges: GraphEdge[]): Graph
 
 // =============================================================================
 // 2. DFS — collect ALL root→leaf paths
+// NOTE: Prefer the API paths object (fromApiPaths) over this function.
+// Using client-side graph traversal as a fallback risks silently papering over
+// API bugs (e.g. missing or empty paths). If paths are absent, the visualization
+// should surface that gap rather than computing its own approximation.
 // =============================================================================
 
 /**
@@ -295,6 +299,9 @@ export function findUnusedGraphElements(
 
 // =============================================================================
 // 5. Entity cumulative % — BFS over the whole DAG
+// NOTE: Prefer the API paths object (fromApiPaths) over this function.
+// Same reasoning as the DFS fallback above — client-side BFS may hide missing
+// or incorrect cumulative % data in the API.
 // =============================================================================
 
 /**
@@ -330,22 +337,76 @@ export function computeEntityCumulativePct(
 }
 
 // =============================================================================
+// API-paths helper — derives RawPath[] and cumulativeEntityPctMap directly
+// from the paths object returned by /ownership/graph, bypassing DFS + BFS.
+// The API already handles cycles and computes cumulative % per path.
+// =============================================================================
+
+export type ApiPathsRecord = Record<string, Array<{ route: string[]; cumulative_pct: number }>>;
+
+function fromApiPaths(
+  apiPaths: ApiPathsRecord,
+  assetToProject: Map<string, string>,
+  projectIds: Set<string>
+): { paths: RawPath[]; cumulativeEntityPctMap: Map<string, number> } {
+  const paths: RawPath[] = [];
+  const cumulativeEntityPctMap = new Map<string, number>();
+
+  for (const [nodeId, nodePaths] of Object.entries(apiPaths)) {
+    const isAsset = assetToProject.has(nodeId);
+    if (isAsset) {
+      // Asset (unit-level) node — use the API route directly.
+      // The route ends with the unit ID; normalize the leaf to project (location) ID.
+      const projId = assetToProject.get(nodeId)!;
+      if (!projectIds.has(projId)) continue;
+      for (const p of nodePaths) {
+        if (!p.route || p.route.length === 0) continue;
+        const route = [...p.route];
+        const leaf = route[route.length - 1];
+        if (assetToProject.has(leaf)) route[route.length - 1] = assetToProject.get(leaf)!;
+        paths.push({ path: route, pct: p.cumulative_pct, depth: route.length });
+      }
+    } else {
+      // Entity node — accumulate cumulative ownership % across all paths
+      const total = nodePaths.reduce((s, p) => s + (p.cumulative_pct || 0), 0);
+      if (total > 0) cumulativeEntityPctMap.set(nodeId, total);
+    }
+  }
+
+  return { paths, cumulativeEntityPctMap };
+}
+
+// =============================================================================
 // Top-level composer — mirrors the original `makeTreePaths` behavior
 // =============================================================================
 
 export function makeTreePaths(
   graph: { nodes: GraphNode[]; edges: GraphEdge[] },
   rootEntityId: string,
-  groups: { projectID: string }[]
+  groups: { projectID: string }[],
+  /** Optional: paths from the API response — skips DFS + BFS when provided. */
+  apiPaths?: ApiPathsRecord | null
 ): MakeTreePathsResult {
   const lookups = buildGraphLookups(graph.nodes, graph.edges);
   const projectIds = new Set(groups.map((g) => g.projectID));
 
-  const paths = collectAllPathsDFS(lookups, rootEntityId, projectIds);
+  let paths: RawPath[];
+  let cumulativeEntityPctMap: Map<string, number>;
+
+  if (apiPaths && Object.keys(apiPaths).length > 0) {
+    ({ paths, cumulativeEntityPctMap } = fromApiPaths(
+      apiPaths,
+      lookups.assetToProject,
+      projectIds
+    ));
+  } else {
+    paths = collectAllPathsDFS(lookups, rootEntityId, projectIds);
+    cumulativeEntityPctMap = computeEntityCumulativePct(lookups, rootEntityId);
+  }
+
   const selected = selectBestPathPerLeaf(paths);
   const pathStrings = selected.map((p) => p.path.join('/'));
   const cumulativePctMap = sumSelectedPathPctByLeaf(selected);
-  const cumulativeEntityPctMap = computeEntityCumulativePct(lookups, rootEntityId);
   const unused = findUnusedGraphElements(
     graph.nodes,
     graph.edges,
@@ -371,10 +432,16 @@ export function makeTreePaths(
 // =============================================================================
 
 export function buildHierarchyFromPaths(pathStrings: string[]): HierNode {
-  const root: HierNode = { name: 'root', children: [] };
+  if (pathStrings.length === 0) return { name: '', children: [] };
+  // All paths share the same first element (the spotlight owner), so use it
+  // directly as the root — no synthetic wrapper node needed.
+  const rootName = pathStrings[0].split('/')[0];
+  const root: HierNode = { name: rootName, children: [] };
   for (const ps of pathStrings) {
+    const parts = ps.split('/');
     let cur = root;
-    for (const part of ps.split('/')) {
+    for (let i = 1; i < parts.length; i++) {
+      const part = parts[i];
       let child = cur.children.find((c) => c.name === part);
       if (!child) {
         child = { name: part, children: [] };
