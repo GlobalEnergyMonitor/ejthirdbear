@@ -4,6 +4,20 @@
  */
 
 /**
+ * Build the Step 3 results-page subtitle.
+ * Single source of truth so the widget and standalone route stay aligned.
+ */
+export function buildResultsSubtitle(
+  viewMode: 'filtered' | 'all',
+  selectedOwnerCount: number,
+  classDescription: string
+): string {
+  return viewMode === 'filtered'
+    ? `Showing ${selectedOwnerCount} selected companies and their ownership in ${classDescription}.`
+    : `Showing all companies with ownership stakes in ${classDescription}.`;
+}
+
+/**
  * Clean an asset name for display. Prefers project_name from API when available,
  * otherwise falls back to trimming facility-type suffixes from asset_name.
  */

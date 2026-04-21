@@ -14,6 +14,8 @@
 
   // Step 1 — shared with /screener route (single source of truth)
   import ScreenerStep1 from '$lib/components/screener/ScreenerStep1.svelte';
+  import ScreenerFilterCrumbs from '$lib/components/screener/ScreenerFilterCrumbs.svelte';
+  import { buildResultsSubtitle } from '$lib/components/screener/screener-utils';
   import WidgetModal from '$lib/components/overlay/WidgetModal.svelte';
   import { fetchAssetFacets, fetchStatusTaxonomy } from './widget-api';
 
@@ -147,6 +149,7 @@
           assetClassId: cls.assetClassId || cls.id,
           status: statuses.length > 0 ? statuses : undefined,
           country: countries,
+          catalogOwnersUrl: cls.catalogOwnersUrl || undefined,
         },
         { limit: 500 }
       );
@@ -384,6 +387,7 @@
           assetClassId: cls.assetClassId || cls.id,
           status: statuses.length > 0 ? statuses : undefined,
           country: countries,
+          catalogOwnersUrl: cls.catalogOwnersUrl || undefined,
         },
         { limit: 500 }
       );
@@ -625,6 +629,9 @@
               {viewMode === 'filtered' ? 'selected' : ''}
               owners
             </h2>
+            <p class="step-subtitle">
+              {buildResultsSubtitle(viewMode, selectedOwnerIds.length, classDescription)}
+            </p>
           </div>
           <div class="step-actions">
             {#if selectedOwnerIds.length > 0}
@@ -637,6 +644,7 @@
           </div>
         </div>
       </div>
+      <ScreenerFilterCrumbs {selectedClasses} />
 
       {#if resultsLoading}
         <div class="loading">Loading owners…</div>

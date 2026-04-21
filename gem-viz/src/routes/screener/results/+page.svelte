@@ -18,6 +18,8 @@
   import DebugPanel from '$lib/components/feedback/DebugPanel.svelte';
   import ScreenerOwnersResultsTable from '$lib/components/screener/ScreenerOwnersResultsTable.svelte';
   import AssetScreenerChart from '$lib/components/screener/AssetScreenerChart.svelte';
+  import ScreenerFilterCrumbs from '$lib/components/screener/ScreenerFilterCrumbs.svelte';
+  import { buildResultsSubtitle } from '$lib/components/screener/screener-utils';
 
   import {
     getAssetTypeForTracker,
@@ -693,9 +695,7 @@
 
 <ScreenerLayout
   currentStep={3}
-  subtitle={viewMode === 'filtered'
-    ? `Showing ${selectedOwnerIds.length} selected companies and their ownership in ${classDescription}.`
-    : `Showing all companies with ownership stakes in ${classDescription}.`}
+  subtitle={buildResultsSubtitle(viewMode, selectedOwnerIds.length, classDescription)}
   {classesParam}
   {ownersParam}
   maxWidth="wide"
@@ -714,41 +714,7 @@
     />
   {/snippet}
 
-  <!-- Compact filter breadcrumb -->
-  <div class="filter-bar">
-    <span class="filter-crumbs">
-      {#each selectedClasses as cls}
-        <span class="crumb">{cls.name || cls.tracker}</span>
-        {#if cls.filters?.statuses?.length > 0}
-          <span class="crumb-sep">/</span>
-          <span class="crumb">
-            {cls.filters.statuses.length <= 3
-              ? cls.filters.statuses.join(', ')
-              : `${cls.filters.statuses.length} statuses`}
-          </span>
-        {:else if cls.filters?.status}
-          <span class="crumb-sep">/</span>
-          <span class="crumb">{cls.filters.status}</span>
-        {/if}
-        {#if cls.filters?.geography}
-          {@const geo = cls.filters.geography}
-          <span class="crumb-sep">/</span>
-          <span class="crumb">
-            {Array.isArray(geo)
-              ? geo.length <= 3
-                ? geo.join(', ')
-                : `${geo.length} countries`
-              : geo}
-          </span>
-        {/if}
-        {#if cls.filters?.geofence}
-          <span class="crumb-sep">/</span>
-          <span class="crumb">custom region</span>
-        {/if}
-      {/each}
-    </span>
-    <button class="edit-link" onclick={openEditModal}>Edit filters</button>
-  </div>
+  <ScreenerFilterCrumbs {selectedClasses} onEdit={openEditModal} />
 
   {#if parseError}
     <div class="parse-error">
@@ -1022,50 +988,6 @@
   }
 
   /* ── Filter breadcrumb bar ──────────────────── */
-  .filter-bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-3);
-    padding: 8px 12px;
-    margin-bottom: var(--space-4);
-    background: var(--color-gray-50, #f8fafc);
-    border: 1px solid var(--color-gray-200, #e5e7eb);
-    border-radius: 2px;
-    font-size: var(--font-size-sm);
-  }
-
-  .filter-crumbs {
-    color: var(--color-text-secondary);
-  }
-
-  .crumb {
-    font-weight: 500;
-    color: var(--color-text-primary);
-  }
-
-  .crumb-sep {
-    margin: 0 6px;
-    color: var(--color-text-tertiary);
-  }
-
-  .edit-link {
-    background: none;
-    border: none;
-    font: inherit;
-    font-size: var(--font-size-sm);
-    color: var(--color-text-tertiary);
-    text-decoration: underline;
-    text-underline-offset: 2px;
-    cursor: pointer;
-    white-space: nowrap;
-    padding: 0;
-  }
-
-  .edit-link:hover {
-    color: var(--gem-teal);
-  }
-
   /* ── Results section ────────────────────────── */
   .results-section {
     margin-top: var(--space-4);
