@@ -111,8 +111,9 @@
   }
 
   /** Max ownership % across all units in a location (used in tooltip/modal). */
-  function maxOwnershipPct(loc: LocationGroup): number {
-    return Math.max(...loc.units.map((u) => u.spotlightOwnershipSharePct ?? 0));
+  function maxOwnershipPct(loc: LocationGroup): number | null {
+    const nonNull = loc.units.map((u) => u.spotlightOwnershipSharePct).filter((p) => p !== null);
+    return nonNull.length > 0 ? Math.max(...nonNull) : null;
   }
 
   /** Look up GraphNode for a unit ID from the cached chart data. */
@@ -126,19 +127,24 @@
     return unit?.project_name;
   }
 
-  /** Build clamped modal style string. */
+  /** Build clamped modal style string. Modal uses raw clientX/Y (viewport coords). */
   function modalStyle(x: number, y: number): string {
-    const p = clampPos(x, y, 760, 520);
-    return `left:${p.left}px; top:${p.top}px;`;
+    const el = scrollEl as HTMLElement | null;
+    const containerW = el?.offsetWidth ?? 800;
+    const containerH = el?.offsetHeight ?? 600;
+    const w = 760, h = 520;
+    return `left:${Math.min(x + 10, containerW - w - 8)}px; top:${Math.min(y + 14, containerH - h - 8)}px;`;
   }
 
-  /** Clamp tooltip so it stays within the sticky-section container. */
+  /** Clamp tooltip so it stays within the currently visible portion of the scroll container. */
   function clampPos(x: number, y: number, w = 300, h = 200) {
-    const containerW = (scrollEl as HTMLElement | null)?.offsetWidth ?? 800;
-    const containerH = (scrollEl as HTMLElement | null)?.offsetHeight ?? 600;
+    const el = scrollEl as HTMLElement | null;
+    const containerW = el?.offsetWidth ?? 800;
+    const containerH = el?.offsetHeight ?? 600;
+    const scrollTop = el?.scrollTop ?? 0;
     return {
       left: Math.min(x + 10, containerW - w - 8),
-      top: Math.min(y + 14, containerH - h - 8),
+      top: Math.min(y + 14, scrollTop + containerH - h - 8),
     };
   }
 
@@ -572,9 +578,7 @@
     {@const u0 = hoveredAsset.units[0]}
     <div class="asset-tooltip" style="left:{tt.left}px; top:{tt.top}px;">
       <div class="tt-name">{cleanAssetName(u0.name, projectName(u0))}</div>
-      {#if pct > 1 && pct < 100}
-        <div class="tt-eff">{pct % 1 === 0 ? pct : pct.toFixed(1)}% ownership</div>
-      {/if}
+      <div class="tt-eff">{pct !== null ? `${pct % 1 === 0 ? pct : pct.toFixed(1)}% ownership` : '--'}</div>
     </div>
   {/if}
 
@@ -583,6 +587,9 @@
     {@const u0 = selectedAsset.units[0]}
     {@const node0 = graphNodeFor(u0.id)}
     {@const pct = maxOwnershipPct(selectedAsset)}
+    {@const ownedUnitIds = new Set(selectedAsset.units.map((u) => u.id))}
+    {@const ownedLocUnits = locationUnits?.filter((u) => ownedUnitIds.has(String(u.asset_id ?? '')))}
+    {@const otherLocUnits = locationUnits?.filter((u) => !ownedUnitIds.has(String(u.asset_id ?? '')))}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
       class="modal-backdrop"
@@ -608,11 +615,9 @@
           {node0?.asset_type || u0.tracker || ''}{#if node0?.country}
             · {node0.country}{/if}
         </div>
-        {#if pct > 1 && pct < 100}
-          <div class="tt-eff" style="margin-bottom:6px">
-            {pct % 1 === 0 ? pct : pct.toFixed(1)}% ownership
-          </div>
-        {/if}
+        <div class="tt-eff" style="margin-bottom:6px">
+          {pct !== null ? `${pct % 1 === 0 ? pct : pct.toFixed(1)}% ownership` : '--'}
+        </div>
         <table class="tt-table">
           <thead>
             <tr>
@@ -626,7 +631,7 @@
           </thead>
           <tbody>
             {#if locationUnits}
-              {#each locationUnits as locUnit}
+              {#each (ownedLocUnits ?? locationUnits) as locUnit}
                 {@const assetId = String(locUnit.asset_id ?? '')}
                 {@const statusAgg = getStatusGroupId(String(locUnit.operating_status ?? ''))}
                 <tr>
@@ -669,6 +674,42 @@
             {/if}
           </tbody>
         </table>
+        {#if otherLocUnits?.length}
+          <div class="other-units-label">Other units of this project not owned through this subsidiary</div>
+          <table class="tt-table tt-table--other">
+            <thead>
+              <tr>
+                <th>Unit</th>
+                <th>Status</th>
+                <th class="num">Capacity</th>
+                {#each classFieldKeys as key}
+                  <th>{fieldLabel(key)}</th>
+                {/each}
+              </tr>
+            </thead>
+            <tbody>
+              {#each otherLocUnits as locUnit}
+                {@const assetId = String(locUnit.asset_id ?? '')}
+                {@const statusAgg = getStatusGroupId(String(locUnit.operating_status ?? ''))}
+                <tr>
+                  <td class="unit-name">{locUnit.asset_name ?? '—'}</td>
+                  <td>
+                    <span class="status-dot" style="background:{statusColors[statusAgg] || '#999'}"
+                    ></span>{locUnit.operating_status ?? '—'}
+                  </td>
+                  <td class="num">
+                    {locUnit.capacity_value != null
+                      ? `${Number(locUnit.capacity_value).toLocaleString()} ${locUnit.capacity_unit ?? 'MW'}`
+                      : '—'}
+                  </td>
+                  {#each classFieldKeys as key}
+                    <td>{classFieldValue(key, assetId)}</td>
+                  {/each}
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        {/if}
         <a
           class="asset-link"
           href="{base}/asset/{encodeURIComponent(u0.id)}"
@@ -1125,6 +1166,18 @@
     margin-right: 3px;
     vertical-align: middle;
     flex-shrink: 0;
+  }
+  .other-units-label {
+    margin-top: 14px;
+    margin-bottom: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #8a9ba8;
+  }
+  .tt-table--other {
+    opacity: 0.55;
   }
   .asset-link {
     display: inline-block;
