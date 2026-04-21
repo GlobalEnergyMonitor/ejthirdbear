@@ -1434,7 +1434,7 @@
 
       // Cumulative ownership badge (effective % through intermediary chains)
       const cumPct = cumulativePctMap.get(proj.projectID);
-      if (cumPct != null && cumPct < 99.9) {
+      if (cumPct != null && cumPct > 0) {
         labelG
           .append('text')
           .attr('dy', '0.35em')
@@ -1993,7 +1993,7 @@
           : tooltipPos.y - 10}
       <div class="portfolio-tooltip" style="left: {ttLeft}px; top: {ttTop}px;">
         <div class="tt-name">{u0?.project_name || u0?.asset_name || hoveredProject.projectID}</div>
-        {#if cumPct != null && cumPct < 99.9}
+        {#if cumPct != null && cumPct > 0}
           <div class="tt-eff">{fmtPct(cumPct)}% eff. ownership</div>
         {:else if u0?.ownership_share}
           <div class="tt-eff">{u0.ownership_share}% ownership</div>
@@ -2039,7 +2039,7 @@
             {sp0?.asset_type || ''}{#if sp0?.country}
               · {sp0.country}{/if}
           </div>
-          {#if modalCumPct != null && modalCumPct < 99.9}
+          {#if modalCumPct != null && modalCumPct > 0}
             <div class="tt-eff" style="margin-bottom:6px">
               {fmtPct(modalCumPct)}% effective ownership
             </div>
