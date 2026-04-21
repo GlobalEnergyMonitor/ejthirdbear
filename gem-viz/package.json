@@ -12,6 +12,8 @@
     "preview": "vite preview",
     "deploy": "npm run build && node scripts/deploy.js",
     "deploy:full": "npm run prefetch:api && npm run deploy",
+    "fly:staging": "fly deploy --config fly.staging.toml --build-arg GIT_COMMIT=$(git rev-parse HEAD) --build-arg GIT_MESSAGE=\"$(git log -1 --format=%s)\" --build-arg GIT_AUTHOR=\"$(git log -1 --format=%an)\"",
+    "fly:prod": "fly deploy --config fly.toml --build-arg GIT_COMMIT=$(git rev-parse HEAD) --build-arg GIT_MESSAGE=\"$(git log -1 --format=%s)\" --build-arg GIT_AUTHOR=\"$(git log -1 --format=%an)\"",
     "release": "node scripts/release.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

@@ -14,6 +14,11 @@ primary_region = 'sjc'
   force_https = true
   auto_stop_machines = 'suspend'
   auto_start_machines = true
+  # BEFORE REAL PROD LAUNCH: set this to 1.
+  # With 0 + suspend, both machines can suspend, and the first visitor after
+  # a quiet period can get 503s on lazy-loaded widget chunks while a machine
+  # is mid-wake — widget silently fails to mount, reload fixes it. Keeping
+  # one machine warm eliminates the cold-wake window.
   min_machines_running = 0
 
 [[vm]]
