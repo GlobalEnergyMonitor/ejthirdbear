@@ -19,7 +19,10 @@
   import ScreenerOwnersResultsTable from '$lib/components/screener/ScreenerOwnersResultsTable.svelte';
   import AssetScreenerChart from '$lib/components/screener/AssetScreenerChart.svelte';
   import ScreenerFilterCrumbs from '$lib/components/screener/ScreenerFilterCrumbs.svelte';
-  import { buildResultsSubtitle } from '$lib/components/screener/screener-utils';
+  import {
+    buildResultsSubtitle,
+    buildClassDescription,
+  } from '$lib/components/screener/screener-utils';
 
   import {
     getAssetTypeForTracker,
@@ -135,41 +138,7 @@
   );
 
   // Build human-readable description of selected class
-  const classDescription = $derived.by(() => {
-    if (selectedClasses.length === 0) return 'selected assets';
-
-    const cls = selectedClasses[0];
-    const trackerName = cls.name || cls.tracker || 'assets';
-    const parts: string[] = [];
-
-    // Only show status prefix when a small number are selected (1-3)
-    const statuses: string[] =
-      cls.filters?.statuses || (cls.filters?.status ? [cls.filters.status] : []);
-    if (statuses.length === 1) {
-      parts.push(statuses[0]);
-    } else if (statuses.length > 1 && statuses.length <= 3) {
-      parts.push(statuses.join('/'));
-    }
-    // 4+ statuses: skip status prefix (too noisy in "Ownership in N ..." text)
-
-    parts.push(trackerName);
-
-    if (cls.filters?.geography) {
-      const geo = cls.filters.geography;
-      if (Array.isArray(geo)) {
-        if (geo.length === 1) parts.push(`in ${geo[0]}`);
-        else if (geo.length > 1) parts.push(`in ${geo.length} countries`);
-      } else {
-        parts.push(`in ${geo}`);
-      }
-    }
-
-    if (cls.filters?.geofence) {
-      parts.push('in custom region');
-    }
-
-    return parts.join(' ');
-  });
+  const classDescription = $derived(buildClassDescription(selectedClasses));
 
   // State
   let loading = $state(true);

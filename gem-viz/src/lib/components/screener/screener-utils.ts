@@ -17,6 +17,59 @@ export function buildResultsSubtitle(
     : `Showing all companies with ownership stakes in ${classDescription}.`;
 }
 
+type ClassDescriptionInput = {
+  name?: string;
+  tracker?: string;
+  filters?: {
+    statuses?: string[];
+    status?: string;
+    geography?: string | string[];
+    geofence?: number[][] | null;
+  } | null;
+};
+
+/**
+ * Build the human-readable "operating/planned Captive Power Data Centers in 2 countries"
+ * description used inside the results subtitle. Single source of truth so both the
+ * standalone /screener/results route and the GemScreener widget stay aligned.
+ *
+ * Prefers the class NAME (e.g. "Captive Power Data Centers") over the tracker slug
+ * (e.g. "Gas Plant") — the tracker slug is misleading for multi-tracker classes.
+ */
+export function buildClassDescription(selectedClasses: ClassDescriptionInput[]): string {
+  if (!selectedClasses || selectedClasses.length === 0) return 'selected assets';
+
+  const cls = selectedClasses[0];
+  const trackerName = cls.name || cls.tracker || 'assets';
+  const parts: string[] = [];
+
+  const statuses: string[] = cls.filters?.statuses ?? (cls.filters?.status ? [cls.filters.status] : []);
+  if (statuses.length === 1) {
+    parts.push(statuses[0]);
+  } else if (statuses.length > 1 && statuses.length <= 3) {
+    parts.push(statuses.join('/'));
+  }
+  // 4+ statuses: skip status prefix (too noisy in "Ownership in N ..." text)
+
+  parts.push(trackerName);
+
+  const geo = cls.filters?.geography;
+  if (geo) {
+    if (Array.isArray(geo)) {
+      if (geo.length === 1) parts.push(`in ${geo[0]}`);
+      else if (geo.length > 1) parts.push(`in ${geo.length} countries`);
+    } else {
+      parts.push(`in ${geo}`);
+    }
+  }
+
+  if (cls.filters?.geofence) {
+    parts.push('in custom region');
+  }
+
+  return parts.join(' ');
+}
+
 /**
  * Clean an asset name for display. Prefers project_name from API when available,
  * otherwise falls back to trimming facility-type suffixes from asset_name.

@@ -15,7 +15,10 @@
   // Step 1 — shared with /screener route (single source of truth)
   import ScreenerStep1 from '$lib/components/screener/ScreenerStep1.svelte';
   import ScreenerFilterCrumbs from '$lib/components/screener/ScreenerFilterCrumbs.svelte';
-  import { buildResultsSubtitle } from '$lib/components/screener/screener-utils';
+  import {
+    buildResultsSubtitle,
+    buildClassDescription,
+  } from '$lib/components/screener/screener-utils';
   import WidgetModal from '$lib/components/overlay/WidgetModal.svelte';
   import { fetchAssetFacets, fetchStatusTaxonomy } from './widget-api';
 
@@ -327,25 +330,7 @@
   const PAGE_SIZE = 100;
   let currentPage = $state(0);
 
-  const classDescription = $derived.by(() => {
-    if (selectedClasses.length === 0) return 'selected assets';
-    const cls = selectedClasses[0];
-    const trackerName = cls.tracker || cls.name || 'assets';
-    const parts: string[] = [];
-    const statuses: string[] =
-      cls.filters?.statuses || (cls.filters?.status ? [cls.filters.status] : []);
-    if (statuses.length === 1) parts.push(statuses[0]);
-    else if (statuses.length > 1 && statuses.length <= 3) parts.push(statuses.join('/'));
-    parts.push(trackerName);
-    if (cls.filters?.geography) {
-      const geo = cls.filters.geography;
-      if (Array.isArray(geo)) {
-        if (geo.length === 1) parts.push(`in ${geo[0]}`);
-        else if (geo.length > 1) parts.push(`in ${geo.length} countries`);
-      } else parts.push(`in ${geo}`);
-    }
-    return parts.join(' ');
-  });
+  const classDescription = $derived(buildClassDescription(selectedClasses));
 
   const viewMode = $derived(selectedOwnerIds.length > 0 ? 'filtered' : 'all');
 
@@ -417,7 +402,7 @@
   let assetsByOwner = $state(new Map());
 
   const chartAssetClassName = $derived(
-    selectedClasses.length > 0 ? selectedClasses[0]?.tracker || selectedClasses[0]?.name || '' : ''
+    selectedClasses.length > 0 ? selectedClasses[0]?.name || selectedClasses[0]?.tracker || '' : ''
   );
   const chartTrackerSlug = $derived(selectedClasses.length > 0 ? selectedClasses[0]?.id || '' : '');
 
