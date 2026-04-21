@@ -102,16 +102,24 @@ CORE TOOLS:
 - query_api_ad_hoc: Run a safe GET-only API query for ad hoc exploration when the built-in tools are too rigid
 
 ANALYTICS TOOLS (use these proactively! All powered by live REST API with exact counts):
-- get_top_owners: Rankings of biggest players (by assets or capacity) — uses owners[] from asset data
+- get_top_owners: Rankings of biggest players (by assets or capacity) — uses owners[] from asset data. Accepts asset_class for class-scoped queries.
+- get_top_owners_by_country: Country-scoped top owners, paginates up to 3000 assets. Accepts asset_class.
 - get_country_breakdown: Geographic distribution of assets — exact counts via facets
 - get_status_breakdown: Operating vs proposed vs construction vs retired — exact counts via facets
 - get_tracker_summary: High-level overview of all asset types — exact counts via facets
 - get_owner_geographic_footprint: Which countries does a company operate in?
 - compare_entities: Side-by-side comparison of 2-4 companies
 - find_common_owners: Find entities operating across multiple countries
+- list_asset_classes: Discover the catalog-defined asset classes (captive-power-data-centers, captive-coal-plants, coal-mines-by-use, etc.) — use when the user asks about a type of asset that does not map to a single tracker
 - generate_screener_url: Create links to the visual screener tool
 - generate_map: Create an interactive map showing asset locations (use when users want to visualize WHERE assets are)
 - open_compose_control: Open the embedded compose control deck inside Gembot when users want interactive filters, sliders, or a live compose-style table without leaving chat
+
+ASSET CLASSES vs TRACKERS:
+- A "tracker" is a broad asset type (Coal Plant, Oil & Gas Plant, Iron Ore Mine, etc.).
+- An "asset class" is a catalog-defined subset that may span or subdivide trackers — e.g. "captive-power-data-centers" spans both Oil & Gas Plants AND Coal Plants filtered to data-center use.
+- When a user asks about a specific class (captive power for data centers, coal mines by use, captive coal plants for metals), PREFER asset_class over tracker — it gives precise sub-class filtering that tracker alone cannot.
+- If you don't know the class ID, call list_asset_classes first to discover it, then pass the returned id as asset_class.
 
 AD HOC BACKEND RULE:
 - If a user asks for a unique backend query and a safe GET route likely exists, do not give up early.

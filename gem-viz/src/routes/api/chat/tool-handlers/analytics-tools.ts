@@ -4,6 +4,7 @@
 
 import { listAssets, resolveApiSlug } from '$lib/ownership-api';
 import { API_TYPE_TO_SLUG } from '$lib/data-config/tracker-schema';
+import { fetchAssetClasses } from '$lib/api/catalog-api';
 import {
   API_BASE,
   fetchApiJson,
@@ -13,31 +14,39 @@ import {
   type ToolHandler,
 } from './tool-utils';
 
-async function getTopOwners(args: ToolArgs): Promise<ToolResult> {
-  const tracker = args.tracker as string | null;
-  const limit = clampLimit(args.limit, 10, 50);
-  const metric = (args.metric as string) === 'capacity' ? 'capacity' : 'assets';
-  const slug = tracker ? resolveApiSlug(tracker) : null;
+type OwnerAgg = { name: string; entityId: string; assetCount: number; capacity: number };
 
-  const MAX_ASSETS = 2000;
+/**
+ * Page through the /assets endpoint and aggregate owners. Used by both
+ * get_top_owners and get_top_owners_by_country so pagination is consistent.
+ * Stops when either the full filter set is scanned or maxAssets is reached.
+ */
+async function aggregateOwnersPaged(params: {
+  asset_type?: string;
+  asset_class?: string;
+  country?: string;
+  status?: string;
+  maxAssets?: number;
+}): Promise<{ ownerMap: Map<string, OwnerAgg>; totalScanned: number; totalAvailable: number }> {
   const BATCH = 500;
-  const ownerMap = new Map<
-    string,
-    { name: string; entityId: string; assetCount: number; capacity: number }
-  >();
+  const maxAssets = params.maxAssets ?? 3000;
+  const ownerMap = new Map<string, OwnerAgg>();
   let totalScanned = 0;
   let totalAvailable = 0;
 
   let offset = 0;
-  while (offset < MAX_ASSETS) {
+  while (offset < maxAssets) {
     const page = await listAssets({
       limit: BATCH,
       offset,
-      asset_type: slug ?? undefined,
+      asset_type: params.asset_type,
+      asset_class: params.asset_class,
+      country: params.country,
+      status: params.status,
     });
     totalAvailable = page.total;
     for (const asset of page.results) {
-      if (asset.owners) {
+      if (asset.owners && asset.owners.length > 0) {
         for (const owner of asset.owners) {
           if (!owner.entityId) continue;
           const existing = ownerMap.get(owner.entityId);
@@ -53,12 +62,42 @@ async function getTopOwners(args: ToolArgs): Promise<ToolResult> {
             });
           }
         }
+      } else if (asset.ownerName) {
+        const key = asset.ownerEntityId || asset.ownerName;
+        const existing = ownerMap.get(key);
+        if (existing) {
+          existing.assetCount++;
+          existing.capacity += asset.capacity || 0;
+        } else {
+          ownerMap.set(key, {
+            name: asset.ownerName,
+            entityId: asset.ownerEntityId || '',
+            assetCount: 1,
+            capacity: asset.capacity || 0,
+          });
+        }
       }
     }
     totalScanned += page.results.length;
     offset += BATCH;
     if (page.results.length < BATCH) break;
   }
+
+  return { ownerMap, totalScanned, totalAvailable };
+}
+
+async function getTopOwners(args: ToolArgs): Promise<ToolResult> {
+  const tracker = args.tracker as string | null;
+  const assetClass = args.asset_class as string | undefined;
+  const limit = clampLimit(args.limit, 10, 50);
+  const metric = (args.metric as string) === 'capacity' ? 'capacity' : 'assets';
+  const slug = tracker ? resolveApiSlug(tracker) : null;
+
+  const { ownerMap, totalScanned, totalAvailable } = await aggregateOwnersPaged({
+    asset_type: slug ?? undefined,
+    asset_class: assetClass,
+    maxAssets: 3000,
+  });
 
   const sorted = [...ownerMap.values()]
     .sort((a, b) => (metric === 'capacity' ? b.capacity - a.capacity : b.assetCount - a.assetCount))
@@ -69,6 +108,7 @@ async function getTopOwners(args: ToolArgs): Promise<ToolResult> {
     data: {
       metric,
       tracker: tracker || 'all',
+      asset_class: assetClass,
       sampled: totalScanned,
       totalAvailable,
       owners: sorted.map((o) => ({
@@ -79,7 +119,7 @@ async function getTopOwners(args: ToolArgs): Promise<ToolResult> {
       })),
       note:
         totalScanned < totalAvailable
-          ? `Based on ${totalScanned.toLocaleString()} of ${totalAvailable.toLocaleString()} assets (sampled for speed)`
+          ? `Based on ${totalScanned.toLocaleString()} of ${totalAvailable.toLocaleString()} assets (sampled for speed; raise maxAssets to deepen)`
           : undefined,
     },
   };
@@ -88,73 +128,89 @@ async function getTopOwners(args: ToolArgs): Promise<ToolResult> {
 async function getTopOwnersByCountry(args: ToolArgs): Promise<ToolResult> {
   const country = args.country as string;
   const tracker = args.tracker as string | undefined;
+  const assetClass = args.asset_class as string | undefined;
   const status = args.status as string | undefined;
   const limit = clampLimit(args.limit, 10, 50);
   const slug = tracker ? resolveApiSlug(tracker) : null;
 
-  const assetsResult = await listAssets({
-    country: country,
+  const { ownerMap, totalScanned, totalAvailable } = await aggregateOwnersPaged({
+    country,
     asset_type: slug ?? undefined,
+    asset_class: assetClass,
     status: status?.toLowerCase(),
-    limit: 500,
+    maxAssets: 3000,
   });
 
-  if (assetsResult.count === 0) {
+  if (ownerMap.size === 0) {
     return {
       success: true,
       data: {
         country,
         tracker: tracker || 'all',
+        asset_class: assetClass,
         owners: [],
         message: `No assets found in ${country}${tracker ? ` for ${tracker}` : ''}`,
       },
     };
   }
 
-  const ownerCounts = new Map<string, { name: string; count: number; entityId: string }>();
-  for (const asset of assetsResult.results) {
-    if (asset.owners && asset.owners.length > 0) {
-      for (const owner of asset.owners) {
-        if (!owner.entityId) continue;
-        const existing = ownerCounts.get(owner.entityId);
-        if (existing) {
-          existing.count++;
-        } else {
-          ownerCounts.set(owner.entityId, {
-            name: owner.name,
-            count: 1,
-            entityId: owner.entityId,
-          });
-        }
-      }
-    } else if (asset.ownerName) {
-      const key = asset.ownerEntityId || asset.ownerName;
-      const existing = ownerCounts.get(key);
-      if (existing) {
-        existing.count++;
-      } else {
-        ownerCounts.set(key, {
-          name: asset.ownerName,
-          count: 1,
-          entityId: asset.ownerEntityId || '',
-        });
-      }
-    }
-  }
-
-  const sortedOwners = [...ownerCounts.values()].sort((a, b) => b.count - a.count).slice(0, limit);
+  const sortedOwners = [...ownerMap.values()]
+    .sort((a, b) => b.assetCount - a.assetCount)
+    .slice(0, limit);
 
   return {
     success: true,
     data: {
       country,
       tracker: tracker || 'all',
-      totalAssetsSearched: assetsResult.count,
+      asset_class: assetClass,
+      totalAssetsScanned: totalScanned,
+      totalAssetsAvailable: totalAvailable,
       owners: sortedOwners.map((o) => ({
         name: o.name,
         entityId: o.entityId,
-        assetCount: o.count,
+        assetCount: o.assetCount,
       })),
+      note:
+        totalScanned < totalAvailable
+          ? `Based on ${totalScanned.toLocaleString()} of ${totalAvailable.toLocaleString()} assets in ${country} (sampled for speed)`
+          : undefined,
+    },
+  };
+}
+
+/**
+ * List the catalog-defined asset classes (e.g. "captive-power-data-centers",
+ * "coal-mines-by-use"). These are multi-tracker or sub-tracker groupings that
+ * power the screener. Useful when a user asks about a "type" of asset that
+ * doesn't map cleanly to a single tracker.
+ */
+async function listAssetClasses(args: ToolArgs): Promise<ToolResult> {
+  const query = (args.query as string | undefined)?.toLowerCase().trim();
+  const classes = await fetchAssetClasses();
+  const filtered = query
+    ? classes.filter(
+        (c) =>
+          c.id.toLowerCase().includes(query) ||
+          c.label.toLowerCase().includes(query) ||
+          (c.description || '').toLowerCase().includes(query) ||
+          (c.category || '').toLowerCase().includes(query)
+      )
+    : classes;
+
+  return {
+    success: true,
+    data: {
+      total: classes.length,
+      matched: filtered.length,
+      classes: filtered.map((c) => ({
+        id: c.id,
+        label: c.label,
+        description: c.description,
+        category: c.category,
+        url: c.url,
+      })),
+      note: 'Pass the `id` field to get_top_owners / get_top_owners_by_country / search_assets as `asset_class` to filter by this class.',
     },
   };
 }
@@ -271,4 +327,5 @@ export const analyticsHandlers: Record<string, ToolHandler> = {
   get_country_breakdown: getCountryBreakdown,
   get_status_breakdown: getStatusBreakdown,
   get_tracker_summary: getTrackerSummary,
+  list_asset_classes: listAssetClasses,
 };

@@ -188,7 +188,7 @@ export const TOOLS = [
     function: {
       name: 'get_top_owners',
       description:
-        'Get the biggest owners ranked by asset count or capacity. Samples up to 2000 assets for speed. For country-specific queries, use get_top_owners_by_country instead.',
+        'Get the biggest owners ranked by asset count or capacity. Pages up to 3000 assets with the given filter. For country-specific queries, use get_top_owners_by_country instead. Accepts asset_class for class-scoped queries (e.g. "captive-power-data-centers"); use list_asset_classes to discover valid class IDs.',
       parameters: {
         type: 'object',
         properties: {
@@ -196,6 +196,11 @@ export const TOOLS = [
             type: 'string',
             enum: TRACKERS as unknown as string[],
             description: 'Filter to a specific asset type',
+          },
+          asset_class: {
+            type: 'string',
+            description:
+              'Filter by a catalog asset class ID (e.g. "captive-power-data-centers", "captive-coal-plants", "coal-mines-by-use"). Use list_asset_classes to discover valid IDs. Scoping by asset_class is MORE PRECISE than tracker when the user asks about a specific class of asset (e.g. "captive power for data centers" should use asset_class, not tracker).',
           },
           metric: {
             type: 'string',
@@ -216,7 +221,7 @@ export const TOOLS = [
     function: {
       name: 'get_top_owners_by_country',
       description:
-        'Get the biggest owners of assets IN A SPECIFIC COUNTRY. Returns entity names, IDs, and asset counts ranked by holdings.',
+        'Get the biggest owners of assets IN A SPECIFIC COUNTRY. Returns entity names, IDs, and asset counts ranked by holdings. Pages up to 3000 assets (was capped at 500, fixed 2026-04-21).',
       parameters: {
         type: 'object',
         properties: {
@@ -229,6 +234,11 @@ export const TOOLS = [
             enum: TRACKERS as unknown as string[],
             description: 'Filter to a specific asset type',
           },
+          asset_class: {
+            type: 'string',
+            description:
+              'Filter by a catalog asset class ID (e.g. "captive-power-data-centers"). Use list_asset_classes to discover valid IDs.',
+          },
           status: {
             type: 'string',
             enum: STATUS_VALUES as unknown as string[],
@@ -240,6 +250,25 @@ export const TOOLS = [
           },
         },
         required: ['country'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_asset_classes',
+      description:
+        'List the catalog-defined asset classes (e.g. "captive-power-data-centers", "captive-coal-plants", "coal-mines-by-use", "coal-related-assets"). These are multi-tracker or sub-tracker groupings that power the visual screener. Use this to discover valid asset_class IDs when a user asks about a type of asset that does not map cleanly to a single tracker (captive power for data centers, coal-related assets across tracker types, coal mines by use, etc). Pass an optional query to narrow the list.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description:
+              'Optional text filter for class id, label, description, or category (e.g. "captive", "coal", "data center").',
+          },
+        },
+        required: [],
       },
     },
   },
