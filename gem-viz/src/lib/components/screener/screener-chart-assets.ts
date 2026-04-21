@@ -88,7 +88,8 @@ function renderExpandedSubGroups(
   getColor: (_unit: ChartUnit) => string,
   callbacks: AssetRenderCallbacks
 ): void {
-  const xShift = LAYOUT.assetsX + depth * LAYOUT.expansionShift;
+  // Only shift assets right for the first expansion level; deeper levels stay at the same x.
+  const xShift = LAYOUT.assetsX + Math.min(depth, 1) * LAYOUT.expansionShift;
 
   for (const sg of subGroups) {
     const sgG = group
@@ -326,14 +327,21 @@ export function drawCommonAssetLines(
   function findLocation(
     node: SubsidiaryGroupData,
     assetId: string,
-    xShiftAcc = 0
+    xShiftAcc = 0,
+    depth = 0
   ): { location: LocationGroup; locationTop: number; xShift: number } | null {
-    const direct = node.locations.find((loc) => loc.units.some((u) => u.id === assetId));
-    if (direct) return { location: direct, locationTop: node.top, xShift: xShiftAcc };
+    // Only search direct locations if not expanded — expanded nodes have stale loc.y values;
+    // the real laid-out locations live in expansion.subGroups.
+    if (!node.expansion) {
+      const direct = node.locations.find((loc) => loc.units.some((u) => u.id === assetId));
+      if (direct) return { location: direct, locationTop: node.top, xShift: xShiftAcc };
+    }
 
     if (node.expansion) {
+      // Only add shift for the first expansion level; deeper levels stay at the same x.
+      const nextShift = depth === 0 ? LAYOUT.expansionShift : 0;
       for (const sg of node.expansion.subGroups) {
-        const result = findLocation(sg, assetId, xShiftAcc + LAYOUT.expansionShift);
+        const result = findLocation(sg, assetId, xShiftAcc + nextShift, depth + 1);
         if (result) return result;
       }
     }
@@ -353,11 +361,11 @@ export function drawCommonAssetLines(
 
       const { location, locationTop, xShift } = found;
 
-      const groupSel = assetGroup.select(`#subsidiary-asset-group-${subId}`);
-      const subGroupSel = assetGroup.select(`#subsidiary-asset-group-${CSS.escape(`${subId}`)}`);
-      const labelEl = groupSel.empty()
-        ? subGroupSel.select(`#asset-${location.locationID}`).select('text')
-        : groupSel.select(`#asset-${location.locationID}`).select('text');
+      // Look up the asset element directly by its unique ID (works for both expanded and
+      // non-expanded subsidiaries; the asset g element always gets this ID).
+      const labelEl = assetGroup
+        .select(`#asset-${location.locationID}`)
+        .select('text');
       const bbox = labelEl.node() ? (labelEl.node() as SVGTextElement).getBBox() : { width: 100 };
 
       points.push({
@@ -391,11 +399,12 @@ export function drawCommonAssetLines(
     const xE = LAYOUT.assetsX + points[1].xShift + points[1].offsetX;
     const yE = points[1].locationTop + points[1].location.y;
 
-    const R = scaleDistance(yE - yS) + Math.random() * 45 + 5;
+    const ctrl = scaleDistance(yE - yS) + (Math.random()+0.5) * 40 + 25;
+    // Cubic bezier: both control points pull rightward so the curve loops to the right,
+    // matching the visual style regardless of whether xS and xE differ (e.g. one endpoint
+    // is in an expanded subsidiary shifted right).
     p.moveTo(xS, yS);
-    p.arc(xS, yS + R, R, -Math.PI / 2, 0, false);
-    p.lineTo(xE + R, yE - R);
-    p.arc(xE, yE - R, R, 0, Math.PI / 2, false);
+    p.bezierCurveTo(xS + ctrl, yS, xE + ctrl, yE, xE, yE);
 
     lineGroup
       .append('path')
