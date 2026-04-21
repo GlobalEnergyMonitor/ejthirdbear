@@ -337,7 +337,7 @@
     })
   );
 
-  // Filtered owners based on search
+  // Filtered owners based on search, always sorted by matched projects desc
   const filteredOwners = $derived.by(() => {
     let result = owners;
 
@@ -347,7 +347,11 @@
       result = result.filter((o) => o.name.toLowerCase().includes(query));
     }
 
-    return result;
+    return [...result].sort(
+      (a, b) =>
+        (b.filteredProjects ?? b.filteredAssets ?? 0) -
+        (a.filteredProjects ?? a.filteredAssets ?? 0)
+    );
   });
 
   const totalPages = $derived(Math.ceil(filteredOwners.length / PAGE_SIZE));
