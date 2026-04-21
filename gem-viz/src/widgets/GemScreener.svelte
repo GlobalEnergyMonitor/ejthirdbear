@@ -46,6 +46,11 @@
   import ScreenerStepNav from '$lib/components/nav/ScreenerStepNav.svelte';
   import type { ScreenerSelectedClass } from '$lib/data-config/screener-types';
   import { getEntity } from './widget-api';
+  import {
+    fetchAssetClasses,
+    extractClassFieldKeys,
+    type CatalogAssetClass,
+  } from '$lib/api/catalog-api';
 
   // ============================================================================
   // PROPS
@@ -326,7 +331,13 @@
   let noAssetEntities = $state<{ id: string; name: string; country?: string | null }[]>([]);
   let bulkMatchProvenance = $state<Record<string, string[]>>({});
   let resultsSearchQuery = $state('');
-  let chartModalOwner = $state<{ entityId: string; name: string } | null>(null);
+  let chartModalOwner = $state<{
+    entityId: string;
+    name: string;
+    filteredAssets?: number;
+    totalAssets?: number;
+    filteredProjects?: number;
+  } | null>(null);
   const PAGE_SIZE = 100;
   let currentPage = $state(0);
 
@@ -397,7 +408,15 @@
   // ============================================================================
   // STEP 4 STATE — Visualize
   // ============================================================================
-  let vizOwners = $state<{ entityId: string; name: string }[]>([]);
+  type VizOwner = {
+    entityId: string;
+    name: string;
+    filteredAssets?: number;
+    totalAssets?: number;
+    filteredProjects?: number;
+  };
+
+  let vizOwners = $state<VizOwner[]>([]);
   let vizLoading = $state(true);
   let assetsByOwner = $state(new Map());
 
@@ -406,18 +425,67 @@
   );
   const chartTrackerSlug = $derived(selectedClasses.length > 0 ? selectedClasses[0]?.id || '' : '');
 
+  // Catalog + field keys — mirror the /screener/results derivation so chart
+  // modals inside the widget filter assets by the same class-specific fields
+  // (e.g. Captive Industry="data center") that the standalone route uses.
+  let catalogClasses = $state<CatalogAssetClass[]>([]);
+  $effect(() => {
+    fetchAssetClasses()
+      .then((c) => {
+        catalogClasses = c;
+      })
+      .catch(() => {});
+  });
+
+  const classFieldKeys = $derived.by((): string[] => {
+    if (!catalogClasses.length || !selectedClasses.length) return [];
+    const cls = selectedClasses[0];
+    const ids: string[] = cls.selectedSubClasses?.length
+      ? cls.selectedSubClasses
+      : [cls.id || cls.assetClassId || ''].filter(Boolean);
+    const seen = new Set<string>();
+    const keys: string[] = [];
+    for (const id of ids) {
+      const entry = catalogClasses.find((c) => c.id === id);
+      for (const key of extractClassFieldKeys(entry?.url)) {
+        if (!seen.has(key)) {
+          seen.add(key);
+          keys.push(key);
+        }
+      }
+    }
+    return keys;
+  });
+
   async function loadVisualization() {
     if (selectedOwnerIds.length === 0) return;
     vizLoading = true;
     try {
+      // Carry the per-owner filter totals from the Step 3 owners list so the
+      // chart can show "N matched units" correctly rather than re-fetching
+      // and defaulting to 0.
+      const ownerById = new Map(owners.map((o) => [o.entityId, o]));
       const results = await Promise.all(
         selectedOwnerIds.slice(0, 20).map(async (id) => {
-          try {
-            const entity = await getEntity(id);
-            return { entityId: id, name: entity?.name || entity?.fullName || id };
-          } catch {
-            return { entityId: id, name: id };
+          const existing = ownerById.get(id);
+          let name: string;
+          if (existing?.name) {
+            name = existing.name;
+          } else {
+            try {
+              const entity = await getEntity(id);
+              name = entity?.name || entity?.fullName || id;
+            } catch {
+              name = id;
+            }
           }
+          return {
+            entityId: id,
+            name,
+            filteredAssets: existing?.filteredAssets,
+            totalAssets: existing?.totalAssets,
+            filteredProjects: existing?.filteredProjects,
+          } satisfies VizOwner;
         })
       );
       vizOwners = results;
@@ -706,6 +774,13 @@
               entityName={chartModalOwner.name}
               assetClassName={chartAssetClassName}
               trackerSlug={chartTrackerSlug}
+              filteredAssetCount={chartModalOwner.filteredAssets}
+              totalPortfolioAssets={chartModalOwner.totalAssets}
+              filteredProjectCount={chartModalOwner.filteredProjects}
+              statusFilter={selectedClasses[0]?.filters?.statuses}
+              trackerFilter={selectedClasses[0]?.gemTrackers}
+              catalogUrl={selectedClasses[0]?.catalogUrl}
+              {classFieldKeys}
               fillHeight={true}
             />
           {/if}
@@ -735,6 +810,13 @@
                 entityName={owner.name}
                 assetClassName={chartAssetClassName}
                 trackerSlug={chartTrackerSlug}
+                filteredAssetCount={owner.filteredAssets}
+                totalPortfolioAssets={owner.totalAssets}
+                filteredProjectCount={owner.filteredProjects}
+                statusFilter={selectedClasses[0]?.filters?.statuses}
+                trackerFilter={selectedClasses[0]?.gemTrackers}
+                catalogUrl={selectedClasses[0]?.catalogUrl}
+                {classFieldKeys}
                 onDataLoaded={handleDataLoaded}
               />
             </div>
