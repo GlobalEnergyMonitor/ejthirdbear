@@ -20,7 +20,7 @@ export interface ChartUnit {
   status: string;
   subStatus: string;
   status_agg: string;
-  spotlightOwnershipSharePct: number;
+  spotlightOwnershipSharePct: number | null;
   directlyOwnedBySpotlightOwner: boolean;
   locationID: string;
 }
@@ -64,6 +64,8 @@ export interface SubsidiaryGroupData {
   intermediary_data?: {
     total_descendants: number;
     max_generations: number;
+    /** Present when all matched assets flow through the same ordered chain of intermediaries. */
+    chain?: Array<{ id: string; name: string; ownershipPct: number | null; directPct: number | null }>;
   };
   expansion?: SubsidiaryExpansion;
 }
@@ -76,7 +78,7 @@ export interface ScreenerChartData {
   matchedEdges: Map<string, { source: string; target: string; value: number }>;
   entityMap: Map<string, { id: string; Name: string; type: string }>;
   multiplePathAssets: Map<string, string[]>;
-  intermediaryData: Map<string, { total_descendants: number; max_generations: number }>;
+  intermediaryData: Map<string, { total_descendants: number; max_generations: number; chain?: Array<{ id: string; name: string; ownershipPct: number | null; directPct: number | null }> }>;
   assetDetails: Map<string, AssetSummary>;
   /** Cached graph node map — used by expandSubsidiary */
   graphNodeMap: Map<string, GraphNode>;
@@ -107,7 +109,7 @@ export const LAYOUT = {
   assetMarkHeightSingle: 16,
   assetMarkHeightCombined: 26,
   /** Rightward shift applied to assets (and parent region width) when a subsidiary is expanded. */
-  expansionShift: 45,
+  expansionShift: 60,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -202,6 +204,9 @@ export async function fetchChartData(
   const assetToSubsidiaries = new Map<string, string[]>();
   const subDescendantEntityIds = new Map<string, Set<string>>();
   const subMaxDepth = new Map<string, number>();
+  // Tracks the set of unique intermediary chain serializations per subsidiary.
+  // If exactly one unique non-empty chain exists, we can render pies on the path.
+  const subChainCandidates = new Map<string, Set<string>>();
 
   // First sub-pass: classify direct children of root (route.length === 2)
   for (const [nodeId, nodePaths] of Object.entries(paths)) {
@@ -227,48 +232,41 @@ export async function fetchChartData(
       const viaSubs = new Set<string>();
       for (const p of nodePaths) {
         const subId = p.route[1];
-        if (subId && subsidiaryIdSet.has(subId)) viaSubs.add(subId);
+        if (!subId || !subsidiaryIdSet.has(subId)) continue;
+        viaSubs.add(subId);
+        // Collect intermediary entities on this path (between subId and this asset).
+        // route = [root, subId, ...intermediaries..., asset] so slice(2, -1) gives intermediaries.
+        const intermediaries = p.route.slice(2, -1);
+        if (!subDescendantEntityIds.has(subId)) subDescendantEntityIds.set(subId, new Set());
+        for (const intId of intermediaries) subDescendantEntityIds.get(subId)!.add(intId);
+        subMaxDepth.set(subId, Math.max(subMaxDepth.get(subId) ?? 0, intermediaries.length));
+        if (!subChainCandidates.has(subId)) subChainCandidates.set(subId, new Set());
+        subChainCandidates.get(subId)!.add(JSON.stringify(intermediaries));
       }
       for (const subId of viaSubs) {
         if (!subsidiaryToAssets.has(subId)) subsidiaryToAssets.set(subId, []);
         subsidiaryToAssets.get(subId)!.push(nodeId);
       }
       if (viaSubs.size > 0) assetToSubsidiaries.set(nodeId, [...viaSubs]);
-    } else {
-      // Intermediary entity — track depth per subsidiary for the expand-icon indicator
-      for (const p of nodePaths) {
-        const subId = p.route[1];
-        if (!subId || !subsidiaryIdSet.has(subId)) continue;
-        if (!subDescendantEntityIds.has(subId)) subDescendantEntityIds.set(subId, new Set());
-        subDescendantEntityIds.get(subId)!.add(nodeId);
-        // depth from subId = route.length - 2 (subtract root entry)
-        subMaxDepth.set(subId, Math.max(subMaxDepth.get(subId) ?? 0, p.route.length - 2));
-      }
     }
   }
 
+  // intermediaryData is built after graphEdgeMap so we can include directPct per chain step.
+  // Declaration here; populated below after graphEdgeMap is available.
   const intermediaryData = new Map<
     string,
-    { total_descendants: number; max_generations: number }
+    { total_descendants: number; max_generations: number; chain?: Array<{ id: string; name: string; ownershipPct: number | null; directPct: number | null }> }
   >();
-  for (const subId of subsidiaryIds) {
-    const descendants = subDescendantEntityIds.get(subId);
-    if (descendants && descendants.size > 0) {
-      intermediaryData.set(subId, {
-        total_descendants: descendants.size,
-        max_generations: subMaxDepth.get(subId) ?? 0,
-      });
-    }
-  }
 
   // The graph API already returns full asset metadata (operating_status, asset_type,
   // location_id, capacity, etc.) on each node — no need for individual getAsset() calls.
   const assetDetails = new Map<string, AssetSummary>();
 
   // Cumulative ownership % the spotlight owner holds in a node: sum of cumulative_pct across all paths.
-  function ownershipPctFor(nodeId: string): number {
+  // Returns null when no path data is available (rather than a misleading fallback value).
+  function ownershipPctFor(nodeId: string): number | null {
     const nodePaths = paths[nodeId];
-    if (!nodePaths?.length) return 100;
+    if (!nodePaths?.length) return null;
     return nodePaths.reduce((sum, p) => sum + (p.cumulative_pct ?? 0), 0);
   }
 
@@ -313,7 +311,7 @@ export async function fetchChartData(
   // Uses cumulative paths when available, so the pie reflects total spotlight-owner share.
   const matchedEdges = new Map<string, { source: string; target: string; value: number }>();
   for (const subId of subsidiaryIds) {
-    matchedEdges.set(subId, { source: rootId, target: subId, value: ownershipPctFor(subId) });
+    matchedEdges.set(subId, { source: rootId, target: subId, value: ownershipPctFor(subId) ?? 0 });
   }
 
   // Sort subsidiaries by ownership percentage (desc), then asset count (desc).
@@ -349,6 +347,41 @@ export async function fetchChartData(
     if (edge.value != null) {
       graphEdgeMap.set(`${edge.source}::${edge.target}`, edge.value);
     }
+  }
+
+  // Populate intermediaryData now that graphEdgeMap is available for directPct lookups.
+  for (const subId of subsidiaryIds) {
+    const descendants = subDescendantEntityIds.get(subId);
+    if (!descendants || descendants.size === 0) continue;
+    const chainCandidates = subChainCandidates.get(subId);
+    let chain: Array<{ id: string; name: string; ownershipPct: number | null; directPct: number | null }> | undefined;
+    if (chainCandidates?.size === 1) {
+      // All matched-asset paths through this subsidiary share the same intermediary sequence.
+      const chainIds = JSON.parse([...chainCandidates][0]) as string[];
+      if (chainIds.length > 0) {
+        chain = chainIds.map((id, i) => ({
+          id,
+          name: nodeMap.get(id)?.Name || id,
+          ownershipPct: ownershipPctFor(id),
+          directPct: graphEdgeMap.get(`${i === 0 ? subId : chainIds[i - 1]}::${id}`) ?? null,
+        }));
+      }
+    } else if (descendants.size === 1) {
+      // Only one unique intermediary entity exists (even if some assets bypass it).
+      // Name it so the tooltip can say which entity rather than the generic fallback.
+      const [entityId] = descendants;
+      chain = [{
+        id: entityId,
+        name: nodeMap.get(entityId)?.Name || entityId,
+        ownershipPct: ownershipPctFor(entityId),
+        directPct: graphEdgeMap.get(`${subId}::${entityId}`) ?? null,
+      }];
+    }
+    intermediaryData.set(subId, {
+      total_descendants: descendants.size,
+      max_generations: subMaxDepth.get(subId) ?? 0,
+      chain,
+    });
   }
 
   onProgress?.('Done');
@@ -624,6 +657,7 @@ export function expandSubsidiary(
   const subToUnitSets = new Map<string, Set<string>>(); // direct-child entity ID → asset IDs
   const ssDescendantEntityIds = new Map<string, Set<string>>();
   const ssMaxDepth = new Map<string, number>();
+  const ssChainCandidates = new Map<string, Set<string>>();
 
   for (const [nodeId, nodePaths] of Object.entries(graphPaths)) {
     const node = graphNodeMap.get(nodeId);
@@ -644,21 +678,20 @@ export function expandSubsidiary(
           directAssetIdSet.add(nodeId);
         }
       } else if (node.type === 'asset' && parentUnitMap.has(nodeId)) {
-        // Asset deeper than a direct child — attribute it to childId (direct child entity)
+        // Asset deeper than a direct child — attribute it to childId (direct child entity).
+        // Also collect unique intermediaries between childId and this asset for the circle count.
         const childNode = graphNodeMap.get(childId);
         if (childNode?.type === 'entity') {
           if (!subToUnitSets.has(childId)) subToUnitSets.set(childId, new Set());
           subToUnitSets.get(childId)!.add(nodeId);
-        }
-      } else if (node.type === 'entity' && nodeId !== subId && childId !== nodeId) {
-        // Intermediary entity deeper than the direct child — track under childId
-        const childNode = graphNodeMap.get(childId);
-        if (childNode?.type === 'entity') {
+          // route = [..., subId, childId, ...intermediaries..., asset]
+          const childIdx = subIdx + 1;
+          const intermediaries = p.route.slice(childIdx + 1, -1);
           if (!ssDescendantEntityIds.has(childId)) ssDescendantEntityIds.set(childId, new Set());
-          ssDescendantEntityIds.get(childId)!.add(nodeId);
-          const nodeIdx = p.route.lastIndexOf(nodeId);
-          const depth = nodeIdx >= 0 ? nodeIdx - subIdx - 1 : 1;
-          ssMaxDepth.set(childId, Math.max(ssMaxDepth.get(childId) ?? 0, depth));
+          for (const intId of intermediaries) ssDescendantEntityIds.get(childId)!.add(intId);
+          ssMaxDepth.set(childId, Math.max(ssMaxDepth.get(childId) ?? 0, intermediaries.length));
+          if (!ssChainCandidates.has(childId)) ssChainCandidates.set(childId, new Set());
+          ssChainCandidates.get(childId)!.add(JSON.stringify(intermediaries));
         }
       }
     }
@@ -696,9 +729,30 @@ export function expandSubsidiary(
     };
     const descendants = ssDescendantEntityIds.get(id);
     if (descendants && descendants.size > 0) {
+      const chainCandidates = ssChainCandidates.get(id);
+      let chain: Array<{ id: string; name: string; ownershipPct: number | null; directPct: number | null }> | undefined;
+      const buildChainEntry = (cid: string, prevId: string) => {
+        const nodePaths = graphPaths[cid];
+        return {
+          id: cid,
+          name: graphNodeMap.get(cid)?.Name || cid,
+          ownershipPct: nodePaths?.length ? nodePaths.reduce((sum, p) => sum + (p.cumulative_pct ?? 0), 0) : null,
+          directPct: graphEdgeMap?.get(`${prevId}::${cid}`) ?? null,
+        };
+      };
+      if (chainCandidates?.size === 1) {
+        const chainIds = JSON.parse([...chainCandidates][0]) as string[];
+        if (chainIds.length > 0) {
+          chain = chainIds.map((cid, i) => buildChainEntry(cid, i === 0 ? id : chainIds[i - 1]));
+        }
+      } else if (descendants.size === 1) {
+        const [entityId] = descendants;
+        chain = [buildChainEntry(entityId, id)];
+      }
       group.intermediary_data = {
         total_descendants: descendants.size,
         max_generations: ssMaxDepth.get(id) ?? 0,
+        chain,
       };
     }
     return group;

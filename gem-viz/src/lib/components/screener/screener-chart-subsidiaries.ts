@@ -176,6 +176,9 @@ function drawSubGroupLabelsRecursive(
     expandedSubIds?: Set<string>;
     onExpandSubsidiary?: (id: string) => void;
     parentPath?: string;
+    spotlightName?: string;
+    ownerChain?: Array<{ name: string; pct: string }>;
+    tooltipGroup?: Selection<SVGGElement, unknown, null, undefined>;
   }
 ): void {
   const entryR = LAYOUT.yPadding;
@@ -211,7 +214,12 @@ function drawSubGroupLabelsRecursive(
           edge.directValue != null
             ? `${Math.round(edge.directValue)}%`
             : `${Math.round(edge.value)}%`;
+        const sgAssetCount = sg.locations.length;
+        const sgAssetLabel = sgAssetCount === 1 ? 'Asset owned via intermediary:' : `Assets owned via intermediary:`;
         const chainLines = [
+          sgAssetLabel,
+          rawName,
+          'owner-chain:',
           `${spotlightName} owns`,
           ...ownerChain.map((c) => `${c.pct} of ${c.name}, which owns`),
           `${directPct} of ${rawName}`,
@@ -221,7 +229,7 @@ function drawSubGroupLabelsRecursive(
         const tipX = originX + markR * 2 + 6;
         const tipY = sg.top + 26 + lineRelY - markR * 2 - 10; // sg.top + 26 = subLabel origin
         pieCircle
-          .on('mouseover', () => showMultilineTooltip(group, tipX, tipY, chainLines))
+          .on('mouseover', () => showMultilineTooltip(group, tipX, tipY, chainLines, { preTitleCount: 1, titleCount: 1 }))
           .on('mouseout', () => group.select('.ownership-chain-tooltip').remove());
 
         const arc = d3Arc<{ endAngle: number }>()
@@ -250,11 +258,25 @@ function drawSubGroupLabelsRecursive(
       .text(name);
 
     if (sg.intermediary_data) {
+      const sgEdge = expansion.matchedEdges.get(sg.id);
+      const sgPct =
+        sgEdge?.directValue != null
+          ? `${Math.round(sgEdge.directValue)}%`
+          : sgEdge?.value != null
+            ? `${Math.round(sgEdge.value)}%`
+            : '?%';
       drawIntermediaryPathForItem(
         subLabel as unknown as Selection<SVGGElement, SubsidiaryGroupData, null, undefined>,
         sg,
         Math.round(lineRelY + markR + 2),
-        { ...options, xOffset: originX - LAYOUT.subsidX, compact: true }
+        {
+          ...options,
+          xOffset: originX - LAYOUT.subsidX,
+          compact: true,
+          spotlightName,
+          ownerChain: [...(ownerChain ?? []), { name: rawName, pct: sgPct }],
+          tooltipGroup: options?.tooltipGroup ?? group,
+        }
       );
     }
 
@@ -275,7 +297,7 @@ function drawSubGroupLabelsRecursive(
         [...ownerChain, { name: rawName, pct }],
         markR,
         labelX,
-        { ...options, parentPath: options?.parentPath ? `${options.parentPath}::${sg.id}` : sg.id }
+        { ...options, spotlightName, parentPath: options?.parentPath ? `${options.parentPath}::${sg.id}` : sg.id }
       );
     }
   }
@@ -384,7 +406,15 @@ export function drawSubsidiaryLabels(
   const BAR_X = 200;
   items.each(function (d) {
     drawMiniBarChartsForItem(select(this), d, markR - 4, BAR_X);
-    drawIntermediaryPathForItem(select(this), d, markR * 2 + 22, options);
+    const subName = chartData.entityMap.get(d.id)?.Name ?? d.id;
+    const edge = chartData.matchedEdges.get(d.id);
+    const subPct = edge?.value != null ? `${Math.round(edge.value)}%` : '?%';
+    drawIntermediaryPathForItem(select(this), d, markR * 2 + 22, {
+      ...options,
+      spotlightName: chartData.spotlightOwner.Name,
+      ownerChain: [{ name: subName, pct: subPct }],
+      tooltipGroup: group,
+    });
   });
 
   // Draw sub-group labels for expanded subsidiaries.
@@ -408,7 +438,7 @@ export function drawSubsidiaryLabels(
       [{ name: parentName, pct: parentPct }],
       markR,
       labelX,
-      { ...options, parentPath: d.id }
+      { ...options, spotlightName, parentPath: d.id, tooltipGroup: group }
     );
   }
 }
@@ -562,6 +592,12 @@ function drawIntermediaryPathForItem(
     xOffset?: number;
     compact?: boolean;
     parentPath?: string;
+    /** Spotlight owner name — used for chain pie tooltips. */
+    spotlightName?: string;
+    /** Owner chain from spotlight through to (and including) the current subsidiary/sub-sub. */
+    ownerChain?: Array<{ name: string; pct: string }>;
+    /** Root SVG group — tooltips are appended here so they paint above all other elements. */
+    tooltipGroup?: Selection<SVGGElement, unknown, null, undefined>;
   }
 ): void {
   if (d.id === 'Directly owned') return;
@@ -580,7 +616,9 @@ function drawIntermediaryPathForItem(
       ? ['Assets are directly owned by intermediary']
       : ['(Some) assets are owned', 'through other intermediaries'];
 
-  const canExpand = intermediary.total_descendants > 1;
+  const hasChain = !!(intermediary.chain && intermediary.chain.length > 0);
+  // Suppress expand button when a single chain is shown as pies — expansion would be redundant.
+  const canExpand = intermediary.total_descendants > 1 && !hasChain;
 
   const g = item
     .append('g')
@@ -590,7 +628,7 @@ function drawIntermediaryPathForItem(
       if (canExpand) options?.onExpandSubsidiary?.(scopedKey);
     });
 
-  if (!isExpanded) {
+  if (!isExpanded && !hasChain) {
     g.on('mouseenter', function (event: MouseEvent) {
       const [mx, my] = d3Pointer(event, item.node()!);
       showMultilineTooltip(
@@ -617,6 +655,20 @@ function drawIntermediaryPathForItem(
     : circlesEndX + 20;
 
   if (!isExpanded) {
+    // Chain geometry — computed upfront so path end X and lineY can be set before drawing.
+    const chain = intermediary.chain ?? [];
+    const pieR = markRLocal;
+    const pieSpacing = pieR * 2 + 6;
+    const arrowHeadSize = 6;
+    const chainTailLength = 50;
+    // Chain pies sit slightly lower than the default lineY for visual breathing room.
+    const renderLineY = lineY + (hasChain ? 6 : 0);
+    // End X of the last pie + gap + tail + arrowhead tip
+    const chainPiesEndX = hasChain && chain.length > 0
+      ? curveR + 6 + (chain.length - 1) * pieSpacing + pieR + pieR + chainTailLength
+      : 0;
+    const pathEndX = hasChain ? chainPiesEndX - arrowHeadSize : iconCX - iconR - 2;
+
     const xS = 0;
     const yS = startY;
     const path = d3Path();
@@ -626,9 +678,8 @@ function drawIntermediaryPathForItem(
       path.moveTo(xS, yS - 16);
       path.lineTo(xS, yS);
     }
-    path.bezierCurveTo(xS, yS + curveR * 0.8, xS + curveR * 0.2, lineY, xS + curveR, lineY);
-    // Line ends just before the icon
-    path.lineTo(iconCX - iconR - 2, lineY);
+    path.bezierCurveTo(xS, yS + curveR * 0.8, xS + curveR * 0.2, renderLineY, xS + curveR, renderLineY);
+    path.lineTo(pathEndX, renderLineY);
 
     g.append('path')
       .attr('class', 'intermediary-path')
@@ -637,7 +688,91 @@ function drawIntermediaryPathForItem(
       .style('stroke', COL_STROKE)
       .style('stroke-width', 1.5);
 
-    if (canExpand) {
+    if (hasChain) {
+      // Render an ownership pie for each entity in the single chain.
+      const pieArc = d3Arc<{ endAngle: number }>()
+        .innerRadius(0)
+        .outerRadius(pieR)
+        .startAngle(0)
+        .cornerRadius(pieR * 0.1);
+
+      const spotlightName = options?.spotlightName ?? '';
+      const parentOwnerChain = options?.ownerChain ?? [];
+      const pieGroup = g
+        .append('g')
+        .attr('class', 'intermediary-chain-pies')
+        .attr('transform', `translate(${curveR + 6}, ${renderLineY})`);
+
+      const assetCountLabel = d.locations.length === 1 ? 'Asset owned via intermediary:' : `Assets owned via intermediary:`;
+
+      chain.forEach((entry, i) => {
+        const cx = i * pieSpacing;
+        const pct = entry.ownershipPct;
+        const displayPct =
+          entry.directPct != null
+            ? `${Math.round(entry.directPct)}%`
+            : pct != null
+              ? `${Math.round(pct)}%`
+              : '?%';
+
+        // Build tooltip: entity name (title), "owner-chain:" label, then chain lines
+        const prevChainLines = chain.slice(0, i).map((c) => {
+          const p =
+            c.directPct != null
+              ? `${Math.round(c.directPct)}%`
+              : c.ownershipPct != null
+                ? `${Math.round(c.ownershipPct)}%`
+                : '?%';
+          return `${p} of ${c.name}, which owns`;
+        });
+        const tooltipLines = [
+          assetCountLabel,
+          entry.name,
+          'owner-chain:',
+          `${spotlightName} owns`,
+          ...parentOwnerChain.map((c) => `${c.pct} of ${c.name}, which owns`),
+          ...prevChainLines,
+          `${displayPct} of ${entry.name}`,
+        ];
+
+        const pieG = pieGroup.append('g').attr('transform', `translate(${cx}, 0)`);
+
+        pieG
+          .append('circle')
+          .attr('r', pieR + 0.625)
+          .style('fill', '#cce1e6')
+          .style('stroke', '#ffffff')
+          .style('stroke-width', '1.25px')
+          .style('cursor', 'default')
+          .on('mouseover', (event: MouseEvent) => {
+            showHtmlChainTooltip(event.clientX, event.clientY, tooltipLines, { preTitleCount: 1, titleCount: 1 });
+          })
+          .on('mouseout', () => {
+            hideHtmlChainTooltip();
+          });
+
+        if (pct != null) {
+          pieG
+            .append('path')
+            .attr('d', pieArc({ endAngle: 2 * Math.PI * (pct / 100) }))
+            .style('fill', colors.teal)
+            .style('pointer-events', 'none');
+        }
+      });
+
+      // Arrowhead at the end of the tail line, pointing right toward the assets.
+      g.append('polygon')
+        .attr(
+          'points',
+          [
+            `${chainPiesEndX},${renderLineY}`,
+            `${chainPiesEndX - arrowHeadSize},${renderLineY - arrowHeadSize * 0.6}`,
+            `${chainPiesEndX - arrowHeadSize},${renderLineY + arrowHeadSize * 0.6}`,
+          ].join(' ')
+        )
+        .style('fill', COL_STROKE)
+        .style('pointer-events', 'none');
+    } else if (canExpand) {
       // Circles near the left, just after the curve ends
       const circles = g
         .append('g')
@@ -712,6 +847,69 @@ function drawIntermediaryPathForItem(
 }
 
 // ---------------------------------------------------------------------------
+// HTML tooltip for chain pies (position:fixed so it renders above HTML footer)
+// ---------------------------------------------------------------------------
+
+const HTML_CHAIN_TIP_ID = 'screener-chain-pie-tooltip';
+
+function showHtmlChainTooltip(
+  clientX: number,
+  clientY: number,
+  lines: string[],
+  opts?: { preTitleCount?: number; titleCount?: number }
+): void {
+  let tip = document.getElementById(HTML_CHAIN_TIP_ID);
+  if (!tip) {
+    tip = document.createElement('div');
+    tip.id = HTML_CHAIN_TIP_ID;
+    document.body.appendChild(tip);
+  }
+
+  const preTitleCount = opts?.preTitleCount ?? 0;
+  const titleCount = opts?.titleCount ?? 0;
+  const titleEnd = preTitleCount + titleCount;
+
+  tip.innerHTML = lines
+    .map((line, i) => {
+      const isPreTitle = i < preTitleCount;
+      const isTitle = i >= preTitleCount && i < titleEnd;
+      const isLabel = i === titleEnd && titleCount > 0;
+      const style = [
+        isPreTitle || isLabel ? 'color:#8bbfcc;font-size:10px;font-style:italic;' : 'color:#fff;',
+        isTitle ? 'font-size:13px;font-weight:700;' : isLabel ? 'font-size:10px;' : 'font-size:12px;',
+        i === titleEnd - 1 && titleEnd > 0 ? 'margin-bottom:4px;' : '',
+      ].join('');
+      return `<div style="${style}">${line}</div>`;
+    })
+    .join('');
+
+  Object.assign(tip.style, {
+    position: 'fixed',
+    background: '#004a63',
+    borderRadius: '4px',
+    padding: '8px 10px',
+    pointerEvents: 'none',
+    zIndex: '10000',
+    whiteSpace: 'nowrap',
+    display: 'block',
+    // Place off-screen first so we can measure
+    left: '-9999px',
+    top: '-9999px',
+  });
+
+  // Measure then reposition above cursor, clamped to viewport
+  const { width: tipW, height: tipH } = tip.getBoundingClientRect();
+  const left = Math.min(clientX + 12, window.innerWidth - tipW - 8);
+  const top = Math.max(8, clientY - tipH - 12);
+  tip.style.left = `${left}px`;
+  tip.style.top = `${top}px`;
+}
+
+function hideHtmlChainTooltip(): void {
+  document.getElementById(HTML_CHAIN_TIP_ID)?.remove();
+}
+
+// ---------------------------------------------------------------------------
 // Multiline ownership chain tooltip
 // ---------------------------------------------------------------------------
 
@@ -719,7 +917,8 @@ function showMultilineTooltip(
   group: Selection<SVGGElement, unknown, null, undefined>,
   x: number,
   y: number,
-  lines: string[]
+  lines: string[],
+  opts?: { titleCount?: number; preTitleCount?: number }
 ): void {
   group.select('.ownership-chain-tooltip').remove();
   const tip = group
@@ -728,16 +927,43 @@ function showMultilineTooltip(
     .attr('transform', `translate(${x}, ${y})`)
     .style('pointer-events', 'none');
 
+  const PRETITLE_H = 14;
+  const TITLE_H = 20;
+  const LABEL_H = 16;
   const LINE_H = 17;
   const PAD = 8;
+  const preTitleCount = opts?.preTitleCount ?? 0;
+  const titleCount = opts?.titleCount ?? 0;
+  const titleEnd = preTitleCount + titleCount;
+
+  // Compute cumulative y positions per line, with gap after the combined pre-title+title block.
+  const lineYs: number[] = [];
+  let curY = PAD + 4;
+  lines.forEach((_, i) => {
+    lineYs.push(curY);
+    let h: number;
+    if (i < preTitleCount) h = PRETITLE_H;
+    else if (i < titleEnd) h = TITLE_H;
+    else if (i === titleEnd && titleCount > 0) h = LABEL_H;
+    else h = LINE_H;
+    curY += h;
+    if (i === titleEnd - 1 && titleEnd > 0) curY += 3;
+  });
+  const totalH = curY + PAD - 4;
 
   lines.forEach((line, i) => {
+    const isPreTitle = i < preTitleCount;
+    const isTitle = i >= preTitleCount && i < titleEnd;
+    const isLabel = i === titleEnd && titleCount > 0;
     tip
       .append('text')
-      .attr('x', PAD)
-      .attr('y', i * LINE_H + 13)
-      .style('font-size', '12px')
-      .style('fill', '#ffffff')
+      .attr('x', isTitle ? PAD : PAD + 2)
+      .attr('y', lineYs[i])
+      .attr('dominant-baseline', 'hanging')
+      .style('font-size', isPreTitle ? '10px' : isTitle ? '13px' : isLabel ? '10px' : '12px')
+      .style('font-weight', isTitle ? '700' : '400')
+      .style('font-style', isPreTitle ? 'italic' : 'normal')
+      .style('fill', isPreTitle || isLabel ? '#8bbfcc' : '#ffffff')
       .text(line);
   });
 
@@ -751,7 +977,7 @@ function showMultilineTooltip(
     .attr('x', 0)
     .attr('y', 0)
     .attr('width', maxW + PAD * 2)
-    .attr('height', lines.length * LINE_H + PAD * 2)
+    .attr('height', totalH)
     .attr('rx', 4)
     .attr('ry', 4)
     .style('fill', '#004a63');
