@@ -43,7 +43,8 @@ export function buildClassDescription(selectedClasses: ClassDescriptionInput[]):
   const trackerName = cls.name || cls.tracker || 'assets';
   const parts: string[] = [];
 
-  const statuses: string[] = cls.filters?.statuses ?? (cls.filters?.status ? [cls.filters.status] : []);
+  const statuses: string[] =
+    cls.filters?.statuses ?? (cls.filters?.status ? [cls.filters.status] : []);
   if (statuses.length === 1) {
     parts.push(statuses[0]);
   } else if (statuses.length > 1 && statuses.length <= 3) {
