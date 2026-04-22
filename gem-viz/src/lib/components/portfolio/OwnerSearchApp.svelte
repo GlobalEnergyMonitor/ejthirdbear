@@ -49,6 +49,7 @@
 
   let selected = $state(/** @type {OwnerResult|null} */ (null));
   let modalOpen = $state(false);
+  let explorerSummary = $state(null);
   let searchController = null;
   let entityDetailsController = null;
 
@@ -315,19 +316,28 @@
   <WidgetModal
     open={modalOpen && !!selected}
     onClose={closeModal}
-    label="Portfolio Explorer"
     title={selected && selected.name !== selected.id ? selected.name : ''}
     ariaLabel="Portfolio Explorer"
   >
+    {#snippet headerSub()}
+      {#if explorerSummary}
+        <span class="modal-explorer-stats">{explorerSummary.total.assetCount} asset{explorerSummary.total.assetCount !== 1 ? 's' : ''}{explorerSummary.total.unitCount > explorerSummary.total.assetCount ? ` (${explorerSummary.total.unitCount} units)` : ''} · {explorerSummary.total.types.size} tracker{explorerSummary.total.types.size !== 1 ? 's' : ''}</span>
+      {/if}
+    {/snippet}
     {#snippet body()}
       {#if selected}
-        <PortfolioExplorer entityId={selected.id} hidePicker={true} heightOffset={120} />
+        <PortfolioExplorer entityId={selected.id} hidePicker={true} heightOffset={120} fitParent={true} onSummaryReady={(s) => explorerSummary = s} />
       {/if}
     {/snippet}
   </WidgetModal>
 </div>
 
 <style>
+  .modal-explorer-stats {
+    font-size: 12px;
+    color: var(--color-text-secondary, #5a7080);
+    white-space: nowrap;
+  }
   .os-root {
     position: relative;
   }

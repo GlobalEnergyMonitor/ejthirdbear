@@ -60,13 +60,13 @@
     label?: string;
     /** Modal body content. */
     body?: Snippet;
-    /** Optional custom header right — e.g. extra controls alongside the close button. */
-    headerRight?: Snippet;
+    /** Optional content after the title — inline on desktop, below on mobile. */
+    headerSub?: Snippet;
     /** Optional aria-label for the dialog. Defaults to title or "Dialog". */
     ariaLabel?: string;
   }
 
-  let { open, onClose, title, label, body, headerRight, ariaLabel }: Props = $props();
+  let { open, onClose, title, label, body, headerSub, ariaLabel }: Props = $props();
 
   // Escape key closes the modal globally while open
   $effect(() => {
@@ -103,13 +103,17 @@
         {#if label}
           <span class="wm-label">{label}</span>
         {/if}
-        {#if title}
-          <span class="wm-title">{title}</span>
-        {/if}
+        <div class="wm-header-center">
+          <div class="wm-title-line">
+            {#if title}
+              <span class="wm-title">{title}</span>
+            {/if}
+            {#if headerSub}
+              <span class="wm-header-sub">{@render headerSub()}</span>
+            {/if}
+          </div>
+        </div>
         <div class="wm-header-right">
-          {#if headerRight}
-            {@render headerRight()}
-          {/if}
           <button class="wm-close" onclick={onClose} aria-label="Close">✕</button>
         </div>
       </div>
@@ -168,8 +172,19 @@
     flex-shrink: 0;
   }
 
-  .wm-title {
+  .wm-header-center {
     flex: 1;
+    min-width: 0;
+  }
+
+  .wm-title-line {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+  }
+
+  .wm-title {
     font-size: var(--font-size-lg, 18px);
     font-weight: 600;
     color: var(--color-text-primary, #111827);
@@ -177,6 +192,12 @@
     overflow: hidden;
     text-overflow: ellipsis;
     min-width: 0;
+  }
+
+  .wm-header-sub {
+    font-size: var(--font-size-sm, 13px);
+    color: var(--color-text-secondary, #6b7280);
+    white-space: nowrap;
   }
 
   .wm-header-right {
@@ -208,9 +229,16 @@
     flex: 1;
     overflow-y: auto;
     min-height: 0;
+    display: flex;
+    flex-direction: column;
   }
 
   @media (max-width: 600px) {
+    .wm-title-line {
+      flex-direction: column;
+      gap: var(--space-1);
+    }
+
     .wm-backdrop {
       padding: 0;
     }
