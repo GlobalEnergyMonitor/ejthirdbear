@@ -328,9 +328,12 @@
 
   /** Stored d3 tree root — needed for asset→tree cross-highlighting */
   let treeRoot = $state(null);
+  /** All raw paths (every root→leaf sequence) — used for ghost-link relevance on hover */
+  let treeAllPaths = [];
   /** D3 selections stored so sidebar hover can drive the same highlight as tree node hover */
   let treeMarks = null;
   let treeLinkGroup = null;
+  let treeGhostGroup = null;
   let treeLabels = null;
   /** Additional refs for hidden-path ghost rendering */
   let treeNodeByName = null;
@@ -641,6 +644,7 @@
       .style('stroke', null)
       .style('stroke-width', null);
     treeLinkGroup.selectAll('path').transition('fade').duration(200).style('opacity', 1);
+    treeGhostGroup?.selectAll('path').transition('fade').duration(200).style('opacity', 1);
     treeLabels
       .selectAll('text')
       .filter((n) => n.depth > 0)
@@ -830,6 +834,7 @@
       treeRoot = null;
       treeMarks = null;
       treeLinkGroup = null;
+      treeGhostGroup = null;
       treeLabels = null;
       treeNodeByName = null;
       treeG = null;
@@ -966,6 +971,7 @@
       }
     }
     const ghostLinks = [];
+    const ghostLinkSeen = new Set();
     for (const e of treePaths.unused.unusedEdges) {
       const src = nodeByName.get(e.source);
       if (!src) continue;
@@ -973,6 +979,9 @@
       const tgt = tgtId ? nodeByName.get(tgtId) : null;
       if (!tgt) continue;
       if (src === tgt) continue;
+      const key = `${src.data.name}→${tgt.data.name}`;
+      if (ghostLinkSeen.has(key)) continue;
+      ghostLinkSeen.add(key);
       ghostLinks.push({ source: src, target: tgt, imputed: !!e.imputed_share });
     }
 
@@ -1001,8 +1010,6 @@
       )
       .style('stroke-width', 1)
       .style('stroke-linecap', 'round')
-      .style('stroke-dasharray', '2 3')
-      .style('opacity', 0.45)
       .style('mix-blend-mode', 'multiply');
 
     const linkGroup = g.append('g').attr('class', 'link-group');
@@ -1104,6 +1111,7 @@
     // Store selections for sidebar→tree cross-highlighting
     treeMarks = marks;
     treeLinkGroup = linkGroup;
+    treeGhostGroup = ghostGroup;
     treeLabels = labels;
     treeNodeByName = nodeByName;
     treeG = g;
@@ -1184,8 +1192,9 @@
     // Overlay group for hidden-path ghost rendering (appended last so it paints on top)
     hiddenPathOverlay = g.append('g').attr('class', 'hidden-path-overlay');
 
-    // Store root for asset→tree cross-highlighting
+    // Store root and all raw paths for asset→tree cross-highlighting
     treeRoot = root;
+    treeAllPaths = treePaths.paths;
     return root;
   }
 
@@ -1232,7 +1241,18 @@
 
     // Match tree's top margin so leaf Y positions align
     const treeTopMargin = 20;
-    const margin = { top: isSingleColumn ? treeTopMargin : 12, left: 4 };
+
+    // Left pad: shift the whole column right so large molecule rings don't clip.
+    // Compute from the maximum unit count in this dataset.
+    const maxN = Math.max(1, ...groups.map((p) => p.units.length));
+    const maxDotR = maxN <= 1 ? unitR : Math.max(3, unitR / Math.sqrt(maxN * 0.5));
+    const maxMolDiam = Math.min(assetMarkH - 4, maxN > 1 ? 24 : assetMarkH - 4);
+    const { ringRadius: maxMolR, unitRadius: maxMolU } = computeMoleculeRadii(maxMolDiam, maxN, {
+      maxUnitRadius: maxDotR,
+    });
+    const molLeftPad = Math.max(4, Math.ceil(maxMolR + maxMolU - unitR + 4));
+
+    const margin = { top: isSingleColumn ? treeTopMargin : 12, left: molLeftPad };
 
     let totalHeight;
     if (isSingleColumn && leafYMap.size > 0) {
@@ -1303,7 +1323,7 @@
                 .duration(100)
                 .style('opacity', (n) => (activeNodes.has(n) ? 1 : 0.15));
 
-              // Dim tree edges not connecting active nodes
+              // Dim primary tree edges not connecting active nodes
               treeSvg
                 .selectAll('.link-group path')
                 .transition('fade')
@@ -1311,6 +1331,26 @@
                 .style('opacity', (l) =>
                   activeNodes.has(l.source) && activeNodes.has(l.target) ? 1 : 0.05
                 );
+
+              // Ghost links dim on hover
+              if (treeGhostGroup) {
+                const activeEdges = new Set();
+                for (const rp of treeAllPaths) {
+                  const leafId = rp.path[rp.path.length - 1];
+                  if (leafId !== proj.projectID) continue;
+                  for (let k = 0; k < rp.path.length - 1; k++) {
+                    activeEdges.add(`${rp.path[k]}→${rp.path[k + 1]}`);
+                  }
+                }
+                treeGhostGroup
+                  .selectAll('path')
+                  .transition('fade')
+                  .duration(100)
+                  .style('opacity', (l) => {
+                    const key = `${l?.source?.data?.name}→${l?.target?.data?.name}`;
+                    return activeEdges.has(key) ? 1 : 0.05;
+                  });
+              }
             }
           }
         })
@@ -1331,6 +1371,7 @@
               .duration(200)
               .style('opacity', 1);
           }
+          treeGhostGroup?.selectAll('path').transition('fade').duration(200).style('opacity', 1);
         })
         .on('click', function (event) {
           event.stopPropagation();

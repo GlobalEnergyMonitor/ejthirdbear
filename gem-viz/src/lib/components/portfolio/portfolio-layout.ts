@@ -93,11 +93,17 @@ export interface GridLayout {
 
 // -- Helpers --
 
-function getTreeMaxShare(leafCount: number): number {
+function getTreeMaxShare(leafCount: number, depth: number): number {
+  let leafShare = TREE_MAX_SHARE_DEFAULT;
   for (const [threshold, share] of TREE_MAX_SHARE_BY_LEAF_COUNT) {
-    if (leafCount <= threshold) return share;
+    if (leafCount <= threshold) {
+      leafShare = share;
+      break;
+    }
   }
-  return TREE_MAX_SHARE_DEFAULT;
+  // Deeper trees need more horizontal room — override leaf-count cap when depth warrants it
+  const depthShare = depth >= 5 ? 0.60 : depth >= 4 ? 0.52 : depth >= 3 ? 0.45 : 0;
+  return Math.max(leafShare, depthShare);
 }
 
 function getDepthPx(containerWidth: number, depth: number): number {
@@ -112,7 +118,7 @@ export function computeTreeLayout(inputs: LayoutInputs): TreeLayout {
   const { containerWidth, containerHeight, depth, leafCount } = inputs;
 
   // Width: idealWidth = depthPx * levels + padding, capped by max share
-  const maxShare = getTreeMaxShare(leafCount);
+  const maxShare = getTreeMaxShare(leafCount, depth);
   const depthPx = getDepthPx(containerWidth, depth);
   const idealWidth = depthPx * (depth + 1) + DEPTH_PX_PADDING;
   const maxWidth = containerWidth * maxShare;
