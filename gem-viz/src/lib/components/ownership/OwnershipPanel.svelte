@@ -173,11 +173,7 @@
               if (frozenId === o.id) {
                 onFreeze(null, null);
               } else {
-                onFreeze(o.id, pathsTouchedMap.get(o.nid) || null, {
-                  kind: 'entity',
-                  label: o.name,
-                  facts: [o.category, o.country || 'HQ unknown', `${o.pct.toFixed(1)}% ownership`],
-                });
+                onFreeze(o.id, pathsTouchedMap.get(o.nid) || null);
               }
             }}
             ondblclick={() => nav(o.nid)}
