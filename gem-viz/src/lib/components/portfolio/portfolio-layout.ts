@@ -46,7 +46,7 @@ const TREE_MARGIN_BOTTOM = 20;
 const ROW_HEIGHT = 28; // px per leaf row
 const SIBLING_SEPARATION = 1.0; // d3.cluster separation for same-parent
 const COUSIN_SEPARATION = 1.4; // d3.cluster separation for different-parent
-const NODE_RADIUS = 8; // intermediary entity circle radius
+const NODE_RADIUS = 10; // intermediary entity circle radius
 
 // -- Grid --
 const GRID_MIN_COL_WIDTH = 200; // min px before dropping to fewer columns

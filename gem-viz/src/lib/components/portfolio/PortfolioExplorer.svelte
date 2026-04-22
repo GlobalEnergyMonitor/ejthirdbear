@@ -48,6 +48,10 @@
     initialColor = '',
     /** Initial filters to restore from URL — keys are filter names, values are comma-separated strings */
     initialFilters = {},
+    /** Called whenever summary data is available — lets parent render stats in its own header */
+    onSummaryReady = undefined,
+    /** When true, stretch to fill parent container height (use inside modals, not page embeds) */
+    fitParent = false,
   } = $props();
 
   /** Format cumulative ownership % for display */
@@ -115,6 +119,8 @@
   let intermediaries = $state([]);
   /** Cumulative ownership %: projectID → effective ownership through all paths */
   let cumulativePctMap = $state(new Map());
+  /** Minimum effective ownership % filter (0 = off, 1–100 = minimum threshold) */
+  let minEffOwnership = $state(0);
   /** Hovered project group for tooltip */
   let hoveredProject = $state(null);
   /** Tooltip viewport position */
@@ -158,7 +164,8 @@
       filters.asset_type.size > 0 ||
       filters.operating_status.size > 0 ||
       filters.ownership.size > 0 ||
-      filters.intermediary.size > 0
+      filters.intermediary.size > 0 ||
+      minEffOwnership > 0
   );
 
   /** Get ownership bucket label for an asset */
@@ -240,8 +247,24 @@
 
   /** The data currently being displayed */
   let displayData = $derived(filteredResult ? filteredResult.data : apiData);
-  let displaySummary = $derived(filteredResult ? filteredResult.summary : summary);
-  let displayProjectGroups = $derived(filteredResult ? filteredResult.groups : projectGroups);
+  let displaySummary = $derived.by(() => {
+    if (!isFiltered) return summary;
+    // When the ownership slider is active, recompute summary from slider-filtered groups
+    // so that facet counts reflect what's actually shown on screen
+    if (minEffOwnership > 0) {
+      const hasOtherFilters = filteredResult != null;
+      const visibleAssets = displayProjectGroups.flatMap((g) =>
+        hasOtherFilters ? g.units.filter((u) => u._matched) : g.units
+      );
+      return summarizeAssets(visibleAssets);
+    }
+    return filteredResult ? filteredResult.summary : summary;
+  });
+  let displayProjectGroups = $derived.by(() => {
+    const base = filteredResult ? filteredResult.groups : projectGroups;
+    if (minEffOwnership <= 0) return base;
+    return base.filter((g) => (cumulativePctMap.get(g.projectID) ?? 0) >= minEffOwnership);
+  });
 
   /** Color field: user-toggleable, defaults to 'type' when multi-type */
   const ALL_COLOR_FIELDS = ['type', 'status', 'country'];
@@ -328,6 +351,8 @@
 
   /** Stored d3 tree root — needed for asset→tree cross-highlighting */
   let treeRoot = $state(null);
+  /** Frozen entity tooltip — set on tree node click, cleared on second click or Escape */
+  let clickedTreeEntity = $state(null);
   /** All raw paths (every root→leaf sequence) — used for ghost-link relevance on hover */
   let treeAllPaths = [];
   /** D3 selections stored so sidebar hover can drive the same highlight as tree node hover */
@@ -436,6 +461,7 @@
     intermediaries = [];
     cumulativePctMap = new Map();
     filters = createEmptyFilters();
+    minEffOwnership = 0;
     hoveredProject = null;
     selectedProject = null;
     treeRoot = null;
@@ -589,6 +615,7 @@
 
   function clearFilter() {
     filters = createEmptyFilters();
+    minEffOwnership = 0;
   }
 
   /** Highlight a tree node (and its ancestor/descendant paths) by entity_id.
@@ -775,6 +802,20 @@
       .style('fill', colors.navy)
       .style('pointer-events', 'none')
       .text(label);
+
+    // Ownership pct below the interpolated node circle
+    if (hidden.ownershipPct != null) {
+      hiddenPathOverlay
+        .append('text')
+        .attr('x', hiddenY)
+        .attr('y', hiddenX + nr + 14)
+        .style('text-anchor', 'middle')
+        .style('font-size', '10px')
+        .style('font-family', "var(--font-family, 'Plus Jakarta Sans', sans-serif)")
+        .style('fill', '#64748b')
+        .style('pointer-events', 'none')
+        .text(Math.round(hidden.ownershipPct * 100) + '%');
+    }
 
     // Fade non-path tree elements
     const pathNodeIds = new Set(hidden.rawPaths.flatMap((p) => p.path));
@@ -1097,9 +1138,9 @@
       .filter((d) => d.depth > 0 && d.ownershipPct != null)
       .append('text')
       .attr('x', 0)
-      .attr('y', nr + 10)
+      .attr('y', nr + 14)
       .style('text-anchor', 'middle')
-      .style('font-size', '8px')
+      .style('font-size', '10px')
       .style('font-family', "var(--font-family, 'Plus Jakarta Sans', sans-serif)")
       .style('fill', '#64748b')
       .style('pointer-events', 'none')
@@ -1187,6 +1228,38 @@
             .duration(200)
             .style('opacity', 1);
         }
+      })
+      .on('click', function (event, d) {
+        event.stopPropagation();
+        if (clickedTreeEntity?.entityId === d.data.name) {
+          clickedTreeEntity = null;
+          return;
+        }
+        const entityMap = new Map((apiData.nodes || []).map((n) => [n.entity_id || n.asset_id, n]));
+        const entity = entityMap.get(d.data.name);
+        const et = (entity?.entity_type || '').toLowerCase();
+        let entityType = 'Other';
+        if (et === 'state' || et === 'state body') entityType = 'Government';
+        else if (entity?.publiclylisted) entityType = 'Publicly Listed Corp.';
+        else if (et === 'legal entity') entityType = 'Private Company';
+
+        const leafIds = new Set(d.leaves().map((l) => l.data.name));
+        const allMatching = projectGroups.filter((g) => leafIds.has(g.projectID));
+        const filteredMatching = displayProjectGroups.filter((g) => leafIds.has(g.projectID));
+
+        clickedTreeEntity = {
+          entityId: d.data.name,
+          name: d.entityName || entity?.name || d.data.name,
+          entityType,
+          hqCountry: entity?.headquarters_country || null,
+          regCountry: entity?.registration_country || null,
+          totalProjects: allMatching.length,
+          totalUnits: allMatching.reduce((s, g) => s + g.units.length, 0),
+          filteredProjects: filteredMatching.length,
+          filteredUnits: filteredMatching.reduce((s, g) => s + g.units.length, 0),
+          x: event.clientX,
+          y: event.clientY,
+        };
       });
 
     // Overlay group for hidden-path ghost rendering (appended last so it paints on top)
@@ -1297,6 +1370,7 @@
         .style('cursor', 'pointer')
         .style('pointer-events', 'all')
         .on('mouseover', function (event) {
+          if (frozenHiddenEntityId) return;
           d3.select(this).style('fill', `${colors.bgSecondary}`);
           hoveredProject = proj;
           tooltipPos = { x: event.clientX, y: event.clientY };
@@ -1355,6 +1429,7 @@
           }
         })
         .on('mouseout', function () {
+          if (frozenHiddenEntityId) return;
           d3.select(this).style('fill', 'transparent');
           hoveredProject = null;
 
@@ -1375,6 +1450,12 @@
         })
         .on('click', function (event) {
           event.stopPropagation();
+          if (frozenHiddenEntityId) {
+            frozenHiddenEntityId = null;
+            hiddenPathOverlay?.selectAll('*').remove();
+            clearTreeHover();
+            return;
+          }
           hoveredProject = null;
           modalPos = { x: event.clientX, y: event.clientY };
           selectedProject = proj;
@@ -1594,6 +1675,11 @@
     };
   });
 
+  // Notify parent when summary data is ready (e.g. to render stats in a modal header)
+  $effect(() => {
+    if (summary) onSummaryReady?.(summary);
+  });
+
   // Close modal on Escape key
   $effect(() => {
     if (!selectedProject) return;
@@ -1603,6 +1689,7 @@
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   });
+
 
   $effect(() => {
     return () => {
@@ -1646,6 +1733,7 @@
 <div
   class="portfolio-explorer"
   class:embed-mode={heightOffset < 200}
+  class:fit-parent={fitParent}
   style:--chart-max-height={heightOffset < 200
     ? 'none'
     : `calc(100vh - ${LAYOUT.portfolio.chartMaxHeightOffset}px)`}
@@ -1684,45 +1772,27 @@
   {:else if error}
     <div class="error">{error}</div>
   {:else if apiData && summary}
-    <!-- Edge legend — above the chart when tree is visible -->
-    {#if showTree}
-      <div class="edge-legend-bar">
-        <span class="edge-legend-item">
-          <svg viewBox="0 0 24 8" width="24" height="8">
-            <line
-              x1="0"
-              y1="4"
-              x2="24"
-              y2="4"
-              stroke={ownershipColors.treeEdge}
-              stroke-width="2"
-              stroke-linecap="round"
-            />
-          </svg>
-          Known %
-        </span>
-        <span class="edge-legend-item">
-          <svg viewBox="0 0 24 8" width="24" height="8">
-            <line
-              x1="0"
-              y1="4"
-              x2="24"
-              y2="4"
-              stroke={ownershipColors.treeEdgeImputed}
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-dasharray="4 3"
-            />
-          </svg>
-          Imputed %
-        </span>
-      </div>
-    {/if}
-
     <!-- MAIN LAYOUT: asset grid (scrolls) + filter sidebar (sticky) -->
     <div class="chart-layout">
       <!-- Asset grid — scrollable -->
       <div class="chart-area" bind:this={chartContainer}>
+        <!-- Edge legend — inside chart-area so it only affects chart height, not sidebar -->
+        {#if showTree}
+          <div class="edge-legend-bar">
+            <span class="edge-legend-item">
+              <svg viewBox="0 0 24 8" width="24" height="8">
+                <line x1="0" y1="4" x2="24" y2="4" stroke={ownershipColors.treeEdge} stroke-width="2" stroke-linecap="round" />
+              </svg>
+              Known %
+            </span>
+            <span class="edge-legend-item">
+              <svg viewBox="0 0 24 8" width="24" height="8">
+                <line x1="0" y1="4" x2="24" y2="4" stroke={ownershipColors.treeEdgeImputed} stroke-width="1.5" stroke-linecap="round" stroke-dasharray="4 3" />
+              </svg>
+              Imputed %
+            </span>
+          </div>
+        {/if}
         {#if isFiltered && displayProjectGroups.length === 0}
           <div class="empty-state">
             <p>No assets match current filters.</p>
@@ -1804,6 +1874,7 @@
                 <svg
                   bind:this={treeSvgEl}
                   onclick={() => {
+                    clickedTreeEntity = null;
                     if (frozenHiddenEntityId) {
                       frozenHiddenEntityId = null;
                       hiddenPathOverlay?.selectAll('*').remove();
@@ -1820,49 +1891,67 @@
         {/if}
       </div>
 
+      <!-- Clear filters — floats above the sidebar left edge, outside overflow-clipping sidebar -->
+      {#if isFiltered}
+        {@const activeLabels = Object.values(filters).flatMap((s) => [...s])}
+        {@const filterCount = activeLabels.length + (minEffOwnership > 0 ? 1 : 0)}
+        <button class="clear-filter-float" onclick={clearFilter}>
+          Clear {filterCount} filter{filterCount !== 1 ? 's' : ''}
+        </button>
+      {/if}
+
       <!-- Filter sidebar — sticky -->
       <div class="filter-sidebar">
-        <div class="sidebar-header">
-          <span class="sidebar-owner"
-            >{apiData.spotlightOwner.name || apiData.spotlightOwner.full_name}</span
-          >
-          <span class="sidebar-stats"
-            >{summary.total.assetCount} asset{summary.total.assetCount !== 1 ? 's' : ''}{summary
-              .total.unitCount > summary.total.assetCount
-              ? ` (${summary.total.unitCount} units)`
-              : ''} · {summary.total.types.size} tracker{summary.total.types.size !== 1
-              ? 's'
-              : ''}</span
-          >
-        </div>
-
-        <div class="sidebar-toolbar">
-          {#if availableColorFields.length > 1}
-            <div class="color-toggle">
-              <span class="color-toggle-label">Color by</span>
-              {#each availableColorFields as opt}
-                <button
-                  class="color-toggle-btn"
-                  class:active={colorField === opt}
-                  onclick={() => {
-                    userHasInteracted = true;
-                    colorFieldOverride = opt;
-                  }}>{opt}</button
-                >
-              {/each}
+        <div class="sidebar-filters">
+          <!-- Effective ownership slider — filters projects by spotlight owner's cumulative % -->
+          {#if cumulativePctMap.size > 0}
+            <div class="summary-section summary-section-full">
+              <p class="subtitle">Min. Effective Ownership</p>
+              <div class="eff-ownership-slider">
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value={minEffOwnership}
+                  oninput={(e) => { userHasInteracted = true; minEffOwnership = +(/** @type {HTMLInputElement} */ (e.target)).value; }}
+                  class="ownership-range"
+                />
+                <span class="eff-ownership-val">
+                  {minEffOwnership > 0 ? `≥${minEffOwnership}%` : 'All'}
+                </span>
+              </div>
             </div>
           {/if}
-          {#if isFiltered}
-            {@const activeLabels = Object.values(filters).flatMap((s) => [...s])}
-            <button class="clear-filter-inline" onclick={clearFilter}>
-              Clear {activeLabels.length} filter{activeLabels.length !== 1 ? 's' : ''}
-            </button>
-          {/if}
-        </div>
 
-        <div class="sidebar-filters">
           <div class="summary-section">
-            <p class="subtitle">By Location</p>
+            {#if availableColorFields.includes('country')}
+              {@const isColorActive = colorField === 'country'}
+              {@const sliceColors = [...countryColorMap.values()]}
+              <button
+                class="subtitle subtitle-colorbtn"
+                class:color-active={isColorActive}
+                type="button"
+                data-tooltip="Color by location"
+                onclick={() => { userHasInteracted = true; colorFieldOverride = isColorActive ? '' : 'country'; }}
+              >
+                By Location
+                <svg viewBox="0 0 14 14" width="11" height="11" aria-hidden="true" class="colorbtn-icon">
+                  <circle cx="7" cy="7" r="6" fill="none" stroke="currentColor" stroke-width="1" />
+                  {#if isColorActive}
+                    <path d="M7 7 L7 1 A6 6 0 0 1 12.2 10 Z" fill={sliceColors[0] ?? 'currentColor'} />
+                    <path d="M7 7 L12.2 10 A6 6 0 0 1 1.8 10 Z" fill={sliceColors[1] ?? 'currentColor'} />
+                    <path d="M7 7 L1.8 10 A6 6 0 0 1 7 1 Z" fill={sliceColors[2] ?? 'currentColor'} />
+                  {:else}
+                    <path d="M7 7 L7 1 A6 6 0 0 1 12.2 10 Z" fill="currentColor" opacity="0.5" />
+                    <path d="M7 7 L12.2 10 A6 6 0 0 1 1.8 10 Z" fill="currentColor" opacity="0.28" />
+                    <path d="M7 7 L1.8 10 A6 6 0 0 1 7 1 Z" fill="currentColor" opacity="0.1" />
+                  {/if}
+                </svg>
+              </button>
+            {:else}
+              <p class="subtitle">By Location</p>
+            {/if}
             <div class="summary-table">
               {#each [...summary.byCountry] as [country, data]}
                 {@const isActive = filters.country.has(country)}
@@ -1893,7 +1982,33 @@
           </div>
 
           <div class="summary-section">
-            <p class="subtitle">By Type</p>
+            {#if availableColorFields.includes('type')}
+              {@const isColorActive = colorField === 'type'}
+              {@const sliceColors = [...summary.byType.keys()].slice(0, 3).map((t) => trackerColorMap.get(t) || colors.grey)}
+              <button
+                class="subtitle subtitle-colorbtn"
+                class:color-active={isColorActive}
+                type="button"
+                data-tooltip="Color by type"
+                onclick={() => { userHasInteracted = true; colorFieldOverride = isColorActive ? '' : 'type'; }}
+              >
+                By Type
+                <svg viewBox="0 0 14 14" width="11" height="11" aria-hidden="true" class="colorbtn-icon">
+                  <circle cx="7" cy="7" r="6" fill="none" stroke="currentColor" stroke-width="1" />
+                  {#if isColorActive}
+                    <path d="M7 7 L7 1 A6 6 0 0 1 12.2 10 Z" fill={sliceColors[0] ?? 'currentColor'} />
+                    <path d="M7 7 L12.2 10 A6 6 0 0 1 1.8 10 Z" fill={sliceColors[1] ?? 'currentColor'} />
+                    <path d="M7 7 L1.8 10 A6 6 0 0 1 7 1 Z" fill={sliceColors[2] ?? 'currentColor'} />
+                  {:else}
+                    <path d="M7 7 L7 1 A6 6 0 0 1 12.2 10 Z" fill="currentColor" opacity="0.5" />
+                    <path d="M7 7 L12.2 10 A6 6 0 0 1 1.8 10 Z" fill="currentColor" opacity="0.28" />
+                    <path d="M7 7 L1.8 10 A6 6 0 0 1 7 1 Z" fill="currentColor" opacity="0.1" />
+                  {/if}
+                </svg>
+              </button>
+            {:else}
+              <p class="subtitle">By Type</p>
+            {/if}
             <div class="summary-table">
               {#each [...summary.byType] as [type, data]}
                 {@const isActive = filters.asset_type.has(type)}
@@ -1925,7 +2040,33 @@
           </div>
 
           <div class="summary-section">
-            <p class="subtitle">By Status</p>
+            {#if availableColorFields.includes('status')}
+              {@const isColorActive = colorField === 'status'}
+              {@const sliceColors = [...summary.byStatus.keys()].slice(0, 3).map((s) => COLOR_BY_STATUS.get(s.toLowerCase()) || colors.grey)}
+              <button
+                class="subtitle subtitle-colorbtn"
+                class:color-active={isColorActive}
+                type="button"
+                data-tooltip="Color by status"
+                onclick={() => { userHasInteracted = true; colorFieldOverride = isColorActive ? '' : 'status'; }}
+              >
+                By Status
+                <svg viewBox="0 0 14 14" width="11" height="11" aria-hidden="true" class="colorbtn-icon">
+                  <circle cx="7" cy="7" r="6" fill="none" stroke="currentColor" stroke-width="1" />
+                  {#if isColorActive}
+                    <path d="M7 7 L7 1 A6 6 0 0 1 12.2 10 Z" fill={sliceColors[0] ?? 'currentColor'} />
+                    <path d="M7 7 L12.2 10 A6 6 0 0 1 1.8 10 Z" fill={sliceColors[1] ?? 'currentColor'} />
+                    <path d="M7 7 L1.8 10 A6 6 0 0 1 7 1 Z" fill={sliceColors[2] ?? 'currentColor'} />
+                  {:else}
+                    <path d="M7 7 L7 1 A6 6 0 0 1 12.2 10 Z" fill="currentColor" opacity="0.5" />
+                    <path d="M7 7 L12.2 10 A6 6 0 0 1 1.8 10 Z" fill="currentColor" opacity="0.28" />
+                    <path d="M7 7 L1.8 10 A6 6 0 0 1 7 1 Z" fill="currentColor" opacity="0.1" />
+                  {/if}
+                </svg>
+              </button>
+            {:else}
+              <p class="subtitle">By Status</p>
+            {/if}
             <div class="summary-table">
               {#each [...summary.byStatus] as [status, data]}
                 {@const isActive = filters.operating_status.has(status)}
@@ -2019,6 +2160,44 @@
         </div>
       </div>
     </div>
+
+    <!-- Tree entity click tooltip -->
+    {#if clickedTreeEntity}
+      {@const cte = clickedTreeEntity}
+      {@const ttLeft = typeof window !== 'undefined' ? Math.min(cte.x + 14, window.innerWidth - 280) : cte.x + 14}
+      {@const ttTop = typeof window !== 'undefined' ? Math.min(cte.y - 10, window.innerHeight - 200) : cte.y - 10}
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div class="entity-tooltip-backdrop" onclick={() => (clickedTreeEntity = null)}></div>
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div
+        class="entity-tooltip"
+        style="left: {ttLeft}px; top: {ttTop}px;"
+        onclick={(e) => e.stopPropagation()}
+        onkeydown={(e) => e.key === 'Escape' && (clickedTreeEntity = null)}
+      >
+        <button class="entity-tooltip-close" onclick={() => (clickedTreeEntity = null)}>✕</button>
+        <div class="et-name">{cte.name}</div>
+        <div class="et-type">{cte.entityType}</div>
+        {#if cte.hqCountry}
+          <div class="et-detail">HQ: {cte.hqCountry}</div>
+        {/if}
+        {#if cte.regCountry && cte.regCountry !== cte.hqCountry}
+          <div class="et-detail">Reg: {cte.regCountry}</div>
+        {/if}
+        <div class="et-assets">
+          <div class="et-count-row">
+            <span>{cte.totalProjects} project{cte.totalProjects !== 1 ? 's' : ''}{cte.totalUnits > cte.totalProjects ? ` • ${cte.totalUnits} units` : ''}</span>
+            {#if isFiltered}<span class="et-count-note">total owned</span>{/if}
+          </div>
+          {#if isFiltered}
+            <div class="et-count-row">
+              <span>{cte.filteredProjects} project{cte.filteredProjects !== 1 ? 's' : ''}{cte.filteredUnits > cte.filteredProjects ? ` • ${cte.filteredUnits} units` : ''}</span>
+              <span class="et-count-note">with filters</span>
+            </div>
+          {/if}
+        </div>
+      </div>
+    {/if}
 
     <!-- Hover tooltip — name + ownership only -->
     {#if hoveredProject}
@@ -2221,6 +2400,7 @@
   .chart-layout {
     display: flex;
     min-height: 300px;
+    position: relative;
   }
   .chart-area {
     flex: 1;
@@ -2353,8 +2533,34 @@
     margin: 0;
     padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
   }
+  .fit-parent {
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  .fit-parent .chart-layout {
+    flex: 1;
+    min-height: 0;
+  }
+  .fit-parent .chart-area {
+    max-height: none;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  .fit-parent .chart-row {
+    flex: 1;
+    min-height: 0;
+  }
+  .fit-parent .tree-container,
+  .fit-parent .assets-container {
+    height: 100%;
+  }
+  .fit-parent .filter-sidebar {
+    max-height: none;
+  }
   .embed-mode .filter-sidebar {
-    max-height: calc(100vh - 180px);
+    max-height: none;
     overflow-y: auto;
     border-radius: 0;
   }
@@ -2367,30 +2573,26 @@
       width: 100%;
     }
   }
-  .sidebar-header {
-    padding-bottom: 10px;
-    margin-bottom: 10px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  }
-  .sidebar-owner {
-    display: block;
-    font-size: 14px;
+  .clear-filter-float {
+    position: absolute;
+    top: 10px;
+    right: clamp(220px, 28%, 320px);
+    margin-right: 8px;
+    padding: 3px 10px;
+    border: 1px solid var(--gem-navy, #1d4961);
+    border-radius: 3px;
+    background: var(--gem-navy, #1d4961);
+    color: var(--gem-mint, #9df7e5);
+    font-size: 10px;
+    font-family: inherit;
     font-weight: var(--font-weight-bold);
-    line-height: 1.25;
+    cursor: pointer;
+    white-space: nowrap;
+    z-index: 2;
+    transition: opacity 80ms ease;
   }
-  .sidebar-stats {
-    display: block;
-    font-size: 11px;
-    color: rgba(255, 255, 255, 0.5);
-    margin-top: 3px;
-  }
-  .sidebar-toolbar {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding-bottom: 10px;
-    margin-bottom: 10px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  .clear-filter-float:hover {
+    opacity: 0.85;
   }
   .sidebar-filters {
     display: flex;
@@ -2422,6 +2624,52 @@
     font-weight: var(--font-weight-bold);
     color: rgba(255, 255, 255, 0.4);
     margin: 0 0 4px 0;
+  }
+  .subtitle-colorbtn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    width: 100%;
+    text-align: left;
+    transition: color 80ms ease;
+    position: relative;
+  }
+  .subtitle-colorbtn[data-tooltip]:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 0;
+    white-space: nowrap;
+    padding: 4px 8px;
+    background: #fff;
+    color: #1a2332;
+    font-size: 11px;
+    font-weight: normal;
+    text-transform: none;
+    letter-spacing: 0;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    pointer-events: none;
+    z-index: 10;
+  }
+  .subtitle-colorbtn:hover {
+    color: rgba(255, 255, 255, 0.65);
+  }
+  .subtitle-colorbtn.color-active {
+    color: var(--gem-mint, #9df7e5);
+  }
+  .colorbtn-icon {
+    flex-shrink: 0;
+    opacity: 0.6;
+    transition: opacity 80ms ease;
+  }
+  .subtitle-colorbtn:hover .colorbtn-icon,
+  .subtitle-colorbtn.color-active .colorbtn-icon {
+    opacity: 1;
   }
   .summary-table {
     overflow-y: auto;
@@ -2508,55 +2756,48 @@
     color: var(--color-error, #7f142a);
     font-size: var(--font-size-sm);
   }
-  .clear-filter-inline {
-    padding: 3px 8px;
-    border: 1px solid rgba(157, 247, 229, 0.25);
-    border-radius: 3px;
-    background: rgba(255, 255, 255, 0.04);
-    color: var(--gem-mint, #9df7e5);
-    font-size: 10px;
-    cursor: pointer;
-    font-family: inherit;
-    font-weight: var(--font-weight-medium);
-    transition: background 80ms ease;
-  }
-  .clear-filter-inline:hover {
-    background: rgba(255, 255, 255, 0.1);
-  }
-  .color-toggle {
+
+  /* ---- Effective ownership slider ---- */
+  .eff-ownership-slider {
     display: flex;
     align-items: center;
-    gap: 3px;
-    flex-wrap: wrap;
+    gap: 8px;
+    padding: 4px 0;
   }
-  .color-toggle-label {
-    font-size: 9px;
-    color: rgba(255, 255, 255, 0.4);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    margin-right: 2px;
-  }
-  .color-toggle-btn {
-    padding: 2px 7px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 3px;
-    background: transparent;
-    color: rgba(255, 255, 255, 0.55);
-    font-size: 10px;
-    font-family: inherit;
+  .ownership-range {
+    flex: 1;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 3px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.15);
+    outline: none;
     cursor: pointer;
-    text-transform: capitalize;
-    transition: all 80ms ease;
   }
-  .color-toggle-btn:hover {
-    background: rgba(255, 255, 255, 0.06);
-    color: rgba(255, 255, 255, 0.8);
+  .ownership-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--gem-mint, #9df7e5);
+    cursor: pointer;
+    border: none;
   }
-  .color-toggle-btn.active {
-    background: rgba(157, 247, 229, 0.12);
-    border-color: rgba(157, 247, 229, 0.4);
-    color: var(--gem-mint, #9df7e5);
-    font-weight: var(--font-weight-bold);
+  .ownership-range::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--gem-mint, #9df7e5);
+    cursor: pointer;
+    border: none;
+  }
+  .eff-ownership-val {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.7);
+    min-width: 30px;
+    text-align: right;
+    white-space: nowrap;
   }
 
   /* ---- Print ---- */
@@ -2594,8 +2835,6 @@
     .summary-row:hover {
       background: none;
     }
-    .clear-filter-inline,
-    .color-toggle,
     .empty-state .clear-btn {
       display: none;
     }
@@ -2639,18 +2878,13 @@
       max-height: none;
       padding: 12px;
     }
-    .sidebar-header {
-      padding-bottom: 8px;
-      margin-bottom: 8px;
-    }
-    .sidebar-toolbar {
-      padding-bottom: 8px;
-      margin-bottom: 8px;
-    }
     .sidebar-filters {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 0 12px;
+    }
+    .summary-section-full {
+      grid-column: 1 / -1;
     }
     .summary-section {
       padding: 6px 0;
@@ -2661,10 +2895,6 @@
     .summary-row {
       padding: 4px 6px;
       min-height: 36px;
-    }
-    .color-toggle-btn {
-      min-height: 32px;
-      padding: 4px 10px;
     }
     .asset-modal {
       left: var(--space-3) !important;
@@ -2718,6 +2948,86 @@
     .portfolio-tooltip {
       display: none;
     }
+  }
+
+  /* ---- Entity click tooltip ---- */
+  .entity-tooltip-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1099;
+    background: transparent;
+    cursor: default;
+  }
+  .entity-tooltip {
+    position: fixed;
+    z-index: 1100;
+    background: var(--gem-white, #fff);
+    border: 1px solid var(--color-border, #ddd);
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.14);
+    padding: 10px 14px 12px;
+    font-family: var(--font-family, 'Plus Jakarta Sans', sans-serif);
+    min-width: 200px;
+    max-width: 280px;
+    animation: tt-in 80ms ease-out;
+  }
+  .entity-tooltip-close {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    background: none;
+    border: none;
+    font-size: 12px;
+    color: var(--color-text-tertiary, #aaa);
+    cursor: pointer;
+    padding: 2px 4px;
+    line-height: 1;
+  }
+  .et-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--color-text-primary, #1a2c3a);
+    padding-right: 18px;
+    line-height: 1.3;
+    margin-bottom: 2px;
+  }
+  .et-type {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--color-text-tertiary, #999);
+    margin-bottom: 6px;
+  }
+  .et-detail {
+    font-size: 11px;
+    color: var(--color-text-secondary, #5a7080);
+    margin-bottom: 2px;
+  }
+  .et-assets {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--color-border-light, #eee);
+    font-size: 11px;
+    color: var(--color-text-primary, #1a2c3a);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .et-count-row {
+    display: flex;
+    gap: 5px;
+    align-items: baseline;
+  }
+  .et-count-note {
+    font-size: 10px;
+    color: var(--color-text-secondary, #5a7080);
+  }
+  .et-count-note::before {
+    content: '(';
+  }
+  .et-count-note::after {
+    content: ')';
   }
 
   /* ---- Click Popover (unit table) ---- */
