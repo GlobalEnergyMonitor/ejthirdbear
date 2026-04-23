@@ -1152,6 +1152,34 @@ export const getAPIBase = () => API_BASE;
 import type { CoalPlantLocation } from '$lib/components/cards/coal-plant-types';
 import type { CoalMineAsset } from '$lib/components/cards/coal-mine-types';
 
+/** Minimal location data returned by /locations/{id} for any asset type. */
+export interface LocationData {
+  location_id: string;
+  asset_name: string;
+  asset_type?: string;
+  /** Single-country assets (most trackers). */
+  country?: string | null;
+  unit_count: number;
+  units: Array<{
+    operating_status?: string;
+    capacity_value?: number | null;
+    capacity_unit?: string;
+    /** Present on pipeline units; absent on most other asset types. */
+    countries?: string[];
+  }>;
+  /** Direct wiki link — may be absent until API adds this field. */
+  wiki_link?: string | null;
+}
+
+/**
+ * Fetch generic location data for any asset type by location ID.
+ * Returns top-line info + units array with status/capacity.
+ */
+export async function fetchLocationData(locationId: string): Promise<LocationData> {
+  _currentReason = `fetchLocationData ${locationId}`;
+  return fetchAPI<LocationData>(`/locations/${encodeURIComponent(locationId)}`);
+}
+
 /**
  * Fetch all units for a coal plant by location ID.
  * Returns top-line plant info plus a units[] array of unit-level data.
