@@ -46,7 +46,8 @@
     PAN_CLICK_THRESHOLD,
     type ColorMode,
   } from './ownership-tree-utils';
-  import { buildNarrativeText } from './ownership-tree-narrative';
+  import { type LocationData, fetchLocationData } from '$lib/ownership-api';
+  import OwnershipPathModal from './OwnershipPathModal.svelte';
   import {
     backgroundClickSuppressionDeadline,
     shouldIgnoreBackgroundClick,
@@ -149,6 +150,10 @@
   let frozenId = $state<string | null>(null);
   let frozenMeta = $state<FrozenMeta | null>(null);
   let frozenNodeData = $state<{ nodesTouched: string[]; edgeIndices: number[] } | null>(null);
+  let assetLocationData = $state<LocationData | null>(null);
+  let pathModalOpen = $state(false);
+  let pathModalNodes = $state<GraphNode[]>([]);
+  let pathModalEdges = $state<GraphEdge[]>([]);
   let hasAutoFit = false;
   let tooltipX = $state(0);
   let tooltipY = $state(0);
@@ -668,21 +673,6 @@
   );
   const _maxOwnerPct = $derived(ownersList.length > 0 ? ownersList[0].pct : 100);
 
-  // Data-driven narrative text for the context panel
-  const narrativeText = $derived.by(() =>
-    buildNarrativeText({
-      renderNodes,
-      renderEdges,
-      nodes: filteredNodes,
-      rootId,
-      graphDirection,
-      focusId: frozenId || hoveredId,
-      pathsMap,
-      edgePctMap,
-      paths,
-    })
-  );
-
   // Max chars per label line — scales with node radius so labels fit
   // nodeR 28 → 16 chars, nodeR 22 → 13, nodeR 18 → 11, compact → 10
   const labelMaxChars = $derived(compact ? 10 : Math.max(8, Math.round(nodeR * 0.57)));
@@ -1172,6 +1162,108 @@
     const url = n.isAsset ? assetLink(n.id) : entityLink(n.id);
     onNavigate ? onNavigate(url) : goto(url);
   }
+
+  /** Build a GEM wiki URL from an asset name when wiki_link is absent. */
+  function buildWikiLink(name: string): string {
+    const slug = name
+      .replace(/[#<>[\]|{}%+?]/g, '')
+      .replace(/ /g, '_');
+    return `https://www.gem.wiki/${slug}`;
+  }
+
+  /** Compose a single narrative sentence describing the asset's status and capacity. */
+  function buildAssetNarrative(data: LocationData): string {
+    const operating = data.units.filter((u) => u.operating_status === 'operating');
+    const planned = data.units.filter((u) => u.operating_status === 'planned');
+    const canceled = data.units.filter((u) => u.operating_status === 'canceled');
+    const retired = data.units.filter((u) => u.operating_status === 'retired');
+
+    const assetType = data.asset_type || 'asset';
+
+    // Geography: pipelines have null top-level country; countries live in each unit
+    const unitCountries = [
+      ...new Set(data.units.flatMap((u) => u.countries ?? []).filter(Boolean)),
+    ];
+    let geo = '';
+    if (data.country) {
+      geo = ` in ${data.country}`;
+    } else if (unitCountries.length === 1) {
+      geo = ` in ${unitCountries[0]}`;
+    } else if (unitCountries.length > 1) {
+      const last = unitCountries[unitCountries.length - 1];
+      const rest = unitCountries.slice(0, -1);
+      geo = ` passing through ${rest.join(', ')}${rest.length > 1 ? ',' : ''} and ${last}`;
+    }
+
+    // Sum capacity for a group; returns "" if none have a value
+    function capStr(units: LocationData['units']): string {
+      const withCap = units.filter((u) => u.capacity_value != null);
+      if (!withCap.length) return '';
+      const total = withCap.reduce((s, u) => s + (u.capacity_value ?? 0), 0);
+      const capUnit = withCap[0].capacity_unit || 'MW';
+      return `${total.toLocaleString()} ${capUnit}`;
+    }
+
+    const parts: string[] = [];
+
+    if (operating.length > 0) {
+      const opCap = capStr(operating);
+      let s = `An operating ${assetType}${geo}`;
+      if (operating.length > 1) {
+        s += ` with ${operating.length} units`;
+        if (opCap) s += ` and a capacity of ${opCap}`;
+      } else if (opCap) {
+        s += ` with a capacity of ${opCap}`;
+      }
+      parts.push(s);
+      if (planned.length > 0) {
+        const plCap = capStr(planned);
+        let ps = `${planned.length} additional unit${planned.length !== 1 ? 's' : ''} ${planned.length === 1 ? 'is' : 'are'} planned`;
+        if (plCap) ps += `, with a capacity of ${plCap}`;
+        parts.push(ps);
+      }
+      const retCan = retired.length + canceled.length;
+      if (retCan > 0) {
+        parts.push(`It has ${retCan} retired or canceled unit${retCan !== 1 ? 's' : ''}`);
+      }
+    } else if (planned.length > 0) {
+      const plCap = capStr(planned);
+      let s = `A planned ${assetType}${geo}`;
+      if (planned.length > 1) {
+        s += ` with ${planned.length} units`;
+        if (plCap) s += ` and a total capacity of ${plCap}`;
+      } else if (plCap) {
+        s += ` with a capacity of ${plCap}`;
+      }
+      parts.push(s);
+      if (canceled.length > 0) {
+        parts.push(`${canceled.length} unit${canceled.length !== 1 ? 's' : ''} ${canceled.length === 1 ? 'has' : 'have'} been canceled`);
+      }
+    } else if (canceled.length > 0) {
+      parts.push(`A canceled ${assetType}${geo}`);
+      if (retired.length > 0) {
+        parts.push(`${retired.length} previously operating unit${retired.length !== 1 ? 's' : ''} ${retired.length === 1 ? 'has' : 'have'} been retired`);
+      }
+    } else {
+      parts.push(`A retired ${assetType}${geo}`);
+    }
+
+    return parts.join('. ') + '.';
+  }
+
+  // Fetch location data whenever an asset node is frozen
+  $effect(() => {
+    if (frozenMeta?.kind !== 'asset' || !frozenId) {
+      assetLocationData = null;
+      return;
+    }
+    const id = frozenId;
+    fetchLocationData(id).then((data) => {
+      if (frozenId === id) assetLocationData = data;
+    }).catch(() => {
+      if (frozenId === id) assetLocationData = null;
+    });
+  });
 
   function clearNodeClickFallback(): void {
     if (nodeClickFallbackTimer !== null) {
@@ -1806,7 +1898,12 @@
                 .filter((o) => o.pct == null || o.pct > 0)
                 .sort((a, b) => (b.pct ?? 0) - (a.pct ?? 0));
             })()}
-            <div class="focus-indicator">
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div
+              class="focus-indicator"
+              onpointerdown={(e) => e.stopPropagation()}
+              onpointerup={(e) => e.stopPropagation()}
+            >
               <div class="focus-copy">
                 {#if frozenMeta.kind === 'entity' && frozenMeta.entityId}
                   <p class="focus-sentence">
@@ -1815,7 +1912,6 @@
                     {#if frozenMeta.country}based in <span class="focus-fact"
                         >{frozenMeta.country}</span
                       >{/if}
-                    <span class="focus-fact id">{frozenMeta.entityId}</span>
                     {#if frozenMeta.cumulativePct}
                       with <span class="focus-fact pct">{frozenMeta.cumulativePct.toFixed(1)}%</span
                       >
@@ -1848,15 +1944,48 @@
                     </p>
                   {/if}
                   {#if frozenMeta.entityId}
+                    <div class="focus-footer">
+                      <span class="focus-fact id">{frozenMeta.entityId}</span>
+                      <a
+                        class="focus-profile-link"
+                        href={entityLink(frozenMeta.entityId)}
+                        onclick={(e) => {
+                          if (onNavigate) {
+                            e.preventDefault();
+                            onNavigate(entityLink(frozenMeta.entityId!));
+                          }
+                        }}>View full profile &rarr;</a
+                      >
+                      {#if frozenNodeData && frozenNodeData.nodesTouched.length > 1}
+                        <button
+                          type="button"
+                          class="focus-path-btn"
+                          onclick={() => {
+                            const touchedSet = new Set(frozenNodeData!.nodesTouched);
+                            pathModalNodes = filteredNodes.filter((n) => touchedSet.has(n.id));
+                            pathModalEdges = frozenNodeData!.edgeIndices
+                              .map((i) => filteredEdges[i])
+                              .filter(Boolean);
+                            pathModalOpen = true;
+                          }}
+                        >
+                          View path &nearr;
+                        </button>
+                      {/if}
+                    </div>
+                  {/if}
+                {:else if frozenMeta.kind === 'asset'}
+                  <strong class="focus-asset-name">{frozenMeta.label}</strong>
+                  {#if assetLocationData}
+                    <p class="focus-asset-narrative">{buildAssetNarrative(assetLocationData)}</p>
+                  {/if}
+                  {#if frozenId}
+                    {@const wikiUrl = assetLocationData?.wiki_link || buildWikiLink(frozenMeta.label)}
                     <a
                       class="focus-profile-link"
-                      href={entityLink(frozenMeta.entityId)}
-                      onclick={(e) => {
-                        if (onNavigate) {
-                          e.preventDefault();
-                          onNavigate(entityLink(frozenMeta.entityId!));
-                        }
-                      }}>View full profile &rarr;</a
+                      href={wikiUrl}
+                      target="_blank"
+                      rel="noopener noreferrer">GEM Wiki &rarr;</a
                     >
                   {/if}
                 {:else}
@@ -1866,24 +1995,12 @@
                       <span class="focus-count">({frozenMeta.facts[0]})</span>
                     {/if}
                   </span>
-                  {#if frozenMeta.facts.length > 0 && frozenMeta.kind !== 'country' && frozenMeta.kind !== 'entity-type'}
+                  {#if frozenMeta.facts.length > 0}
                     <div class="focus-facts">
                       {#each frozenMeta.facts as fact}
                         <span class="focus-fact">{fact}</span>
                       {/each}
                     </div>
-                  {/if}
-                  {#if frozenMeta.kind === 'asset' && frozenId}
-                    <a
-                      class="focus-profile-link"
-                      href={assetLink(frozenId)}
-                      onclick={(e) => {
-                        if (onNavigate) {
-                          e.preventDefault();
-                          onNavigate(assetLink(frozenId!));
-                        }
-                      }}>View asset profile &rarr;</a
-                    >
                   {/if}
                 {/if}
               </div>
@@ -2000,7 +2117,7 @@
                       x={mid.x}
                       y={mid.y - 5}
                       class="edge-lbl"
-                      style="fill: {e.imputed_share ? C.edgeImputed : C.teal}"
+                      style="fill: {e.imputed_share ? '#8fa3aa' : C.teal}"
                       >{Number.isInteger(e.value) ? e.value : e.value.toFixed(1)}%</text
                     >
                   {/if}
@@ -2205,16 +2322,24 @@
       />
     </div>
 
-    <!-- Context narrative -->
-    {#if !compact && !frozenMeta}
-      <div class="narrative" class:entity={narrativeText.mode === 'entity'}>
-        {#each narrativeText.lines as line}
-          <p>{line}</p>
-        {/each}
-      </div>
-    {/if}
   {/if}
 </div>
+
+{#if pathModalOpen && frozenMeta?.kind === 'entity'}
+  {@const rootNode = filteredNodes.find((n) => n.id === rootId)}
+  <OwnershipPathModal
+    open={pathModalOpen}
+    onClose={() => (pathModalOpen = false)}
+    entityName={frozenMeta.label}
+    rootName={rootNode?.name || rootNode?.Name || rootId}
+    nodes={pathModalNodes}
+    edges={pathModalEdges}
+    {rootId}
+    {pathsMap}
+    {edgePctMap}
+    {onNavigate}
+  />
+{/if}
 
 <style>
   /* Off-screen SVG that hosts the hidden measurement <text>. It must still
@@ -2575,10 +2700,18 @@
     background: rgba(0, 79, 97, 0.1);
   }
 
+  .focus-footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+  }
+  .focus-footer .focus-fact.id {
+    margin: 0;
+  }
   .focus-profile-link {
     display: inline-block;
     font-size: 0.68rem;
-    margin-top: 4px;
     color: var(--tree-teal, #004f61);
     text-decoration: none;
     font-weight: 600;
@@ -2588,6 +2721,25 @@
   .focus-profile-link:hover {
     opacity: 1;
     text-decoration: underline;
+  }
+
+  .focus-path-btn {
+    display: inline-block;
+    font-size: 0.68rem;
+    color: var(--tree-teal, #004f61);
+    background: none;
+    border: 1px solid rgba(0, 79, 97, 0.25);
+    border-radius: 999px;
+    padding: 1px 8px;
+    cursor: pointer;
+    font-weight: 600;
+    opacity: 0.85;
+    transition: opacity 0.1s, background 0.1s;
+    line-height: 1.5;
+  }
+  .focus-path-btn:hover {
+    opacity: 1;
+    background: rgba(0, 79, 97, 0.08);
   }
 
   /* Color toggle & legend */
@@ -2678,24 +2830,18 @@
     height: 8px;
   }
 
-  .narrative {
-    font-size: var(--font-size-sm, 0.75rem);
-    line-height: 1.5;
-    color: var(--color-text-secondary, #555);
-    padding: 10px 0 0;
-    border-top: 1px solid var(--color-border-light, #eee);
-    margin-top: 8px;
-    min-height: 36px;
-    transition: opacity 0.15s ease-out;
+  .focus-asset-name {
+    font-size: var(--font-size-base, 14px);
+    font-weight: 600;
+    color: var(--color-text-primary, #111827);
+    display: block;
+    margin-bottom: 4px;
   }
-  .narrative.entity {
-    color: var(--color-text-primary, #1d4961);
-  }
-  .narrative p {
-    margin: 0 0 3px;
-  }
-  .narrative p:last-child {
-    margin-bottom: 0;
+  .focus-asset-narrative {
+    font-size: var(--font-size-sm, 12px);
+    line-height: 1.55;
+    color: var(--color-text-secondary, #6b7280);
+    margin: 4px 0 0;
   }
 
   /* Panel toggle — moved to OwnershipPanel.svelte */
