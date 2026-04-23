@@ -10,7 +10,19 @@
    */
 
   import CountryMultiSelect from '$lib/components/screener/CountryMultiSelect.svelte';
-  import { listAssets } from '$lib/ownership-api';
+  import rawData from '$lib/component-data/iron_steel_methods_data.json';
+
+  const allUnits = rawData as Array<{
+    asset_id: string;
+    unit_id: string;
+    product: string;
+    furnace_category: string;
+    capacity: string;
+    'Current or initial Reductant': string;
+    country_area: string;
+    operating_status: string;
+    operating_status_detail: string;
+  }>;
 
   let selectedCountries = $state<string[]>([]);
   let loading = $state(false);
@@ -47,12 +59,12 @@
     'DRI other/unknown': '#ccd4cc',
   };
 
-  const STEEL_CATS = ['BOF', 'EAF', 'IF', 'OHF'] as const;
+  const STEEL_CATS = ['BOF', 'EAF', 'IF', 'Other/unspecified'] as const;
   const STEEL_COLORS: Record<string, string> = {
     'BOF': '#cc7060',
     'EAF': '#4a90a8',
     'IF': '#a8d0e0',
-    'OHF': '#8a9898',
+    'Other/unspecified': '#8a9898',
   };
 
   const STATUS_ORDER = [
@@ -63,7 +75,6 @@
     'operating',
     'mothballed',
     'retired',
-    'cancelled',
     'shelved',
   ];
   const STATUS_LABEL: Record<string, string> = {
@@ -74,7 +85,6 @@
     'operating': 'Operating',
     'mothballed': 'Mothballed',
     'retired': 'Retired',
-    'cancelled': 'Cancelled',
     'shelved': 'Shelved',
   };
 
@@ -99,7 +109,7 @@
     if (fc === 'bof') return 'BOF';
     if (fc === 'eaf') return 'EAF';
     if (fc === 'induction') return 'IF';
-    if (fc === 'ohf') return 'OHF';
+    if (fc === 'ohf') return 'Other/unspecified';
     return null;
   }
 
@@ -126,7 +136,7 @@
   let ironRows = $state<ChartRow[]>([]);
   let steelRows = $state<ChartRow[]>([]);
 
-  async function fetchData() {
+  function fetchData() {
     loading = true;
     error = null;
     ironRows = [];
@@ -136,47 +146,38 @@
       const ironMap = new Map<string, Map<string, number>>();
       const steelMap = new Map<string, Map<string, number>>();
 
-      const countryParam = selectedCountries.length > 0 ? selectedCountries : undefined;
+      const units =
+        selectedCountries.length > 0
+          ? allUnits.filter((u) => selectedCountries.includes(u.country_area))
+          : allUnits;
 
-      let offset = 0;
-      while (true) {
-        const page = await listAssets({
-          asset_type: 'iron-steel-plant',
-          country: countryParam,
-          limit: 500,
-          offset,
-        });
+      for (const unit of units) {
+        const fc = unit.furnace_category || null;
+        const reductant = unit['Current or initial Reductant'] || null;
+        const capacity = Number(unit.capacity) || 0;
+        if (capacity <= 0) continue;
 
-        const items = page.results;
-        if (items.length === 0) break;
+        // For "planned" records, use operating_status_detail (announced / construction)
+        const rawStatus = (unit.operating_status ?? '').toLowerCase();
+        const status =
+          rawStatus === 'planned'
+            ? (unit.operating_status_detail ?? '').toLowerCase()
+            : rawStatus;
+        if (!STATUS_ORDER.includes(status)) continue;
 
-        for (const asset of items) {
-          const fields = asset.raw.iron_steel_plant_fields as Record<string, unknown> | null | undefined;
-          const fc = (fields?.furnace_category ?? null) as string | null;
-          const reductant = (fields?.current_or_initial_reductant ?? null) as string | null;
-          const capacity = Number(asset.capacity) || 0;
-          if (capacity <= 0) continue;
-
-          const status = (asset.status ?? '').toLowerCase();
-          if (!STATUS_ORDER.includes(status)) continue;
-
-          const ironCat = classifyIron(fc, reductant);
-          if (ironCat) {
-            if (!ironMap.has(status)) ironMap.set(status, new Map());
-            const m = ironMap.get(status)!;
-            m.set(ironCat, (m.get(ironCat) ?? 0) + capacity);
-          }
-
-          const steelCat = classifySteel(fc);
-          if (steelCat) {
-            if (!steelMap.has(status)) steelMap.set(status, new Map());
-            const m = steelMap.get(status)!;
-            m.set(steelCat, (m.get(steelCat) ?? 0) + capacity);
-          }
+        const ironCat = classifyIron(fc, reductant);
+        if (ironCat) {
+          if (!ironMap.has(status)) ironMap.set(status, new Map());
+          const m = ironMap.get(status)!;
+          m.set(ironCat, (m.get(ironCat) ?? 0) + capacity);
         }
 
-        if (items.length < 500 || offset >= 50000) break;
-        offset += 500;
+        const steelCat = classifySteel(fc);
+        if (steelCat) {
+          if (!steelMap.has(status)) steelMap.set(status, new Map());
+          const m = steelMap.get(status)!;
+          m.set(steelCat, (m.get(steelCat) ?? 0) + capacity);
+        }
       }
 
       ironRows = buildRows(ironMap, IRON_CATS);
@@ -200,10 +201,10 @@
   // ---------------------------------------------------------------------------
 
   const LABEL_W = 110;
-  const BAR_H = 34;
+  const BAR_H = 28;
   const ROW_GAP = 10;
   const R_PAD = 20;
-  const AXIS_H = 32;
+  const AXIS_H = 26;
   const CHART_W = 670;
   const SVG_W = LABEL_W + CHART_W + R_PAD;
 
